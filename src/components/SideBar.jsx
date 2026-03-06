@@ -8,7 +8,7 @@ import {
   BarChart3, BookOpen, MessageSquare, Calculator,
   FileText, TrendingUp, Users, ShieldCheck, Settings,
   ArrowLeftRight, Bell, Zap, Activity, UserCircle,
-  LogOut, ChevronsLeft, ChevronsRight, KeyRound, FolderOpen
+  LogOut, ChevronsLeft, ChevronsRight, KeyRound, FolderOpen, LayoutTemplate
 } from 'lucide-react';
 
 const PRIMARY = '#4F46E5';
@@ -142,6 +142,7 @@ const SideBar = () => {
 
           {sectionLabel('Actions')}
           {item('/actions', <Kanban size={18} />, 'Actions', 'actions_view')}
+          {item('/actions/templates', <LayoutTemplate size={18} />, 'Templates', 'actions_view')}
           {item('/actions/achievement-report', <BarChart3 size={18} />, 'Performance Report', 'reports_monthly_view')}
           {item('/activity-log', <BookOpen size={18} />, 'Activity Log', 'settings_view')}
           {item('/file-manager', <FolderOpen size={18} />, 'File Manager')}

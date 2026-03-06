@@ -1,24 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Check, Calendar, Sparkles, Loader2 } from 'lucide-react';
 import { db } from '../../services/db';
-
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }) => {
-    const ROADMAP_PRESETS = {
-        'NONE': { name: 'Custom (No Preset)', goals: [] },
-        '101_PROJECT': {
-            name: '101 Project Roadmap',
-            description: 'Standardized growth roadmap with 6 primary goals for GMS, Ads, Reviews, and Operations.',
-            goals: [
-                { title: 'GMS Achievement', metric: 'GMS', targetValue: 1000 },
-                { title: 'Ads Achievement', metric: 'ROI' },
-                { title: 'Review Achievement', metric: 'ORDER_COUNT' },
-                { title: 'PO Fulfilment', metric: 'NONE' },
-                { title: 'Top 200 ASIN Check', metric: 'NONE' },
-                { title: 'New ASIN 90 Days Check', metric: 'NONE' }
-            ]
-        }
-    };
+    const [roadmapPresets, setRoadmapPresets] = useState({
+        'NONE': { name: 'Custom (No Preset)', goals: [] }
+    });
 
     const [step, setStep] = useState(1); // 1: Info, 2: Template, 3: Tasks/Asins
     const [selectedRoadmap, setSelectedRoadmap] = useState('NONE');
@@ -39,8 +28,8 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
     const [defaultAssignee, setDefaultAssignee] = useState('');
     const [baseTitle, setBaseTitle] = useState(objective?.title || '');
     const [type, setType] = useState(objective?.type || 'MONTHLY');
-    const [startDate, setStartDate] = useState(objective?.startDate ? new Date(objective.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(objective?.endDate ? new Date(objective.endDate).toISOString().split('T')[0] : '');
+    const [startDate, setStartDate] = useState(objective?.startDate ? new Date(objective.startDate) : new Date());
+    const [endDate, setEndDate] = useState(objective?.endDate ? new Date(objective.endDate) : new Date());
     const [sellers, setSellers] = useState([]);
     const [selectedSeller, setSelectedSeller] = useState(objective?.sellerId || '');
     const [loading, setLoading] = useState(false);
@@ -63,15 +52,17 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
         const start = new Date(startDate);
         const end = new Date(start);
 
-        if (type === 'MONTHLY') {
-            end.setMonth(end.getMonth() + 1);
+        if (type === 'DAILY') {
+            end.setDate(end.getDate() + 1);
         } else if (type === 'WEEKLY') {
             end.setDate(end.getDate() + 7);
+        } else if (type === 'MONTHLY') {
+            end.setMonth(end.getMonth() + 1);
         } else if (type === 'QUARTERLY') {
             end.setMonth(end.getMonth() + 3);
         }
 
-        setEndDate(end.toISOString().split('T')[0]);
+        setEndDate(end);
     }, [startDate, type]);
 
     const handleAddKR = () => {
@@ -102,6 +93,15 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                 const tRes = await db.getTaskTemplates();
                 if (tRes && Array.isArray(tRes.data)) setTemplates(tRes.data);
                 else if (Array.isArray(tRes)) setTemplates(tRes);
+
+                const gRes = await db.getGoalTemplates();
+                if (gRes && Array.isArray(gRes.data)) {
+                    const dynamicPresets = { 'NONE': { name: 'Custom (No Preset)', goals: [] } };
+                    gRes.data.forEach(gt => {
+                        dynamicPresets[gt._id] = gt;
+                    });
+                    setRoadmapPresets(dynamicPresets);
+                }
 
                 const settingsRes = await db.getSettings();
                 if (settingsRes && settingsRes.data) {
@@ -192,8 +192,8 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                 goalSettings,
                 selectedRoadmap,
                 type,
-                startDate,
-                endDate,
+                startDate: startDate instanceof Date ? startDate.toISOString() : startDate,
+                endDate: endDate instanceof Date ? endDate.toISOString() : endDate,
                 sellerId: selectedSeller?._id || selectedSeller,
                 owners,
                 status: 'NOT_STARTED'
@@ -226,7 +226,7 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
     };
 
     const handleStep2Submit = () => {
-        const isRoadmapSelected = selectedRoadmap !== 'NONE' && ROADMAP_PRESETS[selectedRoadmap];
+        const isRoadmapSelected = selectedRoadmap !== 'NONE' && roadmapPresets[selectedRoadmap];
         const hasRoadmapMappings = Object.values(roadmapTaskMapping).some(ids => ids.length > 0);
 
         if (!isRoadmapSelected && selectedTemplates.length === 0) {
@@ -243,7 +243,7 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
     };
 
     const handleFinalSubmit = async () => {
-        const isRoadmapSelected = selectedRoadmap !== 'NONE' && ROADMAP_PRESETS[selectedRoadmap];
+        const isRoadmapSelected = selectedRoadmap !== 'NONE' && roadmapPresets[selectedRoadmap];
         if (!isRoadmapSelected && selectedTemplates.length === 0) return;
 
         setLoading(true);
@@ -253,7 +253,7 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
             const assignedTo = defaultAssignee || owners[0] || fallbackManager || '';
 
             if (isRoadmapSelected) {
-                const roadmap = ROADMAP_PRESETS[selectedRoadmap];
+                const roadmap = roadmapPresets[selectedRoadmap];
                 for (const roadmapGoal of roadmap.goals) {
                     // Create a Key Result for each goal in the roadmap
                     const krRes = await db.createKeyResult({
@@ -439,10 +439,12 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                     required
                                 />
                             </div>
+
+
                             <div className="col-12">
                                 <label className="form-label small fw-bold text-muted text-uppercase">Roadmap Preset (Optional)</label>
                                 <div className="row g-3">
-                                    {Object.entries(ROADMAP_PRESETS).map(([key, roadmap]) => (
+                                    {Object.entries(roadmapPresets).map(([key, roadmap]) => (
                                         <div key={key} className="col-md-6">
                                             <div
                                                 className={`card p-3 cursor-pointer border-2 transition-all ${selectedRoadmap === key ? 'border-primary bg-soft-primary' : 'border-light hover-bg-light'}`}
@@ -494,72 +496,69 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                             <option value="ORDER_COUNT">Order Count</option>
                                         </select>
                                     </div>
-                                    <div className="col-md-6">
-                                        <div className="d-flex align-items-center justify-content-between h-100 pt-4">
-                                            <label className="form-check-label small fw-bold text-muted text-uppercase mb-0">Enable Goal-Based Tasks</label>
-                                            <div className="form-check form-switch m-0">
-                                                <input
-                                                    className="form-check-input"
-                                                    type="checkbox"
-                                                    checked={goalSettings.isGoalPrimary}
-                                                    onChange={(e) => setGoalSettings({ ...goalSettings, isGoalPrimary: e.target.checked })}
+                                </div>
+                            </div>
+
+                            <div className="col-12">
+                                <div className="p-3 bg-soft-primary rounded-3 border border-primary border-opacity-10 animate-fadeIn">
+                                    <div className="row g-3">
+                                        <div className="col-md-3">
+                                            <label className="form-label small fw-bold text-muted text-uppercase">Target Value</label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                placeholder="e.g. 10000000"
+                                                value={goalSettings.targetValue}
+                                                onChange={(e) => setGoalSettings({ ...goalSettings, targetValue: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="col-md-3">
+                                            <label className="form-label small fw-bold text-muted text-uppercase">Frequency</label>
+                                            <select
+                                                className="form-select"
+                                                value={type}
+                                                onChange={(e) => {
+                                                    setType(e.target.value);
+                                                    setGoalSettings({ ...goalSettings, frequency: e.target.value });
+                                                }}
+                                            >
+                                                <option value="DAILY">Daily</option>
+                                                <option value="WEEKLY">Weekly</option>
+                                                <option value="MONTHLY">Monthly</option>
+                                                <option value="QUARTERLY">Quarterly</option>
+                                            </select>
+                                        </div>
+                                        <div className="col-md-3">
+                                            <label className="form-label small fw-bold text-muted text-uppercase">Start Date</label>
+                                            <div className="d-flex bg-white border rounded">
+                                                <DatePicker
+                                                    selected={startDate}
+                                                    onChange={(date) => setStartDate(date)}
+                                                    className="form-control border-0"
+                                                    dateFormat="MMM d, yyyy"
+                                                    required
                                                 />
+                                                <div className="d-flex align-items-center px-2 text-muted"><Calendar size={16} /></div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-3">
+                                            <label className="form-label small fw-bold text-muted text-uppercase">End Date</label>
+                                            <div className="d-flex bg-white border rounded">
+                                                <DatePicker
+                                                    selected={endDate}
+                                                    onChange={(date) => setEndDate(date)}
+                                                    className="form-control border-0"
+                                                    dateFormat="MMM d, yyyy"
+                                                    required
+                                                    minDate={startDate}
+                                                />
+                                                <div className="d-flex align-items-center px-2 text-muted"><Calendar size={16} /></div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                            {goalSettings.isGoalPrimary && (
-                                <div className="col-12">
-                                    <div className="p-3 bg-soft-primary rounded-3 border border-primary border-opacity-10 animate-fadeIn">
-                                        <div className="row g-3">
-                                            <div className="col-md-4">
-                                                <label className="form-label small fw-bold text-muted text-uppercase">Target Value</label>
-                                                <input
-                                                    type="number"
-                                                    className="form-control"
-                                                    placeholder="e.g. 10000000"
-                                                    value={goalSettings.targetValue}
-                                                    onChange={(e) => setGoalSettings({ ...goalSettings, targetValue: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="col-md-4">
-                                                <label className="form-label small fw-bold text-muted text-uppercase">Frequency</label>
-                                                <select
-                                                    className="form-select"
-                                                    value={goalSettings.frequency || 'MONTHLY'}
-                                                    onChange={(e) => setGoalSettings({ ...goalSettings, frequency: e.target.value })}
-                                                >
-                                                    <option value="DAILY">Daily</option>
-                                                    <option value="WEEKLY">Weekly</option>
-                                                    <option value="MONTHLY">Monthly</option>
-                                                </select>
-                                            </div>
-                                            <div className="col-md-4">
-                                                <label className="form-label small fw-bold text-muted text-uppercase">Duration ({
-                                                    goalSettings.frequency === 'DAILY' ? 'Days' :
-                                                        goalSettings.frequency === 'WEEKLY' ? 'Weeks' : 'Months'
-                                                })</label>
-                                                <div className="d-flex align-items-center gap-3">
-                                                    <input
-                                                        type="range"
-                                                        min="1"
-                                                        max={goalSettings.frequency === 'DAILY' ? '90' : goalSettings.frequency === 'WEEKLY' ? '52' : '24'}
-                                                        className="form-range flex-grow-1"
-                                                        value={goalSettings.timeframe}
-                                                        onChange={(e) => setGoalSettings({ ...goalSettings, timeframe: e.target.value })}
-                                                    />
-                                                    <span className="badge bg-primary rounded-pill px-3">{goalSettings.timeframe}{
-                                                        goalSettings.frequency === 'DAILY' ? 'd' :
-                                                            goalSettings.frequency === 'WEEKLY' ? 'w' : 'm'
-                                                    }</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             <div className="col-12">
                                 <label className="form-label small fw-bold text-muted text-uppercase">Project Owners (Optional)</label>
@@ -633,23 +632,6 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                 <div className="p-3 bg-light rounded-3 border fw-bold text-primary">
                                     {title || 'Select seller and title...'}
                                 </div>
-                            </div>
-
-                            <div className="col-md-4">
-                                <label className="form-label small fw-bold text-muted text-uppercase">Type</label>
-                                <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
-                                    <option value="WEEKLY">Weekly</option>
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="QUARTERLY">Quarterly</option>
-                                </select>
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label small fw-bold text-muted text-uppercase">Start</label>
-                                <input type="date" className="form-control" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-                            </div>
-                            <div className="col-md-4">
-                                <label className="form-label small fw-bold text-muted text-uppercase">End</label>
-                                <input type="date" className="form-control" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
                             </div>
                         </div>
                     </form>

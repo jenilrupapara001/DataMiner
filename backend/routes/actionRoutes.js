@@ -6,6 +6,7 @@ const fs = require('fs').promises;
 const Action = require('../models/Action');
 const Asin = require('../models/Asin');
 const TaskTemplate = require('../models/TaskTemplate');
+const GoalTemplate = require('../models/GoalTemplate');
 const SystemSetting = require('../models/SystemSetting');
 const { authenticate: protect, requireAnyPermission, requireRole } = require('../middleware/auth');
 const { createNotification } = require('../controllers/notificationController');
@@ -265,6 +266,63 @@ router.delete('/templates/:id', protect, requireAnyPermission(['actions_manage']
         res.json({ success: true, message: 'Template deleted' });
     } catch (error) {
         console.error('[ActionRoutes] Failed to delete template:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ==========================================
+// Goal Templates Routes
+// ==========================================
+
+// Get all goal templates
+router.get('/goal-templates', protect, async (req, res) => {
+    try {
+        const templates = await GoalTemplate.find({}).sort({ name: 1 });
+        res.json({ success: true, data: templates });
+    } catch (error) {
+        console.error('[ActionRoutes] Failed to fetch goal templates:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Create goal template
+router.post('/goal-templates', protect, requireAnyPermission(['actions_manage']), async (req, res) => {
+    try {
+        const template = await GoalTemplate.create({ ...req.body, createdBy: req.user._id });
+        res.status(201).json({ success: true, data: template });
+    } catch (error) {
+        console.error('[ActionRoutes] Failed to create goal template:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
+// Update goal template
+router.put('/goal-templates/:id', protect, requireAnyPermission(['actions_manage']), async (req, res) => {
+    try {
+        const template = await GoalTemplate.findByIdAndUpdate(req.params.id, req.body, {
+            new: true,
+            runValidators: true
+        });
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Goal template not found' });
+        }
+        res.json({ success: true, data: template });
+    } catch (error) {
+        console.error('[ActionRoutes] Failed to update goal template:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
+// Delete goal template
+router.delete('/goal-templates/:id', protect, requireAnyPermission(['actions_manage']), async (req, res) => {
+    try {
+        const template = await GoalTemplate.findByIdAndDelete(req.params.id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Goal template not found' });
+        }
+        res.json({ success: true, message: 'Goal template deleted' });
+    } catch (error) {
+        console.error('[ActionRoutes] Failed to delete goal template:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
@@ -1122,12 +1180,22 @@ router.get('/reports/by-stage', protect, requireAnyPermission(['actions_view', '
 // Goal Achievement Analysis Report
 router.get('/reports/goal-achievement', protect, requireAnyPermission(['actions_view', 'actions_manage']), async (req, res) => {
     try {
-        // Fetch all completed actions with time tracking
-        const actions = await Action.find({
+        const { timeframe } = req.query; // e.g., '30d', 'all'
+        const filter = {
             status: 'COMPLETED',
             'timeTracking.startedAt': { $exists: true },
             'timeTracking.completedAt': { $exists: true }
-        }).populate('assignedTo', 'firstName lastName');
+        };
+
+        if (timeframe && timeframe !== 'all') {
+            const days = parseInt(timeframe) || 30;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            filter['timeTracking.completedAt'].$gte = cutoff;
+        }
+
+        // Fetch completed actions within timeframe
+        const actions = await Action.find(filter).populate('assignedTo', 'firstName lastName');
 
         const metrics = actions.map(a => {
             const start = new Date(a.timeTracking.startedAt);

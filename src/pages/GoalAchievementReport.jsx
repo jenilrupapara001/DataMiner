@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/db';
 import {
     BarChart2,
@@ -17,16 +17,13 @@ import { useNavigate } from 'react-router-dom';
 const GoalAchievementReport = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [timeframe, setTimeframe] = useState('30'); // Default to 30 days
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchReport();
-    }, []);
-
-    const fetchReport = async () => {
+    const fetchReport = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await db.getGoalAchievementReport();
+            const response = await db.getGoalAchievementReport(timeframe);
             if (response && response.success) {
                 setData(response.data);
             }
@@ -35,7 +32,11 @@ const GoalAchievementReport = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [timeframe]);
+
+    useEffect(() => {
+        fetchReport();
+    }, [fetchReport]);
 
     if (loading) {
         return (
@@ -133,9 +134,15 @@ const GoalAchievementReport = () => {
                     <div className="d-flex justify-content-between align-items-center">
                         <h5 className="mb-0 fw-bold">Task Performance Metrics</h5>
                         <div className="d-flex gap-2">
-                            <select className="form-select form-select-sm border-0 bg-light">
-                                <option>Last 30 Days</option>
-                                <option>All Time</option>
+                            <select
+                                className="form-select form-select-sm border-0 bg-light fw-bold"
+                                value={timeframe}
+                                onChange={(e) => setTimeframe(e.target.value)}
+                            >
+                                <option value="30">Last 30 Days</option>
+                                <option value="7">Last 7 Days</option>
+                                <option value="90">Last 90 Days</option>
+                                <option value="all">All Time</option>
                             </select>
                         </div>
                     </div>

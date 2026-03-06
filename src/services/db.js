@@ -531,8 +531,8 @@ class DatabaseService {
   /**
    * Get Goal vs Achievement report
    */
-  async getGoalAchievementReport() {
-    return this.request('/actions/reports/goal-achievement', {}, null);
+  async getGoalAchievementReport(timeframe = '30') {
+    return this.request(`/actions/reports/goal-achievement${timeframe ? `?timeframe=${timeframe}` : ''}`, {}, null);
   }
 
   // --- Action Review Workflow ---
@@ -621,6 +621,40 @@ class DatabaseService {
    */
   async deleteTemplate(id) {
     return this.request(`/actions/templates/${id}`, { method: 'DELETE' }, null);
+  }
+
+  // --- Goal Templates Methods ---
+
+  /**
+   * Get all goal templates
+   */
+  async getGoalTemplates() {
+    return this.request('/actions/goal-templates', {}, []);
+  }
+
+  /**
+   * Create a new goal template
+   * @param {object} template
+   */
+  async createGoalTemplate(template) {
+    return this.request('/actions/goal-templates', { method: 'POST', body: JSON.stringify(template) }, null);
+  }
+
+  /**
+   * Update a goal template
+   * @param {string} id
+   * @param {object} updates
+   */
+  async updateGoalTemplate(id, updates) {
+    return this.request(`/actions/goal-templates/${id}`, { method: 'PUT', body: JSON.stringify(updates) }, null);
+  }
+
+  /**
+   * Delete a goal template
+   * @param {string} id
+   */
+  async deleteGoalTemplate(id) {
+    return this.request(`/actions/goal-templates/${id}`, { method: 'DELETE' }, null);
   }
 
   /**

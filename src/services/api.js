@@ -658,7 +658,7 @@ const api = {
     if (!res.ok) throw new Error(`Request failed: ${res.statusText}`);
     return res.json();
   },
-  post: async (endpoint, data) => {
+  post: async (endpoint, data = {}) => {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -776,6 +776,20 @@ const api = {
     },
     votePoll: async (messageId, optionIndex) => {
       return api.post(`/chat/messages/${messageId}/vote`, { optionIndex });
+    }
+  },
+  sellerTrackerApi: {
+    getTrackers: async () => {
+      return api.get('/seller-tracker');
+    },
+    getSellerAsins: async (sellerId) => {
+      return api.get(`/seller-tracker/${sellerId}/asins`);
+    },
+    syncSeller: async (sellerId) => {
+      return api.post(`/seller-tracker/sync/${sellerId}`);
+    },
+    syncAll: async () => {
+      return api.post('/seller-tracker/sync-all');
     }
   }
 };

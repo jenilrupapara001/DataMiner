@@ -1,18 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, AlertTriangle, ExternalLink, BarChart2, Store, Scan } from 'lucide-react';
-
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3001/api';
-
-const request = async (path, options = {}) => {
-    const token = localStorage.getItem('authToken');
-    const res = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }), ...options.headers },
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-    return data;
-};
+import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, AlertTriangle, ExternalLink, BarChart2, Store } from 'lucide-react';
+import api from '../services/api';
 
 const MARKETPLACE_FLAGS = {
     'amazon.in': '🇮🇳',
@@ -43,29 +31,8 @@ const getScrapeStatusBadge = (status) => {
     return <span className="badge" style={{ backgroundColor: s.bg, color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}>{s.label}</span>;
 };
 
-// Collapsible Section (same as AsinManagerPage)
-const CollapsibleSection = ({ title, icon: Icon, isOpen, onToggle, children, badge }) => (
-    <div className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-        <div
-            className="card-header d-flex justify-content-between align-items-center cursor-pointer px-4 py-3"
-            onClick={onToggle}
-            style={{ cursor: 'pointer', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
-        >
-            <h5 className="card-title mb-0 d-flex align-items-center gap-2" style={{ color: '#111827', fontWeight: 600 }}>
-                <div className="p-2 bg-primary-subtle text-primary rounded-3"><Icon size={18} /></div>
-                {title}
-                {badge != null && <span className="badge rounded-pill bg-primary shadow-sm ms-2">{badge}</span>}
-            </h5>
-            <button className="btn btn-sm btn-light rounded-circle shadow-sm p-1">
-                {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-        </div>
-        {isOpen && <div className="card-body px-4 pb-4 pt-2" style={{ backgroundColor: '#fff' }}>{children}</div>}
-    </div>
-);
-
 // Per-seller ASIN table panel
-const SellerAsinPanel = ({ seller, onSync, syncing }) => {
+const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
     const [asins, setAsins] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
@@ -75,16 +42,18 @@ const SellerAsinPanel = ({ seller, onSync, syncing }) => {
         if (!isOpen) return;
         setLoading(true);
         try {
-            const res = await request(`/seller-tracker/${seller._id}/asins`);
-            setAsins(res.data || []);
+            const res = await api.sellerTrackerApi.getSellerAsins(seller._id);
+            if (res.success) {
+                setAsins(res.data || []);
+            }
         } catch (e) {
             console.error('Failed to load ASINs for seller:', e.message);
         } finally {
             setLoading(false);
         }
-    }, [isOpen, seller._id]);
+    }, [isOpen, seller._id]); // refreshKey is not strictly needed here if we trigger load() from parent or if we use effect on refreshKey
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { load(); }, [load, refreshKey]);
 
     const filtered = useMemo(() =>
         asins.filter(a => !search || a.asinCode?.toLowerCase().includes(search.toLowerCase()) || a.title?.toLowerCase().includes(search.toLowerCase())),
@@ -252,6 +221,7 @@ const SellerAsinTrackerPage = () => {
     const [alert, setAlert] = useState(null); // { msg, type: 'success'|'warning'|'danger' }
     const [keepaKeyMissing, setKeepaKeyMissing] = useState(false);
     const [showOverview, setShowOverview] = useState(true);
+    const [refreshKeys, setRefreshKeys] = useState({}); // sellerId -> timestamp
 
     const showAlert = (msg, type = 'success') => {
         setAlert({ msg, type });
@@ -261,12 +231,14 @@ const SellerAsinTrackerPage = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const res = await request('/seller-tracker');
-            setSellers(res.data || []);
-            setTokenStatus(res.tokenStatus);
-            setKeepaKeyMissing(false);
+            const res = await api.sellerTrackerApi.getTrackers();
+            if (res.success) {
+                setSellers(res.data || []);
+                setTokenStatus(res.tokenStatus);
+                setKeepaKeyMissing(false);
+            }
         } catch (e) {
-            if (e.message.includes('KEEPA_API_KEY')) setKeepaKeyMissing(true);
+            if (e.message && e.message.includes('KEEPA_API_KEY')) setKeepaKeyMissing(true);
             else showAlert(e.message, 'danger');
         } finally {
             setLoading(false);
@@ -278,9 +250,14 @@ const SellerAsinTrackerPage = () => {
     const handleSyncSeller = async (sellerId) => {
         setSyncingSeller(sellerId);
         try {
-            const res = await request(`/seller-tracker/sync/${sellerId}`, { method: 'POST' });
-            showAlert(`✅ ${res.seller}: +${res.added} new ASINs synced (${res.total} total on Keepa)`);
-            await loadData();
+            const res = await api.sellerTrackerApi.syncSeller(sellerId);
+            if (res.success) {
+                showAlert(`✅ ${res.seller}: +${res.added} new ASINs synced (${res.total} total on Keepa)`);
+                // Trigger refresh for this specific panel
+                setRefreshKeys(prev => ({ ...prev, [sellerId]: Date.now() }));
+                // Also update the seller info in the overview
+                await loadData();
+            }
         } catch (e) {
             showAlert(`Failed to sync: ${e.message}`, 'danger');
         } finally {
@@ -291,9 +268,15 @@ const SellerAsinTrackerPage = () => {
     const handleSyncAll = async () => {
         setSyncingAll(true);
         try {
-            const res = await request('/seller-tracker/sync-all', { method: 'POST' });
-            showAlert(`✅ Sync complete — ${res.totalAdded} new ASINs added across ${res.results.length} sellers`);
-            await loadData();
+            const res = await api.sellerTrackerApi.syncAll();
+            if (res.success) {
+                showAlert(`✅ Sync complete — ${res.totalAdded} new ASINs added across ${res.results.length} sellers`);
+                // Refresh all open panels by updating all refresh keys
+                const newKeys = {};
+                sellers.forEach(s => { newKeys[s._id] = Date.now(); });
+                setRefreshKeys(newKeys);
+                await loadData();
+            }
         } catch (e) {
             showAlert(`Sync all failed: ${e.message}`, 'danger');
         } finally {
@@ -308,19 +291,13 @@ const SellerAsinTrackerPage = () => {
         { label: 'New (24h)', value: `+${sellers.reduce((s, x) => s + (x.newAsinCount || 0), 0)}`, color: '#f59e0b', icon: <Zap size={14} /> },
     ], [sellers]);
 
-    if (loading) {
+    if (loading && sellers.length === 0) {
         return (
             <div className="container-fluid p-0">
-                <header className="main-header" style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <h1 className="page-title mb-0 d-flex align-items-center gap-2" style={{ fontSize: '1.75rem', fontWeight: 700 }}>
-                        <Zap className="text-primary" size={28} />
-                        Seller ASIN Tracker
-                    </h1>
-                </header>
                 <div className="page-content py-5">
                     <div className="d-flex flex-column justify-content-center align-items-center" style={{ minHeight: 400 }}>
                         <RefreshCw className="text-primary spin mb-3" size={40} />
-                        <p className="text-muted fw-500">Loading seller data...</p>
+                        <p className="text-muted fw-500">Loading seller data from Keepa...</p>
                     </div>
                 </div>
             </div>
@@ -328,41 +305,45 @@ const SellerAsinTrackerPage = () => {
     }
 
     return (
-        <>
+        <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-            {/* Page Header */}
-            <header className="main-header" style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                <div className="d-flex justify-content-between align-items-center">
+            {/* Page Header Area */}
+            <div className="p-4 bg-white border-bottom shadow-xs mb-4">
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <div>
-                        <h1 className="page-title mb-1 d-flex align-items-center gap-2" style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                            <Zap className="text-primary" size={28} />
-                            Seller ASIN <span className="text-primary">Tracker</span>
-                        </h1>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                            <div className="bg-primary text-white p-2 rounded-3 shadow-sm"><Zap size={20} /></div>
+                            <h1 className="h4 fw-bold mb-0 text-dark" style={{ letterSpacing: '-0.01em' }}>
+                                Seller ASIN <span className="text-primary">Tracker</span>
+                            </h1>
+                        </div>
                         <p className="text-muted small mb-0">Auto-discover new ASINs via Keepa API · Syncs every 12 hours automatically</p>
                     </div>
-                    <div className="d-flex align-items-center gap-3">
+                    <div className="d-flex align-items-center gap-2">
                         {tokenStatus && (
-                            <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 py-2" style={{ fontSize: '12px' }}>
-                                🪙 {tokenStatus.tokensLeft?.toLocaleString()} tokens left
-                            </span>
+                            <div className="px-3 py-2 rounded-pill bg-light border d-flex align-items-center gap-2 shadow-xs" style={{ fontSize: '12px', fontWeight: 600 }}>
+                                <span className="text-primary">🪙</span>
+                                <span className="text-dark">{tokenStatus.tokensLeft?.toLocaleString()} tokens left</span>
+                            </div>
                         )}
                         <button
-                            className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm"
+                            className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm fw-bold"
                             onClick={handleSyncAll}
                             disabled={syncingAll}
+                            style={{ height: '42px' }}
                         >
                             <RefreshCw size={16} className={syncingAll ? 'spin' : ''} />
                             {syncingAll ? 'Syncing All...' : 'Sync All Sellers'}
                         </button>
                     </div>
                 </div>
-            </header>
+            </div>
 
-            <div className="page-content">
+            <div className="container-fluid px-4 pb-5">
                 {/* Alert banner */}
                 {alert && (
-                    <div className={`alert alert-${alert.type} d-flex align-items-center mb-4 mx-2 border-0 shadow-sm rounded-4`} role="alert" style={{ padding: '0.75rem 1.25rem' }}>
+                    <div className={`alert alert-${alert.type} d-flex align-items-center mb-4 border-0 shadow-sm rounded-4`} role="alert" style={{ padding: '0.75rem 1.25rem' }}>
                         <AlertTriangle className="me-2" size={18} />
                         <span className="small fw-500">{alert.msg}</span>
                     </div>
@@ -370,7 +351,7 @@ const SellerAsinTrackerPage = () => {
 
                 {/* Missing API key warning */}
                 {keepaKeyMissing && (
-                    <div className="alert alert-warning d-flex align-items-start mb-4 mx-2 border-0 shadow-sm rounded-4" role="alert">
+                    <div className="alert alert-warning d-flex align-items-start mb-4 border-0 shadow-sm rounded-4" role="alert">
                         <AlertTriangle className="me-2 mt-1 text-warning flex-shrink-0" size={18} />
                         <div>
                             <div className="fw-bold mb-1">Keepa API Key Not Set</div>
@@ -383,57 +364,71 @@ const SellerAsinTrackerPage = () => {
                 )}
 
                 {/* Overview KPIs */}
-                <CollapsibleSection title="Seller Overview" icon={BarChart2} isOpen={showOverview} onToggle={() => setShowOverview(o => !o)}>
-                    <div className="d-flex flex-wrap gap-3 mt-2">
-                        {kpis.map((kpi, i) => (
-                            <div key={i} className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border bg-white border-light-subtle shadow-sm" style={{ fontSize: '13px', fontWeight: 500, minWidth: 'fit-content' }}>
-                                <div className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 24, height: 24, backgroundColor: kpi.color + '20', color: kpi.color }}>
-                                    {kpi.icon}
-                                </div>
-                                <div className="d-flex flex-column" style={{ lineHeight: '1.1' }}>
-                                    <span className="text-muted text-uppercase" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em' }}>{kpi.label}</span>
-                                    <span className="fw-bold text-dark" style={{ fontSize: '14px' }}>{kpi.value}</span>
-                                </div>
-                            </div>
-                        ))}
+                <div className="mb-4">
+                    <div className="d-flex align-items-center gap-2 mb-3 cursor-pointer" onClick={() => setShowOverview(!showOverview)}>
+                        <div className="p-1.5 bg-primary-subtle text-primary rounded-2"><BarChart2 size={16} /></div>
+                        <h6 className="mb-0 fw-bold text-dark">Seller Intelligence Overview</h6>
+                        <div className="ms-auto text-muted">{showOverview ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
                     </div>
-                </CollapsibleSection>
+
+                    {showOverview && (
+                        <div className="row g-3">
+                            {kpis.map((kpi, i) => (
+                                <div key={i} className="col-md-3">
+                                    <div className="glass-card p-3 d-flex align-items-center gap-3" style={{ borderRadius: '16px' }}>
+                                        <div className="d-flex align-items-center justify-content-center rounded-circle shadow-sm" style={{ width: 40, height: 40, backgroundColor: kpi.color + '15', color: kpi.color }}>
+                                            {kpi.icon}
+                                        </div>
+                                        <div>
+                                            <div className="text-muted text-uppercase fw-700" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{kpi.label}</div>
+                                            <div className="h5 fw-bold mb-0 text-dark">{kpi.value}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
                 {/* Seller list */}
                 <div className="card border-0 shadow-sm mb-5" style={{ borderRadius: '16px', overflow: 'hidden' }}>
                     <div className="card-header d-flex justify-content-between align-items-center px-4 py-3" style={{ backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                         <h5 className="card-title mb-0 d-flex align-items-center gap-2 text-dark fw-bold" style={{ fontSize: '1.1rem' }}>
                             <Store size={18} className="text-primary" />
-                            Sellers &amp; Their ASINs
-                            <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle smallest px-3 ms-2">
-                                {sellers.length} Sellers
+                            Active Sellers & Inventory
+                            <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 ms-2" style={{ fontSize: '11px' }}>
+                                {sellers.length} Sellers Tracking
                             </span>
                         </h5>
-                        <button className="btn btn-sm btn-light shadow-sm rounded-pill px-3" onClick={loadData}>
-                            <RefreshCw size={13} className="me-1" /> Refresh
+                        <button className="btn btn-white btn-sm shadow-sm rounded-pill px-3 border" onClick={loadData}>
+                            <RefreshCw size={13} className={loading ? 'spin me-1' : 'me-1'} /> Refresh Data
                         </button>
                     </div>
 
-                    <div className="card-body p-3" style={{ backgroundColor: '#f9fafb' }}>
-                        {sellers.length === 0 ? (
-                            <div className="text-center text-muted py-5">
-                                <Package size={40} className="mb-3 text-muted" />
-                                <p>No sellers found. Add sellers first from the <strong>Sellers</strong> page.</p>
+                    <div className="card-body p-4" style={{ backgroundColor: '#f9fafb' }}>
+                        {sellers.length === 0 && !loading ? (
+                            <div className="text-center text-muted py-5 bg-white rounded-4 border border-dashed">
+                                <Package size={48} className="mb-3 text-muted opacity-25" />
+                                <h6 className="fw-bold">No Sellers Found</h6>
+                                <p className="small mb-0">Add sellers first from the <strong>Sellers</strong> page.</p>
                             </div>
                         ) : (
-                            sellers.map(seller => (
-                                <SellerAsinPanel
-                                    key={seller._id}
-                                    seller={seller}
-                                    onSync={handleSyncSeller}
-                                    syncing={syncingSeller === seller._id}
-                                />
-                            ))
+                            <div className="d-grid gap-3">
+                                {sellers.map(seller => (
+                                    <SellerAsinPanel
+                                        key={seller._id}
+                                        seller={seller}
+                                        onSync={handleSyncSeller}
+                                        syncing={syncingSeller === seller._id}
+                                        refreshKey={refreshKeys[seller._id]}
+                                    />
+                                ))}
+                            </div>
                         )}
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 

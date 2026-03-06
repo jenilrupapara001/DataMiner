@@ -97,7 +97,26 @@ const syncSellerFromKeepa = async (seller) => {
             lastKeepaSync: new Date(),
             totalAsins: existingCodes.size + newAsins.length,
         });
+
         console.log(`[SellerTracker] ${seller.name}: added ${newAsins.length} new ASINs from Keepa`);
+
+        // Notify users associated with this seller
+        if (newAsins.length > 0 && seller.users && seller.users.length > 0) {
+            const Notification = require('../models/Notification');
+            for (const userId of seller.users) {
+                try {
+                    await Notification.create({
+                        recipient: userId,
+                        type: 'SYSTEM',
+                        referenceModel: 'System',
+                        referenceId: seller._id, // Using sellerId as reference
+                        message: `🚀 ${newAsins.length} new ASINs discovered for seller: ${seller.name} via Keepa sync.`
+                    });
+                } catch (notiErr) {
+                    console.error('[SellerTracker] Failed to create sync notification:', notiErr.message);
+                }
+            }
+        }
     } else {
         await Seller.findByIdAndUpdate(seller._id, {
             keepaAsinCount: keepaAsins.length,
@@ -108,7 +127,7 @@ const syncSellerFromKeepa = async (seller) => {
     return {
         added: newAsins.length,
         total: keepaAsins.length,
-        newAsins: newAsins.map(a => a.asinCode),
+        newAsins: Array.isArray(newAsins) ? newAsins.map(a => a.asinCode) : [],
     };
 };
 

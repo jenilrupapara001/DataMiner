@@ -181,6 +181,10 @@ server.listen(PORT, () => {
   // Start recurring task scheduler
   const recurringTaskScheduler = require('./services/recurringTaskScheduler');
   recurringTaskScheduler.start();
+
+  // Start Keepa ASIN Sync Scheduler
+  const schedulerService = require('./services/schedulerService');
+  schedulerService.init();
   console.log('⏰ Recurring task scheduler initialized');
 
   // Trigger initial CometChat sync on startup

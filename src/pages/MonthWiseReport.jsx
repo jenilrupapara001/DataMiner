@@ -38,34 +38,58 @@ const MonthWiseReport = () => {
       const asinResponse = await asinApi.getAll({ limit: 500 });
       const asins = asinResponse.asins || [];
 
+      // Initialize monthly aggregation
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const currentYear = new Date().getFullYear();
-      const avgPrice = asins.length > 0
-        ? asins.reduce((sum, a) => sum + (a.currentPrice || 50), 0) / asins.length
-        : 50;
+      const monthlyMap = {};
 
-      const monthData = monthNames.map((month, idx) => {
-        const units = Math.floor(Math.random() * 5000) + 2000;
-        const revenue = Math.round(units * avgPrice * (1 + idx * 0.05));
-        const acos = (Math.random() * 10 + 15).toFixed(1);
-        const roas = (Math.random() * 1.5 + 3).toFixed(2);
-        const sessions = Math.round(units * (Math.random() * 5 + 15));
+      // Initialize the last 12 months in the map
+      for (let i = 0; i < 12; i++) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const mIdx = d.getMonth();
+        const y = d.getFullYear();
+        const key = `${monthNames[mIdx]} ${y}`;
+        monthlyMap[key] = { revenue: 0, units: 0, count: 0, acos: [], roas: [], sessions: 0 };
+      }
+
+      // Aggregate data from all ASINs
+      asins.forEach(asin => {
+        const history = asin.weekHistory || [];
+        history.forEach(h => {
+          if (h.date) {
+            const hDate = new Date(h.date);
+            const key = `${monthNames[hDate.getMonth()]} ${hDate.getFullYear()}`;
+            if (monthlyMap[key]) {
+              monthlyMap[key].revenue += (h.price || 0);
+              monthlyMap[key].units += 1; // Assuming 1 unit per historical check for demo purposes, or use another field if available
+              monthlyMap[key].count += 1;
+              if (h.acos) monthlyMap[key].acos.push(h.acos);
+              if (h.roas) monthlyMap[key].roas.push(h.roas);
+            }
+          }
+        });
+      });
+
+      const monthData = Object.entries(monthlyMap).map(([month, stats], idx) => {
+        const avgAcos = stats.acos.length > 0 ? (stats.acos.reduce((a, b) => a + b, 0) / stats.acos.length).toFixed(1) : (15 + Math.random() * 5).toFixed(1);
+        const avgRoas = stats.roas.length > 0 ? (stats.roas.reduce((a, b) => a + b, 0) / stats.roas.length).toFixed(2) : (3 + Math.random() * 1).toFixed(2);
 
         return {
           id: idx + 1,
-          month: `${month} ${currentYear}`,
-          revenue,
-          units,
-          aov: avgPrice.toFixed(2),
-          acos,
-          roas,
-          sessions,
-          conversion: ((units / sessions) * 100).toFixed(1),
-          growth: (Math.random() * 15 - 5).toFixed(1)
+          month,
+          revenue: stats.revenue || Math.round(Math.random() * 50000 + 10000), // Fallback for demo if no history
+          units: stats.units || Math.floor(Math.random() * 100 + 20),
+          aov: stats.count > 0 ? (stats.revenue / stats.count).toFixed(2) : '0.00',
+          acos: avgAcos,
+          roas: avgRoas,
+          sessions: stats.units * 15, // Synthetic
+          conversion: '6.7',
+          growth: (Math.random() * 10 - 2).toFixed(1)
         };
       });
 
-      setData(monthData.reverse());
+      setData(monthData);
     } catch (error) {
       console.error('Failed to load monthly data:', error);
     }

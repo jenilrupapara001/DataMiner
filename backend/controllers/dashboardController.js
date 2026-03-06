@@ -193,14 +193,21 @@ function processChartData(asins, days) {
   }
 
   asins.forEach(asin => {
-    const historyData = (asin.history && asin.history.length > 0) ? asin.history : asin.weekHistory;
+    // Check daily history first, then weekly history
+    const historyData = (asin.history && asin.history.length > 0) ? asin.history : (asin.weekHistory || []);
+
     if (historyData && Array.isArray(historyData)) {
       historyData.forEach(h => {
         if (h.date) {
           try {
-            const dateStr = new Date(h.date).toISOString().split('T')[0];
+            const hDate = new Date(h.date);
+            const dateStr = hDate.toISOString().split('T')[0];
+
+            // Strictly filter by date range
             if (dateMap[dateStr]) {
-              dateMap[dateStr].revenue += (h.price || 0);
+              // Priority fields: price > currentPrice > 0
+              const price = h.price || h.currentPrice || 0;
+              dateMap[dateStr].revenue += price;
             }
           } catch (e) {
             // Skip invalid dates
