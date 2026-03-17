@@ -17,8 +17,12 @@ import {
   Filter,
   MoreVertical,
   FileUp,
-  Download
+  Download,
+  XCircle,
+  ChevronLeft
 } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import DataTable from '../components/DataTable';
 import api, { asinApi, sellerApi } from '../services/api';
 
@@ -34,6 +38,9 @@ const AdsReport = () => {
   });
 
   const [reportType, setReportType] = useState('daily');
+  const [selectedAsin, setSelectedAsin] = useState(null);
+  const [customStartDate, setCustomStartDate] = useState(null);
+  const [customEndDate, setCustomEndDate] = useState(null);
 
   const loadAdsData = useCallback(async () => {
     setLoading(true);
@@ -51,9 +58,17 @@ const AdsReport = () => {
         startDate = new Date(startDateCalc.setDate(startDateCalc.getDate() - 30)).toISOString().split('T')[0];
       } else if (dateRange === 'last90') {
         startDate = new Date(startDateCalc.setDate(startDateCalc.getDate() - 90)).toISOString().split('T')[0];
+      } else if (dateRange === 'custom' && customStartDate) {
+        startDate = customStartDate.toISOString().split('T')[0];
+        if (customEndDate) {
+          endDate = customEndDate.toISOString().split('T')[0];
+        }
       }
 
-      const response = await api.get(`/data/ads-report`, { startDate, endDate, reportType });
+      const params = { startDate, endDate, reportType };
+      if (selectedAsin) params.asin = selectedAsin;
+
+      const response = await api.get(`/data/ads-report`, params);
 
       setData(response.data || []);
       setDailyData(response.dailyData || []);
@@ -61,7 +76,7 @@ const AdsReport = () => {
       console.error('Failed to load ads data:', error);
     }
     setLoading(false);
-  }, [dateRange, reportType]);
+  }, [dateRange, reportType, selectedAsin, customStartDate, customEndDate]);
 
   useEffect(() => {
     loadAdsData();
@@ -165,7 +180,7 @@ const AdsReport = () => {
       ctr: <span className="fw-600">{(item.ctr || 0).toFixed(2)}%</span>,
       aov: <span className="fw-600 text-dark">₹{(item.aov || 0).toLocaleString()}</span>
     }));
-  }, [data]);
+  }, [data, selectedAsin]);
 
   // Chart options for Performance Efficiency
   const performanceChartOptions = {
@@ -252,17 +267,37 @@ const AdsReport = () => {
               IMPORT CSV
             </button>
             <div className="glass-card p-1 d-flex gap-1 ms-2" style={{ borderRadius: '50px' }}>
-              {['7D', '30D', '90D'].map((range) => (
+              {['7D', '30D', '90D', 'Custom'].map((range) => (
                 <button
                   key={range}
-                  className={`btn btn-sm px-3 rounded-pill border-0 transition-base ${dateRange === (range === '7D' ? 'last7' : range === '30D' ? 'last30' : 'last90') ? 'btn-primary shadow-sm' : 'btn-light bg-transparent text-muted'}`}
+                  className={`btn btn-sm px-3 rounded-pill border-0 transition-base ${dateRange === (range === '7D' ? 'last7' : range === '30D' ? 'last30' : range === '90D' ? 'last90' : 'custom') ? 'btn-primary shadow-sm' : 'btn-light bg-transparent text-muted'}`}
                   style={{ fontSize: '11px', fontWeight: 700 }}
-                  onClick={() => setDateRange(range === '7D' ? 'last7' : range === '30D' ? 'last30' : 'last90')}
+                  onClick={() => setDateRange(range === '7D' ? 'last7' : range === '30D' ? 'last30' : range === '90D' ? 'last90' : 'custom')}
                 >
                   {range}
                 </button>
               ))}
             </div>
+            {dateRange === 'custom' && (
+              <div className="ms-2 d-flex align-items-center bg-white border rounded-pill px-3 py-1 shadow-sm" style={{ height: '36px' }}>
+                <Calendar size={14} className="text-muted me-2" />
+                <DatePicker
+                  selectsRange={true}
+                  startDate={customStartDate}
+                  endDate={customEndDate}
+                  onChange={(update) => {
+                    const [start, end] = update;
+                    setCustomStartDate(start);
+                    setCustomEndDate(end);
+                  }}
+                  className="border-0 bg-transparent smallest fw-600 outline-none"
+                  dateFormat="MMM d, yyyy"
+                  placeholderText="Select range"
+                  isClearable={true}
+                  style={{ width: '150px' }}
+                />
+              </div>
+            )}
             <button className="btn btn-dark btn-sm rounded-pill px-3 py-2 shadow-sm fw-700 d-flex align-items-center gap-2 ms-2" onClick={loadAdsData}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
               SYNC
@@ -281,7 +316,25 @@ const AdsReport = () => {
       <div className="row g-4 mb-4">
         {/* Trend Visualization */}
         <div className="col-lg-8">
-          <DashboardCard title="Performance Efficiency" icon={Activity} extra={<span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill smallest">SPEND VS SALES</span>}>
+          <DashboardCard 
+            title={selectedAsin ? `Performance: ${selectedAsin}` : "Performance Efficiency"} 
+            icon={Activity} 
+            extra={
+              <div className="d-flex align-items-center gap-2">
+                {selectedAsin && (
+                  <button 
+                    className="btn btn-xs btn-outline-danger rounded-pill px-2 py-1 d-flex align-items-center gap-1 fw-700"
+                    onClick={() => setSelectedAsin(null)}
+                    style={{ fontSize: '10px' }}
+                  >
+                    <XCircle size={12} />
+                    BACK TO ALL
+                  </button>
+                )}
+                <span className="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill smallest">SPEND VS SALES</span>
+              </div>
+            }
+          >
             <div style={{ height: '320px' }}>
               <Chart
                 options={performanceChartOptions}
@@ -412,6 +465,16 @@ const AdsReport = () => {
                 pageSize={8}
                 compact={true}
                 sortable={true}
+                onRowClick={(row) => {
+                  // The data row asin column has JSX tags in it, so we need to extract string from data[rowIdx].asin or similar
+                  // Actually the data passed to DataTable is 'dashboardData' which has JSX in 'asin' field.
+                  // We should use the original 'data' item or find it.
+                  const rawItem = data.find(d => d.asin === row.asin.props.children || d.asin === row.asin);
+                  if (rawItem) {
+                    setSelectedAsin(rawItem.asin);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
               />
             </div>
           </div>

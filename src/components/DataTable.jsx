@@ -24,7 +24,8 @@ const DataTable = ({
   pageSize = 10,
   compact = false,
   actions = null,
-  customRenderers = {}
+  customRenderers = {},
+  onRowClick = null
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -196,7 +197,11 @@ const DataTable = ({
           <tbody className="border-top-0">
             {displayData.length > 0 ? (
               displayData.map((item, rowIdx) => (
-                <tr key={rowIdx} className="transition-base hover-table-row">
+                <tr 
+                  key={rowIdx} 
+                  className={`transition-base hover-table-row ${onRowClick ? 'cursor-pointer' : ''}`}
+                  onClick={() => onRowClick && onRowClick(item)}
+                >
                   {headers.map((col, colIdx) => (
                     <td
                       key={colIdx}

@@ -288,6 +288,11 @@ exports.getAdsReport = async (req, res) => {
       query.asin = { $in: allowedAsinCodes };
     }
 
+    // Add explicit asin filter if provided
+    if (req.query.asin) {
+      query.asin = req.query.asin;
+    }
+
     if (reportType === 'daily' && (startDate || endDate)) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
