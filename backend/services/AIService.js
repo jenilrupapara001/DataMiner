@@ -2,6 +2,14 @@ const OpenAI = require('openai');
 
 class AIService {
     constructor() {
+        // DEBUG: Log API key presence
+        const apiKey = process.env.PERPLEXITY_API_KEY;
+        console.log('[DEBUG] AIService initializing...', {
+            hasApiKey: !!apiKey,
+            keyLength: apiKey?.length || 0,
+            keyPrefix: apiKey?.substring(0, 10) || 'undefined'
+        });
+
         this.openai = new OpenAI({
             apiKey: process.env.PERPLEXITY_API_KEY,
             baseURL: 'https://api.perplexity.ai'

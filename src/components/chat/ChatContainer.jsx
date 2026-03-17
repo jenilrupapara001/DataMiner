@@ -26,6 +26,19 @@ const ChatContainer = () => {
 
     useEffect(() => {
         if (user && !loggedInUser && !isLoggingIn) {
+            // DEBUG: Validate user object has required fields
+            console.log('[DEBUG] ChatContainer login attempt:', {
+                hasUser: !!user,
+                hasEmail: !!user?.email,
+                email: user?.email,
+                userId: user?._id || user?.id
+            });
+
+            if (!user.email) {
+                console.error('[ERROR] Cannot login to CometChat: user.email is undefined');
+                return;
+            }
+
             const uid = user.email.replace(/[@.]/g, '_').toLowerCase();
             setIsLoggingIn(true);
             CometChatUIKit.login(uid)

@@ -60,7 +60,25 @@ exports.getCategories = async (req, res) => {
 exports.getMasterWithRevenue = async (req, res) => {
   try {
     const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
-    const allowedSellerIds = !isAdmin ? req.user.assignedSellers.map(s => s._id) : [];
+    // DEBUG: Log user info to diagnose assignedSellers issue
+    console.log('[DEBUG] User info:', {
+      userId: req.user?._id,
+      isAdmin,
+      hasAssignedSellers: !!req.user?.assignedSellers,
+      assignedSellersType: typeof req.user?.assignedSellers,
+      roleName: req.user?.role?.name
+    });
+
+    // FIX: Add null check for assignedSellers
+    let allowedSellerIds = [];
+    if (!isAdmin) {
+      if (!req.user.assignedSellers) {
+        console.warn('[WARN] Non-admin user has no assignedSellers:', req.user._id);
+        allowedSellerIds = []; // Return empty array - user has no access
+      } else {
+        allowedSellerIds = req.user.assignedSellers.map(s => s._id);
+      }
+    }
 
     const result = await Master.aggregate([
       {

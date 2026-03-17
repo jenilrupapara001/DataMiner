@@ -9,10 +9,19 @@ const DEMO_MODE = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === '
 exports.authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
+  // DEBUG: Log auth attempt
+  console.log('[DEBUG] Auth middleware:', {
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader?.substring(0, 20),
+    demoMode: DEMO_MODE,
+    dbState: mongoose.connection.readyState
+  });
+
   // DEMO_MODE: only bypass auth when there is no real token provided
   if (DEMO_MODE && (!authHeader || !authHeader.startsWith('Bearer '))) {
     req.userId = 'demo-user';
     req.user = { _id: 'demo-user', role: { name: 'admin' }, assignedSellers: [] };
+    console.log('[DEBUG] Demo mode enabled, using fallback user');
     return next();
   }
 

@@ -18,7 +18,16 @@ export const SocketProvider = ({ children }) => {
 
     useEffect(() => {
         if (user) {
+            // DEBUG: Log socket connection attempt
+            console.log('[DEBUG] SocketContext: User logged in, attempting socket connection', {
+                userId: user._id || user.id,
+                hasEmail: !!user.email,
+                envUrl: import.meta.env.VITE_API_URL
+            });
+
             const socketUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace('/api', '');
+            console.log('[DEBUG] Socket URL:', socketUrl);
+
             const newSocket = io(socketUrl, {
                 transports: ['websocket'],
                 autoConnect: true
