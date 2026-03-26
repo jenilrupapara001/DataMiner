@@ -12,181 +12,82 @@ const stageHistorySchema = new mongoose.Schema({
 }, { _id: false });
 
 const actionSchema = new mongoose.Schema({
-    asins: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Asin',
-        required: false
-    }],
-    keyResultId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'KeyResult',
-        required: false
+    // SCOPE SYSTEM
+    scopeType: { 
+        type: String, 
+        enum: ['BRAND', 'ASIN', 'GLOBAL'], 
+        default: 'ASIN' 
     },
+    scopeIds: [{ type: String }],
+    resolvedAsins: [{ type: String, index: true }], // Flattened ASIN array for data tracking
+
+    // STRATEGIC LINKAGE
+    goalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Goal',
+        required: false,
+        index: true
+    },
+    impactWeight: { 
+        type: Number, 
+        min: 1, 
+        max: 10, 
+        default: 5 
+    }, // How much this task impacts the Goal (for prioritization)
+    
     type: {
         type: String,
-        enum: [
-            'DESCRIPTION_OPTIMIZATION',
-            'TITLE_OPTIMIZATION',
-            'IMAGE_OPTIMIZATION',
-            'BULLET_POINTS',
-            'A_PLUS_CONTENT',
-            'PRICING_STRATEGY',
-            'RANK_IMPROVEMENT',
-            'REVIEW_MANAGEMENT',
-            'INVENTORY_MANAGEMENT',
-            'COMPETITOR_ANALYSIS',
-            'KEYWORD_OPTIMIZATION',
-            'GENERAL_OPTIMIZATION',
-            'GOAL_DRIVEN_TASK'
-        ],
-        required: true
+        required: true,
+        index: true
     },
-    measurementMetric: {
-        type: String,
-        enum: ['GMS', 'ACOS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'ORDER_COUNT', 'NONE'],
-        default: 'NONE'
-    },
-    goalSettings: {
-        targetValue: { type: Number },
-        timeframe: { type: Number }, // in months
-        isGoalPrimary: { type: Boolean, default: false }
-    },
-    title: { type: String, required: true },
+    
+    title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
+    
     priority: {
         type: String,
         enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
-        required: true
+        required: true,
+        default: 'MEDIUM'
     },
+    
     status: {
         type: String,
         enum: ['PENDING', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 'CANCELLED', 'REJECTED'],
         default: 'PENDING',
         required: true
     },
-    assignedTo: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
 
-    // Legacy fields (kept for backward compatibility)
-    startedAt: { type: Date },
-    completedAt: { type: Date },
-    estimatedHours: { type: Number },
-    actualHours: { type: Number },
-    notes: { type: String },
-    completionNotes: { type: String },
-    tags: [{ type: String }],
-    relatedMetrics: {
-        lqsScore: { type: Number },
-        rankChange: { type: Number },
-        priceChange: { type: Number },
-        ratingChange: { type: Number },
-    },
+    // EXECUTION METADATA
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    deadline: { type: Date },
 
-    // NEW: Time Tracking
+    // AI ENRICHMENT
+    isAIGenerated: { type: Boolean, default: false },
+    aiGenerated: { type: Boolean, default: false }, // Consistency with new system
+    aiReasoning: { type: String }, // "Why this task exists"
+    aiReason: { type: String }, // Consistency with new system
+    expectedImpact: {
+        metric: { type: String }, // "GMS" | "ACOS" | "CVR"
+        value: { type: Number }
+    },
+    expectedImpactLegacy: { type: String }, // For old string-based impact data
+    
+    // PROGRESS TRACKING
     timeTracking: {
-        startDate: { type: Date },
-        deadline: { type: Date },
-        startedAt: { type: Date }, // Actual start
-        completedAt: { type: Date }, // Actual completion
-        timeLimit: { type: Number }, // in minutes
-        actualDuration: { type: Number }, // in minutes
-        isOverdue: { type: Boolean, default: false }
+        startedAt: { type: Date },
+        completedAt: { type: Date },
+        actualDuration: { type: Number } // in minutes
     },
 
-    // NEW: Stage Management
-    stage: {
-        current: {
-            type: String,
-            enum: ['NOT_STARTED', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'],
-            default: 'NOT_STARTED'
-        },
-        history: [stageHistorySchema]
-    },
-
-    // NEW: Review Management
-    review: {
-        requestedAt: { type: Date },
-        reviewedAt: { type: Date },
-        reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        comments: { type: String },
-        status: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: 'PENDING' }
-    },
-
-    // NEW: Completion Details
-    completion: {
-        remarks: { type: String },
-        audioUrl: { type: String }, // S3 URL or file path
-        audioTranscript: { type: String },
-        completedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        completedAt: { type: Date }
-    },
-
-    sellerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Seller'
-    },
-
-    // NEW: OKR Linkage
-    keyResultId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'KeyResult'
-    },
-
-    // NEW: Recurring Configuration
-    recurring: {
-        enabled: { type: Boolean, default: false },
-        frequency: {
-            type: String,
-            enum: ['DAILY', 'WEEKLY', 'MONTHLY'],
-            default: 'WEEKLY'
-        },
-        daysOfWeek: [{ type: Number, min: 0, max: 6 }], // 0=Sunday, 6=Saturday
-        nextOccurrence: { type: Date },
-        parentActionId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Action'
-        }
-    },
-
-    // NEW: Action Conversation (Chat)
-    messages: [{
-        sender: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-        content: { type: String, required: true },
-        createdAt: { type: Date, default: Date.now }
-    }],
-
-    // NEW: Auto-generation metadata
-    autoGenerated: {
-        isAuto: { type: Boolean, default: false },
-        source: {
-            type: String,
-            enum: ['ASIN_ANALYSIS', 'MANUAL', 'RECURRING'],
-            default: 'MANUAL'
-        },
-        analysisData: { type: mongoose.Schema.Types.Mixed },
-        confidence: { type: Number, min: 0, max: 100 }
-    }
+    instructions: { type: String }
 }, { timestamps: true });
 
 // Protocols for performance
-actionSchema.index({ asins: 1, status: 1 });
+actionSchema.index({ resolvedAsins: 1, status: 1 });
 actionSchema.index({ assignedTo: 1, status: 1 });
-actionSchema.index({ 'recurring.nextOccurrence': 1 });
-actionSchema.index({ 'stage.current': 1 });
+actionSchema.index({ goalId: 1, status: 1 });
 actionSchema.index({ createdAt: -1 });
 
 // Virtual for checking if task is started
@@ -367,7 +268,7 @@ actionSchema.methods.calculateNextOccurrence = function () {
 // Static method to create recurring instance
 actionSchema.statics.createRecurringInstance = async function (parentAction) {
     const newAction = new this({
-        asins: parentAction.asins,
+        resolvedAsins: parentAction.resolvedAsins,
         type: parentAction.type,
         title: parentAction.title,
         description: parentAction.description,

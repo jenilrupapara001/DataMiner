@@ -7,10 +7,15 @@ import {
     MessageSquare,
     Info,
     Check,
-    TrendingUp
+    TrendingUp,
+    Menu,
+    Package,
+    Users
 } from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
+import { useSidebar } from '../contexts/SidebarContext';
+import { usePageTitle } from '../contexts/PageTitleContext';
 import { DropdownButton } from './DropdownButton';
 import { Dropdown } from './base/dropdown/dropdown';
 import './Header.css';
@@ -24,7 +29,17 @@ const Header = () => {
     const [showUserMenu, setShowUserMenu] = useState(false);
     const notificationRef = useRef(null);
     const userMenuRef = useRef(null);
+    const searchInputRef = useRef(null);
     const socket = useSocket();
+    const { toggleMobile, isMobile } = useSidebar();
+    const { pageTitle } = usePageTitle();
+    
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [showResults, setShowResults] = useState(false);
+    const searchContainerRef = useRef(null);
 
     const fetchNotifications = async () => {
         try {
@@ -65,14 +80,58 @@ const Header = () => {
             if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
                 setShowUserMenu(false);
             }
+            if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+                setShowResults(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Global keyboard shortcut (Cmd+K)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Global Search Logic
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(async () => {
+            if (searchQuery.length >= 2) {
+                setSearchLoading(true);
+                try {
+                    const response = await api.get(`/search?q=${searchQuery}`);
+                    setSearchResults(response.data);
+                    setShowResults(true);
+                } catch (error) {
+                    console.error('Search failed:', error);
+                } finally {
+                    setSearchLoading(false);
+                }
+            } else {
+                setSearchResults(null);
+                setShowResults(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchQuery]);
+
     const handleLogout = () => {
         logout();
         navigate('/login');
+    };
+
+    const handleOpenCommandPalette = () => {
+        window.dispatchEvent(new CustomEvent('open-command-palette'));
     };
 
     const getTypeIcon = (type) => {
@@ -137,15 +196,90 @@ const Header = () => {
     return (
         <header className="main-header">
             <div className="header-container">
-                {/* Flex spacer — logo is in sidebar */}
-                <div style={{ flex: 1 }} />
+                {/* Mobile hamburger menu */}
+                {isMobile && (
+                    <button className="header-hamburger" onClick={toggleMobile} aria-label="Open menu">
+                        <Menu size={24} />
+                    </button>
+                )}
+
+                {/* Page Title */}
+                {pageTitle && <h1 className="header-title">{pageTitle}</h1>}
+
+                {/* Spacer */}
+                <div className="header-spacer" />
 
                 {/* Right Side: search + notifications + account */}
                 <div className="header-right">
-                    {/* Search Bar */}
-                    <div className="header-search">
-                        <Search size={16} className="search-icon" />
-                        <input type="text" placeholder="Search..." />
+                    {/* Integrated Search */}
+                    <div className="header-search-container" ref={searchContainerRef}>
+                        <div className={`header-search-wrapper ${showResults ? 'active' : ''}`}>
+                            <Search size={16} className="search-icon" />
+                            <input 
+                                type="text" 
+                                placeholder="Search ASINs, Sellers, Actions..." 
+                                value={searchQuery}
+                                ref={searchInputRef}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => searchQuery.length >= 2 && setShowResults(true)}
+                                className="header-search-input"
+                            />
+                            {searchLoading && <div className="search-spinner-sm" />}
+                            <span className="search-shortcut">⌘K</span>
+                        </div>
+
+                        {showResults && searchResults && (
+                            <div className="search-results-dropdown">
+                                {(!searchResults.asins.length && !searchResults.sellers.length && !searchResults.actions.length) ? (
+                                    <div className="search-no-results">No results for "{searchQuery}"</div>
+                                ) : (
+                                    <>
+                                        {searchResults.asins.length > 0 && (
+                                            <div className="search-section">
+                                                <div className="search-section-title">Products / ASINs</div>
+                                                {searchResults.asins.map(asin => (
+                                                    <div key={asin.id} className="search-item" onClick={() => { navigate(`/sku-report?asin=${asin.code}`); setShowResults(false); }}>
+                                                        <div className="search-item-icon"><Package size={14} /></div>
+                                                        <div className="search-item-content">
+                                                            <div className="search-item-title">{asin.title}</div>
+                                                            <div className="search-item-subtitle">{asin.code} • {asin.sku}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {searchResults.sellers.length > 0 && (
+                                            <div className="search-section">
+                                                <div className="search-section-title">Sellers</div>
+                                                {searchResults.sellers.map(seller => (
+                                                    <div key={seller.id} className="search-item" onClick={() => { navigate(`/seller-tracker/${seller.id}`); setShowResults(false); }}>
+                                                        <div className="search-item-icon"><Users size={14} /></div>
+                                                        <div className="search-item-content">
+                                                            <div className="search-item-title">{seller.title}</div>
+                                                            <div className="search-item-subtitle">{seller.subtitle}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {searchResults.actions.length > 0 && (
+                                            <div className="search-section">
+                                                <div className="search-section-title">Action Items</div>
+                                                {searchResults.actions.map(action => (
+                                                    <div key={action.id} className="search-item" onClick={() => { navigate(`/actions?id=${action.id}`); setShowResults(false); }}>
+                                                        <div className="search-item-icon"><TrendingUp size={14} /></div>
+                                                        <div className="search-item-content">
+                                                            <div className="search-item-title">{action.title}</div>
+                                                            <div className="search-item-subtitle">{action.subtitle}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Notifications */}

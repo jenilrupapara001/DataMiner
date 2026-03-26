@@ -418,6 +418,13 @@ class DatabaseService {
   }
 
   /**
+   * Get action instructions (AI generated)
+   */
+  async getActionInstructions(id) {
+    return this.request(`/actions/${id}/instructions`, { method: 'GET' }, null);
+  }
+
+  /**
    * Add a message to an action
    * @param {string} actionId
    * @param {string} content
@@ -531,8 +538,17 @@ class DatabaseService {
   /**
    * Get Goal vs Achievement report
    */
-  async getGoalAchievementReport(timeframe = '30') {
-    return this.request(`/actions/reports/goal-achievement${timeframe ? `?timeframe=${timeframe}` : ''}`, {}, null);
+  async getGoalAchievementReport(timeframe = '30', startDate = null, endDate = null) {
+    let url = '/actions/reports/goal-achievement';
+    const params = new URLSearchParams();
+    if (startDate && endDate) {
+      params.append('startDate', startDate);
+      params.append('endDate', endDate);
+    } else if (timeframe) {
+      params.append('timeframe', timeframe);
+    }
+    const query = params.toString();
+    return this.request(`${url}${query ? `?${query}` : ''}`, {}, null);
   }
 
   // --- Action Review Workflow ---
@@ -589,6 +605,28 @@ class DatabaseService {
    */
   async getObjectives() {
     return this.request('/objectives', {}, []);
+  }
+
+  /**
+   * Get all goals (synonym for objectives in some contexts, or specific to GMS)
+   */
+  async getGoals() {
+    return this.request('/goals', {}, []);
+  }
+
+  /**
+   * Get goals filtered by brand
+   */
+  async getBrandGoals(brandId) {
+    if (!brandId) return this.getGoals();
+    return this.request(`/goals/brand/${brandId}`, {}, []);
+  }
+
+  /**
+   * Create a new goal
+   */
+  async createGoal(goalData) {
+    return this.request('/goals', { method: 'POST', body: JSON.stringify(goalData) }, null);
   }
 
   /**
@@ -702,6 +740,13 @@ class DatabaseService {
   }
 
   /**
+   * Synchronize key result progress
+   */
+  async syncKeyResult(id) {
+    return this.request(`/objectives/key-results/${id}/sync`, { method: 'POST' }, null);
+  }
+
+  /**
    * Delete an action (task) by ID
    */
   async deleteAction(id) {
@@ -736,12 +781,19 @@ class DatabaseService {
    * Get AI suggestions for tasks
    * @param {string} context - Goal or KR context
    */
-  /**
-   * Get AI suggestions for tasks
-   * @param {string} context - Goal or KR context
-   */
   async getAISuggestions(context) {
     return this.request('/ai/suggest-tasks', { method: 'POST', body: JSON.stringify({ context }) }, null);
+  }
+
+  /**
+   * Generate recovery tasks for a specific objective/goal
+   * @param {string} objectiveId 
+   */
+  async generateRecoveryTasks(objectiveId) {
+    return this.request('/ai/generate-recovery-tasks', { 
+      method: 'POST', 
+      body: JSON.stringify({ objectiveId }) 
+    }, null);
   }
 
   /**

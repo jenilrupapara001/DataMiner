@@ -221,6 +221,65 @@ class ObjectiveService {
     }
 
     /**
+     * Synchronize progress for a specific Key Result (e.g. GMS tracking)
+     */
+    async syncKeyResultProgress(krId) {
+        const kr = await KeyResult.findById(krId);
+        if (!kr) throw new Error('Key Result not found');
+
+        const objective = await Objective.findById(kr.objectiveId);
+        if (!objective) throw new Error('Parent Objective not found');
+
+        if (kr.metric === 'GMS' && objective.sellerId) {
+            const currentGms = await this.calculateCurrentGms(objective.sellerId, objective.startDate, objective.endDate);
+            kr.currentValue = currentGms;
+            await kr.save();
+
+            // Refresh parent objective progress
+            await this.refreshProgress(objective._id);
+            return kr;
+        }
+
+        return kr;
+    }
+
+    /**
+     * Helper to calculate GMS for a seller in a given date range using MonthlyPerformance
+     */
+    async calculateCurrentGms(sellerId, startDate, endDate) {
+        const Asin = require('../models/Asin');
+        const MonthlyPerformance = require('../models/MonthlyPerformance');
+
+        // 1. Find all ASINs for this seller
+        const asins = await Asin.find({ seller: sellerId }).select('asinCode');
+        const asinCodes = asins.map(a => a.asinCode);
+
+        if (asinCodes.length === 0) return 0;
+
+        // 2. Aggregate MonthlyPerformance revenue for these ASINs
+        // Note: MonthlyPerformance is usually recorded on the 1st of each month
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        const results = await MonthlyPerformance.aggregate([
+            {
+                $match: {
+                    asin: { $in: asinCodes },
+                    month: { $gte: start, $lte: end }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: "$ordered_revenue" }
+                }
+            }
+        ]);
+
+        return results.length > 0 ? results[0].totalRevenue : 0;
+    }
+
+    /**
      * Delete a Key Result and its associated Actions
      */
     async deleteKeyResult(id, userId) {

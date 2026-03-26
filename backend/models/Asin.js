@@ -16,6 +16,7 @@ const weekHistorySchema = new mongoose.Schema({
   bulletPoints: { type: Number, default: 0 },
   videoCount: { type: Number, default: 0 },
   offers: { type: Number, default: 0 },
+  subBSRs: [{ type: String }],
 });
 
 const asinSchema = new mongoose.Schema({
@@ -33,6 +34,7 @@ const asinSchema = new mongoose.Schema({
   bsr: { type: Number, default: 0 }, // Main BSR
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
+  stockLevel: { type: Number, default: 0, index: true },
   ratingBreakdown: {
     fiveStar: { type: Number, default: 0 },
     fourStar: { type: Number, default: 0 },
@@ -103,13 +105,15 @@ const asinSchema = new mongoose.Schema({
   status: { type: String, enum: ['Active', 'Pending', 'Scraping', 'Error'], default: 'Active' },
   lastScraped: { type: Date },
 
-  // Daily history (existing)
+  // Daily consolidated history
   history: [{
-    date: Date,
-    price: Number,
-    salesRank: Number,
-    offers: Number,
-    reviews: Number,
+    date: { type: Date, required: true },
+    price: { type: Number, default: 0 },
+    bsr: { type: Number, default: 0 }, // Consolidated BSR
+    rating: { type: Number, default: 0 },
+    reviewCount: { type: Number, default: 0 },
+    offers: { type: Number, default: 0 },
+    lqs: { type: Number, default: 0 },
   }],
 
   // Rating history (existing)
@@ -135,17 +139,24 @@ asinSchema.index({ category: 1 });
 asinSchema.index({ lqs: -1 });
 asinSchema.index({ bsr: 1 });
 
-// Method to update week history
+// Method to update week history (Allow multiple entries per week if dates are different)
 asinSchema.methods.updateWeekHistory = function (weekData) {
-  const existingIndex = this.weekHistory.findIndex(w => w.week === weekData.week);
+  // Try to find an entry with the exact same date (ignoring time)
+  const incomingDate = new Date(weekData.date).toDateString();
+  const existingIndex = this.weekHistory.findIndex(w => new Date(w.date).toDateString() === incomingDate);
+  
   if (existingIndex >= 0) {
-    this.weekHistory[existingIndex] = weekData;
+    this.weekHistory[existingIndex] = { ...this.weekHistory[existingIndex].toObject(), ...weekData };
   } else {
     this.weekHistory.push(weekData);
   }
-  // Keep only last 12 weeks of history
-  if (this.weekHistory.length > 12) {
-    this.weekHistory = this.weekHistory.slice(-12);
+  
+  // Sort by date after update
+  this.weekHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Keep only last 24 entries (roughly 3-4 weeks if daily, or more if weekly)
+  if (this.weekHistory.length > 24) {
+    this.weekHistory = this.weekHistory.slice(-24);
   }
 };
 

@@ -17,7 +17,7 @@ const GoalTemplateSchema = new mongoose.Schema({
         },
         metric: {
             type: String,
-            enum: ['NONE', 'GMS', 'ACOS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'ORDER_COUNT'],
+            enum: ['NONE', 'GMS', 'ACOS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'ORDER_COUNT', 'LISTING', 'PO_FULFILLMENT', 'LQS', 'ADS_SPEND', 'PRODUCTS_TO_LIST'],
             default: 'NONE'
         },
         targetValue: {

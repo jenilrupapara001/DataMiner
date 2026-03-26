@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const sellerSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  marketplace: { type: String, required: true, enum: ['amazon.in', 'amazon.com', 'amazon.uk', 'amazon.de', 'amazon.fr', 'amazon.ca'] },
+  marketplace: { type: String, required: true, enum: ['amazon.in'] },
   sellerId: { type: String, required: true, unique: true },
   apiKey: { type: String },
   plan: { type: String, enum: ['Starter', 'Pro', 'Enterprise'], default: 'Starter' },

@@ -16,6 +16,11 @@ const keyResultSchema = new mongoose.Schema({
         required: true, // e.g. "Revenue", "Tasks Completed", "BSR", "NPS"
         default: 'Percentage'
     },
+    metricType: {
+        type: String,
+        enum: ['GMS', 'ACOS', 'ORDERS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'NONE'],
+        default: 'NONE'
+    },
     startValue: {
         type: Number,
         default: 0
@@ -43,6 +48,15 @@ const keyResultSchema = new mongoose.Schema({
         enum: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'BEHIND'],
         default: 'NOT_STARTED'
     },
+    healthStatus: {
+        type: String,
+        enum: ['BEHIND', 'ON_TRACK', 'AHEAD'],
+        default: 'ON_TRACK'
+    },
+    achievementPercent: { type: Number, default: 0 },
+    resolvedAsins: [{ type: String }],
+    projectedValue: { type: Number, default: 0 },
+    dailyRunRateRequired: { type: Number, default: 0 },
     owner: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'

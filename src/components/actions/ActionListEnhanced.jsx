@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, CheckCircle, Clock, AlertTriangle, Filter, Search, Play, Square, Plus, Sparkles, Loader2, BarChart2, Calendar, AlertCircle, ArrowDown, Minus, ThumbsUp, ThumbsDown, RotateCcw, FileText } from 'lucide-react';
+import { Edit2, Trash2, CheckCircle, Clock, AlertTriangle, Filter, Search, Play, Square, Plus, Sparkles, Loader2, BarChart2, Calendar, AlertCircle, ArrowDown, Minus, ThumbsUp, ThumbsDown, RotateCcw, FileText, RefreshCw, Eye } from 'lucide-react';
 import CompletionModal from './CompletionModal';
+import ActionDetailModal from './ActionDetailModal';
 import Popover from '../common/Popover';
 import { Badge } from 'reactstrap';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 /* ── Reusable review-remark popover ─────────────────────────────── */
 const ReviewRemarkPopover = ({ id, status, comments }) => {
@@ -121,6 +124,7 @@ const ActionList = ({
     onCompleteTask,
     onSubmitForReview,
     onReviewAction,
+    onSyncGoal, // New prop
     viewMode = 'STRATEGIC' // STRATEGIC or OPERATIONS
 }) => {
     const [filterStatus, setFilterStatus] = useState('');
@@ -129,6 +133,45 @@ const ActionList = ({
     const [selectedAction, setSelectedAction] = useState(null);
     const [timers, setTimers] = useState({});
     const [expandedRows, setExpandedRows] = useState({});
+    const [syncingKRs, setSyncingKRs] = useState({});
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [detailAction, setDetailAction] = useState(null);
+
+    const formatCurrency = (val) => {
+        if (!val) return '₹0';
+        if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)}Cr`;
+        if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
+        return `₹${val.toLocaleString()}`;
+    };
+
+    const COLUMNS = [
+        { id: 'PENDING', label: 'Pending', icon: Clock, color: 'slate' },
+        { id: 'IN_PROGRESS', label: 'In Progress', icon: Play, color: 'blue' },
+        { id: 'REVIEW', label: 'Review', icon: Eye, color: 'indigo' },
+        { id: 'COMPLETED', label: 'Completed', icon: CheckCircle, color: 'emerald' }
+    ];
+
+
+    const handleSync = async (e, kr) => {
+        e.stopPropagation();
+        if (!onSyncGoal) return;
+        setSyncingKRs(prev => ({ ...prev, [kr._id || kr.id]: true }));
+        try {
+            await onSyncGoal(kr);
+        } finally {
+            setSyncingKRs(prev => ({ ...prev, [kr._id || kr.id]: false }));
+        }
+    };
+
+    const handleViewAction = (e, action, type) => {
+        if (e) e.stopPropagation();
+        if (onViewAction) {
+            onViewAction(action);
+            return;
+        }
+        setDetailAction(action);
+        setIsDetailModalOpen(true);
+    };
 
     // Update timers every second for actions in progress
     useEffect(() => {
@@ -275,7 +318,7 @@ const ActionList = ({
     };
 
     const ChevronIcon = ({ expanded }) => (
-        <span className="me-2 text-muted" style={{ cursor: 'pointer', transition: 'transform 0.2s', display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'none' }}>
+        <span className="me-2 text-muted" style={{ cursor: 'pointer', transition: 'transform 0.2s', display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
             <Play size={10} fill="currentColor" />
         </span>
     );
@@ -339,16 +382,14 @@ const ActionList = ({
         }
 
         return (
-            <div className="smartsheet-container mt-4">
+            <div className="smartsheet-container mt-4" style={{ overflow: 'auto' }}>
                 <table className="smartsheet-table">
-                    <thead>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                         <tr>
                             <th className="row-index">#</th>
-                            <th style={{ width: '25%' }}>Task / Objective Name</th>
-                            <th style={{ width: '20%' }}>Details</th>
-                            <th style={{ width: '10%' }}>Type</th>
-                            <th style={{ width: '10%' }}>Seller</th>
-                            <th style={{ width: '10%' }}>ASINs</th>
+                            <th style={{ width: '28%' }}>Task / Objective Name</th>
+                            <th style={{ width: '18%' }}>Details</th>
+                            <th style={{ width: '12%' }}>Type</th>
                             <th className="text-center">Progress</th>
                             <th>Resource</th>
                             <th className="text-center">Priority</th>
@@ -364,8 +405,8 @@ const ActionList = ({
                             // Divider separator between objectives and standalone tasks
                             if (type === 'DIVIDER') {
                                 return (
-                                    <tr key={row.id} style={{ background: 'rgba(99,102,241,0.08)', borderTop: '2px solid rgba(99,102,241,0.25)', borderBottom: '1px solid rgba(99,102,241,0.12)' }}>
-                                        <td colSpan={11} style={{ padding: '8px 16px', fontWeight: 700, color: '#6366f1', fontSize: '0.82rem', letterSpacing: '0.03em' }}>
+                                    <tr key={row.id} style={{ background: 'var(--color-brand-50)', borderTop: '2px solid var(--color-brand-600)', borderBottom: '1px solid var(--color-brand-200)' }}>
+                                        <td colSpan={9} style={{ padding: '8px 16px', fontWeight: 700, color: 'var(--color-brand-600)', fontSize: '0.82rem', letterSpacing: '0.03em' }}>
                                             {data.label}
                                         </td>
                                     </tr>
@@ -374,7 +415,11 @@ const ActionList = ({
 
                             return (
                                 <React.Fragment key={row.id + '-' + type}>
-                                    <tr className={`row-level-${level} ${type.toLowerCase()}-row`}>
+                                    <tr
+                                        className={`row-level-${level} ${type.toLowerCase()}-row`}
+                                        onClick={() => type === 'ACTION' && !standalone && toggleRow(row.id)}
+                                        style={{ cursor: type === 'ACTION' && !standalone ? 'pointer' : 'default' }}
+                                    >
                                         <td className="row-index">{index + 1}</td>
                                         <td style={{ paddingLeft: `${12 + (level * 24)}px` }}>
                                             <div className="d-flex align-items-center">
@@ -385,39 +430,50 @@ const ActionList = ({
                                                 )}
                                                 {type === 'ACTION' && !standalone && <span className="me-2 opacity-25"><div style={{ width: '10px' }}></div></span>}
                                                 <div className="d-flex align-items-center gap-2">
-                                                    {type === 'ACTION' && getStatusDot(data.status)}
-                                                    <div className={`sm-task-title ${type !== 'ACTION' ? 'fw-bold' : ''}`}>
-                                                        {type === 'OBJECTIVE' && <span className="badge bg-primary-subtle text-primary border-primary-subtle me-2" style={{ fontSize: '9px' }}>OBJ</span>}
-                                                        {type === 'KR' && <span className="badge bg-info-subtle text-info border-info-subtle me-2" style={{ fontSize: '9px' }}>KR</span>}
-                                                        {data.title}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
+                                                                 {type === 'ACTION' && getStatusDot(data.status)}
+                                                                <div className={`sm-task-title ${type !== 'ACTION' ? 'fw-bold' : ''}`}>
+                                                                    {type === 'OBJECTIVE' && <span className="badge bg-primary-subtle text-primary border-primary-subtle me-2" style={{ fontSize: '9px' }}>OBJ</span>}
+                                                                    {type === 'KR' && <span className="badge bg-info-subtle text-info border-info-subtle me-2" style={{ fontSize: '9px' }}>KR</span>}
+                                                                    {data.title}
+                                                                    {type === 'ACTION' && (
+                                                                        <>
+                                                                            {data.scopeType === 'BRAND' && (
+                                                                                <span className="badge bg-indigo-subtle text-indigo border border-indigo-subtle ms-2" style={{ fontSize: '9px' }}>
+                                                                                    BRAND SCOPE
+                                                                                </span>
+                                                                            )}
+                                                                            {data.aiGenerated && (
+                                                                                <span className="ms-2 text-info" title="AI Generated Strategy">
+                                                                                    <Sparkles size={12} />
+                                                                                </span>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                    {type === 'ACTION' && data.asins?.length > 0 && data.scopeType !== 'BRAND' && (
+                                                                        <span className="badge bg-light text-dark border ms-1" style={{ fontSize: '9px' }}>
+                                                                            {data.asins.length} ASIN{data.asins.length > 1 ? 's' : ''}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
                                         <td>
                                             <div className="text-muted small text-truncate" style={{ maxWidth: '200px' }}>
                                                 {data.description || (type === 'OBJECTIVE' ? 'Strategic Goal' : type === 'KR' ? 'Key Metric' : '--')}
                                             </div>
                                         </td>
-                                        <td>
+                                         <td>
                                             {type === 'ACTION' ? (
-                                                <span className="badge bg-secondary-subtle text-secondary border-secondary-subtle" style={{ fontSize: '10px' }}>
-                                                    {data.type?.replace('_', ' ')}
-                                                </span>
-                                            ) : '--'}
-                                        </td>
-                                        <td>
-                                            {type === 'ACTION' ? data.sellerId?.name || '--' : '--'}
-                                        </td>
-                                        <td>
-                                            {type === 'ACTION' ? (
-                                                <div className="d-flex flex-wrap gap-1">
-                                                    {data.asins?.slice(0, 2).map((asin, i) => (
-                                                        <span key={i} className="badge bg-light text-dark border" style={{ fontSize: '9px' }}>
-                                                            {asin.asinCode || asin.asin || asin}
+                                                <div className="d-flex flex-column gap-1">
+                                                    <span className="badge bg-secondary-subtle text-secondary border-secondary-subtle" style={{ fontSize: '10px' }}>
+                                                        {data.type?.replace('_', ' ')}
+                                                    </span>
+                                                    {data.expectedImpact?.value > 0 && (
+                                                        <span className="fw-bold text-success" style={{ fontSize: '10px' }}>
+                                                            +{data.expectedImpact.value}% {data.expectedImpact.metric}
                                                         </span>
-                                                    ))}
-                                                    {data.asins?.length > 2 && <span className="text-muted smallest">+{data.asins.length - 2}</span>}
+                                                    )}
                                                 </div>
                                             ) : '--'}
                                         </td>
@@ -427,13 +483,30 @@ const ActionList = ({
                                                     {data.status === 'COMPLETED' ? '100%' : data.status === 'IN_PROGRESS' ? '50%' : '0%'}
                                                 </span>
                                             ) : (
-                                                <div className="d-flex align-items-center justify-content-center gap-2">
-                                                    <div className="progress" style={{ height: '4px', width: '40px' }}>
-                                                        <div className="progress-bar" style={{ width: `${type === 'OBJECTIVE' ? data.stats.progress : data.progress}%` }}></div>
+                                                <div className="d-flex flex-column align-items-center justify-content-center">
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <div className="progress" style={{ height: '4px', width: '40px' }}>
+                                                            <div className="progress-bar" style={{ width: `${type === 'OBJECTIVE' ? data.stats.progress : (Math.min(100, Math.round((data.currentValue / data.targetValue) * 100)) || 0)}%` }}></div>
+                                                        </div>
+                                                        <span className="small fw-bold" style={{ fontSize: '10px' }}>
+                                                            {type === 'OBJECTIVE' ? data.stats.progress : (Math.min(100, Math.round((data.currentValue / data.targetValue) * 100)) || 0)}%
+                                                        </span>
+                                                        {type === 'KR' && data.metric === 'GMS' && (
+                                                            <button
+                                                                onClick={(e) => handleSync(e, data)}
+                                                                className={`btn btn-sm btn-link p-0 ms-1 ${syncingKRs[data._id || data.id] ? 'fa-spin' : ''}`}
+                                                                title="Sync GMS Progress"
+                                                                disabled={syncingKRs[data._id || data.id]}
+                                                            >
+                                                                <RefreshCw size={10} className={syncingKRs[data._id || data.id] ? 'animate-spin' : ''} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    <span className="small fw-bold" style={{ fontSize: '10px' }}>
-                                                        {type === 'OBJECTIVE' ? data.stats.progress : data.progress}%
-                                                    </span>
+                                                    {type === 'KR' && (data.metric === 'GMS' || data.targetValue > 0) && (
+                                                        <div className="smallest text-muted mt-1" style={{ fontSize: '9px' }}>
+                                                            {data.metric === 'GMS' ? formatCurrency(data.currentValue) : data.currentValue} / {data.metric === 'GMS' ? formatCurrency(data.targetValue) : data.targetValue}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -488,16 +561,37 @@ const ActionList = ({
                                             <div className="d-flex gap-2 justify-content-center">
                                                 {type === 'ACTION' ? (
                                                     <>
-                                                        {(isOwnerOfItem(data, currentUser) || hasAdminPrivileges(currentUser)) && (
-                                                            <>
-                                                                {!isTaskCompleted(data) && !isTaskStarted(data) && data.status !== 'REVIEW' && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleStartTask(data); }} className="btn btn-sm btn-link p-0 text-primary" title="Start Task"><Play size={14} /></button>
-                                                                )}
-                                                                {!isTaskCompleted(data) && isTaskStarted(data) && data.status === 'IN_PROGRESS' && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); onSubmitForReview(data); }} className="btn btn-sm btn-link p-0 text-info" title="Submit for Review"><FileText size={14} /></button>
-                                                                )}
-                                                            </>
-                                                        )}
+                                                        <div className="d-flex align-items-center justify-content-center gap-1">
+                                                            <button
+                                                                onClick={(e) => handleViewAction(e, data, 'ACTION')}
+                                                                className="btn btn-sm btn-light p-1 border shadow-sm"
+                                                                title="View Task Details"
+                                                            >
+                                                                <Eye size={12} />
+                                                            </button>
+                                                            {(isOwnerOfItem(data, currentUser) || hasAdminPrivileges(currentUser)) && (
+                                                                <>
+                                                                    {!isTaskCompleted(data) && !isTaskStarted(data) && data.status !== 'REVIEW' && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); handleStartTask(data); }}
+                                                                            className="btn btn-sm btn-primary p-1 shadow-sm"
+                                                                            title="Start Task"
+                                                                        >
+                                                                            <Play size={12} fill="currentColor" />
+                                                                        </button>
+                                                                    )}
+                                                                    {!isTaskCompleted(data) && isTaskStarted(data) && data.status === 'IN_PROGRESS' && (
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); onSubmitForReview(data); }}
+                                                                            className="btn btn-sm btn-success p-1 shadow-sm"
+                                                                            title="Stop & Submit"
+                                                                        >
+                                                                            <Square size={12} fill="currentColor" />
+                                                                        </button>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
                                                         {data.status === 'REVIEW' && hasAdminPrivileges(currentUser) && (
                                                             <div className="d-flex gap-2">
                                                                 <button
@@ -524,7 +618,14 @@ const ActionList = ({
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <div className="d-flex gap-2 justify-content-center">
+                                                    <div className="d-flex gap-2 justify-content-center align-items-center">
+                                                        <button
+                                                            onClick={(e) => handleViewAction(e, data, type)}
+                                                            className="btn btn-sm btn-light p-1 border shadow-sm"
+                                                            title={`View ${type} Details`}
+                                                        >
+                                                            <Eye size={12} />
+                                                        </button>
                                                         {(isOwnerOfItem(data, currentUser) || hasAdminPrivileges(currentUser)) && (
                                                             <button onClick={(e) => { e.stopPropagation(); onEdit(data, type); }} className="btn btn-sm btn-link p-0 text-muted" title={`Edit ${type}`}><Edit2 size={14} /></button>
                                                         )}
@@ -539,8 +640,78 @@ const ActionList = ({
                                     {/* Auto-Generated Detailed Sub-table */}
                                     {isExpanded && type === 'ACTION' && standalone && (
                                         <tr>
-                                            <td colSpan={11} className="p-0 border-0">
+                                            <td colSpan={9} className="p-0 border-0">
                                                 <AutoGeneratedSubTable action={data} />
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {/* Row Expansion Details for non-standalone actions */}
+                                    {isExpanded && type === 'ACTION' && !standalone && (
+                                        <tr>
+                                            <td colSpan={9} className="p-0 border-0">
+                                                <div style={{ padding: '16px', backgroundColor: 'var(--color-surface-1)', borderBottom: '1px solid var(--color-border)' }}>
+                                                    <div className="row g-3">
+                                                        {/* Full Description */}
+                                                         <div className="col-12">
+                                                            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</div>
+                                                            <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                                                                {data.description || 'No description provided'}
+                                                            </div>
+                                                            {(data.aiReason || data.aiReasoning) && (
+                                                                <div className="mt-2 p-2 rounded" style={{ backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD', fontSize: '12px' }}>
+                                                                    <div className="fw-bold text-info mb-1"><Sparkles size={12} className="me-1"/> AI STRATEGIC REASONING</div>
+                                                                    <div className="text-zinc-700 italic">"{data.aiReason || data.aiReasoning}"</div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {/* Seller & ASINs */}
+                                                        <div className="col-md-6">
+                                                            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Seller & ASINs</div>
+                                                            <div style={{ fontSize: '13px' }}>
+                                                                <span style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{data.sellerId?.name || 'Unassigned'}</span>
+                                                                {data.asins?.length > 0 && (
+                                                                    <div className="d-flex flex-wrap gap-1 mt-1">
+                                                                        {data.asins.map((asin, i) => (
+                                                                            <span key={i} className="badge bg-light text-dark border" style={{ fontSize: '10px' }}>
+                                                                                {asin.asinCode || asin.asin || asin}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {/* Timeline */}
+                                                        <div className="col-md-6">
+                                                            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timeline</div>
+                                                            <div style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                {data.timeTracking?.startDate ? (
+                                                                    <>
+                                                                        <span style={{ color: 'var(--color-text-primary)' }}>
+                                                                            {new Date(data.timeTracking.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                        </span>
+                                                                        <span style={{ color: 'var(--color-text-muted)' }}>→</span>
+                                                                        <span style={{ color: data.timeTracking.deadline && new Date(data.timeTracking.deadline) < new Date() ? 'var(--color-danger-600)' : 'var(--color-text-primary)' }}>
+                                                                            {data.timeTracking.deadline ? new Date(data.timeTracking.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No deadline'}
+                                                                        </span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span style={{ color: 'var(--color-text-muted)' }}>No timeline set</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {/* Last Activity */}
+                                                        <div className="col-12">
+                                                            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Last Activity</div>
+                                                            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                                                                {data.updatedAt ? (
+                                                                    <span>Updated {new Date(data.updatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                                ) : (
+                                                                    <span className="text-muted">No activity recorded</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </td>
                                         </tr>
                                     )}
@@ -705,21 +876,21 @@ const ActionList = ({
         );
     };
 
-    return (
-        <div className="action-list-container">
+    const renderFilters = () => {
+        return (
             <div className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-                <div className="card-body">
-                    <div className="row g-3">
+                <div className="card-body p-4">
+                    <div className="row g-3 align-items-center">
                         <div className="col-md-6">
                             <div className="position-relative">
-                                <Search className="position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#6b7280' }} />
+                                <Search className="position-absolute" style={{ left: '16px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#94a3b8' }} />
                                 <input
                                     type="text"
-                                    placeholder="Search initiatives & tasks..."
+                                    placeholder="Search initiatives, tasks, or assigned members..."
                                     value={searchQuery}
                                     onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-                                    className="form-control ps-5 border-0 bg-light"
-                                    style={{ borderRadius: '10px' }}
+                                    className="form-control ps-5 border-0 bg-slate-50 hover-bg-slate-100 transition-all"
+                                    style={{ borderRadius: '14px', height: '48px', fontSize: '14px' }}
                                 />
                             </div>
                         </div>
@@ -727,8 +898,8 @@ const ActionList = ({
                             <select
                                 value={filterStatus}
                                 onChange={(e) => setFilterStatus(e.target.value)}
-                                className="form-select border-0 bg-light"
-                                style={{ borderRadius: '10px' }}
+                                className="form-select border-0 bg-slate-50"
+                                style={{ borderRadius: '12px', height: '48px' }}
                             >
                                 <option value="">All Statuses</option>
                                 <option value="PENDING">Pending</option>
@@ -741,8 +912,8 @@ const ActionList = ({
                             <select
                                 value={filterPriority}
                                 onChange={(e) => setFilterPriority(e.target.value)}
-                                className="form-select border-0 bg-light"
-                                style={{ borderRadius: '10px' }}
+                                className="form-select border-0 bg-slate-50"
+                                style={{ borderRadius: '12px', height: '48px' }}
                             >
                                 <option value="">All Priorities</option>
                                 <option value="LOW">Low</option>
@@ -754,8 +925,208 @@ const ActionList = ({
                     </div>
                 </div>
             </div>
+        );
+    };
 
-            {viewMode === 'STRATEGIC' ? renderTreeTable() : renderFlatTable()}
+    const getPriorityColor = (p) => {
+        switch (p) {
+            case 'URGENT': return 'text-rose-600 bg-rose-50 border-rose-100';
+            case 'HIGH': return 'text-amber-600 bg-amber-50 border-amber-100';
+            case 'MEDIUM': return 'text-blue-600 bg-blue-50 border-blue-100';
+            default: return 'text-slate-500 bg-slate-50 border-slate-100';
+        }
+    };
+
+    const renderBoardView = () => {
+        const boardActions = [];
+        objectives.forEach(obj => {
+            (obj.keyResults || []).forEach(kr => {
+                (kr.actions || []).forEach(action => {
+                    boardActions.push({ ...action, objectiveTitle: obj.title, krTitle: kr.title });
+                });
+            });
+        });
+        
+        standaloneActions.forEach(action => {
+            boardActions.push({ ...action, objectiveTitle: 'System', krTitle: 'Direct Action' });
+        });
+
+        const filtered = boardActions.filter(matchesFilters);
+
+        return (
+            <div className="kanban-container">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+                    {COLUMNS.map(col => {
+                        const colActions = filtered.filter(a => (a.status || 'PENDING') === col.id);
+                        return (
+                            <div key={col.id} className="kanban-column bg-slate-50/70 backdrop-blur-sm rounded-3xl p-4 border border-slate-100 min-h-[600px] flex flex-col">
+                                <div className="flex items-center justify-between mb-5 px-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className={`p-2 rounded-xl bg-${col.color === 'slate' ? 'slate-200' : col.color + '-100'} text-${col.color === 'slate' ? 'slate-600' : col.color + '-600'}`}>
+                                            <col.icon size={16} strokeWidth={2.5} />
+                                        </div>
+                                        <h3 className="text-[13px] font-black text-slate-800 uppercase tracking-wider">{col.label}</h3>
+                                        <span className="text-[10px] font-black text-slate-400 bg-white shadow-sm px-2.5 py-0.5 rounded-full">
+                                            {colActions.length}
+                                        </span>
+                                    </div>
+                                    <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar-thin">
+                                    <AnimatePresence mode="popLayout">
+                                        {colActions.map(action => (
+                                            <motion.div
+                                                key={action._id || action.id}
+                                                layout
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
+                                                onClick={(e) => handleViewAction(e, action, 'ACTION')}
+                                                className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-indigo-200 transition-all cursor-pointer group relative overflow-hidden"
+                                            >
+                                                {/* Status Accent Bar */}
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                                                    action.status === 'COMPLETED' ? 'bg-emerald-500' :
+                                                    action.status === 'IN_PROGRESS' ? 'bg-blue-500' :
+                                                    action.status === 'REVIEW' ? 'bg-indigo-500' : 'bg-slate-300'
+                                                }`} />
+
+                                                <div className="flex items-start justify-between mb-3.5">
+                                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${getPriorityColor(action.priority)}`}>
+                                                        {action.priority}
+                                                    </span>
+                                                    <div className="flex gap-1">
+                                                        {(isOwnerOfItem(action, currentUser) || hasAdminPrivileges(currentUser)) && (
+                                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                {!isTaskCompleted(action) && !isTaskStarted(action) && action.status !== 'REVIEW' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); handleStartTask(action); }} 
+                                                                        className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all"
+                                                                        title="Start Task"
+                                                                    >
+                                                                        <Play size={12} fill="currentColor" />
+                                                                    </button>
+                                                                )}
+                                                                {!isTaskCompleted(action) && isTaskStarted(action) && action.status === 'IN_PROGRESS' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onSubmitForReview(action); }} 
+                                                                        className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-all"
+                                                                        title="Submit for Review"
+                                                                    >
+                                                                        <FileText size={12} />
+                                                                    </button>
+                                                                )}
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); onEdit(action, 'ACTION'); }} 
+                                                                    className="p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-all"
+                                                                    title="Edit Task"
+                                                                >
+                                                                    <Edit2 size={12} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <h4 className="text-sm font-bold text-slate-900 mb-2 leading-relaxed group-hover:text-indigo-600 transition-colors">
+                                                    {action.title}
+                                                </h4>
+                                                
+                                                <div className="flex items-center gap-2 mb-5">
+                                                    <span className="text-[11px] text-slate-400 font-bold truncate">
+                                                        {action.objectiveTitle} • {action.krTitle}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white border-2 border-white shadow-sm flex items-center justify-center text-[9px] font-black">
+                                                            {(action.assignedTo?.firstName || 'U').charAt(0)}
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-tight">
+                                                            {action.assignedTo?.firstName || 'User'}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {action.timeTracking?.deadline ? (
+                                                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
+                                                            new Date(action.timeTracking.deadline) < new Date() 
+                                                                ? 'bg-rose-50 text-rose-500 border-rose-100' 
+                                                                : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                        }`}>
+                                                            <Clock size={10} strokeWidth={2.5} />
+                                                            <span className="text-[10px] font-black uppercase tracking-tight">
+                                                                {new Date(action.timeTracking.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">No Deadline</div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+
+                                    {colActions.length === 0 && (
+                                        <div className="h-32 border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center justify-center text-slate-200">
+                                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-2">
+                                                <Minus size={20} />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-50">No Tasks</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="action-list-enhanced py-4">
+            {renderFilters()}
+            
+            <div className="view-transition-container">
+                {viewMode === 'BOARD' ? renderBoardView() : 
+                 viewMode === 'STRATEGIC' ? renderTreeTable() : renderFlatTable()}
+            </div>
+
+            {/* Modal & Panels */}
+            {completionModalOpen && (
+                <CompletionModal
+                    isOpen={completionModalOpen}
+                    action={selectedAction}
+                    onClose={() => setCompletionModalOpen(false)}
+                    onComplete={onCompleteTask}
+                />
+            )}
+            
+            {isDetailModalOpen && (
+                <ActionDetailModal
+                    isOpen={isDetailModalOpen}
+                    onClose={() => {
+                        setIsDetailModalOpen(false);
+                        setDetailAction(null);
+                    }}
+                    action={detailAction}
+                />
+            )}
+
+            <style>{`
+                .kanban-column {
+                    max-height: calc(100vh - 250px);
+                }
+                .custom-scrollbar-thin::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar-thin::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
+                .hover-bg-slate-100:hover { background-color: #f1f5f9 !important; }
+            `}</style>
         </div>
     );
 };

@@ -2,17 +2,16 @@
 @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap');
 
 :root {
-    --glass-bg: rgba(255, 255, 255, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.4);
-    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-    --ios-blue: #007AFF;
-    --ios-blue-hover: #0062cc;
-    --text-primary: #1c1c1e;
-    --text-secondary: #8e8e93;
-    --input-bg: rgba(118, 118, 128, 0.08);
-    /* Lighter gray for clean look */
-    --input-focus-bg: rgba(118, 118, 128, 0.05);
-    --danger: #ff3b30;
+    --glass-bg: rgba(255, 255, 255, 0.95);
+    --glass-border: #E4E4E7;
+    --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    --ios-blue: #18181B; /* Zinc 900 */
+    --ios-blue-hover: #09090B; /* Zinc 950 */
+    --text-primary: #09090B;
+    --text-secondary: #52525B;
+    --input-bg: #F4F4F5;
+    --input-focus-bg: #FFFFFF;
+    --danger: #EF4444;
 }
 
 body {
@@ -32,19 +31,18 @@ body {
 
 /* Left Panel: Branding & Visuals */
 .auth-left-panel {
-    flex: 0 0 40%;
-    /* 40% width */
+    flex: 0 0 50%;
     position: relative;
-    background-color: #000;
+    background-color: #F9FAFB;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 60px;
-    color: white;
+    padding: 80px;
+    color: #09090B;
 }
 
-/* Mesh Gradient Background for Left Panel */
+/* Neutral Background for Left Panel */
 .auth-background {
     position: absolute;
     top: 0;
@@ -52,26 +50,12 @@ body {
     width: 100%;
     height: 100%;
     z-index: 0;
-    background:
-        radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
-        radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
-        radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
-    background-size: 200% 200%;
+    background-color: #F9FAFB;
+    border-right: 1px solid #E4E4E7;
 }
 
 .auth-gradient {
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background:
-        radial-gradient(circle at 50% 50%, rgba(76, 29, 149, 0.5), transparent 60%),
-        radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.5), transparent 50%),
-        radial-gradient(circle at 20% 80%, rgba(236, 72, 153, 0.5), transparent 50%);
-    filter: blur(80px);
-    animation: floatGradient 20s ease-in-out infinite alternate;
-    opacity: 0.9;
+    display: none;
 }
 
 @keyframes floatGradient {
@@ -106,13 +90,13 @@ body {
 .auth-branding-logo svg {
     width: 32px;
     height: 32px;
-    color: white;
-    /* Make logo white */
+    color: #18181B;
 }
 
 .auth-branding-logo span {
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    color: #18181B;
     letter-spacing: -0.01em;
 }
 
@@ -122,14 +106,12 @@ body {
 }
 
 .auth-features h1 {
-    font-size: 48px;
-    font-weight: 700;
-    line-height: 1.1;
-    margin-bottom: 24px;
-    letter-spacing: -0.03em;
-    background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0.7));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 32px;
+    letter-spacing: -0.04em;
+    color: #18181B;
 }
 
 .feature-list {
@@ -146,26 +128,27 @@ body {
 }
 
 .feature-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.1);
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #FFFFFF;
+    border: 1px solid #E4E4E7;
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .feature-text h3 {
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     margin: 0 0 4px;
-    color: white;
+    color: #18181B;
 }
 
 .feature-text p {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.6);
+    color: #71717A;
     margin: 0;
 }
 
@@ -256,9 +239,8 @@ body {
 .form-group input:focus {
     outline: none;
     background: #fff;
-    border-color: #d1d1d6;
-    /* iOS Gray 4 */
-    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+    border-color: #18181B;
+    box-shadow: 0 0 0 4px rgba(24, 24, 27, 0.05);
 }
 
 .form-group input::placeholder {
@@ -327,27 +309,27 @@ body {
 
 /* iOS Styled Button */
 .auth-button {
-    background: var(--ios-blue);
+    background: #18181B;
     color: white;
     border: none;
     padding: 18px;
-    font-size: 16px;
-    font-weight: 600;
-    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin-top: 12px;
 }
 
 .auth-button:hover:not(:disabled) {
-    background: var(--ios-blue-hover);
-    transform: scale(1.01);
-    box-shadow: 0 6px 16px rgba(0, 122, 255, 0.35);
+    background: #09090B;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .auth-button:active:not(:disabled) {

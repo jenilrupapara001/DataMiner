@@ -10,6 +10,7 @@ const GoalTemplate = require('../models/GoalTemplate');
 const SystemSetting = require('../models/SystemSetting');
 const { authenticate: protect, requireAnyPermission, requireRole } = require('../middleware/auth');
 const { createNotification } = require('../controllers/notificationController');
+const AIService = require('../services/AIService');
 
 // Configure multer for audio file uploads
 const storage = multer.diskStorage({
@@ -207,13 +208,11 @@ router.get('/', protect, requireAnyPermission(['actions_view', 'actions_manage']
             .populate('completion.completedBy', 'firstName lastName')
             .sort({ createdAt: -1 });
 
-        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
         res.json({ success: true, data: actions });
     } catch (error) {
         console.error('GET /actions error:', error.message);
-        res.status(500).json({ success: false, message: 'Server error' });
+        // Return empty data on error to keep UI alive (resilience)
+        res.status(200).json({ success: true, data: [], message: 'Database currently unavailable' });
     }
 });
 
@@ -293,7 +292,7 @@ router.post('/goal-templates', protect, requireAnyPermission(['actions_manage'])
         res.status(201).json({ success: true, data: template });
     } catch (error) {
         console.error('[ActionRoutes] Failed to create goal template:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        res.status(500).json({ success: false, message: error.message || 'Server error', error: error.message });
     }
 });
 
@@ -310,7 +309,7 @@ router.put('/goal-templates/:id', protect, requireAnyPermission(['actions_manage
         res.json({ success: true, data: template });
     } catch (error) {
         console.error('[ActionRoutes] Failed to update goal template:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        res.status(500).json({ success: false, message: error.message || 'Server error', error: error.message });
     }
 });
 
@@ -618,15 +617,24 @@ router.post('/:id/submit-review', protect, upload.single('audio'), requireAnyPer
             return res.status(403).json({ success: false, message: 'Only the assigned user or an administrator can submit this task for review' });
         }
 
-        const submissionData = {
+        action.completeTask({
             remarks: req.body.remarks,
-            submittedBy: req.user._id,
             audioUrl: req.file ? `/uploads/audio/${req.file.filename}` : undefined,
-            audioTranscript: req.body.audioTranscript
-        };
-
-        action.submitForReview(submissionData);
+            audioTranscript: req.body.audioTranscript,
+            completedBy: req.user._id,
+            completedAt: new Date()
+        });
         await action.save();
+
+        // [GROWTH-ENGINE] Trigger goal recalculation if linked to a KeyResult
+        if (action.keyResultId) {
+            try {
+                const GoalProgressService = require('../services/GoalProgressService');
+                await GoalProgressService.calculateGoalProgress(action.keyResultId);
+            } catch (err) {
+                console.error('[Growth-Engine] Goal Sync failed:', err);
+            }
+        }
 
         // Log activity
         const SystemLogService = require('../services/SystemLogService');
@@ -668,8 +676,26 @@ router.post('/:id/review-action', protect, requireRole('admin'), async (req, res
         const action = await Action.findById(req.params.id);
         if (!action) return res.status(404).json({ success: false, message: 'Action not found' });
 
-        action.reviewTask(req.user._id, decision, comments);
-        await action.save();
+        // APPROVE -> COMPLETE
+        if (decision === 'APPROVE') {
+            action.reviewTask(req.user._id, 'APPROVE', comments);
+            await action.save();
+
+            // [GROWTH-ENGINE] Trigger goal recalculation
+            if (action.keyResultId) {
+                try {
+                    const GoalProgressService = require('../services/GoalProgressService');
+                    await GoalProgressService.calculateGoalProgress(action.keyResultId);
+                } catch (err) {
+                    console.error('[Growth-Engine] Goal Sync failed during review:', err);
+                }
+            }
+        }
+        // REJECT -> Back to PENDING with feedback
+        else {
+            action.reviewTask(req.user._id, 'REJECT', comments);
+            await action.save();
+        }
 
         // Log activity
         const SystemLogService = require('../services/SystemLogService');
@@ -767,30 +793,6 @@ router.post('/bulk', protect, requireAnyPermission(['actions_create', 'actions_m
 // NEW WORKFLOW ENDPOINTS
 // ============================================================================
 
-// Start task
-router.post('/:id/start', protect, requireAnyPermission(['actions_edit', 'actions_manage']), async (req, res) => {
-    try {
-        const action = await Action.findById(req.params.id);
-        if (!action) {
-            return res.status(404).json({ success: false, message: 'Action not found' });
-        }
-
-        action.startTask();
-        await action.save();
-
-        const populatedAction = await Action.findById(action._id)
-            .populate('assignedTo', 'firstName lastName')
-            .populate('asins', 'asinCode title');
-
-        // Notify SSE clients
-        try { sendSseEvent('task_started', populatedAction); } catch (e) { console.error('SSE notify failed', e); }
-
-        res.json({ success: true, data: populatedAction });
-    } catch (error) {
-        console.error('Error starting task:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
-    }
-});
 
 // Complete task
 router.post('/:id/complete', protect, requireAnyPermission(['actions_edit', 'actions_manage']), async (req, res) => {
@@ -870,6 +872,24 @@ router.post('/:id/upload-audio', protect, requireAnyPermission(['actions_edit', 
         });
     } catch (error) {
         console.error('Error uploading audio:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
+// Get single action details
+router.get('/:id', protect, async (req, res) => {
+    try {
+        const action = await Action.findById(req.params.id)
+            .populate('asins', 'asinCode title description')
+            .populate('assignedTo', 'firstName lastName email role avatar')
+            .populate('createdBy', 'firstName lastName email');
+            
+        if (!action) {
+            return res.status(404).json({ success: false, message: 'Action not found' });
+        }
+        res.status(200).json({ success: true, data: action });
+    } catch (error) {
+        console.error('Error fetching action details:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });
@@ -1181,14 +1201,19 @@ router.get('/reports/by-stage', protect, requireAnyPermission(['actions_view', '
 // Goal Achievement Analysis Report
 router.get('/reports/goal-achievement', protect, requireAnyPermission(['actions_view', 'actions_manage']), async (req, res) => {
     try {
-        const { timeframe } = req.query; // e.g., '30d', 'all'
+        const { timeframe, startDate, endDate } = req.query; // e.g., '30d', 'all', or date range
         const filter = {
             status: 'COMPLETED',
             'timeTracking.startedAt': { $exists: true },
             'timeTracking.completedAt': { $exists: true }
         };
 
-        if (timeframe && timeframe !== 'all') {
+        if (startDate && endDate) {
+            filter['timeTracking.completedAt'] = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        } else if (timeframe && timeframe !== 'all') {
             const days = parseInt(timeframe) || 30;
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - days);
@@ -1335,6 +1360,33 @@ router.post('/:id/messages', protect, async (req, res) => {
         res.status(201).json({ success: true, data: savedMessage });
     } catch (error) {
         console.error('Error adding message:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
+// Get AI-generated task instructions
+router.get('/:id/instructions', protect, async (req, res) => {
+    try {
+        const action = await Action.findById(req.params.id).populate('asins', 'asinCode title description');
+        if (!action) {
+            return res.status(404).json({ success: false, message: 'Action not found' });
+        }
+
+        // Return existing instructions if available
+        if (action.instructions) {
+            return res.status(200).json({ success: true, data: action.instructions });
+        }
+
+        // Generate new instructions via AI
+        const instructions = await AIService.generateTaskInstructions(action);
+        
+        // Save to database for future use
+        action.instructions = instructions;
+        await action.save();
+
+        res.status(200).json({ success: true, data: instructions });
+    } catch (error) {
+        console.error('Error fetching task instructions:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });

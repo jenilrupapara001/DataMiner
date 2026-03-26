@@ -1,5 +1,8 @@
 const Asin = require('../models/Asin');
 const Seller = require('../models/Seller');
+const imageGenerationService = require('../services/imageGenerationService');
+const path = require('path');
+const fs = require('fs');
 
 // Get all ASINs
 exports.getAsins = async (req, res) => {
@@ -581,6 +584,36 @@ exports.searchAsins = async (req, res) => {
   }
 };
 
+// Generate AI images for ASIN
+exports.generateImages = async (req, res) => {
+  console.log(`[DEBUG] generateImages called for ID: ${req.params.id}`);
+  try {
+    const asin = await Asin.findById(req.params.id);
+    if (!asin) {
+      return res.status(404).json({ error: 'ASIN not found' });
+    }
+
+    // Security check
+    const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
+    const isAssigned = isAdmin || req.user.assignedSellers.some(s => s._id.toString() === asin.seller.toString());
+
+    if (!isAssigned) {
+      return res.status(403).json({ error: 'Unauthorized to generate images for this ASIN' });
+    }
+
+    const imageUrl = await imageGenerationService.triggerAiImageTask(asin._id);
+    
+    res.json({
+      success: true,
+      message: 'AI image generated successfully',
+      imageUrl
+    });
+  } catch (error) {
+    console.error('Image Generation Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate AI image' });
+  }
+};
+
 // Helper function to update seller ASIN counts
 async function updateSellerAsinCount(sellerId) {
   if (!sellerId) return;
@@ -597,3 +630,5 @@ async function updateSellerAsinCount(sellerId) {
     console.error('Error updating seller ASIN count:', error);
   }
 }
+
+module.exports = exports;

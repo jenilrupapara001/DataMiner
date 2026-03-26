@@ -1,41 +1,52 @@
-/* Premium Sidebar Styles */
+/* Enterprise Sidebar Styles */
 
 .sidebar-container {
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width var(--transition-base);
+    background-color: var(--bg-secondary) !important;
+    border-right: 1px solid var(--border-color) !important;
 }
 
 .sidebar-item {
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
     cursor: pointer;
     border: 1px solid transparent;
+    color: var(--text-secondary) !important;
 }
 
-.sidebar-item.hover-bg-light:hover {
-    background-color: #f1f5f9;
-    color: #0f172a !important;
+.sidebar-item:hover {
+    background-color: var(--color-gray-50) !important;
+    color: var(--text-primary) !important;
 }
 
 .sidebar-item.bg-primary {
-    background-color: #4f46e5 !important;
+    background-color: var(--color-primary) !important;
+    color: white !important;
+    font-weight: 500;
 }
 
 .sidebar-item.bg-primary:hover {
-    background-color: #4338ca !important;
+    background-color: var(--color-primary-dark) !important;
 }
 
 .sidebar-item svg {
-    transition: transform 0.2s ease;
-}
-
-.sidebar-item:hover svg {
-    transform: scale(1.1);
+    color: inherit;
 }
 
 .sidebar-section {
-    transition: all 0.3s ease;
+    margin-bottom: var(--spacing-lg);
 }
 
-/* Custom Scrollbar for Sidebar */
+.sidebar-header {
+    border-bottom: 1px solid var(--border-color) !important;
+    background-color: var(--bg-secondary) !important;
+}
+
+.sidebar-footer {
+    border-top: 1px solid var(--border-color) !important;
+    background-color: var(--bg-secondary) !important;
+}
+
+/* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
 }
@@ -45,49 +56,35 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 10px;
+    background: var(--color-gray-200);
+    border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #cbd5e1;
+    background: var(--color-gray-300);
 }
 
-/* Tracking Wider Utility */
-.tracking-wider {
-    letter-spacing: 0.1em;
-}
-
-/* Helper for "smallest" text if not already defined */
 .smallest {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
 }
 
-/* Theme Toggle Transitions */
-[data-theme='dark'] .sidebar-container {
-    background-color: #0f172a !important;
-    border-color: #1e293b !important;
-}
-
-[data-theme='dark'] .sidebar-item.hover-bg-light:hover {
-    background-color: #1e293b;
-    color: #f8fafc !important;
-}
-
-[data-theme='dark'] .sidebar-header {
-    border-color: #1e293b !important;
-}
-
+/* Dark Mode Overrides - Simplified */
+[data-theme='dark'] .sidebar-container,
+[data-theme='dark'] .sidebar-header,
 [data-theme='dark'] .sidebar-footer {
-    background-color: #0f172a !important;
-    border-color: #1e293b !important;
+    background-color: var(--color-gray-900) !important;
+    border-color: var(--color-gray-800) !important;
+}
+
+[data-theme='dark'] .sidebar-item:hover {
+    background-color: var(--color-gray-800) !important;
 }
 
 [data-theme='dark'] .text-dark {
-    color: #f8fafc !important;
+    color: var(--color-gray-100) !important;
 }
 
 [data-theme='dark'] .bg-light {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
+    background-color: var(--color-gray-800) !important;
+    border-color: var(--color-gray-700) !important;
 }

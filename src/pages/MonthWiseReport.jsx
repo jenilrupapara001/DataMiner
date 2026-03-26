@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import Chart from 'react-apexcharts';
 import {
   Calendar,
@@ -23,11 +25,14 @@ import {
 } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import api, { asinApi, sellerApi } from '../services/api';
+import { X } from 'lucide-react';
 
 const MonthWiseReport = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('last12');
+  const [dateRange, setDateRange] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [customStart, setCustomStart] = useState(null);
+  const [customEnd, setCustomEnd] = useState(null);
   const [filters, setFilters] = useState({
     searchTerm: ''
   });
@@ -35,7 +40,22 @@ const MonthWiseReport = () => {
   const loadMonthlyData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/data/month-wise-report');
+      let params = {};
+      if (dateRange === 'custom' && customStart && customEnd) {
+        params = { 
+          startDate: customStart.toISOString().split('T')[0], 
+          endDate: customEnd.toISOString().split('T')[0] 
+        };
+      } else {
+        const firstDay = new Date(selectedYear, selectedMonth, 1);
+        const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+        params = { 
+          startDate: firstDay.toISOString().split('T')[0], 
+          endDate: lastDay.toISOString().split('T')[0] 
+        };
+      }
+      const query = new URLSearchParams(params).toString();
+      const response = await api.get(`/data/month-wise-report?${query}`);
       const monthData = (response.data || []).map((item, idx) => ({
         id: idx + 1,
         month: item._id,
@@ -58,7 +78,7 @@ const MonthWiseReport = () => {
 
   useEffect(() => {
     loadMonthlyData();
-  }, [loadMonthlyData]);
+  }, [loadMonthlyData, dateRange, selectedMonth, selectedYear, customStart, customEnd]);
 
   const kpis = useMemo(() => {
     const totalRevenue = data.reduce((sum, item) => sum + item.revenue, 0);
@@ -152,9 +172,63 @@ const MonthWiseReport = () => {
             <p className="text-muted small mb-0">Fiscal Performance & Multi-Month Trends</p>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
-            <div className="glass-card p-1 d-flex gap-1" style={{ borderRadius: '50px' }}>
-              <button className="btn btn-sm btn-primary px-3 rounded-pill border-0 transition-base shado-sm" style={{ fontSize: '11px', fontWeight: 700 }}>12 MONTHS</button>
+          <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-2 bg-white border border-zinc-200 p-1.5 rounded-3 shadow-sm">
+              <Calendar size={14} className="text-muted ms-2" />
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '120px' }}
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(parseInt(e.target.value));
+                  setDateRange('month');
+                }}
+              >
+                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '80px' }}
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(parseInt(e.target.value));
+                  setDateRange('month');
+                }}
+              >
+                {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
+              <div className="px-1 d-flex align-items-center">
+                <DatePicker
+                  selected={customStart}
+                  onChange={([s, e]) => { 
+                    setCustomStart(s); 
+                    setCustomEnd(e); 
+                    if (s && e) setDateRange('custom'); 
+                  }}
+                  startDate={customStart}
+                  endDate={customEnd}
+                  selectsRange
+                  placeholderText="Custom Range"
+                  className="bg-transparent border-0 smallest text-zinc-600 fw-bold"
+                  style={{ width: '130px', outline: 'none' }}
+                />
+                {(dateRange === 'custom') && (
+                  <X 
+                    size={14} 
+                    className="text-muted cursor-pointer ms-1" 
+                    onClick={() => {
+                      setDateRange('month');
+                      setCustomStart(null);
+                      setCustomEnd(null);
+                    }} 
+                  />
+                )}
+              </div>
             </div>
             <button className="btn btn-dark btn-sm rounded-pill px-3 py-2 shadow-sm fw-700 d-flex align-items-center gap-2" onClick={loadMonthlyData}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />

@@ -1,43 +1,54 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { IndianRupee, Package, Percent, Activity, TrendingUp, PieChart, Filter, BarChart3, Download, Search, RefreshCw, Layers, Target, Calendar, X } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import Chart from 'react-apexcharts';
-import {
-
-  TrendingUp,
-  IndianRupee,
-  Activity,
-  Target,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3,
-  Layers,
-  Search,
-  RefreshCw,
-  PieChart,
-  Calendar,
-  Filter,
-  Package,
-  ShoppingCart,
-  Percent,
-  CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
+import KPICard from '../components/KPICard';
+import Card from '../components/common/Card';
 import DataTable from '../components/DataTable';
-import api, { asinApi } from '../services/api';
+import api from '../services/api';
 
 const SkuReport = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('last30');
+  const [dateRange, setDateRange] = useState('month');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [customStart, setCustomStart] = useState(null);
+  const [customEnd, setCustomEnd] = useState(null);
+  const [searchParams] = useSearchParams();
+  const initialAsin = searchParams.get('asin') || '';
+
   const [filters, setFilters] = useState({
     category: 'all',
     status: 'all',
-    searchTerm: ''
+    searchTerm: initialAsin
   });
+
+  // Update searchTerm if asin param changes
+  useEffect(() => {
+    if (initialAsin) {
+      setFilters(prev => ({ ...prev, searchTerm: initialAsin }));
+    }
+  }, [initialAsin]);
 
   const loadSkuData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/data/sku-report');
+      let params = {};
+      if (dateRange === 'custom' && customStart && customEnd) {
+        params = { 
+          startDate: customStart.toISOString().split('T')[0], 
+          endDate: customEnd.toISOString().split('T')[0] 
+        };
+      } else {
+        const firstDay = new Date(selectedYear, selectedMonth, 1);
+        const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+        params = { 
+          startDate: firstDay.toISOString().split('T')[0], 
+          endDate: lastDay.toISOString().split('T')[0] 
+        };
+      }
+      
+      const query = new URLSearchParams(params).toString();
+      const response = await api.get(`/data/sku-report?${query}`);
       const skuData = (response.data || []).map((item, idx) => ({
         id: idx + 1,
         sku: item.sku || 'N/A',
@@ -46,11 +57,12 @@ const SkuReport = () => {
         category: item.category || 'General',
         revenue: item.total_revenue || 0,
         units: item.units_sold || 0,
-        aov: item.price || 0,
-        acos: '0.0',
-        roas: '0.00',
-        sessions: 0,
-        conversion: '0.0',
+        aov: item.units_sold > 0 ? (item.total_revenue / item.units_sold).toFixed(2) : (item.price || 0).toFixed(2),
+        acos: item.ad_sales > 0 ? ((item.ad_spend / item.ad_sales) * 100).toFixed(1) : '0.0',
+        roas: item.ad_spend > 0 ? (item.ad_sales / item.ad_spend).toFixed(2) : '0.00',
+        clicks: item.clicks || 0,
+        impressions: item.impressions || 0,
+        conversion: item.clicks > 0 ? ((item.units_sold / item.clicks) * 100).toFixed(1) : '0.0',
         status: 'Active'
       }));
 
@@ -63,7 +75,7 @@ const SkuReport = () => {
 
   useEffect(() => {
     loadSkuData();
-  }, [loadSkuData]);
+  }, [loadSkuData, dateRange, selectedMonth, selectedYear, customStart, customEnd]);
 
   const kpis = useMemo(() => {
     const totalRevenue = data.reduce((sum, item) => sum + item.revenue, 0);
@@ -74,10 +86,10 @@ const SkuReport = () => {
     const totalSessions = data.reduce((sum, item) => sum + item.sessions, 0);
 
     return [
-      { title: 'Total Revenue', value: `₹${totalRevenue.toLocaleString()}`, icon: IndianRupee, color: '#4F46E5', trend: '+14%' },
-      { title: 'Units Sold', value: totalUnits.toLocaleString(), icon: Package, color: '#8B5CF6', trend: '+8%' },
-      { title: 'Avg Conversion', value: `${avgConversion}%`, icon: Percent, color: '#EC4899', trend: '+1.2%' },
-      { title: 'Total Sessions', value: totalSessions.toLocaleString(), icon: Activity, color: '#F59E0B', trend: '+22%' },
+      { title: 'Total Revenue', value: `₹${totalRevenue.toLocaleString()}`, icon: IndianRupee, color: 'indigo', trend: 'up', change: '+14%' },
+      { title: 'Units Sold', value: totalUnits.toLocaleString(), icon: Package, color: 'violet', trend: 'up', change: '+8%' },
+      { title: 'Avg Conversion', value: `${avgConversion}%`, icon: Percent, color: 'emerald', trend: 'up', change: '+1.2%' },
+      { title: 'Total Sessions', value: totalSessions.toLocaleString(), icon: Activity, color: 'amber', trend: 'up', change: '+22%' },
     ];
   }, [data]);
 
@@ -96,17 +108,17 @@ const SkuReport = () => {
     return filteredData.map(item => ({
       ...item,
       status: (
-        <span className={`badge border rounded-pill px-2 py-1 smallest fw-700 ${item.status === 'In Stock' ? 'bg-success-subtle text-success border-success-subtle' : 'bg-warning-subtle text-warning border-warning-subtle'}`}>
+        <span className="badge rounded-pill bg-success-subtle text-success border border-success-subtle smallest fw-600 px-2 py-1">
           {item.status.toUpperCase()}
         </span>
       ),
       conversion: (
-        <span className="fw-700" style={{ color: parseFloat(item.conversion) > 5 ? '#10b981' : '#f59e0b' }}>
+        <span className="fw-700 text-zinc-900">
           {item.conversion}%
         </span>
       ),
-      revenue: <span className="fw-600">₹{item.revenue.toLocaleString()}</span>,
-      units: <span className="fw-600 text-dark">{item.units}</span>
+      revenue: <span className="fw-600 text-zinc-900">₹{item.revenue.toLocaleString()}</span>,
+      units: <span className="fw-600 text-zinc-700">{item.units}</span>
     }));
   }, [filteredData]);
 
@@ -114,87 +126,118 @@ const SkuReport = () => {
     chart: { type: 'line', toolbar: { show: false }, background: 'transparent' },
     colors: ['#4F46E5', '#10B981'],
     stroke: { curve: 'smooth', width: [3, 3] },
-    plotOptions: { bar: { columnWidth: '50%', borderRadius: 4 } },
+    plotOptions: { bar: { columnWidth: '35%', borderRadius: 6 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: filteredData.slice(0, 10).map(d => d.sku), labels: { style: { colors: '#64748b' } } },
+    xaxis: {
+      categories: filteredData.slice(0, 10).map(d => d.sku),
+      labels: { style: { colors: 'var(--zinc-500)', fontSize: '10px' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false }
+    },
     yaxis: [
-      { title: { text: 'Revenue (₹)', style: { color: '#4F46E5' } }, labels: { style: { colors: '#4F46E5' } } },
-      { opposite: true, title: { text: 'Units', style: { color: '#10B981' } }, labels: { style: { colors: '#10B981' } } }
+      { title: { text: 'Revenue (₹)', style: { color: 'var(--zinc-500)', fontWeight: 500 } }, labels: { style: { colors: 'var(--zinc-500)' } } },
+      { opposite: true, title: { text: 'Units', style: { color: 'var(--zinc-500)', fontWeight: 500 } }, labels: { style: { colors: 'var(--zinc-500)' } } }
     ],
     tooltip: { theme: 'light', shared: true, intersect: false },
-    grid: { show: true, borderColor: '#f1f5f9', strokeDashArray: 4 }
+    grid: { show: true, borderColor: 'var(--zinc-100)', strokeDashArray: 4 }
   };
 
-  const MetricPill = ({ title, value, icon: Icon, color, trend }) => (
-    <div className="stat-pill">
-      <div className="stat-pill-icon" style={{ backgroundColor: `${color}15`, color: color }}>
-        <Icon size={14} />
-      </div>
-      <div>
-        <div className="stat-pill-label">{title} <span className="ms-1" style={{ fontSize: '9px', color: trend.startsWith('+') ? '#10b981' : '#ef4444' }}>{trend}</span></div>
-        <div className="stat-pill-value">{value}</div>
-      </div>
-    </div>
-  );
-
-  const DashboardCard = ({ title, icon: Icon, children, extra }) => (
-    <div className="glass-card h-100" style={{ borderRadius: '20px', padding: '1.25rem' }}>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h6 className="mb-0 d-flex align-items-center gap-2 fw-bold text-dark">
-          <Icon size={18} className="text-primary" />
-          {title}
-        </h6>
-        {extra}
-      </div>
-      {children}
-    </div>
-  );
-
   return (
-    <div className="dashboard-container p-4" style={{ backgroundColor: '#fdfdfd', minHeight: '100vh' }}>
-      <header className="mb-4">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-4">
+    <div className="page-container pb-5">
+      <div className="page-header mb-4">
+        <div className="d-flex justify-content-between align-items-center">
           <div>
             <div className="d-flex align-items-center gap-2 mb-1">
-              <div className="bg-primary text-white p-1 rounded-2"><Package size={18} /></div>
-              <h1 className="h4 fw-800 mb-0" style={{ letterSpacing: '-0.02em' }}>SKU Intelligence</h1>
+              <div className="p-2 bg-indigo-subtle text-indigo-600 rounded-3">
+                <Layers size={20} />
+              </div>
+              <h1 className="page-title mb-0">SKU Intelligence</h1>
             </div>
             <p className="text-muted small mb-0">Deep Insights & Inventory Analytics</p>
           </div>
-
-          <div className="d-flex align-items-center gap-3">
-            <div className="glass-card p-1 d-flex gap-1" style={{ borderRadius: '50px' }}>
-              {['7D', '30D', '90D'].map((range) => (
-                <button
-                  key={range}
-                  className={`btn btn-sm px-3 rounded-pill border-0 transition-base ${dateRange === (range === '7D' ? 'last7' : range === '30D' ? 'last30' : 'last90') ? 'btn-primary shadow-sm' : 'btn-light bg-transparent text-muted'}`}
-                  style={{ fontSize: '11px', fontWeight: 700 }}
-                  onClick={() => setDateRange(range === '7D' ? 'last7' : range === '30D' ? 'last30' : 'last90')}
-                >
-                  {range}
-                </button>
-              ))}
+          <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-2 bg-white border border-zinc-200 p-1.5 rounded-3 shadow-sm">
+              <Calendar size={14} className="text-muted ms-2" />
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '120px' }}
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(parseInt(e.target.value));
+                  setDateRange('month');
+                }}
+              >
+                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '80px' }}
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(parseInt(e.target.value));
+                  setDateRange('month');
+                }}
+              >
+                {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
+              <div className="px-1 d-flex align-items-center">
+                <DatePicker
+                  selected={customStart}
+                  onChange={([s, e]) => { 
+                    setCustomStart(s); 
+                    setCustomEnd(e); 
+                    if (s && e) setDateRange('custom'); 
+                  }}
+                  startDate={customStart}
+                  endDate={customEnd}
+                  selectsRange
+                  placeholderText="Custom Range"
+                  className="bg-transparent border-0 smallest text-zinc-600 fw-bold"
+                  style={{ width: '130px', outline: 'none' }}
+                />
+                {(dateRange === 'custom') && (
+                  <X 
+                    size={14} 
+                    className="text-muted cursor-pointer ms-1" 
+                    onClick={() => {
+                      setDateRange('month');
+                      setCustomStart(null);
+                      setCustomEnd(null);
+                    }} 
+                  />
+                )}
+              </div>
             </div>
-            <button className="btn btn-dark btn-sm rounded-pill px-3 py-2 shadow-sm fw-700 d-flex align-items-center gap-2" onClick={loadSkuData}>
-              <RefreshCw size={14} className={loading ? 'spin' : ''} />
-              SYNC
+            <button className="btn btn-white btn-sm rounded-circle p-2 shadow-sm border border-zinc-200" onClick={loadSkuData}>
+              <RefreshCw size={14} className={loading ? 'spin text-primary' : 'text-zinc-500'} />
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* KPI Row */}
-      <div className="d-flex flex-wrap gap-3 mb-4">
+      <div className="row g-3 mb-4">
         {kpis.map((kpi, idx) => (
-          <MetricPill key={idx} {...kpi} />
+          <div key={idx} className="col-md-3">
+            <KPICard {...kpi} />
+          </div>
         ))}
       </div>
 
       <div className="row g-4 mb-4">
-        {/* Visualization */}
         <div className="col-lg-8">
-          <DashboardCard title="Revenue vs. Volume" icon={TrendingUp} extra={<span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 rounded-pill smallest">TOP 10 SKUS</span>}>
-            <div style={{ height: '300px' }}>
+          <Card
+            title="Revenue vs. Volume"
+            icon={TrendingUp}
+            className="border-zinc-200 shadow-sm rounded-4"
+            extra={<span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 rounded-pill smallest fw-600">TOP 10 SKUS</span>}
+          >
+            <div style={{ height: '320px' }}>
               <Chart
                 options={performanceChartOptions}
                 series={[
@@ -204,101 +247,110 @@ const SkuReport = () => {
                 height="100%"
               />
             </div>
-          </DashboardCard>
+          </Card>
         </div>
 
-        {/* Inventory Mix */}
         <div className="col-lg-4">
-          <DashboardCard title="Category Distribution" icon={PieChart}>
+          <Card
+            title="Category Mix"
+            icon={PieChart}
+            className="border-zinc-200 shadow-sm rounded-4"
+          >
             <div className="h-100 d-flex align-items-center justify-content-center">
               <Chart
                 options={{
                   labels: Array.from(new Set(data.map(d => d.category))).slice(0, 4),
                   colors: ['#4F46E5', '#8B5CF6', '#EC4899', '#F59E0B'],
-                  legend: { position: 'bottom' },
+                  legend: { position: 'bottom', labels: { colors: 'var(--zinc-500)', useSeriesColors: false } },
                   dataLabels: { enabled: false },
-                  plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'BRANDS' } } } } }
+                  stroke: { show: false },
+                  plotOptions: { pie: { donut: { size: '75%', labels: { show: true, total: { show: true, label: 'TOTAL', color: 'var(--zinc-900)' } } } } }
                 }}
                 series={[40, 30, 20, 10]}
                 type="donut"
                 width="100%"
+                height={320}
               />
             </div>
-          </DashboardCard>
+          </Card>
         </div>
       </div>
 
       <div className="row g-4">
-        {/* Filters Sidebar */}
         <div className="col-lg-3">
-          <div className="glass-card p-4 h-100" style={{ borderRadius: '20px' }}>
-            <h6 className="fw-bold mb-4 d-flex align-items-center gap-2">
-              <Filter size={18} className="text-secondary" />
-              SKU Optimization
-            </h6>
-
+          <Card
+            title="Optimization Filters"
+            icon={Filter}
+            className="border-zinc-200 shadow-sm rounded-4"
+          >
             <div className="mb-4">
-              <label className="smallest fw-bolder text-muted mb-2 d-block text-uppercase">Search Product</label>
-              <div className="bg-light p-2 rounded-3 d-flex align-items-center">
-                <Search size={14} className="text-muted me-2" />
+              <label className="smallest fw-bold text-zinc-500 mb-2 d-block text-uppercase tracking-wider">Search Inventory</label>
+              <div className="input-group input-group-sm rounded-pill overflow-hidden border border-zinc-200 shadow-sm bg-white p-1">
+                <span className="input-group-text bg-transparent border-0 text-muted ps-2"><Search size={14} /></span>
                 <input
                   type="text"
-                  className="border-0 bg-transparent flex-grow-1 smallest fw-600 outline-none"
-                  placeholder="SKU, ASIN, Title..."
+                  className="form-control border-0 ps-1"
+                  placeholder="SKU, ASIN..."
                   value={filters.searchTerm}
+                  style={{ fontSize: '13px' }}
                   onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
                 />
               </div>
             </div>
 
             <div className="mb-4">
-              <label className="smallest fw-bolder text-muted mb-2 d-block text-uppercase">Brand / Category</label>
+              <label className="smallest fw-bold text-zinc-500 mb-2 d-block text-uppercase tracking-wider">Brand / Category</label>
               <select
-                className="form-select border-0 bg-light rounded-3 smallest fw-600"
+                className="form-select form-select-sm border-zinc-200 rounded-pill shadow-sm bg-white ps-3"
                 value={filters.category}
+                style={{ fontSize: '13px' }}
                 onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
               >
-                <option value="all">All Brands</option>
+                <option value="all">All Channels</option>
                 {Array.from(new Set(data.map(d => d.category))).map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
             </div>
 
-            <div className="p-3 rounded-4 bg-primary bg-opacity-10 border border-primary border-opacity-10">
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <Target size={18} className="text-primary" />
-                <span className="text-primary smallest fw-bolder">Conversion Goal: 15%</span>
+            <div className="p-4 rounded-4 bg-primary-subtle border border-primary-subtle shadow-sm">
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="p-1.5 bg-primary text-white rounded-circle">
+                  <Target size={14} />
+                </div>
+                <span className="text-primary smallest fw-bold">Conversion Target: 15%</span>
               </div>
-              <div className="progress" style={{ height: '6px', borderRadius: '10px' }}>
-                <div className="progress-bar bg-primary" style={{ width: '45%' }}></div>
+              <div className="progress bg-white" style={{ height: '6px', borderRadius: '10px' }}>
+                <div className="progress-bar bg-primary shadow-sm" style={{ width: '45%' }}></div>
               </div>
-              <div className="text-muted smallest mt-2 text-center">Current Avg: 6.8%</div>
+              <div className="text-muted smallest mt-3 text-center fw-medium">Average Performance: <span className="text-zinc-900 fw-bold">6.8%</span></div>
             </div>
-          </div>
+          </Card>
         </div>
 
-        {/* SKU Ledger */}
         <div className="col-lg-9">
-          <div className="glass-card shadow-sm border-0 h-100 overflow-hidden" style={{ borderRadius: '20px' }}>
-            <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center">
-              <h6 className="fw-bold mb-0 d-flex align-items-center gap-2">
-                <BarChart3 size={18} className="text-primary" />
-                SKU Performance Ledger
-              </h6>
-              <button className="btn btn-sm btn-white border rounded-pill px-3 shadow-xs smallest fw-700">EXPORT DATA</button>
-            </div>
-            <div className="p-0 text-nowrap">
+          <Card
+            title="SKU Performance Ledger"
+            icon={BarChart3}
+            className="border-zinc-200 shadow-sm rounded-4 overflow-hidden"
+            extra={
+              <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" style={{ fontSize: '11px' }}>
+                <Download size={14} className="text-primary" /> Export Dataset
+              </button>
+            }
+            padding="0"
+          >
+            <div className="p-0 table-responsive border-top border-zinc-100">
               <DataTable
                 data={dashboardData}
                 columns={['sku', 'asin', 'title', 'category', 'status', 'revenue', 'units', 'conversion']}
                 pagination={true}
-                pageSize={8}
+                pageSize={10}
                 compact={true}
                 sortable={true}
               />
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

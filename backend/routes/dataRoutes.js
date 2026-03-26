@@ -14,6 +14,7 @@ router.get('/data/sku-report', authenticate, requirePermission('reports_sku_view
 router.get('/data/parent-asin-report', authenticate, requirePermission('reports_parent_view'), controller.getParentAsinReport);
 router.get('/data/month-wise-report', authenticate, requirePermission('reports_monthly_view'), controller.getMonthWiseReport);
 router.get('/categories', authenticate, controller.getCategories); // Category options
+router.get('/search', authenticate, controller.globalSearch);
 router.get('/dashboard', authenticate, requirePermission('dashboard_view'), dashboardController.getDashboardData);
 
 module.exports = router;

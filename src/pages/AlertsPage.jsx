@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { Bell, CheckCircle, AlertTriangle, Info, XCircle, Check, Search as SearchIcon, RefreshCw, Loader2, MessageSquare } from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
+import EmptyState from '../components/common/EmptyState';
 import './Alerts.css';
 
 const AlertsPage = () => {
@@ -160,29 +161,30 @@ const AlertsPage = () => {
 
   return (
     <>
-      <div className="container-fluid py-5 min-vh-100" style={{ backgroundColor: '#f2f2f7' }}>
+      <div className="container-fluid py-5 min-vh-100" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="row justify-content-center">
           <div className="col-lg-10 col-xl-9">
 
             <div className="d-flex justify-content-between align-items-end mb-4 px-2">
               <div>
-                <h1 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2" style={{ letterSpacing: '-0.02em' }}>
-                  <Bell className="text-primary" size={28} />
-                  Notifications
+                <h1 className="fw-bold text-zinc-900 mb-0 d-flex align-items-center gap-2" style={{ letterSpacing: '-0.02em', fontSize: '2rem' }}>
+                  <Bell className="text-zinc-400" size={28} />
+                  Operational <span className="text-zinc-400">Alerts</span>
                 </h1>
-                <p className="text-muted small mb-0 mt-1">Stay updated with system activities</p>
+                <p className="text-zinc-500 small mb-0 mt-1 fw-500">Stay updated with system activities & market triggers</p>
               </div>
               <div className="d-flex gap-3">
                 <button
-                  className="btn ios-btn-white rounded-pill px-3 d-flex align-items-center gap-2 fw-medium"
+                  className="btn btn-white border border-zinc-200 shadow-sm rounded-pill px-3 d-flex align-items-center gap-2 fw-bold text-zinc-700"
                   onClick={fetchNotifications}
                   disabled={loading}
                 >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} className="text-zinc-400" />}
                   Sync
                 </button>
                 <button
-                  className="btn ios-btn-primary text-white rounded-pill px-4 fw-semibold"
+                  className="btn btn-zinc-900 text-white rounded-pill px-4 fw-bold shadow-sm border-0"
+                  style={{ backgroundColor: '#18181B' }}
                   onClick={acknowledgeAll}
                   disabled={stats.unreadCount === 0}
                 >
@@ -200,12 +202,12 @@ const AlertsPage = () => {
                 { label: 'System', value: stats.warning, icon: Info, color: '#5856d6' }
               ].map((stat, i) => (
                 <div key={i} className="col-6 col-md-3">
-                  <div className="ios-stat-card text-center animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
-                    <div className="mb-2 d-inline-block p-2 rounded-circle" style={{ backgroundColor: `${stat.color}15`, color: stat.color }}>
+                  <div className="surface-card p-4 rounded-xl text-center border border-zinc-200 bg-white shadow-sm animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
+                    <div className="mb-2 d-inline-block p-2 rounded-circle border border-zinc-100" style={{ backgroundColor: `${stat.color}08`, color: stat.color }}>
                       <stat.icon size={20} />
                     </div>
-                    <div className="text-muted smallest fw-bold text-uppercase">{stat.label}</div>
-                    <div className="h3 fw-bold mb-0 mt-1">{stat.value}</div>
+                    <div className="text-zinc-500 smallest fw-bold text-uppercase" style={{ letterSpacing: '0.05em' }}>{stat.label}</div>
+                    <div className="h3 fw-bold mb-0 mt-1 text-zinc-900">{stat.value}</div>
                   </div>
                 </div>
               ))}
@@ -213,40 +215,43 @@ const AlertsPage = () => {
 
             <div className="mb-4">
               {/* Read / Unread toggle */}
-              <div className="d-flex gap-2 p-1 bg-white rounded-pill shadow-sm d-inline-flex mb-3">
+              <div className="d-flex gap-2 p-1 bg-zinc-100 border border-zinc-200 rounded-pill d-inline-flex mb-3">
                 <button
-                  className={`btn btn-sm rounded-pill px-4 fw-medium border-0 ${!filters.unreadOnly ? 'bg-primary text-white' : 'text-muted'}`}
+                  className={`btn btn-sm rounded-pill px-4 fw-bold border-0 transition-all ${!filters.unreadOnly ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+                  style={!filters.unreadOnly ? { backgroundColor: '#18181B' } : {}}
                   onClick={() => setFilters({ ...filters, unreadOnly: false })}
                 >
                   Recent
                 </button>
                 <button
-                  className={`btn btn-sm rounded-pill px-4 fw-medium border-0 ${filters.unreadOnly ? 'bg-primary text-white' : 'text-muted'}`}
+                  className={`btn btn-sm rounded-pill px-4 fw-bold border-0 transition-all ${filters.unreadOnly ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+                  style={filters.unreadOnly ? { backgroundColor: '#18181B' } : {}}
                   onClick={() => setFilters({ ...filters, unreadOnly: true })}
                 >
                   Unread
                 </button>
               </div>
 
-              {/* Type filter */}
-              <div className="d-flex gap-2 flex-wrap mb-3">
-                {[
-                  { id: 'all', label: 'All Types' },
-                  { id: 'ALERT', label: '🔴 Alerts' },
-                  { id: 'SYSTEM', label: '🔵 System' },
-                  { id: 'ACTION_ASSIGNED', label: '🟢 Updates' },
-                  { id: 'CHAT_MESSAGE', label: '💬 Chat' },
-                ].map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setFilters(prev => ({ ...prev, type: t.id }))}
-                    className={`btn btn-sm rounded-pill fw-medium border-0 px-3 ${filters.type === t.id ? 'bg-dark text-white' : 'bg-white text-muted shadow-sm'
-                      }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+                {/* Type filter */}
+                <div className="d-flex gap-2 flex-wrap mb-3">
+                  {[
+                    { id: 'all', label: 'All Types' },
+                    { id: 'ALERT', label: '🔴 Alerts' },
+                    { id: 'SYSTEM', label: '🔵 System' },
+                    { id: 'ACTION_ASSIGNED', label: '🟢 Updates' },
+                    { id: 'CHAT_MESSAGE', label: '💬 Chat' },
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setFilters(prev => ({ ...prev, type: t.id }))}
+                      className={`btn btn-sm rounded-pill fw-bold border border-zinc-200 px-3 shadow-none transition-all ${filters.type === t.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-white text-zinc-500'
+                        }`}
+                      style={filters.type === t.id ? { backgroundColor: '#18181B' } : {}}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
 
               {/* Search */}
               <div className="input-group ios-search-pill rounded-pill px-3 py-1 shadow-sm mb-4">
@@ -278,13 +283,12 @@ const AlertsPage = () => {
                   <p className="text-muted">Fetching updates...</p>
                 </div>
               ) : notifications.length === 0 ? (
-                <div className="text-center py-5 mt-5">
-                  <div className="ios-app-icon mx-auto mb-4 bg-white" style={{ width: '80px', height: '80px', borderRadius: '20px' }}>
-                    <Bell size={40} className="text-muted opacity-30" />
-                  </div>
-                  <h4 className="fw-bold">No Notifications</h4>
-                  <p className="text-muted px-4">You're all caught up. Any new system messages will appear here.</p>
-                </div>
+                <EmptyState
+                  icon={Bell}
+                  title="All caught up!"
+                  description="No new notifications. System events and alerts will appear here."
+                  action={null}
+                />
               ) : (
                 <div className="d-flex flex-column gap-2">
                   {notifications
@@ -301,7 +305,7 @@ const AlertsPage = () => {
                         color={getTypeColor(notification.type)}
                         isOpen={true}
                         toggle={() => dismissAlert(notification._id)}
-                        className={`mb-0 shadow-sm animate-fade-in ${!notification.isRead ? 'fw-semibold' : ''}`}
+                        className={`mb-0 border border-zinc-200 shadow-sm animate-fade-in ${!notification.isRead ? 'fw-semibold bg-white' : 'bg-zinc-50'}`}
                         style={{ animationDelay: `${idx * 0.05}s`, borderRadius: 12 }}
                       >
                         <div className="d-flex align-items-center gap-2">

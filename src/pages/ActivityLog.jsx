@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { Clock, Filter, Search, ArrowRight, User, CheckCircle, PlusCircle, Trash2, Edit3, ClipboardList } from 'lucide-react';
+import EmptyState from '../components/common/EmptyState';
+import { Clock, Filter, Search, ArrowRight, User, CheckCircle, PlusCircle, Trash2, Edit3, ClipboardList, Activity } from 'lucide-react';
 
 const ActivityLog = () => {
     const [logs, setLogs] = useState([]);
@@ -135,8 +136,13 @@ const ActivityLog = () => {
                                     </tr>
                                 ) : filteredLogs.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="text-center py-5 text-muted">
-                                            No logs found matching your filters
+                                        <td colSpan="5">
+                                            <EmptyState
+                                                icon={Activity}
+                                                title="No activity yet"
+                                                description="Actions performed on projects, ASINs, and settings will be logged here."
+                                                action={null}
+                                            />
                                         </td>
                                     </tr>
                                 ) : (

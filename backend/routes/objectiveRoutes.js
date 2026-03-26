@@ -14,4 +14,10 @@ router.get('/', objectiveController.getObjectives);
 router.put('/:id', objectiveController.updateObjective);
 router.delete('/:id', objectiveController.deleteObjective);
 
+// Key Result Routes
+router.post('/key-results', protect, objectiveController.createKeyResult);
+router.put('/key-results/:id', protect, objectiveController.updateKeyResult);
+router.delete('/key-results/:id', protect, objectiveController.deleteKeyResult);
+router.post('/key-results/:id/sync', protect, objectiveController.syncKeyResult);
+
 module.exports = router;

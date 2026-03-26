@@ -136,3 +136,67 @@ exports.renameFile = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
+
+/* ── List ASIN folders ─────────────────────────────────────────── */
+exports.listAsinFolders = async (req, res) => {
+    try {
+        const baseDir = path.join(__dirname, '..', 'uploads', 'asin_images');
+        if (!fs.existsSync(baseDir)) {
+            return res.json({ success: true, folders: [] });
+        }
+
+        const items = fs.readdirSync(baseDir, { withFileTypes: true });
+        const folders = items
+            .filter(item => item.isDirectory())
+            .map(item => {
+                const folderPath = path.join(baseDir, item.name);
+                const files = fs.readdirSync(folderPath).filter(f => !f.startsWith('.'));
+                return {
+                    id: item.name,
+                    name: item.name,
+                    type: 'folder',
+                    count: files.length,
+                    // Use first image as thumbnail if available
+                    thumbnail: files.length > 0 ? `${req.protocol}://${req.get('host')}/uploads/asin_images/${item.name}/${files[0]}` : null
+                };
+            });
+
+        return res.json({ success: true, folders });
+    } catch (err) {
+        console.error('listAsinFolders error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/* ── List files in a specific ASIN folder ──────────────────────── */
+exports.getAsinFiles = async (req, res) => {
+    try {
+        const { asin } = req.params;
+        const baseDir = path.join(__dirname, '..', 'uploads', 'asin_images', asin);
+        
+        if (!fs.existsSync(baseDir)) {
+            return res.status(404).json({ success: false, message: 'ASIN folder not found' });
+        }
+
+        const files = fs.readdirSync(baseDir)
+            .filter(f => !f.startsWith('.'))
+            .map(f => {
+                const stats = fs.statSync(path.join(baseDir, f));
+                return {
+                    _id: `${asin}_${f}`,
+                    originalName: f,
+                    size: stats.size,
+                    sizeLabel: fmtSize(stats.size),
+                    mimeType: 'image/png', // Mostly PNGs from SD3
+                    url: `${req.protocol}://${req.get('host')}/uploads/asin_images/${asin}/${f}`,
+                    createdAt: stats.birthtime,
+                    type: 'image'
+                };
+            });
+
+        return res.json({ success: true, files });
+    } catch (err) {
+        console.error('getAsinFiles error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

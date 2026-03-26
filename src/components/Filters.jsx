@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { Calendar, Search, Filter, X, RotateCcw } from 'lucide-react';
 
 const Filters = ({
   filters,
@@ -11,30 +12,77 @@ const Filters = ({
   showCampaignType = false,
   showStatus = false
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [tempRange, setTempRange] = useState([null, null]);
-  const [showCustomRange, setShowCustomRange] = useState(filters.dateRange === 'custom');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [customStart, setCustomStart] = useState(null);
+  const [customEnd, setCustomEnd] = useState(null);
+  const [dateRangeMode, setDateRangeMode] = useState('month');
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'dateRange' && value === 'custom') {
-      setShowCustomRange(true);
-      onFilterChange({ [name]: value });
-    } else if (name === 'dateRange') {
-      setShowCustomRange(false);
-      onFilterChange({ [name]: value, customStartDate: null, customEndDate: null });
-    } else {
-      onFilterChange({ [name]: value });
+  const handleMonthChange = (e) => {
+    const month = parseInt(e.target.value);
+    setSelectedMonth(month);
+    setDateRangeMode('month');
+    const firstDay = new Date(selectedYear, month, 1);
+    const lastDay = new Date(selectedYear, month + 1, 0);
+    onFilterChange({ 
+      dateRange: 'month', 
+      startDate: firstDay.toISOString().split('T')[0], 
+      endDate: lastDay.toISOString().split('T')[0] 
+    });
+  };
+
+  const handleYearChange = (e) => {
+    const year = parseInt(e.target.value);
+    setSelectedYear(year);
+    setDateRangeMode('month');
+    const firstDay = new Date(year, selectedMonth, 1);
+    const lastDay = new Date(year, selectedMonth + 1, 0);
+    onFilterChange({ 
+      dateRange: 'month', 
+      startDate: firstDay.toISOString().split('T')[0], 
+      endDate: lastDay.toISOString().split('T')[0] 
+    });
+  };
+
+  const handleCustomRange = (update) => {
+    const [start, end] = update;
+    setCustomStart(start);
+    setCustomEnd(end);
+    if (start && end) {
+      setDateRangeMode('custom');
+      onFilterChange({ 
+        dateRange: 'custom', 
+        startDate: start.toISOString().split('T')[0], 
+        endDate: end.toISOString().split('T')[0] 
+      });
     }
   };
 
-  const handleSearchChange = (e) => {
-    onFilterChange({ searchTerm: e.target.value });
+  const clearCustom = () => {
+    setDateRangeMode('month');
+    setCustomStart(null);
+    setCustomEnd(null);
+    const firstDay = new Date(selectedYear, selectedMonth, 1);
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
+    onFilterChange({ 
+      dateRange: 'month', 
+      startDate: firstDay.toISOString().split('T')[0], 
+      endDate: lastDay.toISOString().split('T')[0] 
+    });
   };
 
   const handleReset = () => {
+    setSelectedMonth(new Date().getMonth());
+    setSelectedYear(new Date().getFullYear());
+    setCustomStart(null);
+    setCustomEnd(null);
+    setDateRangeMode('month');
+    const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const lastDay = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
     onFilterChange({
-      dateRange: 'last30',
+      dateRange: 'month',
+      startDate: firstDay.toISOString().split('T')[0],
+      endDate: lastDay.toISOString().split('T')[0],
       category: 'all',
       searchTerm: '',
       campaignType: 'all',
@@ -43,169 +91,118 @@ const Filters = ({
   };
 
   return (
-    <div className="filters-container">
-      <div className="filters-header">
-        <button
-          className="filters-toggle-btn"
-          onClick={() => setIsExpanded(!isExpanded)}
-          aria-expanded={isExpanded}
-        >
-          <i className={`bi bi-funnel${isExpanded ? '-fill' : ''}`}></i>
-          Filters
-          <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} ms-2`}></i>
-        </button>
-      </div>
-
-      <div className={`filters-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
-        <div className="filter-row">
-          {showSearch && (
-            <div className="filter-group-inline" style={{ flex: 2 }}>
-              <label className="form-label">
-                <i className="bi bi-search me-1"></i>
-                Search
-              </label>
+    <div className="bg-white border border-zinc-200 rounded-4 p-4 shadow-sm mb-4">
+      <div className="row g-3 align-items-end">
+        {showSearch && (
+          <div className="col-lg-4">
+            <label className="smallest fw-bolder text-zinc-500 mb-2 d-flex align-items-center gap-1.5 text-uppercase letter-spacing-05">
+              <Search size={12} /> Search Records
+            </label>
+            <div className="bg-zinc-50 border border-zinc-200 rounded-3 px-3 py-2 d-flex align-items-center focus-within-ring transition-base">
               <input
                 type="text"
-                className="form-control"
-                placeholder="Search SKU, ASIN, title..."
+                className="border-0 bg-transparent flex-grow-1 smallest fw-600 text-zinc-700 outline-none"
+                placeholder="SKU, ASIN, or Title..."
                 value={filters.searchTerm || ''}
-                onChange={handleSearchChange}
+                onChange={(e) => onFilterChange({ searchTerm: e.target.value })}
               />
             </div>
-          )}
+          </div>
+        )}
 
-          {showDateRange && (
-            <div className="filter-group-inline">
-              <label className="form-label">
-                <i className="bi bi-calendar3 me-1"></i>
-                Date Range
-              </label>
-              <select
-                name="dateRange"
-                className="form-control form-select"
-                value={filters.dateRange || 'last30'}
-                onChange={handleInputChange}
+        {showDateRange && (
+          <div className="col-lg-5">
+            <label className="smallest fw-bolder text-zinc-500 mb-2 d-flex align-items-center gap-1.5 text-uppercase letter-spacing-05">
+              <Calendar size={12} /> Date Filtering
+            </label>
+            <div className="bg-white border border-zinc-200 p-1 rounded-3 d-flex align-items-center gap-1 shadow-xs">
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '120px' }}
+                value={selectedMonth}
+                onChange={handleMonthChange}
               >
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="last7">Last 7 Days</option>
-                <option value="last14">Last 14 Days</option>
-                <option value="last30">Last 30 Days</option>
-                <option value="last60">Last 60 Days</option>
-                <option value="last90">Last 90 Days</option>
-                <option value="thisMonth">This Month</option>
-                <option value="lastMonth">Last Month</option>
-                <option value="thisQuarter">This Quarter</option>
-                <option value="thisYear">This Year</option>
-                <option value="custom">Custom Range...</option>
+                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
               </select>
-            </div>
-          )}
-
-          {showDateRange && showCustomRange && (
-            <div className="filter-group-inline animate-fadeIn" style={{ flex: 1.5 }}>
-              <label className="form-label">
-                <i className="bi bi-calendar-range me-1"></i>
-                Select Dates
-              </label>
-              <div className="d-flex align-items-center bg-white border rounded px-2" style={{ height: '38px' }}>
+              <select 
+                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
+                style={{ width: '80px' }}
+                value={selectedYear}
+                onChange={handleYearChange}
+              >
+                {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
+              <div className="px-1 d-flex align-items-center">
                 <DatePicker
-                  selectsRange={true}
-                  startDate={filters.customStartDate || tempRange[0]}
-                  endDate={filters.customEndDate || tempRange[1]}
-                  onChange={(update) => {
-                    const [start, end] = update;
-                    setTempRange(update);
-                    if (start && end) {
-                      onFilterChange({ customStartDate: start, customEndDate: end });
-                    }
-                  }}
-                  className="form-control border-0 bg-transparent smallest p-0"
-                  dateFormat="MMM d, yyyy"
-                  placeholderText="Click to select range"
-                  isClearable={true}
+                  selectsRange
+                  startDate={customStart}
+                  endDate={customEnd}
+                  onChange={handleCustomRange}
+                  placeholderText="Custom Range"
+                  className="bg-transparent border-0 smallest text-zinc-600 fw-bold"
+                  style={{ width: '130px', outline: 'none' }}
                 />
+                {dateRangeMode === 'custom' && (
+                  <X 
+                    size={14} 
+                    className="text-muted cursor-pointer ms-1" 
+                    onClick={clearCustom} 
+                  />
+                )}
               </div>
             </div>
-          )}
-
-          {showCategory && (
-            <div className="filter-group-inline">
-              <label className="form-label">
-                <i className="bi bi-collection me-1"></i>
-                Category
-              </label>
-              <select
-                name="category"
-                className="form-control form-select"
-                value={filters.category || 'all'}
-                onChange={handleInputChange}
-              >
-                <option value="all">All Categories</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Home & Kitchen">Home & Kitchen</option>
-                <option value="Sports">Sports</option>
-                <option value="Books">Books</option>
-                <option value="Clothing">Clothing</option>
-                <option value="Toys">Toys</option>
-                <option value="Beauty">Beauty</option>
-                <option value="Automotive">Automotive</option>
-              </select>
-            </div>
-          )}
-
-          {showCampaignType && (
-            <div className="filter-group-inline">
-              <label className="form-label">
-                <i className="bi bi-megaphone me-1"></i>
-                Campaign Type
-              </label>
-              <select
-                name="campaignType"
-                className="form-control form-select"
-                value={filters.campaignType || 'all'}
-                onChange={handleInputChange}
-              >
-                <option value="all">All Types</option>
-                <option value="Sponsored Products">Sponsored Products</option>
-                <option value="Sponsored Brands">Sponsored Brands</option>
-                <option value="Sponsored Display">Sponsored Display</option>
-                <option value="Sponsored TV">Sponsored TV</option>
-              </select>
-            </div>
-          )}
-
-          {showStatus && (
-            <div className="filter-group-inline">
-              <label className="form-label">
-                <i className="bi bi-toggle-on me-1"></i>
-                Status
-              </label>
-              <select
-                name="status"
-                className="form-control form-select"
-                value={filters.status || 'all'}
-                onChange={handleInputChange}
-              >
-                <option value="all">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Paused">Paused</option>
-                <option value="Ended">Ended</option>
-                <option value="Draft">Draft</option>
-              </select>
-            </div>
-          )}
-
-          <div className="filter-actions-inline">
-            <button
-              className="btn btn-secondary"
-              onClick={handleReset}
-              title="Reset Filters"
-            >
-              <i className="bi bi-arrow-clockwise"></i>
-              Reset
-            </button>
           </div>
+        )}
+
+        {(showCategory || showCampaignType || showStatus) && (
+          <div className="col-lg-3 d-flex gap-2">
+            {showCategory && (
+              <div className="flex-grow-1">
+                <label className="smallest fw-bolder text-zinc-500 mb-2 d-block text-uppercase shadow-none">Category</label>
+                <select
+                  name="category"
+                  className="form-select border border-zinc-200 bg-zinc-50 rounded-3 smallest fw-600 py-2 shadow-none"
+                  value={filters.category || 'all'}
+                  onChange={(e) => onFilterChange({ category: e.target.value })}
+                >
+                  <option value="all">All Categories</option>
+                  {['Electronics', 'Home & Kitchen', 'Sports', 'Books', 'Clothing', 'Toys', 'Beauty', 'Automotive'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {showStatus && (
+              <div className="flex-grow-1">
+                <label className="smallest fw-bolder text-zinc-500 mb-2 d-block text-uppercase shadow-none">Status</label>
+                <select
+                  name="status"
+                  className="form-select border border-zinc-200 bg-zinc-50 rounded-3 smallest fw-600 py-2 shadow-none"
+                  value={filters.status || 'all'}
+                  onChange={(e) => onFilterChange({ status: e.target.value })}
+                >
+                  <option value="all">All Status</option>
+                  {['Active', 'Paused', 'Ended', 'Draft'].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="col-lg-auto ms-auto d-flex gap-2">
+           <button
+              className="btn btn-white btn-sm border border-zinc-200 rounded-3 px-3 py-2 d-flex align-items-center gap-2 fw-700 smallest text-zinc-600 transition-base"
+              onClick={handleReset}
+            >
+              <RotateCcw size={14} /> Reset
+            </button>
         </div>
       </div>
     </div>

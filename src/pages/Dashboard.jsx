@@ -1,6 +1,10 @@
+// Dashboard - RetailOps Command Center
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import NumberChart from '../components/common/NumberChart';
 import Chart from 'react-apexcharts';
+import Box from '@mui/material/Box';
+import { BarChart } from '@mui/x-charts/BarChart';
+import { CHART_COLORS, mergeApexOptions, areaChartOptions } from '../utils/chartTheme';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -27,12 +31,20 @@ import {
   Settings,
   PieChart,
   ChevronRight,
-  MessageSquareCode
+  MessageSquareCode,
+  ArrowRight,
+  Activity
 } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import api, { seedApi } from '../services/api';
+import Card from '../components/common/Card';
+import PageHeader from '../components/common/PageHeader';
+import { SkeletonKpiCard } from '../components/common/Skeleton';
+import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [dateRange, setDateRange] = useState('last30');
@@ -42,6 +54,7 @@ const Dashboard = () => {
     revenueData: [],
     stackedBarSeries: [],
     areaSeries: [],
+    adsPerformanceSeries: [],
     categoryData: [],
     topProducts: [],
     labels: [],
@@ -70,6 +83,7 @@ const Dashboard = () => {
         revenueData: revenue?.[0]?.data || [],
         stackedBarSeries: stackedBarSeries || [],
         areaSeries: areaSeries || [],
+        adsPerformanceSeries: response.adsPerformanceSeries || [],
         labels: labels || [],
         categoryData: category || [],
         topProducts: tableData?.map((p, idx) => ({ ...p, rank: idx + 1, name: p.title })) || [],
@@ -152,7 +166,7 @@ const Dashboard = () => {
       labels: { colors: '#64748b' },
       markers: { radius: 12 }
     },
-    colors: ['#4F46E5', '#10B981', '#EF4444'],
+    colors: [CHART_COLORS[0], CHART_COLORS[1], CHART_COLORS[5]],
     dataLabels: { enabled: false },
     tooltip: { theme: 'light' }
   };
@@ -180,7 +194,10 @@ const Dashboard = () => {
       labels: { style: { colors: '#64748b', fontSize: '10px' } }
     },
     yaxis: {
-      labels: { style: { colors: '#64748b', fontSize: '10px' } }
+      labels: {
+        style: { colors: '#64748b', fontSize: '10px' },
+        formatter: (val) => val >= 1000 ? `₹${(val / 1000).toFixed(1)}K` : `₹${val}`
+      }
     },
     grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
     legend: {
@@ -190,15 +207,24 @@ const Dashboard = () => {
       fontSize: '11px',
       fontWeight: 600,
     },
-    colors: ['#4F46E5', '#8B5CF6', '#F59E0B'],
-    dataLabels: { enabled: false },
-    tooltip: { theme: 'light' }
+    colors: [CHART_COLORS[0], CHART_COLORS[5]], // Ordered: Organic Sales (Blue), Ad Sales (Teal)
+    dataLabels: {
+      enabled: true,
+      style: { fontSize: '9px', fontWeight: 600, colors: ['#1e293b'] },
+      formatter: (val) => val > 0 ? `₹${(val / 1000).toFixed(1)}K` : ''
+    },
+    tooltip: {
+      theme: 'light',
+      y: {
+        formatter: (val) => `₹${val.toLocaleString()}`
+      }
+    }
   };
 
   const donutChartOptions = {
     chart: { type: 'donut' },
     labels: data.categoryData.map(c => c.name),
-    colors: ['#4F46E5', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'],
+    colors: CHART_COLORS.slice(0, 5),
     stroke: { width: 0 },
     legend: {
       position: 'bottom',
@@ -228,61 +254,118 @@ const Dashboard = () => {
   };
 
 
-  const DashboardCard = ({ title, icon: Icon, children, extra, subtitle }) => (
-    <div className="glass-card shadow-sm h-100" style={{ borderRadius: '16px', padding: '1.25rem', display: 'flex', flexDirection: 'column', border: '1px solid rgba(0,0,0,0.05)' }}>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h6 className="mb-0 d-flex align-items-center gap-2 fw-800 text-dark" style={{ fontSize: '0.9rem', letterSpacing: '-0.01em' }}>
-            {Icon && <Icon size={18} className="text-secondary" strokeWidth={2.5} />}
-            {title}
-          </h6>
-          {subtitle && <p className="text-muted smallest mb-0 mt-1" style={{ fontSize: '10px' }}>{subtitle}</p>}
-        </div>
-        {extra}
-      </div>
-      <div style={{ flex: 1 }}>{children}</div>
-    </div>
-  );
+  // Removed local DashboardCard as we now use common Card component
 
-  return (
-    <div className="dashboard-container p-3" style={{ backgroundColor: '#fdfdfd', minHeight: '100vh' }}>
-      {/* Header Command Center */}
-      <header className="mb-3">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <div>
-            <div className="d-flex align-items-center gap-2 mb-0">
-              <div className="bg-primary text-white p-1 rounded-2"><Zap size={16} /></div>
-              <h1 className="h5 fw-800 mb-0" style={{ letterSpacing: '-0.02em' }}>Analytics HQ</h1>
-            </div>
-            <p className="text-muted smallest mb-0">Market Intelligence Command Center</p>
-          </div>
-
-          <div className="d-flex align-items-center gap-2">
-            {/* Compact Tools */}
-            <div className="d-flex gap-2">
-              <button className="btn btn-white btn-sm shadow-sm border border-light rounded-pill px-2 py-1 fw-600 d-flex align-items-center gap-1" style={{ fontSize: '11px' }} onClick={loadDashboardData}>
-                <RefreshCw size={12} className={loading ? 'spin' : ''} />
-                SYNC
+  // Loading state with skeletons
+  if (loading) {
+    return (
+      <div className="dashboard-container p-3" style={{ backgroundColor: 'var(--color-surface-1)', minHeight: '100vh' }}>
+        <PageHeader
+          title="Dashboard"
+          subtitle="Market Intelligence Command Center"
+          actions={
+            <>
+              <button className="btn btn-white btn-sm shadow-sm border border-zinc-200" style={{ borderRadius: 'var(--radius-full)' }} onClick={loadDashboardData}>
+                <RefreshCw size={14} className={loading ? 'spin text-zinc-900' : 'text-zinc-500'} />
               </button>
-              <div className="glass-card p-1 d-flex gap-1" style={{ borderRadius: '50px' }}>
-                {['last7', 'last30', 'last90'].map((range) => (
+              <div className="d-flex gap-1" style={{ borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-2)', padding: '4px' }}>
+                {['7D', '30D', '90D'].map((range) => (
                   <button
                     key={range}
-                    className={`btn btn-sm px-2 rounded-pill border-0 transition-base ${dateRange === range ? 'btn-primary shadow-sm' : 'btn-light bg-transparent text-muted'}`}
-                    style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px' }}
-                    onClick={() => setDateRange(range)}
+                    className="btn btn-sm px-3"
+                    style={{ borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: 600 }}
                   >
-                    {range === 'last7' ? '7D' : range === 'last30' ? '30D' : '90D'}
+                    {range}
                   </button>
                 ))}
               </div>
+            </>
+          }
+        />
+        {/* KPI Skeletons */}
+        <div className="row g-3 mb-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="col-md-3 col-6">
+
             </div>
-            <button onClick={handleSeedDemoData} className="btn btn-dark btn-sm rounded-pill px-3 py-1 shadow-sm fw-700" style={{ fontSize: '11px' }} disabled={seeding}>
-              {seeding ? 'SEEDING...' : 'POPULATE'}
-            </button>
+          ))}
+        </div>
+        {/* Chart Skeletons */}
+        <div className="row g-3 mb-3">
+          <div className="col-lg-8">
+            {/* <SkeletonChart height={280} /> */}
+          </div>
+          <div className="col-lg-4">
+            {/* <SkeletonChart height={280} /> */}
           </div>
         </div>
-      </header>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="dashboard-container p-3" style={{ backgroundColor: 'var(--color-surface-1)', minHeight: '100vh' }}>
+        <PageHeader
+          title="Dashboard"
+          subtitle="Market Intelligence Command Center"
+        />
+        <ErrorState
+          title="Failed to load dashboard"
+          description={error}
+          onRetry={loadDashboardData}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard-container p-3" style={{ backgroundColor: 'var(--color-surface-1)', minHeight: '100vh' }}>
+      {/* Page Header */}
+      <PageHeader
+        title="Dashboard"
+        subtitle="Market Intelligence Command Center"
+        actions={
+          <>
+            <button className="btn btn-sm btn-secondary" onClick={loadDashboardData}>
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+            </button>
+            <div className="d-flex gap-1" style={{ borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-2)', padding: '4px' }}>
+              {['last7', 'last30', 'last90'].map((range) => (
+                <button
+                  key={range}
+                  className={`btn btn-sm px-3 border-0 transition-all ${dateRange === range ? 'bg-zinc-900 text-white' : 'btn-ghost text-zinc-500'}`}
+                  style={{
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    backgroundColor: dateRange === range ? '#18181B' : 'transparent'
+                  }}
+                  onClick={() => setDateRange(range)}
+                >
+                  {range === 'last7' ? '7D' : range === 'last30' ? '30D' : '90D'}
+                </button>
+              ))}
+            </div>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => window.location.href = '/ads-report'}
+                  className="btn btn-sm btn-white border border-zinc-200 shadow-sm"
+                  style={{ borderRadius: 'var(--radius-full)', fontWeight: 600, fontSize: '11px' }}
+                >
+                  <Upload size={14} className="me-1" /> IMPORT ADS
+                </button>
+                <button onClick={handleSeedDemoData} className="btn btn-sm btn-zinc-900 border-0 shadow-sm" style={{ backgroundColor: '#18181B', color: '#fff', borderRadius: 'var(--radius-full)' }} disabled={seeding}>
+                  {seeding ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
+                  <span className="ms-1">{seeding ? 'SEEDING...' : 'POPULATE'}</span>
+                </button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* Standardized Metric Grid */}
       <div className="row g-3 mb-4">
@@ -294,7 +377,7 @@ const Dashboard = () => {
               icon={kpi.icon.includes('shop') ? ShoppingBag : kpi.icon.includes('box') ? Package : kpi.icon.includes('rupee') ? IndianRupee : TrendingUp}
               delta={kpi.trend}
               deltaType={kpi.trendType}
-              color={['#4f46e5', '#8b5cf6', '#10b981', '#f59e0b'][idx % 4]}
+              color="#18181B"
             />
           </div>
         ))}
@@ -303,134 +386,258 @@ const Dashboard = () => {
       <div className="row g-3 mb-3">
         {/* Main Area Chart */}
         <div className="col-lg-8">
-          <DashboardCard title="Revenue Flow" icon={TrendingUp} extra={<span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 rounded-pill smallest" style={{ fontSize: '10px' }}>MULTI-SERIES</span>}>
-            <div style={{ minHeight: '280px' }}>
-              <Chart options={areaChartOptions} series={data.areaSeries} type="area" height={280} />
-            </div>
-          </DashboardCard>
+          <Card
+            title="Daily Ads Performance"
+            icon={TrendingUp}
+            extra={<span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5 rounded-pill smallest">ADS SPEND VS REVENUE</span>}
+          >
+            <Box sx={{ width: '100%', height: 300, mt: 2 }}>
+              {data.adsPerformanceSeries.length > 0 ? (
+                <BarChart
+                  series={data.adsPerformanceSeries.map(s => ({
+                    data: s.data,
+                    label: s.name,
+                    id: s.name.replace(/\s+/g, '').toLowerCase() + 'Id',
+                    valueFormatter: (val) => `₹${val.toLocaleString()}`
+                  }))}
+                  xAxis={[{
+                    data: data.labels,
+                    scaleType: 'band',
+                    tickLabelStyle: { fontSize: 9, fill: '#94a3b8' }
+                  }]}
+                  yAxis={[{
+                    valueFormatter: (val) => val >= 1000 ? `₹${(val / 1000).toFixed(1)}K` : `₹${val}`,
+                    tickLabelStyle: { fontSize: 9, fill: '#94a3b8' }
+                  }]}
+                  height={300}
+                  margin={{ top: 20, bottom: 40, left: 60, right: 20 }}
+                  colors={['#06b6d4', '#f59e0b']} // Ad Sales (Teal), Ad Spend (Orange)
+                />
+              ) : (
+                <div className="d-flex align-items-center justify-content-center h-100 text-muted smallest">
+                  No ads performance data available for this period.
+                </div>
+              )}
+            </Box>
+          </Card>
         </div>
 
         {/* Portfolio Distribution (Donut) */}
         <div className="col-lg-4">
-          <DashboardCard title="Portfolio Mix" icon={PieChart} extra={<button className="btn btn-link btn-sm p-0 text-muted"><Settings size={12} /></button>}>
+          <Card title="Portfolio Mix" icon={PieChart}>
             <div className="d-flex align-items-center justify-content-center h-100">
               {data.categoryData.length > 0 ? (
-                <Chart options={donutChartOptions} series={data.categoryData.map(c => c.data[0])} type="donut" width="100%" height={280} />
+                <Chart options={donutChartOptions} series={data.categoryData.map(c => c.data[0])} type="donut" width="100%" height={300} />
               ) : (
                 <div className="text-muted smallest">No category data</div>
               )}
             </div>
-          </DashboardCard>
+          </Card>
         </div>
       </div>
 
       {/* Stacked Bar Chart Row */}
       <div className="row g-3 mb-3">
         <div className="col-12">
-          <DashboardCard title="Monthly Performance Breakdown" icon={BarChart2} extra={<span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5 rounded-pill smallest" style={{ fontSize: '10px' }}>STACKED PERFORMANCE</span>}>
+          <Card title="Monthly Performance Breakdown" icon={BarChart2} extra={<span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5 rounded-pill smallest">STACKED PERFORMANCE</span>}>
             <div style={{ minHeight: '300px' }}>
               <Chart options={stackedBarOptions} series={data.stackedBarSeries} type="bar" height={300} />
             </div>
-          </DashboardCard>
+          </Card>
         </div>
       </div>
 
       <div className="row g-3 mb-3">
-        {/* Quick Access Column */}
+        {/* Quick Access Column - 3-column grid of action cards */}
         <div className="col-lg-3">
-          <div className="glass-card p-3 h-100" style={{ borderRadius: '16px' }}>
-            <h6 className="fw-bold mb-3 d-flex align-items-center gap-2" style={{ fontSize: '0.85rem' }}>
-              <MousePointer2 size={16} className="text-primary" />
+          <div style={{
+            backgroundColor: 'var(--color-surface-0)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-xl)',
+            padding: '16px',
+            height: '100%'
+          }}>
+            <h6 style={{
+              fontWeight: 600,
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px'
+            }}>
+              <MousePointer2 size={16} style={{ color: 'var(--color-brand-600)' }} />
               Quick Access
             </h6>
-            <div className="d-grid gap-1">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               {[
-                { label: 'Inventory Hub', icon: Package, href: '/inventory', color: '#4f46e5' },
+                { label: 'Inventory Hub', icon: Package, href: '/inventory', color: 'var(--color-brand-600)' },
                 { label: 'Strategic OKRs', icon: Target, href: '/actions', color: '#8b5cf6' },
                 { label: 'Market Scraper', icon: Zap, href: '/scrape-tasks', color: '#f59e0b' },
                 { label: 'Alert Manager', icon: AlertCircle, href: '/alerts', color: '#ef4444' },
                 { label: 'Performance', icon: FileBarChart, href: '/performance-reports', color: '#10b981' },
               ].map((item, idx) => (
-                <a key={idx} href={item.href} className="btn text-start p-2 rounded-3 transition-base border border-transparent hover-bg-light d-flex align-items-center justify-content-between group" style={{ minHeight: '44px' }}>
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="p-1.5 rounded-2 d-flex align-items-center justify-content-center" style={{ backgroundColor: `${item.color}15`, color: item.color, width: '28px', height: '28px' }}>
-                      <item.icon size={14} />
-                    </div>
-                    <span className="fw-600" style={{ fontSize: '12px' }}>{item.label}</span>
+                <a
+                  key={idx}
+                  href={item.href}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 8px',
+                    borderRadius: 'var(--radius-md)',
+                    textDecoration: 'none',
+                    transition: 'all var(--transition-fast)',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    border: '1px solid transparent',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.borderColor = 'transparent';
+                  }}
+                >
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: `${item.color}15`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: item.color,
+                  }}>
+                    <item.icon size={20} />
                   </div>
-                  <ChevronRight size={12} className="text-muted opacity-0 group-hover-opacity-100 transition-base" />
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    textAlign: 'center'
+                  }}>
+                    {item.label}
+                  </span>
+                  <ArrowRight
+                    size={12}
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      color: 'var(--color-text-muted)',
+                      opacity: 0,
+                      transition: 'opacity var(--transition-fast)'
+                    }}
+                    className="arrow-icon"
+                  />
                 </a>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Action Center Side-by-Side */}
+        {/* Action Center - Horizontal Progress Bars */}
         <div className="col-lg-9">
-          <div className="row g-3 h-100">
-            {/* Personal Actions */}
-            <div className="col-md-6">
-              <div className="glass-card p-3 h-100 d-flex flex-column" style={{ borderRadius: '16px' }}>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="fw-bold mb-0 d-flex align-items-center gap-2" style={{ fontSize: '0.85rem' }}>
-                    <ShoppingBag size={16} className="text-primary" />
-                    My Operations
-                  </h6>
-                  <span className="badge bg-primary rounded-pill smallest px-2" style={{ fontSize: '10px' }}>{data.userStats?.total || 0} ITEMS</span>
-                </div>
-
-                <div className="row g-2 flex-grow-1">
-                  {[
-                    { label: 'TO DO', value: data.userStats?.pending || 0, icon: Clock, color: '#64748b' },
-                    { label: 'ACTIVE', value: data.userStats?.inProgress || 0, icon: PlayCircle, color: '#3b82f6' },
-                    { label: 'REVIEW', value: data.userStats?.review || 0, icon: MessageSquareCode, color: '#f59e0b' },
-                    { label: 'DONE', value: data.userStats?.completed || 0, icon: CheckCircle2, color: '#10b981' }
-                  ].map((s, idx) => (
-                    <div key={idx} className="col-6">
-                      <div className="p-2 border rounded-3 h-100 transition-base hover-shadow-sm bg-white bg-opacity-50">
-                        <div className="d-flex align-items-center gap-2 mb-1">
-                          <s.icon size={14} style={{ color: s.color }} />
-                          <div className="smallest fw-700 text-muted" style={{ fontSize: '9px', letterSpacing: '0.05em' }}>{s.label}</div>
-                        </div>
-                        <div className="h5 fw-bold mb-0" style={{ fontSize: '1.1rem' }}>{s.value}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Team Throughput */}
-            <div className="col-md-6">
-              <div className="glass-card p-3 h-100 d-flex flex-column" style={{ borderRadius: '16px' }}>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="fw-bold mb-0 d-flex align-items-center gap-2" style={{ fontSize: '0.85rem' }}>
-                    <Users size={16} className="text-secondary" />
-                    Team Health
-                  </h6>
-                  <div className="d-flex align-items-center gap-1 text-success smallest fw-700" style={{ fontSize: '10px' }}>
-                    <TrendingUp size={10} />
-                    {data.teamStats?.total ? Math.round((data.teamStats.completed / data.teamStats.total) * 100) : 0}% EFF.
+          <div style={{
+            backgroundColor: 'var(--color-surface-0)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-xl)',
+            padding: '20px'
+          }}>
+            <h6 style={{
+              fontWeight: 600,
+              marginBottom: '20px',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Activity size={16} style={{ color: 'var(--color-brand-600)' }} />
+              Action Center
+            </h6>
+            <div className="row g-4">
+              {/* My Operations */}
+              <div className="col-md-6">
+                <div style={{
+                  padding: '16px',
+                  borderRadius: 'var(--radius-lg)',
+                  backgroundColor: 'var(--color-surface-1)',
+                  border: '1px solid var(--color-border)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontWeight: 500, fontSize: '13px', color: 'var(--color-text-primary)' }}>
+                      <ShoppingBag size={14} style={{ marginRight: '6px', color: 'var(--color-brand-600)' }} />
+                      My Operations
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{data.userStats?.total || 0} items</span>
+                  </div>
+                  {/* Horizontal 4-segment progress bar */}
+                  <div style={{ display: 'flex', gap: '4px', height: '10px', marginBottom: '12px' }}>
+                    {[
+                      { value: data.userStats?.pending || 0, color: 'var(--color-neutral-400)' },
+                      { value: data.userStats?.inProgress || 0, color: 'var(--color-brand-500)' },
+                      { value: data.userStats?.review || 0, color: 'var(--color-warning-500)' },
+                      { value: data.userStats?.completed || 0, color: 'var(--color-success-500)' }
+                    ].map((seg, i) => (
+                      <div key={i} style={{
+                        flex: 1,
+                        borderRadius: i === 0 ? '5px 0 0 5px' : i === 3 ? '0 5px 5px 0' : '0',
+                        backgroundColor: seg.color,
+                        border: i === 0 ? '1px solid var(--color-neutral-500)' : i === 3 ? '1px solid var(--color-success-600)' : 'none',
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>
+                      {data.userStats?.completed || 0} of {data.userStats?.total || 0} completed
+                    </span>
+                    <a href="/actions" style={{ color: 'var(--color-brand-600)', textDecoration: 'none', fontWeight: 500 }}>View all →</a>
                   </div>
                 </div>
-
-                <div className="row g-2 flex-grow-1">
-                  {[
-                    { label: 'WAITING', value: data.teamStats?.pending || 0, color: '#64748b' },
-                    { label: 'WORKING', value: data.teamStats?.inProgress || 0, color: '#3b82f6' },
-                    { label: 'VERIFY', value: data.teamStats?.review || 0, color: '#f59e0b' },
-                    { label: 'SUCCESS', value: data.teamStats?.completed || 0, color: '#10b981' }
-                  ].map((s, idx) => (
-                    <div key={idx} className="col-6">
-                      <div className="p-2 border rounded-3 h-100 transition-base bg-white bg-opacity-20 d-flex align-items-center justify-content-between" style={{ minHeight: '56px' }}>
-                        <div>
-                          <div className="smallest fw-700 text-muted" style={{ fontSize: '9px', letterSpacing: '0.05em' }}>{s.label}</div>
-                          <div className="h6 fw-bold mb-0" style={{ fontSize: '1rem' }}>{s.value}</div>
-                        </div>
-                        <div style={{ width: '3px', height: '16px', borderRadius: '4px', backgroundColor: s.color }}></div>
-                      </div>
-                    </div>
-                  ))}
+              </div>
+              {/* Team Health */}
+              <div className="col-md-6">
+                <div style={{
+                  padding: '16px',
+                  borderRadius: 'var(--radius-lg)',
+                  backgroundColor: 'var(--color-surface-1)',
+                  border: '1px solid var(--color-border)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontWeight: 500, fontSize: '13px', color: 'var(--color-text-primary)' }}>
+                      <Users size={14} style={{ marginRight: '6px', color: 'var(--color-text-secondary)' }} />
+                      Team Health
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--color-success-600)', fontWeight: 600 }}>
+                      <TrendingUp size={10} style={{ marginRight: '4px' }} />
+                      {data.teamStats?.total ? Math.round((data.teamStats.completed / data.teamStats.total) * 100) : 0}% EFF.
+                    </span>
+                  </div>
+                  {/* Horizontal 4-segment progress bar */}
+                  <div style={{ display: 'flex', gap: '4px', height: '10px', marginBottom: '12px' }}>
+                    {[
+                      { value: data.teamStats?.pending || 0, color: 'var(--color-neutral-400)' },
+                      { value: data.teamStats?.inProgress || 0, color: 'var(--color-brand-500)' },
+                      { value: data.teamStats?.review || 0, color: 'var(--color-warning-500)' },
+                      { value: data.teamStats?.completed || 0, color: 'var(--color-success-500)' }
+                    ].map((seg, i) => (
+                      <div key={i} style={{
+                        flex: 1,
+                        borderRadius: i === 0 ? '5px 0 0 5px' : i === 3 ? '0 5px 5px 0' : '0',
+                        backgroundColor: seg.color,
+                        border: i === 0 ? '1px solid var(--color-neutral-500)' : i === 3 ? '1px solid var(--color-success-600)' : 'none',
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>
+                      {data.teamStats?.completed || 0} of {data.teamStats?.total || 0} completed
+                    </span>
+                    <a href="/actions" style={{ color: 'var(--color-brand-600)', textDecoration: 'none', fontWeight: 500 }}>View all →</a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -441,44 +648,121 @@ const Dashboard = () => {
       <div className="row g-3">
         {/* Alerts / Activity */}
         <div className="col-lg-4">
-          <DashboardCard title="Real-time Alerts" icon={AlertCircle} extra={<button className="btn btn-light btn-sm rounded-circle p-1"><MoreVertical size={12} /></button>}>
-            <div className="d-grid gap-2">
+          <Card
+            title={
+              <div className="d-flex align-items-center gap-2">
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-error)', boxShadow: '0 0 8px var(--color-error)' }} className="pulse-indicator"></div>
+                Live Event Stream
+              </div>
+            }
+            icon={Activity}
+          >
+            <div className="d-grid gap-2" style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
               {data.alerts.length > 0 ? data.alerts.map(alert => (
-                <div key={alert.id} className="d-flex align-items-start gap-2 p-2 rounded-3 bg-white border shadow-xs border-light">
-                  <div className={`p-1.5 rounded-2 mt-0.5 ${alert.type === 'critical' ? 'bg-danger-subtle text-danger' : 'bg-warning-subtle text-warning'}`}>
-                    <AlertTriangle size={12} />
+                <div
+                  key={alert.id}
+                  className={`live-alert-item p-2 rounded-2 ${alert.type === 'critical' ? 'live-alert-critical' : ''}`}
+                  style={{
+                    backgroundColor: 'var(--color-surface-1)',
+                    border: '1px solid var(--color-border)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                  }}
+                >
+                  <div
+                    className="alert-icon-wrapper d-flex align-items-center justify-content-center mt-1"
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: alert.type === 'critical' ? 'rgba(238, 0, 0, 0.1)' : 'rgba(245, 166, 35, 0.1)',
+                      color: alert.type === 'critical' ? 'var(--color-error)' : 'var(--color-warning)'
+                    }}
+                  >
+                    <AlertTriangle size={12} strokeWidth={3} />
                   </div>
-                  <div>
-                    <div className="fw-700" style={{ fontSize: '12px', lineHeight: '1.2' }}>{alert.message}</div>
-                    <div className="text-muted smallest mt-0.5" style={{ fontSize: '10px' }}>{alert.time}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: '1.4' }}>
+                      {alert.message}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{alert.type === 'critical' ? 'SYSTEM CRITICAL' : 'WARNING'}</span>
+                      <span>{alert.time}</span>
+                    </div>
                   </div>
                 </div>
-              )) : <div className="text-center py-4 text-muted smallest">All systems operational</div>}
+              )) : (
+                <div className="text-center py-5" style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>
+                  <CheckCircle2 size={24} style={{ color: 'var(--color-success)', marginBottom: '8px', opacity: 0.5 }} />
+                  <div>All systems operational</div>
+                </div>
+              )}
             </div>
-          </DashboardCard>
+          </Card>
         </div>
 
-        {/* Top Products Table */}
+        {/* Dynamic Intelligence Hubs */}
         <div className="col-lg-8">
-          <div className="glass-card shadow-sm border-0 h-100" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-            <div className="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-              <h6 className="fw-bold mb-0 d-flex align-items-center gap-2" style={{ fontSize: '0.85rem' }}>
-                <ShoppingBag size={16} className="text-primary" />
-                Performance Ledger
-              </h6>
-              <button className="btn btn-sm btn-white border rounded-pill px-2 py-1 shadow-xs smallest fw-700" style={{ fontSize: '10px' }}>VIEW FULL LEDGER</button>
+          <div className="row g-3">
+            {/* Ads Intelligence Hub */}
+            <div className="col-md-6">
+              <Card title="Advertising Stats" icon={Target}>
+                <div className="d-flex flex-column gap-3">
+                  <div className="d-flex justify-content-between align-items-center p-3 rounded-2 border live-alert-item" style={{ backgroundColor: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+                    <div>
+                      <div className="text-muted smallest" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current ROAS</div>
+                      <div className="fw-bold" style={{ fontSize: '24px', color: 'var(--color-text-primary)' }}>{data.roas || '0.00'}x</div>
+                    </div>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '3px solid var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingUp size={20} style={{ color: 'var(--color-success)' }} />
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2 border live-alert-item" style={{ backgroundColor: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+                    <div className="d-flex justify-content-between mb-2">
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Daily Spend Velocity</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-warning)' }}>₹{data.dailySpend?.toLocaleString() || 0} / day</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--color-surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: '75%', height: '100%', backgroundColor: 'var(--color-warning)', boxShadow: '0 0 8px var(--color-warning)' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
             </div>
-            <div className="p-0">
-              {data.topProducts.length > 0 ? (
-                <DataTable
-                  data={data.topProducts}
-                  columns={['name', 'asin', 'revenue', 'units', 'growth']}
-                  searchable={false}
-                  compact={true}
-                />
-              ) : (
-                <div className="p-4 text-center text-muted smallest">No data available</div>
-              )}
+
+            {/* Active Operations Feed */}
+            <div className="col-md-6">
+              <Card
+                title={
+                  <div className="d-flex align-items-center gap-2">
+                    <Settings size={16} style={{ color: 'var(--color-text-muted)' }} />
+                    Active Operations
+                  </div>
+                }
+                icon={null}
+                extra={<span className="pulse-indicator" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-info)', display: 'inline-block', boxShadow: '0 0 8px var(--color-info)' }}></span>}
+              >
+                <div className="d-flex flex-column gap-2" style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {[
+                    { name: 'Competitor Price Scrape', status: 'Running', progress: 65, color: 'var(--color-info)' },
+                    { name: 'Inventory Sync (IN)', status: 'Queued', progress: 0, color: 'var(--color-text-muted)' },
+                    { name: 'Ad Campaign Rules', status: 'Completed', progress: 100, color: 'var(--color-success)' },
+                    { name: 'Supplier Feed Fetch', status: 'Running', progress: 30, color: 'var(--color-info)' },
+                  ].map((op, idx) => (
+                    <div key={idx} className="p-2 rounded-2 border live-alert-item" style={{ backgroundColor: 'var(--color-surface-1)', borderColor: 'var(--color-border)' }}>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{op.name}</span>
+                        <span style={{ fontSize: '10px', color: op.color, fontWeight: 700, letterSpacing: '0.05em' }}>{op.status.toUpperCase()}</span>
+                      </div>
+                      <div style={{ width: '100%', height: '4px', backgroundColor: 'var(--color-surface-2)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ width: `${op.progress}%`, height: '100%', backgroundColor: op.color, boxShadow: op.progress > 0 && op.progress < 100 ? `0 0 6px ${op.color}` : 'none' }}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </div>
           </div>
         </div>

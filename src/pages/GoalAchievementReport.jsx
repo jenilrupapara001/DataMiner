@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/db';
+import Filters from '../components/Filters';
 import {
     BarChart2,
     CheckCircle,
@@ -17,13 +17,17 @@ import { useNavigate } from 'react-router-dom';
 const GoalAchievementReport = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [timeframe, setTimeframe] = useState('30'); // Default to 30 days
+    const [filters, setFilters] = useState({
+        dateRange: 'month',
+        startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
+    });
     const navigate = useNavigate();
 
     const fetchReport = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await db.getGoalAchievementReport(timeframe);
+            const response = await db.getGoalAchievementReport(null, filters.startDate, filters.endDate);
             if (response && response.success) {
                 setData(response.data);
             }
@@ -32,7 +36,7 @@ const GoalAchievementReport = () => {
         } finally {
             setLoading(false);
         }
-    }, [timeframe]);
+    }, [filters.startDate, filters.endDate]);
 
     useEffect(() => {
         fetchReport();
@@ -69,6 +73,13 @@ const GoalAchievementReport = () => {
                     <Download size={16} /> Export Report
                 </button>
             </div>
+
+            <Filters 
+                filters={filters} 
+                onFilterChange={(newF) => setFilters(prev => ({ ...prev, ...newF }))} 
+                showSearch={false}
+                showCategory={false}
+            />
 
             {/* Stats Overview */}
             <div className="row g-3 mb-4">
@@ -133,18 +144,6 @@ const GoalAchievementReport = () => {
                 <div className="card-header bg-white py-3">
                     <div className="d-flex justify-content-between align-items-center">
                         <h5 className="mb-0 fw-bold">Task Performance Metrics</h5>
-                        <div className="d-flex gap-2">
-                            <select
-                                className="form-select form-select-sm border-0 bg-light fw-bold"
-                                value={timeframe}
-                                onChange={(e) => setTimeframe(e.target.value)}
-                            >
-                                <option value="30">Last 30 Days</option>
-                                <option value="7">Last 7 Days</option>
-                                <option value="90">Last 90 Days</option>
-                                <option value="all">All Time</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
                 <div className="card-body p-0">

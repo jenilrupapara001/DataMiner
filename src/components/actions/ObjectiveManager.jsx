@@ -39,6 +39,13 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
     const [availableAsins, setAvailableAsins] = useState([]);
     const [selectedAsins, setSelectedAsins] = useState([]);
     const [ownerSearchQuery, setOwnerSearchQuery] = useState('');
+    const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+    const [activeDropdown, setActiveDropdown] = useState(null); // 'goal-title'
+
+    // Compute total selected templates across all roadmap goals
+    const totalRoadmapTemplates = Object.values(roadmapTaskMapping).reduce((acc, curr) => acc + curr.length, 0);
+    const totalSelectedCount = (step === 2 && selectedRoadmap !== 'NONE') ? totalRoadmapTemplates : selectedTemplates.length;
+
     const [optimizationRules, setOptimizationRules] = useState({
         minLqsScore: 80,
         minTitleLength: 100,
@@ -119,6 +126,15 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
         };
         fetchData();
     }, []);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = () => setActiveDropdown(null);
+        if (activeDropdown) {
+            window.addEventListener('click', handleClickOutside);
+        }
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, [activeDropdown]);
 
     // Fetch ASINs when seller is selected or in step 3
     useEffect(() => {
@@ -234,9 +250,15 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
             return;
         }
 
-        if (isRoadmapSelected && !hasRoadmapMappings) {
-            alert('Please select at least one template for your roadmap goals');
-            return;
+        if (isRoadmapSelected) {
+            if (!hasRoadmapMappings) {
+                alert('Please select at least one template for your roadmap goals');
+                return;
+            }
+            // Sync selectedTemplates with the roadmap mapping (as objects)
+            const allMappedIds = [...new Set(Object.values(roadmapTaskMapping).flat())];
+            const mappedTemplates = templates.filter(t => allMappedIds.includes(t._id || t.id));
+            setSelectedTemplates(mappedTemplates);
         }
 
         setStep(3); // Move to Task Config
@@ -488,12 +510,25 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                             required
                                         >
                                             <option value="NONE">No Specific Metric</option>
-                                            <option value="GMS">GMS (Gross Merchandise Sales)</option>
-                                            <option value="ACOS">ACOS (Advertising Cost of Sales)</option>
-                                            <option value="ROI">ROI (Return on Investment)</option>
-                                            <option value="PROFIT">Profit</option>
-                                            <option value="CONVERSION_RATE">Conversion Rate</option>
-                                            <option value="ORDER_COUNT">Order Count</option>
+                                            <optgroup label="Sales & Growth">
+                                                <option value="GMS">GMS (₹)</option>
+                                                <option value="ORDER_COUNT">Order Count</option>
+                                                <option value="CONVERSION_RATE">Conversion Rate (%)</option>
+                                            </optgroup>
+                                            <optgroup label="Advertising (Ads)">
+                                                <option value="ACOS">ACOS (%)</option>
+                                                <option value="ADS_SPEND">Ads Spend (₹)</option>
+                                                <option value="ROI">ROI (%)</option>
+                                            </optgroup>
+                                            <optgroup label="Listing & Content">
+                                                <option value="LISTING">Listing Optimization (%)</option>
+                                                <option value="PRODUCTS_TO_LIST">Products to List (Count)</option>
+                                                <option value="LQS">LQS (Score 0-100)</option>
+                                            </optgroup>
+                                            <optgroup label="Operations & Profit">
+                                                <option value="PROFIT">Net Profit (₹)</option>
+                                                <option value="PO_FULFILLMENT">PO Fulfilment (%)</option>
+                                            </optgroup>
                                         </select>
                                     </div>
                                 </div>
@@ -504,14 +539,18 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                     <div className="row g-3">
                                         <div className="col-md-3">
                                             <label className="form-label small fw-bold text-muted text-uppercase">Target Value</label>
-                                            <input
-                                                type="number"
-                                                className="form-control"
-                                                placeholder="e.g. 10000000"
-                                                value={goalSettings.targetValue}
-                                                onChange={(e) => setGoalSettings({ ...goalSettings, targetValue: e.target.value })}
-                                                required
-                                            />
+                                            <div className="input-group">
+                                                {['GMS', 'PROFIT', 'ADS_SPEND'].includes(measurementMetric) && <span className="input-group-text bg-light border-end-0 text-muted small">₹</span>}
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    placeholder="e.g. 10000000"
+                                                    value={goalSettings.targetValue}
+                                                    onChange={(e) => setGoalSettings({ ...goalSettings, targetValue: e.target.value })}
+                                                    required
+                                                />
+                                                {['ACOS', 'ROI', 'CONVERSION_RATE', 'LISTING', 'PO_FULFILLMENT'].includes(measurementMetric) && <span className="input-group-text bg-light border-start-0 text-muted small">%</span>}
+                                            </div>
                                         </div>
                                         <div className="col-md-3">
                                             <label className="form-label small fw-bold text-muted text-uppercase">Frequency</label>
@@ -638,9 +677,19 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                     <p className="text-muted small mb-0">Select templates for each project goal below.</p>
                                 </div>
                                 {roadmapPresets[selectedRoadmap].goals.map((goal, idx) => (
-                                    <div key={idx} className="card border-light mb-4 shadow-sm overflow-hidden">
+                                    <div key={idx} className="card border-light mb-4 shadow-sm">
                                         <div className="card-header bg-light py-2 px-3 border-0 d-flex justify-content-between align-items-center">
-                                            <h6 className="fw-bold mb-0 small text-uppercase text-muted">{goal.title}</h6>
+                                            <div className="d-flex align-items-center gap-2">
+                                                <h6 className="fw-bold mb-0 small text-uppercase text-muted">{goal.title}</h6>
+                                                {goal.metric !== 'NONE' && (
+                                                    <span className="badge bg-soft-info text-info border border-info border-opacity-10 small fw-normal">
+                                                        Target: {['GMS', 'PROFIT', 'ADS_SPEND'].includes(goal.metric) ? '₹' : ''}
+                                                        {goal.targetValue?.toLocaleString()}
+                                                        {['ACOS', 'ROI', 'CONVERSION_RATE', 'LISTING', 'PO_FULFILLMENT'].includes(goal.metric) ? '%' : ''}
+                                                        {' '}{goal.metric.replace('_', ' ').toLowerCase()}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className="badge bg-primary rounded-pill small">
                                                 {(roadmapTaskMapping[goal.title] || []).length} Selected
                                             </span>
@@ -676,43 +725,72 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                                             </div>
 
                                             {/* Search/Selection for templates in this goal */}
-                                            <div className="dropdown">
-                                                <button className="btn btn-outline-primary btn-sm rounded-pill px-4 dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                    + Add Task from Template
+                                            <div className="dropdown position-relative">
+                                                <button 
+                                                    className="btn btn-outline-primary btn-sm rounded-pill px-4 dropdown-toggle" 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveDropdown(activeDropdown === goal.title ? null : goal.title);
+                                                    }}
+                                                >
+                                                    + Add Task from Template {templates.length > 0 && `(${templates.length})`}
                                                 </button>
-                                                <div className="dropdown-menu p-2 shadow border-0" style={{ minWidth: '300px', maxHeight: '300px', overflowY: 'auto' }}>
+                                                <div 
+                                                    className={`dropdown-menu p-2 shadow border-0 ${activeDropdown === goal.title ? 'show' : ''}`} 
+                                                    style={{ 
+                                                        display: activeDropdown === goal.title ? 'block' : 'none',
+                                                        minWidth: '300px', 
+                                                        maxHeight: '300px', 
+                                                        overflowY: 'auto',
+                                                        position: 'absolute',
+                                                        zIndex: 1050,
+                                                        top: '100%',
+                                                        left: 0
+                                                    }}
+                                                >
                                                     <input
                                                         type="text"
                                                         className="form-control form-control-sm mb-2"
                                                         placeholder="Search templates..."
+                                                        value={templateSearchQuery}
+                                                        onChange={(e) => setTemplateSearchQuery(e.target.value)}
                                                         onClick={(e) => e.stopPropagation()}
                                                     />
-                                                    {templates.map(t => {
-                                                        const isSelected = (roadmapTaskMapping[goal.title] || []).includes(t._id);
-                                                        return (
-                                                            <div
-                                                                key={t._id}
-                                                                className={`dropdown-item small d-flex align-items-center justify-content-between cursor-pointer rounded ${isSelected ? 'bg-soft-primary' : ''}`}
-                                                                onClick={() => {
-                                                                    const current = roadmapTaskMapping[goal.title] || [];
-                                                                    if (isSelected) {
-                                                                        setRoadmapTaskMapping({
-                                                                            ...roadmapTaskMapping,
-                                                                            [goal.title]: current.filter(id => id !== t._id)
-                                                                        });
-                                                                    } else {
-                                                                        setRoadmapTaskMapping({
-                                                                            ...roadmapTaskMapping,
-                                                                            [goal.title]: [...current, t._id]
-                                                                        });
-                                                                    }
-                                                                }}
-                                                            >
-                                                                {t.title}
-                                                                {isSelected && <Check size={14} className="text-primary" />}
-                                                            </div>
-                                                        );
-                                                    })}
+                                                    {templates
+                                                        .filter(t => t.title.toLowerCase().includes(templateSearchQuery.toLowerCase()))
+                                                        .map(t => {
+                                                            const isSelected = (roadmapTaskMapping[goal.title] || []).includes(t._id);
+                                                            return (
+                                                                <div
+                                                                    key={t._id}
+                                                                    className={`dropdown-item small d-flex align-items-center justify-content-between cursor-pointer rounded ${isSelected ? 'bg-soft-primary' : ''}`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const current = roadmapTaskMapping[goal.title] || [];
+                                                                        if (isSelected) {
+                                                                            setRoadmapTaskMapping({
+                                                                                ...roadmapTaskMapping,
+                                                                                [goal.title]: current.filter(id => id !== t._id)
+                                                                            });
+                                                                        } else {
+                                                                            setRoadmapTaskMapping({
+                                                                                ...roadmapTaskMapping,
+                                                                                [goal.title]: [...current, t._id]
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    {t.title}
+                                                                    {isSelected && <Check size={14} className="text-primary" />}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    {templates.filter(t => t.title.toLowerCase().includes(templateSearchQuery.toLowerCase())).length === 0 && (
+                                                        <div className="dropdown-item disabled small text-muted text-center py-2">
+                                                            No templates found
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -873,9 +951,9 @@ const ObjectiveManager = ({ onObjectiveCreated, onClose, objective, users = [] }
                         <button
                             onClick={handleStep2Submit}
                             className="btn btn-primary px-4"
-                            disabled={selectedTemplates.length === 0}
+                            disabled={totalSelectedCount === 0}
                         >
-                            Configure Tasks ({selectedTemplates.length} Selected)
+                            Configure Tasks ({totalSelectedCount} Selected)
                         </button>
                     ) : (
                         <button

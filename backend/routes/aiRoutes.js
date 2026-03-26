@@ -1,11 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const aiController = require('../controllers/aiController');
-const { authenticate: protect } = require('../middleware/auth');
+const aiGoalController = require('../controllers/aiGoalController');
+const aiTaskController = require('../controllers/aiTaskController');
 
-router.use(protect); // Ensure all AI routes are protected
+/**
+ * Brandcentral AI Strategy Routes
+ * 
+ * These endpoints power the intent-based Growth Execution Engine.
+ */
 
-router.post('/generate-okr', aiController.generateOKR);
-router.post('/suggest-tasks', aiController.suggestTasks);
+// AI GOAL LIFECYCLE
+router.post('/goals/ai-preview', aiGoalController.getPreview);
+router.post('/goals/ai-create', aiGoalController.createFullStrategy);
+
+// AI TASK LIFECYCLE
+router.post('/tasks/ai-create', aiTaskController.createEnrichedTask);
+router.post('/generate-recovery-tasks', aiTaskController.generateRecoveryTasks);
 
 module.exports = router;

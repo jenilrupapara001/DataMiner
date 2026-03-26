@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const TaskTemplate = require('./models/TaskTemplate');
+const GoalTemplate = require('./models/GoalTemplate');
 require('dotenv').config();
 
 const templates = [
@@ -45,6 +46,27 @@ const templates = [
     }
 ];
 
+const goalTemplates = [
+    {
+        name: 'Growth Strategy',
+        description: 'Multi-phase approach to scale account GMS and brand awareness.',
+        goals: [
+            { title: 'Listing Audit & SEO', metric: 'LISTING', targetValue: 90 },
+            { title: 'Brand Visibility & Ads', metric: 'ADS_SPEND', targetValue: 200000 },
+            { title: 'GMS Growth', metric: 'GMS', targetValue: 5000000 }
+        ]
+    },
+    {
+        name: 'Profit Maximization',
+        description: 'Focused on reducing ACOS and improving net profit margins.',
+        goals: [
+            { title: 'Ad Spend Optimization', metric: 'ACOS', targetValue: 15 },
+            { title: 'PO Fulfilment Excellence', metric: 'PO_FULFILLMENT', targetValue: 98 },
+            { title: 'Inventory Liquidations', metric: 'NONE', targetValue: 100 }
+        ]
+    }
+];
+
 const seedTemplates = async () => {
     try {
         await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://jenil:jenilpatel@aiap.sedzp3h.mongodb.net/aiap?retryWrites=true&w=majority&appName=aiap');
@@ -53,7 +75,10 @@ const seedTemplates = async () => {
         await TaskTemplate.deleteMany({});
         await TaskTemplate.insertMany(templates);
 
-        console.log('Task Templates seeded successfully!');
+        await GoalTemplate.deleteMany({});
+        await GoalTemplate.insertMany(goalTemplates);
+
+        console.log('Task and Goal Templates seeded successfully!');
         process.exit(0);
     } catch (error) {
         console.error('Seeding failed:', error);

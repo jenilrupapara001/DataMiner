@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Upload, Star, Trash2, RotateCcw, Search, Grid, List,
     FolderOpen, File, FileText, FileImage, FileVideo, FileAudio,
-    FileArchive, ChevronRight, MoreVertical, Download, Pencil,
-    X, Check, RefreshCw,
+    FileArchive, ChevronRight, ChevronLeft, MoreVertical, Download, Pencil,
+    X, Check, RefreshCw, Image
 } from 'lucide-react';
 import api from '../services/api';
+import EmptyState from '../components/common/EmptyState';
 
 /* ── File-type helpers ────────────────────────────────────────────── */
 const EXT_MAP = {
@@ -65,7 +66,7 @@ const StorageBar = ({ storage }) => {
                 <div style={{
                     height: '100%', borderRadius: 99,
                     width: `${Math.min(storage.percent, 100)}%`,
-                    background: storage.percent > 80 ? '#EF4444' : '#4F46E5',
+                    background: storage.percent > 80 ? '#EF4444' : '#18181B',
                     transition: 'width 400ms',
                 }} />
             </div>
@@ -88,14 +89,14 @@ const RenameModal = ({ file, onClose, onSave }) => {
                 </div>
                 <input
                     autoFocus value={name} onChange={e => setName(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.55rem 0.8rem', borderRadius: 8, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#1e293b', outline: 'none' }}
-                    onFocus={e => e.target.style.borderColor = '#4F46E5'}
-                    onBlur={e => e.target.style.borderColor = '#E2E8F0'}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.55rem 0.8rem', borderRadius: 8, border: '1.5px solid #E4E4E7', fontSize: 14, color: '#18181B', outline: 'none' }}
+                    onFocus={e => e.target.style.borderColor = '#18181B'}
+                    onBlur={e => e.target.style.borderColor = '#E4E4E7'}
                 />
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <button onClick={onClose} style={{ padding: '0.5rem 1rem', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#F8FAFC', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#475569' }}>Cancel</button>
+                    <button onClick={onClose} style={{ padding: '0.5rem 1rem', borderRadius: 8, border: '1.5px solid #E4E4E7', background: '#F8FAFC', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#71717A' }}>Cancel</button>
                     <button onClick={() => name.trim() && onSave(name.trim())} disabled={!name.trim()}
-                        style={{ padding: '0.5rem 1.1rem', borderRadius: 8, border: 'none', background: '#4F46E5', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#fff', opacity: name.trim() ? 1 : 0.5 }}>
+                        style={{ padding: '0.5rem 1.1rem', borderRadius: 8, border: 'none', background: '#18181B', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#fff', opacity: name.trim() ? 1 : 0.5 }}>
                         Save
                     </button>
                 </div>
@@ -134,7 +135,8 @@ const FileManagerPage = () => {
     const [storage, setStorage] = useState(null);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState('grid');           // 'grid' | 'list'
-    const [section, setSection] = useState('all');     // 'all' | 'starred' | 'trash'
+    const [section, setSection] = useState('all');     // 'all' | 'starred' | 'trash' | 'asin-folders'
+    const [currentAsin, setCurrentAsin] = useState(null); // drilling into ASIN folder
     const [search, setSearch] = useState('');
     const [uploading, setUploading] = useState(false);
     const [renameFile, setRenameFile] = useState(null);
@@ -145,20 +147,30 @@ const FileManagerPage = () => {
     const fetchFiles = useCallback(async () => {
         setLoading(true);
         try {
-            const params = {};
-            if (section === 'starred') params.starred = 'true';
-            if (section === 'trash') params.trashed = 'true';
-            // api.get returns res.json() directly — no .data wrapper
-            const data = await api.get('/files', params);
-            setFiles(data.files || []);
-            setStorage(data.storage || null);
+            if (section === 'asin-folders') {
+                if (currentAsin) {
+                    const data = await api.get(`/files/asin-folders/${currentAsin}`);
+                    setFiles(data.files || []);
+                } else {
+                    const data = await api.get('/files/asin-folders');
+                    setFiles(data.folders || []);
+                }
+                setStorage(null); // No storage limit for ASIN assets yet
+            } else {
+                const params = {};
+                if (section === 'starred') params.starred = 'true';
+                if (section === 'trash') params.trashed = 'true';
+                const data = await api.get('/files', params);
+                setFiles(data.files || []);
+                setStorage(data.storage || null);
+            }
         } catch (e) {
             console.error('fetchFiles error:', e);
             setFiles([]);
         } finally {
             setLoading(false);
         }
-    }, [section]);
+    }, [section, currentAsin]);
 
     useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
@@ -248,12 +260,13 @@ const FileManagerPage = () => {
     /* Nav items */
     const navItems = [
         { id: 'all', label: 'All Files', icon: <FolderOpen size={16} /> },
+        { id: 'asin-folders', label: 'Marketplace', icon: <Image size={16} /> },
         { id: 'starred', label: 'Starred', icon: <Star size={16} /> },
         { id: 'trash', label: 'Trash', icon: <Trash2 size={16} /> },
     ];
 
     return (
-        <div style={{ display: 'flex', height: 'calc(100vh - 73px)', overflow: 'hidden', margin: '-1.5rem -2rem', background: '#F8FAFC' }}>
+        <div style={{ display: 'flex', height: 'calc(100vh - 73px)', overflow: 'hidden', margin: '-1.5rem -2rem', background: '#FFFFFF' }}>
 
             {/* ── Left sidebar ─────────────────────────────────────── */}
             <div style={{
@@ -270,12 +283,13 @@ const FileManagerPage = () => {
                     <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleUpload} />
                     <button onClick={() => fileInputRef.current.click()} disabled={uploading}
                         style={{
-                            width: '100%', padding: '0.6rem', borderRadius: 9,
-                            background: '#4F46E5', color: '#fff', border: 'none',
+                            width: '100%', padding: '0.65rem', borderRadius: 9,
+                            background: '#18181B', color: '#fff', border: 'none',
                             fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            boxShadow: '0 2px 8px rgba(79,70,229,0.3)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                             opacity: uploading ? 0.7 : 1,
+                            transition: 'all 200ms'
                         }}>
                         <Upload size={14} /> {uploading ? 'Uploading…' : 'Upload'}
                     </button>
@@ -284,16 +298,16 @@ const FileManagerPage = () => {
                 {/* Nav */}
                 <nav style={{ flex: 1, padding: '0 0.5rem' }}>
                     {navItems.map(item => (
-                        <button key={item.id} onClick={() => setSection(item.id)}
+                        <button key={item.id} onClick={() => { setSection(item.id); setCurrentAsin(null); }}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 10,
                                 width: '100%', padding: '0.6rem 0.75rem', borderRadius: 8,
                                 border: 'none', cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
-                                background: section === item.id ? '#EEF2FF' : 'none',
-                                color: section === item.id ? '#4F46E5' : '#475569',
+                                background: section === item.id ? '#F4F4F5' : 'none',
+                                color: section === item.id ? '#18181B' : '#71717A',
                                 transition: 'background 150ms',
                             }}
-                            onMouseEnter={e => { if (section !== item.id) e.currentTarget.style.background = '#F8FAFC'; }}
+                            onMouseEnter={e => { if (section !== item.id) e.currentTarget.style.background = '#FAFAFA'; }}
                             onMouseLeave={e => { if (section !== item.id) e.currentTarget.style.background = 'none'; }}
                         >
                             {item.icon} {item.label}
@@ -311,13 +325,25 @@ const FileManagerPage = () => {
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '0.85rem 1.5rem', background: '#fff',
-                    borderBottom: '1px solid #E2E8F0',
+                    borderBottom: '1px solid #E4E4E7',
                 }}>
                     {/* Breadcrumb */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748B' }}>
-                        <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#71717A' }}>
+                        {currentAsin && (
+                            <button onClick={() => setCurrentAsin(null)} 
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#18181B', display: 'flex', alignItems: 'center' }}>
+                                <ChevronLeft size={16} />
+                            </button>
+                        )}
+                        <span style={{ fontWeight: 700, color: '#18181B' }}>
                             {navItems.find(n => n.id === section)?.label}
                         </span>
+                        {currentAsin && (
+                            <>
+                                <ChevronRight size={14} />
+                                <span style={{ fontWeight: 600 }}>{currentAsin}</span>
+                            </>
+                        )}
                     </div>
 
                     <div style={{ flex: 1 }} />
@@ -325,13 +351,14 @@ const FileManagerPage = () => {
                     {/* Search */}
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: 8,
-                        background: '#F1F5F9', borderRadius: 9, padding: '0.45rem 0.9rem',
+                        background: '#F4F4F5', borderRadius: 9, padding: '0.45rem 0.9rem',
+                        border: '1px solid #E4E4E7'
                     }}>
-                        <Search size={14} color="#94A3B8" />
+                        <Search size={14} color="#A1A1AA" />
                         <input
                             value={search} onChange={e => setSearch(e.target.value)}
-                            placeholder="Search files…"
-                            style={{ background: 'none', border: 'none', outline: 'none', fontSize: 13, color: '#1e293b', width: 180 }}
+                            placeholder="Search…"
+                            style={{ background: 'none', border: 'none', outline: 'none', fontSize: 13, color: '#18181B', width: 180 }}
                         />
                     </div>
 
@@ -346,10 +373,11 @@ const FileManagerPage = () => {
                         {[{ id: 'grid', icon: <Grid size={15} /> }, { id: 'list', icon: <List size={15} /> }].map(v => (
                             <button key={v.id} onClick={() => setView(v.id)}
                                 style={{
-                                    padding: '0.4rem 0.7rem', border: 'none', cursor: 'pointer',
-                                    background: view === v.id ? '#4F46E5' : 'none',
-                                    color: view === v.id ? '#fff' : '#64748B',
-                                    transition: 'background 150ms',
+                                    padding: '0.45rem 0.8rem', border: 'none', cursor: 'pointer',
+                                    background: view === v.id ? '#18181B' : 'transparent',
+                                    color: view === v.id ? '#fff' : '#71717A',
+                                    transition: 'all 200ms',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
                                 {v.icon}
                             </button>
@@ -362,12 +390,21 @@ const FileManagerPage = () => {
                     {loading ? (
                         <div style={{ textAlign: 'center', paddingTop: '4rem', color: '#94A3B8', fontSize: 14 }}>Loading files…</div>
                     ) : filtered.length === 0 ? (
-                        <div style={{ textAlign: 'center', paddingTop: '5rem' }}>
-                            <FolderOpen size={48} color="#CBD5E1" style={{ marginBottom: 12 }} />
-                            <div style={{ color: '#94A3B8', fontSize: 14, fontWeight: 600 }}>
-                                {search ? 'No files match your search' : section === 'trash' ? 'Trash is empty' : 'No files yet — upload to get started'}
+                        section === 'trash' ? (
+                            <EmptyState
+                                icon={Trash2}
+                                title="Trash is empty"
+                                description="Files you delete will appear here for 30 days before permanent removal."
+                                action={null}
+                            />
+                        ) : (
+                            <div style={{ textAlign: 'center', paddingTop: '5rem' }}>
+                                <FolderOpen size={48} color="#CBD5E1" style={{ marginBottom: 12 }} />
+                                <div style={{ color: '#94A3B8', fontSize: 14, fontWeight: 600 }}>
+                                    {search ? 'No files match your search' : 'No files yet — upload to get started'}
+                                </div>
                             </div>
-                        </div>
+                        )
                     ) : view === 'grid' ? (
                         /* ── Grid view */
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '1rem' }}>
@@ -400,53 +437,71 @@ const FileManagerPage = () => {
 
                                     <div style={{
                                         width: 52, height: 52, borderRadius: 12,
-                                        background: `${TYPE_COLORS[getFileType(file.originalName)]}18`,
+                                        background: file.type === 'folder' ? '#F4F4F5' : `${TYPE_COLORS[getFileType(file.originalName)]}18`,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        overflow: 'hidden'
                                     }}>
-                                        <FileIcon name={file.originalName} url={file.url} size={52} />
+                                        {file.type === 'folder' ? (
+                                            file.thumbnail ? (
+                                                <img src={file.thumbnail} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : <FolderOpen size={24} color="#71717A" />
+                                        ) : (
+                                            <FileIcon name={file.originalName} url={file.url} size={52} />
+                                        )}
                                     </div>
 
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1.3 }}>
-                                        {file.originalName.length > 22 ? file.originalName.slice(0, 20) + '…' : file.originalName}
+                                    <div 
+                                        onClick={() => file.type === 'folder' && setCurrentAsin(file.id)}
+                                        style={{ fontSize: 12, fontWeight: 600, color: '#18181B', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1.3, cursor: file.type === 'folder' ? 'pointer' : 'default' }}>
+                                        {file.type === 'folder' ? file.name : (file.originalName.length > 22 ? file.originalName.slice(0, 20) + '…' : file.originalName)}
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#94A3B8' }}>{file.sizeLabel}</div>
+                                    <div style={{ fontSize: 11, color: '#A1A1AA' }}>{file.type === 'folder' ? `${file.count} images` : file.sizeLabel}</div>
                                 </div>
                             ))}
                         </div>
                     ) : (
                         /* ── List view */
-                        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E4E4E7', overflow: 'hidden' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                    <tr style={{ borderBottom: '1px solid #F4F4F5' }}>
                                         {['Name', 'Size', 'Uploaded', 'Actions'].map(h => (
-                                            <th key={h} style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                                            <th key={h} style={{ padding: '0.65rem 1rem', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filtered.map((file, idx) => (
-                                        <tr key={file._id}
-                                            style={{ borderBottom: idx < filtered.length - 1 ? '1px solid #F8FAFC' : 'none' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = '#FAFBFF'}
+                                        <tr key={file._id || file.id}
+                                            style={{ borderBottom: idx < filtered.length - 1 ? '1px solid #F4F4F5' : 'none' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                         >
                                             <td style={{ padding: '0.7rem 1rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div 
+                                                    onClick={() => file.type === 'folder' && setCurrentAsin(file.id)}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: file.type === 'folder' ? 'pointer' : 'default' }}>
                                                     <div style={{
                                                         width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-                                                        background: `${TYPE_COLORS[getFileType(file.originalName)]}18`,
+                                                        background: file.type === 'folder' ? '#F4F4F5' : `${TYPE_COLORS[getFileType(file.originalName)]}18`,
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        overflow: 'hidden'
                                                     }}>
-                                                        <FileIcon name={file.originalName} url={file.url} size={34} />
+                                                        {file.type === 'folder' ? (
+                                                            file.thumbnail ? (
+                                                                <img src={file.thumbnail} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                            ) : <FolderOpen size={16} color="#71717A" />
+                                                        ) : (
+                                                            <FileIcon name={file.originalName} url={file.url} size={34} />
+                                                        )}
                                                     </div>
-                                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{file.originalName}</span>
+                                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#18181B' }}>{file.type === 'folder' ? file.name : file.originalName}</span>
                                                     {file.starred && <Star size={12} color="#FBBF24" fill="#FBBF24" />}
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '0.7rem 1rem', fontSize: 12, color: '#64748B' }}>{file.sizeLabel}</td>
-                                            <td style={{ padding: '0.7rem 1rem', fontSize: 12, color: '#64748B', whiteSpace: 'nowrap' }}>
-                                                {new Date(file.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            <td style={{ padding: '0.7rem 1rem', fontSize: 12, color: '#71717A' }}>{file.type === 'folder' ? '--' : file.sizeLabel}</td>
+                                            <td style={{ padding: '0.7rem 1rem', fontSize: 12, color: '#71717A', whiteSpace: 'nowrap' }}>
+                                                {file.type === 'folder' ? '--' : new Date(file.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </td>
                                             <td style={{ padding: '0.7rem 1rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

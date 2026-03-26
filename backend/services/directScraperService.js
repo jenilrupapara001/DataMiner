@@ -105,7 +105,8 @@ class DirectScraperService {
                 reviews: parseInt(reviewCountText.replace(/[^\d]/g, '')) || 0,
                 price: getText('//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[3]') || getText('//*[@id="priceblock_ourprice"]'),
                 mrp: getText('//*[@id="corePriceDisplay_desktop_feature_div"]/div[2]/span/span[1]/span[2]/span/span[1]'),
-                bsr: getText('//*[@id="detailBullets_feature_div"]/ul/li[15]/span'),
+                bsr: getText('//span[contains(text(), "Best Sellers Rank")]/parent::*') || getText('//*[@id="SalesRank"]'), // Capture raw string
+                subBSRs: [], // Initialize fresh array
                 imageCount: xpath.select('//*[@id="altImages"]/ul/li', doc)?.length || 0,
                 mainImage: getAttr('//*[@id="landingImage"]', 'src') || getAttr('//*[@id="imgBlkFront"]', 'src'),
                 description: descriptionText,
@@ -121,12 +122,42 @@ class DirectScraperService {
             data.price = parseFloat(data.price?.replace(/[^\d.]/g, '')) || 0;
             data.rating = parseFloat(data.rating) || 0;
 
-            // Extract BSR from complicated string "15 in Electronics (See Top 100 in Electronics)"
-            if (data.bsr) {
-                const match = data.bsr.match(/#([\d,]+)/) || data.bsr.match(/(\d+) in/);
-                if (match) {
-                    data.bsr = parseInt(match[1].replace(/,/g, ''));
+            // Extract BSR from complicated string "#1 in Beauty (See Top 100 in Beauty) #1 in Solid Soap Bars"
+            if (data.bsr && typeof data.bsr === 'string') {
+                const bsrText = data.bsr;
+                
+                // 1. Primary BSR - Look for "#rank in Category" (usually at the start)
+                const primaryMatch = bsrText.match(/#([\d,]+)\s+in\s+([^(\n]+)/);
+                if (primaryMatch) {
+                    data.bsr = parseInt(primaryMatch[1].replace(/,/g, ''));
+                } else {
+                    // Fallback: try to just get the first number
+                    const firstNumMatch = bsrText.match(/#([\d,]+)/);
+                    if (firstNumMatch) {
+                        data.bsr = parseInt(firstNumMatch[1].replace(/,/g, ''));
+                    } else {
+                        data.bsr = 0; // Truly not found
+                    }
                 }
+
+                // 2. Sub-category BSRs - Usually in a <ul> or following the primary
+                // Reset subBSRs to ensure we don't have duplicates from previous logic
+                data.subBSRs = [];
+                const allRankMatches = bsrText.matchAll(/#([\d,]+)\s+in\s+([^(\n]+)/g);
+                let matchCount = 0;
+                for (const match of allRankMatches) {
+                    matchCount++;
+                    // If the first match was actually the primary, skip it. 
+                    // But if primaryMatch was null, then the first match might actually be a sub-BSR if we're not careful.
+                    // However, in Amazon, the first one is consistently the primary.
+                    if (matchCount > 1) { 
+                        data.subBSRs.push(`${match[1]} in ${match[2].trim()}`);
+                    }
+                }
+            } else if (typeof data.bsr === 'number') {
+                // Already a number, nothing to parse
+            } else {
+                data.bsr = 0;
             }
 
             console.log(`✅ Scraped successfully: ${data.title.substring(0, 30)}...`);

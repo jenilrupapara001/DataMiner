@@ -28,6 +28,8 @@ const upload = multer({
 /* ── Routes ─────────────────────────────────────────────────────── */
 router.post('/upload', authenticate, upload.array('files', 20), fileController.uploadFiles);
 router.get('/', authenticate, fileController.listFiles);
+router.get('/asin-folders', authenticate, fileController.listAsinFolders);
+router.get('/asin-folders/:asin', authenticate, fileController.getAsinFiles);
 router.patch('/:id/star', authenticate, fileController.toggleStar);
 router.patch('/:id/trash', authenticate, fileController.trashFile);
 router.patch('/:id/rename', authenticate, fileController.renameFile);

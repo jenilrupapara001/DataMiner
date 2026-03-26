@@ -14,6 +14,11 @@ class AIService {
             apiKey: process.env.PERPLEXITY_API_KEY,
             baseURL: 'https://api.perplexity.ai'
         });
+
+        this.nvidiaOpenAI = new OpenAI({
+            apiKey: process.env.NVIDIA_NIM_API_KEY,
+            baseURL: 'https://integrate.api.nvidia.com/v1'
+        });
     }
 
     /**
@@ -110,6 +115,90 @@ class AIService {
         } catch (error) {
             console.error('AI Suggestion Error:', error);
             throw new Error('Failed to suggest tasks');
+        }
+    }
+
+    /**
+     * Generate detailed instructions for a task using NVIDIA NIM (Minimax)
+     * @param {Object} action - Action object
+     */
+    async generateTaskInstructions(action) {
+        try {
+            const completion = await this.nvidiaOpenAI.chat.completions.create({
+                model: "minimaxai/minimax-m2.1",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a Senior E-commerce Expert and Retail Operations Strategist. 
+                        Your goal is to analyze the provided task and suggest a highly professional, actionable solution.
+                        - Be direct and concise. 
+                        - Focus on main points only. 
+                        - Use clean Markdown formatting.
+                        - Use sections: **Task Analysis**, **Strategic Solution**, and **Key Success Points**.`
+                    },
+                    {
+                        role: "user",
+                        content: `Analyze and provide a solution for this task:
+                        Task Title: ${action.title}
+                        Context: ${action.description || 'N/A'}
+                        Item Type: ${action.type || 'Action'}`
+                    }
+                ],
+                temperature: 0.6,
+                max_tokens: 1500
+            });
+
+            return completion.choices[0].message.content;
+        } catch (error) {
+            console.error('NVIDIA NIM Error:', error);
+            throw new Error('Failed to generate instructions from NVIDIA NIM');
+        }
+    }
+
+    /**
+     * Generate a 4-week actionable plan from a high-level goal using NVIDIA NIM
+     * @param {string} goal - User's target (e.g., "Increase sales for electronics")
+     */
+    async generateWeeklyTasks(goal) {
+        try {
+            const completion = await this.nvidiaOpenAI.chat.completions.create({
+                model: "minimaxai/minimax-m2.1",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a World-Class E-commerce Growth Strategist.
+                        Your goal is to convert a high-level business objective into a structured 4-week actionable roadmap.
+                        
+                        RULES:
+                        1. Provide exactly 4 weeks.
+                        2. Each week must have 3-5 high-impact, specific tasks.
+                        3. Return ONLY a valid JSON array of objects.
+                        4. DO NOT include any explanatory text, markdown notes, or preamble.
+                        
+                        SCHEMA:
+                        [
+                          {
+                            "week": 1,
+                            "tasks": [
+                              "Task 1: Specific detail",
+                              "Task 2: Specific action"
+                            ]
+                          }
+                        ]`
+                    },
+                    {
+                        role: "user",
+                        content: `Objective: ${goal}`
+                    }
+                ],
+                temperature: 0.5
+            });
+
+            const content = completion.choices[0].message.content;
+            return this._cleanJSON(content);
+        } catch (error) {
+            console.error('NVIDIA Task Generation Error:', error);
+            throw new Error('Failed to generate weekly tasks via NVIDIA NIM');
         }
     }
 }

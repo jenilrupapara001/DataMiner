@@ -27,6 +27,12 @@ const TemplateManagerPage = () => {
         name: '', description: '', goals: []
     });
 
+    // AI Generation State
+    const [showAiModal, setShowAiModal] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiGenerating, setAiGenerating] = useState(false);
+    const [aiSuggestions, setAiSuggestions] = useState(null);
+
     // Constants
     const categories = ['SEO & Content', 'Sales & Marketing', 'Operations & General', 'PPC & Advertising', 'Compliance & Legal'];
     const types = [
@@ -39,7 +45,7 @@ const TemplateManagerPage = () => {
         { value: 'DESCRIPTION_OPTIMIZATION', label: 'Description' }
     ];
     const priorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-    const metrics = ['NONE', 'GMS', 'ACOS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'ORDER_COUNT'];
+    const metrics = ['NONE', 'GMS', 'ACOS', 'ROI', 'PROFIT', 'CONVERSION_RATE', 'ORDER_COUNT', 'LISTING', 'PO_FULFILLMENT', 'LQS', 'ADS_SPEND', 'PRODUCTS_TO_LIST'];
 
     // Data Fetching
     const fetchTemplates = async () => {
@@ -135,13 +141,96 @@ const TemplateManagerPage = () => {
         }
     };
 
+    // AI Generation Handlers
+    const handleAiGenerate = async () => {
+        if (!aiPrompt.trim()) return;
+        setAiGenerating(true);
+        try {
+            // Re-using the strategy/goals/ai-preview endpoint 
+            // Note: In a production app, we might want a specific template suggestion endpoint
+            const response = await fetch('/api/strategy/goals/ai-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ intent: aiPrompt })
+            });
+            const data = await response.json();
+            if (data.success) {
+                setAiSuggestions(data.data);
+            } else {
+                alert(data.message || 'AI failed to generate suggestions.');
+            }
+        } catch (error) {
+            console.error('AI Generation Error:', error);
+            alert('Failed to connect to AI engine.');
+        } finally {
+            setAiGenerating(false);
+        }
+    };
+
+    const handleAcceptSuggestion = async (suggestion) => {
+        setIsSubmitting(true);
+        try {
+            if (activeTab === 'goal') {
+                const payload = {
+                    name: suggestion.name || `AI: ${aiPrompt}`,
+                    description: suggestion.strategy || '',
+                    goals: (suggestion.milestones || []).map(m => ({
+                        title: m.objective || 'Objective',
+                        metric: 'GMS', // Default for now
+                        targetValue: ''
+                    }))
+                };
+                await db.createGoalTemplate(payload);
+            } else {
+                // If task tab, creates tasks from milestones
+                for (const m of (suggestion.milestones || [])) {
+                    await db.createTemplate({
+                        title: m.objective,
+                        description: `Strategy: ${suggestion.strategy}\nFocus: ${activeTab === 'goal' ? 'Strategic Goal' : 'Action Item'}`,
+                        category: 'Operations & General',
+                        type: 'GENERAL_OPTIMIZATION',
+                        priority: 'MEDIUM'
+                    });
+                }
+            }
+            await fetchTemplates();
+            setShowAiModal(false);
+            setAiSuggestions(null);
+            setAiPrompt('');
+        } catch (error) {
+            alert('Failed to save AI suggestions.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // Sub-goal management
     const addSubGoal = () => {
         setGoalFormData(prev => ({ ...prev, goals: [...prev.goals, { title: '', metric: 'NONE', targetValue: '' }] }));
     };
     const updateSubGoal = (index, field, value) => {
         const newGoals = [...goalFormData.goals];
+        const oldMetric = newGoals[index].metric;
         newGoals[index][field] = value;
+
+        // Auto-suggest title based on metric if title is empty or was the default for previous metric
+        if (field === 'metric' && value !== 'NONE' && (!newGoals[index].title || newGoals[index].title === oldMetric.replace('_', ' '))) {
+            const suggestions = {
+                'GMS': 'Monthly GMS Target',
+                'ACOS': 'ACOS Efficiency Goal',
+                'ROI': 'Return on Investment',
+                'PROFIT': 'Net Profit Margin',
+                'CONVERSION_RATE': 'Listing Conversion Rate',
+                'ORDER_COUNT': 'Daily Order Volume',
+                'LISTING': 'Listing Optimization Score',
+                'PO_FULFILLMENT': 'PO Fulfilment Rate',
+                'LQS': 'Listing Quality Score (LQS)',
+                'ADS_SPEND': 'Ads Budget / Spend',
+                'PRODUCTS_TO_LIST': 'New Products to List'
+            };
+            newGoals[index].title = suggestions[value] || value.replace('_', ' ');
+        }
+        
         setGoalFormData(prev => ({ ...prev, goals: newGoals }));
     };
     const removeSubGoal = (index) => {
@@ -176,14 +265,24 @@ const TemplateManagerPage = () => {
                         <p className="text-muted small mb-0 mt-1">Configure automated workflows, actions, and roadmaps.</p>
                     </div>
                 </div>
-                <button
-                    className="btn btn-primary d-flex align-items-center gap-2 shadow-sm rounded-pill px-4 fw-bold"
-                    onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()}
-                    style={{ background: '#4F46E5', border: 'none' }}
-                >
-                    <Plus size={16} />
-                    {activeTab === 'task' ? 'Create Task Outline' : 'Create Roadmap'}
-                </button>
+                <div className="d-flex align-items-center gap-2">
+                    <button
+                        className="btn btn-outline-primary d-flex align-items-center gap-2 rounded-pill px-4 fw-bold"
+                        onClick={() => setShowAiModal(true)}
+                        style={{ borderColor: '#6366F1', color: '#4F46E5', backgroundColor: '#EEF2FF' }}
+                    >
+                        <Sparkles size={16} />
+                        AI Generate
+                    </button>
+                    <button
+                        className="btn btn-primary d-flex align-items-center gap-2 shadow-sm rounded-pill px-4 fw-bold"
+                        onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()}
+                        style={{ background: '#4F46E5', border: 'none' }}
+                    >
+                        <Plus size={16} />
+                        {activeTab === 'task' ? 'Create Task Outline' : 'Create Roadmap'}
+                    </button>
+                </div>
             </div>
 
             {/* Quick Stats / Overview row */}
@@ -458,7 +557,26 @@ const TemplateManagerPage = () => {
                                                 </div>
                                                 <div className="col-md-3">
                                                     <select className="form-select form-select-sm border-0 bg-light fw-medium text-muted" value={g.metric} onChange={(e) => updateSubGoal(idx, 'metric', e.target.value)}>
-                                                        {metrics.map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
+                                                        <option value="NONE">Metric Type</option>
+                                                        <optgroup label="Sales">
+                                                            <option value="GMS">GMS (₹)</option>
+                                                            <option value="ORDER_COUNT">Orders</option>
+                                                            <option value="CONVERSION_RATE">Conv. %</option>
+                                                        </optgroup>
+                                                        <optgroup label="Ads">
+                                                            <option value="ACOS">ACOS %</option>
+                                                            <option value="ADS_SPEND">Spend (₹)</option>
+                                                            <option value="ROI">ROI %</option>
+                                                        </optgroup>
+                                                        <optgroup label="Content">
+                                                            <option value="LISTING">Listing %</option>
+                                                            <option value="PRODUCTS_TO_LIST">Products</option>
+                                                            <option value="LQS">LQS</option>
+                                                        </optgroup>
+                                                        <optgroup label="Ops">
+                                                            <option value="PROFIT">Profit (₹)</option>
+                                                            <option value="PO_FULFILLMENT">PO %</option>
+                                                        </optgroup>
                                                     </select>
                                                 </div>
                                                 <div className="col-md-3">
@@ -484,6 +602,80 @@ const TemplateManagerPage = () => {
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* AI Generation Modal */}
+            {showAiModal && (
+                <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)' }}>
+                    <div className="modal-dialog modal-lg modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-2xl" style={{ borderRadius: '24px', overflow: 'hidden' }}>
+                            <div className="modal-header border-0 px-4 pt-4 pb-0 bg-white">
+                                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 mb-2">
+                                    <Sparkles size={24} />
+                                </div>
+                                <button onClick={() => setShowAiModal(false)} className="btn-close shadow-none position-absolute top-0 end-0 m-4"></button>
+                            </div>
+                            <div className="modal-body p-4 bg-white">
+                                <div className="mb-4">
+                                    <h4 className="fw-black text-slate-900 tracking-tight mb-2">AI Strategy Workbench</h4>
+                                    <p className="text-slate-500 small">Enter your growth intent (e.g., "Increase sales for Electronics in Q4") and let our AI engine draft your strategy templates.</p>
+                                </div>
+
+                                <div className="mb-4">
+                                    <div className="input-group bg-slate-50 border border-slate-200 rounded-3xl p-2 transition-all focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/5">
+                                        <textarea 
+                                            className="form-control border-0 bg-transparent shadow-none" 
+                                            rows="3" 
+                                            placeholder="What is your current mission?"
+                                            value={aiPrompt}
+                                            onChange={(e) => setAiPrompt(e.target.value)}
+                                            style={{ resize: 'none' }}
+                                        />
+                                        <button 
+                                            className="btn btn-indigo shadow-lg shadow-indigo-200 rounded-2xl px-4 align-self-end fw-black text-uppercase tracking-widest"
+                                            style={{ background: '#4F46E5', color: 'white', fontSize: '11px', height: '40px', marginBottom: '8px', marginRight: '8px' }}
+                                            onClick={handleAiGenerate}
+                                            disabled={aiGenerating || !aiPrompt.trim()}
+                                        >
+                                            {aiGenerating ? <Loader2 className="animate-spin" size={16} /> : 'Think'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {aiSuggestions && (
+                                    <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="d-flex justify-content-between align-items-start mb-6">
+                                            <div>
+                                                <span className="badge bg-indigo-100 text-indigo-600 rounded-pill px-3 py-2 mb-2 fw-bold" style={{ fontSize: '10px' }}>STRATEGIC DRAFT</span>
+                                                <h5 className="fw-black text-slate-900 mb-1">{aiSuggestions.name}</h5>
+                                                <p className="text-slate-500 small mb-0">{aiSuggestions.strategy}</p>
+                                            </div>
+                                            <button 
+                                                className="btn btn-dark rounded-pill px-4 fw-bold" 
+                                                onClick={() => handleAcceptSuggestion(aiSuggestions)}
+                                                disabled={isSubmitting}
+                                            >
+                                                {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save as Template'}
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-3">
+                                            {aiSuggestions.milestones?.map((m, i) => (
+                                                <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 d-flex align-items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black">{i + 1}</div>
+                                                    <div className="flex-1">
+                                                        <h6 className="fw-bold text-slate-900 mb-0 small">{m.objective}</h6>
+                                                        <p className="text-slate-400 mb-0" style={{ fontSize: '11px' }}>Strategic focus for this phase</p>
+                                                    </div>
+                                                    <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full fw-bold" style={{ fontSize: '10px' }}>AUTO</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

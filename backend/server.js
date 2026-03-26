@@ -100,22 +100,36 @@ app.use('/api/objectives', objectiveRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const marketSyncRoutes = require('./routes/marketDataSyncRoutes');
+const growthExecutionRoutes = require('./routes/growthExecutionRoutes');
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/market-sync', marketSyncRoutes);
+app.use('/api', growthExecutionRoutes);
 
 const systemLogRoutes = require('./routes/systemLogRoutes');
 const systemSettingRoutes = require('./routes/systemSettingRoutes');
 app.use('/api/logs', systemLogRoutes);
 app.use('/api/settings', systemSettingRoutes);
 
-// AI Routes
+// Brandcentral AI Strategy Routes
 const aiRoutes = require('./routes/aiRoutes');
-app.use('/api/ai', aiRoutes);
+app.use('/api/strategy', aiRoutes);
 
 // Keepa Seller ASIN Tracker Routes
 const sellerAsinTrackerRoutes = require('./routes/sellerAsinTrackerRoutes');
 app.use('/api/seller-tracker', sellerAsinTrackerRoutes);
+
+// Unified Revenue Engine Routes
+const revenueRoutes = require('./routes/revenueRoutes');
+app.use('/api/revenue-engine', revenueRoutes);
+
+// GMS Goal Tracking Routes
+const goalRoutes = require('./routes/goalRoutes');
+app.use('/api/goals', goalRoutes);
+
+// Unified ASIN Table Routes
+const asinTableRoutes = require('./routes/asinTableRoutes');
+app.use('/api/asins-table', asinTableRoutes);
 
 
 // Health check endpoint
@@ -185,6 +199,11 @@ server.listen(PORT, () => {
   // Start Keepa ASIN Sync Scheduler
   const schedulerService = require('./services/schedulerService');
   schedulerService.init();
+  
+  // Start ASIN Auto-Scraper
+  const autoScrape = require('./cron/autoScrape');
+  autoScrape.init();
+  
   console.log('⏰ Recurring task scheduler initialized');
 
   // Trigger initial CometChat sync on startup

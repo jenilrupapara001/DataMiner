@@ -1,435 +1,544 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, AlertTriangle, ExternalLink, BarChart2, Store } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, Activity, AlertTriangle, ExternalLink, BarChart2, Store, Plus, Filter, Database, Globe } from 'lucide-react';
 import api from '../services/api';
 
-const MARKETPLACE_FLAGS = {
-    'amazon.in': '🇮🇳',
-    'amazon.com': '🇺🇸',
-    'amazon.co.uk': '🇬🇧',
-    'amazon.de': '🇩🇪',
-    'amazon.fr': '🇫🇷',
-    'amazon.ca': '🇨🇦',
+/* ── Zinc Design Tokens (inline) ─────────────────────────── */
+const Z = {
+  white: '#FFFFFF',
+  bg: '#F9FAFB',
+  50: '#FAFAFA',
+  100: '#F4F4F5',
+  200: '#E4E4E7',
+  300: '#D4D4D8',
+  400: '#A1A1AA',
+  500: '#71717A',
+  600: '#52525B',
+  700: '#3F3F46',
+  800: '#27272A',
+  900: '#18181B',
+  brand: '#18181B',
+  shadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.06)',
+  shadowMd: '0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05)',
 };
 
+const MARKETPLACE_FLAGS = { 'amazon.in': '🇮🇳' };
+
+/* ── Badge Helpers ─────────────────────────────────────── */
 const getLqsBadge = (lqs) => {
-    if (lqs == null) return <span style={{ color: '#9ca3af' }}>—</span>;
-    let bgColor = '#059669';
-    if (lqs < 60) bgColor = '#dc2626';
-    else if (lqs < 80) bgColor = '#d97706';
-    return <span className="badge" style={{ backgroundColor: bgColor, color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}>{lqs}</span>;
+  if (lqs == null) return <span style={{ color: Z[400] }}>—</span>;
+  let colors;
+  if (lqs >= 80) colors = { bg: '#ecfdf5', text: '#059669', border: '#d1fae5' };
+  else if (lqs >= 60) colors = { bg: '#fffbeb', text: '#d97706', border: '#fef3c7' };
+  else colors = { bg: '#fef2f2', text: '#dc2626', border: '#fee2e2' };
+
+  return (
+    <span style={{ backgroundColor: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, fontWeight: 600, fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+      {lqs}
+    </span>
+  );
 };
 
 const getScrapeStatusBadge = (status) => {
-    const map = {
-        PENDING: { bg: '#d97706', label: 'Pending' },
-        SCRAPED: { bg: '#059669', label: 'Scraped' },
-        FAILED: { bg: '#dc2626', label: 'Failed' },
-        SCRAPING: { bg: '#2563eb', label: 'Scraping' },
-        Active: { bg: '#059669', label: 'Active' },
-    };
-    const s = map[status] || { bg: '#6b7280', label: status || 'Unknown' };
-    return <span className="badge" style={{ backgroundColor: s.bg, color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}>{s.label}</span>;
+  const map = {
+    PENDING: { bg: '#fffbeb', text: '#d97706', border: '#fef3c7', label: 'Pending' },
+    SCRAPED: { bg: '#ecfdf5', text: '#059669', border: '#d1fae5', label: 'Scraped' },
+    FAILED: { bg: '#fef2f2', text: '#dc2626', border: '#fee2e2', label: 'Failed' },
+    SCRAPING: { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe', label: 'Scraping' },
+    Active: { bg: '#ecfdf5', text: '#059669', border: '#d1fae5', label: 'Active' },
+  };
+  const s = map[status] || { bg: Z[100], text: Z[500], border: Z[200], label: status || 'Unknown' };
+  return (
+    <span style={{ backgroundColor: s.bg, color: s.text, border: `1px solid ${s.border}`, fontWeight: 600, fontSize: '0.7rem', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+      {s.label}
+    </span>
+  );
 };
 
-// Per-seller ASIN table panel
+/* ── Inline KPI Card ───────────────────────────────────── */
+const TrackerKPI = ({ title, value, subtitle, Icon, accentColor }) => (
+  <div style={{ background: Z.white, borderRadius: '16px', border: `1px solid ${Z[200]}`, boxShadow: Z.shadow, padding: '20px 24px', flex: 1, minWidth: 180 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+      <div style={{ width: 42, height: 42, borderRadius: 12, background: `${accentColor}12`, color: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={20} strokeWidth={2.5} />
+      </div>
+    </div>
+    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: Z[400], marginBottom: 4 }}>{title}</div>
+    <div style={{ fontSize: 28, fontWeight: 800, color: Z[900], letterSpacing: '-0.02em', lineHeight: 1.1, marginBottom: 4 }}>{value}</div>
+    <div style={{ fontSize: 11, color: Z[400], fontWeight: 500 }}>{subtitle}</div>
+  </div>
+);
+
+/* ── Seller ASIN Panel (expandable) ────────────────────── */
 const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
-    const [asins, setAsins] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-    const [search, setSearch] = useState('');
+  const { sellerId: urlSellerId } = useParams();
+  const [asins, setAsins] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(seller._id === urlSellerId);
+  const [search, setSearch] = useState('');
 
-    const load = useCallback(async () => {
-        if (!isOpen) return;
-        setLoading(true);
-        try {
-            const res = await api.sellerTrackerApi.getSellerAsins(seller._id);
-            if (res.success) {
-                setAsins(res.data || []);
-            }
-        } catch (e) {
-            console.error('Failed to load ASINs for seller:', e.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [isOpen, seller._id]); // refreshKey is not strictly needed here if we trigger load() from parent or if we use effect on refreshKey
+  // Auto-open if URL matches
+  useEffect(() => {
+    if (seller._id === urlSellerId) {
+      setIsOpen(true);
+      // Scroll into view
+      const el = document.getElementById(`seller-${seller._id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [urlSellerId, seller._id]);
 
-    useEffect(() => { load(); }, [load, refreshKey]);
+  const load = useCallback(async () => {
+    if (!isOpen) return;
+    setLoading(true);
+    try {
+      const res = await api.sellerTrackerApi.getSellerAsins(seller._id);
+      if (res.success) setAsins(res.data || []);
+    } catch (e) {
+      console.error('Failed to load ASINs for seller:', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [isOpen, seller._id]);
 
-    const filtered = useMemo(() =>
-        asins.filter(a => !search || a.asinCode?.toLowerCase().includes(search.toLowerCase()) || a.title?.toLowerCase().includes(search.toLowerCase())),
-        [asins, search]
-    );
+  useEffect(() => { load(); }, [load, refreshKey]);
 
-    const flag = MARKETPLACE_FLAGS[seller.marketplace] || '🌐';
-    const lastSync = seller.lastKeepaSync ? new Date(seller.lastKeepaSync) : null;
-    const isNew24h = (date) => date && new Date(date) > new Date(Date.now() - 86400000);
+  const filtered = useMemo(() =>
+    asins.filter(a => !search || a.asinCode?.toLowerCase().includes(search.toLowerCase()) || a.title?.toLowerCase().includes(search.toLowerCase())),
+    [asins, search]
+  );
 
-    return (
-        <div className="card mb-3 border-0 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-            {/* Seller header row */}
-            <div
-                className="card-header d-flex justify-content-between align-items-center px-4 py-3"
-                style={{ cursor: 'pointer', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
-                onClick={() => setIsOpen(o => !o)}
-            >
-                <div className="d-flex align-items-center gap-3">
-                    <div className="p-2 bg-primary-subtle text-primary rounded-3" style={{ fontSize: '1.2rem' }}>{flag}</div>
-                    <div>
-                        <div className="fw-bold text-dark" style={{ fontSize: '1rem' }}>{seller.name}</div>
-                        <div className="text-muted small">{seller.sellerId} · {seller.marketplace}</div>
-                    </div>
-                </div>
+  const flag = MARKETPLACE_FLAGS[seller.marketplace] || '🌐';
+  const lastSync = seller.lastKeepaSync ? new Date(seller.lastKeepaSync) : null;
+  const isNew24h = (date) => date && new Date(date) > new Date(Date.now() - 86400000);
 
-                <div className="d-flex align-items-center gap-3 flex-wrap">
-                    {/* KPI pills */}
-                    <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border bg-white border-light-subtle shadow-sm" style={{ fontSize: '13px', fontWeight: 500 }}>
-                        <div className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 24, height: 24, backgroundColor: '#6366f120', color: '#6366f1' }}>
-                            <Package size={12} />
-                        </div>
-                        <div className="d-flex flex-column" style={{ lineHeight: '1.1' }}>
-                            <span className="text-muted text-uppercase" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em' }}>In System</span>
-                            <span className="fw-bold text-dark" style={{ fontSize: 14 }}>{seller.dbAsinCount ?? seller.totalAsins ?? 0}</span>
-                        </div>
-                    </div>
-                    <div className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border bg-white border-light-subtle shadow-sm" style={{ fontSize: '13px', fontWeight: 500 }}>
-                        <div className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 24, height: 24, backgroundColor: '#10b98120', color: '#10b981' }}>
-                            <Zap size={12} />
-                        </div>
-                        <div className="d-flex flex-column" style={{ lineHeight: '1.1' }}>
-                            <span className="text-muted text-uppercase" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em' }}>Keepa</span>
-                            <span className="fw-bold text-dark" style={{ fontSize: 14 }}>{seller.keepaAsinCount ?? 0}</span>
-                        </div>
-                    </div>
-                    {seller.newAsinCount > 0 && (
-                        <span className="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3">
-                            +{seller.newAsinCount} new today
-                        </span>
-                    )}
-                    <span className="text-muted small text-end" style={{ whiteSpace: 'nowrap', minWidth: 90 }}>
-                        {lastSync ? `Synced ${lastSync.toLocaleDateString()}` : 'Never synced'}
-                    </span>
-                    <button
-                        className="btn btn-outline-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm rounded-pill px-3"
-                        onClick={e => { e.stopPropagation(); onSync(seller._id); }}
-                        disabled={syncing}
-                    >
-                        <RefreshCw size={13} className={syncing ? 'spin' : ''} />
-                        {syncing ? 'Syncing...' : 'Sync Now'}
-                    </button>
-                    <button className="btn btn-sm btn-light rounded-circle shadow-sm p-1">
-                        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
-                </div>
+  return (
+    <div 
+        id={`seller-${seller._id}`}
+        style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${Z[200]}`, background: Z.white, boxShadow: Z.shadow, marginBottom: 12, transition: 'box-shadow 0.2s ease' }}
+    >
+      {/* Seller header row */}
+      <div
+        style={{ cursor: 'pointer', backgroundColor: Z.white, borderBottom: isOpen ? `1px solid ${Z[200]}` : 'none', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.15s' }}
+        onClick={() => setIsOpen(o => !o)}
+        onMouseEnter={e => e.currentTarget.style.background = Z[50]}
+        onMouseLeave={e => e.currentTarget.style.background = Z.white}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: Z[50], border: `1px solid ${Z[200]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+            {flag}
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, color: Z[900], fontSize: '0.95rem' }}>{seller.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: Z[500], marginTop: 2 }}>
+              <span style={{ background: Z[100], color: Z[600], border: `1px solid ${Z[200]}`, fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>{seller.sellerId}</span>
+              <span style={{ color: Z[300] }}>·</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Globe size={10} /> {seller.marketplace}</span>
             </div>
-
-            {/* ASIN table */}
-            {isOpen && (
-                <div className="card-body p-0" style={{ backgroundColor: '#fff' }}>
-                    <div className="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom bg-light-subtle">
-                        <div className="input-group input-group-sm rounded-pill overflow-hidden border shadow-sm" style={{ width: 280 }}>
-                            <span className="input-group-text bg-white border-0 text-muted ps-3"><Search size={13} /></span>
-                            <input
-                                type="text"
-                                className="form-control border-0 ps-0"
-                                placeholder="Search ASIN or title..."
-                                style={{ fontSize: '13px' }}
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
-                        <span className="text-muted small">{filtered.length} ASINs</span>
-                    </div>
-
-                    {loading ? (
-                        <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 120 }}>
-                            <RefreshCw className="text-primary spin me-2" size={20} />
-                            <span className="text-muted">Loading ASINs...</span>
-                        </div>
-                    ) : filtered.length === 0 ? (
-                        <div className="text-center text-muted py-4 small">
-                            No ASINs found. Click <strong>Sync Now</strong> to pull from Keepa.
-                        </div>
-                    ) : (
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="table table-bordered table-hover mb-0 w-100" style={{ fontSize: '0.8rem', minWidth: 900 }}>
-                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
-                                    <tr>
-                                        {['ASIN', 'Title', 'LQS', 'Images', 'Desc Length', 'Scrape Status', 'Added On', 'Amazon Link'].map(h => (
-                                            <th key={h} style={{ backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.65rem 0.75rem', whiteSpace: 'nowrap' }}>{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filtered.map((asin, i) => (
-                                        <tr key={asin._id || i} style={{ backgroundColor: '#fff' }}>
-                                            <td style={{ fontWeight: 600, color: '#111827', padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>
-                                                {asin.asinCode}
-                                                {isNew24h(asin.createdAt) && (
-                                                    <span className="badge ms-1 bg-success-subtle text-success border border-success-subtle" style={{ fontSize: '0.65rem' }}>NEW</span>
-                                                )}
-                                            </td>
-                                            <td style={{ color: '#4b5563', padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', maxWidth: 260 }}>
-                                                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {asin.title || <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Not scraped yet</span>}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>{getLqsBadge(asin.lqs)}</td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
-                                                {asin.imagesCount != null ? (
-                                                    <span className="badge" style={{ backgroundColor: '#f3f4f6', color: '#374151', fontWeight: 500 }}>{asin.imagesCount}</span>
-                                                ) : <span style={{ color: '#9ca3af' }}>—</span>}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', color: '#6b7280', fontSize: '0.75rem' }}>
-                                                {asin.descLength ?? <span style={{ color: '#9ca3af' }}>—</span>}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
-                                                {getScrapeStatusBadge(asin.scrapeStatus || asin.status)}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
-                                                {asin.createdAt ? new Date(asin.createdAt).toLocaleDateString() : '—'}
-                                            </td>
-                                            <td style={{ padding: '0.65rem 0.75rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
-                                                <a
-                                                    href={`https://${seller.marketplace}/dp/${asin.asinCode}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="btn btn-sm btn-outline-primary rounded-pill d-inline-flex align-items-center gap-1"
-                                                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem' }}
-                                                    onClick={e => e.stopPropagation()}
-                                                >
-                                                    View <ExternalLink size={10} />
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-            )}
+          </div>
         </div>
-    );
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {/* KPI Summary (desktop) */}
+          <div className="d-none d-lg-flex" style={{ alignItems: 'center', gap: 24, marginRight: 12 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: Z[400] }}>Inventory</div>
+              <div style={{ fontWeight: 700, color: Z[900], fontSize: 14 }}>{seller.dbAsinCount ?? seller.totalAsins ?? 0}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: Z[400] }}>Keepa Catalog</div>
+              <div style={{ fontWeight: 700, color: Z[900], fontSize: 14 }}>{seller.keepaAsinCount ?? 0}</div>
+            </div>
+          </div>
+
+          {seller.newAsinCount > 0 && (
+            <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Plus size={10} /> {seller.newAsinCount} new today
+            </span>
+          )}
+
+          <div className="d-none d-md-block" style={{ textAlign: 'right', minWidth: 100 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: Z[400] }}>Last Sync</div>
+            <div style={{ fontSize: 12, color: Z[600], fontWeight: 500 }}>{lastSync ? lastSync.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'Never'}</div>
+          </div>
+
+          <button
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: Z.white, border: `1px solid ${Z[200]}`, borderRadius: 20, padding: '6px 16px', fontSize: 12, fontWeight: 700, color: Z[900], cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'all 0.15s' }}
+            onClick={e => { e.stopPropagation(); onSync(seller._id); }}
+            disabled={syncing}
+            onMouseEnter={e => { e.currentTarget.style.background = Z[50]; e.currentTarget.style.boxShadow = Z.shadow; }}
+            onMouseLeave={e => { e.currentTarget.style.background = Z.white; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}
+          >
+            <RefreshCw size={14} className={syncing ? 'spin' : ''} style={{ color: syncing ? Z[900] : Z[400] }} />
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+
+          <div style={{ width: 32, height: 32, borderRadius: '50%', border: `1px solid ${Z[200]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+            {isOpen ? <ChevronUp size={16} style={{ color: Z[600] }} /> : <ChevronDown size={16} style={{ color: Z[600] }} />}
+          </div>
+        </div>
+      </div>
+
+      {/* ASIN table */}
+      {isOpen && (
+        <div style={{ background: Z.white }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '12px 20px', borderBottom: `1px solid ${Z[100]}`, background: Z[50] }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${Z[200]}`, borderRadius: 20, overflow: 'hidden', background: Z.white, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', width: 280 }}>
+                <span style={{ padding: '6px 0 6px 12px', color: Z[400] }}><Search size={14} /></span>
+                <input
+                  type="text"
+                  placeholder="Filter by ASIN or Title..."
+                  style={{ border: 'none', outline: 'none', padding: '6px 12px 6px 8px', fontSize: 13, width: '100%', background: 'transparent', color: Z[900] }}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <span style={{ fontSize: 12, color: Z[500], fontWeight: 500 }}>{filtered.length} ASINs found</span>
+          </div>
+
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '48px 0' }}>
+              <RefreshCw className="spin" size={24} style={{ color: Z[900], marginBottom: 8 }} />
+              <span style={{ color: Z[500], fontSize: 13, fontWeight: 500 }}>Retrieving Catalog Data...</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 0', background: Z.white }}>
+              <Package size={40} style={{ color: Z[200], marginBottom: 8 }} />
+              <h6 style={{ color: Z[900], fontWeight: 700, marginBottom: 4 }}>No matches found</h6>
+              <p style={{ color: Z[500], fontSize: 13, marginBottom: 0 }}>Try adjusting your search or sync with Keepa.</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', fontSize: '0.825rem', borderCollapse: 'collapse', minWidth: 900 }}>
+                <thead>
+                  <tr>
+                    {['ASIN Code', 'Product Title', 'LQS', 'Images', 'Desc Len', 'Status', 'Date Added', 'Link'].map(h => (
+                      <th key={h} style={{ borderBottom: `1px solid ${Z[200]}`, padding: '12px 16px', background: Z[50], fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, color: Z[500], textAlign: h === 'Product Title' ? 'left' : 'center' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((asin, i) => (
+                    <tr
+                      key={asin._id || i}
+                      style={{ transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = Z[50]}
+                      onMouseLeave={e => e.currentTarget.style.background = Z.white}
+                    >
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 700, color: Z[900], fontFamily: 'monospace' }}>{asin.asinCode}</span>
+                          {isNew24h(asin.createdAt) && (
+                            <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #d1fae5', fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>NEW</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', maxWidth: 300 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {asin.imageUrl && <img src={asin.imageUrl} alt="" style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 6, border: `1px solid ${Z[200]}` }} />}
+                          <span style={{ color: Z[700], fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260, display: 'inline-block' }} title={asin.title}>
+                            {asin.title || <span style={{ color: Z[400], fontStyle: 'italic' }}>Not available</span>}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>{getLqsBadge(asin.lqs)}</td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
+                        {asin.imagesCount != null ? (
+                          <span style={{ background: Z[100], color: Z[700], fontWeight: 600, border: `1px solid ${Z[200]}`, padding: '3px 10px', borderRadius: 6, fontSize: '0.8rem' }}>{asin.imagesCount}</span>
+                        ) : <span style={{ color: Z[300] }}>—</span>}
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center', color: Z[500], fontSize: '0.8rem' }}>
+                        {asin.descLength ?? <span style={{ color: Z[300] }}>—</span>}
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
+                        {getScrapeStatusBadge(asin.scrapeStatus || asin.status)}
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', color: Z[500], whiteSpace: 'nowrap', textAlign: 'center' }}>
+                        {asin.createdAt ? new Date(asin.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
+                        <a
+                          href={`https://${seller.marketplace}/dp/${asin.asinCode}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', border: `1px solid ${Z[200]}`, color: Z[600], background: Z.white, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', textDecoration: 'none', transition: 'all 0.15s' }}
+                          title="View on Amazon"
+                          onClick={e => e.stopPropagation()}
+                          onMouseEnter={e => { e.currentTarget.style.background = Z[900]; e.currentTarget.style.color = Z.white; e.currentTarget.style.borderColor = Z[900]; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = Z.white; e.currentTarget.style.color = Z[600]; e.currentTarget.style.borderColor = Z[200]; }}
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
+/* ── Main Page Component ───────────────────────────────── */
 const SellerAsinTrackerPage = () => {
-    const [sellers, setSellers] = useState([]);
-    const [tokenStatus, setTokenStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [syncingAll, setSyncingAll] = useState(false);
-    const [syncingSeller, setSyncingSeller] = useState(null);
-    const [alert, setAlert] = useState(null); // { msg, type: 'success'|'warning'|'danger' }
-    const [keepaKeyMissing, setKeepaKeyMissing] = useState(false);
-    const [showOverview, setShowOverview] = useState(true);
-    const [refreshKeys, setRefreshKeys] = useState({}); // sellerId -> timestamp
+  const [sellers, setSellers] = useState([]);
+  const [tokenStatus, setTokenStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncingSeller, setSyncingSeller] = useState(null);
+  const [alert, setAlert] = useState(null);
+  const [keepaKeyMissing, setKeepaKeyMissing] = useState(false);
+  const [showOverview, setShowOverview] = useState(true);
+  const [refreshKeys, setRefreshKeys] = useState({});
 
-    const showAlert = (msg, type = 'success') => {
-        setAlert({ msg, type });
-        setTimeout(() => setAlert(null), 6000);
-    };
+  const showAlert = (msg, type = 'success') => {
+    setAlert({ msg, type });
+    setTimeout(() => setAlert(null), 6000);
+  };
 
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const res = await api.sellerTrackerApi.getTrackers();
-            if (res.success) {
-                setSellers(res.data || []);
-                setTokenStatus(res.tokenStatus);
-                setKeepaKeyMissing(false);
-            }
-        } catch (e) {
-            if (e.message && e.message.includes('KEEPA_API_KEY')) setKeepaKeyMissing(true);
-            else showAlert(e.message, 'danger');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { loadData(); }, []);
-
-    const handleSyncSeller = async (sellerId) => {
-        setSyncingSeller(sellerId);
-        try {
-            const res = await api.sellerTrackerApi.syncSeller(sellerId);
-            if (res.success) {
-                showAlert(`✅ ${res.seller}: +${res.added} new ASINs synced (${res.total} total on Keepa)`);
-                // Trigger refresh for this specific panel
-                setRefreshKeys(prev => ({ ...prev, [sellerId]: Date.now() }));
-                // Also update the seller info in the overview
-                await loadData();
-            }
-        } catch (e) {
-            showAlert(`Failed to sync: ${e.message}`, 'danger');
-        } finally {
-            setSyncingSeller(null);
-        }
-    };
-
-    const handleSyncAll = async () => {
-        setSyncingAll(true);
-        try {
-            const res = await api.sellerTrackerApi.syncAll();
-            if (res.success) {
-                showAlert(`✅ Sync complete — ${res.totalAdded} new ASINs added across ${res.results.length} sellers`);
-                // Refresh all open panels by updating all refresh keys
-                const newKeys = {};
-                sellers.forEach(s => { newKeys[s._id] = Date.now(); });
-                setRefreshKeys(newKeys);
-                await loadData();
-            }
-        } catch (e) {
-            showAlert(`Sync all failed: ${e.message}`, 'danger');
-        } finally {
-            setSyncingAll(false);
-        }
-    };
-
-    const kpis = useMemo(() => [
-        { label: 'Total Sellers', value: sellers.length, color: '#6366f1', icon: <Store size={14} /> },
-        { label: 'ASINs in System', value: sellers.reduce((s, x) => s + (x.dbAsinCount || 0), 0).toLocaleString(), color: '#10b981', icon: <Package size={14} /> },
-        { label: 'Keepa Catalog', value: sellers.reduce((s, x) => s + (x.keepaAsinCount || 0), 0).toLocaleString(), color: '#2563eb', icon: <BarChart2 size={14} /> },
-        { label: 'New (24h)', value: `+${sellers.reduce((s, x) => s + (x.newAsinCount || 0), 0)}`, color: '#f59e0b', icon: <Zap size={14} /> },
-    ], [sellers]);
-
-    if (loading && sellers.length === 0) {
-        return (
-            <div className="container-fluid p-0">
-                <div className="page-content py-5">
-                    <div className="d-flex flex-column justify-content-center align-items-center" style={{ minHeight: 400 }}>
-                        <RefreshCw className="text-primary spin mb-3" size={40} />
-                        <p className="text-muted fw-500">Loading seller data from Keepa...</p>
-                    </div>
-                </div>
-            </div>
-        );
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.sellerTrackerApi.getTrackers();
+      if (res.success) {
+        setSellers(res.data || []);
+        setTokenStatus(res.tokenStatus);
+        setKeepaKeyMissing(false);
+      }
+    } catch (e) {
+      if (e.message && e.message.includes('KEEPA_API_KEY')) setKeepaKeyMissing(true);
+      else showAlert(e.message, 'danger');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => { loadData(); }, []);
+
+  const handleSyncSeller = async (sellerId) => {
+    setSyncingSeller(sellerId);
+    try {
+      const res = await api.sellerTrackerApi.syncSeller(sellerId);
+      if (res.success) {
+        showAlert(`✅ ${res.seller}: +${res.added} new ASINs synced`);
+        setRefreshKeys(prev => ({ ...prev, [sellerId]: Date.now() }));
+        await loadData();
+      }
+    } catch (e) {
+      showAlert(`Failed to sync: ${e.message}`, 'danger');
+    } finally {
+      setSyncingSeller(null);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    try {
+      const res = await api.sellerTrackerApi.syncAll();
+      if (res.success) {
+        showAlert(`✅ Sync complete — ${res.totalAdded} new ASINs added`);
+        const newKeys = {};
+        sellers.forEach(s => { newKeys[s._id] = Date.now(); });
+        setRefreshKeys(newKeys);
+        await loadData();
+      }
+    } catch (e) {
+      showAlert(`Sync all failed: ${e.message}`, 'danger');
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
+  const kpiData = useMemo(() => [
+    { title: 'Tracked Sellers', value: sellers.length, Icon: Store, subtitle: 'Sellers in catalog', color: '#6366f1' },
+    { title: 'System ASINs', value: sellers.reduce((s, x) => s + (x.dbAsinCount || 0), 0).toLocaleString(), Icon: Database, subtitle: 'Total in database', color: '#10b981' },
+    { title: 'Keepa Catalog', value: sellers.reduce((s, x) => s + (x.keepaAsinCount || 0), 0).toLocaleString(), Icon: Activity, subtitle: 'Live on Amazon', color: '#2563eb' },
+    { title: 'Growth (24h)', value: `+${sellers.reduce((s, x) => s + (x.newAsinCount || 0), 0)}`, Icon: Zap, subtitle: 'New discoveries', color: '#f59e0b' },
+  ], [sellers]);
+
+  /* ── Loading state ─── */
+  if (loading && sellers.length === 0) {
     return (
-        <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-            <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-            {/* Page Header Area */}
-            <div className="p-4 bg-white border-bottom shadow-xs mb-4">
-                <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <div>
-                        <div className="d-flex align-items-center gap-2 mb-1">
-                            <div className="bg-primary text-white p-2 rounded-3 shadow-sm"><Zap size={20} /></div>
-                            <h1 className="h4 fw-bold mb-0 text-dark" style={{ letterSpacing: '-0.01em' }}>
-                                Seller ASIN <span className="text-primary">Tracker</span>
-                            </h1>
-                        </div>
-                        <p className="text-muted small mb-0">Auto-discover new ASINs via Keepa API · Syncs every 12 hours automatically</p>
-                    </div>
-                    <div className="d-flex align-items-center gap-2">
-                        {tokenStatus && (
-                            <div className="px-3 py-2 rounded-pill bg-light border d-flex align-items-center gap-2 shadow-xs" style={{ fontSize: '12px', fontWeight: 600 }}>
-                                <span className="text-primary">🪙</span>
-                                <span className="text-dark">{tokenStatus.tokensLeft?.toLocaleString()} tokens left</span>
-                            </div>
-                        )}
-                        <button
-                            className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm fw-bold"
-                            onClick={handleSyncAll}
-                            disabled={syncingAll}
-                            style={{ height: '42px' }}
-                        >
-                            <RefreshCw size={16} className={syncingAll ? 'spin' : ''} />
-                            {syncingAll ? 'Syncing All...' : 'Sync All Sellers'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="container-fluid px-4 pb-5">
-                {/* Alert banner */}
-                {alert && (
-                    <div className={`alert alert-${alert.type} d-flex align-items-center mb-4 border-0 shadow-sm rounded-4`} role="alert" style={{ padding: '0.75rem 1.25rem' }}>
-                        <AlertTriangle className="me-2" size={18} />
-                        <span className="small fw-500">{alert.msg}</span>
-                    </div>
-                )}
-
-                {/* Missing API key warning */}
-                {keepaKeyMissing && (
-                    <div className="alert alert-warning d-flex align-items-start mb-4 border-0 shadow-sm rounded-4" role="alert">
-                        <AlertTriangle className="me-2 mt-1 text-warning flex-shrink-0" size={18} />
-                        <div>
-                            <div className="fw-bold mb-1">Keepa API Key Not Set</div>
-                            <div className="small">Add your key to <code>backend/.env</code>: <code>KEEPA_API_KEY=your_key_here</code></div>
-                            <a href="https://keepa.com/#!api" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-warning rounded-pill mt-2 d-inline-flex align-items-center gap-1">
-                                Get Keepa API Key <ExternalLink size={11} />
-                            </a>
-                        </div>
-                    </div>
-                )}
-
-                {/* Overview KPIs */}
-                <div className="mb-4">
-                    <div className="d-flex align-items-center gap-2 mb-3 cursor-pointer" onClick={() => setShowOverview(!showOverview)}>
-                        <div className="p-1.5 bg-primary-subtle text-primary rounded-2"><BarChart2 size={16} /></div>
-                        <h6 className="mb-0 fw-bold text-dark">Seller Intelligence Overview</h6>
-                        <div className="ms-auto text-muted">{showOverview ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
-                    </div>
-
-                    {showOverview && (
-                        <div className="row g-3">
-                            {kpis.map((kpi, i) => (
-                                <div key={i} className="col-md-3">
-                                    <div className="glass-card p-3 d-flex align-items-center gap-3" style={{ borderRadius: '16px' }}>
-                                        <div className="d-flex align-items-center justify-content-center rounded-circle shadow-sm" style={{ width: 40, height: 40, backgroundColor: kpi.color + '15', color: kpi.color }}>
-                                            {kpi.icon}
-                                        </div>
-                                        <div>
-                                            <div className="text-muted text-uppercase fw-700" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{kpi.label}</div>
-                                            <div className="h5 fw-bold mb-0 text-dark">{kpi.value}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Seller list */}
-                <div className="card border-0 shadow-sm mb-5" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-                    <div className="card-header d-flex justify-content-between align-items-center px-4 py-3" style={{ backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                        <h5 className="card-title mb-0 d-flex align-items-center gap-2 text-dark fw-bold" style={{ fontSize: '1.1rem' }}>
-                            <Store size={18} className="text-primary" />
-                            Active Sellers & Inventory
-                            <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-3 ms-2" style={{ fontSize: '11px' }}>
-                                {sellers.length} Sellers Tracking
-                            </span>
-                        </h5>
-                        <button className="btn btn-white btn-sm shadow-sm rounded-pill px-3 border" onClick={loadData}>
-                            <RefreshCw size={13} className={loading ? 'spin me-1' : 'me-1'} /> Refresh Data
-                        </button>
-                    </div>
-
-                    <div className="card-body p-4" style={{ backgroundColor: '#f9fafb' }}>
-                        {sellers.length === 0 && !loading ? (
-                            <div className="text-center text-muted py-5 bg-white rounded-4 border border-dashed">
-                                <Package size={48} className="mb-3 text-muted opacity-25" />
-                                <h6 className="fw-bold">No Sellers Found</h6>
-                                <p className="small mb-0">Add sellers first from the <strong>Sellers</strong> page.</p>
-                            </div>
-                        ) : (
-                            <div className="d-grid gap-3">
-                                {sellers.map(seller => (
-                                    <SellerAsinPanel
-                                        key={seller._id}
-                                        seller={seller}
-                                        onSync={handleSyncSeller}
-                                        syncing={syncingSeller === seller._id}
-                                        refreshKey={refreshKeys[seller._id]}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+      <div style={{ minHeight: '100vh', background: Z.white, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <RefreshCw className="spin" size={48} style={{ color: Z[900], marginBottom: 12 }} />
+        <h5 style={{ color: Z[900], fontWeight: 700 }}>Connecting to Keepa...</h5>
+        <p style={{ color: Z[500] }}>Retrieving operational data streams</p>
+      </div>
     );
+  }
+
+  return (
+    <div style={{ backgroundColor: Z.bg, minHeight: '100vh' }}>
+      <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* ── Professional Header ─── */}
+      <div style={{ background: Z.white, borderBottom: `1px solid ${Z[200]}`, boxShadow: '0 1px 2px rgba(0,0,0,0.03)', padding: '20px 28px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: Z[900], color: Z.white, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: Z.shadow }}>
+                <Zap size={22} />
+              </div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: Z[900], letterSpacing: '-0.02em' }}>
+                ASIN Catalog <span style={{ color: Z[400], fontWeight: 500 }}>Discovery</span>
+              </h1>
+            </div>
+            <p style={{ color: Z[400], fontSize: 13, margin: 0, fontWeight: 500, paddingLeft: 56 }}>
+              Automated inventory monitoring via Keepa SDK • Auto-discovery active
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {tokenStatus && (
+              <div className="d-none d-md-flex" style={{ flexDirection: 'column', alignItems: 'flex-end', marginRight: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: Z[400] }}>API Quota</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: Z[900] }}>
+                  {tokenStatus.tokensLeft?.toLocaleString()} <span style={{ fontSize: 10, color: Z[400] }}>Left</span>
+                </div>
+              </div>
+            )}
+            <button
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: Z[900], color: Z.white, border: 'none', borderRadius: 22, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: Z.shadow, transition: 'all 0.15s', height: 44 }}
+              onClick={handleSyncAll}
+              disabled={syncingAll}
+              onMouseEnter={e => e.currentTarget.style.background = Z[700]}
+              onMouseLeave={e => e.currentTarget.style.background = Z[900]}
+            >
+              <RefreshCw size={16} className={syncingAll ? 'spin' : ''} />
+              Sync All Sellers
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '0 28px' }}>
+        {/* ── Alert banners ─── */}
+        {alert && (
+          <div style={{
+            background: alert.type === 'danger' ? '#fef2f2' : '#ecfdf5',
+            color: alert.type === 'danger' ? '#991b1b' : '#065f46',
+            borderRadius: 14,
+            padding: '14px 20px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontWeight: 600,
+            fontSize: 14,
+            boxShadow: Z.shadow,
+            animation: 'fadeIn 0.3s ease'
+          }}>
+            <div style={{ background: 'rgba(255,255,255,0.5)', borderRadius: '50%', padding: 6, display: 'flex' }}>
+              <AlertTriangle size={16} />
+            </div>
+            {alert.msg}
+          </div>
+        )}
+
+        {keepaKeyMissing && (
+          <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', borderRadius: 16, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, boxShadow: Z.shadow }}>
+            <div style={{ background: Z.white, borderRadius: '50%', padding: 14, boxShadow: Z.shadow }}>
+              <AlertTriangle size={24} style={{ color: '#d97706' }} />
+            </div>
+            <div>
+              <h6 style={{ fontWeight: 700, margin: '0 0 4px 0', color: '#92400e' }}>Keepa API Configuration Required</h6>
+              <p style={{ fontSize: 13, margin: '0 0 8px 0', color: '#92400e' }}>Connect your Keepa account to enable automatic ASIN tracking across your seller accounts.</p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <a href="https://keepa.com/#!api" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: '#d97706', color: Z.white, borderRadius: 20, fontWeight: 700, padding: '6px 16px', fontSize: 12, textDecoration: 'none', boxShadow: Z.shadow }}>
+                  Get API Access
+                </a>
+                <code style={{ background: Z.white, padding: '4px 12px', borderRadius: 8, border: `1px solid ${Z[200]}`, fontSize: 12 }}>KEEPA_API_KEY=•••</code>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Intelligence Overview KPIs ─── */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, padding: '0 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 6, background: Z[900], color: Z.white, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <BarChart2 size={13} />
+              </div>
+              <h6 style={{ margin: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: Z[500] }}>Fleet Intelligence Overview</h6>
+            </div>
+            <button
+              style={{ background: 'none', border: 'none', color: Z[400], fontWeight: 700, fontSize: 11, cursor: 'pointer', textDecoration: 'none', padding: 0, transition: 'color 0.15s' }}
+              onClick={() => setShowOverview(!showOverview)}
+              onMouseEnter={e => e.currentTarget.style.color = Z[900]}
+              onMouseLeave={e => e.currentTarget.style.color = Z[400]}
+            >
+              {showOverview ? 'HIDE DETAILS' : 'SHOW DETAILS'}
+            </button>
+          </div>
+
+          {showOverview && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              {kpiData.map((kpi, i) => (
+                <TrackerKPI key={i} title={kpi.title} value={kpi.value} subtitle={kpi.subtitle} Icon={kpi.Icon} accentColor={kpi.color} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Seller Catalog List ─── */}
+        <div style={{ borderRadius: 16, overflow: 'hidden', border: `1px solid ${Z[200]}`, background: Z.white, boxShadow: Z.shadow, marginBottom: 40 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: Z.white, borderBottom: `1px solid ${Z[200]}` }}>
+            <div>
+              <h5 style={{ margin: 0, fontWeight: 700, color: Z[900], display: 'flex', alignItems: 'center', gap: 10, fontSize: '1rem' }}>
+                <Store size={18} style={{ color: '#6366f1' }} />
+                Managed Sellers
+                <span style={{ background: Z[100], color: Z[500], border: `1px solid ${Z[200]}`, fontSize: 11, padding: '3px 12px', borderRadius: 20, fontWeight: 600, marginLeft: 4 }}>
+                  {sellers.length} active
+                </span>
+              </h5>
+            </div>
+            <button
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: Z.white, border: `1px solid ${Z[200]}`, borderRadius: 20, padding: '6px 16px', fontSize: 12, fontWeight: 600, color: Z[700], cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'all 0.15s' }}
+              onClick={loadData}
+              onMouseEnter={e => { e.currentTarget.style.background = Z[50]; e.currentTarget.style.boxShadow = Z.shadow; }}
+              onMouseLeave={e => { e.currentTarget.style.background = Z.white; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}
+            >
+              <RefreshCw size={13} className={loading ? 'spin' : ''} /> Refresh Catalog
+            </button>
+          </div>
+
+          <div style={{ padding: 16, background: Z[50] }}>
+            {sellers.length === 0 && !loading ? (
+              <div style={{ textAlign: 'center', padding: '48px 0', background: Z.white, borderRadius: 16, border: `2px dashed ${Z[200]}` }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: '50%', background: Z[50], border: `1px solid ${Z[100]}`, marginBottom: 16 }}>
+                  <Store size={32} style={{ color: Z[300] }} />
+                </div>
+                <h5 style={{ color: Z[900], fontWeight: 700, marginBottom: 4 }}>Connect your first seller</h5>
+                <p style={{ color: Z[500], fontSize: 13, marginBottom: 20 }}>You haven't added any Amazon sellers to monitor yet.</p>
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#6366f1', color: Z.white, border: 'none', borderRadius: 22, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: Z.shadow }}>
+                  <Plus size={16} /> Add New Seller
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {sellers.map(seller => (
+                  <SellerAsinPanel
+                    key={seller._id}
+                    seller={seller}
+                    onSync={handleSyncSeller}
+                    syncing={syncingSeller === seller._id}
+                    refreshKey={refreshKeys[seller._id]}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default SellerAsinTrackerPage;

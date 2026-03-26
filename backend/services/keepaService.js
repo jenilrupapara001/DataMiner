@@ -6,25 +6,16 @@
 
 const KEEPA_API_BASE = 'https://api.keepa.com';
 
-// Marketplace → Keepa domain ID mapping
+// Marketplace → Keepa domain ID mapping (Strictly Amazon India)
 const MARKETPLACE_TO_DOMAIN = {
-    'amazon.in': 10,
-    'amazon.com': 1,
-    'amazon.co.uk': 3,
-    'amazon.de': 4,
-    'amazon.fr': 5,
-    'amazon.ca': 6,
-    'amazon.it': 8,
-    'amazon.es': 9,
-    'amazon.co.jp': 25,
-    'amazon.com.au': 26,
+    'amazon.in': 10
 };
 
 /**
  * Get Keepa domain ID for a marketplace string
  */
 const getDomainId = (marketplace) => {
-    return MARKETPLACE_TO_DOMAIN[marketplace] || 10; // default to amazon.in
+    return 10; // strictly amazon.in
 };
 
 /**

@@ -489,14 +489,27 @@ export const asinApi = {
     if (!res.ok) throw new Error('Failed to delete ASIN');
     return res.json();
   },
+
+  generateImages: async (id) => {
+    const res = await fetch(`${API_BASE}/asins/${id}/generate-images`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to generate AI images');
+    }
+    return res.json();
+  },
 };
 
 
 const REVENUE_API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/revenue`;
 
 export const dashboardApi = {
-  getSummary: async (period = '30d') => {
-    const res = await fetch(`${API_BASE}/dashboard?period=${period}`, {
+  getSummary: async (params = {}) => {
+    const query = typeof params === 'string' ? `period=${params}` : new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/dashboard?${query}`, {
       headers: { ...getAuthHeader() },
     });
     if (!res.ok) throw new Error('Failed to fetch dashboard data');

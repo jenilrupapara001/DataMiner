@@ -3,9 +3,9 @@ import DataTable from '../components/DataTable';
 import ListView from '../components/common/ListView';
 import ProgressBar from '../components/common/ProgressBar';
 import KPICard from '../components/KPICard';
+import EmptyState from '../components/common/EmptyState';
 import { sellerApi, asinApi, authApi, userApi } from '../services/api';
 import {
-  Store,
   CheckCircle2,
   PauseCircle,
   Package,
@@ -22,7 +22,8 @@ import {
   Pause,
   LayoutGrid,
   List,
-  AlertCircle
+  AlertCircle,
+  Store
 } from 'lucide-react';
 
 const SellersPage = () => {
@@ -251,13 +252,13 @@ const SellersPage = () => {
             <p className="text-muted small mb-0">Monitor and manage your connected storefronts</p>
           </div>
           <div className="d-flex gap-2">
-            <button className="btn btn-white btn-sm shadow-sm border d-flex align-items-center gap-2" onClick={() => setShowImportModal(true)}>
-              <FileUp size={16} />
-              <span>Import CSV</span>
+            <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
+              <FileUp size={16} className="text-zinc-500" />
+              <span className="fw-bold text-zinc-700">Import CSV</span>
             </button>
-            <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-4" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-zinc-900 btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-4 rounded-pill" onClick={() => setShowAddModal(true)} style={{ backgroundColor: '#18181B', color: '#fff' }}>
               <Plus size={16} />
-              <span>Add Seller</span>
+              <span className="fw-bold">Add Seller</span>
             </button>
           </div>
         </div>
@@ -266,11 +267,12 @@ const SellersPage = () => {
 
         {/* Tabs and Search */}
         <div className="d-flex justify-content-between align-items-center mb-4 px-1">
-          <div className="nav-pills-container bg-white p-1 rounded-3 shadow-sm d-inline-flex border">
+          <div className="nav-pills-container bg-zinc-50 p-1 rounded-pill shadow-sm d-inline-flex border border-zinc-200">
             {['all', 'active', 'paused'].map(tab => (
               <button
                 key={tab}
-                className={`btn btn-sm px-4 rounded-2 border-0 transition-all ${activeTab === tab ? 'bg-primary text-white shadow-sm' : 'text-muted'}`}
+                className={`btn btn-sm px-4 rounded-pill border-0 transition-all fw-bold ${activeTab === tab ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+                style={activeTab === tab ? { backgroundColor: '#18181B' } : {}}
                 onClick={() => setActiveTab(tab)}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -422,7 +424,12 @@ const SellersPage = () => {
                 </button>
               </>
             )}
-            emptyMessage="No sellers found. Add a seller to get started."
+            emptyState={{
+              icon: Store,
+              title: 'No sellers yet',
+              description: 'Add your first Amazon seller account to start tracking performance.',
+              action: { label: 'Add Seller', onClick: () => setShowAddModal(true) }
+            }}
           />
         </div>
       </div>
@@ -492,8 +499,8 @@ const AddSellerModal = ({ onClose, onSave, isAdmin }) => {
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '20px' }}>
           <div className="modal-header border-0 px-4 pt-4 pb-0">
-            <h5 className="h5 fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-              <div className="p-2 bg-primary-subtle text-primary rounded-3">
+            <h5 className="h5 fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
+              <div className="p-2 bg-zinc-100 text-zinc-900 rounded-3 border border-zinc-200">
                 <Plus size={20} />
               </div>
               Add New Seller
@@ -520,13 +527,10 @@ const AddSellerModal = ({ onClose, onSave, isAdmin }) => {
                   <select
                     className="form-select form-control-lg bg-light border-0 px-3 fs-6"
                     value={formData.marketplace}
-                    onChange={(e) => setFormData({ ...formData, marketplace: e.target.value })}
-                    style={{ borderRadius: '12px' }}
+                    disabled={true}
+                    style={{ borderRadius: '12px', cursor: 'not-allowed' }}
                   >
                     <option value="amazon.in">Amazon India (IN)</option>
-                    <option value="amazon.com">Amazon US (US)</option>
-                    <option value="amazon.uk">Amazon UK (UK)</option>
-                    <option value="amazon.de">Amazon Germany (DE)</option>
                   </select>
                 </div>
                 <div className="col-md-6 mb-4">
@@ -575,8 +579,8 @@ const AddSellerModal = ({ onClose, onSave, isAdmin }) => {
               </div>
             </div>
             <div className="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
-              <button type="button" className="btn btn-white fw-bold px-4" onClick={onClose} style={{ borderRadius: '12px' }}>Cancel</button>
-              <button type="submit" className="btn btn-primary fw-bold px-4" style={{ borderRadius: '12px' }}>
+              <button type="button" className="btn btn-white fw-bold px-4 border border-zinc-200 rounded-pill" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-zinc-900 fw-bold px-4 rounded-pill shadow-sm" style={{ backgroundColor: '#18181B', color: '#fff' }}>
                 Create Store
               </button>
             </div>
@@ -614,8 +618,13 @@ HomeEssentials,amazon.com,A2B3C4D5E6F7,oct_xxx456`;
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="modal-dialog">
         <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title"><i className="bi bi-file-earmark-arrow-up me-2"></i>Import Sellers from CSV</h5>
+          <div className="modal-header border-0 px-4 pt-4 pb-0">
+            <h5 className="h5 fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
+              <div className="p-2 bg-zinc-100 text-zinc-900 rounded-3 border border-zinc-200">
+                <FileUp size={20} />
+              </div>
+              Import Sellers
+            </h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <div className="modal-body">
@@ -624,8 +633,9 @@ HomeEssentials,amazon.com,A2B3C4D5E6F7,oct_xxx456`;
               Upload a CSV file with columns: Name, Marketplace, Seller ID, API Key
             </div>
             <div className="mb-3">
-              <button className="btn btn-outline-primary btn-sm mb-2" onClick={downloadTemplate}>
-                <i className="bi bi-download me-1"></i>Download Template
+              <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={downloadTemplate}>
+                <Plus size={14} className="text-zinc-500" />
+                <span className="fw-bold text-zinc-700">Download Template</span>
               </button>
             </div>
             <div className="mb-3">
@@ -639,10 +649,11 @@ HomeEssentials,amazon.com,A2B3C4D5E6F7,oct_xxx456`;
               ></textarea>
             </div>
           </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleImport} disabled={!csvData.trim()}>
-              <i className="bi bi-file-earmark-check me-2"></i>Import
+          <div className="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
+            <button type="button" className="btn btn-white fw-bold px-4 border border-zinc-200 rounded-pill" onClick={onClose}>Cancel</button>
+            <button className="btn btn-zinc-900 fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2" onClick={handleImport} disabled={!csvData.trim()} style={{ backgroundColor: '#18181B', color: '#fff' }}>
+              <ShieldCheck size={16} />
+              Import Data
             </button>
           </div>
         </div>
@@ -710,18 +721,21 @@ const SellerAsinsModal = ({ seller, asins, onClose, onAddAsin, onDeleteAsin }) =
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="modal-dialog modal-lg">
         <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">
-              <i className="bi bi-box-seam me-2"></i>
-              ASINs - {seller.name}
+          <div className="modal-header border-0 px-4 pt-4 pb-0">
+            <h5 className="h5 fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
+              <div className="p-2 bg-zinc-100 text-zinc-900 rounded-3 border border-zinc-200">
+                <Package size={20} />
+              </div>
+              ASIN Inventory - {seller.name}
             </h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
           <div className="modal-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <span className="text-muted">{asins.length} ASINs</span>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowAddAsinModal(true)}>
-                <i className="bi bi-plus-lg me-1"></i>Add ASIN(s)
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <span className="text-zinc-400 smallest fw-bold uppercase">{asins.length} ASINs Cataloged</span>
+              <button className="btn btn-zinc-900 btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-3 rounded-pill" onClick={() => setShowAddAsinModal(true)} style={{ backgroundColor: '#18181B', color: '#fff' }}>
+                <Plus size={16} />
+                <span className="fw-bold">Add ASIN(s)</span>
               </button>
             </div>
             <div className="table-responsive">
@@ -762,11 +776,12 @@ const SellerAsinsModal = ({ seller, asins, onClose, onAddAsin, onDeleteAsin }) =
                         </td>
                         <td>
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn btn-icon btn-white border border-zinc-200 shadow-sm btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                            style={{ width: '28px', height: '28px' }}
                             onClick={() => onDeleteAsin(asin._id)}
                             title="Delete"
                           >
-                            <i className="bi bi-trash"></i>
+                            <Trash2 size={12} className="text-zinc-400" />
                           </button>
                         </td>
                       </tr>
@@ -776,8 +791,8 @@ const SellerAsinsModal = ({ seller, asins, onClose, onAddAsin, onDeleteAsin }) =
               </table>
             </div>
           </div>
-          <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose}>Close</button>
+          <div className="modal-footer border-0 px-4 pb-4 pt-0">
+            <button className="btn btn-white fw-bold px-4 border border-zinc-200 rounded-pill" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>
@@ -787,8 +802,13 @@ const SellerAsinsModal = ({ seller, asins, onClose, onAddAsin, onDeleteAsin }) =
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
           <div className="modal-dialog">
             <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title"><i className="bi bi-plus-circle me-2"></i>Add ASIN(s)</h5>
+              <div className="modal-header border-0 px-4 pt-4 pb-0">
+                <h5 className="h5 fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
+                  <div className="p-2 bg-zinc-100 text-zinc-900 rounded-3 border border-zinc-200">
+                    <Plus size={20} />
+                  </div>
+                  Add Product Identifiers
+                </h5>
                 <button type="button" className="btn-close" onClick={() => setShowAddAsinModal(false)}></button>
               </div>
               <div className="modal-body">
@@ -811,13 +831,13 @@ const SellerAsinsModal = ({ seller, asins, onClose, onAddAsin, onDeleteAsin }) =
                   )}
                 </div>
               </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowAddAsinModal(false)} disabled={isSubmitting}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleBulkAddAsins} disabled={!newAsinsText.trim() || isSubmitting}>
+              <div className="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
+                <button className="btn btn-white fw-bold px-4 border border-zinc-200 rounded-pill" onClick={() => setShowAddAsinModal(false)} disabled={isSubmitting}>Cancel</button>
+                <button className="btn btn-zinc-900 fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2" onClick={handleBulkAddAsins} disabled={!newAsinsText.trim() || isSubmitting} style={{ backgroundColor: '#18181B', color: '#fff' }}>
                   {isSubmitting ? (
-                    <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Adding...</>
+                    <><RefreshCw size={16} className="spin" /> Adding...</>
                   ) : (
-                    <><i className="bi bi-plus-lg me-2"></i>Add {newAsinsText.split(/[\n,]+/).filter(a => a.trim().length > 0).length || ''} ASIN(s)</>
+                    <><Plus size={16} /> Add {newAsinsText.split(/[\n,]+/).filter(a => a.trim().length > 0).length || ''} ASIN(s)</>
                   )}
                 </button>
               </div>

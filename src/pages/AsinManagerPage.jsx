@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import KPICard from '../components/KPICard';
 import ProgressBar from '../components/common/ProgressBar';
+import EmptyState from '../components/common/EmptyState';
 import octoparseService from '../services/octoparseService';
 import { db } from '../services/db';
 import { asinApi, marketSyncApi } from '../services/api';
@@ -26,35 +27,33 @@ import {
   IndianRupee,
   ChevronRight,
   TrendingDown,
-  Trash2
+  Trash2,
+  Sparkles,
+  Image
 } from 'lucide-react';
 
-// Helper function to generate week labels with date stamps
-const generateWeekColumns = (history) => {
-  if (!history || history.length === 0) return ['W1'];
+// Helper to generate tiered structure for history columns
+const generateHistoryStructure = (history) => {
+  if (!history || history.length === 0) return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
 
-  // Sort by date if available
-  const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  return sorted.map((item, idx) => {
-    if (item.date) {
-      const date = new Date(item.date);
-      return `W${idx + 1}\n${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`;
-    }
-    return `W${idx + 1}`;
+  // 1. Group by Week
+  const groups = {};
+  [...history].sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(item => {
+    // Extract week label (e.g., "W45" from "W45-2024")
+    const weekLabel = item.week ? item.week.split('-')[0] : 'W?';
+    if (!groups[weekLabel]) groups[weekLabel] = [];
+    groups[weekLabel].push(item);
   });
-};
 
-// Helper to get week label short format
-const getWeekLabel = (week, index) => {
-  if (week.includes('\n')) {
-    return week.split('\n')[0];
-  }
-  return week;
+  // 2. Format structure for rendering
+  return Object.keys(groups).map(week => ({
+    label: week,
+    dates: groups[week].map(d => ({
+      raw: d.date,
+      label: new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+    }))
+  }));
 };
-
-// Week columns for table headers
-const WEEK_COLUMNS = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'];
 
 // Helper function for week history badges
 const getWeekHistoryBadge = (value, type) => {
@@ -319,12 +318,20 @@ const AsinManagerPage = () => {
     ];
   }, [asins, stats]);
 
-  const weekColumns = useMemo(() => {
-    if (asins.length > 0 && asins[0]?.weekHistory) {
-      return generateWeekColumns(asins[0].weekHistory);
+  const historyStructure = useMemo(() => {
+    if (asins.length > 0) {
+      // Find the ASIN with the most history to determine columns
+      const sample = asins.sort((a, b) => (b.weekHistory?.length || 0) - (a.weekHistory?.length || 0))[0];
+      if (sample && sample.weekHistory) {
+        return generateHistoryStructure(sample.weekHistory);
+      }
     }
-    return ['W1'];
+    return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
   }, [asins]);
+
+  const totalHistoryCols = useMemo(() => {
+    return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
+  }, [historyStructure]);
 
   const handleSync = useCallback(async () => {
     if (!newAsin.trim()) {
@@ -397,6 +404,32 @@ const AsinManagerPage = () => {
     } catch (err) {
       console.error('Task creation failed:', err);
       alert('Failed to create tasks: ' + err.message);
+    }
+  };
+
+  const handleGenerateAiImages = async (asinId, asinCode) => {
+    try {
+      if (!window.confirm(`Generate AI lifestyle images for ASIN ${asinCode}? This uses Nvidia NIM (SD3 Medium).`)) return;
+      
+      setScrapingIds(prev => new Set(prev).add(asinId));
+      const res = await asinApi.generateImages(asinId);
+      
+      if (res.success) {
+        alert(`✅ AI Image Generated!\nView it at: ${res.imageUrl}`);
+        // Refresh ASIN data to show updated action status if needed
+        loadAsins();
+      } else {
+        alert(`❌ Generation failed: ${res.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('AI Image generation failed:', err);
+      alert('AI Generation Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setScrapingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(asinId);
+        return newSet;
+      });
     }
   };
 
@@ -508,24 +541,24 @@ const AsinManagerPage = () => {
 
   // Collapsible Section Component
   const CollapsibleSection = ({ title, icon: Icon, isOpen, onToggle, children, badge }) => (
-    <div className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+    <div className="card mb-4 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--zinc-200)' }}>
       <div
         className="card-header d-flex justify-content-between align-items-center cursor-pointer px-4 py-3"
         onClick={onToggle}
-        style={{ cursor: 'pointer', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
+        style={{ cursor: 'pointer', backgroundColor: '#fff', borderBottom: '1px solid var(--zinc-200)' }}
       >
-        <h5 className="card-title mb-0 d-flex align-items-center gap-2" style={{ color: '#111827', fontWeight: 600 }}>
+        <h5 className="card-title mb-0 d-flex align-items-center gap-2" style={{ color: 'var(--zinc-900)', fontWeight: 600 }}>
           <div className="p-2 bg-primary-subtle text-primary rounded-3">
             <Icon size={18} />
           </div>
           {title}
-          {badge && <span className="badge rounded-pill bg-primary shadow-sm ms-2">{badge}</span>}
+          {badge && <span className="badge rounded-pill bg-primary shadow-sm ms-2" style={{ fontSize: '10px' }}>{badge}</span>}
         </h5>
-        <button className="btn btn-sm btn-light rounded-circle shadow-sm p-1">
-          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <button className="btn btn-sm btn-light rounded-circle p-1 border-0 shadow-none hover-bg-light">
+          {isOpen ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
         </button>
       </div>
-      {isOpen && <div className="card-body px-4 pb-4 pt-2" style={{ backgroundColor: '#fff' }}>{children}</div>}
+      {isOpen && <div className="card-body px-4 pb-4 pt-4" style={{ backgroundColor: '#fff' }}>{children}</div>}
     </div>
   );
 
@@ -555,19 +588,42 @@ const AsinManagerPage = () => {
     );
   }
 
+  if (asins.length === 0) {
+    return (
+      <div className="container-fluid p-0">
+        <header className="main-header" style={{ padding: '1.5rem 2rem', background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+          <h1 className="page-title mb-0 d-flex align-items-center gap-2" style={{ fontSize: '1.75rem', fontWeight: 700 }}>
+            <Scan className="text-primary" size={28} />
+            ASIN Manager
+          </h1>
+        </header>
+        <div className="page-content">
+          <EmptyState
+            icon={Package}
+            title="No ASINs tracked"
+            description="Add ASINs to start monitoring listings, LQS scores, and performance metrics."
+            action={{ label: 'Add ASINs', onClick: () => setShowAddModal(true) }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div className="page-header">
+    <div className="page-container pb-5">
+      <div className="page-header mb-4">
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="page-title mb-1">
-              <Scan className="text-primary" size={24} />
-              ASIN <span className="text-primary">Performance</span> Manager
-            </h1>
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <div className="p-2 bg-primary-subtle text-primary rounded-3">
+                <Scan size={20} />
+              </div>
+              <h1 className="page-title mb-0">ASIN Manager</h1>
+            </div>
             <p className="text-muted small mb-0">Operational Inventory tracking & Listing Quality Metrics</p>
           </div>
           <div className="d-flex align-items-center gap-3">
-            <div className="btn-group p-1 bg-white border shadow-sm rounded-pill">
+            <div className="btn-group p-1 bg-white border border-zinc-200 shadow-sm rounded-pill">
               <button className="btn btn-sm px-3 rounded-pill border-0 transition-all btn-primary shadow-sm" style={{ fontSize: '11px', fontWeight: '600' }}>
                 <TrendingUp size={12} className="me-1" /> Performance
               </button>
@@ -575,8 +631,8 @@ const AsinManagerPage = () => {
                 <Table size={12} className="me-1" /> Analytics
               </button>
             </div>
-            <button className="btn btn-primary btn-sm d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm" onClick={() => setShowAddModal(true)}>
-              <Plus size={16} /> Add ASIN
+            <button className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 py-2 shadow-sm border-0" onClick={() => setShowAddModal(true)} style={{ fontWeight: '600' }}>
+              <Plus size={18} /> Add ASIN
             </button>
           </div>
         </div>
@@ -647,73 +703,87 @@ const AsinManagerPage = () => {
           {/* Performance Summary Cards */}
           <div className="row g-4 mb-4">
             <div className="col-lg-4">
-              <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-                <div className="card-header bg-white border-0 pt-4 px-4 pb-0">
-                  <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
-                    <div className="p-2 bg-success-subtle text-success rounded-3"><IndianRupee size={16} /></div>
-                    Price Dynamics
-                  </h6>
-                </div>
-                <div className="card-body px-4 pb-4">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">Average Price</span>
-                    <span className="fw-bold">₹{(stats?.avgPrice || 0).toLocaleString()}</span>
+              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex align-items-center gap-3 mb-4">
+                    <div className="p-2 bg-success-subtle text-success rounded-3"><IndianRupee size={20} /></div>
+                    <div>
+                      <h6 className="mb-0 fw-bold text-zinc-900">Price Dynamics</h6>
+                      <p className="text-muted smallest mb-0">Historical listing trends</p>
+                    </div>
                   </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">Highest Recorded</span>
-                    <span className="fw-bold text-success">₹{Math.max(...asins.map(a => a.currentPrice || 0)).toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span className="text-muted small">Lowest Entry</span>
-                    <span className="fw-bold text-danger">₹{Math.min(...asins.map(a => a.currentPrice || 0)).toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-lg-4">
-              <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-                <div className="card-header bg-white border-0 pt-4 px-4 pb-0">
-                  <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
-                    <div className="p-2 bg-primary-subtle text-primary rounded-3"><BarChart2 size={16} /></div>
-                    Algorithm Visibility
-                  </h6>
-                </div>
-                <div className="card-body px-4 pb-4">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">Average BSR</span>
-                    <span className="fw-bold">#{(stats?.avgBSR || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">Best Performer</span>
-                    <span className="fw-bold text-primary">#{Math.min(...asins.map(a => a.currentRank || 9999999)).toLocaleString()}</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span className="text-muted small">Tracking Pool</span>
-                    <span className="fw-bold">{stats?.total || 0} Active ASINs</span>
+                  
+                  <div className="space-y-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Average Price</span>
+                      <span className="fw-bold text-zinc-900">₹{(stats?.avgPrice || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Highest Recorded</span>
+                      <span className="fw-bold text-success">₹{(Math.max(...asins.map(a => a.currentPrice || 0), 0)).toLocaleString()}</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Lowest Entry</span>
+                      <span className="fw-bold text-danger">₹{(Math.min(...asins.map(a => a.currentPrice || 0), Infinity) === Infinity ? 0 : Math.min(...asins.map(a => a.currentPrice || 0))).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+            
             <div className="col-lg-4">
-              <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-                <div className="card-header bg-white border-0 pt-4 px-4 pb-0">
-                  <h6 className="mb-0 fw-bold d-flex align-items-center gap-2">
-                    <div className="p-2 bg-warning-subtle text-warning rounded-3"><Zap size={16} /></div>
-                    Optimization Index
-                  </h6>
+              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex align-items-center gap-3 mb-4">
+                    <div className="p-2 bg-primary-subtle text-primary rounded-3"><BarChart2 size={20} /></div>
+                    <div>
+                      <h6 className="mb-0 fw-bold text-zinc-900">Algorithm Visibility</h6>
+                      <p className="text-muted smallest mb-0">BSR & Category performance</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Average BSR</span>
+                      <span className="fw-bold text-zinc-900">#{(stats?.avgBSR || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Best Performer</span>
+                      <span className="fw-bold text-primary">#{(Math.min(...asins.map(a => a.currentRank || 9999999), 9999999) === 9999999 ? 0 : Math.min(...asins.map(a => a.currentRank || 9999999))).toLocaleString()}</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Tracking Pool</span>
+                      <span className="fw-bold text-zinc-900">{stats?.total || 0} Active ASINs</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="card-body px-4 pb-4">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">A+ Content Adoption</span>
-                    <span className="fw-bold">{asins.filter(a => a.hasAPlus).length} / {asins.length}</span>
+              </div>
+            </div>
+
+            <div className="col-lg-4">
+              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex align-items-center gap-3 mb-4">
+                    <div className="p-2 bg-warning-subtle text-warning rounded-3"><Zap size={20} /></div>
+                    <div>
+                      <h6 className="mb-0 fw-bold text-zinc-900">Optimization Index</h6>
+                      <p className="text-muted smallest mb-0">A+ Content & Media Assets</p>
+                    </div>
                   </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-muted small">Avg Description</span>
-                    <span className="fw-bold">{Math.round(asins.reduce((sum, a) => sum + (a.descLength || 0), 0) / (asins.length || 1))} chars</span>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <span className="text-muted small">Avg Media Assets</span>
-                    <span className="fw-bold">{Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / (asins.length || 1))} imgs</span>
+
+                  <div className="space-y-3">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">A+ Content Adoption</span>
+                      <span className="fw-bold text-zinc-900">{asins.filter(a => a.hasAPlus).length} / {asins.length}</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Avg Description</span>
+                      <span className="fw-bold text-zinc-900">{Math.round(asins.reduce((sum, a) => sum + (a.descLength || 0), 0) / (asins.length || 1))} chars</span>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-zinc-500 small">Avg Media Assets</span>
+                      <span className="fw-bold text-zinc-900">{Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / (asins.length || 1))} imgs</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -721,43 +791,43 @@ const AsinManagerPage = () => {
           </div>
         </CollapsibleSection>
 
-        {/* Collapsible ASIN Table */}
-        <div className="card border-0 shadow-sm mb-5" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-          <div className="card-header d-flex justify-content-between align-items-center px-4 py-3" style={{ backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-            <h5 className="card-title mb-0 d-flex align-items-center gap-2 text-dark fw-bold" style={{ fontSize: '1.1rem' }}>
+        {/* Inventory & Performance Ledger Table */}
+        <div className="card border-zinc-200 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--zinc-200)' }}>
+          <div className="card-header d-flex justify-content-between align-items-center px-4 py-3" style={{ backgroundColor: '#fff', borderBottom: '1px solid var(--zinc-200)' }}>
+            <h5 className="card-title mb-0 d-flex align-items-center gap-2 text-zinc-900 fw-bold" style={{ fontSize: '1.1rem' }}>
               <Table size={18} className="text-primary" />
               Inventory & Performance Ledger
-              <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle smallest px-3 ms-2">
+              <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle smallest px-3 ms-2" style={{ fontWeight: 600 }}>
                 {asins.length} Active SKUs
               </span>
             </h5>
             <button
-              className="btn btn-sm btn-light shadow-sm rounded-circle p-1"
+              className="btn btn-sm btn-light p-1 border-0 shadow-none hover-bg-light"
               onClick={() => setShowTable(!showTable)}
             >
-              {showTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {showTable ? <ChevronUp size={20} className="text-muted" /> : <ChevronDown size={20} className="text-muted" />}
             </button>
           </div>
           {showTable && (
             <div className="card-body p-0" style={{ backgroundColor: '#fff' }}>
-              <div className="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom bg-light-subtle">
+              <div className="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom bg-zinc-50">
                 <div className="d-flex align-items-center gap-2">
-                  <div className="input-group input-group-sm rounded-pill overflow-hidden border shadow-sm" style={{ width: '300px' }}>
+                  <div className="input-group input-group-sm rounded-pill overflow-hidden border border-zinc-200 shadow-sm" style={{ width: '320px', backgroundColor: '#fff' }}>
                     <span className="input-group-text bg-white border-0 text-muted ps-3"><Search size={14} /></span>
                     <input type="text" className="form-control border-0 ps-0" placeholder="Search ASIN, SKU or Product..." style={{ fontSize: '13px' }} />
                   </div>
                 </div>
                 <div className="d-flex gap-2">
-                  <button className="btn btn-outline-success btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm rounded-pill px-3" onClick={handleBulkCreateActions} disabled={asins.length === 0}>
-                    <Zap size={14} /> Create Actions for Needed ASINs
+                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={handleBulkCreateActions} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
+                    <Zap size={14} className="text-amber-500" /> Actions
                   </button>
-                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border rounded-pill px-3" onClick={() => console.log('Export CSV')}>
-                    <Download size={14} className="text-primary" /> Export CSV
+                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={() => console.log('Export CSV')} style={{ fontSize: '12px' }}>
+                    <Download size={14} className="text-primary" /> Export
                   </button>
-                  <button className="btn btn-outline-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm rounded-pill px-3" onClick={handleBulkScrape} disabled={asins.length === 0}>
-                    <RefreshCw size={14} /> Scrape All
+                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={handleBulkScrape} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
+                    <RefreshCw size={14} className="text-zinc-500" /> Scrape All
                   </button>
-                  <button className="btn btn-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm rounded-pill px-3" onClick={() => loadData()}>
+                  <button className="btn btn-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border-0 rounded-pill px-3 py-1.5" onClick={() => loadData()} style={{ fontSize: '12px' }}>
                     <RefreshCw size={14} /> Sync All
                   </button>
                 </div>
@@ -768,50 +838,59 @@ const AsinManagerPage = () => {
                 <table className="table table-bordered table-hover mb-0 w-100" style={{ fontSize: '0.8rem', minWidth: '1200px' }}>
                   <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
                     <tr>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>ASIN</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Seller ID</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>SKU</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Category</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', minWidth: '180px' }}>Product</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Price</th>
-                      <th colSpan={weekColumns.length || 1} style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 600, textAlign: 'center', padding: '0.5rem', borderBottom: '2px solid #c7d2fe' }}>Price by Week</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 600, borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>BSR</th>
-                      <th colSpan={weekColumns.length || 1} style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '2px solid #bbf7d0', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>ASIN</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Seller ID</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>SKU</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Category</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', minWidth: '180px' }}>Product</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Price</th>
+                      <th colSpan={totalHistoryCols} style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #c7d2fe', fontSize: '12px', textTransform: 'uppercase' }}>Price by Week</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>BSR</th>
+                      <th colSpan={totalHistoryCols} style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #bbf7d0', fontSize: '10px', textTransform: 'uppercase' }}>
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           <BarChart2 size={12} /> BSR by Week
                         </div>
                       </th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 600, borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Rating</th>
-                      <th colSpan={weekColumns.length || 1} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '2px solid #fde68a', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Rating</th>
+                      <th colSpan={totalHistoryCols} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #fde68a', fontSize: '10px', textTransform: 'uppercase' }}>
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           <Star size={12} /> Rating by Week
                         </div>
                       </th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 600, borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>Reviews</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 600, borderBottom: '2px solid #e2e8f0', padding: '0.75rem 1rem', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>5★/1★ Split</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>LQS</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Buy Box</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>A+</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Images</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Bullets</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Desc Len</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Status</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Last Scraped</th>
-                      <th rowSpan="2" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Actions</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Reviews</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>5/1 Split</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>LQS</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Buy Box</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>A+</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Images</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Bullets</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Status</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Scraped</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Actions</th>
                     </tr>
                     <tr>
-                      {/* Price by Week headers */}
-                      {weekColumns.length > 0 ? weekColumns.map(week => (
-                        <th key={`price-${week}`} style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 500, fontSize: '0.7rem', padding: '0.5rem 0.25rem', border: '1px solid #c7d2fe', textAlign: 'center' }}>{week}</th>
-                      )) : <th style={{ backgroundColor: '#e0e7ff', color: '#3730a3', padding: '0.5rem', border: '1px solid #c7d2fe', textAlign: 'center' }}>-</th>}
-                      {/* BSR by Week headers */}
-                      {weekColumns.length > 0 ? weekColumns.map(week => (
-                        <th key={`bsr-${week}`} style={{ backgroundColor: '#dcfce7', color: '#166534', fontWeight: 500, fontSize: '0.7rem', padding: '0.5rem 0.25rem', border: '1px solid #bbf7d0', textAlign: 'center' }}>{week}</th>
-                      )) : <th style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '0.5rem', border: '1px solid #bbf7d0', textAlign: 'center' }}>-</th>}
-                      {/* Rating by Week headers */}
-                      {weekColumns.length > 0 ? weekColumns.map(week => (
-                        <th key={`rating-${week}`} style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 500, fontSize: '0.7rem', padding: '0.5rem 0.25rem', border: '1px solid #fde68a', textAlign: 'center' }}>{week}</th>
-                      )) : <th style={{ backgroundColor: '#fef3c7', color: '#92400e', padding: '0.5rem', border: '1px solid #fde68a', textAlign: 'center' }}>-</th>}
+                      {/* Week Group Headers */}
+                      {historyStructure.map(week => (
+                        <th key={`week-price-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#ebf0ff', color: '#4338ca', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #c7d2fe' }}>{week.label}</th>
+                      ))}
+                      {historyStructure.map(week => (
+                        <th key={`week-bsr-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #bbf7d0' }}>{week.label}</th>
+                      ))}
+                      {historyStructure.map(week => (
+                        <th key={`week-rating-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #fde68a' }}>{week.label}</th>
+                      ))}
+                    </tr>
+                    <tr>
+                      {/* Date Sub-headers */}
+                      {historyStructure.map(week => week.dates.map((date, idx) => (
+                        <th key={`date-price-${week.label}-${idx}`} style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #c7d2fe', textAlign: 'center' }}>{date.label}</th>
+                      )))}
+                      {historyStructure.map(week => week.dates.map((date, idx) => (
+                        <th key={`date-bsr-${week.label}-${idx}`} style={{ backgroundColor: '#dcfce7', color: '#166534', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #bbf7d0', textAlign: 'center' }}>{date.label}</th>
+                      )))}
+                      {historyStructure.map(week => week.dates.map((date, idx) => (
+                        <th key={`date-rating-${week.label}-${idx}`} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #fde68a', textAlign: 'center' }}>{date.label}</th>
+                      )))}
                     </tr>
                   </thead>
                   <tbody>
@@ -839,26 +918,52 @@ const AsinManagerPage = () => {
                           {asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
                         </td>
                         {/* Price by Week columns */}
-                        {weekColumns.length > 0 ? weekColumns.map((week, idx) => {
-                          const wData = asin.weekHistory?.find(w => w.week === week);
+                        {historyStructure.map(week => week.dates.map((date, idx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toDateString() === new Date(date.raw).toDateString());
                           return (
-                            <td key={`price-${idx}`} style={{ backgroundColor: '#f5f3ff', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td key={`price-${week.label}-${idx}`} style={{ backgroundColor: '#f5f3ff', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
                               {wData && wData.price ? getWeekHistoryBadge(wData.price, 'price') : '-'}
                             </td>
                           );
-                        }) : <td style={{ padding: '0.5rem', textAlign: 'center', border: '1px solid #e5e7eb' }}>-</td>}
-                        <td style={{ fontWeight: 600, color: '#2563eb', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.currentRank ? `#${asin.currentRank.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
+                        }))}
+                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
+                          <div className="d-flex flex-column align-items-center">
+                            <span style={{ fontWeight: 600, color: '#2563eb' }}>
+                              {asin.currentRank ? `#${asin.currentRank.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
+                            </span>
+                            {asin.subBSRs && asin.subBSRs.length > 0 && (
+                              <div className="mt-1 d-flex flex-column gap-1 w-100">
+                                {asin.subBSRs.map((sub, idx) => (
+                                  <span key={idx} className="smallest text-muted text-center" style={{ fontSize: '0.65rem', lineHeight: '1.2' }}>
+                                    #{sub}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         {/* BSR by Week columns */}
-                        {weekColumns.length > 0 ? weekColumns.map((week, idx) => {
-                          const wData = asin.weekHistory?.find(w => w.week === week);
+                        {historyStructure.map(week => week.dates.map((date, idx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toDateString() === new Date(date.raw).toDateString());
                           return (
-                            <td key={`bsr-${idx}`} style={{ backgroundColor: '#f0fdf4', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                              {wData && wData.bsr ? getWeekHistoryBadge(wData.bsr, 'number') : '-'}
+                            <td key={`bsr-${week.label}-${idx}`} style={{ backgroundColor: '#f0fdf4', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {wData && wData.bsr ? (
+                                <div className="d-flex flex-column align-items-center">
+                                  {getWeekHistoryBadge(wData.bsr, 'number')}
+                                  {wData.subBSRs && wData.subBSRs.length > 0 && (
+                                    <div className="mt-1 d-flex flex-column gap-1 w-100">
+                                      {wData.subBSRs.map((sub, sIdx) => (
+                                        <span key={sIdx} className="smallest text-muted text-center" style={{ fontSize: '0.6rem', lineHeight: '1.2' }}>
+                                          #{sub}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : '-'}
                             </td>
                           );
-                        }) : <td style={{ padding: '0.5rem', textAlign: 'center', border: '1px solid #e5e7eb' }}>-</td>}
+                        }))}
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
                           {asin.rating ? (
                             <div className="d-flex align-items-center justify-content-center gap-1">
@@ -868,14 +973,14 @@ const AsinManagerPage = () => {
                           ) : <span style={{ color: '#9ca3af', display: 'block', textAlign: 'center' }}>-</span>}
                         </td>
                         {/* Rating by Week columns */}
-                        {weekColumns.length > 0 ? weekColumns.map((week, idx) => {
-                          const wData = asin.weekHistory?.find(w => w.week === week);
+                        {historyStructure.map(week => week.dates.map((date, idx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toDateString() === new Date(date.raw).toDateString());
                           return (
-                            <td key={`rating-${idx}`} style={{ backgroundColor: '#fffbeb', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td key={`rating-${week.label}-${idx}`} style={{ backgroundColor: '#fffbeb', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
                               {wData && wData.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
                             </td>
                           );
-                        }) : <td style={{ padding: '0.5rem', textAlign: 'center', border: '1px solid #e5e7eb' }}>-</td>}
+                        }))}
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
                           {asin.reviewCount ? asin.reviewCount.toLocaleString() : <span style={{ color: '#9ca3af' }}>-</span>}
                         </td>
@@ -943,6 +1048,17 @@ const AsinManagerPage = () => {
                             >
                               <Plus size={12} /> Create Task
                             </button>
+                            {asin.imagesCount < 7 && (
+                              <button
+                                className="btn btn-sm btn-warning rounded-pill d-flex align-items-center gap-1"
+                                style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem', whiteSpace: 'nowrap', backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}
+                                onClick={() => handleGenerateAiImages(asin._id, asin.asinCode)}
+                                disabled={scrapingIds.has(asin._id)}
+                              >
+                                {scrapingIds.has(asin._id) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
+                                AI Image
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1051,7 +1167,7 @@ const AsinManagerPage = () => {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 };
 

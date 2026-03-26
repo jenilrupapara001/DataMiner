@@ -1,240 +1,203 @@
-# GMS Report Dashboard - Technical Documentation
+# GMS Report: Enterprise E-commerce Intelligence Platform
 
-A comprehensive Business Intelligence (BI) dashboard for Amazon sellers, featuring OKR tracking, task management, ASIN analytics, and AI-powered goal generation.
+[![Tech Stack](https://img.shields.io/badge/Stack-MERN-blue.svg)](https://mongodb.com)
+[![Design](https://img.shields.io/badge/Design-Zinc%20%2F%20Pristine%20White-lightgrey.svg)](https://tailwindcss.com)
+[![AI Powered](https://img.shields.io/badge/AI-NVIDIA%20NIM%20%2F%20Perplexity-orange.svg)](https://www.nvidia.com/en-us/ai-data-science/generative-ai/)
 
----
-
-## 🛠️ System Architecture
-
-The project follows a MERN stack architecture with a clear separation of concerns:
-- **Backend**: Node.js/Express.js with MongoDB (Mongoose)
-- **Frontend**: React 19 (Vite) with Bootstrap 5 and Tailwind CSS 4
-- **Real-time**: Socket.io for notifications and Server-Sent Events (SSE) for task updates
-- **AI**: Perplexity (Sonar model) for OKR and task suggestion
+A state-of-the-art Business Intelligence (BI) and Inventory Management system designed explicitly for high-volume Amazon India sellers. The platform combines real-time advertising analytics, automated ASIN discovery, and AI-driven goal generation into a unified, high-performance dashboard.
 
 ---
 
-## 🧪 Function Documentation
+## 🏗️ System Architecture
 
-### 👤 Authentication & User Management
+The GMS Report platform is built on a modern MERN stack with a service-oriented backend and a component-driven frontend using the **Zinc Design System**.
 
-#### `backend/models/User.js`
-- **`comparePassword(candidatePassword)`**: Verifies if the provided password matches the hashed password in the database.
-- **`incLoginAttempts()`**: Increments failed login counts and locks the account for 30 minutes after 5 failures.
-- **`getPermissions()`**: Retrieves all permissions associated with the user's role.
-- **`hasPermission(permissionName)`**: Checks if the user has a specific permission.
-- **`hasAnyPermission(permissionNames)`**: Checks if the user has at least one of the specified permissions.
-
-#### `backend/controllers/authController.js`
-- **`generateTokens(userId)`**: Generates both Access and Refresh JWT tokens for a user session.
-- **`register(req, res)`**: Handles user registration, role assignment (defaulting to 'viewer'), and token generation.
-- **`login(req, res)`**: Validates credentials, checks for account locks, and establishes a session.
-- **`refreshToken(req, res)`**: Validates a refresh token and issues a new access token.
-- **`logout(req, res)`**: Invalidates the user's refresh token.
-- **`getMe(req, res)`**: Returns the currently authenticated user's profile and permissions.
-
-#### `backend/controllers/userController.js`
-- **`getUsers(req, res)`**: Fetches users with pagination, search, and role filtering.
-- **`getUser(req, res)`**: Retrieves a single user with populated role and assigned sellers.
-- **`createUser(req, res)`**: Admin-only function to create new users with specific roles and seller access.
-- **`updateUser(req, res)`**: Updates user details with hierarchical role checks (prevents low-level users from editing high-level ones).
-- **`toggleUserStatus(req, res)`**: Activates or deactivates a user account.
-- **`resetUserPassword(req, res)`**: Resets a user's password with administrative oversight.
+```mermaid
+graph TD
+    Client[React 19 Frontend] <--> API[Express.js API Gateway]
+    API <--> Auth[JWT / RBAC Middleware]
+    API <--> MongoDB[(MongoDB / Mongoose)]
+    
+    subgraph "External Services"
+        API <--> Keepa[Keepa Amazon SDK]
+        API <--> NIM[NVIDIA NIM Image Gen]
+        API <--> PPLX[Perplexity AI OKR]
+        API <--> Comet[CometChat Messaging]
+    end
+    
+    subgraph "Internal Services"
+        API --> Ingestion[Ads Ingestion Engine]
+        API --> Aggregation[Analytics Aggregator]
+        API --> Scraping[Puppeteer/Axios Scraper]
+    end
+```
 
 ---
 
-### 📦 ASIN Tracking & Analytics
+## 🚀 Key Modules & Features
 
-#### `backend/models/Asin.js`
-- **`updateWeekHistory(weekData)`**: Adds or updates a weekly performance snapshot (Price, BSR, LQS). Keeps the last 12 weeks.
-- **`getTrends()`**: Calculates week-on-week changes and percentage shifts for all core metrics.
+### 1. Ads Intelligence & Ingestion
+*   **Case-Insensitive Mapping**: Robust CSV ingestion supporting 34+ performance headers.
+*   **Real-time Attribution**: Immediate calculation of ROAS, ACoS, and Spend Velocity.
+*   **Granular Filtering**: Unified Month/Year and Custom Range selectors across all analytical views.
 
-#### `backend/controllers/asinController.js`
-- **`getAsins(req, res)`**: Retrieves ASINs with pagination and data isolation (Brand Managers only see their assigned sellers).
-- **`getAllAsinsWithHistory(req, res)`**: Special endpoint for dashboard visualizations, returning all ASINs with historical data.
-- **`getAsinTrends(req, res)`**: Returns calculated WoW trends for a specific product.
-- **`updateWeekHistory(req, res)`**: Manually triggers a week-snapshot update for an ASIN.
-- **`getAsinStats(req, res)`**: Aggregates dashboard-level statistics (Avg Price, Avg LQS, Buy Box Won count).
-- **`searchAsins(req, res)`**: Performs index-optimized searches across the ASIN catalog.
+### 2. SKU & Parent ASIN Analytics
+*   **Direct Aggregation**: Real-time MongoDB aggregation pipelines mapping `AdsPerformance` to `Master` unit data.
+*   **Marketplace Lock**: Standardized for `amazon.in` with INR (₹) currency formatting.
 
-#### `backend/services/feeCalculationEngine.js`
-- **`calculateFBAFee(weight, dimensions, category)`**: Logic for determining Amazon FBA fees based on size tier and product type.
-- **`calculateReferralFee(price, category)`**: Determines percentage-based referral fees per category.
+### 3. AI Automation (Goal & Image Gen)
+*   **OKR Generation**: Integrated Perplexity AI to transform business intent into structured weekly execution plans.
+*   **NVIDIA SD3 Integration**: Automated lifestyle image generation for product listings with low image counts.
 
----
-
-### 🎯 OKR & Strategic Management
-
-#### `backend/services/ObjectiveService.js`
-- **`createObjective(data, user)`**: Handles Objective creation. If marked as `MONTHLY`, it can trigger `generateWeeklyBreakdown`.
-- **`generateWeeklyBreakdown(parentObjective, user)`**: Automatically splits a Monthly Objective into 4 Weekly Key Results with default execution tasks.
-- **`getObjectivesHierarchy(filter, user)`**: Recursively fetches Objectives -> Key Results -> Actions with strict multi-tenancy isolation.
-- **`refreshProgress(objectiveId)`**: Recalculates Objective progress (0-100%) based on the weighted completion of its Key Results.
-- **`deleteObjective(id, userId)`**: Cascading delete for an objective and all its descendant KRs and Actions.
-
-#### `backend/controllers/objectiveController.js`
-- **`getObjectives(req, res)`**: Main entry point for the OKR tree view, handling complex visibility logic for non-admin users.
-- **`createKeyResult(req, res)`**: Adds a measurable Key Result to an existing Objective and refreshes parent progress.
-- **`updateKeyResult(req, res)`**: Updates KR metrics and triggers a progress refresh on the parent Objective.
+### 4. Inventory & P&L Control
+*   **Profit Reconciliation**: Automated SKU-level profit calculation including FBA fees and referral commissions.
+*   **Health Monitoring**: Real-time BSR and LQS tracking via Keepa SDK.
 
 ---
 
-### ✅ Action & Task Management
+## 🛠️ Core Workflows
 
-#### `backend/models/Action.js`
-- **`startTask()`**: Transitions status to `IN_PROGRESS` and initializes time tracking.
-- **`submitForReview(data)`**: Moves task to `REVIEW` stage, captures remarks, and stops the active timer.
-- **`completeTask(data)`**: Finalizes the task, updating status to `COMPLETED` and recording final metrics.
-- **`reviewTask(reviewerId, decision, comments)`**: Admin function to Approve or Reject a task. Rejection resets the status to `PENDING`.
-- **`calculateNextOccurrence()`**: For recurring tasks, determines the next scheduled date based on the set interval.
-- **`createRecurringInstance(parentAction)`**: Static method that spawns a new `Action` based on a completed recurring task.
+### Data Ingestion Flow (Ads Performance)
+```mermaid
+sequenceDiagram
+    participant User
+    participant FE as Frontend (AdsReport)
+    participant BE as Backend (uploadController)
+    participant DB as MongoDB (AdsPerformance)
 
-#### `backend/routes/actionRoutes.js` (Route Handlers)
-- **`POST /:id/complete`**: Validates task state and calls `action.completeTask()`. Handles recurring logic if enabled.
-- **`POST /:id/submit-review`**: Supports multipart/form-data for audio file uploads and transitions task to `REVIEW`.
-- **`POST /analyze-asin/:asinId`**: Uses industry logic to suggest relevant optimization tasks for a specific product.
-- **`GET /reports/goal-achievement`**: Generates a duration analysis report comparing estimated vs actual task completion times.
+    User->>FE: Upload ads.csv
+    FE->>BE: POST /api/upload/ads-data (Multipart)
+    BE->>BE: Parse CSV & Normalize Headers
+    BE->>BE: Validate Date Formats & Numeric Scrubbing
+    BE->>DB: Bulk Upsert (ASIN + Date key)
+    BE->>FE: Success Response + Ingest Summary
+    FE->>User: Update Dashboard Charts
+```
 
----
-
-### 🤖 AI Services
-
-#### `backend/services/AIService.js`
-- **`generateOKR(prompt, type, industry)`**: Communicates with Perplexity AI to turn a simple goal (e.g., "Improve electronics sales") into a structured OKR tree.
-- **`suggestTasks(context)`**: Generates 5 high-priority improvement tasks based on a specific Objective or Key Result title.
-- **`_cleanJSON(text)`**: Helper function to resiliently parse JSON from LLM responses, stripping markdown artifacts.
-
----
-
-### � Real-time Services
-
-#### `backend/services/socketService.js`
-- **`init(server)`**: Initializes the Socket.io instance with CORS configuration.
-- **`emitToUser(userId, event, data)`**: Targeted real-time delivery to specific users (e.g., Notifications).
-- **`emitToRoom(room, event, data)`**: Broadcasts updates to shared contexts like Task Chats.
-
-#### `backend/services/cometChatService.js`
-- **`syncUserToCometChat(user)`**: Syncs MongoDB users to CometChat for messaging.
-- **`syncSellerToCometChat(seller)`**: Creates CometChat users for Sellers to enable vendor communication.
-- **`sanitizeUid(id)`**: Utility to ensure UIDs are compatible with CometChat's strict format.
+### AI Execution Flow (OKRs & Tasks)
+```mermaid
+sequenceDiagram
+    participant User
+    participant AI as Perplexity AI Service
+    participant Task as Task Manager (Actions)
+    
+    User->>User: Clicks "Generate with AI"
+    User->>AI: Business Intent (e.g. "Increase Electronics Sales")
+    AI->>AI: Structure into OKRs (Hierarchy)
+    AI->>Task: Create Pending Actions + Timeline
+    Task->>User: Display Execution Roadmap
+```
 
 ---
 
-### �🔗 Frontend Data Layer (`src/services/db.js`)
-
-The `DatabaseService` class acts as the single source for all API interactions.
-
-- **`request(path, options, fallback)`**: Standardized wrapper for `fetch` that handles JWT header injection, 401 redirection, and error logging.
-- **`login(email, password)`**: Handles authentication and persists user session to `localStorage`.
-- **`getAsins(params)`**: Fetches ASIN data with support for filtering by seller or category.
-- **`startAction(id)`**: Triggers the backend task timer.
-- **`submitActionForReview(id, formData)`**: Submits task completion data, handling both JSON and multipart (audio) payloads.
-- **`reviewAction(id, decision, comments)`**: Submits admin approval/rejection for a task in review.
-- **`generateAIOKR(params)`**: Bridge to the backend AI generation endpoint.
-- **`getSystemLogs()`**: Fetches administrative activity logs for the audit trail.
-
----
-
-## �️ Scripts & Utilities
-
-#### Data Synchronization
-- **`node backend/scripts/sync_all.js`**: 
-  - **Purpose**: Full sync of all Users and Sellers from MongoDB to CometChat.
-  - **Usage**: Run manually after bulk database updates or migrations.
-
-#### Data Integrity
-- **`node backend/scripts/fix_linkage.js`**: 
-  - **Purpose**: Scans and repairs broken relationships between ASINs and Sellers.
-  - **Usage**: Run if ASINs disappear from the dashboard.
-
-### 🛠️ Vercel Deployment Note
-If you encounter `Running "vercel build"` errors with `Missing script: "build"`, Vercel is likely detecting the `backend` folder as the project root.
-
-**Resolution:**
-1. Go to your Vercel Project Settings > **General**.
-2. Locate the **Root Directory** setting.
-3. Ensure it is set to `.` (the project root) and NOT `backend`.
-4. Redeploy.
-
-### 🛠️ Render Deployment Troubleshooting
-If you see `Error: Cannot find module '/opt/render/project/src/backend/eslint.config.js'`, it means Render is running the wrong start command.
-
-**Resolution:**
-1. Go to Render Dashboard > **Settings**.
-2. **Root Directory**: Ensure it is set to `backend`.
-3. **Start Command**: Ensure it is `node server.js` (NOT `npm start` or `node .`).
-4. **Build Command**: Ensure it is `npm install`.
-
----
-
-### 🚀 Backend Deployment (Render)
-To support Socket.io and Cron jobs, deploy the backend to [Render](https://render.com).
-
-1.  **Select "Web Service"** and connect your GitHub repo.
-2.  **Configuration**:
-    - **name**: `gms-backend`
-    - **Region**: Same as CometChat (e.g., Singapore/US)
-    - **Root Directory**: `backend` (Important!)
-    - **Build Command**: `npm install`
-    - **Start Command**: `node server.js`
-3.  **Environment Variables**:
-    - copy all values from `backend/.env`
-    - Add `FRONTEND_URL`: `https://retail-ops-black.vercel.app`
-
-### 🔗 Frontend Connection
-After Render deploys, copy the **onrender.com** URL.
-
-1.  Go to **Vercel Project Settings > Environment Variables**.
-2.  Add `VITE_API_URL` with value: `https://your-app-name.onrender.com/api` (ensure `/api` suffix is added if your backend expects it, but our refactor handles the base URL). *Correction*: Our code appends `/api`, so just the base URL `https://your-app-name.onrender.com` or if `server.js` routes are at root... checking code... `api.js` appends `/api`. Wait, `server.js` mounts at `/api`.
-    - **Actually**: The code uses `VITE_API_URL` as the base. If `VITE_API_URL` is set, it uses it.
-    - **Value**: `https://your-app-name.onrender.com/api` (The code logic is `import.meta.env.VITE_API_URL || 'http://localhost:3001/api'`).
-3.  **Redeploy Frontend** on Vercel.
-
----
-
-## 🚦 Getting Started
+## ⚙️ Installation & Setup
 
 ### Prerequisites
-- Node.js v18+
-- MongoDB v5+
+*   **Node.js**: v18.0.0+
+*   **MongoDB**: v6.0+ (Atlas or Local)
+*   **Package Manager**: npm or yarn
 
-### Installation
-1.  **Backend**: `cd backend && npm install`
-2.  **Frontend**: `cd gms-dashboard && npm install`
+### 1. Clone & Install
+```bash
+git clone https://github.com/your-repo/gms-report.git
+cd gms-report
 
-### Run
-1.  **Backend**: `npm start` (Runs on port 3001)
-2.  **Frontend**: `npm run dev` (Runs on port 5173)
+# Install Backend Dependencies
+cd backend
+npm install
 
-### ⚙️ Environment Variables
+# Install Frontend Dependencies
+cd ../gms-dashboard
+npm install
+```
 
-Ensure your `.env` file includes the following for full functionality:
+### 2. Environment Configuration
+Create a `.env` file in the `backend/` directory:
 
 ```env
+# Server
+PORT=3001
+NODE_ENV=development
+
 # Database
-MONGO_URI=mongodb://localhost:27017/easysell
+MONGO_URI=mongodb+srv://... (or localhost)
 
 # Authentication
 JWT_SECRET=your_jwt_secret
 JWT_REFRESH_SECRET=your_refresh_secret
 
-# AI Service
-PERPLEXITY_API_KEY=pplx-xxxxxxxx
+# AI Keys
+PERPLEXITY_API_KEY=pplx-...
+NVIDIA_NIM_API_KEY=nvapi-...
 
-# CometChat (Messaging)
-COMETCHAT_APP_ID=your_app_id
-COMETCHAT_REGION=your_region
-COMETCHAT_AUTH_KEY=your_auth_key
-COMETCHAT_API_KEY=your_api_key
+# E-commerce SDK
+KEEPA_API_KEY=your_keepa_key
+```
+
+### 3. Running Locally
+**Start Backend:**
+```bash
+cd backend
+npm run dev
+```
+
+**Start Frontend:**
+```bash
+cd gms-dashboard
+npm run dev
 ```
 
 ---
 
-## 🔒 Security & RBAC
+## 🎨 Design System: Pristine White
+The platform utilizes a customized **Zinc-based design system** optimized for enterprise clarity.
 
-The system employs a hierarchical Role-Based Access Control system:
-- **Level 100 (Admin)**: Full access to all sellers, user management, and task approval.
-- **Level 50 (Brand Manager)**: Restricted to assigned sellers. Can create/manage tasks within their scope.
-- **Level 10 (Researcher/Assignee)**: Can only see their assigned tasks and progress.
+*   **Primary Palette**: Zinc-900 (Black) / Zinc-500 (Gray) / White.
+*   **Typography**: Inter / Outfit for modern readability.
+*   **Components**: Glassmorphism effects, subtle borders, and high-contrast labels.
 
-All write operations are guarded by the `protect` and `requirePermission` middlewares in the backend.
+---
+
+## 📖 Operational Guides (Step-by-Step)
+
+### 📊 Ads Data Ingestion Workflow
+1.  **Prepare CSV**: Export your advertising report from Amazon Seller Central (Daily breakdown).
+2.  **Upload**: Navigate to **Ads Intelligence** and click the `IMPORT ADS` button.
+3.  **Validation**: The system automatically attempts case-insensitive mapping for headers like `Ad Sales`, `Ad Spend`, `Clicks`, and `Impressions`.
+4.  **Processing**: The backend (`uploadController.js`) performs a `bulkWrite` operation, upserting records based on the unique combination of `ASIN` + `Date`.
+5.  **Attribution**: Once ingested, the **Dashboard** and **SKU Reports** will automatically calculate:
+    *   **ROAS**: `Ad Sales / Ad Spend`
+    *   **ACoS**: `(Ad Spend / Ad Sales) * 100`
+
+### 🔍 SKU Performance Deep-Dive
+1.  **Filter Selection**: Choose a **Month** or **Custom Range** from the global filter.
+2.  **Aggregation**: The `dataController.js` executes a MongoDB aggregation pipeline:
+    *   Matches `Master` unit data for the selected ASINs.
+    *   Lookups `AdsPerformance` data for the exact date range.
+    *   Sums `spend` and `sales` to provide a unified P&L view.
+3.  **Visualization**: The **SKU Intelligence** page displays the result in a high-performance `DataTable` with real-time metric calculation.
+
+### 🖼️ AI Image Generation (NVIDIA NIM)
+1.  **Trigger**: Identify ASINs in the **ASIN Manager** with low image counts (< 7).
+2.  **Generation**: Click "Generate Images". The system sends the product title and attributes to the NVIDIA SD3 API.
+3.  **Storage**: Images are saved in `/uploads/asin_images/[ASIN]/`.
+4.  **Management**: Browse the generated assets in the **File Manager** under the dedicated ASIN folder.
+
+### 🎯 Goal Tracking & Achievement
+1.  **Define Intent**: Enter a natural language goal in the **Action Manager** (e.g., "Improve my ACoS by 5%").
+2.  **AI Decomposition**: Perplexity AI splits the goal into actionable weekly tasks.
+3.  **Execution**: Assign tasks to team members. The system tracks "Time to Complete" vs. "Planned Duration".
+4.  **Reporting**: View the **Goal vs Achievement** report to analyze team efficiency and task variance.
+
+---
+
+## ️ Scripts & Utilities
+Built-in hierarchy for multi-user operations:
+1.  **Admin**: Full platform access + User Management.
+2.  **Brand Manager**: Seller-specific isolation + Campaign control.
+3.  **Assignee**: Task-level access for execution tracking.
+
+---
+
+## 📄 License
+© 2026 Easysell Projects. Confidential and Proprietary.

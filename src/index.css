@@ -2,6 +2,9 @@
    GMS Dashboard - Global Styles & Typography
    ========================================================================== */
 
+/* Design Tokens - Must be at the very top */
+@import './styles/tokens.css';
+
 /* Import Inter font for better typography */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -12,131 +15,115 @@
    CSS Variables - Design System
    ========================================================================== */
 :root {
-  /* Colors - Clean Light Theme */
-  --color-primary: #4F46E5;
-  --color-primary-light: #818CF8;
-  --color-primary-dark: #3730A3;
-  --color-secondary: #0891B2;
-  --color-secondary-light: #22D3EE;
-  --color-secondary-dark: #0E7490;
+  /* Colors - High-End Premium Palette (Vercel/Linear inspired) */
+  --color-primary: #0070F3;
+  --color-primary-light: #3291FF;
+  --color-primary-dark: #0761D1;
+  --color-secondary: #FAFAFA;
+  --color-secondary-light: #FFFFFF;
+  --color-secondary-dark: #EAEAEA;
 
-  /* Semantic Colors */
-  --color-success: #16A34A;
-  --color-success-light: #4ADE80;
-  --color-success-bg: #DCFCE7;
-  --color-warning: #D97706;
-  --color-warning-light: #FBBF24;
-  --color-warning-bg: #FEF3C7;
-  --color-error: #DC2626;
-  --color-error-light: #F87171;
-  --color-error-bg: #FEE2E2;
-  --color-info: #0284C7;
-  --color-info-light: #38BDF8;
-  --color-info-bg: #E0F2FE;
+  /* Semantic Colors - Rich Glossy Tones */
+  --color-success: #50E3C2;
+  --color-success-bg: rgba(80, 227, 194, 0.1);
+  --color-warning: #F5A623;
+  --color-warning-bg: rgba(245, 166, 35, 0.1);
+  --color-error: #EE0000;
+  --color-error-bg: rgba(238, 0, 0, 0.1);
+  --color-info: #0070F3;
+  --color-info-bg: rgba(0, 112, 243, 0.1);
 
-  /* Neutral Colors */
+  /* Neutral Colors - Ultra Dark Zinc */
   --color-white: #FFFFFF;
-  --color-gray-50: #F8FAFC;
-  --color-gray-100: #F1F5F9;
-  --color-gray-200: #E2E8F0;
-  --color-gray-300: #CBD5E1;
-  --color-gray-400: #94A3B8;
-  --color-gray-500: #64748B;
-  --color-gray-600: #475569;
-  --color-gray-700: #334155;
-  --color-gray-800: #1E293B;
-  --color-gray-900: #0F172A;
+  --color-gray-50: #FAFAFA;
+  --color-gray-100: #F4F4F5;
+  --color-gray-200: #E4E4E7;
+  --color-gray-300: #D4D4D8;
+  --color-gray-400: #A1A1AA;
+  --color-gray-500: #71717A;
+  --color-gray-600: #52525B;
+  --color-gray-700: #3F3F46;
+  --color-gray-800: #27272A;
+  --color-gray-900: #18181B;
 
-  /* Background & Surface */
-  --bg-primary: #F8FAFC;
+  /* Premium $100M Light Aesthetic */
+  --bg-primary: #F9FAFB;
   --bg-secondary: #FFFFFF;
-  --bg-tertiary: #F1F5F9;
+  --bg-tertiary: #F3F4F6;
 
-  /* Text Colors */
-  --text-primary: #1E293B;
-  --text-secondary: #475569;
-  --text-tertiary: #64748B;
-  --text-muted: #94A3B8;
+  /* Text Colors - High Contrast Hierarchy */
+  --text-primary: #09090B; /* Zinc 950 */
+  --text-secondary: #52525B; /* Zinc 600 */
+  --text-tertiary: #71717A; /* Zinc 500 */
+  --text-muted: #A1A1AA; /* Zinc 400 */
 
-  /* Borders */
-  --border-color: #E2E8F0;
-  --border-radius-sm: 6px;
+  /* Borders - Hairline Precision */
+  --border-color: #E4E4E7; /* Zinc 200 */
+  --border-radius-sm: 4px;
   --border-radius: 8px;
   --border-radius-lg: 12px;
   --border-radius-xl: 16px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  /* Shadows - Minimalist Glow Elevaton */
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 
-  /* Typography */
+  /* Typography - Precise Type Scale */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 2rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.25rem;
+  --font-size-3xl: 1.5rem;
 
-  /* Spacing */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
+  /* Spacing - Rigid 8px (0.5rem) System */
+  --spacing-xs: 0.25rem;  /* 4px */
+  --spacing-sm: 0.5rem;   /* 8px */
+  --spacing-md: 1rem;    /* 16px */
+  --spacing-lg: 1.5rem;  /* 24px */
+  --spacing-xl: 2rem;    /* 32px */
+  --spacing-2xl: 3rem;   /* 48px */
 
   /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Glassmorphism */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.3);
-  --glass-blur: 12px;
-
-  /* Premium Gradients */
-  --grad-primary: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
-  --grad-secondary: linear-gradient(135deg, #0891B2 0%, #06B6D4 100%);
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
+  /* Surface Accents (Glowing - Light Mode) */
+  --grad-primary: linear-gradient(135deg, #0070F3 0%, #3291FF 100%);
+  --grad-secondary: linear-gradient(135deg, #7928CA 0%, #FF0080 100%);
+  --grad-surface: #F4F4F5;
 }
 
 /* Glassmorphism Utilities */
-.glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
+/* Standard Surface */
+.surface-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
-  transition: all var(--transition-base);
+  transition: border-color var(--transition-base);
 }
 
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.85);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+.surface-card:hover {
+  border-color: var(--color-gray-300);
 }
 
 .stat-pill {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.75rem;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
   background: white;
   border: 1px solid var(--color-gray-100);
-  border-radius: 9999px;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition-fast);
+  border-radius: 4px;
 }
 
 .stat-pill:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow);
+  background: var(--color-gray-50);
 }
 
 .stat-pill-icon {
@@ -166,22 +153,7 @@
   line-height: 1.2;
 }
 
-.quick-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border-radius: 12px;
-  transition: all var(--transition-base);
-  border: 1px solid transparent;
-}
-
-.quick-action-btn:hover {
-  transform: scale(1.02);
-  box-shadow: var(--shadow-md);
-}
+/* Quick Action Button - Replaced by .btn-secondary */
 
 /* ==========================================================================
    Base Styles
@@ -231,10 +203,11 @@ h3,
 h4,
 h5,
 h6 {
-  font-weight: 700;
-  line-height: 1.3;
+  font-weight: 600;
+  line-height: 1.2;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
+  letter-spacing: -0.01e;
 }
 
 h1 {
@@ -259,8 +232,11 @@ h5 {
 }
 
 h6 {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
 }
 
 p {
@@ -1375,6 +1351,39 @@ a:hover {
 }
 
 /* ==========================================================================
+   Animations
+   ========================================================================== */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* ==========================================================================
    Opacity Utilities
    ========================================================================== */
 .opacity-0 {
@@ -1455,12 +1464,7 @@ a:hover {
   opacity: 1;
 }
 
-.glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-}
+/* Legacy glass-card removed */
 
 /* ==========================================================================
    Page Layout Styles
@@ -1567,7 +1571,6 @@ a:hover {
   background-color: var(--bg-tertiary);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow: var(--shadow);
 }
 
 .filters-toggle-btn i:first-child {
@@ -2686,13 +2689,11 @@ a:hover {
   animation: slideUp 0.2s ease-out;
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 16px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+.dropdown-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .dropdown-list {
@@ -2801,10 +2802,129 @@ a:hover {
   }
 }
 
-.glass-element {
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+.standard-ui-element {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   Standardized UI Components (Enterprise Grade)
+   ========================================================================== */
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--border-radius);
+  transition: all var(--transition-base);
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: var(--font-size-xs);
+}
+
+.btn-primary {
+  background-color: var(--color-secondary);
+  color: var(--color-white);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-secondary-light);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background-color: var(--color-white);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--color-gray-50);
+  border-color: var(--color-gray-300);
+}
+
+.btn-danger {
+  background-color: var(--color-error);
+  color: var(--color-white);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--color-gray-100);
+  color: var(--text-primary);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  background-color: var(--color-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: all var(--transition-base);
+  outline: none;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+
+.form-input:disabled,
+.form-select:disabled {
+  background-color: var(--color-gray-50);
+  cursor: not-allowed;
 }
 
 .transition-base {
@@ -2830,4 +2950,28 @@ a:hover {
 .btn-icon-sm:hover:not(:disabled) {
   background: var(--color-gray-100);
   color: var(--color-primary);
+}
+
+/* ==========================================================================
+   Live Alerts ($100M Aesthetic)
+   ========================================================================== */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.5); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(238, 0, 0, 0); }
+  100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(238, 0, 0, 0); }
+}
+
+.pulse-indicator {
+  animation: pulse-ring 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.live-alert-item {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.live-alert-item:hover {
+  border-color: var(--color-border-strong) !important;
+  transform: translateY(-1px);
 }

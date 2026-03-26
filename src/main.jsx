@@ -7,6 +7,17 @@ import "@cometchat/chat-uikit-react/css-variables.css";
 import { CometChatUIKit, UIKitSettingsBuilder } from "@cometchat/chat-uikit-react";
 import { setupLocalization } from "./CometChat/utils/utils";
 import { CometChatProvider } from "./CometChat/context/CometChatContext";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes cache as per requirement
+    },
+  },
+});
 
 export const COMETCHAT_CONSTANTS = {
   APP_ID: "1675623ba4da04e9e",
@@ -25,9 +36,11 @@ CometChatUIKit.init(uiKitSettings)?.then(() => {
   setupLocalization();
   createRoot(document.getElementById('root')).render(
     <BrowserRouter>
-      <CometChatProvider>
-        <App />
-      </CometChatProvider>
+      <QueryClientProvider client={queryClient}>
+        <CometChatProvider>
+          <App />
+        </CometChatProvider>
+      </QueryClientProvider>
     </BrowserRouter>,
   )
 }).catch(err => {
@@ -35,7 +48,9 @@ CometChatUIKit.init(uiKitSettings)?.then(() => {
   // Fallback to normal render if initialization fails
   createRoot(document.getElementById('root')).render(
     <BrowserRouter>
-      <App />
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
     </BrowserRouter>,
   )
 });

@@ -164,7 +164,7 @@ const LoginPage = () => {
                         <p>Don't have an account? <Link to="/register">Sign up</Link></p>
                     </div>
 
-                    <div className="demo-credentials">
+                    {/* <div className="demo-credentials">
                         <p className="demo-title">Demo Accounts:</p>
                         <div className="demo-account">
                             <strong>Admin:</strong> admin@gms.com / admin123
@@ -172,7 +172,7 @@ const LoginPage = () => {
                         <div className="demo-account">
                             <strong>Manager:</strong> sarah.johnson@gms.com / password123
                         </div>
-                    </div>
+                    </div> */}
                 </div>
             </div>
         </div>

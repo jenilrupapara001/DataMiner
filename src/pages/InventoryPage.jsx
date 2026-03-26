@@ -8,7 +8,13 @@ const InventoryPage = () => {
   const [data, setData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ dateRange: 'thisYear', searchTerm: '', status: 'all' });
+  const [filters, setFilters] = useState({ 
+    dateRange: 'month',
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    searchTerm: '', 
+    status: 'all' 
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -88,7 +94,7 @@ const InventoryPage = () => {
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [filters.startDate, filters.endDate]);
 
   const kpis = useMemo(() => {
     const totalUnits = data.reduce((sum, item) => sum + item.quantity, 0);

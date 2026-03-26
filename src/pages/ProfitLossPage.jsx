@@ -8,7 +8,12 @@ const ProfitLossPage = () => {
   const [data, setData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ dateRange: 'thisYear', searchTerm: '' });
+  const [filters, setFilters] = useState({ 
+    dateRange: 'month',
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    searchTerm: '' 
+  });
 
   useEffect(() => {
     const loadData = async () => {
@@ -79,7 +84,7 @@ const ProfitLossPage = () => {
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [filters.startDate, filters.endDate]);
 
   const kpis = useMemo(() => {
     const totalIncome = data.find(d => d.category === 'Total Sales')?.amount || 0;
