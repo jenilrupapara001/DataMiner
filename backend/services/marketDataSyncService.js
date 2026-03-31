@@ -92,39 +92,57 @@ class MarketDataSyncService {
      * @param {string[]} urls Array of full URLs to inject
      */
     async updateTaskUrlsWithFile(taskId, urls) {
+        if (!taskId) throw new Error('Task ID is required for URL injection');
         if (!urls || urls.length === 0) return true;
+        
         const token = await this.authenticate();
         
+        // 1. Normalize and clean URLs (strictly one per line, no duplicates)
+        const uniqueUrls = [...new Set(urls.map(u => u?.trim()).filter(Boolean))];
+        
         try {
-            console.log(`📂 Injecting ${urls.length} URLs via professional file endpoint for task: ${taskId}`);
+            console.log(`📂 Injecting ${uniqueUrls.length} URLs via Octoparse provider endpoint for task: ${taskId}`);
             
-            // Create FormData for multipart upload (Native in Node 18+)
+            // 2. Create FormData and Blob (Standard Multipart approach)
             const formData = new FormData();
             formData.append('taskId', taskId);
             
-            // Create a Blob containing the URLs separated by newlines
-            const blob = new Blob([urls.join('\n')], { type: 'text/plain' });
+            // Standard Octoparse URL file format: one URL per line
+            const blob = new Blob([uniqueUrls.join('\n')], { type: 'text/plain' });
             
-            // Append as 'file' - following Octoparse OpenAPI spec
-            formData.append('file', blob, 'asins.txt');
+            // Field mapping from Official Docs: 'taskId' (string) and 'file' (File)
+            formData.append('file', blob, 'sync_urls.txt');
 
             const response = await axios.post(`${this.baseUrl}/task/urls:file`, formData, {
                 headers: { 
                     'Authorization': `Bearer ${token}`
-                    // Axios v1.x handles Content-Type and boundary automatically for global FormData/Blob
                 }
             });
 
-            console.log(`✅ File-based injection success. RequestID: ${response.data?.requestId}`);
-            return true;
+            // 3. Official Status Handling
+            if (response.data && (response.data.requestId || response.data.data === null)) {
+                console.log(`✅ File-based injection successful. RequestID: ${response.data.requestId}`);
+                return true;
+            }
+            
+            throw new Error(`Unexpected provider response: ${JSON.stringify(response.data)}`);
         } catch (error) {
             const errorData = error.response?.data;
-            console.error('❌ File-based URL Injection Error:', errorData || error.message);
+            const provError = errorData?.error || {};
             
-            // Specific handling for permission issues on this endpoint
-            if (errorData?.error?.code === 'PermissionDenied') {
-                console.warn('⚠️ Professional endpoint restricted. Will likely need Professional/Enterprise plan.');
+            console.error('❌ Octoparse File Injection Error:', {
+                code: provError.code,
+                message: provError.message,
+                requestId: errorData?.requestId || error.response?.headers?.['x-request-id']
+            });
+
+            // Handle specific spec errors
+            if (provError.code === 'PermissionDenied') {
+                console.warn('⚠️ Restricted Feature: File injection requires a Professional or Enterprise account.');
+            } else if (provError.code === 'InvalidTaskId') {
+                console.error('⚠️ The provided Task ID is not recognized by the provider.');
             }
+            
             throw error;
         }
     }
@@ -229,30 +247,15 @@ class MarketDataSyncService {
                 }
             }
 
-            // 2. Start the task in the Cloud using modern POST /cloudextraction/start
-            console.log(`🚀 Starting Octoparse Cloud Extraction: ${taskId}`);
-            const response = await axios.post(`${this.baseUrl}/cloudextraction/start`, {
-                taskId: taskId
-            }, {
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const data = response.data;
-            if (data.error && !data.data?.lotNo) {
-                if (data.message?.includes('running')) {
-                    return { success: true, taskId, lotNo: data.data?.lotNo, status: 'Running' };
-                }
-                throw new Error(`Provider Error: ${data.message || data.error}`);
-            }
+            // 2. Start the task in the Cloud using standalone method
+            console.log(`🚀 Triggering Cloud Task Start: ${taskId}`);
+            const startData = await this.startCloudExtraction(taskId);
 
             return { 
                 success: true, 
                 taskId, 
-                lotNo: data.data?.lotNo,
-                status: data.data?.status || 'Running'
+                lotNo: startData.lotNo,
+                status: startData.status || 'Running'
             };
         } catch (error) {
             console.error('❌ Trigger Sync Error:', error.response?.data || error.message);
@@ -376,19 +379,58 @@ class MarketDataSyncService {
      * Start cloud extraction for a specific task.
      */
     async startCloudExtraction(taskId) {
+        if (!taskId) throw new Error('Task ID is required for cloud extraction');
+        
         const token = await this.authenticate();
         try {
-            console.log(`🚀 Starting Octoparse Cloud Extraction for Task: ${taskId}...`);
+            console.log(`🚀 Starting Cloud Extraction via Octoparse provider endpoint for task: ${taskId}...`);
+            
+            // Standard Octoparse Cloud Extraction Start (POST /cloudextraction/start)
             const response = await axios.post(`${this.baseUrl}/cloudextraction/start`, {
                 taskId: taskId
             }, {
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                headers: { 
+                    'Authorization': `Bearer ${token}`, 
+                    'Content-Type': 'application/json' 
+                }
             });
 
-            return response.data;
+            const responseData = response.data || {};
+            const data = responseData.data || {};
+
+            // Handle "already running" edge case (often returns data: null but success message)
+            if (responseData.message?.toLowerCase().includes('already running')) {
+                console.log(`ℹ️ Task ${taskId} is currently active and running.`);
+                return { 
+                    lotNo: data.lotNo || 'ACTIVE', 
+                    status: data.status || 'running' 
+                };
+            }
+
+            // Official Success Mapping: requestId, data: { lotNo, status }
+            if (data.status || data.lotNo) {
+                console.log(`✅ Cloud extraction sequence started. LotNo: ${data.lotNo}, Status: ${data.status}`);
+                return data;
+            }
+
+            // Handle Errors from Spec
+            if (responseData.error) {
+                const provError = responseData.error || {};
+                console.error('❌ Provider reported an extraction start error:', provError.message);
+                throw new Error(`Extraction Error: ${provError.message || 'Unknown Service Error'}`);
+            }
+
+            return data;
         } catch (error) {
-            console.error('❌ Start Extraction Error:', error.response?.data || error.message);
-            throw error;
+            const errorPayload = error.response?.data || {};
+            const errorMsg = errorPayload.error?.message || error.message;
+            
+            console.error('❌ Octoparse Task Start Error:', {
+                message: errorMsg,
+                code: errorPayload.error?.code,
+                requestId: errorPayload.requestId
+            });
+            throw new Error(`Extraction Launch Failed: ${errorMsg}`);
         }
     }
 
@@ -563,46 +605,63 @@ class MarketDataSyncService {
     }
 
     /**
-     * Get task status.
+     * Get statuses for multiple tasks in a single call (Official V2 Batch API).
+     * @param {string[]} taskIds Array of Task IDs to check.
      */
-    async getStatus(taskId) {
-        // STATUS CACHING: Check if we have a fresh status (under 10 seconds old)
-        const cached = this.statusCache.get(taskId);
-        if (cached && Date.now() - cached.timestamp < 10000) {
-            return cached.data;
-        }
-
+    async getStatuses(taskIds) {
+        if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) return [];
+        
         const token = await this.authenticate();
         try {
-            // Use modern V2 status endpoint
+            console.log(`📊 Batch Status Check for ${taskIds.length} tasks...`);
             const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`, {
-                taskIds: [taskId]
+                taskIds: taskIds
             }, {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
-            
-            const results = response.data?.data || [];
-            const result = results.length > 0 ? results[0] : null;
 
-            // Cache result if valid
-            if (result) {
-                this.statusCache.set(taskId, { data: result, timestamp: Date.now() });
-            }
-            return result;
+            const results = response.data?.data || [];
+            
+            // Cache each status
+            results.forEach(statusObj => {
+                if (statusObj.taskId) {
+                    this.statusCache.set(statusObj.taskId, { data: statusObj, timestamp: Date.now() });
+                }
+            });
+
+            return results;
         } catch (error) {
             const isRateLimit = error.response?.status === 429 || error.message?.includes('TooManyRequests');
-            
             if (isRateLimit) {
-                console.warn(`⚠️ Get Status Rate Limited for task ${taskId}. Returning error indicator...`);
-                return { error: 'RateLimit', message: 'TooManyRequests' };
+                console.warn(`⚠️ Status API Rate Limited (5 req/sec spec)`);
+                return taskIds.map(id => ({ taskId: id, error: 'RateLimit' }));
             }
+            console.error('❌ Octoparse Statuses V2 Batch Error:', error.response?.data || error.message);
+            throw error;
+        }
+    }
 
-            console.error('❌ Get Status Error:', error.response?.data || error.message);
-            
-            // Fallback to legacy status
+    /**
+     * Get task status for a single task.
+     */
+    async getStatus(taskId) {
+        if (!taskId) return null;
+
+        // STATUS CACHING: Check if we have a fresh status (under 10 seconds old)
+        const cached = this.statusCache.get(taskId);
+        if (cached && Date.now() - cached.timestamp < 10000) {
+            return cached.data;
+        }
+
+        try {
+            const results = await this.getStatuses([taskId]);
+            return results.length > 0 ? results[0] : null;
+        } catch (error) {
+            // Fallback to legacy single-task status if Batch/V2 fails
+            const token = await this.authenticate();
             try {
                 const response = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatus`, {
                     params: { taskId },
@@ -694,6 +753,60 @@ class MarketDataSyncService {
     }
 
     /**
+     * Get data that has never been exported (Official Incremental API).
+     * @param {string} taskId 
+     * @param {number} size Range from 1 to 1000
+     */
+    async fetchNonExportedData(taskId, size = 1000) {
+        if (!taskId) return { data: [], total: 0, current: 0 };
+        const token = await this.authenticate();
+
+        try {
+            console.log(`📥 Fetching INCREMENTAL data for task: ${taskId} (Size: ${size})...`);
+            const response = await axios.get(`${this.baseUrl}/data/notexported`, {
+                params: { taskId, size },
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            // Spec: { data: { total, current, data: [...] }, requestId }
+            const result = response.data?.data || {};
+            return {
+                total: result.total || 0,
+                current: result.current || 0,
+                data: result.data || []
+            };
+        } catch (error) {
+            console.error('❌ Fetch Non-Exported Data Error:', error.response?.data || error.message);
+            return { data: [], total: 0, current: 0 };
+        }
+    }
+
+    /**
+     * Mark data as exported so it won't be fetched as "not exported" again.
+     */
+    async markDataAsExported(taskId) {
+        if (!taskId) return false;
+        const token = await this.authenticate();
+
+        try {
+            console.log(`🏷️ Marking task ${taskId} data as exported...`);
+            await axios.post(`${this.baseUrl}/data/markexported`, {
+                taskId: taskId
+            }, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            console.log(`✅ Task ${taskId} successfully marked as exported.`);
+            return true;
+        } catch (error) {
+            console.error('❌ Mark Exported Error:', error.response?.data || error.message);
+            return false;
+        }
+    }
+
+    /**
      * Helper to fetch all available data pages for a task.
      */
     async _fetchAllDataPages(taskId) {
@@ -728,57 +841,90 @@ class MarketDataSyncService {
         console.log(`🕵️ Starting automated monitoring for Seller: ${sellerId}, Task: ${taskId}...`);
         
         let attempts = 0;
-        const maxAttempts = 24; // 24 * 5 mins = 2 hours max
-        const interval = 300000; // 5 minutes
+        const maxAttempts = 50; // Increased to cover more polls
+        
+        // Dynamic Polling Strategy:
+        // - Fast Interval (1m) for first 5 attempts
+        // - Standard Interval (5m) for the rest
+        const FAST_INTERVAL = 60000;
+        const STANDARD_INTERVAL = 300000;
+        const INITIAL_WAIT = 15000;
 
-        // Initial wait - Amazon scrapes never finish in < 2 mins
-        await this.wait(120000); 
+        console.log(`⏳ Monitoring started. First status check in 15 seconds...`);
+        await this.wait(INITIAL_WAIT); 
 
         while (attempts < maxAttempts) {
             try {
                 const statusInfo = await this.getStatus(taskId);
                 
-                // If rate limited, wait a bit longer and continue
                 if (statusInfo?.error === 'RateLimit') {
-                    console.warn(`⏳ Automation Polling Rate Limited for task ${taskId}. Waiting 1 minute...`);
+                    console.warn(`⏳ Polling Rate Limited for task ${taskId}. Waiting 1 minute...`);
                     await this.wait(60000);
                     continue;
                 }
 
-                const status = statusInfo?.status || statusInfo?.Status || statusInfo;
-                
-                // Status 3 = Completed, Status 2 = Failed
-                const isCompleted = status === 3 || status === '3' || status === 'Completed';
+                const status = statusInfo?.status || statusInfo?.Status || statusInfo || 'Unknown';
+                const isCompleted = status === 3 || status === '3' || status === 'Finished' || status === 'Completed';
                 const isFailed = status === 2 || status === '2' || status === 'Failed' || status === 'Stopped';
 
                 if (isCompleted) {
-                    console.log(`✅ Task ${taskId} COMPLETED! Initiating auto-ingestion...`);
-                    const rawData = await this._fetchAllDataPages(taskId);
-                    if (rawData.length > 0) {
-                        const updatedCount = await this.processBatchResults(sellerId, rawData);
-                        console.log(`🎉 Automation Success: ${updatedCount} ASINs auto-updated for seller ${sellerId}.`);
-                    } else {
-                        console.warn(`⚠️ Task ${taskId} completed but no data was found.`);
+                    console.log(`✅ Task ${taskId} COMPLETED! Initiating incremental ingestion...`);
+                    
+                    let totalIngested = 0;
+                    let hasMore = true;
+                    const pageSize = 1000;
+
+                    // Incremental fetch loop (Fetch only what hasn't been exported yet)
+                    while (hasMore) {
+                        const { data, current, total } = await this.fetchNonExportedData(taskId, pageSize);
+                        
+                        if (data && data.length > 0) {
+                            console.log(`📦 Processing chunk of ${data.length} new records (Exported so far: ${current}/${total})...`);
+                            const { count } = await this.processBatchResults(sellerId, data);
+                            totalIngested += count;
+
+                            // Mark this data as exported in Octoparse so we don't get it again
+                            await this.markDataAsExported(taskId);
+                            
+                            // If we didn't get a full page, it might be the end for this run
+                            if (data.length < pageSize) hasMore = false;
+                        } else {
+                            hasMore = false;
+                        }
+
+                        // Safety break to prevent infinite loops
+                        if (totalIngested > 10000) hasMore = false;
                     }
-                    return; // Exit loop on success
+
+                    if (totalIngested > 0) {
+                        console.log(`🎉 Incremental Sync Success: ${totalIngested} ASINs auto-updated for seller ${sellerId}.`);
+                    } else {
+                        console.warn(`⚠️ Task ${taskId} completed but no NEW data was exported.`);
+                    }
+                    return; 
                 }
 
                 if (isFailed) {
                     console.error(`❌ Task ${taskId} FAILED or STOPPED. Automation aborted.`);
-                    return; // Exit loop on failure
+                    return; 
                 }
 
-                console.log(`⏳ [Attempt ${attempts+1}/${maxAttempts}] Task ${taskId} still in progress (Status: ${status}). Checking again in 5m...`);
+                // Determine interval based on attempt count
+                const currentInterval = attempts < 5 ? FAST_INTERVAL : STANDARD_INTERVAL;
+                const nextCheckMins = Math.round(currentInterval / 60000);
+
+                console.log(`⏳ [Attempt ${attempts+1}] Task ${taskId} status: ${status}. Next check in ${nextCheckMins}m...`);
                 
+                await this.wait(currentInterval);
             } catch (err) {
-                console.warn(`⚠️ Automation Polling Error for task ${taskId}:`, err.message);
+                console.warn(`⚠️ Polling Error for task ${taskId}:`, err.message);
+                await this.wait(60000); // Wait 1m on error
             }
 
             attempts++;
-            await this.wait(interval);
         }
 
-        console.warn(`⏰ Automation Timeout: Task ${taskId} did not complete within 2 hours.`);
+        console.warn(`⏰ Automation Timeout: Task ${taskId} did not complete within limit.`);
     }
 
     /**
@@ -991,7 +1137,18 @@ class MarketDataSyncService {
             const seller = await Seller.findById(sellerId).select('marketSyncUrls');
             const syncUrls = seller?.marketSyncUrls || urls;
 
-            await this.updateTaskUrlsWithFile(taskId, syncUrls);
+            try {
+                await this.updateTaskUrlsWithFile(taskId, syncUrls);
+            } catch (injectionError) {
+                console.warn(`⚠️ File-based injection failed for task ${taskId}: ${injectionError.message}. Attempting Loop Item fallback...`);
+                // Fallback: Use standard Loop Items API (UpdateLoopItems)
+                // We send syncUrls directly; the method will handle formatting
+                const fallbackSuccess = await this.updateTaskLoopItems(taskId, syncUrls);
+                if (!fallbackSuccess) {
+                    console.error(`❌ All injection methods failed for task ${taskId}.`);
+                    // We continue anyway so the scrape can optionally try to run with old data or fail later
+                }
+            }
 
             // 5. Trigger Scrape if requested
             if (triggerScrape) {
