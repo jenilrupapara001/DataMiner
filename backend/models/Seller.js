@@ -14,6 +14,7 @@ const sellerSchema = new mongoose.Schema({
   status: { type: String, enum: ['Active', 'Paused'], default: 'Active' },
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   marketSyncTaskId: { type: String },
+  marketSyncUrls: [{ type: String }], // Full Amazon URLs synced to Octoparse
   cometChatUid: { type: String, index: true },
   // Keepa integration fields
   keepaSellerId: { type: String },          // Amazon Seller ID for Keepa (defaults to sellerId)

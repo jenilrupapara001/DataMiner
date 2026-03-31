@@ -1,6 +1,7 @@
 const Seller = require('../models/Seller');
 const Asin = require('../models/Asin');
 const User = require('../models/User');
+const marketDataSyncService = require('../services/marketDataSyncService');
 
 /**
  * Enrich sellers with their assigned managers.
@@ -178,6 +179,12 @@ exports.createSeller = async (req, res) => {
     }
 
     res.status(201).json(seller);
+
+    // BACKGROUND: Automate Octoparse task creation
+    if (marketDataSyncService.isConfigured()) {
+      marketDataSyncService.ensureTaskForSeller(seller._id)
+        .catch(err => console.error(`⚠️ Automation: Failed to ensure task for seller ${seller.name}:`, err.message));
+    }
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ error: 'Seller ID already exists' });
@@ -291,6 +298,12 @@ exports.importSellers = async (req, res) => {
         }
 
         results.imported++;
+
+        // BACKGROUND: Automate Octoparse task creation for imported seller
+        if (marketDataSyncService.isConfigured()) {
+          marketDataSyncService.ensureTaskForSeller(seller._id)
+            .catch(err => console.error(`⚠️ Automation: Failed to ensure task for imported seller ${sellerData.name}:`, err.message));
+        }
       } catch (error) {
         results.errors.push({ seller: sellerData.name, error: error.message });
       }

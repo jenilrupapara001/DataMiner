@@ -28,10 +28,19 @@ const asinSchema = new mongoose.Schema({
   imageUrl: { type: String },
   brand: { type: String },
   manufacturer: { type: String },
+  currentASP: { type: Number, default: 0 },
+  currentPrice: { type: Number, default: 0 }, // Same as currentASP
+  priceType: { type: String, enum: ['Standard Price', 'Deal Price'], default: 'Standard Price' },
+  dealBadge: { type: String, default: 'No deal found' },
+  mrp: { type: Number, default: 0 },
   category: { type: String },
-  currentPrice: { type: Number, default: 0 },
-  currentRank: { type: Number, default: 0 },
+  soldBy: { type: String, default: '' },
+  imageUrl: { type: String }, // Backwards compatibility
+  mainImageUrl: { type: String }, // Modern mapping
+  images: [{ type: String }],
+  imagesCount: { type: Number, default: 0 },
   bsr: { type: Number, default: 0 }, // Main BSR
+  subBSRs: [{ type: String }],
   rating: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   stockLevel: { type: Number, default: 0, index: true },
@@ -42,20 +51,8 @@ const asinSchema = new mongoose.Schema({
     twoStar: { type: Number, default: 0 },
     oneStar: { type: Number, default: 0 },
   },
-  buyBoxPrice: { type: Number, default: 0 },
-  buyBoxSellerId: { type: String },
-  buyBoxWin: { type: Boolean, default: false },
-  couponDetails: { type: String, default: 'None' },
-  dealDetails: { type: String, default: 'None' },
-  totalOffers: { type: Number, default: 0 },
-  imagesCount: { type: Number, default: 0 },
-  hasAplus: { type: Boolean, default: false },
-  lqs: { type: Number, default: 0 },
-  bulletPoints: { type: Number, default: 0 },
-  descLength: { type: Number, default: 0 },
-  subBSRs: [{ type: String }],
-  mrp: { type: Number, default: 0 },
-  currentASP: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 },
+  bulletPoints: { type: Number, default: 0 }, // List count
   // Enhanced Product Details (from Tracker & Calculator)
   weight: { type: Number }, // in grams
   dimensions: { type: String }, // LxWxH
@@ -102,7 +99,7 @@ const asinSchema = new mongoose.Schema({
   },
 
   amazonListedDate: { type: String },
-  status: { type: String, enum: ['Active', 'Pending', 'Scraping', 'Error'], default: 'Active' },
+  status: { type: String, enum: ['Active', 'Pending', 'Scraping', 'Error', 'Paused'], default: 'Active' },
   lastScraped: { type: Date },
 
   // Daily consolidated history
@@ -144,13 +141,13 @@ asinSchema.methods.updateWeekHistory = function (weekData) {
   // Try to find an entry with the exact same date (ignoring time)
   const incomingDate = new Date(weekData.date).toDateString();
   const existingIndex = this.weekHistory.findIndex(w => new Date(w.date).toDateString() === incomingDate);
-  
+
   if (existingIndex >= 0) {
     this.weekHistory[existingIndex] = { ...this.weekHistory[existingIndex].toObject(), ...weekData };
   } else {
     this.weekHistory.push(weekData);
   }
-  
+
   // Sort by date after update
   this.weekHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
 

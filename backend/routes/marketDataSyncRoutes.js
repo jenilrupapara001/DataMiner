@@ -26,7 +26,38 @@ router.post('/sync-all/:sellerId', authenticate, requirePermission('sellers_mana
 // Fetch and apply results for a task
 router.post('/fetch-results/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.fetchAndApplyResults);
 
+// Ingest results from a specific task or latest task execution
+router.post('/ingest-task', authenticate, requirePermission('sellers_manage_asins'), marketSyncController.ingestTaskResults);
+
+// Global ingestion trigger for all sellers
+router.post('/ingest-all', authenticate, requirePermission('admin_manage_users'), marketSyncController.syncAllSellersResults);
+
+// Setup a new Octoparse Sync Task for a seller by duplicating the master template
+router.post('/setup-task/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.setupSellerTask);
+
 // Handle sync data updates (e.g., from webhooks or manual updates)
 router.post('/update', authenticate, requirePermission('sellers_manage_asins'), marketSyncController.handleSyncComplete);
+
+// Task Pool Management
+router.get('/pool-status', authenticate, requirePermission('admin_manage_users'), marketSyncController.getPoolStatus);
+router.post('/pool-tasks', authenticate, requirePermission('admin_manage_users'), marketSyncController.uploadTaskPool);
+
+// Real-time task status for all sellers
+router.get('/tasks', authenticate, requirePermission('admin_manage_users'), marketSyncController.getGlobalSyncTasks);
+
+// Bulk update seller task IDs
+router.post('/bulk-update-tasks', authenticate, requirePermission('admin_manage_users'), marketSyncController.bulkUpdateSellerTasks);
+
+// Bulk inject ASIN URLs into associated Octoparse tasks
+router.post('/bulk-inject-asins', authenticate, requirePermission('admin_manage_users'), marketSyncController.bulkInjectAsinsToTasks);
+
+// Start cloud extraction for a seller's task
+router.post('/start-task/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.startTask);
+
+// Fetch and map results for a seller
+router.post('/sync-results/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.syncResults);
+
+// Bulk inject raw JSON data manually
+router.post('/bulk-inject-json', authenticate, requirePermission('sellers_manage_asins'), marketSyncController.bulkInjectJson);
 
 module.exports = router;

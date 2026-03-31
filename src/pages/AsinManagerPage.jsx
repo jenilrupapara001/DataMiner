@@ -4,7 +4,7 @@ import ProgressBar from '../components/common/ProgressBar';
 import EmptyState from '../components/common/EmptyState';
 import octoparseService from '../services/octoparseService';
 import { db } from '../services/db';
-import { asinApi, marketSyncApi } from '../services/api';
+import { asinApi, marketSyncApi, sellerApi } from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
 import { calculateLQS } from '../utils/lqs';
 import {
@@ -30,7 +30,8 @@ import {
   Trash2,
   Sparkles,
   Image,
-  Eye
+  Eye,
+  Store
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -253,6 +254,8 @@ const AsinManagerPage = () => {
   const socket = useSocket();
   const [selectedAsin, setSelectedAsin] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [sellers, setSellers] = useState([]);
+  const [selectedSellerId, setSelectedSellerId] = useState('');
 
   const handleViewAsin = (asin) => {
     setSelectedAsin(asin);
@@ -298,6 +301,18 @@ const AsinManagerPage = () => {
     });
     return () => socket.off('scrape_progress');
   }, [socket, loadData, pagination.page]);
+
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const response = await sellerApi.getAll();
+        setSellers(response || []);
+      } catch (err) {
+        console.error('Error fetching sellers:', err);
+      }
+    };
+    fetchSellers();
+  }, []);
 
   const kpis = useMemo(() => {
     if (stats) {
@@ -350,9 +365,14 @@ const AsinManagerPage = () => {
       return;
     }
 
+    if (!selectedSellerId) {
+      alert('Please select a target seller association first.');
+      return;
+    }
+
     setSyncing(true);
     try {
-      const asinList = newAsin.split(/[\n,]+/).map(a => a.trim().toUpperCase()).filter(a => a.length > 0);
+      const asinList = newAsin.split(/[,\s]+/).map(a => a.trim().toUpperCase()).filter(a => a.length > 0);
 
       if (asinList.length === 0) {
         alert('No valid ASINs found.');
@@ -362,7 +382,8 @@ const AsinManagerPage = () => {
 
       const asinsPayload = asinList.map(code => ({
         asinCode: code,
-        status: 'Active'
+        status: 'Active',
+        sellerId: selectedSellerId
       }));
 
       // Call the bulk API method
@@ -373,6 +394,7 @@ const AsinManagerPage = () => {
 
       alert(`Successfully added ${asinList.length} ASIN(s) to the tracking pool.`);
       setNewAsin('');
+      setSelectedSellerId('');
       setShowAddModal(false);
 
     } catch (error) {
@@ -381,7 +403,7 @@ const AsinManagerPage = () => {
     } finally {
       setSyncing(false);
     }
-  }, [newAsin, loadData]);
+  }, [newAsin, loadData, selectedSellerId]);
 
   const handleIndividualScrape = async (asinId) => {
     try {
@@ -857,7 +879,7 @@ const AsinManagerPage = () => {
                   <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
                     <tr>
                       <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>ASIN</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Seller ID</th>
+                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Management / Buy Box</th>
                       <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>SKU</th>
                       <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Category</th>
                       <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', minWidth: '180px' }}>Product</th>
@@ -932,7 +954,16 @@ const AsinManagerPage = () => {
                             </button>
                           </div>
                         </td>
-                        <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>{asin.seller?.name || asin.seller || <span style={{ color: '#9ca3af' }}>Global</span>}</td>
+                        <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
+                          <div className="d-flex flex-column" style={{ fontSize: '0.7rem' }}>
+                            <span className="fw-bold text-dark">{asin.seller?.name || asin.seller || <span className="text-muted">Global</span>}</span>
+                            {asin.soldBy && (
+                              <span className="text-primary mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <Store size={10} /> {asin.soldBy}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>{asin.sku || <span style={{ color: '#9ca3af' }}>-</span>}</td>
                         <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', fontSize: '0.75rem', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asin.category || ''}>{asin.category || <span style={{ color: '#9ca3af' }}>-</span>}</td>
                         <td style={{ padding: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>
@@ -954,8 +985,18 @@ const AsinManagerPage = () => {
                               </span>
                           </div>
                         </td>
-                        <td style={{ fontWeight: 600, color: '#059669', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
-                          {asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
+                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
+                          <div className="d-flex flex-column align-items-center">
+                            <span style={{ fontWeight: 600, color: '#059669' }}>
+                              {asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
+                            </span>
+                            {asin.mrp > asin.currentPrice && (
+                              <div className="d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <span className="text-muted text-decoration-line-through">₹{asin.mrp.toLocaleString()}</span>
+                                <span className="text-danger fw-bold">-{Math.round(((asin.mrp - asin.currentPrice) / asin.mrp) * 100)}%</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         {/* Price by Week columns */}
                         {historyStructure.map(week => week.dates.map((date, idx) => {
@@ -1190,10 +1231,27 @@ const AsinManagerPage = () => {
                       className="form-control border shadow-sm"
                       rows="4"
                       style={{ borderRadius: '12px', fontSize: '14px', padding: '12px' }}
-                      placeholder="e.g. B07XYZ123, B07ABC456, B07DEF789"
+                      placeholder="Enter ASINs here (one per line or comma separated)..."
                       value={newAsin}
                       onChange={(e) => setNewAsin(e.target.value)}
                     ></textarea>
+                  </div>
+                  <div className="mt-4">
+                    <label className="form-label fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
+                       <Store size={14} className="text-primary" /> Target Seller Association
+                    </label>
+                    <select 
+                      className="form-select border shadow-sm"
+                      style={{ borderRadius: '12px', fontSize: '14px', padding: '10px' }}
+                      value={selectedSellerId}
+                      onChange={(e) => setSelectedSellerId(e.target.value)}
+                    >
+                      <option value="">Select a seller...</option>
+                      {sellers.map(seller => (
+                        <option key={seller._id} value={seller._id}>{seller.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-muted smallest mt-2 px-1">Mapping these ASINs to a seller ensures correct inventory tracking and performance attribution.</p>
                   </div>
                 </div>
                 <div className="modal-footer border-0 px-4 pb-4 pt-0">

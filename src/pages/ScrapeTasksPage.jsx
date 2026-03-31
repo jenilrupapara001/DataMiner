@@ -1,463 +1,411 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import KPICard from '../components/KPICard';
 import ProgressBar from '../components/common/ProgressBar';
-import { sellerApi, asinApi } from '../services/api';
-import octoparseService from '../services/octoparseService';
+import { marketSyncApi } from '../services/api';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { 
+  Store, 
+  RefreshCcw, 
+  Package, 
+  Percent, 
+  Play, 
+  CloudDownload, 
+  Clock, 
+  CheckCircle, 
+  PauseCircle, 
+  AlertTriangle, 
+  Info,
+  Rocket,
+  Plus
+} from 'lucide-react';
 
 const ScrapeTasksPage = () => {
   const [tasks, setTasks] = useState([]);
-  const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [showResults, setShowResults] = useState(false);
-  const [results, setResults] = useState([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedSellerId, setSelectedSellerId] = useState('');
-  const [scrapeType, setScrapeType] = useState('all');
-  const [creating, setCreating] = useState(false);
-  const [sellerAsins, setSellerAsins] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState({}); // sellerId -> boolean
+  const [bulkSyncing, setBulkSyncing] = useState(false);
+  const pollingInterval = useRef(null);
 
-  const loadTasks = async () => {
-    setLoading(true);
+  const loadSyncTasks = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    else setRefreshing(true);
+    
     try {
-      const response = await octoparseService.getScrapeTasks(1, 50);
-      setTasks(response.tasks);
+      const response = await marketSyncApi.getSyncTasks();
+      setTasks(response.tasks || []);
     } catch (error) {
-      console.error('Failed to load tasks:', error);
-    }
-    setLoading(false);
-  };
-
-  const loadSellers = async () => {
-    try {
-      const response = await sellerApi.getAll();
-      if (response && response.data && Array.isArray(response.data.sellers)) {
-        setSellers(response.data.sellers);
-      } else if (response && Array.isArray(response.sellers)) {
-        setSellers(response.sellers);
-      } else {
-        setSellers([]);
-      }
-    } catch (error) {
-      console.error('Failed to load sellers:', error);
-      setSellers([]);
-    }
-  };
-
-  const loadSellerAsins = async (sellerId) => {
-    try {
-      const asins = await asinApi.getBySeller(sellerId);
-      setSellerAsins(asins);
-    } catch (error) {
-      console.error('Failed to load ASINs:', error);
-      setSellerAsins([]);
+      console.error('Failed to load sync tasks:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    loadTasks();
-    loadSellers();
+    loadSyncTasks();
+    pollingInterval.current = setInterval(() => {
+      loadSyncTasks(false);
+    }, 30000);
+
+    return () => {
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+    };
   }, []);
 
-  const handleCreateTask = async () => {
-    if (!selectedSellerId) return;
+  const handleBulkInject = async () => {
+    if (!window.confirm('This will re-inject all active ASIN URLs into their respective Octoparse tasks. Continue?')) {
+      return;
+    }
 
-    setCreating(true);
+    setBulkSyncing(true);
     try {
-      const seller = sellers.find(s => s._id === selectedSellerId);
-      if (!seller) return;
+      const res = await marketSyncApi.bulkInjectAsins();
+      alert(res.message || 'Bulk injection started');
+      loadSyncTasks(false);
+    } catch (err) {
+      console.error('Bulk injection failed:', err);
+      alert('Failed: ' + err.message);
+    } finally {
+      setBulkSyncing(false);
+    }
+  };
 
-      // Get ASINs based on scrape type
-      let asins = [];
-      if (sellerAsins.length > 0) {
-        asins = sellerAsins.map(a => a.asinCode);
-      } else {
-        // If no ASINs in DB, use demo ASINs
-        asins = ['B07XYZ123', 'B07ABC456', 'B07DEF789', 'B07GHI012', 'B07JKL345'];
-      }
-
-      if (asins.length === 0) {
-        alert('No ASINs found for this seller. Please add ASINs in the Sellers page first.');
-        setCreating(false);
-        return;
-      }
-
-      const result = await octoparseService.startScrapeTask(asins, seller.marketplace, seller._id);
-
-      // Add seller info to the task
-      const updatedTasks = [{
-        ...result,
-        sellerName: seller.name,
-        sellerId: seller.sellerId,
-        asinsCount: asins.length,
-        scrapeType,
-        createdAt: new Date().toISOString(),
-      }, ...tasks];
-
-      setTasks(updatedTasks);
-      setShowCreateModal(false);
-      setSelectedSellerId('');
-      setSellerAsins([]);
-      setScrapeType('all');
-
-      alert(`Scraping task created for ${seller.name}. ${asins.length} ASINs will be scraped.`);
+  const handleStartSync = async (sellerId) => {
+    setSyncing(prev => ({ ...prev, [sellerId]: true }));
+    try {
+      const response = await marketSyncApi.startTask(sellerId);
+      setTimeout(() => loadSyncTasks(false), 2000);
+      alert(response.message || 'Extraction process started successfully in Octoparse Cloud.');
     } catch (error) {
-      console.error('Failed to create task:', error);
-      alert('Failed to create scraping task: ' + error.message);
-    }
-    setCreating(false);
-  };
-
-  const handleSellerChange = async (sellerId) => {
-    setSelectedSellerId(sellerId);
-    if (sellerId) {
-      await loadSellerAsins(sellerId);
-    } else {
-      setSellerAsins([]);
+      console.error('Failed to start extraction:', error);
+      alert('Failed: ' + error.message);
+    } finally {
+      setSyncing(prev => ({ ...prev, [sellerId]: false }));
     }
   };
 
-  const handleViewResults = async (task) => {
-    setSelectedTask(task);
-    if (task.status === 'COMPLETED') {
-      try {
-        const response = await octoparseService.getTaskResults(task.executionId);
-        setResults(response.results);
-        setShowResults(true);
-      } catch (error) {
-        console.error('Failed to get results:', error);
-      }
+  const handleFetchResults = async (sellerId) => {
+    setSyncing(prev => ({ ...prev, [sellerId]: true }));
+    try {
+      const response = await marketSyncApi.syncResults(sellerId);
+      loadSyncTasks(false);
+      alert(response.message || 'Data successfully pulled and mapped to dashboard.');
+    } catch (error) {
+      console.error('Failed to sync results:', error);
+      alert('Failed: ' + error.message);
+    } finally {
+      setSyncing(prev => ({ ...prev, [sellerId]: false }));
     }
   };
 
-  const handleDeleteTask = async (task) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      await octoparseService.deleteScrapeTask(task.executionId);
-      loadTasks();
+  const handleBulkDuplicate = async () => {
+    if (!window.confirm('This will create dedicated Octoparse tasks for all selected sellers using your master template. Continue?')) {
+      return;
+    }
+
+    setBulkSyncing(true);
+    try {
+      const res = await marketSyncApi.bulkUpdateTasks();
+      alert(res.message || 'Bulk task duplication completed.');
+      loadSyncTasks(true);
+    } catch (err) {
+      alert('Failed: ' + err.message);
+    } finally {
+      setBulkSyncing(false);
     }
   };
-
-  const kpis = [
-    { title: 'Total Tasks', value: tasks.length.toString(), icon: 'bi-list-task', trend: tasks.length, trendType: 'neutral' },
-    { title: 'Running', value: tasks.filter(t => t.status === 'RUNNING').length.toString(), icon: 'bi-gear', trend: 0, trendType: 'neutral' },
-    { title: 'Completed', value: tasks.filter(t => t.status === 'COMPLETED').length.toString(), icon: 'bi-check-circle', trend: tasks.filter(t => t.status === 'COMPLETED').length, trendType: 'positive' },
-    { title: 'Failed', value: tasks.filter(t => t.status === 'FAILED').length.toString(), icon: 'bi-x-circle', trend: tasks.filter(t => t.status === 'FAILED').length, trendType: 'negative' },
-  ];
 
   const getStatusBadge = (status) => {
     const map = {
-      'PENDING': { class: 'badge-secondary', icon: 'bi-clock' },
-      'RUNNING': { class: 'badge-primary', icon: 'bi-gear spin' },
-      'COMPLETED': { class: 'badge-success', icon: 'bi-check-circle' },
-      'FAILED': { class: 'badge-danger', icon: 'bi-x-circle' },
+      'IDLE': { className: 'badge-idle', icon: Clock, label: 'Idle' },
+      'RUNNING': { className: 'badge-running', icon: RefreshCcw, label: 'Running', spin: true },
+      'COMPLETED': { className: 'badge-success', icon: CheckCircle, label: 'Completed' },
+      'STOPPED': { className: 'badge-warning', icon: PauseCircle, label: 'Stopped' },
+      'PAUSED': { className: 'badge-warning', icon: PauseCircle, label: 'Paused' },
+      'FAILED': { className: 'badge-danger', icon: AlertTriangle, label: 'Failed' },
     };
-    const { class: className, icon } = map[status] || { class: 'badge-secondary', icon: 'bi-question-circle' };
+    const { className, icon: Icon, label, spin } = map[status] || { className: 'badge-idle', icon: Clock, label: status };
     return (
-      <span className={`badge ${className}`}>
-        <i className={`bi ${icon} me-1`}></i>
-        {status}
+      <span className={`sync-status-badge ${className}`}>
+        <Icon size={14} className={`me-1 ${spin ? 'spin' : ''}`} />
+        {label}
       </span>
     );
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString();
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (loading && tasks.length === 0) { return <PageLoader message="Loading Scrape Tasks..." />; }
+  const kpis = [
+    { title: 'Enabled Sellers', value: tasks.length.toString(), icon: 'Store', trend: 0, trendType: 'neutral' },
+    { title: 'Active Syncs', value: tasks.filter(t => t.status === 'RUNNING').length.toString(), icon: 'RefreshCcw', trend: 0, trendType: 'neutral' },
+    { title: 'Total ASINs', value: tasks.reduce((acc, t) => acc + (t.asinCount || 0), 0).toLocaleString(), icon: 'Package', trend: 0, trendType: 'neutral' },
+    { title: 'Latest Progress', value: tasks.length > 0 ? (tasks.find(t => t.status === 'RUNNING')?.progress || 0) + '%' : '0%', icon: 'Percent', trend: 0, trendType: 'neutral' },
+  ];
+
+  if (loading) return <PageLoader message="Initializing Real-time Pipeline..." />;
 
   return (
-    <>
-      {loading && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-          <LoadingIndicator type="line-simple" size="md" />
-        </div>
-      )}
-      <div className="page-header">
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <h1 className="page-title"><i className="bi bi-cloud-download"></i>Scrape Tasks</h1>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-            <i className="bi bi-plus-lg me-2"></i>Create Task
-          </button>
+    <div className="scrape-tasks-container container-fluid p-4">
+      <style>{`
+        .scrape-tasks-container {
+          background: #f9fafb;
+          min-height: 100vh;
+        }
+        .page-header-v2 {
+          margin-bottom: 2rem;
+        }
+        .page-title {
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: #111827;
+        }
+        .sync-status-badge {
+          padding: 0.35rem 0.75rem;
+          border-radius: 9999px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          letter-spacing: 0.01em;
+          text-transform: uppercase;
+        }
+        .badge-idle { background: #f3f4f6; color: #4b5563; }
+        .badge-running { 
+          background: rgba(59, 130, 246, 0.1); 
+          color: #2563eb;
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
+        }
+        .badge-success { background: rgba(16, 185, 129, 0.1); color: #059669; }
+        .badge-warning { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+        .badge-danger { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+        
+        .spin {
+          animation: bi-spin 2s linear infinite;
+        }
+        @keyframes bi-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .data-table-v2 {
+          background: #fff;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .data-table-v2 thead th {
+          background: #fafafa;
+          padding: 0.875rem 1.25rem;
+          font-size: 0.65rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #6b7280;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .data-table-v2 tbody td {
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid #f3f4f6;
+          vertical-align: middle;
+        }
+        .data-table-v2 tbody tr:last-child td {
+          border-bottom: none;
+        }
+        .data-table-v2 tbody tr:hover {
+          background-color: #f9fafb;
+        }
+        
+        .btn-action-group .btn {
+          border-radius: 8px;
+          font-weight: 500;
+          padding: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .hint-card {
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-left: 4px solid #3b82f6;
+          border-radius: 12px;
+          padding: 1.25rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        
+        .avatar-glow {
+          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.05);
+        }
+
+        .font-monospace {
+          font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
+        }
+      `}</style>
+
+      <div className="page-header-v2">
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-4">
+          <div>
+            <h1 className="page-title d-flex align-items-center h2 mb-1">
+              Data Pipeline Status
+            </h1>
+            <p className="text-muted small mb-0">Live monitoring of Amazon marketplace extraction tasks.</p>
+          </div>
+          <div className="d-flex gap-2">
+            <button className="btn btn-white shadow-sm border px-3 d-flex align-items-center gap-2" onClick={() => loadSyncTasks(true)} disabled={refreshing}>
+              {refreshing ? <span className="spinner-border spinner-border-sm"></span> : <RefreshCcw size={16} />}
+              Refresh Status
+            </button>
+            <button 
+                className="btn btn-outline-info shadow-sm px-3 d-flex align-items-center gap-2" 
+                onClick={handleBulkDuplicate} 
+                disabled={bulkSyncing || loading}
+            >
+                {bulkSyncing ? <span className="spinner-border spinner-border-sm"></span> : <Plus size={16} />}
+                {bulkSyncing ? 'Creating Tasks...' : 'Assign & Duplicate Tasks'}
+            </button>
+            <button 
+                className="btn btn-outline-primary shadow-sm px-3 d-flex align-items-center gap-2" 
+                onClick={handleBulkInject} 
+                disabled={bulkSyncing || loading}
+            >
+                {bulkSyncing ? <span className="spinner-border spinner-border-sm"></span> : <CloudDownload size={16} />}
+                {bulkSyncing ? 'Syncing ASINs...' : 'Sync ASINs to Cloud'}
+            </button>
+            <button className="btn btn-primary shadow-sm px-4 d-flex align-items-center gap-2" onClick={() => marketSyncApi.ingestAllResults().then(() => alert('Global ingestion started'))}>
+              <Rocket size={16} />
+              Ingest All Data
+            </button>
+          </div>
         </div>
       </div>
-      <div className="page-content">
-        <div className="kpi-grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-          {kpis.map((kpi, idx) => (
-            <KPICard key={idx} title={kpi.title} value={kpi.value} icon={kpi.icon} trend={kpi.trend} trendType={kpi.trendType} />
-          ))}
-        </div>
 
-        <div className="card">
-          <div className="card-header d-flex justify-content-between align-items-center">
-            <h5 className="mb-0"><i className="bi bi-list-task"></i> All Scrape Tasks</h5>
-            <div className="d-flex gap-2">
-              <button className="btn btn-outline-secondary btn-sm" onClick={loadTasks}>
-                <i className="bi bi-arrow-repeat me-1"></i>Refresh
-              </button>
-            </div>
+      <div className="row g-4 mb-5">
+        {kpis.map((kpi, idx) => (
+          <div key={idx} className="col-md-3">
+            <KPICard 
+              title={kpi.title} 
+              value={kpi.value} 
+              icon={kpi.icon} 
+              trend={kpi.trend} 
+              trendType={kpi.trendType} 
+            />
           </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table data-table mb-0">
-                <thead>
-                  <tr>
-                    <th>Task ID</th>
-                    <th>Seller</th>
-                    <th>ASINs</th>
-                    <th>Marketplace</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+        ))}
+      </div>
+
+      <div className="data-table-v2 mb-5">
+        <div className="px-4 py-3 border-bottom d-flex align-items-center justify-content-between bg-white sticky-top shadow-sm-bottom">
+          <h6 className="mb-0 text-dark fw-bold">Active Seller Tasks</h6>
+          <div className="small text-muted">{tasks.length} Configured Tasks</div>
+        </div>
+        <div className="table-responsive">
+          <table className="table data-table mb-0">
+            <thead>
+              <tr>
+                <th style={{ width: '25%' }}>Seller Details</th>
+                <th style={{ width: '20%' }}>Task ID</th>
+                <th style={{ width: '15%' }}>Sync Stats</th>
+                <th style={{ width: '15%' }}>Current Status</th>
+                <th style={{ width: '15%' }}>Progress</th>
+                <th className="text-end" style={{ width: '10%' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-5">
+                    <div className="text-muted opacity-50">
+                      <div className="mb-3"><RefreshCcw size={48} /></div>
+                      No sellers found with active Octoparse sync tasks.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                tasks.map(task => (
+                  <tr key={task.sellerId}>
+                    <td>
+                      <div className="d-flex align-items-center">
+                        <div className="avatar-sm bg-primary text-white rounded-3 d-flex align-items-center justify-content-center me-3 avatar-glow" style={{ width: '38px', height: '38px', fontSize: '1rem', fontWeight: '700' }}>
+                          {task.sellerName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="fw-bold text-dark" style={{ fontSize: '0.9rem' }}>{task.sellerName}</div>
+                          <div className="text-muted small" style={{ fontSize: '0.75rem' }}>{task.marketplace}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex flex-column">
+                        <div className="font-monospace text-primary fw-medium" style={{ fontSize: '0.75rem', letterSpacing: '-0.01em' }}>{task.taskId}</div>
+                        <div className="text-muted x-small mt-0.5">Octoparse Cloud Task</div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex flex-column">
+                        <span className="fw-bold text-dark" style={{ fontSize: '0.85rem' }}>{task.asinCount} ASINs</span>
+                        <span className="text-muted x-small" style={{ fontSize: '0.7rem' }}>Last sync: {formatDate(task.lastSync)}</span>
+                      </div>
+                    </td>
+                    <td>{getStatusBadge(task.status)}</td>
+                    <td>
+                      <div style={{ width: '120px' }}>
+                        <ProgressBar 
+                          value={task.progress} 
+                          color={task.status === 'RUNNING' ? 'primary' : 'success'} 
+                          size="sm" 
+                        />
+                        <div className="progress-hint x-small text-muted mt-1 fw-medium">{task.progress || 0}% Completed</div>
+                      </div>
+                    </td>
+                    <td className="text-end">
+                      <div className="btn-action-group d-flex gap-2 justify-content-end">
+                        <button 
+                          className="btn btn-outline-primary" 
+                          onClick={() => handleStartSync(task.sellerId)}
+                          disabled={task.status === 'RUNNING' || syncing[task.sellerId]}
+                          title="Trigger extraction"
+                        >
+                          {syncing[task.sellerId] ? <span className="spinner-border spinner-border-sm"></span> : <Play size={18} />}
+                        </button>
+                        <button 
+                          className="btn btn-outline-success" 
+                          onClick={() => handleFetchResults(task.sellerId)}
+                          disabled={syncing[task.sellerId]}
+                          title="Import data"
+                        >
+                          <CloudDownload size={18} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {tasks.length === 0 ? (
-                    <tr>
-                      <td colSpan="9" className="text-center text-muted py-4">
-                        <i className="bi bi-inbox d-block mb-2" style={{ fontSize: '24px' }}></i>
-                        No scrape tasks yet. Click "Create Task" to start scraping.
-                      </td>
-                    </tr>
-                  ) : (
-                    tasks.map(task => (
-                      <tr key={task.executionId}>
-                        <td className="fw-medium font-monospace" style={{ fontSize: '0.85rem' }}>
-                          {task.executionId.substring(0, 16)}...
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
-                            <div className="seller-avatar bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center" style={{ width: '28px', height: '28px', fontSize: '0.75rem', fontWeight: '600' }}>
-                              {(task.sellerName || 'S').charAt(0)}
-                            </div>
-                            <span>{task.sellerName || 'Unknown'}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="badge bg-info-subtle text-info">{task.asinsCount || task.asins?.length || 0} ASINs</span>
-                        </td>
-                        <td>
-                          <span className="badge bg-primary-subtle text-primary">{task.marketplace || '-'}</span>
-                        </td>
-                        <td>
-                          <span className={`badge ${task.scrapeType === 'all' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'}`}>
-                            {task.scrapeType === 'all' ? 'All ASINs' : 'Pending Only'}
-                          </span>
-                        </td>
-                        <td>{getStatusBadge(task.status)}</td>
-                        <td>
-                          <div style={{ width: '120px' }}>
-                            <ProgressBar
-                              value={task.progress}
-                              color={task.status === 'FAILED' ? 'danger' : 'primary'}
-                              size="sm"
-                              hint
-                            />
-                          </div>
-                        </td>
-                        <td className="text-muted fs-sm">{formatDate(task.startedAt || task.createdAt)}</td>
-                        <td>
-                          <div className="d-flex gap-1">
-                            {task.status === 'COMPLETED' && (
-                              <button
-                                className="btn btn-sm btn-outline-primary"
-                                onClick={() => handleViewResults(task)}
-                                title="View Results"
-                              >
-                                <i className="bi bi-eye"></i>
-                              </button>
-                            )}
-                            {(task.status === 'PENDING' || task.status === 'RUNNING') && (
-                              <button
-                                className="btn btn-sm btn-outline-danger"
-                                onClick={() => octoparseService.cancelScrapeTask(task.executionId).then(loadTasks)}
-                                title="Cancel"
-                              >
-                                <i className="bi bi-x"></i>
-                              </button>
-                            )}
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => handleDeleteTask(task)}
-                              title="Delete"
-                            >
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* Create Task Modal */}
-      {showCreateModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title"><i className="bi bi-plus-circle me-2"></i>Create Scrape Task</h5>
-                <button type="button" className="btn-close" onClick={() => { setShowCreateModal(false); setSelectedSellerId(''); setSellerAsins([]); }}></button>
-              </div>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label">Select Seller *</label>
-                  <select
-                    className="form-select"
-                    value={selectedSellerId}
-                    onChange={(e) => handleSellerChange(e.target.value)}
-                  >
-                    <option value="">Choose a seller...</option>
-                    {(sellers || []).filter(s => s.status === 'Active').map(seller => (
-                      <option key={seller._id} value={seller._id}>
-                        {seller.name} ({seller.marketplace})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="form-text">
-                    {(sellers || []).filter(s => s.status === 'Active').length} active sellers available
-                  </div>
-                </div>
-
-                {selectedSellerId && (
-                  <div className="mb-3">
-                    <div className="alert alert-info">
-                      <i className="bi bi-info-circle me-2"></i>
-                      {(() => {
-                        const seller = sellers.find(s => s._id === selectedSellerId);
-                        return `${seller?.name} has ${sellerAsins.length} ASINs in the database`;
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mb-3">
-                  <label className="form-label">Scrape Type</label>
-                  <div className="d-flex gap-3">
-                    <div className="form-check">
-                      <input
-                        type="radio"
-                        className="form-check-input"
-                        id="scrapeAll"
-                        name="scrapeType"
-                        checked={scrapeType === 'all'}
-                        onChange={() => setScrapeType('all')}
-                      />
-                      <label className="form-check-label" htmlFor="scrapeAll">
-                        <i className="bi bi-box-seam me-1"></i>All ASINs
-                      </label>
-                      <div className="form-text">Scrape all ASINs for this seller</div>
-                    </div>
-                    <div className="form-check">
-                      <input
-                        type="radio"
-                        className="form-check-input"
-                        id="scrapePending"
-                        name="scrapeType"
-                        checked={scrapeType === 'pending'}
-                        onChange={() => setScrapeType('pending')}
-                      />
-                      <label className="form-check-label" htmlFor="scrapePending">
-                        <i className="bi bi-clock me-1"></i>Pending Only
-                      </label>
-                      <div className="form-text">Only scrape ASINs not scraped recently</div>
-                    </div>
-                  </div>
-                </div>
-
-                {(!sellers || sellers.filter(s => s.status === 'Active').length === 0) && (
-                  <div className="alert alert-warning">
-                    <i className="bi bi-exclamation-triangle me-2"></i>
-                    No active sellers found. Please add sellers first in the Sellers page.
-                    <a href="/sellers" className="ms-2">Go to Sellers</a>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowCreateModal(false); setSelectedSellerId(''); setSellerAsins([]); }}>Cancel</button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleCreateTask}
-                  disabled={!selectedSellerId || creating || sellers.filter(s => s.status === 'Active').length === 0}
-                >
-                  {creating ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2"></span>
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-cloud-arrow-down me-2"></i>
-                      Start Scraping
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+      
+      <div className="hint-card d-flex align-items-start gap-3">
+        <div className="icon-box bg-primary-subtle p-2 rounded-3 text-primary">
+          <Info size={20} />
         </div>
-      )}
-
-      {/* Results Modal */}
-      {showResults && selectedTask && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Scrape Results - {selectedTask.executionId}</h5>
-                <button type="button" className="btn-close" onClick={() => setShowResults(false)}></button>
-              </div>
-              <div className="modal-body">
-                <div className="table-responsive">
-                  <table className="table data-table mb-0">
-                    <thead>
-                      <tr>
-                        <th>ASIN</th>
-                        <th>Title</th>
-                        <th>Price</th>
-                        <th>Rating</th>
-                        <th>Reviews</th>
-                        <th>Rank</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.map((result, idx) => (
-                        <tr key={idx}>
-                          <td className="fw-medium">{result.asin}</td>
-                          <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {result.title}
-                          </td>
-                          <td>₹{result.price.toFixed(2)}</td>
-                          <td>{result.rating}</td>
-                          <td>{result.reviews.toLocaleString()}</td>
-                          <td>#{result.rank.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-outline-primary" onClick={() => console.log('Import to ASIN Manager', results)}>
-                  <i className="bi bi-plus me-1"></i>Import to ASIN Manager
-                </button>
-                <button className="btn btn-secondary" onClick={() => setShowResults(false)}>Close</button>
-              </div>
-            </div>
-          </div>
+        <div>
+          <h6 className="fw-bold text-dark mb-1">Pipeline Optimization Engaged</h6>
+          <p className="text-muted small mb-0">
+            The platform automatically handles high-scale concurrent tasks. You can manually force an update by clicking 
+            <strong> Start Sync</strong> to re-inject ASINs into the Octoparse cloud loop.
+          </p>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 };
 

@@ -145,43 +145,27 @@ class SchedulerService {
     }
 
     /**
-     * Logic to fetch and ingest results from completed Octoparse tasks
+     * Logic to fetch and ingest results from completed Octoparse tasks across ALL sellers.
+     * Uses high-performance bulk processing.
      */
     async runOctoparseResultFetch() {
         try {
             const sellers = await Seller.find({ status: 'Active', marketSyncTaskId: { $exists: true, $ne: '' } });
-            console.log(`[Scheduler] Fetching Octoparse results for ${sellers.length} configured sellers...`);
-
-            const Notification = require('../models/Notification');
-            const User = require('../models/User');
-            const targetAdmins = await User.find({ role: { $exists: true } }).populate('role').then(users => users.filter(u => u.role?.name === 'admin'));
+            console.log(`[Scheduler] Fetching results for ${sellers.length} sellers...`);
 
             for (const seller of sellers) {
                 try {
                     const rawData = await MarketSyncService.retrieveResults(seller.marketSyncTaskId);
                     if (rawData && rawData.length > 0) {
-                        console.log(`[Scheduler] 📥 Received ${rawData.length} scraped rows for Seller: ${seller.name}`);
-                        const result = await MarketSyncService.processOctoparseResults(rawData);
-                        console.log(`[Scheduler] ✅ Processed: ${result.processed}, Failed: ${result.failed}`);
-
-                        // Notify admins
-                        if (result.processed > 0) {
-                            for (const admin of targetAdmins) {
-                                await Notification.create({
-                                    recipient: admin._id,
-                                    type: 'SYSTEM',
-                                    referenceModel: 'System',
-                                    referenceId: admin._id,
-                                    message: `🕸️ Octoparse Sync: Successfully updated ${result.processed} ASIN metrics for ${seller.name}`
-                                });
-                            }
-                        }
-                    } else {
-                        console.log(`[Scheduler] ⌛ No new data to fetch for Seller: ${seller.name}`);
+                        console.log(`[Scheduler] 📥 Received ${rawData.length} rows for Seller: ${seller.name}`);
+                        const processedCount = await MarketSyncService.processBatchResults(seller._id, rawData);
+                        console.log(`[Scheduler] ✅ Successfully bulk-linked ${processedCount} results for ${seller.name}`);
                     }
                 } catch (err) {
-                    console.error(`[Scheduler] ❌ Failed to fetch Octoparse data for seller ${seller.name}:`, err.message);
+                    console.error(`[Scheduler] ❌ Failed to fetch result for ${seller.name}:`, err.message);
                 }
+                // Small delay between sellers to respect API limits
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         } catch (error) {
             console.error('[Scheduler] Critical Octoparse Fetch error:', error.message);

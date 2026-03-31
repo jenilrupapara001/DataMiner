@@ -195,6 +195,134 @@ export const marketSyncApi = {
       throw new Error(error.error || 'Failed to trigger global sync');
     }
     return res.json();
+  },
+
+   setupAutoSync: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/market-sync/setup-task/${sellerId}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to setup auto-sync');
+    }
+    return res.json();
+  },
+
+  syncAsin: async (asinId) => {
+    const res = await fetch(`${API_BASE}/market-sync/sync/${asinId}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to sync ASIN');
+    }
+    return res.json();
+  },
+
+  getPoolStatus: async () => {
+    const res = await fetch(`${API_BASE}/market-sync/pool-status`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch pool status');
+    return res.json();
+  },
+
+  uploadPoolTasks: async (taskIds) => {
+    const res = await fetch(`${API_BASE}/market-sync/pool-tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ taskIds }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to upload task pool');
+    }
+    return res.json();
+  },
+
+  ingestAllResults: async () => {
+    const res = await fetch(`${API_BASE}/market-sync/ingest-all`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to initiate global ingestion');
+    }
+    return res.json();
+  },
+
+  getSyncTasks: async () => {
+    const res = await fetch(`${API_BASE}/market-sync/tasks`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch global sync tasks');
+    return res.json();
+  },
+
+  startTask: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/market-sync/start-task/${sellerId}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to start extraction');
+    }
+    return res.json();
+  },
+
+  syncResults: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/market-sync/sync-results/${sellerId}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to sync results');
+    }
+    return res.json();
+  },
+
+  bulkUpdateTasks: async (sellerIds = []) => {
+    const res = await fetch(`${API_BASE}/market-sync/bulk-update-tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ sellerIds }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to duplicate and assign tasks');
+    }
+    return res.json();
+  },
+
+  bulkInjectJson: async (sellerId, data) => {
+    const res = await fetch(`${API_BASE}/market-sync/bulk-inject-json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ sellerId, data }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to manually inject JSON data');
+    }
+    return res.json();
+  },
+
+  bulkInjectAsins: async (sellerIds = []) => {
+    const res = await fetch(`${API_BASE}/market-sync/bulk-inject-asins`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ sellerIds }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to trigger bulk ASIN injection');
+    }
+    return res.json();
   }
 };
 

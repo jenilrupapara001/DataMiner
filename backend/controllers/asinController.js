@@ -3,6 +3,7 @@ const Seller = require('../models/Seller');
 const imageGenerationService = require('../services/imageGenerationService');
 const path = require('path');
 const fs = require('fs');
+const marketDataSyncService = require('../services/marketDataSyncService');
 
 // Get all ASINs
 exports.getAsins = async (req, res) => {
@@ -357,6 +358,12 @@ exports.createAsin = async (req, res) => {
     // Update seller ASIN count
     await updateSellerAsinCount(asin.seller);
 
+    // BACKGROUND: Automate URL Injection & Scrape
+    if (marketDataSyncService.isConfigured()) {
+      marketDataSyncService.syncSellerAsinsToOctoparse(asin.seller, { triggerScrape: true })
+        .catch(err => console.error(`⚠️ Automation: Failed to sync ASIN ${asin.asinCode}:`, err.message));
+    }
+
     res.status(201).json(asin);
   } catch (error) {
     if (error.code === 11000) {
@@ -408,12 +415,21 @@ exports.createAsins = async (req, res) => {
     const sellerIds = [...new Set(asins.map(a => a.seller).filter(Boolean))];
     for (const sellerId of sellerIds) {
       await updateSellerAsinCount(sellerId);
+
+      // BACKGROUND: Automate URL Injection & Scrape for newly added/updated ASINs
+      // The service now handles concurrency locking to prevent multiple overlapping syncs for the same seller.
+      if (marketDataSyncService.isConfigured()) {
+        console.log(`🤖 Automated Sync Trigger for seller: ${sellerId}`);
+        marketDataSyncService.syncSellerAsinsToOctoparse(sellerId, { triggerScrape: true })
+          .catch(err => console.error(`⚠️ Automation: Failed to sync ASINs for seller ${sellerId}:`, err.message));
+      }
     }
 
     res.status(201).json({
       message: 'ASINs processed successfully',
       insertedCount: asinsResult.upsertedCount,
       matchedCount: asinsResult.matchedCount,
+      upsertedIds: asinsResult.upsertedIds
     });
   } catch (error) {
     console.error('Bulk Insert Error:', error);
@@ -442,6 +458,10 @@ exports.updateAsin = async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
+
+    if (req.body.status && req.body.status !== asin.status) {
+      await updateSellerAsinCount(asin.seller);
+    }
 
     res.json(updatedAsin);
   } catch (error) {

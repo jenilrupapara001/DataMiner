@@ -1,6 +1,6 @@
 import React from 'react';
 import Chart from 'react-apexcharts';
-import { X, Package, TrendingUp, TrendingDown, IndianRupee, Star, MessageSquare, Award } from 'lucide-react';
+import { X, Package, TrendingUp, TrendingDown, IndianRupee, Star, MessageSquare, Award, Store, Tag } from 'lucide-react';
 
 const AsinDetailModal = ({ asin, isOpen, onClose }) => {
   if (!isOpen || !asin) return null;
@@ -126,7 +126,25 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <div className="d-grid gap-2">
                   <div className="d-flex justify-content-between p-2 border-bottom">
                     <span className="text-zinc-500 small">Current Price</span>
-                    <span className="fw-bold text-zinc-900">₹{asin.currentPrice?.toLocaleString()}</span>
+                    <div className="text-end">
+                      <span className="fw-bold text-zinc-900 d-block">₹{asin.currentPrice?.toLocaleString()}</span>
+                      {asin.mrp > asin.currentPrice && (
+                        <span className="text-muted smallest text-decoration-line-through">₹{asin.mrp.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  {asin.mrp > asin.currentPrice && (
+                    <div className="d-flex justify-content-between p-2 border-bottom bg-danger-subtle/20 rounded">
+                      <span className="text-danger small fw-bold">Discount</span>
+                      <span className="badge bg-danger rounded-pill">-{Math.round(((asin.mrp - asin.currentPrice) / asin.mrp) * 100)}% OFF</span>
+                    </div>
+                  )}
+                  <div className="d-flex justify-content-between p-2 border-bottom">
+                    <span className="text-zinc-500 small">Buy Box Seller</span>
+                    <span className="fw-bold text-primary d-flex align-items-center gap-1">
+                      <Store size={14} />
+                      {asin.soldBy || 'Amazon.in'}
+                    </span>
                   </div>
                   <div className="d-flex justify-content-between p-2 border-bottom">
                     <span className="text-zinc-500 small">Main BSR</span>
