@@ -867,7 +867,7 @@ const AsinManagerPage = () => {
                   <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={handleBulkScrape} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
                     <RefreshCw size={14} className="text-zinc-500" /> Scrape All
                   </button>
-                  <button className="btn btn-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border-0 rounded-pill px-3 py-1.5" onClick={() => loadData()} style={{ fontSize: '12px' }}>
+                  <button className="btn btn-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border-0 rounded-pill px-3 py-1.5" onClick={handleBulkScrape} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
                     <RefreshCw size={14} /> Sync All
                   </button>
                 </div>

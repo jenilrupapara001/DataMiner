@@ -91,26 +91,34 @@ class MarketDataSyncService {
      * @param {string} taskId The task ID to update
      * @param {string[]} urls Array of full URLs to inject
      */
-    async updateTaskUrlsWithFile(taskId, urls) {
+    async updateTaskUrlsWithFile(taskId, items) {
         if (!taskId) throw new Error('Task ID is required for URL injection');
-        if (!urls || urls.length === 0) return true;
+        if (!items || items.length === 0) return true;
         
         const token = await this.authenticate();
         
-        // 1. Normalize and clean URLs (strictly one per line, no duplicates)
-        const uniqueUrls = [...new Set(urls.map(u => u?.trim()).filter(Boolean))];
+        // 1. Normalize and clean input (strictly one URL per line, no duplicates)
+        // Correctly formats ASINs to full Amazon.in URLs if they aren't already
+        const uniqueUrls = [...new Set(items.map(item => {
+            if (typeof item !== 'string') return '';
+            const t = item.trim();
+            if (t.startsWith('http')) return t;
+            if (t.length === 10) return `https://www.amazon.in/dp/${t}`;
+            return t;
+        }).filter(Boolean))];
         
         try {
-            console.log(`📂 Injecting ${uniqueUrls.length} URLs via Octoparse provider endpoint for task: ${taskId}`);
+            console.log(`📂 Injecting ${uniqueUrls.length} items via Octoparse FILE method for task: ${taskId}`);
             
             // 2. Create FormData and Blob (Standard Multipart approach)
+            // Note: Uses Node.js 18+ global FormData and Blob compatibility
             const formData = new FormData();
             formData.append('taskId', taskId);
             
             // Standard Octoparse URL file format: one URL per line
             const blob = new Blob([uniqueUrls.join('\n')], { type: 'text/plain' });
             
-            // Field mapping from Official Docs: 'taskId' (string) and 'file' (File)
+            // Field mapping: 'taskId' (string) and 'file' (File)
             formData.append('file', blob, 'sync_urls.txt');
 
             const response = await axios.post(`${this.baseUrl}/task/urls:file`, formData, {
@@ -121,7 +129,7 @@ class MarketDataSyncService {
 
             // 3. Official Status Handling
             if (response.data && (response.data.requestId || response.data.data === null)) {
-                console.log(`✅ File-based injection successful. RequestID: ${response.data.requestId}`);
+                console.log(`✅ File-based injection successful for task: ${taskId}`);
                 return true;
             }
             
@@ -130,6 +138,13 @@ class MarketDataSyncService {
             const errorData = error.response?.data;
             const provError = errorData?.error || {};
             
+            // RETRY LOGIC for TaskExecuting (400)
+            if (provError.code === 'TaskExecuting' || errorData?.message === 'TaskExecuting') {
+                console.warn(`⏳ Task is still executing. Retrying injection in 10s...`);
+                await this.wait(10000);
+                return this.updateTaskUrlsWithFile(taskId, items); // Single level recursion for retry
+            }
+
             console.error('❌ Octoparse File Injection Error:', {
                 code: provError.code,
                 message: provError.message,
@@ -147,118 +162,24 @@ class MarketDataSyncService {
         }
     }
 
-    async updateTaskLoopItems(taskId, items) {
-        const token = await this.authenticate();
-        try {
-            // Find LoopAction ID
-            let actionId = process.env.OCTOPARSE_LOOP_ACTION_ID;
-            
-            // Robust discovery: If actionId is missing or we want to ensure correctness for this specific taskId
-            if (!actionId || actionId === 'undefined' || actionId === 'j7jy8yp23dh') { // Force discovery if using the generic one
-                console.log(`🔍 Discovering LoopAction ID for task: ${taskId}`);
-                try {
-                    const actionRes = await axios.get(`${this.baseUrl}/api/Task/GetActions`, {
-                        params: { taskId },
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-
-                    // Search for LoopAction in the response
-                    const actions = actionRes.data.data || [];
-                    const loopAction = actions.find(a => 
-                        a.actionType === "LoopAction" || 
-                        a.name?.toLowerCase().includes('loop') ||
-                        a.actionId?.startsWith('loop')
-                    );
-                    
-                    if (loopAction) {
-                        actionId = loopAction.actionId;
-                        console.log(`✅ Dynamically found Action ID: ${actionId}`);
-                    }
-                } catch (discoveryError) {
-                    console.error(`⚠️ Discovery failed for task ${taskId}:`, discoveryError.message);
-                }
-            }
-
-            if (!actionId) {
-                console.warn(`⚠️ No LoopAction found for task ${taskId}. Attempting fallback to known generic ID.`);
-                actionId = process.env.OCTOPARSE_LOOP_ACTION_ID || 'j7jy8yp23dh';
-            }
-
-            // Format ASINs into Amazon Search URLs
-            const formattedItems = items.map(item => {
-                if (typeof item !== 'string') return '';
-                if (item.startsWith('http')) return item;
-                return `https://www.amazon.in/dp/${item.trim()}`;
-            }).filter(Boolean);
-
-            // CHUNKING: Octoparse API limits
-            const CHUNK_SIZE = 1000;
-            console.log(`🔄 Updating loop items for task ${taskId} (${formattedItems.length} items)...`);
-
-            for (let i = 0; i < formattedItems.length; i += CHUNK_SIZE) {
-                const chunk = formattedItems.slice(i, i + CHUNK_SIZE);
-                const isFirst = i === 0;
-
-                try {
-                    await axios.post(`${this.baseUrl}/api/Task/UpdateLoopItems`, {
-                        taskId,
-                        actionId,
-                        loopItems: chunk.join('\n'), 
-                        isAppend: !isFirst 
-                    }, {
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-                    });
-                    console.log(`✅ Chunk ${Math.floor(i/CHUNK_SIZE) + 1} uploaded.`);
-                } catch (apiError) {
-                    console.error(`❌ UpdateLoopItems API Error (Chunk ${i}):`, apiError.response?.data || apiError.message);
-                    // If 404, the actionId is definitely wrong for this task
-                    if (apiError.response?.status === 404) {
-                        throw new Error(`Invalid Action ID (${actionId}) for Task ${taskId}. Please verify the task workflow in Octoparse.`);
-                    }
-                    throw apiError;
-                }
-            }
-
-            return true;
-        } catch (error) {
-            console.error('❌ Update Loop Items Service Error:', error.message);
-            return false;
-        }
-    }
-
     /**
-     * Triggers a data extraction task for a list of ASINs.
+     * @deprecated Use syncSellerAsinsToOctoparse instead.
+     * This method is kept for legacy compatibility but redirected to the robust sync-all.
      */
     async triggerSync(taskId, parameters) {
-        const token = await this.authenticate();
         try {
-            // 1. Update ASIN list if provided
-            if (parameters && parameters.length > 0) {
-                const asins = parameters.flatMap(p => {
-                    const val = p.value || p.ASIN || p;
-                    if (typeof val === 'string' && val.includes(',')) {
-                        return val.split(',').map(s => s.trim());
-                    }
-                    return val;
-                }).filter(Boolean);
-
-                if (asins.length > 0) {
-                    await this.updateTaskLoopItems(taskId, asins);
-                }
+            // Find seller by taskId
+            const seller = await Seller.findOne({ marketSyncTaskId: taskId });
+            if (!seller) {
+                console.warn(`⚠️ triggerSync called for unknown task ${taskId}. Falling back to standard cloud start.`);
+                return await this.startCloudExtraction(taskId);
             }
-
-            // 2. Start the task in the Cloud using standalone method
-            console.log(`🚀 Triggering Cloud Task Start: ${taskId}`);
-            const startData = await this.startCloudExtraction(taskId);
-
-            return { 
-                success: true, 
-                taskId, 
-                lotNo: startData.lotNo,
-                status: startData.status || 'Running'
-            };
+            
+            console.log(`🔄 Redirecting legacy triggerSync for seller ${seller.name} to robust sync-all...`);
+            const success = await this.syncSellerAsinsToOctoparse(seller._id, { triggerScrape: true });
+            return { success, taskId };
         } catch (error) {
-            console.error('❌ Trigger Sync Error:', error.response?.data || error.message);
+            console.error('❌ Legacy Trigger Sync Error:', error.message);
             throw error;
         }
     }
@@ -375,63 +296,68 @@ class MarketDataSyncService {
         }
     }
 
-    /**
-     * Start cloud extraction for a specific task.
-     */
     async startCloudExtraction(taskId) {
         if (!taskId) throw new Error('Task ID is required for cloud extraction');
         
+        const fs = require('fs');
+        const path = require('path');
+        const diagLogPath = path.join(process.cwd(), 'octoparse_sync_diagnostics.log');
+        const logDiag = (msg) => {
+            const entry = `[${new Date().toISOString()}] ${msg}\n`;
+            fs.appendFileSync(diagLogPath, entry);
+            console.log(msg);
+        };
+
+        logDiag(`🚀 Starting Mega Diagnostic for Task ID: ${taskId}`);
         const token = await this.authenticate();
-        try {
-            console.log(`🚀 Starting Cloud Extraction via Octoparse provider endpoint for task: ${taskId}...`);
-            
-            // Standard Octoparse Cloud Extraction Start (POST /cloudextraction/start)
-            const response = await axios.post(`${this.baseUrl}/cloudextraction/start`, {
-                taskId: taskId
-            }, {
-                headers: { 
-                    'Authorization': `Bearer ${token}`, 
-                    'Content-Type': 'application/json' 
+        const baseUrls = [this.baseUrl, 'https://dataapi.octoparse.com', 'https://openapi.octoparse.cn'];
+        
+        let lastError = null;
+        for (const base of baseUrls) {
+            const variants = [
+                { name: 'V1 GET', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId } },
+                { name: 'V1 POST Q', url: `${base}/api/CloudTask/StartTask?taskId=${taskId}`, method: 'post' },
+                { name: 'V3 POST B', url: `${base}/cloud_extraction/start`, method: 'post', data: { taskId } },
+                { name: 'V2 GET Lower', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskid: taskId } },
+                { name: 'V1 GET LowerBearer', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId }, lowerBearer: true },
+                { name: 'Advanced Trigger', url: `${base}/api/CloudTask/AddRunTask`, method: 'get', params: { taskId } }
+            ];
+
+            for (const v of variants) {
+                try {
+                    logDiag(`🔍 Trying ${v.name} at ${base}...`);
+                    const response = await axios({
+                        url: v.url,
+                        method: v.method,
+                        data: v.data,
+                        params: v.params,
+                        headers: { 
+                            'Authorization': v.lowerBearer ? `bearer ${token}` : `Bearer ${token}`,
+                            'Content-Type': 'application/json' 
+                        },
+                        timeout: 8000
+                    });
+
+                    const data = response.data || {};
+                    const isSuccess = data.data === true || data.data === 1 || data.data?.lotNo || data.requestId;
+
+                    if (isSuccess) {
+                        logDiag(`✅ SUCCESS via ${v.name}! Response: ${JSON.stringify(data)}`);
+                        return data.data || data;
+                    }
+                    
+                    logDiag(`⚠️ Server rejected ${v.name}: ${JSON.stringify(data)}`);
+                    lastError = data;
+                } catch (err) {
+                    const status = err.response?.status;
+                    const body = err.response?.data;
+                    logDiag(`❌ ${v.name} Failed (${status}): ${JSON.stringify(body || err.message)}`);
+                    lastError = body || err.message;
                 }
-            });
-
-            const responseData = response.data || {};
-            const data = responseData.data || {};
-
-            // Handle "already running" edge case (often returns data: null but success message)
-            if (responseData.message?.toLowerCase().includes('already running')) {
-                console.log(`ℹ️ Task ${taskId} is currently active and running.`);
-                return { 
-                    lotNo: data.lotNo || 'ACTIVE', 
-                    status: data.status || 'running' 
-                };
             }
-
-            // Official Success Mapping: requestId, data: { lotNo, status }
-            if (data.status || data.lotNo) {
-                console.log(`✅ Cloud extraction sequence started. LotNo: ${data.lotNo}, Status: ${data.status}`);
-                return data;
-            }
-
-            // Handle Errors from Spec
-            if (responseData.error) {
-                const provError = responseData.error || {};
-                console.error('❌ Provider reported an extraction start error:', provError.message);
-                throw new Error(`Extraction Error: ${provError.message || 'Unknown Service Error'}`);
-            }
-
-            return data;
-        } catch (error) {
-            const errorPayload = error.response?.data || {};
-            const errorMsg = errorPayload.error?.message || error.message;
-            
-            console.error('❌ Octoparse Task Start Error:', {
-                message: errorMsg,
-                code: errorPayload.error?.code,
-                requestId: errorPayload.requestId
-            });
-            throw new Error(`Extraction Launch Failed: ${errorMsg}`);
         }
+        logDiag(`🛑 ALL VARIANTS FAILED for task ${taskId}.`);
+        throw new Error(`Exhausted all 18 start variants. Check octoparse_sync_diagnostics.log for details.`);
     }
 
     /**
@@ -591,15 +517,31 @@ class MarketDataSyncService {
      * Stop a running task.
      */
     async stopSync(taskId) {
+        if (!taskId) throw new Error('Task ID required for stop command');
+        
         const token = await this.authenticate();
         try {
-            await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
+            console.log(`🛑 Sending STOP command for task: ${taskId} (Legacy V1 method)...`);
+            
+            // Octoparse API v1 Stop (GET /api/CloudTask/StopTask?taskId={taskId})
+            const response = await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
                 params: { taskId },
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+
+            if (response.data && (response.data.requestId || response.data.data === true)) {
+                console.log(`✅ Stop command acknowledge (V1) for: ${taskId}`);
+                this.statusCache.delete(taskId); 
+                return true;
+            }
+            
+            // Fallback: V3 POST Stop
+            await axios.post(`${this.baseUrl}/cloud_extraction/stop`, { taskId }, {
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
             return true;
         } catch (error) {
-            console.error('❌ Stop Sync Error:', error.response?.data || error.message);
+            console.error('❌ Octoparse Stop Error:', error.response?.data || error.message);
             return false;
         }
     }
@@ -837,15 +779,13 @@ class MarketDataSyncService {
     /**
      * Background worker that polls for task completion and then ingests data.
      */
-    async pollAndAutomate(sellerId, taskId) {
-        console.log(`🕵️ Starting automated monitoring for Seller: ${sellerId}, Task: ${taskId}...`);
+    async pollAndAutomate(sellerId, taskId, options = {}) {
+        const fullSync = options.fullSync || false;
+        console.log(`🕵️ Starting automated monitoring for Seller: ${sellerId}, Task: ${taskId}... (Mode: ${fullSync ? 'FULL REFRESH' : 'INCREMENTAL'})`);
         
         let attempts = 0;
-        const maxAttempts = 50; // Increased to cover more polls
+        const maxAttempts = 50; 
         
-        // Dynamic Polling Strategy:
-        // - Fast Interval (1m) for first 5 attempts
-        // - Standard Interval (5m) for the rest
         const FAST_INTERVAL = 60000;
         const STANDARD_INTERVAL = 300000;
         const INITIAL_WAIT = 15000;
@@ -868,38 +808,51 @@ class MarketDataSyncService {
                 const isFailed = status === 2 || status === '2' || status === 'Failed' || status === 'Stopped';
 
                 if (isCompleted) {
-                    console.log(`✅ Task ${taskId} COMPLETED! Initiating incremental ingestion...`);
-                    
                     let totalIngested = 0;
-                    let hasMore = true;
-                    const pageSize = 1000;
 
-                    // Incremental fetch loop (Fetch only what hasn't been exported yet)
-                    while (hasMore) {
-                        const { data, current, total } = await this.fetchNonExportedData(taskId, pageSize);
-                        
-                        if (data && data.length > 0) {
-                            console.log(`📦 Processing chunk of ${data.length} new records (Exported so far: ${current}/${total})...`);
-                            const { count } = await this.processBatchResults(sellerId, data);
-                            totalIngested += count;
-
-                            // Mark this data as exported in Octoparse so we don't get it again
+                    if (fullSync) {
+                        console.log(`✅ Task ${taskId} COMPLETED! Initiating FULL data ingestion (Force Refresh)...`);
+                        const allData = await this._fetchAllDataPages(taskId);
+                        if (allData.length > 0) {
+                            const count = await this.processBatchResults(sellerId, allData);
+                            totalIngested = count;
+                            // Optionally mark as exported anyway to keep Octoparse queue clean
                             await this.markDataAsExported(taskId);
-                            
-                            // If we didn't get a full page, it might be the end for this run
-                            if (data.length < pageSize) hasMore = false;
-                        } else {
-                            hasMore = false;
                         }
+                    } else {
+                        console.log(`✅ Task ${taskId} COMPLETED! Initiating INCREMENTAL ingestion...`);
+                        let hasMore = true;
+                        const pageSize = 1000;
 
-                        // Safety break to prevent infinite loops
-                        if (totalIngested > 10000) hasMore = false;
+                        while (hasMore) {
+                            const { data, current, total } = await this.fetchNonExportedData(taskId, pageSize);
+                            if (data && data.length > 0) {
+                                console.log(`📦 Processing chunk of ${data.length} new records (Exported so far: ${current}/${total})...`);
+                                const count = await this.processBatchResults(sellerId, data);
+                                totalIngested += count;
+                                await this.markDataAsExported(taskId);
+                                if (data.length < pageSize) hasMore = false;
+                            } else {
+                                hasMore = false;
+                            }
+                            if (totalIngested > 10000) hasMore = false;
+                        }
                     }
 
                     if (totalIngested > 0) {
-                        console.log(`🎉 Incremental Sync Success: ${totalIngested} ASINs auto-updated for seller ${sellerId}.`);
+                        try {
+                            const Seller = require('../models/Seller');
+                            await Seller.findByIdAndUpdate(sellerId, { 
+                                lastScraped: new Date(),
+                                scrapeUsed: totalIngested // For now, we update it to the last scrape count or add to it? 
+                                // Let's use it as 'current' scrape volume or incremental add.
+                            }, { new: true });
+                            console.log(`🎉 ${fullSync ? 'Full' : 'Incremental'} Sync Success: ${totalIngested} ASINs updated for seller ${sellerId}. Result persisted to DB.`);
+                        } catch (sdErr) {
+                            console.error(`⚠️ Failed to update sync metadata for seller ${sellerId}:`, sdErr.message);
+                        }
                     } else {
-                        console.warn(`⚠️ Task ${taskId} completed but no NEW data was exported.`);
+                        console.warn(`⚠️ Task ${taskId} completed but no data was ingested.`);
                     }
                     return; 
                 }
@@ -909,16 +862,14 @@ class MarketDataSyncService {
                     return; 
                 }
 
-                // Determine interval based on attempt count
                 const currentInterval = attempts < 5 ? FAST_INTERVAL : STANDARD_INTERVAL;
                 const nextCheckMins = Math.round(currentInterval / 60000);
-
                 console.log(`⏳ [Attempt ${attempts+1}] Task ${taskId} status: ${status}. Next check in ${nextCheckMins}m...`);
                 
                 await this.wait(currentInterval);
             } catch (err) {
                 console.warn(`⚠️ Polling Error for task ${taskId}:`, err.message);
-                await this.wait(60000); // Wait 1m on error
+                await this.wait(60000);
             }
 
             attempts++;
@@ -1060,7 +1011,11 @@ class MarketDataSyncService {
      * Optionally triggers a new cloud scrape.
      */
     async syncSellerAsinsToOctoparse(sellerId, options = {}) {
-        const { triggerScrape = false } = options;
+        // DEFAULT TO TRUE: We always want to start the scrape unless explicitly told not to
+        const triggerScrape = options.triggerScrape !== undefined ? options.triggerScrape : true;
+        const forceReRun = options.forceReRun || false;
+        
+        console.log(`🏁 [START] Seller Sync Logic triggered for: ${sellerId}`);
 
         // CONCURRENCY LOCK: Prevent overlapping syncs for the same seller
         if (this.syncLocks.get(sellerId.toString())) {
@@ -1077,36 +1032,13 @@ class MarketDataSyncService {
                 return false;
             }
 
-            // 2. Robust Task Stop (TaskExecuting error prevention)
-            let isRunning = true;
-            let stopRetries = 0;
-            
-            while (isRunning && stopRetries < 5) {
-                const statusInfo = await this.getStatus(taskId);
-                
-                // If rate limited, WAIT and RETRY without assuming status
-                if (statusInfo?.error === 'RateLimit') {
-                    console.log(`⏳ Rate limited on status check for task ${taskId}. Waiting 5s before retry...`);
-                    await this.wait(5000);
-                    continue; // Skip this loop iteration, don't increment retries if it's just a rate limit? 
-                    // Actually, let's limit total attempts.
-                }
-
-                const status = statusInfo?.status || statusInfo?.Status || statusInfo;
-                isRunning = status === 'Executing' || status === 'Running' || status === 1 || status === '1';
-
-                if (isRunning) {
-                    console.log(`⏳ Task ${taskId} is currently executing (Status: ${status}). Sending stop command (Attempt ${stopRetries + 1})...`);
-                    await this.stopSync(taskId);
-                    this.statusCache.delete(taskId); // Invalidate cache so we fetch fresh status next time
-                    await this.wait(5000 * (stopRetries + 1)); // Heavier back off
-                }
-                stopRetries++;
-            }
-
-            // If still running after retries, try one more time or alert
-            if (isRunning) {
-                console.warn(`⚠️ Task ${taskId} still reported as Running after ${stopRetries} stops. Proceeding with update anyway (may hit TaskExecuting error).`);
+            // 2. Task Stop (Only wait if not a forced manual re-run to save time)
+            if (forceReRun) {
+                console.log(`📡 Forcing immediate restart for task ${taskId}...`);
+                await this.stopSync(taskId); 
+                // We don't wait for status confirmation in forced re-run mode to avoid stalls
+            } else {
+                await this.ensureTaskStopped(taskId);
             }
 
             // 3. Get All Active ASINs for this seller
@@ -1132,23 +1064,18 @@ class MarketDataSyncService {
 
             console.log(`🔄 Syncing ASINs to task ${taskId} from DB record...`);
 
-            // 4. Update task URLs (using file endpoint for efficiency)
-            // Pulling from DB record (as requested) to ensure absolute sync
+            // 4. Update task URLs (using FILE endpoint only as per user request)
             const seller = await Seller.findById(sellerId).select('marketSyncUrls');
             const syncUrls = seller?.marketSyncUrls || urls;
 
             try {
                 await this.updateTaskUrlsWithFile(taskId, syncUrls);
             } catch (injectionError) {
-                console.warn(`⚠️ File-based injection failed for task ${taskId}: ${injectionError.message}. Attempting Loop Item fallback...`);
-                // Fallback: Use standard Loop Items API (UpdateLoopItems)
-                // We send syncUrls directly; the method will handle formatting
-                const fallbackSuccess = await this.updateTaskLoopItems(taskId, syncUrls);
-                if (!fallbackSuccess) {
-                    console.error(`❌ All injection methods failed for task ${taskId}.`);
-                    // We continue anyway so the scrape can optionally try to run with old data or fail later
-                }
+                console.error(`❌ File-based injection failed for task ${taskId}: ${injectionError.message}`);
+                // Don't fall back to Loop Items anymore
+                throw injectionError;
             }
+
 
             // 5. Trigger Scrape if requested
             if (triggerScrape) {
@@ -1157,7 +1084,7 @@ class MarketDataSyncService {
 
                 // START BACKGROUND AUTOMATION: Poll and Ingest once done
                 // We do NOT await this so the response returns to user immediately
-                this.pollAndAutomate(sellerId, taskId).catch(err => {
+                this.pollAndAutomate(sellerId, taskId, { fullSync: options.fullSync }).catch(err => {
                     console.error(`❌ Background Automation Critical Error for seller ${sellerId}:`, err.message);
                 });
             }
@@ -1169,6 +1096,46 @@ class MarketDataSyncService {
         } finally {
             this.syncLocks.delete(sellerId.toString());
         }
+    }
+
+    /**
+     * Helper to ensure a task is fully stopped before proceeding.
+     * Polls the status and sends stop commands if necessary.
+     */
+    async ensureTaskStopped(taskId, maxAttempts = 6) {
+        let attempts = 0;
+        let isRunning = true;
+
+        while (isRunning && attempts < maxAttempts) {
+            const statusInfo = await this.getStatus(taskId);
+            
+            // Octoparse statuses can be: 0=Idle, 1=Running, 2=Waiting, 3=Stopped/Finished, 4=Failed
+            let status = statusInfo?.status ?? statusInfo?.Status ?? statusInfo;
+            if (typeof status === 'object' && status !== null) status = status.status || status.Status;
+
+            // Normalize status to number if possible
+            const statusNum = parseInt(status);
+            
+            // 0, 3, 4 are "Not Running"
+            isRunning = (statusNum === 1 || statusNum === 2 || status === 'Executing' || status === 'Running' || status === 'Waiting');
+
+            if (isRunning) {
+                console.log(`⏳ Task ${taskId} is active (Status: ${status}). Forcing STOP... (Attempt ${attempts + 1}/${maxAttempts})`);
+                await this.stopSync(taskId);
+                await this.wait(3000); // Wait for cloud coordinator to process stop
+            } else {
+                console.log(`✅ Task ${taskId} is already stopped/idle (Status: ${status}).`);
+                isRunning = false;
+            }
+            attempts++;
+        }
+
+        if (isRunning) {
+            console.warn(`⚠️ Warning: Task ${taskId} still in ${isRunning} state after ${maxAttempts} attempts.`);
+        } else {
+            console.log(`✅ Task ${taskId} is confirmed stopped.`);
+        }
+        return !isRunning;
     }
 
     /**
@@ -1397,31 +1364,69 @@ class MarketDataSyncService {
             const asin = asinMap.get(code);
             if (!asin) continue;
 
-            // Use existing cleaning/mapping logic via a stateless version of updateAsinMetrics
-            // For now, we'll manually extract the critical updates to optimize memory
+            // 1. Core Numeric Metrics
             const price = this._cleanPrice(rawData.asp || rawData.price || rawData.Field2 || rawData.currentPrice);
             const mrp = this._cleanPrice(rawData.mrp || rawData.listPrice || rawData.Field3);
             const bsr = this._cleanBsr(rawData.sub_BSR || rawData.Field9 || rawData.BSR || rawData.bsr);
-            const soldBy = (rawData.sold_by || rawData.Field11 || '').trim();
             
-            // Smarter Rating Extraction for noisy strings
-            let rating = 0;
-            const rawRating = (rawData.Rating || rawData.rating || rawData.Field7 || '').toString();
-            if (rawRating) {
-                const rMatch = rawRating.match(/([\d.]+)\s+out of 5/i);
-                rating = rMatch ? parseFloat(rMatch[1]) : parseFloat(rawRating.replace(/[^0-9.]/g, '')) || 0;
+            // 2. Title & Metadata
+            const title = (rawData.Title || rawData.title || asin.title || '').trim();
+            const soldBy = (rawData.sold_by || rawData.Field11 || asin.soldBy || '').trim();
+            const hasAplus = this._parseBoolean(rawData.A_plus || rawData.has_aplus || false);
+
+            // 3. Category Breadcrumb Parsing
+            let category = (rawData.category || asin.category || '').trim();
+            if (category.includes('<li')) {
+                const liMatch = category.match(/<li[^>]*>(?:<span[^>]*>)?(?:<a[^>]*>)?([^<]+)(?:<\/a>)?(?:<\/span>)?<\/li>$/i);
+                if (liMatch) category = liMatch[1].trim().replace(/^›\s*/, '').replace(/\s*›$/, '').trim();
             }
 
-            // Prepare update object (simplified for bulk)
+            // 4. Rating & Reviews
+            let rating = 0;
+            let reviewCount = 0;
+            const ratingStr = (rawData.Rating || rawData.rating || '').toString();
+            if (ratingStr) {
+                const rMatch = ratingStr.match(/([\d.]+)\s+out of 5/i);
+                rating = rMatch ? parseFloat(rMatch[1]) : parseFloat(ratingStr.replace(/[^0-9.]/g, '')) || 0;
+                
+                const cMatch = ratingStr.match(/([\d,]+)\s+global ratings/i) || ratingStr.match(/([\d,]+)\s+ratings/i);
+                if (cMatch) reviewCount = parseInt(cMatch[1].replace(/,/g, ''));
+            }
+
+            // 5. Image & Gallery Data
+            const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || asin.mainImageUrl;
+            let imagesCount = asin.imagesCount || 0;
+            if (rawData.image_count?.includes('<li')) {
+                imagesCount = (rawData.image_count.match(/<li/g) || []).length;
+            }
+
+            // 6. SubBSRs extraction
+            let subBSRs = asin.subBSRs || [];
+            const bsrString = rawData.sub_BSR || rawData.BSR || '';
+            if (bsrString) {
+                const parts = bsrString.split(/\s{2,}|\n/).map(p => p.trim()).filter(Boolean);
+                subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
+            }
+
+            // Prepare update object
             const updateData = {
                 $set: {
+                    title: title || asin.title,
+                    titleLength: title.length || asin.titleLength,
                     currentPrice: price > 0 ? price : asin.currentPrice,
                     currentASP: price > 0 ? price : asin.currentASP,
                     mrp: mrp > 0 ? mrp : asin.mrp,
                     bsr: bsr > 0 ? bsr : asin.bsr,
+                    subBSRs: subBSRs,
                     rating: rating > 0 ? rating : asin.rating,
-                    stockLevel: this._cleanStock(rawData.stock || rawData.inventory || rawData.FieldX || 0),
-                    soldBy: soldBy || asin.soldBy,
+                    reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
+                    category: category || asin.category,
+                    mainImageUrl: mainImageUrl || asin.mainImageUrl,
+                    imageUrl: mainImageUrl || asin.mainImageUrl,
+                    imagesCount: imagesCount,
+                    hasAplus: hasAplus,
+                    stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
+                    soldBy: soldBy,
                     lastScraped: now,
                     scrapeStatus: 'COMPLETED',
                     status: 'Active'

@@ -157,8 +157,12 @@ exports.syncSellerAsins = async (req, res) => {
         if (!useDirect) {
             try {
                 console.log(`🤖 Using Automated Octoparse Sync for Seller: ${seller.name}`);
-                
-                const syncStarted = await MarketSyncService.syncSellerAsinsToOctoparse(sellerId, { triggerScrape: true });
+                const fullSync = req.body.fullSync === true || req.query.fullSync === 'true';
+
+                const syncStarted = await MarketSyncService.syncSellerAsinsToOctoparse(sellerId, { 
+                    triggerScrape: true,
+                    fullSync: fullSync
+                });
 
                 if (!syncStarted) {
                     throw new Error('Automated sync service failed to initialize');
@@ -236,90 +240,65 @@ exports.syncAllAsins = async (req, res) => {
             { $set: { scrapeStatus: 'SCRAPING', status: 'Scraping' } }
         );
 
-        // Process in background
-        const DirectScraperService = require('../services/directScraperService');
+        // Process Sellers in background (Bulk sync approach)
         const MarketSyncService = require('../services/marketDataSyncService');
         const SocketService = require('../services/socketService');
+        const io = SocketService.getIo();
+
+        // 1. Identify Unique Sellers from the ASIN set
+        const sellerIds = [...new Set(asins.map(a => a.seller?._id || a.seller).filter(Boolean))];
+        
+        // Force-Clear any stale locks for these specific sellers before a manual "Sync All"
+        sellerIds.forEach(id => MarketSyncService.syncLocks.delete(id.toString()));
+        console.log(`🧹 Cleared status locks for ${sellerIds.length} sellers to allow fresh sync.`);
+        console.log(`🚀 Starting Global Sync for ${sellerIds.length} Sellers (${asins.length} ASINs)...`);
 
         // Fire and forget background process
         setTimeout(async () => {
-            const CONCURRENCY_LIMIT = parseInt(process.env.CONCURRENCY_LIMIT || '5', 10);
-            const CHUNK_SIZE = 5; // Emit progress more frequently for UI responsiveness
-            let processedCount = 0;
-            const io = SocketService.getIo(); // Correctly get Socket.io instance
+            let sellersProcessed = 0;
 
             const broadcastProgress = (statusText) => {
                 if (io) {
-                    // Broadcast globally so any connected dashboard sees the global sync progress
                     io.emit('scrape_progress', {
-                        total: asins.length,
-                        processed: processedCount,
+                        total: sellerIds.length,
+                        processed: sellersProcessed,
                         status: statusText,
                         timestamp: Date.now()
                     });
                 }
             };
 
-            console.log(`🚀 Starting background sync for ${asins.length} ASINs with concurrency ${CONCURRENCY_LIMIT}`);
-            broadcastProgress('Initializing Scrape Task...');
+            broadcastProgress('Initializing Bulk Sync Tasks...');
 
-            // Helper function to process a single ASIN
-            const processAsin = async (asin) => {
-                try {
-                    const isConfigured = MarketSyncService.isConfigured();
-                    let useDirect = !asin.seller?.marketSyncTaskId || !isConfigured;
-
-                    console.log(`[BatchSync] Processing ${asin.asinCode}: taskId=${asin.seller?.marketSyncTaskId}, isConfigured=${isConfigured} => useDirect=${useDirect}`);
-
-                    if (!useDirect) {
-                        try {
-                            await MarketSyncService.triggerSync(
-                                asin.seller.marketSyncTaskId,
-                                [{ name: 'ASIN', value: asin.asinCode }]
-                            );
-                        } catch (octoError) {
-                            console.warn(`⚠️ Octoparse trigger failed for ${asin.asinCode}:`, octoError.message);
-                            await Asin.updateOne({ _id: asin._id }, { $set: { scrapeStatus: 'FAILED', status: 'Error' } });
+            // Parallel Batch Processor (Process 3 sellers at a time for efficiency)
+            const BATCH_SIZE = 3;
+            for (let i = 0; i < sellerIds.length; i += BATCH_SIZE) {
+                const batch = sellerIds.slice(i, i + BATCH_SIZE);
+                console.log(`🚀 Initiating Sync Batch: ${i / BATCH_SIZE + 1} (${batch.length} sellers)...`);
+                
+                await Promise.all(batch.map(async (sellerId) => {
+                    try {
+                        const result = await MarketSyncService.syncSellerAsinsToOctoparse(sellerId, { 
+                            fullSync: true,
+                            forceReRun: true,
+                            triggerScrape: true
+                        });
+                        if (result) {
+                            console.log(`✅ Bulk Sync: Initialized for seller ${sellerId}`);
                         }
+                    } catch (err) {
+                        console.error(`❌ Bulk Sync: Failed for seller ${sellerId}:`, err.message);
                     }
+                }));
 
-                    /*
-                    if (useDirect) {
-                        const rawData = await DirectScraperService.scrapeAsin(asin.asinCode);
-                        await MarketSyncService.updateAsinMetrics(asin._id, rawData);
-                    }
-                    */
-                    console.log(`✅ Background sync cycle completed for ASIN: ${asin.asinCode}`);
-                } catch (err) {
-                    console.error(`❌ Background sync failed for ASIN: ${asin.asinCode}`, err.message);
-                    await Asin.updateOne({ _id: asin._id }, { $set: { scrapeStatus: 'FAILED', status: 'Error' } });
+                // Short pacing delay between batches (rather than between individuals)
+                if (i + BATCH_SIZE < sellerIds.length) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                 }
+            }
 
-            };
-
-            // Process strictly with concurrency limit using a queue pool
-            let index = 0;
-            const workers = Array(CONCURRENCY_LIMIT).fill(null).map(async () => {
-                while (index < asins.length) {
-                    const currentIndex = index++;
-                    const asin = asins[currentIndex];
-                    await processAsin(asin);
-                    processedCount++;
-
-                    if (processedCount % CHUNK_SIZE === 0 || processedCount === asins.length) {
-                        const percent = ((processedCount / asins.length) * 100).toFixed(1);
-                        console.log(`📊 Sync Progress: ${processedCount}/${asins.length} ASINs processed (${percent}%).`);
-                        broadcastProgress(`Scraping in progress... (${percent}%)`);
-                    }
-                    // Small delay between requests per worker to be polite
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-            });
-
-            await Promise.all(workers);
-            console.log(`🎉 Global sync finished processing ${asins.length} ASINs.`);
-            broadcastProgress('Complete');
-
+            console.log(`🎉 Global sync bulk initialization finished for ${sellerIds.length} sellers.`);
+            broadcastProgress('All sync tasks initiated.');
         }, 0);
 
         res.json({

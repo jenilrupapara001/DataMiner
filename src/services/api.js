@@ -161,8 +161,9 @@ export const marketSyncApi = {
     return res.json();
   },
 
-  syncSellerAsins: async (sellerId) => {
-    const res = await fetch(`${API_BASE}/market-sync/sync-all/${sellerId}`, {
+  syncSellerAsins: async (sellerId, fullSync = false) => {
+    const query = fullSync ? '?fullSync=true' : '';
+    const res = await fetch(`${API_BASE}/market-sync/sync-all/${sellerId}${query}`, {
       method: 'POST',
       headers: { ...getAuthHeader() },
     });

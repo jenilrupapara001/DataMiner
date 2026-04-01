@@ -245,6 +245,21 @@ const SellersPage = () => {
     }
   };
 
+  const handleFullSync = async (sellerId) => {
+    if (window.confirm('⚠️ Full Refresh: This will re-inject ALL ASINs and perform a complete re-scrape. This counts toward your daily limit. Continue?')) {
+      setLoading(true);
+      try {
+        const response = await marketSyncApi.syncSellerAsins(sellerId, true);
+        if (response.success) {
+          alert('Full Sync successfully triggered! Background monitoring started.');
+        }
+      } catch (error) {
+        alert('Full sync failed: ' + error.message);
+      }
+      setLoading(false);
+    }
+  };
+
   const handleSetupAutoSync = async (sellerId) => {
     if (window.confirm('Do you want to automatically create an Octoparse task for this seller? This will clone your master template and link it to this store.')) {
       setLoading(true);
@@ -533,6 +548,14 @@ const SellersPage = () => {
                       disabled={seller.marketSyncTaskId}
                     >
                       <Wand2 size={12} className={seller.marketSyncTaskId ? 'text-muted' : 'text-primary'} />
+                    </button>
+                    <button 
+                      className={`btn btn-icon border shadow-sm btn-sm ${seller.marketSyncTaskId ? 'btn-white text-info' : 'btn-white text-muted opacity-50'}`} 
+                      onClick={() => seller.marketSyncTaskId && handleFullSync(seller._id)} 
+                      title={seller.marketSyncTaskId ? "Force Full Refresh (All ASINs)" : "No task linked"}
+                      disabled={!seller.marketSyncTaskId}
+                    >
+                      <RefreshCw size={12} />
                     </button>
                     <button 
                       className="btn btn-icon btn-white border shadow-sm btn-sm text-primary-emphasis" 

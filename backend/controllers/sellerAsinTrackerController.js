@@ -6,6 +6,8 @@
 const Seller = require('../models/Seller');
 const Asin = require('../models/Asin');
 const { getSellerAsins, getTokenStatus, getDomainId } = require('../services/keepaService');
+const marketDataSyncService = require('../services/marketDataSyncService');
+
 
 /**
  * GET /api/seller-tracker
@@ -134,7 +136,15 @@ const syncSellerFromKeepa = async (seller) => {
                 }
             }
         }
+
+        // BACKGROUND: Trigger Octoparse sync for the newly discovered ASINs
+        if (newAsins.length > 0 && marketDataSyncService.isConfigured()) {
+            console.log(`🤖 [SellerTracker] Triggering Octoparse sync for: ${seller.name} (+${newAsins.length} ASINs)`);
+            marketDataSyncService.syncSellerAsinsToOctoparse(seller._id, { triggerScrape: true })
+                .catch(err => console.error(`⚠️ [SellerTracker] Octoparse trigger failed for ${seller.name}:`, err.message));
+        }
     } else {
+
         await Seller.findByIdAndUpdate(seller._id, {
             keepaAsinCount: keepaAsins.length,
             lastKeepaSync: new Date(),
@@ -180,20 +190,21 @@ exports.syncSeller = async (req, res) => {
 exports.syncAll = async (req, res) => {
     try {
         const sellers = await Seller.find({ status: 'Active' });
-        const results = [];
-
-        for (const seller of sellers) {
+        
+        // 1. Concurrent Keepa Sync
+        const results = await Promise.all(sellers.map(async (seller) => {
             try {
                 const r = await syncSellerFromKeepa(seller);
-                results.push({ seller: seller.name, sellerId: seller._id, ...r, error: null });
+                return { seller: seller.name, sellerId: seller._id, ...r, error: null };
             } catch (err) {
-                results.push({ seller: seller.name, sellerId: seller._id, added: 0, error: err.message });
+                return { seller: seller.name, sellerId: seller._id, added: 0, error: err.message };
             }
-        }
+        }));
 
         const totalAdded = results.reduce((s, r) => s + (r.added || 0), 0);
         res.json({ success: true, results, totalAdded });
     } catch (error) {
+
         res.status(500).json({ success: false, message: error.message });
     }
 };

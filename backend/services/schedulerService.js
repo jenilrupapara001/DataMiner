@@ -25,19 +25,20 @@ class SchedulerService {
             await this.runKeepaSync();
         });
 
-        // 2. Octoparse Scrape Task Trigger (Hourly check for 24h sync)
-        this.jobs.triggerOctoparse = cron.schedule('0 * * * *', async () => {
-            console.log('🕒 Checking for Sellers due for Market Data Sync...');
+        // 2. Octoparse Nightly Full Sync (Every day at 12 AM)
+        this.jobs.triggerOctoparse = cron.schedule('0 0 * * *', async () => {
+            console.log('🕒 Starting Nightly Octoparse Market Data Sync...');
             await this.runOctoparseTrigger();
         });
 
-        // 3. Octoparse Data Fetching (Every 4 hours)
+        // 3. Octoparse Data Fetching (Every 4 hours as a fallback for background polling)
         this.jobs.fetchOctoparse = cron.schedule('0 */4 * * *', async () => {
-            console.log('🕒 Fetching pending Octoparse Scrape Results...');
+            console.log('🕒 Fetching pending Octoparse Scrape Results (Fallback)...');
             await this.runOctoparseResultFetch();
         });
 
-        console.log('✅ Background tasks scheduled (Keepa: 12h, Octoparse Trigger: Daily 2AM, Octoparse Fetch: 4h)');
+        console.log('✅ Background tasks scheduled (Keepa: 12h, Octoparse Trigger: Daily 12AM, Octoparse Fetch: 4h)');
+
 
         // Optional: Run once on startup after a small delay to ensure DB is ready
         setTimeout(() => {
@@ -89,60 +90,36 @@ class SchedulerService {
     }
 
     /**
-     * Logic to trigger Octoparse extraction tasks
+     * Logic to trigger Octoparse extraction tasks for all active sellers.
+     * Runs concurrently to optimize throughput.
      */
     async runOctoparseTrigger() {
         try {
-            const Asin = require('../models/Asin');
-            const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-            const now = new Date();
-
             // Find active sellers with a configured task
             const sellers = await Seller.find({ 
                 status: 'Active', 
                 marketSyncTaskId: { $exists: true, $ne: '' } 
             });
 
-            console.log(`[Scheduler] Checking ${sellers.length} sellers for sync eligibility...`);
+            console.log(`[Scheduler] 🚀 Starting Nightly Octoparse Sync for ${sellers.length} sellers...`);
 
-            for (const seller of sellers) {
+            // Use Promise.all for concurrent triggering of scrapes
+            // (Each trigger handles its own background polling/ingestion)
+            await Promise.all(sellers.map(async (seller) => {
                 try {
-                    const lastSync = seller.lastScraped ? new Date(seller.lastScraped).getTime() : 0;
-                    const due = (Date.now() - lastSync) >= TWENTY_FOUR_HOURS;
-
-                    if (!due) {
-                        console.log(`[Scheduler] ⏭️ Skipping ${seller.name} (Last sync: ${seller.lastScraped || 'Never'})`);
-                        continue;
-                    }
-
-                    console.log(`[Scheduler] 🚀 Auto-Triggering sync for Seller: ${seller.name}`);
-
-                    // Fetch active ASINs to update loop items
-                    const asins = await Asin.find({ seller: seller._id, status: 'Active' });
-                    const asinCodes = asins.map(a => a.asinCode);
-
-                    if (asinCodes.length === 0) {
-                        console.log(`[Scheduler] ⏭️ Skipping ${seller.name} - No active ASINs`);
-                        continue;
-                    }
-
-                    await MarketSyncService.triggerSync(seller.marketSyncTaskId, asinCodes);
-
-                    // Update seller lastScraped timestamp
-                    seller.lastScraped = now;
-                    await seller.save();
-                    
-                    console.log(`[Scheduler] ✅ Octoparse sync initiated for ${seller.name} (${asinCodes.length} ASINs)`);
+                    console.log(`[Scheduler] 🤖 Launching sync for ${seller.name}...`);
+                    await MarketSyncService.syncSellerAsinsToOctoparse(seller._id, { triggerScrape: true });
                 } catch (err) {
                     console.error(`[Scheduler] ❌ Failed to trigger Octoparse for seller ${seller.name}:`, err.message);
                 }
-                // Small delay to avoid API burst limits
-                await new Promise(resolve => setTimeout(resolve, 3000));
-            }
+            }));
+
+            console.log('[Scheduler] ✅ All nightly Octoparse tasks triggered.');
         } catch (error) {
             console.error('[Scheduler] Critical Octoparse Trigger error:', error.message);
         }
     }
+
 
     /**
      * Logic to fetch and ingest results from completed Octoparse tasks across ALL sellers.
