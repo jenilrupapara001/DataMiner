@@ -164,20 +164,39 @@ class OctoparseAutomationService {
     async fetchResults(taskId, size = 1000) {
         const token = await this.authenticate();
 
-        try {
-            this.log('info', `Fetching results for task ${taskId} (size: ${size})`);
-            const response = await axios.get(`${this.baseUrl}/task/data`, {
-                params: { taskId, size },
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+        // Try multiple API paths (same as marketDataSyncService)
+        const paths = [
+            '/data/all',
+            '/data/notexported',
+            '/task/data/notexporteddata',
+            '/api/notexporteddata/get',
+            '/task/data'
+        ];
 
-            // Handle different Octoparse API response formats
-            const results = response.data?.data?.dataList || response.data?.data || [];
-            return Array.isArray(results) ? results : [];
-        } catch (err) {
-            this.log('error', `Fetch results failed for ${taskId}`, { error: err.message });
-            return [];
+        let lastErr = null;
+        for (const path of paths) {
+            try {
+                this.log('info', `Trying ${path} for task ${taskId}`);
+                const response = await axios.get(`${this.baseUrl}${path}`, {
+                    params: { taskId, size },
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.data?.data) {
+                    const results = response.data.data?.dataList || response.data.data?.data || response.data;
+                    if (Array.isArray(results) && results.length > 0) {
+                        this.log('info', `✅ Fetched ${results.length} results from ${path}`);
+                        return results;
+                    }
+                }
+            } catch (err) {
+                lastErr = err.message;
+                this.log('warn', `Path ${path} failed: ${err.message}`);
+            }
         }
+
+        this.log('error', `All paths failed for ${taskId}`, { lastError: lastErr });
+        return [];
     }
 
     async stopTask(taskId) {

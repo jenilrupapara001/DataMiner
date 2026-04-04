@@ -1085,10 +1085,26 @@ class MarketDataSyncService {
                         }
                     }
                     
+                    // Also check for /data/notexported response structure
+                    if (path === '/data/notexported' && response.data.data) {
+                        console.log(`📋 DEBUG /data/notexported response structure:`, {
+                            hasTotal: 'total' in response.data.data,
+                            hasCurrent: 'current' in response.data.data,
+                            hasData: 'data' in response.data.data,
+                            total: response.data.data.total,
+                            current: response.data.data.current,
+                            dataLength: response.data.data.data?.length
+                        });
+                    }
+                    
                     return Array.isArray(dataList) ? dataList : [];
+                } else {
+                    // Response doesn't have expected structure
+                    console.log(`⚠️ Response from ${path} missing expected data structure:`, JSON.stringify(response.data).substring(0, 200));
                 }
             } catch (err) {
                 lastErr = err.response?.status + ' ' + (err.response?.data?.error?.message || err.message);
+                console.log(`❌ Path ${path} failed: ${err.response?.status} - ${err.message}`);
                 
                 // If it's a 404 and we used a resolved ID, try a fallback to original UUID
                 if (err.response?.status === 404 && currentId !== taskId) {
@@ -1108,7 +1124,9 @@ class MarketDataSyncService {
                             
                             return Array.isArray(dataList) ? dataList : [];
                         }
-                    } catch (inner) { /* ignore fallback error */ }
+                    } catch (inner) { 
+                        console.log(`❌ Fallback also failed: ${inner.message}`);
+                    }
                 }
             }
         }
