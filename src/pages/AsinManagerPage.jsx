@@ -132,19 +132,19 @@ const demoAsins = [
     dealDetails: 'Lightning Deal',
     totalOffers: 15,
     imagesCount: 7,
-    hasAPlus: true,
+    hasAplus: true,
     descLength: 520,
     lqs: 85,
     status: 'Active',
     weekHistory: [
-      { week: 'Week 1', date: '2024-12-01', price: 2399, bsr: 1400, rating: 4.4, reviews: 1180 },
-      { week: 'Week 2', date: '2024-12-08', price: 2499, bsr: 1350, rating: 4.4, reviews: 1200 },
-      { week: 'Week 3', date: '2024-12-15', price: 2499, bsr: 1300, rating: 4.5, reviews: 1215 },
-      { week: 'Week 4', date: '2024-12-22', price: 2599, bsr: 1280, rating: 4.5, reviews: 1225 },
-      { week: 'Week 5', date: '2024-12-29', price: 2499, bsr: 1250, rating: 4.5, reviews: 1235 },
-      { week: 'Week 6', date: '2025-01-05', price: 2399, bsr: 1220, rating: 4.5, reviews: 1240 },
-      { week: 'Week 7', date: '2025-01-12', price: 2499, bsr: 1200, rating: 4.5, reviews: 1245 },
-      { week: 'Week 8', date: '2025-01-19', price: 2499, bsr: 1250, rating: 4.5, reviews: 1250 },
+      { week: 'W48-2024', date: '2024-12-01', price: 2399, bsr: 1400, rating: 4.4, reviews: 1180, hasAplus: true },
+      { week: 'W49-2024', date: '2024-12-08', price: 2499, bsr: 1350, rating: 4.4, reviews: 1200, hasAplus: true },
+      { week: 'W50-2024', date: '2024-12-15', price: 2499, bsr: 1300, rating: 4.5, reviews: 1215, hasAplus: true },
+      { week: 'W51-2024', date: '2024-12-22', price: 2599, bsr: 1280, rating: 4.5, reviews: 1225, hasAplus: true },
+      { week: 'W52-2024', date: '2024-12-29', price: 2499, bsr: 1250, rating: 4.5, reviews: 1235, hasAplus: true },
+      { week: 'W01-2025', date: '2025-01-05', price: 2399, bsr: 1220, rating: 4.5, reviews: 1240, hasAplus: true },
+      { week: 'W02-2025', date: '2025-01-12', price: 2499, bsr: 1200, rating: 4.5, reviews: 1245, hasAplus: true },
+      { week: 'W03-2025', date: '2025-01-19', price: 2499, bsr: 1250, rating: 4.5, reviews: 1250, hasAplus: true },
     ],
   },
   {
@@ -164,19 +164,19 @@ const demoAsins = [
     dealDetails: 'None',
     totalOffers: 8,
     imagesCount: 5,
-    hasAPlus: true,
+    hasAplus: true,
     descLength: 480,
     lqs: 72,
     status: 'Active',
     weekHistory: [
-      { week: 'Week 1', date: '2024-12-01', price: 8799, bsr: 950, rating: 4.1, reviews: 820 },
-      { week: 'Week 2', date: '2024-12-08', price: 8999, bsr: 920, rating: 4.1, reviews: 835 },
-      { week: 'Week 3', date: '2024-12-15', price: 9199, bsr: 900, rating: 4.2, reviews: 850 },
-      { week: 'Week 4', date: '2024-12-22', price: 8999, bsr: 910, rating: 4.2, reviews: 860 },
-      { week: 'Week 5', date: '2024-12-29', price: 8799, bsr: 895, rating: 4.2, reviews: 870 },
-      { week: 'Week 6', date: '2025-01-05', price: 8999, bsr: 890, rating: 4.2, reviews: 880 },
-      { week: 'Week 7', date: '2025-01-12', price: 9199, bsr: 885, rating: 4.2, reviews: 885 },
-      { week: 'Week 8', date: '2025-01-19', price: 8999, bsr: 890, rating: 4.2, reviews: 890 },
+      { week: 'W48-2024', date: '2024-12-01', price: 8799, bsr: 950, rating: 4.1, reviews: 820 },
+      { week: 'W49-2024', date: '2024-12-08', price: 8999, bsr: 920, rating: 4.1, reviews: 835 },
+      { week: 'W50-2024', date: '2024-12-15', price: 9199, bsr: 900, rating: 4.2, reviews: 850 },
+      { week: 'W51-2024', date: '2024-12-22', price: 8999, bsr: 910, rating: 4.2, reviews: 860 },
+      { week: 'W52-2024', date: '2024-12-29', price: 8799, bsr: 895, rating: 4.2, reviews: 870 },
+      { week: 'W01-2025', date: '2025-01-05', price: 8999, bsr: 890, rating: 4.2, reviews: 880 },
+      { week: 'W02-2025', date: '2025-01-12', price: 9199, bsr: 885, rating: 4.2, reviews: 885 },
+      { week: 'W03-2025', date: '2025-01-19', price: 8999, bsr: 890, rating: 4.2, reviews: 890 },
     ],
   },
   {
@@ -196,19 +196,19 @@ const demoAsins = [
     dealDetails: 'None',
     totalOffers: 22,
     imagesCount: 6,
-    hasAPlus: false,
+    hasAplus: false,
     descLength: 280,
     lqs: 68,
     status: 'Active',
     weekHistory: [
-      { week: 'Week 1', date: '2024-12-01', price: 1199, bsr: 3500, rating: 4.7, reviews: 3050 },
-      { week: 'Week 2', date: '2024-12-08', price: 1299, bsr: 3400, rating: 4.7, reviews: 3080 },
-      { week: 'Week 3', date: '2024-12-15', price: 1299, bsr: 3350, rating: 4.7, reviews: 3100 },
-      { week: 'Week 4', date: '2024-12-22', price: 1399, bsr: 3300, rating: 4.7, reviews: 3120 },
-      { week: 'Week 5', date: '2024-12-29', price: 1299, bsr: 3250, rating: 4.8, reviews: 3140 },
-      { week: 'Week 6', date: '2025-01-05', price: 1199, bsr: 3220, rating: 4.8, reviews: 3160 },
-      { week: 'Week 7', date: '2025-01-12', price: 1299, bsr: 3210, rating: 4.8, reviews: 3180 },
-      { week: 'Week 8', date: '2025-01-19', price: 1299, bsr: 3200, rating: 4.8, reviews: 3200 },
+      { week: 'W48-2024', date: '2024-12-01', price: 1199, bsr: 3500, rating: 4.7, reviews: 3050 },
+      { week: 'W49-2024', date: '2024-12-08', price: 1299, bsr: 3400, rating: 4.7, reviews: 3080 },
+      { week: 'W50-2024', date: '2024-12-15', price: 1299, bsr: 3350, rating: 4.7, reviews: 3100 },
+      { week: 'W51-2024', date: '2024-12-22', price: 1399, bsr: 3300, rating: 4.7, reviews: 3120 },
+      { week: 'W52-2024', date: '2024-12-29', price: 1299, bsr: 3250, rating: 4.8, reviews: 3140 },
+      { week: 'W01-2025', date: '2025-01-05', price: 1199, bsr: 3220, rating: 4.8, reviews: 3160 },
+      { week: 'W02-2025', date: '2025-01-12', price: 1299, bsr: 3210, rating: 4.8, reviews: 3180 },
+      { week: 'W03-2025', date: '2025-01-19', price: 1299, bsr: 3200, rating: 4.8, reviews: 3200 },
     ],
   },
   {
@@ -228,19 +228,19 @@ const demoAsins = [
     dealDetails: 'None',
     totalOffers: 35,
     imagesCount: 8,
-    hasAPlus: true,
+    hasAplus: true,
     descLength: 420,
     lqs: 78,
     status: 'Active',
     weekHistory: [
-      { week: 'Week 1', date: '2024-12-01', price: 699, bsr: 4800, rating: 4.2, reviews: 4300 },
-      { week: 'Week 2', date: '2024-12-08', price: 799, bsr: 4700, rating: 4.2, reviews: 4350 },
-      { week: 'Week 3', date: '2024-12-15', price: 849, bsr: 4650, rating: 4.3, reviews: 4400 },
-      { week: 'Week 4', date: '2024-12-22', price: 799, bsr: 4600, rating: 4.3, reviews: 4420 },
-      { week: 'Week 5', date: '2024-12-29', price: 749, bsr: 4550, rating: 4.3, reviews: 4440 },
-      { week: 'Week 6', date: '2025-01-05', price: 799, bsr: 4520, rating: 4.3, reviews: 4460 },
-      { week: 'Week 7', date: '2025-01-12', price: 849, bsr: 4510, rating: 4.3, reviews: 4480 },
-      { week: 'Week 8', date: '2025-01-19', price: 799, bsr: 4500, rating: 4.3, reviews: 4500 },
+      { week: 'W48-2024', date: '2024-12-01', price: 699, bsr: 4800, rating: 4.2, reviews: 4300 },
+      { week: 'W49-2024', date: '2024-12-08', price: 799, bsr: 4700, rating: 4.2, reviews: 4350 },
+      { week: 'W50-2024', date: '2024-12-15', price: 849, bsr: 4650, rating: 4.3, reviews: 4400 },
+      { week: 'W51-2024', date: '2024-12-22', price: 799, bsr: 4600, rating: 4.3, reviews: 4420 },
+      { week: 'W52-2024', date: '2024-12-29', price: 749, bsr: 4550, rating: 4.3, reviews: 4440 },
+      { week: 'W01-2025', date: '2025-01-05', price: 799, bsr: 4520, rating: 4.3, reviews: 4460 },
+      { week: 'W02-2025', date: '2025-01-12', price: 849, bsr: 4510, rating: 4.3, reviews: 4480 },
+      { week: 'W03-2025', date: '2025-01-19', price: 799, bsr: 4500, rating: 4.3, reviews: 4500 },
     ],
   },
   {
@@ -260,19 +260,19 @@ const demoAsins = [
     dealDetails: 'Prime Deal',
     totalOffers: 12,
     imagesCount: 9,
-    hasAPlus: true,
+    hasAplus: true,
     descLength: 680,
     lqs: 82,
     status: 'Active',
     weekHistory: [
-      { week: 'Week 1', date: '2024-12-01', price: 3299, bsr: 2000, rating: 4.0, reviews: 1750 },
-      { week: 'Week 2', date: '2024-12-08', price: 3499, bsr: 1950, rating: 4.0, reviews: 1770 },
-      { week: 'Week 3', date: '2024-12-15', price: 3699, bsr: 1900, rating: 4.1, reviews: 1790 },
-      { week: 'Week 4', date: '2024-12-22', price: 3499, bsr: 1880, rating: 4.1, reviews: 1805 },
-      { week: 'Week 5', date: '2024-12-29', price: 3299, bsr: 1860, rating: 4.1, reviews: 1820 },
-      { week: 'Week 6', date: '2025-01-05', price: 3499, bsr: 1855, rating: 4.1, reviews: 1830 },
-      { week: 'Week 7', date: '2025-01-12', price: 3699, bsr: 1852, rating: 4.1, reviews: 1840 },
-      { week: 'Week 8', date: '2025-01-19', price: 3499, bsr: 1850, rating: 4.1, reviews: 1850 },
+      { week: 'W48-2024', date: '2024-12-01', price: 3299, bsr: 2000, rating: 4.0, reviews: 1750 },
+      { week: 'W49-2024', date: '2024-12-08', price: 3499, bsr: 1950, rating: 4.0, reviews: 1770 },
+      { week: 'W50-2024', date: '2024-12-15', price: 3699, bsr: 1900, rating: 4.1, reviews: 1790 },
+      { week: 'W51-2024', date: '2024-12-22', price: 3499, bsr: 1880, rating: 4.1, reviews: 1805 },
+      { week: 'W52-2024', date: '2024-12-29', price: 3299, bsr: 1860, rating: 4.1, reviews: 1820 },
+      { week: 'W01-2025', date: '2025-01-05', price: 3499, bsr: 1855, rating: 4.1, reviews: 1830 },
+      { week: 'W02-2025', date: '2025-01-12', price: 3699, bsr: 1852, rating: 4.1, reviews: 1840 },
+      { week: 'W03-2025', date: '2025-01-19', price: 3499, bsr: 1850, rating: 4.1, reviews: 1850 },
     ],
   },
 ];
@@ -673,15 +673,15 @@ const AsinManagerPage = () => {
     );
   };
 
-  const getAplusBadge = (hasAPlus, status) => {
+  const getAplusBadge = (hasAplus, status) => {
     if (status === 'Scraping') return <span style={{ color: '#9ca3af' }}>-</span>;
-    const bgColor = hasAPlus ? '#059669' : '#6b7280';
+    const bgColor = hasAplus ? '#059669' : '#6b7280';
     return (
       <span
         className="badge"
         style={{ backgroundColor: bgColor, color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
       >
-        {hasAPlus ? 'Yes' : 'No'}
+        {hasAplus ? 'Yes' : 'No'}
       </span>
     );
   };
@@ -979,7 +979,7 @@ const AsinManagerPage = () => {
                   <div className="space-y-3">
                     <div className="d-flex justify-content-between align-items-center">
                       <span className="text-zinc-500 small">A+ Content Adoption</span>
-                      <span className="fw-bold text-zinc-900">{asins.filter(a => a.hasAPlus).length} / {asins.length}</span>
+                      <span className="fw-bold text-zinc-900">{asins.filter(a => a.hasAplus).length} / {asins.length}</span>
                     </div>
                     <div className="d-flex justify-content-between align-items-center">
                       <span className="text-zinc-500 small">Avg Description</span>
@@ -1195,10 +1195,10 @@ const AsinManagerPage = () => {
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
                           <div className="d-flex flex-column align-items-center">
                             <span style={{ fontWeight: 600, color: '#059669' }}>
-                              {asin.uploadedPrice ? `₹${asin.uploadedPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
+                              {asin.currentPrice > 0 ? `₹${asin.currentPrice.toLocaleString()}` : (asin.uploadedPrice ? `₹${asin.uploadedPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>)}
                             </span>
-                            {asin.currentPrice > 0 && asin.currentPrice !== asin.uploadedPrice && (
-                              <span className="text-primary" style={{ fontSize: '0.6rem' }}>Live: ₹{asin.currentPrice.toLocaleString()}</span>
+                            {asin.uploadedPrice > 0 && asin.currentPrice !== asin.uploadedPrice && (
+                              <span className="text-zinc-400" style={{ fontSize: '0.6rem', textDecoration: 'line-through' }}>₹{asin.uploadedPrice.toLocaleString()}</span>
                             )}
                           </div>
                         </td>

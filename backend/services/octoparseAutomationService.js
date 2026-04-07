@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Seller = require('../models/Seller');
 const Asin = require('../models/Asin');
+const { calculateLQS } = require('../utils/lqs');
 
 class OctoparseAutomationService {
     constructor() {
@@ -476,26 +477,100 @@ class OctoparseAutomationService {
             }
 
             // Only update if we have meaningful data (not just generic data)
-            if (Object.keys(updateData).length >= 2) { // Require at least 2 meaningful fields
+            if (Object.keys(updateData).length >= 2) {
                 updateData.lastScraped = new Date();
                 updateData.scrapeStatus = 'COMPLETED';
                 updateData.status = 'Active';
 
+                // Map Rating Breakdown if available (expecting fields like five_star, etc. as "75%")
+                const starFields = {
+                    fiveStar: item.five_star || item.Field12 || '',
+                    fourStar: item.four_star || item.Field13 || '',
+                    threeStar: item.three_star || item.Field14 || '',
+                    twoStar: item.two_star || item.Field15 || '',
+                    oneStar: item.one_star || item.Field16 || ''
+                };
+
+                const ratingBreakdown = {};
+                let hasBreakdown = false;
+                for (const [key, val] of Object.entries(starFields)) {
+                    if (val) {
+                        const numeric = parseInt(val.toString().replace(/[^0-9]/g, ''));
+                        if (!isNaN(numeric)) {
+                            ratingBreakdown[key] = numeric;
+                            hasBreakdown = true;
+                        }
+                    }
+                }
+                if (hasBreakdown) updateData.ratingBreakdown = ratingBreakdown;
+
+                // Map Buy Box & A+ Content status
+                const buyBoxRaw = item.buy_box_winner || item.buyBox || '';
+                if (buyBoxRaw) {
+                    updateData.buyBoxWin = buyBoxRaw.toString().toLowerCase().includes('yes') || 
+                                          buyBoxRaw.toString().toLowerCase().includes('buy box');
+                } else if (updateData.soldBy) {
+                    // Fallback: If sold by is extracted, assume buy box is active
+                    updateData.buyBoxWin = true;
+                }
+
+                const aPlusRaw = item.aplus_content || item.hasAplus || '';
+                if (aPlusRaw) {
+                    updateData.hasAplus = aPlusRaw.toString().toLowerCase().includes('yes') || 
+                                         aPlusRaw.toString().length > 100; // HTML content
+                }
+
+                // Apply updates to the document to calculate LQS
+                Object.assign(asin, updateData);
+                
+                // Ensure currentASP and currentPrice are in sync
+                if (updateData.currentPrice !== undefined) {
+                    asin.currentASP = updateData.currentPrice;
+                }
+                
+                // Detailed metrics for LQS
+                if (asin.title) asin.titleLength = asin.title.length;
+
+                // Calculate LQS score based on all available data
+                asin.lqs = calculateLQS(asin);
+
+                // Update Week-on-Week History for dashboard ledger
+                const now = new Date();
+                const year = now.getFullYear();
+                const startOfYear = new Date(year, 0, 1);
+                const pastDaysOfYear = (now - startOfYear) / 86400000;
+                const weekNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+                
+                // Match DB format: "WXX-YYYY"
+                const weekId = `W${weekNum < 10 ? '0' + weekNum : weekNum}-${year}`;
+                
+                asin.updateWeekHistory({
+                    week: weekId,
+                    date: now,
+                    price: asin.currentPrice,
+                    bsr: asin.bsr,
+                    rating: asin.rating,
+                    reviews: asin.reviewCount,
+                    lqs: asin.lqs,
+                    imageCount: asin.imagesCount,
+                    hasAplus: asin.hasAplus,
+                    titleLength: asin.titleLength || (asin.title ? asin.title.length : 0),
+                    bulletPoints: asin.bulletPoints || 0
+                });
+
+                await asin.save();
+                updatedCount++;
+
                 // Log processed data for first few items
                 if (results.indexOf(item) < 2) {
                     this.log('info', `✅ Processing ASIN ${asinCode}:`, {
-                        title: updateData.title?.substring(0, 50) + '...',
-                        price: updateData.currentPrice,
-                        category: updateData.category,
-                        imagesCount: updateData.imagesCount,
-                        bulletPointsCount: updateData.bulletPoints,
-                        bsr: updateData.bsr,
-                        soldBy: updateData.soldBy
+                        title: asin.title?.substring(0, 50) + '...',
+                        price: asin.currentPrice,
+                        lqs: asin.lqs,
+                        buyBox: asin.buyBoxWin,
+                        historyEntries: asin.weekHistory.length
                     });
                 }
-
-                await Asin.findByIdAndUpdate(asin._id, { $set: updateData });
-                updatedCount++;
             } else {
                 this.log('warn', `⚠️ Skipping ASIN ${asinCode} - insufficient valid data (${Object.keys(updateData).length} fields)`);
             }

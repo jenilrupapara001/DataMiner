@@ -55,6 +55,9 @@ const asinSchema = new mongoose.Schema({
   reviewCount: { type: Number, default: 0 },
   bulletPoints: { type: Number, default: 0 }, // List count
   bulletPointsText: [{ type: String }], // Actual bullet point text
+  lqs: { type: Number, default: 0 }, // Listing Quality Score
+  buyBoxWin: { type: Boolean, default: false }, // Buy Box winner status
+  hasAplus: { type: Boolean, default: false }, // A+ content presence
   // Enhanced Product Details (from Tracker & Calculator)
   weight: { type: Number }, // in grams
   dimensions: { type: String }, // LxWxH
