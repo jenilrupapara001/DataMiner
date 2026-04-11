@@ -498,7 +498,7 @@ router.post('/', protect, requireAnyPermission(['actions_create', 'actions_manag
 });
 
 // Update action
-router.put('/:id', protect, requireAnyPermission(['actions_edit', 'actions_manage']), async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
     try {
         const action = await Action.findById(req.params.id);
         if (!action) {
@@ -510,6 +510,8 @@ router.put('/:id', protect, requireAnyPermission(['actions_edit', 'actions_manag
         const isAdmin = userRole === 'admin';
         const isCreator = action.createdBy?.toString() === req.user._id.toString();
         const isAssigned = action.assignedTo?.toString() === req.user._id.toString();
+
+        console.log('[Action Update] Permission check:', { userRole, isAdmin, isCreator, isAssigned, userId: req.user._id.toString(), createdBy: action.createdBy?.toString() });
 
         if (!isAdmin && !isCreator && !isAssigned) {
             return res.status(403).json({ success: false, message: 'You do not have permission to update this task' });
@@ -542,21 +544,22 @@ router.put('/:id', protect, requireAnyPermission(['actions_edit', 'actions_manag
             );
         }
 
-        await action.populate('assignedTo', 'firstName lastName')
+        await updatedAction.populate('assignedTo', 'firstName lastName')
             .populate('createdBy', 'firstName lastName')
             .populate('asins', 'asinCode title')
             .populate('sellerId', 'name marketplace');
 
-        if (!action) {
+        if (!updatedAction) {
             return res.status(404).json({ success: false, message: 'Action not found' });
         }
 
         // Notify SSE clients
-        try { sendSseEvent('updated', action); } catch (e) { console.error('SSE notify failed', e); }
+        try { sendSseEvent('updated', updatedAction); } catch (e) { console.error('SSE notify failed', e); }
 
-        res.json({ success: true, data: action });
+        res.json({ success: true, data: updatedAction });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('[Action Update] Error:', error);
+        res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 });
 

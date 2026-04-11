@@ -33,7 +33,8 @@ import {
   ChevronRight,
   MessageSquareCode,
   ArrowRight,
-  Activity
+  Activity,
+  Upload
 } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import api, { seedApi } from '../services/api';
@@ -42,14 +43,17 @@ import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpiCard } from '../components/common/Skeleton';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { format } from 'date-fns';
+import ErrorState from '../components/common/ErrorState';
 import { useAuth } from '../contexts/AuthContext';
+import { useDateRange } from '../contexts/DateRangeContext';
 
 const Dashboard = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { startDate, endDate, rangeType } = useDateRange();
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
-  const [dateRange, setDateRange] = useState('last30');
   const [refreshInterval, setRefreshInterval] = useState(0);
   const [data, setData] = useState({
     kpis: [],
@@ -71,13 +75,19 @@ const Dashboard = () => {
     setLoading(true);
     setError(null);
     try {
-      const periodMap = {
-        'last7': '7d',
-        'last30': '30d',
-        'last90': '90d',
-        'thisYear': '1y'
+      const params = {
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
+        rangeType
       };
-      const response = await api.dashboardApi.getSummary(periodMap[dateRange] || '30d');
+
+      // Remove undefined keys so they don't become "undefined" strings in URL
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== undefined && v !== null)
+      );
+
+      const query = new URLSearchParams(cleanParams).toString();
+      const response = await api.dashboardApi.getSummary(query);
       const { kpi, revenue, areaSeries, stackedBarSeries, labels, category, tableData, userStats, teamStats, alerts } = response;
 
       setData({
@@ -99,7 +109,7 @@ const Dashboard = () => {
       setError('Failed to load dashboard data. Please check your connection.');
     }
     setLoading(false);
-  }, [dateRange]);
+  }, [rangeType, startDate, endDate]);
 
   useEffect(() => {
     loadDashboardData();
@@ -269,22 +279,9 @@ const Dashboard = () => {
           title="Dashboard"
           subtitle="Market Intelligence Command Center"
           actions={
-            <>
-              <button className="btn btn-white btn-sm shadow-sm border border-zinc-200" style={{ borderRadius: 'var(--radius-full)' }} onClick={loadDashboardData}>
-                <RefreshCw size={14} className={loading ? 'spin text-zinc-900' : 'text-zinc-500'} />
-              </button>
-              <div className="d-flex gap-1" style={{ borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-2)', padding: '4px' }}>
-                {['7D', '30D', '90D'].map((range) => (
-                  <button
-                    key={range}
-                    className="btn btn-sm px-3"
-                    style={{ borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: 600 }}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
-            </>
+            <button className="btn btn-white btn-sm shadow-sm border border-zinc-200" style={{ borderRadius: 'var(--radius-full)' }} onClick={loadDashboardData}>
+              <RefreshCw size={14} className={loading ? 'spin text-zinc-900' : 'text-zinc-500'} />
+            </button>
           }
         />
         {/* KPI Skeletons */}
@@ -341,23 +338,6 @@ const Dashboard = () => {
             <button className="btn btn-sm btn-secondary" onClick={loadDashboardData}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
             </button>
-            <div className="d-flex gap-1" style={{ borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-surface-2)', padding: '4px' }}>
-              {['last7', 'last30', 'last90'].map((range) => (
-                <button
-                  key={range}
-                  className={`btn btn-sm px-3 border-0 transition-all ${dateRange === range ? 'bg-zinc-900 text-white' : 'btn-ghost text-zinc-500'}`}
-                  style={{
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    backgroundColor: dateRange === range ? '#18181B' : 'transparent'
-                  }}
-                  onClick={() => setDateRange(range)}
-                >
-                  {range === 'last7' ? '7D' : range === 'last30' ? '30D' : '90D'}
-                </button>
-              ))}
-            </div>
             {isAdmin && (
               <>
                 <button
@@ -479,11 +459,12 @@ const Dashboard = () => {
               Quick Access
             </h6>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              {[
+{[
                 { label: 'Inventory Hub', icon: Package, href: '/inventory', color: 'var(--color-brand-600)' },
                 { label: 'Strategic OKRs', icon: Target, href: '/actions', color: '#8b5cf6' },
                 { label: 'Market Scraper', icon: Zap, href: '/scrape-tasks', color: '#f59e0b' },
                 { label: 'Alert Manager', icon: AlertCircle, href: '/alerts', color: '#ef4444' },
+                { label: 'Rule Sets', icon: Settings, href: '/rule-sets', color: '#06b6d4' },
                 { label: 'Performance', icon: FileBarChart, href: '/performance-reports', color: '#10b981' },
               ].map((item, idx) => (
                 <a

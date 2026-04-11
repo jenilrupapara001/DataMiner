@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, Activity, AlertTriangle, ExternalLink, BarChart2, Store, Plus, Filter, Database, Globe } from 'lucide-react';
+import { RefreshCw, Package, Search, ChevronDown, ChevronUp, Zap, Activity, AlertTriangle, ExternalLink, BarChart2, Store, Plus, Filter, Database, Globe, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -78,6 +78,7 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(seller._id === urlSellerId);
   const [search, setSearch] = useState('');
+  const [lqsFilter, setLqsFilter] = useState('');
 
   // Auto-open if URL matches
   useEffect(() => {
@@ -104,10 +105,25 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  const filtered = useMemo(() =>
-    asins.filter(a => !search || a.asinCode?.toLowerCase().includes(search.toLowerCase()) || a.title?.toLowerCase().includes(search.toLowerCase())),
-    [asins, search]
-  );
+  const filtered = useMemo(() => {
+    let result = asins;
+    if (search) {
+      result = result.filter(a => 
+        a.asinCode?.toLowerCase().includes(search.toLowerCase()) || 
+        a.title?.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    if (lqsFilter) {
+      if (lqsFilter === 'high') {
+        result = result.filter(a => a.lqs >= 80);
+      } else if (lqsFilter === 'medium') {
+        result = result.filter(a => a.lqs >= 60 && a.lqs < 80);
+      } else if (lqsFilter === 'low') {
+        result = result.filter(a => a.lqs != null && a.lqs < 60);
+      }
+    }
+    return result;
+  }, [asins, search, lqsFilter]);
 
   const flag = MARKETPLACE_FLAGS[seller.marketplace] || '🌐';
   const lastSync = seller.lastKeepaSync ? new Date(seller.lastKeepaSync) : null;
@@ -195,6 +211,16 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
+              <select
+                value={lqsFilter}
+                onChange={e => setLqsFilter(e.target.value)}
+                style={{ border: `1px solid ${Z[200]}`, borderRadius: 20, padding: '6px 12px', fontSize: 13, background: Z.white, color: Z[700], cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+              >
+                <option value="">All LQS</option>
+                <option value="high">High (80+)</option>
+                <option value="medium">Medium (60-79)</option>
+                <option value="low">Low (&lt;60)</option>
+              </select>
             </div>
             <span style={{ fontSize: 12, color: Z[500], fontWeight: 500 }}>{filtered.length} ASINs found</span>
           </div>

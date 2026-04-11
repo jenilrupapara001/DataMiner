@@ -12,6 +12,13 @@ class OctoparseAutomationService {
         this.retryDelay = parseInt(process.env.OCTOPARSE_RETRY_DELAY) || 30000;
         this.pollInterval = parseInt(process.env.OCTOPARSE_POLL_INTERVAL) || 60000; // 1 minute
         this.concurrentPollers = new Map();
+        this.syncLocks = new Map();
+    }
+
+    isConfigured() {
+        return !!(process.env.MARKET_SYNC_USERNAME && 
+                  process.env.MARKET_SYNC_PASSWORD && 
+                  process.env.OCTOPARSE_MASTER_TASK_ID);
     }
 
     async authenticate() {
@@ -357,16 +364,66 @@ class OctoparseAutomationService {
             }
 
             // Rating mapping - Octoparse uses "Rating" field
-            const rating = item.Rating || item.Field7 || item.rating || item.Average_Rating || '';
-            if (rating) {
-                const ratingNum = parseFloat(rating);
-                if (ratingNum >= 0 && ratingNum <= 5) { // Valid rating range
+            const ratingRaw = item.Rating || item.Field7 || item.rating || item.Average_Rating || '';
+            
+            // Parse rating breakdown from complex Rating string format
+            // Format: "Customer reviews4.4 out of 5 stars4.4 out of 5173 global ratings5 star4 star3 star2 star1 star5 star73%12%7%2%6%..."
+            if (ratingRaw && typeof ratingRaw === 'string' && ratingRaw.includes('%')) {
+                // The percentages appear after the star labels, in order 5,4,3,2,1
+                // Pattern: "5 star73%12%7%2%6%" means 5star=73%, 4star=12%, 3star=7%, 2star=2%, 1star=6%
+                
+                // The percentages after the star labels are in sequence for 5,4,3,2,1 stars
+                // We need to find where the star breakdown starts
+                const starLabelsIndex = ratingRaw.indexOf('5 star');
+                if (starLabelsIndex !== -1 && allPercents.length >= 5) {
+                    // Find where percentages start after starLabelsIndex
+                    const afterStars = ratingRaw.substring(starLabelsIndex);
+                    const percentMatches = afterStars.match(/(\d+)%/g) || [];
+                    
+                    const ratingBreakdown = {};
+                    if (percentMatches.length >= 5) {
+                        ratingBreakdown.fiveStar = parseInt(percentMatches[0]) || 0;
+                        ratingBreakdown.fourStar = parseInt(percentMatches[1]) || 0;
+                        ratingBreakdown.threeStar = parseInt(percentMatches[2]) || 0;
+                        ratingBreakdown.twoStar = parseInt(percentMatches[3]) || 0;
+                        ratingBreakdown.oneStar = parseInt(percentMatches[4]) || 0;
+                        
+                        // Only update if we have valid percentages
+                        if (ratingBreakdown.fiveStar > 0 || ratingBreakdown.fourStar > 0 || 
+                            ratingBreakdown.threeStar > 0 || ratingBreakdown.twoStar > 0 || ratingBreakdown.oneStar > 0) {
+                            updateData.ratingBreakdown = ratingBreakdown;
+                        }
+                    }
+                }
+                
+                // Extract overall rating number from the beginning
+                const ratingNumMatch = ratingRaw.match(/([\d.]+)\s*(?:out\s*of)?\s*5/);
+                if (ratingNumMatch) {
+                    const ratingNum = parseFloat(ratingNumMatch[1]);
+                    if (ratingNum >= 0 && ratingNum <= 5) {
+                        updateData.rating = ratingNum;
+                    }
+                }
+                
+                // Extract review count from Rating string - format: "4.4 out of 5173 global ratings"
+                const reviewCountMatch = ratingRaw.match(/(\d[\d,]*)\s*global\s*ratings?/i);
+                if (reviewCountMatch) {
+                    const reviewCountStr = reviewCountMatch[1].replace(/,/g, '');
+                    const reviewCountNum = parseInt(reviewCountStr);
+                    if (reviewCountNum > 0 && reviewCountNum < 10000000) {
+                        updateData.reviewCount = reviewCountNum;
+                    }
+                }
+            } else if (ratingRaw) {
+                // Simple rating number
+                const ratingNum = parseFloat(ratingRaw);
+                if (ratingNum >= 0 && ratingNum <= 5) {
                     updateData.rating = ratingNum;
                 }
             }
 
-            // Reviews - not present in this data format, but check anyway
-            const reviews = item.Reviews || item.reviews || item.ReviewCount || item.Reviews_Count || item.Total_Reviews || '';
+            // Reviews - parse from Rating field or dedicated field
+            const reviews = item.Reviews || item.reviews || item.ReviewCount || item.Reviews_Count || item.Total_Reviews || item.totalReviews || '';
             if (reviews) {
                 const reviewsNum = parseInt(reviews);
                 if (reviewsNum >= 0 && reviewsNum < 1000000) { // Reasonable review count
@@ -1133,6 +1190,66 @@ class OctoparseAutomationService {
         this.log('info', '🏢 CONCURRENT pipeline completed', summary);
         this.log('info', '═══════════════════════════════════════════════════════');
         return summary;
+    }
+
+    /**
+     * Compatibility wrapper for controllers.
+     * Triggers the full executePipeline flow.
+     */
+    async syncSellerAsinsToOctoparse(sellerId, options = {}) {
+        // Handle triggerScrape option for backward compatibility
+        if (options.triggerScrape === false) {
+             this.log('info', `Sync triggered for seller ${sellerId} but triggerScrape is false. Just ensuring task exists.`);
+             return await this.ensureTaskForSeller(sellerId);
+        }
+
+        // Use the new robust pipeline
+        // executePipeline is async but returns immediately if successful? 
+        // No, executePipeline in its current form awaits the polling.
+        // For "Trigger" behavior, we might want to run it in background.
+        
+        if (this.syncLocks.has(sellerId.toString())) {
+            this.log('warn', `Shield: Sync already in progress for seller ${sellerId}`);
+            return false;
+        }
+
+        // Fire and forget background process
+        const triggerPipeline = async () => {
+            try {
+                this.syncLocks.set(sellerId.toString(), true);
+                await this.executePipeline(sellerId);
+            } finally {
+                this.syncLocks.delete(sellerId.toString());
+            }
+        };
+
+        triggerPipeline().catch(err => {
+            this.log('error', `Background pipeline failed for seller ${sellerId}:`, { error: err.message });
+        });
+
+        return true; 
+    }
+
+    // Aliases for backward compatibility with marketDataSyncService
+    async retrieveResults(taskId, executionId = null) { return this.fetchResults(taskId); }
+    async processBatchResults(sellerId, results) { return this.processResults(sellerId, results); }
+    async duplicateTask(taskName) { return this.cloneMasterTask(taskName); }
+    async updateTaskUrlsWithFile(taskId, urls) { return this.injectUrls(taskId, urls); }
+    async startCloudExtraction(taskId) { return this.startTask(taskId); }
+    async getStatus(taskId) { return this.getTaskStatus(taskId); }
+    async stopSync(taskId) { return this.stopTask(taskId); }
+    async getBulkStatuses(taskIds) {
+        const token = await this.authenticate();
+        try {
+            const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`,
+                { taskIds },
+                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
+            return response.data?.data || [];
+        } catch (err) {
+            this.log('warn', `Bulk status check failed`, { error: err.message });
+            return [];
+        }
     }
 }
 

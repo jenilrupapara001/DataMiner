@@ -16,6 +16,8 @@ import PageHeader from '../components/common/PageHeader';
 import KPICard from '../components/KPICard';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { useDateRange } from '../contexts/DateRangeContext';
+import { format, differenceInDays, subDays } from 'date-fns';
 import './AdsReport.css';
 
 // ─── Utility Helpers ────────────────────────────────────────────
@@ -70,15 +72,11 @@ const formatDateShort = (d) => {
 
 // ─── Component ──────────────────────────────────────────────────
 const AdsReport = () => {
+  const { startDate, endDate, rangeType } = useDateRange();
   const [data, setData] = useState([]);
   const [dailyData, setDailyData] = useState([]);
   const [prevData, setPrevData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('month');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [customStart, setCustomStart] = useState(null);
-  const [customEnd, setCustomEnd] = useState(null);
   const [compareMode, setCompareMode] = useState(false);
   const [chartMode, setChartMode] = useState('revenue');
   const [tableSearch, setTableSearch] = useState('');
@@ -93,12 +91,6 @@ const AdsReport = () => {
    const fileRef = useRef(null);
    const [reportType] = useState('daily');
   const TABLE_PAGE_SIZE = 15;
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const currentYear = new Date().getFullYear();
-  const years = [currentYear, currentYear - 1];
 
   const chartModes = [
     { key: 'revenue', label: 'Revenue & Trend' },
@@ -106,38 +98,41 @@ const AdsReport = () => {
   ];
 
   // ─── Date Computation ───────────────────────────────────────
-  const { startDate, endDate, prevStartDate, prevEndDate } = useMemo(() => {
-    let start, end;
+  const { prevStartDate, prevEndDate } = useMemo(() => {
+    if (!startDate || !endDate) return { prevStartDate: null, prevEndDate: null };
 
-    if (dateRange === 'custom' && customStart) {
-      start = customStart.toISOString().split('T')[0];
-      end = customEnd ? customEnd.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-    } else {
-      // Month-wise
-      const firstDay = new Date(selectedYear, selectedMonth, 1);
-      const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
-      start = firstDay.toISOString().split('T')[0];
-      end = lastDay.toISOString().split('T')[0];
-    }
+    const rangeDays = differenceInDays(endDate, startDate) + 1;
+    const pe = subDays(startDate, 1);
+    const ps = subDays(pe, rangeDays - 1);
 
-    const rangeDays = daysBetween(start, end);
-    const pe = new Date(new Date(start).getTime() - 86400000);
-    const ps = new Date(pe.getTime() - (rangeDays - 1) * 86400000);
     return {
-      startDate: start,
-      endDate: end,
-      prevStartDate: ps.toISOString().split('T')[0],
-      prevEndDate: pe.toISOString().split('T')[0]
+      prevStartDate: format(ps, 'yyyy-MM-dd'),
+      prevEndDate: format(pe, 'yyyy-MM-dd')
     };
-  }, [dateRange, selectedMonth, selectedYear, customStart, customEnd]);
+  }, [startDate, endDate]);
+
+  const startStr = useMemo(() => startDate ? format(startDate, 'yyyy-MM-dd') : null, [startDate]);
+  const endStr = useMemo(() => endDate ? format(endDate, 'yyyy-MM-dd') : null, [endDate]);
 
   // ─── Data Loading ───────────────────────────────────────────
   const loadData = useCallback(async () => {
+    if (!startStr || !endStr) return;
     setLoading(true);
     try {
-      const params = { startDate, endDate, reportType };
-      if (selectedAsin) params.asin = selectedAsin;
-      const res = await api.get('/data/ads-report', params);
+      const params = {
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
+        rangeType,
+        asin: selectedAsin
+      };
+
+      // Clean params: remove null/undefined/string "null"
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
+      );
+
+      const query = new URLSearchParams(cleanParams).toString();
+      const res = await api.get(`/data/ads/report?${query}`);
       setData(res.data || []);
       setDailyData(res.dailyData || []);
 

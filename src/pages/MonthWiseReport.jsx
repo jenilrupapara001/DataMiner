@@ -26,37 +26,36 @@ import {
 import DataTable from '../components/DataTable';
 import api, { asinApi, sellerApi } from '../services/api';
 import { X } from 'lucide-react';
+import { useDateRange } from '../contexts/DateRangeContext';
+import { format } from 'date-fns';
 
 const MonthWiseReport = () => {
-  const [dateRange, setDateRange] = useState('month');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [customStart, setCustomStart] = useState(null);
-  const [customEnd, setCustomEnd] = useState(null);
+  const { startDate, endDate, rangeType } = useDateRange();
   const [filters, setFilters] = useState({
     searchTerm: ''
   });
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const startStr = useMemo(() => startDate ? format(startDate, 'yyyy-MM-dd') : null, [startDate]);
+  const endStr = useMemo(() => endDate ? format(endDate, 'yyyy-MM-dd') : null, [endDate]);
+
   const loadMonthlyData = useCallback(async () => {
+    if (!startStr || !endStr) return;
     setLoading(true);
     try {
-      let params = {};
-      if (dateRange === 'custom' && customStart && customEnd) {
-        params = {
-          startDate: customStart.toISOString().split('T')[0],
-          endDate: customEnd.toISOString().split('T')[0]
-        };
-      } else {
-        const firstDay = new Date(selectedYear, selectedMonth, 1);
-        const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
-        params = {
-          startDate: firstDay.toISOString().split('T')[0],
-          endDate: lastDay.toISOString().split('T')[0]
-        };
-      }
-      const query = new URLSearchParams(params).toString();
+      const params = {
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
+        rangeType
+      };
+
+      // Clean params: remove null/undefined/string "null"
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
+      );
+
+      const query = new URLSearchParams(cleanParams).toString();
       const response = await api.get(`/data/month-wise-report?${query}`);
       const monthData = (response.data || []).map((item, idx) => ({
         id: idx + 1,
@@ -76,11 +75,11 @@ const MonthWiseReport = () => {
       console.error('Failed to load monthly data:', error);
     }
     setLoading(false);
-  }, []);
+  }, [startStr, endStr, rangeType]);
 
   useEffect(() => {
     loadMonthlyData();
-  }, [loadMonthlyData, dateRange, selectedMonth, selectedYear, customStart, customEnd]);
+  }, [loadMonthlyData]);
 
   const kpis = useMemo(() => {
     const totalRevenue = data.reduce((sum, item) => sum + item.revenue, 0);
@@ -191,46 +190,6 @@ const MonthWiseReport = () => {
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <div className="d-flex align-items-center gap-2 bg-white border border-zinc-200 p-1.5 rounded-3 shadow-sm">
-              <Calendar size={14} className="text-muted ms-2" />
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
-                style={{ width: '120px' }}
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
-              </select>
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
-                style={{ width: '80px' }}
-                value={selectedYear}
-                onChange={(e) => {
-                  setSelectedYear(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
-              <DateRangePicker
-                startDate={customStart}
-                endDate={customEnd}
-                onDateChange={(start, end) => {
-                  setCustomStart(start);
-                  setCustomEnd(end);
-                  if (start && end) setDateRange('custom');
-                }}
-                placeholder="Custom Range"
-              />
-            </div>
             <button className="btn btn-dark btn-sm rounded-pill px-3 py-2 shadow-sm fw-700 d-flex align-items-center gap-2" onClick={loadMonthlyData}>
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
               REFRESH

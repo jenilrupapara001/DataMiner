@@ -37,6 +37,9 @@ import { PageLoader } from '@/components/application/loading-indicator/PageLoade
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import AsinDetailModal from '../components/AsinDetailModal';
 import AsinTrendsModal from '../components/AsinTrendsModal';
+import PriceViewModal from '../components/PriceViewModal';
+import BSRViewModal from '../components/BSRViewModal';
+import RatingViewModal from '../components/RatingViewModal';
 
 // Helper to generate tiered structure for history columns
 const generateHistoryStructure = (history) => {
@@ -302,6 +305,26 @@ const AsinManagerPage = () => {
   const [showFullPriceHistory, setShowFullPriceHistory] = useState(false);
   const [showFullBsrHistory, setShowFullBsrHistory] = useState(false);
   const [showFullRatingHistory, setShowFullRatingHistory] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAsinForPrice, setSelectedAsinForPrice] = useState(null);
+  const [selectedAsinForBsr, setSelectedAsinForBsr] = useState(null);
+  const [selectedAsinForRating, setSelectedAsinForRating] = useState(null);
+  const [showAllPriceHistory, setShowAllPriceHistory] = useState(false);
+  const [showAllBsrHistory, setShowAllBsrHistory] = useState(false);
+  const [showAllRatingHistory, setShowAllRatingHistory] = useState(false);
+  const [allAsins, setAllAsins] = useState([]);
+
+  // Filter asins based on search query
+  const filteredAsins = useMemo(() => {
+    if (!searchQuery.trim()) return asins;
+    const query = searchQuery.toLowerCase().trim();
+    return asins.filter(asin => {
+      const asinCode = asin.asinCode?.toLowerCase() || '';
+      const title = asin.title?.toLowerCase() || '';
+      const sku = asin.sku?.toLowerCase() || '';
+      return asinCode.includes(query) || title.includes(query) || sku.includes(query);
+    });
+  }, [asins, searchQuery]);
 
   // CSV Upload handler
   const handleCsvUpload = async (e) => {
@@ -335,16 +358,33 @@ const AsinManagerPage = () => {
     setShowTrendsModal(true);
   };
 
+  const handleViewPrice = (asin, e) => {
+    e.stopPropagation();
+    setSelectedAsinForPrice(asin);
+  };
+
+  const handleViewBsr = (asin, e) => {
+    e.stopPropagation();
+    setSelectedAsinForBsr(asin);
+  };
+
+  const handleViewRating = (asin, e) => {
+    e.stopPropagation();
+    setSelectedAsinForRating(asin);
+  };
+
   const loadData = useCallback(async (page = 1) => {
     try {
       setLoading(true);
 
-      const [asinRes, statsRes] = await Promise.all([
+      const [asinRes, allAsinsRes, statsRes] = await Promise.all([
         asinApi.getAll({ page, limit: 25 }),
+        asinApi.getAllWithoutPagination(),
         asinApi.getStats()
       ]);
 
       setAsins(asinRes?.asins || []);
+      setAllAsins(allAsinsRes?.data || allAsinsRes?.asins || []);
       setPagination(asinRes?.pagination || { page: 1, limit: 25, total: 0, totalPages: 0 });
       setStats(statsRes);
       setError(null);
@@ -703,18 +743,28 @@ const AsinManagerPage = () => {
       return <span style={{ color: '#9ca3af' }}>-</span>;
     }
 
-    // Very condensed mini bar chart or simple text representation
-    // Using a tooltip might be best for full details, but let's show a tiny inline representation
+    // Mini horizontal bar chart showing star distribution
+    const stars = [
+      { key: 'fiveStar', label: '5', color: '#22c55e' },
+      { key: 'fourStar', label: '4', color: '#84cc16' },
+      { key: 'threeStar', label: '3', color: '#eab308' },
+      { key: 'twoStar', label: '2', color: '#f97316' },
+      { key: 'oneStar', label: '1', color: '#ef4444' }
+    ];
+
     return (
-      <div className="d-flex flex-column gap-1" style={{ fontSize: '0.65rem', width: '60px' }}>
-        <div className="d-flex align-items-center justify-content-between">
-          <span className="text-success fw-bold">5★</span>
-          <span className="text-muted">{breakdown.fiveStar || 0}%</span>
-        </div>
-        <div className="d-flex align-items-center justify-content-between">
-          <span className="text-secondary fw-bold">1★</span>
-          <span className="text-muted">{breakdown.oneStar || 0}%</span>
-        </div>
+      <div className="d-flex flex-column gap-1" style={{ width: '50px' }}>
+        {stars.slice(0, 3).map(star => {
+          const pct = breakdown[star.key] || 0;
+          return (
+            <div key={star.key} className="d-flex align-items-center gap-1">
+              <span className="text-muted" style={{ fontSize: '0.6rem', width: '10px' }}>{star.label}★</span>
+              <div style={{ flex: 1, height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', backgroundColor: star.color, borderRadius: '2px' }} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -838,6 +888,26 @@ const AsinManagerPage = () => {
             <button className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 py-2 shadow-sm border-0 transition-transform active-scale-95" onClick={() => setShowAddModal(true)} style={{ fontWeight: '600' }}>
               <Plus size={18} /> Add ASIN
             </button>
+            <div className="input-group input-group-sm rounded-pill overflow-hidden border border-zinc-200 shadow-sm" style={{ width: '280px', backgroundColor: '#fff' }}>
+              <span className="input-group-text bg-white border-0 text-muted ps-3"><Search size={14} /></span>
+              <input 
+                type="text" 
+                className="form-control border-0 ps-0" 
+                placeholder="Search ASIN, SKU or Product..." 
+                style={{ fontSize: '13px' }}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button 
+                  className="btn btn-link text-muted position-absolute end-0 pe-2" 
+                  onClick={() => setSearchQuery('')}
+                  style={{ textDecoration: 'none', zIndex: 10 }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1052,17 +1122,17 @@ const AsinManagerPage = () => {
                       <th 
                         colSpan={showFullPriceHistory ? totalHistoryCols : visibleHistoryCols} 
                         style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #c7d2fe', fontSize: '12px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowFullPriceHistory(!showFullPriceHistory)}
-                        title="Click to toggle full history"
+                        onClick={() => setShowAllPriceHistory(true)}
+                        title="Click to view all price history"
                       >
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           <span>Price by Week</span>
                           <button 
                             className="btn btn-sm btn-link p-0" 
                             style={{ fontSize: '10px', color: '#3730a3' }}
-                            onClick={(e) => { e.stopPropagation(); setShowFullPriceHistory(!showFullPriceHistory); }}
+                            onClick={(e) => { e.stopPropagation(); setShowAllPriceHistory(true); }}
                           >
-                            {showFullPriceHistory ? '▼' : '▶'}
+                            <Eye size={12} />
                           </button>
                         </div>
                       </th>
@@ -1070,16 +1140,17 @@ const AsinManagerPage = () => {
                       <th 
                         colSpan={showFullBsrHistory ? totalHistoryCols : visibleHistoryCols} 
                         style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #bbf7d0', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowFullBsrHistory(!showFullBsrHistory)}
+                        onClick={() => setShowAllBsrHistory(true)}
+                        title="Click to view all BSR history"
                       >
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           <BarChart2 size={12} /> BSR by Week
                           <button 
                             className="btn btn-sm btn-link p-0" 
                             style={{ fontSize: '10px', color: '#166534' }}
-                            onClick={(e) => { e.stopPropagation(); setShowFullBsrHistory(!showFullBsrHistory); }}
+                            onClick={(e) => { e.stopPropagation(); setShowAllBsrHistory(true); }}
                           >
-                            {showFullBsrHistory ? '▼' : '▶'}
+                            <Eye size={12} />
                           </button>
                         </div>
                       </th>
@@ -1087,16 +1158,17 @@ const AsinManagerPage = () => {
                       <th 
                         colSpan={showFullRatingHistory ? totalHistoryCols : visibleHistoryCols} 
                         style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #fde68a', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowFullRatingHistory(!showFullRatingHistory)}
+                        onClick={() => setShowAllRatingHistory(true)}
+                        title="Click to view all rating history"
                       >
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           <Star size={12} /> Rating by Week
                           <button 
                             className="btn btn-sm btn-link p-0" 
                             style={{ fontSize: '10px', color: '#92400e' }}
-                            onClick={(e) => { e.stopPropagation(); setShowFullRatingHistory(!showFullRatingHistory); }}
+                            onClick={(e) => { e.stopPropagation(); setShowAllRatingHistory(true); }}
                           >
-                            {showFullRatingHistory ? '▼' : '▶'}
+                            <Eye size={12} />
                           </button>
                         </div>
                       </th>
@@ -1141,7 +1213,7 @@ const AsinManagerPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {asins.map((asin, index) => (
+                    {filteredAsins.map((asin, index) => (
                       <tr key={asin._id || index} style={{ backgroundColor: '#fff' }}>
                         <td style={{ fontWeight: 600, color: '#111827', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
                           <div className="d-flex align-items-center gap-2">
@@ -1194,11 +1266,15 @@ const AsinManagerPage = () => {
                         </td>
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
                           <div className="d-flex flex-column align-items-center">
-                            <span style={{ fontWeight: 600, color: '#059669' }}>
-                              {asin.currentPrice > 0 ? `₹${asin.currentPrice.toLocaleString()}` : (asin.uploadedPrice ? `₹${asin.uploadedPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>)}
+                            <span 
+                              onClick={(e) => handleViewPrice(asin, e)}
+                              style={{ fontWeight: 600, color: '#059669', cursor: 'pointer' }}
+                              className="hover-underline"
+                            >
+                              {asin.uploadedPrice > 0 ? `₹${asin.uploadedPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
                             </span>
-                            {asin.uploadedPrice > 0 && asin.currentPrice !== asin.uploadedPrice && (
-                              <span className="text-zinc-400" style={{ fontSize: '0.6rem', textDecoration: 'line-through' }}>₹{asin.uploadedPrice.toLocaleString()}</span>
+                            {asin.uploadedPrice > 0 && asin.currentPrice > 0 && asin.uploadedPrice !== asin.currentPrice && (
+                              <span className="text-zinc-400" style={{ fontSize: '0.6rem' }}>Live: ₹{asin.currentPrice.toLocaleString()}</span>
                             )}
                           </div>
                         </td>
@@ -1218,7 +1294,11 @@ const AsinManagerPage = () => {
                         }))}
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
                           <div className="d-flex flex-column align-items-center">
-                            <span style={{ fontWeight: 600, color: '#2563eb' }}>
+                            <span 
+                              onClick={(e) => handleViewBsr(asin, e)}
+                              style={{ fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}
+                              className="hover-underline"
+                            >
                               {asin.bsr ? `#${asin.bsr.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
                             </span>
                             {asin.subBSRs && asin.subBSRs.length > 0 && (
@@ -1261,7 +1341,11 @@ const AsinManagerPage = () => {
                         }))}
                         <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
                           {asin.rating ? (
-                            <div className="d-flex align-items-center justify-content-center gap-1">
+                            <div 
+                              onClick={(e) => handleViewRating(asin, e)}
+                              className="d-flex align-items-center justify-content-center gap-1 hover-underline"
+                              style={{ cursor: 'pointer' }}
+                            >
                               <Star size={12} className="text-warning fill-warning" />
                               <span style={{ fontWeight: 500 }}>{asin.rating}</span>
                             </div>
@@ -1556,6 +1640,24 @@ const AsinManagerPage = () => {
         isOpen={showTrendsModal} 
         onClose={() => setShowTrendsModal(false)}
         initialMetric={trendsMetric}
+      />
+      <PriceViewModal 
+        asins={!!selectedAsinForPrice ? filteredAsins : allAsins} 
+        selectedAsin={selectedAsinForPrice}
+        isOpen={!!selectedAsinForPrice || showAllPriceHistory} 
+        onClose={() => { setSelectedAsinForPrice(null); setShowAllPriceHistory(false); }} 
+      />
+      <BSRViewModal 
+        asins={!!selectedAsinForBsr ? filteredAsins : allAsins} 
+        selectedAsin={selectedAsinForBsr}
+        isOpen={!!selectedAsinForBsr || showAllBsrHistory} 
+        onClose={() => { setSelectedAsinForBsr(null); setShowAllBsrHistory(false); }} 
+      />
+      <RatingViewModal 
+        asins={!!selectedAsinForRating ? filteredAsins : allAsins} 
+        selectedAsin={selectedAsinForRating}
+        isOpen={!!selectedAsinForRating || showAllRatingHistory} 
+        onClose={() => { setSelectedAsinForRating(null); setShowAllRatingHistory(false); }} 
       />
     </div>
   );

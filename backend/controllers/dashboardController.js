@@ -119,12 +119,26 @@ exports.getDashboardData = async (req, res) => {
     const asinCodes = asins.map(a => a.asinCode);
     
     let startDate, endDate, days;
-    if (startQuery && endQuery) {
-        startDate = new Date(startQuery);
-        endDate = new Date(endQuery);
-        days = Math.max(1, Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
-        console.log(`[Dashboard DEBUG] Using custom range: ${startDate.toISOString()} to ${endDate.toISOString()} (${days} days)`);
-    } else {
+    const isValidDate = (d) => d instanceof Date && !isNaN(d.getTime());
+
+    // Clean up "null" or "undefined" strings from frontend
+    const cleanStart = (startQuery === 'null' || startQuery === 'undefined') ? null : startQuery;
+    const cleanEnd = (endQuery === 'null' || endQuery === 'undefined') ? null : endQuery;
+
+    if (cleanStart && cleanEnd) {
+        startDate = new Date(cleanStart);
+        endDate = new Date(cleanEnd);
+
+        if (isValidDate(startDate) && isValidDate(endDate)) {
+            days = Math.max(1, Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+            console.log(`[Dashboard DEBUG] Using custom range: ${startDate.toISOString()} to ${endDate.toISOString()} (${days} days)`);
+        } else {
+            console.log('[Dashboard DEBUG] Invalid custom range provided, falling back to period');
+            cleanStart = null; // force fallback
+        }
+    }
+
+    if (!startDate || !endDate) {
         days = Math.min(parsePeriod(period), 365);
         endDate = new Date();
         startDate = new Date();

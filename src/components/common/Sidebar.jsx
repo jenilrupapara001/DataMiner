@@ -36,46 +36,37 @@ import {
     ChevronRight
 } from 'lucide-react';
 
-const SidebarItem = ({ item, collapsed, active, onNavigate }) => {
-    const [isHovered, setIsHovered] = useState(false);
+const SidebarItem = ({ item, collapsed, active, onNavigate, isSubItem = false }) => {
     const navigate = useNavigate();
 
     const handleClick = (e) => {
-        if (onNavigate) {
-            onNavigate();
-        }
+        if (item.subItems) return;
+        if (onNavigate) onNavigate();
         navigate(item.to);
     };
 
     return (
-        <Link
-            to={item.to}
-            className={`sidebar-item d-flex align-items-center gap-3 px-3 py-2 rounded-2 text-decoration-none transition-all mb-1 ${active ? 'bg-primary text-white' : 'text-muted'
-                }`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+        <div
+            className={`sidebar-item d-flex align-items-center ${collapsed ? 'justify-content-center px-0' : 'gap-3 px-3'} py-2 rounded-2 transition-all mb-1 cursor-pointer ${active ? 'active-item' : 'text-muted'
+                } ${isSubItem ? 'ps-4 opacity-75' : ''}`}
             onClick={handleClick}
         >
-            <div className="d-flex align-items-center justify-content-center" style={{ width: '20px' }}>
-                {item.icon && <item.icon size={18} strokeWidth={active ? 2.5 : 2} />}
+            <div className="d-flex align-items-center justify-content-center item-icon" style={{ width: collapsed ? '100%' : '18px' }}>
+                {item.icon && <item.icon size={collapsed ? 18 : 16} strokeWidth={active ? 2.5 : 2} />}
             </div>
             {!collapsed && (
-                <span className="fw-medium flex-grow-1" style={{ fontSize: '13.5px', whiteSpace: 'nowrap' }}>
+                <span className="item-label fw-medium flex-grow-1" style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
                     {item.label}
                 </span>
             )}
-            {!collapsed && item.badge && (
-                <span className="badge rounded-pill bg-danger smallest" style={{ fontSize: '10px' }}>
-                    {item.badge}
-                </span>
+            {!collapsed && item.subItems && (
+                <ChevronRight size={12} className={`transition-all ${active ? 'rotate-90' : ''}`} />
             )}
-        </Link>
+        </div>
     );
 };
 
 const SidebarSection = ({ section, collapsed, activePath, hasPermission, onNavigate }) => {
-    const [isOpen, setIsOpen] = useState(!section.collapsible);
-
     const filteredItems = section.items.filter(
         (item) => !item.permission || hasPermission(item.permission)
     );
@@ -85,58 +76,33 @@ const SidebarSection = ({ section, collapsed, activePath, hasPermission, onNavig
     return (
         <div className={`sidebar-section mb-3 ${collapsed ? 'px-2' : 'px-3'}`}>
             {section.label && !collapsed && (
-                <div
-                    className="d-flex align-items-center justify-content-between mb-2 px-1 cursor-pointer"
-                    onClick={() => section.collapsible && setIsOpen(!isOpen)}
-                >
-                    <span className="smallest fw-bold text-muted text-uppercase tracking-wider">
+                <div className="px-2 mb-2">
+                    <span className="section-label text-muted text-uppercase tracking-widest fw-bold" style={{ fontSize: '9px', opacity: 0.6 }}>
                         {section.label}
                     </span>
-                    {section.collapsible && (
-                        <motion.div animate={{ rotate: isOpen ? 0 : -90 }}>
-                            <ChevronDown size={12} className="text-muted opacity-50" />
-                        </motion.div>
-                    )}
                 </div>
             )}
-
-            <AnimatePresence initial={false}>
-                {isOpen && (
-                    <motion.div
-                        initial={section.collapsible ? { height: 0, opacity: 0 } : false}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                    >
-                        {filteredItems.map((item, idx) => (
-                            <SidebarItem
-                                key={idx}
-                                item={item}
-                                collapsed={collapsed}
-                                active={activePath === item.to || (item.to !== '/' && activePath.startsWith(item.to))}
-                                onNavigate={onNavigate}
-                            />
-                        ))}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {filteredItems.map((item, idx) => (
+                <SidebarItem
+                    key={idx}
+                    item={item}
+                    collapsed={collapsed}
+                    active={activePath === item.to || (item.to !== '/' && activePath.startsWith(item.to))}
+                    onNavigate={onNavigate}
+                />
+            ))}
         </div>
     );
 };
 
 const Sidebar = () => {
     const { user, logout, hasPermission } = useAuth();
-    const { collapsed, toggle, isOpen, toggleMobile, isMobile } = useSidebar();
+    const { isMobile, isOpen, toggleMobile } = useSidebar();
     const location = useLocation();
-    const [showUserMenu, setShowUserMenu] = useState(false);
-    const [theme, setTheme] = useState('light');
-
-    const toggleTheme = () => {
-        const newTheme = theme === 'light' ? 'dark' : 'light';
-        setTheme(newTheme);
-        document.documentElement.setAttribute('data-theme', newTheme);
-    };
+    const [isHovered, setIsHovered] = useState(false);
+    
+    // Snappy expansion logic
+    const isExpanded = isHovered || (isMobile && isOpen);
 
     const sections = [
         {
@@ -162,7 +128,6 @@ const Sidebar = () => {
         },
         {
             label: 'Intelligence',
-            collapsible: true,
             items: [
                 { label: 'SKU Analysis', icon: FileText, to: '/sku-report', permission: 'reports_sku_view' },
                 { label: 'Parent Trends', icon: TrendingUp, to: '/parent-asin-report', permission: 'reports_parent_view' },
@@ -174,7 +139,6 @@ const Sidebar = () => {
         },
         {
             label: 'System',
-            collapsible: true,
             items: [
                 { label: 'Users', icon: Users, to: '/users', permission: 'users_view' },
                 { label: 'Security Roles', icon: ShieldCheck, to: '/roles', permission: 'roles_view' },
@@ -190,100 +154,53 @@ const Sidebar = () => {
         (user?.firstName?.[0] || '') + (user?.lastName?.[0] || user?.firstName?.[1] || '')
     ).toUpperCase();
 
-    // Handle mobile: show overlay and sidebar
-    const shouldShowSidebar = !isMobile || isOpen;
-
     return (
-        <>
-            {/* Mobile overlay */}
-            {isMobile && isOpen && (
-                <div
-                    className="sidebar-overlay"
-                    onClick={toggleMobile}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                        zIndex: 999
-                    }}
-                />
-            )}
+        <div className="sidebar-wrapper" style={{ position: 'relative', width: isMobile ? 0 : '70px', zIndex: 1000 }}>
             <motion.div
-                className="sidebar-container bg-white border-end shadow-sm d-flex flex-column"
+                className="sidebar-container bg-white border-end d-flex flex-column"
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
                 animate={{
-                    width: collapsed ? '72px' : '260px',
-                    x: isMobile && !isOpen ? '-100%' : 0
+                    width: isExpanded ? '260px' : '70px',
+                    x: isMobile && !isOpen ? '-100%' : 0,
+                    boxShadow: isHovered ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none'
                 }}
-                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 style={{
                     height: '100vh',
-                    position: isMobile ? 'fixed' : 'sticky',
+                    position: 'fixed',
                     top: 0,
-                    zIndex: 1000,
-                    display: shouldShowSidebar ? 'flex' : 'none'
+                    left: 0,
+                    overflowX: 'hidden',
+                    backgroundColor: 'white'
                 }}
             >
-                {/* ── Header ───────────────────────────────────── */}
-                <div className="sidebar-header px-3 border-bottom d-flex align-items-center justify-content-between" style={{ height: '64px' }}>
-                    <div className="d-flex align-items-center gap-3 overflow-hidden">
-                        <div className="flex-shrink-0 bg-primary rounded-2 d-flex align-items-center justify-content-center" style={{ width: '32px', height: '32px' }}>
-                            <Store size={18} className="text-white" />
+                {/* Minimalist Logo Area */}
+                <div className="sidebar-header d-flex align-items-center" style={{ height: '60px', borderBottom: '1px solid #f1f5f9', width: '100%', padding: '0 20px' }}>
+                    <div className={`d-flex align-items-center ${isExpanded ? 'gap-3' : 'justify-content-center w-100'}`}>
+                        <div className="flex-shrink-0 bg-zinc-900 d-flex align-items-center justify-content-center shadow-sm" style={{ width: '28px', height: '28px', borderRadius: '6px' }}>
+                            <Activity size={14} className="text-white" />
                         </div>
-                        {!collapsed && (
-                            <motion.div
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className="overflow-hidden"
+                        {isExpanded && (
+                            <motion.span
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="fw-bold text-zinc-900 tracking-tight"
+                                style={{ fontSize: '0.95rem' }}
                             >
-                                <h1 className="h6 fw-bold mb-0 text-dark text-nowrap">RetailOps</h1>
-                                <p className="smallest text-muted mb-0 text-nowrap">Enterprise Platform</p>
-                            </motion.div>
+                                GMS Report
+                            </motion.span>
                         )}
                     </div>
-                    {!collapsed && (
-                        <button
-                            className="btn btn-icon btn-sm btn-ghost text-muted"
-                            onClick={() => setShowUserMenu(!showUserMenu)}
-                        >
-                            <MoreVertical size={16} />
-                        </button>
-                    )}
                 </div>
 
-                {/* ── User Menu Popup (Floating) ──────────────── */}
-                <AnimatePresence>
-                    {showUserMenu && !collapsed && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="position-absolute bg-white shadow-lg border rounded-3 p-2"
-                            style={{ top: '65px', right: '15px', zIndex: 1100, width: '180px' }}
-                        >
-                            <button className="btn btn-sm btn-ghost w-100 justify-content-start gap-2 mb-1" onClick={toggleTheme}>
-                                {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-                                <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
-                            </button>
-                            <button className="btn btn-sm btn-ghost w-100 justify-content-start gap-2 mb-1">
-                                <HelpCircle size={14} />
-                                <span>Help & Docs</span>
-                            </button>
-                            <div className="dropdown-divider"></div>
-                            <button className="btn btn-sm btn-danger w-100 justify-content-start gap-2" onClick={logout}>
-                                <LogOut size={14} />
-                                <span>Logout</span>
-                            </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* ── Navigation Sections ──────────────────────── */}
+                {/* Nav Items */}
                 <div className="sidebar-content flex-grow-1 overflow-auto py-3 custom-scrollbar">
                     {sections.map((section, idx) => (
                         <SidebarSection
                             key={idx}
                             section={section}
-                            collapsed={collapsed}
+                            collapsed={!isExpanded}
                             activePath={location.pathname}
                             hasPermission={hasPermission}
                             onNavigate={isMobile ? toggleMobile : undefined}
@@ -291,39 +208,34 @@ const Sidebar = () => {
                     ))}
                 </div>
 
-                {/* ── Footer / Profile ─────────────────────────── */}
-                <div className="sidebar-footer p-3 border-top">
-                    {!collapsed ? (
-                        <div className="d-flex align-items-center justify-content-between gap-3">
-                            <Link to="/profile" className="d-flex align-items-center gap-3 text-decoration-none min-w-0 flex-grow-1">
-                                <div
-                                    className="avatar flex-shrink-0 bg-light rounded-circle d-flex align-items-center justify-content-center fw-bold text-primary border"
-                                    style={{ width: '32px', height: '32px', fontSize: '12px' }}
-                                >
-                                    {initials}
-                                </div>
-                                <div className="overflow-hidden">
-                                    <div className="fw-bold text-dark smallest text-truncate">{user?.fullName || 'User Account'}</div>
-                                    <div className="smallest text-muted text-truncate" style={{ fontSize: '10px' }}>{user?.email}</div>
-                                </div>
-                            </Link>
-                            <button className="btn btn-icon btn-sm btn-secondary border-0" onClick={toggle}>
-                                <ChevronRight size={16} />
-                            </button>
+                {/* Refined Profile Section */}
+                <div className="sidebar-footer p-3 border-top mt-auto">
+                    <div className={`d-flex align-items-center ${isExpanded ? 'gap-3' : 'justify-content-center'}`}>
+                        <div
+                            className="avatar flex-shrink-0 bg-zinc-100 text-zinc-900 fw-bold d-flex align-items-center justify-content-center border border-zinc-200"
+                            style={{ width: '30px', height: '30px', borderRadius: '6px', fontSize: '10px' }}
+                        >
+                            {initials}
                         </div>
-                    ) : (
-                        <div className="d-flex flex-column align-items-center gap-3">
-                            <Link to="/profile" className="avatar bg-light rounded-circle d-flex align-items-center justify-content-center fw-bold text-primary border" style={{ width: '36px', height: '36px', fontSize: '13px' }}>
-                                {initials}
-                            </Link>
-                            <button className="btn btn-icon btn-sm btn-secondary border-0" onClick={toggle}>
-                                <ChevronRight size={16} />
+                        {isExpanded && (
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="overflow-hidden flex-grow-1"
+                            >
+                                <div className="fw-semibold text-zinc-900 smallest text-truncate" style={{ fontSize: '11.5px', lineHeight: 1.2 }}>{user?.fullName || 'Account'}</div>
+                                <div className="text-muted text-truncate" style={{ fontSize: '9px', fontWeight: 500 }}>{user?.role?.title || user?.role?.name || 'Authorized User'}</div>
+                            </motion.div>
+                        )}
+                        {isExpanded && (
+                            <button className="btn btn-sm btn-ghost p-1 text-zinc-400 hover-red" onClick={logout} title="Logout">
+                                <LogOut size={13} />
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </motion.div>
-        </>
+        </div>
     );
 };
 

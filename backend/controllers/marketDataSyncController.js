@@ -1,4 +1,5 @@
-const MarketSyncService = require('../services/marketDataSyncService');
+const octoparseAutomationService = require('../services/octoparseAutomationService');
+const marketDataSyncService = require('../services/marketDataSyncService');
 const Asin = require('../models/Asin');
 const Seller = require('../models/Seller');
 
@@ -35,7 +36,7 @@ exports.syncAsin = async (req, res) => {
         asin.status = 'Scraping';
         await asin.save();
 
-        const isConfigured = MarketSyncService.isConfigured();
+        const isConfigured = octoparseAutomationService.isConfigured();
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
         let useDirect = (!taskId || !isConfigured) && !automationEnabled;
 
@@ -47,7 +48,7 @@ exports.syncAsin = async (req, res) => {
                 console.log(`🤖 Using Octoparse for ASIN: ${asin.asinCode}`);
                 
                 // Trigger batch sync logic (which handles URL injection and scrape start)
-                const syncStarted = await MarketSyncService.syncSellerAsinsToOctoparse(asin.seller._id, { triggerScrape: true });
+                const syncStarted = await octoparseAutomationService.syncSellerAsinsToOctoparse(asin.seller._id, { triggerScrape: true });
 
                 if (!syncStarted) {
                     throw new Error('Failed to start sync via automated service');
@@ -67,7 +68,7 @@ exports.syncAsin = async (req, res) => {
 
                 try {
                     const rawData = await DirectScraperService.scrapeAsin(asin.asinCode);
-                    const updatedAsin = await MarketSyncService.updateAsinMetrics(asin._id, rawData);
+                    const updatedAsin = await octoparseAutomationService.updateAsinMetrics(asin._id, rawData);
 
                     return res.json({
                         success: true,
@@ -105,7 +106,7 @@ exports.handleSyncComplete = async (req, res) => {
 
         // This would typically be a webhook from the provider
         // but can be triggered manually for direct API updates.
-        const updatedAsin = await MarketSyncService.updateAsinMetrics(asinId, rawData);
+        const updatedAsin = await octoparseAutomationService.updateAsinMetrics(asinId, rawData);
 
         res.json({
             success: true,
@@ -150,7 +151,7 @@ exports.syncSellerAsins = async (req, res) => {
             { $set: { scrapeStatus: 'SCRAPING', status: 'Scraping' } }
         );
 
-        const isConfigured = MarketSyncService.isConfigured();
+        const isConfigured = octoparseAutomationService.isConfigured();
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
         let useDirect = (!seller.marketSyncTaskId || !isConfigured) && !automationEnabled;
 
@@ -161,7 +162,7 @@ exports.syncSellerAsins = async (req, res) => {
                 console.log(`🤖 Using Automated Octoparse Sync for Seller: ${seller.name}`);
                 const fullSync = req.body.fullSync === true || req.query.fullSync === 'true';
 
-                const syncStarted = await MarketSyncService.syncSellerAsinsToOctoparse(sellerId, { 
+                const syncStarted = await octoparseAutomationService.syncSellerAsinsToOctoparse(sellerId, { 
                     triggerScrape: true,
                     fullSync: fullSync
                 });
@@ -187,7 +188,7 @@ exports.syncSellerAsins = async (req, res) => {
                         for (const asin of asins) {
                             try {
                                 const rawData = await DirectScraperService.scrapeAsin(asin.asinCode);
-                                await MarketSyncService.updateAsinMetrics(asin._id, rawData);
+                                await octoparseAutomationService.updateAsinMetrics(asin._id, rawData);
                                 console.log(`✅ Background sync completed for ASIN: ${asin.asinCode}`);
                             } catch (err) {
                                 console.error(`❌ Background sync failed for ASIN: ${asin.asinCode}`, err.message);
@@ -243,7 +244,6 @@ exports.syncAllAsins = async (req, res) => {
         );
 
         // Process Sellers in background (Bulk sync approach)
-        const MarketSyncService = require('../services/marketDataSyncService');
         const SocketService = require('../services/socketService');
         const io = SocketService.getIo();
 
@@ -251,7 +251,7 @@ exports.syncAllAsins = async (req, res) => {
         const sellerIds = [...new Set(asins.map(a => a.seller?._id || a.seller).filter(Boolean))];
         
         // Force-Clear any stale locks for these specific sellers before a manual "Sync All"
-        sellerIds.forEach(id => MarketSyncService.syncLocks.delete(id.toString()));
+        sellerIds.forEach(id => octoparseAutomationService.syncLocks.delete(id.toString()));
         console.log(`🧹 Cleared status locks for ${sellerIds.length} sellers to allow fresh sync.`);
         console.log(`🚀 Starting Global Sync for ${sellerIds.length} Sellers (${asins.length} ASINs)...`);
 
@@ -277,7 +277,7 @@ exports.syncAllAsins = async (req, res) => {
             
             const triggerPromises = sellerIds.map(async (sellerId) => {
                 try {
-                    const result = await MarketSyncService.syncSellerAsinsToOctoparse(sellerId, { 
+                    const result = await octoparseAutomationService.syncSellerAsinsToOctoparse(sellerId, { 
                         fullSync: true,
                         forceReRun: true,
                         triggerScrape: true
@@ -326,13 +326,13 @@ exports.fetchAndApplyResults = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Seller or Sync Task not found' });
         }
 
-        const data = await MarketSyncService.retrieveResults(seller.marketSyncTaskId);
+        const data = await octoparseAutomationService.retrieveResults(seller.marketSyncTaskId);
 
         if (!data || data.length === 0) {
             return res.json({ success: true, message: 'No new data found from provider' });
         }
 
-        const updatedCount = await MarketSyncService.processBatchResults(sellerId, data);
+        const updatedCount = await octoparseAutomationService.processBatchResults(sellerId, data);
 
         res.json({
             success: true,
@@ -373,7 +373,7 @@ exports.ingestTaskResults = async (req, res) => {
         let targetExecutionId = executionId;
         if (!targetExecutionId && taskId) {
             console.log(`🔍 Finding latest execution for taskId: ${taskId}`);
-            targetExecutionId = await MarketSyncService.getLatestExecutionId(taskId);
+            targetExecutionId = await octoparseAutomationService.getLatestExecutionId(taskId);
         }
 
         if (!targetExecutionId) {
@@ -382,7 +382,7 @@ exports.ingestTaskResults = async (req, res) => {
 
         // 3. Fetch Data
         console.log(`📥 Ingesting results from Execution: ${targetExecutionId}`);
-        const data = await MarketSyncService.retrieveResults(taskId || seller.marketSyncTaskId, targetExecutionId);
+        const data = await octoparseAutomationService.retrieveResults(taskId || seller.marketSyncTaskId, targetExecutionId);
 
         if (!data || data.length === 0) {
             return res.json({ success: true, message: 'No data found in execution', count: 0 });
@@ -419,7 +419,7 @@ exports.ingestTaskResults = async (req, res) => {
         }
 
         // 5. High-Performance Bulk Update
-        const updatedCount = await MarketSyncService.processBatchResults(seller._id, data);
+        const updatedCount = await octoparseAutomationService.processBatchResults(seller._id, data);
 
         res.json({
             success: true,
@@ -455,12 +455,12 @@ exports.setupSellerTask = async (req, res) => {
         
         let newTaskId;
         try {
-            newTaskId = await MarketSyncService.duplicateTask(taskName);
+            newTaskId = await octoparseAutomationService.duplicateTask(taskName);
         } catch (dupError) {
             console.warn(`⚠️ Automated duplication failed: ${dupError.message}. Falling back to Pooled Tasks...`);
             
             // 2. Fallback: Assign from Pool
-            newTaskId = await MarketSyncService.assignTaskFromPool(sellerId);
+            newTaskId = await octoparseAutomationService.assignTaskFromPool(sellerId);
             
             if (!newTaskId) {
                 return res.status(400).json({ 
@@ -478,7 +478,7 @@ exports.setupSellerTask = async (req, res) => {
         const asins = await Asin.find({ seller: sellerId, status: 'Active' });
         if (asins.length > 0) {
             const asinUrls = asins.map(a => `https://www.amazon.in/dp/${a.asinCode}`);
-            await MarketSyncService.updateTaskUrlsWithFile(newTaskId, asinUrls);
+            await octoparseAutomationService.updateTaskUrlsWithFile(newTaskId, asinUrls);
             console.log(`✅ Injected ${asinUrls.length} ASIN URLs into new task: ${newTaskId} via FILE method.`);
         }
 
@@ -505,7 +505,7 @@ exports.uploadTaskPool = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid Task IDs list. Expected an array of strings.' });
         }
 
-        const result = await MarketSyncService.importTaskPool(taskIds);
+        const result = await octoparseAutomationService.importTaskPool(taskIds);
         
         res.json({
             success: true,
@@ -523,7 +523,7 @@ exports.uploadTaskPool = async (req, res) => {
  */
 exports.getPoolStatus = async (req, res) => {
     try {
-        const stats = await MarketSyncService.getPoolStats();
+        const stats = await marketDataSyncService.getPoolStats();
         res.json({ success: true, stats });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -561,7 +561,7 @@ exports.syncAllSellersResults = async (req, res) => {
  */
 exports.getSyncStatus = async (req, res) => {
     try {
-        await MarketSyncService.authenticate();
+        await octoparseAutomationService.authenticate();
         res.json({ success: true, service: 'Operational', provider: 'Connected' });
     } catch (error) {
         res.json({ success: true, service: 'Maintenance', provider: 'Disconnected' });
@@ -588,7 +588,7 @@ exports.getGlobalSyncTasks = async (req, res) => {
         }
 
         const taskIds = [...new Set(sellers.map(s => s.marketSyncTaskId))];
-        const statuses = await MarketSyncService.getBulkStatuses(taskIds);
+        const statuses = await octoparseAutomationService.getBulkStatuses(taskIds);
         const statusMap = new Map(statuses.map(s => [s.taskId, s]));
 
         const tasks = await Promise.all(sellers.map(async (seller) => {
@@ -659,7 +659,7 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
             try {
                 // 1. Duplicate Master Task
                 const taskName = seller.name;
-                const newTaskId = await MarketSyncService.duplicateTask(taskName);
+                const newTaskId = await octoparseAutomationService.duplicateTask(taskName);
 
                 // 2. Save Task ID to Seller
                 seller.marketSyncTaskId = newTaskId;
@@ -672,7 +672,7 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
                 if (asins.length > 0) {
                     const asinUrls = asins.map(a => `https://www.amazon.in/dp/${a.asinCode}`);
                     try {
-                        await MarketSyncService.updateTaskUrlsWithFile(newTaskId, asinUrls);
+                        await octoparseAutomationService.updateTaskUrlsWithFile(newTaskId, asinUrls);
                         injectStatus = 'Success';
                     } catch (fileErr) {
                         console.error(`❌ File injection failed for ${seller.name}:`, fileErr.message);
@@ -710,7 +710,7 @@ exports.startTask = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Seller has no Task ID assigned.' });
         }
 
-        const result = await MarketSyncService.startCloudExtraction(seller.marketSyncTaskId);
+        const result = await octoparseAutomationService.startCloudExtraction(seller.marketSyncTaskId);
         res.json({ success: true, data: result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -730,14 +730,14 @@ exports.syncResults = async (req, res) => {
         }
 
         // 1. Fetch results from Octoparse
-        const results = await MarketSyncService.fetchTaskResults(seller.marketSyncTaskId);
+        const results = await octoparseAutomationService.fetchTaskResults(seller.marketSyncTaskId);
         
         if (!results || results.length === 0) {
             return res.json({ success: true, message: 'No new records found in Octoparse.', count: 0 });
         }
 
         // 2. Map results to dashboard
-        const mappingResult = await MarketSyncService.processAndMapResults(sellerId, results);
+        const mappingResult = await octoparseAutomationService.processAndMapResults(sellerId, results);
 
         // 3. Update seller status
         seller.lastScraped = new Date();
@@ -803,7 +803,7 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
                 let methodUsed = 'File-based';
                 
                 try {
-                    success = await MarketSyncService.updateTaskUrlsWithFile(seller.marketSyncTaskId, asinUrls);
+                    success = await octoparseAutomationService.updateTaskUrlsWithFile(seller.marketSyncTaskId, asinUrls);
                 } catch (fileErr) {
                     console.error(`❌ Bulk file injection failed for ${seller.name}:`, fileErr.message);
                     success = false;
@@ -856,7 +856,7 @@ exports.bulkInjectJson = async (req, res) => {
         }
 
         // Process and map results using the existing robust mapping service
-        const mappingResult = await MarketSyncService.processAndMapResults(sellerId, data);
+        const mappingResult = await marketDataSyncService.processAndMapResults(sellerId, data);
 
         // Update seller last scraped
         seller.lastScraped = new Date();

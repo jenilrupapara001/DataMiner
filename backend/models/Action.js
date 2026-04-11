@@ -29,6 +29,18 @@ const actionSchema = new mongoose.Schema({
         required: false,
         index: true
     },
+    objectiveId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Objective',
+        required: false,
+        index: true
+    },
+    keyResultId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'KeyResult',
+        required: false,
+        index: true
+    },
     impactWeight: { 
         type: Number, 
         min: 1, 

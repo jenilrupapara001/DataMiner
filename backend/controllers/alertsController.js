@@ -1,8 +1,17 @@
 const { Alert, AlertRule } = require('../models/AlertModel');
 const { createNotification } = require('./notificationController');
+const ruleExecutionController = require('./ruleExecutionController');
 const User = require('../models/User');
 
-// Get all alerts
+const mongoose = require('mongoose');
+
+exports.getUnreadAlertCount = ruleExecutionController.getUnreadAlertCount;
+exports.acknowledgeAllAlerts = ruleExecutionController.acknowledgeAllAlerts;
+exports.getAlertRuleById = ruleExecutionController.getAlertRuleById;
+exports.toggleAlertRule = ruleExecutionController.toggleAlertRule;
+exports.executeRule = ruleExecutionController.executeRule;
+exports.executeAllRules = ruleExecutionController.executeAllRules;
+
 exports.getAlerts = async (req, res) => {
   try {
     const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
@@ -10,11 +19,151 @@ exports.getAlerts = async (req, res) => {
 
     const alerts = await Alert.find(filter)
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .populate('ruleId', 'name type')
+      .populate('asinId', 'asinCode title')
+      .populate('sellerId', 'name');
     res.json(alerts);
   } catch (error) {
     console.error('Error fetching alerts:', error);
     res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+};
+
+exports.getAlertRules = async (req, res) => {
+  try {
+    const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
+    const filter = isAdmin ? {} : { 
+      $or: [
+        { sellerId: { $in: req.user.assignedSellers.map(s => s._id.toString()) } },
+        { sellerId: { $exists: false } }
+      ]
+    };
+
+    const rules = await AlertRule.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('sellerId', 'name')
+      .populate('createdBy', 'name email');
+    res.json(rules);
+  } catch (error) {
+    console.error('Error fetching alert rules:', error);
+    res.status(500).json({ error: 'Failed to fetch alert rules' });
+  }
+};
+
+exports.createAlertRule = async (req, res) => {
+  try {
+    const ruleData = {
+      ...req.body,
+      createdBy: req.user._id
+    };
+    const rule = new AlertRule(ruleData);
+    await rule.save();
+    res.status(201).json(rule);
+  } catch (error) {
+    console.error('Error creating alert rule:', error);
+    res.status(400).json({ error: error.message || 'Failed to create alert rule' });
+  }
+};
+
+exports.updateAlertRule = async (req, res) => {
+  try {
+    const rule = await AlertRule.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!rule) {
+      return res.status(404).json({ error: 'Alert rule not found' });
+    }
+    res.json(rule);
+  } catch (error) {
+    console.error('Error updating alert rule:', error);
+    res.status(400).json({ error: error.message || 'Failed to update alert rule' });
+  }
+};
+
+exports.deleteAlertRule = async (req, res) => {
+  try {
+    const rule = await AlertRule.findByIdAndDelete(req.params.id);
+    if (!rule) {
+      return res.status(404).json({ error: 'Alert rule not found' });
+    }
+    res.json({ message: 'Alert rule deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting alert rule:', error);
+    res.status(500).json({ error: 'Failed to delete alert rule' });
+  }
+};
+
+exports.acknowledgeAlert = async (req, res) => {
+  try {
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+
+    const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
+    const isAssigned = isAdmin || req.user.assignedSellers.some(s => s._id.toString() === alert.sellerId?.toString());
+
+    if (!isAssigned && !isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized to acknowledge this alert' });
+    }
+
+    alert.acknowledged = true;
+    alert.acknowledgedBy = req.body.acknowledgedBy || req.user.name || 'unknown';
+    alert.acknowledgedAt = new Date();
+    await alert.save();
+    res.json(alert);
+  } catch (error) {
+    console.error('Error acknowledging alert:', error);
+    res.status(400).json({ error: 'Failed to acknowledge alert' });
+  }
+};
+
+exports.createAlert = async (alertData) => {
+  try {
+    const alert = new Alert(alertData);
+    await alert.save();
+
+    try {
+      const admins = await User.find({ role: { $ne: null } });
+      for (const admin of admins) {
+        await createNotification(
+          admin._id,
+          'ALERT',
+          'Alert',
+          alert._id,
+          `New Alert: ${alert.message}`
+        );
+      }
+    } catch (e) {
+      console.error('Failed to create alert notifications:', e);
+    }
+
+    return alert;
+  } catch (error) {
+    console.error('Error creating alert:', error);
+    throw error;
+  }
+};
+
+exports.checkAlerts = async () => {
+  try {
+    const rules = await AlertRule.find({ active: true });
+    const alerts = [];
+
+    for (const rule of rules) {
+      const result = await ruleExecutionController.evaluateAndExecuteRule(rule);
+      if (result.triggered) {
+        alerts.push(...result.alerts);
+      }
+    }
+
+    return alerts;
+  } catch (error) {
+    console.error('Error checking alerts:', error);
+    return [];
   }
 };
 
@@ -196,8 +345,6 @@ const evaluateRule = async (rule) => {
     return false;
   }
 };
-
-const mongoose = require('mongoose');
 
 // Get data for evaluation
 const getDataForEvaluation = async (rule, metric, period) => {

@@ -32,6 +32,7 @@ exports.getAsins = async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
     const asins = await Asin.find(filter)
+      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails')
       .populate('seller', 'name marketplace')
       .sort(sortOptions)
       .skip((page - 1) * limit)
@@ -77,6 +78,7 @@ exports.getAllAsinsWithHistory = async (req, res) => {
     if (category) filter.category = category;
 
     const asins = await Asin.find(filter)
+      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails')
       .populate('seller', 'name marketplace')
       .sort({ createdAt: -1 });
 

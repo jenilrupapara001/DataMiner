@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { PageTitleProvider } from './contexts/PageTitleContext';
+import { DateRangeProvider } from './contexts/DateRangeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Header from './components/Header';
 import Sidebar from './components/common/Sidebar';
@@ -16,6 +17,8 @@ import AdsReport from './pages/AdsReport';
 import UploadExport from './pages/UploadExport';
 import AlertsPage from './pages/AlertsPage';
 import AlertRulesPage from './pages/AlertRulesPage';
+import RuleSetsPage from './pages/RuleSetsPage';
+import RulesetBuilderPage from './pages/RulesetBuilderPage';
 import ProfitLossPage from './pages/ProfitLossPage';
 import InventoryPage from './pages/InventoryPage';
 import AsinManagerPage from './pages/AsinManagerPage';
@@ -47,30 +50,20 @@ import './App.css';
 // Layout wrapper — flex row: Sidebar takes its own width, content fills the rest
 function AppLayout({ children }) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-shell">
       {/* Sidebar lives in the flex row — takes its own width (260px or 72px) */}
       <Sidebar />
 
       {/* Content fills the remaining space automatically */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0,
-          overflowX: 'hidden',
-          overflowY: 'auto',
-        }}
-      >
+      <div className="content-wrapper">
         <Header />
-        <main className="main-content" style={{ flex: 1 }}>
+        <main className="main-content">
           <div className="routes-container">
             {children}
           </div>
         </main>
       </div>
     </div>
-
   );
 }
 
@@ -114,6 +107,9 @@ function AppRoutes() {
                   <Route path="/upload-export" element={<ProtectedRoute permission="sellers_manage_asins"><UploadExport /></ProtectedRoute>} />
                   <Route path="/alerts" element={<ProtectedRoute permission="dashboard_view"><AlertsPage /></ProtectedRoute>} />
                   <Route path="/alert-rules" element={<ProtectedRoute permission="settings_view"><AlertRulesPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets" element={<ProtectedRoute permission="settings_view"><RuleSetsPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets/new" element={<ProtectedRoute permission="settings_edit"><RulesetBuilderPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets/:id/edit" element={<ProtectedRoute permission="settings_edit"><RulesetBuilderPage /></ProtectedRoute>} />
                   <Route path="/scrape-tasks" element={<ProtectedRoute permission="scraping_view"><ScrapeTasksPage /></ProtectedRoute>} />
                   <Route path="/sellers" element={<ProtectedRoute permission="sellers_view"><SellersPage /></ProtectedRoute>} />
                   <Route path="/seller-tracker" element={<ProtectedRoute permission="sellers_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
@@ -137,19 +133,23 @@ function AppRoutes() {
   );
 }
 
+
+
 function App() {
   return (
     <AuthProvider>
       <SocketProvider>
         <SidebarProvider>
-          <PageTitleProvider>
-            <ToastProvider>
-              <OnboardingProvider>
-                <GlobalNotificationListener />
-                <AppRoutes />
-              </OnboardingProvider>
-            </ToastProvider>
-          </PageTitleProvider>
+          <DateRangeProvider>
+            <PageTitleProvider>
+              <ToastProvider>
+                <OnboardingProvider>
+                  <GlobalNotificationListener />
+                  <AppRoutes />
+                </OnboardingProvider>
+              </ToastProvider>
+            </PageTitleProvider>
+          </DateRangeProvider>
         </SidebarProvider>
       </SocketProvider>
     </AuthProvider>

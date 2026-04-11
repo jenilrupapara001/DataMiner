@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar } from 'lucide-react';
+import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import Chart from 'react-apexcharts';
+import { subDays, startOfDay, endOfDay, format } from 'date-fns';
+import AdvancedDateRangePicker from '../contexts/DateRangeContext';
 
 const AsinDetailModal = ({ asin, isOpen, onClose }) => {
   const [isClosing, setIsClosing] = useState(false);
-  const [dateFilter, setDateFilter] = useState('All'); // All, 90D, 30D, 7D
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [dateRange, setDateRange] = useState({
+    start: subDays(endOfDay(new Date()), 7),
+    end: endOfDay(new Date())
+  });
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 200);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -17,38 +31,20 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 200);
-  };
-
-  // 1. All hooks must be called unconditionally
+  // All hooks above this line - called unconditionally every render
   const history = useMemo(() => {
     if (!asin) return [];
-    
+
     let rawHistory = asin.history || asin.weekHistory || [];
     if (rawHistory.length === 0) return [];
 
-    // Sort by date to ensure correct filtering and display
     const sorted = [...rawHistory].sort((a, b) => new Date(a.date || a.week) - new Date(b.date || b.week));
-
-    if (dateFilter === 'All') return sorted;
-
-    const daysMap = { '7D': 7, '30D': 30, '90D': 90 };
-    const days = daysMap[dateFilter] || 0;
-    
-    // Calculate cutoff based on the latest available date in data
-    const latestDate = new Date(sorted[sorted.length - 1].date || sorted[sorted.length - 1].week);
-    const cutoffDate = new Date(latestDate.getTime() - days * 24 * 60 * 60 * 1000);
 
     return sorted.filter(h => {
       const itemDate = new Date(h.date || h.week);
-      return itemDate >= cutoffDate;
+      return itemDate >= dateRange.start && itemDate <= dateRange.end;
     });
-  }, [asin, dateFilter]);
+  }, [asin, dateRange]);
 
   const chartCategories = history.map(h => {
     if (!h.date && !h.week) return '';
@@ -155,7 +151,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
   if (!isOpen || !asin) return null;
 
   return createPortal(
-    <div 
+    <div
       className={`position-fixed top-0 bottom-0 start-0 end-0 d-flex align-items-center justify-content-center p-4 ${isClosing ? 'fade-out' : 'fade-in'}`}
       style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(12px)', zIndex: 9999 }}
       onClick={(e) => e.target === e.currentTarget && handleClose()}
@@ -182,10 +178,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
         .stat-label { color: #64748b; font-size: 0.75rem; font-weight: 500; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.025em; }
         .stat-value { font-weight: 700; color: #1e293b; font-size: 1rem; }
       `}</style>
-      
-      <div 
+
+      <div
         className="bg-white shadow-2xl overflow-hidden"
-        style={{ 
+        style={{
           width: '100%', maxWidth: '1280px', maxHeight: '95vh', borderRadius: '24px', display: 'flex', flexDirection: 'column'
         }}
       >
@@ -198,10 +194,22 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
             <div>
               <div className="d-flex align-items-center gap-2">
                 <h4 className="mb-0 fw-bold text-slate-900">{asin.asinCode}</h4>
-                <span className="badge bg-slate-100 text-slate-600 border rounded-pill px-3">{asin.category || 'ASIN Details'}</span>
+                {(asin.category || asin.status) && (
+                  <span className="badge border rounded-pill px-3 py-2"
+                    style={{
+                      backgroundColor: '#f8f9fa',
+                      color: '#374151',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      border: '1px solid #e5e7eb'
+                    }}
+                  >
+                    {asin.category || asin.status}
+                  </span>
+                )}
               </div>
               <p className="text-secondary small mb-0 d-flex align-items-center gap-1">
-                <Store size={14} /> Association: {asin.sellerName || 'Direct Seller'}
+                <Store size={14} /> Sold By: {asin.soldBy || 'Direct Seller'}
               </p>
             </div>
           </div>
@@ -212,32 +220,41 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
         {/* Content Area */}
         <div className="p-5 overflow-auto bg-slate-50/50" style={{ flex: 1 }}>
-          
+
           {/* Filters Bar */}
           <div className="d-flex justify-content-between align-items-center mb-5 bg-white p-3 rounded-2xl border shadow-sm">
             <div className="d-flex align-items-center gap-2 text-slate-600 fw-medium">
               <Calendar size={18} className="text-indigo-600" />
               <span>Historical Range</span>
             </div>
-            <div className="d-flex shadow-sm" style={{ borderRadius: '10px', overflow: 'hidden' }}>
-              {['7D', '30D', '90D', 'All'].map(range => (
-                <button 
-                  key={range} 
-                  className={`filter-btn ${dateFilter === range ? 'active' : ''}`}
-                  onClick={() => setDateFilter(range)}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
+            <button
+              className="d-flex align-items-center gap-2 px-3 py-1 border rounded-3"
+              style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0', height: '32px' }}
+              onClick={() => setIsPickerOpen(true)}
+            >
+              <Calendar size={14} className="text-zinc-500" />
+              <span className="small fw-semibold text-zinc-700">
+                {format(dateRange.start, 'MMM dd, yyyy')} - {format(dateRange.end, 'MMM dd, yyyy')}
+              </span>
+            </button>
+            <AdvancedDateRangePicker
+              isOpen={isPickerOpen}
+              onClose={() => setIsPickerOpen(false)}
+              onApply={(range) => {
+                setDateRange({ start: range.startDate, end: range.endDate });
+              }}
+              initialStartDate={dateRange.start}
+              initialEndDate={dateRange.end}
+              initialRangeType="last7"
+            />
           </div>
 
           {/* Horizontal Product Details Bar */}
           <div className="bg-white border rounded-3xl p-4 shadow-sm mb-5 d-flex align-items-center gap-4">
             {/* Product Thumbnail */}
-            <div 
-              className="flex-shrink-0" 
-              style={{ width: '180px', height: '180px', borderRadius: '20px', border: '1px solid #f1f5f9', overflow: 'hidden', backgroundColor: '#f8fafc', padding: '12px' }}
+            <div
+              className="flex-shrink-0"
+              style={{ width: '180px', height: '180px', borderRadius: '20px', border: '1px solid #2547ddff', overflow: 'hidden', backgroundColor: '#f8fafc', }}
             >
               {asin.imageUrl ? (
                 <img src={asin.imageUrl} alt={asin.asinCode} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -251,7 +268,19 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
               <div className="mb-4">
                 <h5 className="fw-bold text-slate-800 mb-2 truncate-2-lines" style={{ lineHeight: '1.4' }}>{asin.title}</h5>
                 <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg font-monospace border border-indigo-100">{asin.asinCode}</span>
+                  <span
+                    className="badge px-3 py-2 rounded-lg font-monospace border"
+                    style={{
+                      backgroundColor: '#eef2ff',
+                      color: '#334155',
+                      border: '1px solid #c7d2fe',
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      letterSpacing: '0.025em'
+                    }}
+                  >
+                    {asin.asinCode}
+                  </span>
                   <a href={`https://www.amazon.in/dp/${asin.asinCode}`} target="_blank" rel="noopener noreferrer" className="btn btn-link p-0 text-slate-400 hover:text-indigo-600"><ExternalLink size={16} /></a>
                 </div>
               </div>
@@ -269,40 +298,117 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
           {/* Visualizations Stack (Full Width) */}
           <div className="d-flex flex-column gap-5">
-            {/* Price History Chart */}
-            <div className="bg-white border p-5 rounded-3xl shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><IndianRupee size={20} /></div>
-                  <h6 className="mb-0 fw-bold text-slate-800">PRICE HISTORY</h6>
-                </div>
-                <span className="text-slate-400 small font-medium">Snapshot Count: {history.length}</span>
+            {/* Bullet Points Cards - Always show if there's data */}
+            <div className="bg-white border p-4 rounded-3xl shadow-sm">
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><ListChecks size={20} /></div>
+                <h6 className="mb-0 fw-bold text-slate-800">PRODUCT FEATURES ({asin.bulletPoints || asin.bulletPointsText?.length || 0})</h6>
               </div>
-              <div style={{ minHeight: '300px' }}><Chart options={priceOptions} series={priceSeries} type="area" height={300} /></div>
+              {asin.bulletPointsText && asin.bulletPointsText.length > 0 ? (
+                <div className="d-flex flex-wrap gap-2">
+                  {asin.bulletPointsText.map((bullet, idx) => (
+                    <div
+                      key={idx}
+                      className="px-3 py-2 bg-slate-50 rounded-lg border"
+                      style={{ fontSize: '0.8rem', maxWidth: '300px' }}
+                    >
+                      <span className="text-violet-600 fw-bold me-2">{idx + 1}.</span>
+                      <span className="text-slate-700">{bullet}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted small mb-0">No bullet points available</p>
+              )}
             </div>
 
-            {/* BSR Trend Chart */}
-            <div className="bg-white border p-5 rounded-3xl shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><BarChart3 size={20} /></div>
-                  <h6 className="mb-0 fw-bold text-slate-800">BEST SELLERS RANK TREND</h6>
-                </div>
-                <div className="d-flex align-items-center gap-1 text-slate-400 small font-medium"><Eye size={14} /> Interactive View</div>
+            {/* Rating Breakdown - Always show */}
+            <div className="bg-white border p-4 rounded-3xl shadow-sm">
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Star size={20} /></div>
+                <h6 className="mb-0 fw-bold text-slate-800">RATING BREAKDOWN</h6>
               </div>
-              <div style={{ minHeight: '300px' }}><Chart options={bsrOptions} series={bsrSeries} type="line" height={300} /></div>
+              <div className="row g-3">
+                {[
+                  { stars: 5, key: 'fiveStar', color: '#22c55e' },
+                  { stars: 4, key: 'fourStar', color: '#84cc16' },
+                  { stars: 3, key: 'threeStar', color: '#eab308' },
+                  { stars: 2, key: 'twoStar', color: '#f97316' },
+                  { stars: 1, key: 'oneStar', color: '#ef4444' }
+                ].map(({ stars, key, color }) => {
+                  const percentage = asin.ratingBreakdown?.[key] || 0;
+                  return (
+                    <div key={stars} className="col-md-6 col-lg-4">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fw-bold text-slate-700" style={{ minWidth: '30px' }}>{stars}★</span>
+                        <div className="flex-grow-1">
+                          <div className="progress rounded-pill" style={{ height: '12px', backgroundColor: '#e2e8f0' }}>
+                            <div
+                              className="progress-bar rounded-pill"
+                              style={{ width: `${percentage}%`, backgroundColor: color }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-slate-600 fw-medium" style={{ minWidth: '45px', textAlign: 'right' }}>{percentage}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Price History Chart */}
+            <div className="bg-white border rounded-4 p-4 shadow-sm">
+              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <IndianRupee size={18} className="text-emerald-600" />
+                  </div>
+                  <h6 className="mb-0 fw-semibold" style={{ color: '#1e293b', fontSize: '0.938rem' }}>
+                    PRICE HISTORY
+                  </h6>
+                </div>
+                <span className="small" style={{ color: '#64748b', fontWeight: 500 }}>
+                  Snapshot Count: {history.length}
+                </span>
+              </div>
+              <div style={{ minHeight: '280px' }}>
+                <Chart options={priceOptions} series={priceSeries} type="line" height={280} />
+              </div>
+            </div>
+            {/* BSR Trend Chart */}
+            <div className="bg-white border rounded-4 p-4 shadow-sm">
+              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <BarChart3 size={18} className="text-emerald-600" />
+                  </div>
+                  <h6 className="mb-0 fw-semibold text-slate-800">BEST SELLERS RANK TREND</h6>
+                </div>
+                <div className="d-flex align-items-center gap-1 text-slate-500 small fw-medium">
+                  <Eye size={14} />
+                  <span>Interactive View</span>
+                </div>
+              </div>
+              <div style={{ minHeight: '280px' }}>
+                <Chart options={bsrOptions} series={bsrSeries} type="line" height={280} />
+              </div>
             </div>
 
             {/* Rating History Chart */}
-            <div className="bg-white border p-5 rounded-3xl shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Star size={20} /></div>
-                  <h6 className="mb-0 fw-bold text-slate-800">RATING PROGRESSION</h6>
+            <div className="bg-white border rounded-4 p-4 shadow-sm">
+              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="p-2 bg-amber-50 rounded-lg">
+                    <Star size={18} className="text-amber-600" />
+                  </div>
+                  <h6 className="mb-0 fw-semibold text-slate-800">RATING PROGRESSION</h6>
                 </div>
-                <span className="text-slate-400 small font-medium">Scale (0 - 5)</span>
+                <span className="text-slate-500 small fw-medium">Scale (0 - 5)</span>
               </div>
-              <div style={{ minHeight: '300px' }}><Chart options={ratingOptions} series={ratingSeries} type="line" height={300} /></div>
+              <div style={{ minHeight: '280px' }}>
+                <Chart options={ratingOptions} series={ratingSeries} type="line" height={280} />
+              </div>
             </div>
           </div>
         </div>

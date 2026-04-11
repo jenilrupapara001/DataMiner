@@ -47,48 +47,57 @@ const TemplateManagerPage = () => {
         name: '', description: '', goals: []
     });
 
-      // AI Generation State
-      const [showAiModal, setShowAiModal] = useState(false);
-      const [aiPrompt, setAiPrompt] = useState('');
-      const [aiGenerating, setAiGenerating] = useState(false);
-      const [aiSuggestions, setAiSuggestions] = useState(null);
-
-      // Show page loader when loading (waiting for templates and settings)
-      if (loading) {
-        return <PageLoader message="Loading Templates..." />;
-      }
+    // AI Generation State
+    const [showAiModal, setShowAiModal] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiGenerating, setAiGenerating] = useState(false);
+    const [aiSuggestions, setAiSuggestions] = useState(null);
+    const [error, setError] = useState(null);
 
     // Data Fetching
-    const fetchTemplates = async () => {
-        setLoading(true);
-        try {
-            // Fetch templates and configuration in parallel
-            const [taskRes, goalRes, configRes] = await Promise.all([
-                db.getTaskTemplates(),
-                db.getGoalTemplates(),
-                db.getSettings('template_manager') // Fetch template manager specific settings
-            ]);
-            
-            if (taskRes?.success) setTaskTemplates(taskRes.data);
-            if (goalRes?.success) setGoalTemplates(goalRes.data);
-            
-            // Update configuration from database if available
-            if (configRes?.success) {
-                const config = configRes.data;
-                if (config.categories) setCategories(config.categories);
-                if (config.taskTypes) setTaskTypes(config.taskTypes);
-                if (config.priorities) setPriorities(config.priorities);
-                if (config.metrics) setMetrics(config.metrics);
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const [taskRes, goalRes] = await Promise.all([
+                    db.getTaskTemplates(),
+                    db.getGoalTemplates()
+                ]);
+                
+                // Handle both direct array or wrapped {success, data} response
+                const taskData = Array.isArray(taskRes) ? taskRes : (taskRes?.data || []);
+                const goalData = Array.isArray(goalRes) ? goalRes : (goalRes?.data || []);
+                
+                setTaskTemplates(taskData);
+                setGoalTemplates(goalData);
+            } catch (err) {
+                console.error('Failed to fetch templates:', err);
+                setError('Failed to load templates. Please refresh.');
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error('Failed to fetch templates or configuration:', error);
-            // Keep hardcoded defaults if database fails
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
+        
+        fetchTemplates();
+    }, []);
 
-    useEffect(() => { fetchTemplates(); }, []);
+    // Show page loader when loading
+    if (loading) {
+        return <PageLoader message="Loading Templates..." />;
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div className="container-fluid py-4 text-center">
+                <div className="alert alert-danger">{error}</div>
+                <button className="btn btn-primary" onClick={() => window.location.reload()}>
+                    Refresh Page
+                </button>
+            </div>
+        );
+    }
 
     // Task Modal Handlers
     const handleOpenTaskModal = (template = null) => {

@@ -410,6 +410,16 @@ class DatabaseService {
   }
 
   /**
+   * Generate bulk auto-tasks from ASIN analysis
+   */
+  async generateBulkActions(options = {}) {
+    return this.request('/actions/bulk-from-analysis', { 
+      method: 'POST', 
+      body: JSON.stringify(options) 
+    }, null);
+  }
+
+  /**
    * Delete an action
    * @param {string} id
    */

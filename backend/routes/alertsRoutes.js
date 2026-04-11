@@ -6,11 +6,21 @@ const { authenticate, requirePermission } = require('../middleware/auth');
 
 // Alert routes
 router.get('/alerts', authenticate, requirePermission('dashboard_view'), alertsController.getAlerts);
+router.get('/alerts/count', authenticate, requirePermission('dashboard_view'), alertsController.getUnreadAlertCount);
 router.patch('/alerts/:id', authenticate, requirePermission('dashboard_view'), alertsController.acknowledgeAlert);
+router.patch('/alerts/acknowledge-all', authenticate, requirePermission('dashboard_view'), alertsController.acknowledgeAllAlerts);
 
 // Alert rule routes
 router.get('/alert-rules', authenticate, requirePermission('settings_view'), alertsController.getAlertRules);
 router.post('/alert-rules', authenticate, requirePermission('settings_edit'), alertsController.createAlertRule);
+
+// Execute all rules (root level to avoid :id conflict)
+router.post('/execute-all-rules', authenticate, requirePermission('settings_edit'), alertsController.executeAllRules);
+
+// Specific routes with :id pattern
+router.patch('/alert-rules/:id/toggle', authenticate, requirePermission('settings_edit'), alertsController.toggleAlertRule);
+router.post('/alert-rules/:id/execute', authenticate, requirePermission('settings_edit'), alertsController.executeRule);
+router.get('/alert-rules/:id', authenticate, requirePermission('settings_view'), alertsController.getAlertRuleById);
 router.put('/alert-rules/:id', authenticate, requirePermission('settings_edit'), alertsController.updateAlertRule);
 router.delete('/alert-rules/:id', authenticate, requirePermission('settings_edit'), alertsController.deleteAlertRule);
 

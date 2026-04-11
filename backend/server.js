@@ -79,11 +79,13 @@ const actionRoutes = require('./routes/actionRoutes');
 const fileRoutes = require('./routes/fileRoutes');
 const apiKeyRoutes = require('./routes/apiKeyRoutes');
 const teamRoutes = require('./routes/teamRoutes');
+const rulesetRoutes = require('./routes/rulesetRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', alertsRoutes);
 app.use('/api', exportRoutes);
+app.use('/api', rulesetRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/asins', asinRoutes);
 app.use('/api/auth', authRoutes);

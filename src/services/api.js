@@ -549,6 +549,14 @@ export const asinApi = {
     return res.json();
   },
 
+  getAllWithoutPagination: async () => {
+    const res = await fetch(`${API_BASE}/asins/all`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch all ASINs');
+    return res.json();
+  },
+
   getStats: async (params = {}) => {
     const query = new URLSearchParams(params).toString();
     const res = await fetch(`${API_BASE}/asins/stats?${query}`, {
@@ -654,7 +662,22 @@ const REVENUE_API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:30
 
 export const dashboardApi = {
   getSummary: async (params = {}) => {
-    const query = typeof params === 'string' ? `period=${params}` : new URLSearchParams(params).toString();
+    let query = '';
+    if (typeof params === 'string') {
+      // If it's already a query string (has = or &), use it as is
+      if (params.includes('=') || params.includes('&')) {
+        query = params;
+      } else if (params) {
+        query = `period=${params}`;
+      }
+    } else {
+      // For object params, filter out null/undefined before stringifying
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
+      );
+      query = new URLSearchParams(cleanParams).toString();
+    }
+    
     const res = await fetch(`${API_BASE}/dashboard?${query}`, {
       headers: { ...getAuthHeader() },
     });
@@ -877,6 +900,22 @@ const api = {
     }
     return res.json();
   },
+  patch: async (endpoint, data = {}) => {
+    const authHeader = getAuthHeader();
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'PATCH',
+      headers: {
+        ...authHeader,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.message || `Request failed: ${res.statusText}`);
+    }
+    return res.json();
+  },
 
   // Namespaced APIs
   authApi,
@@ -971,6 +1010,44 @@ const api = {
       return api.post(`/chat/messages/${messageId}/vote`, { optionIndex });
     }
   },
+  alertApi: {
+    getAlerts: async () => {
+      return api.get('/alerts');
+    },
+    getAlertCount: async () => {
+      return api.get('/alerts/count');
+    },
+    acknowledgeAlert: async (id) => {
+      return api.patch(`/alerts/${id}`, { acknowledged: true });
+    },
+    acknowledgeAll: async () => {
+      return api.patch('/alerts/acknowledge-all');
+    },
+    getRules: async () => {
+      return api.get('/alert-rules');
+    },
+    getRule: async (id) => {
+      return api.get(`/alert-rules/${id}`);
+    },
+    createRule: async (data) => {
+      return api.post('/alert-rules', data);
+    },
+    updateRule: async (id, data) => {
+      return api.put(`/alert-rules/${id}`, data);
+    },
+    toggleRule: async (id) => {
+      return api.patch(`/alert-rules/${id}/toggle`);
+    },
+    deleteRule: async (id) => {
+      return api.delete(`/alert-rules/${id}`);
+    },
+    executeRule: async (id) => {
+      return api.post(`/alert-rules/${id}/execute`);
+    },
+    executeAllRules: async () => {
+      return api.post('/execute-all-rules');
+    }
+  },
   sellerTrackerApi: {
     getTrackers: async () => {
       return api.get('/seller-tracker');
@@ -988,3 +1065,80 @@ const api = {
 };
 
 export default api;
+
+export const alertApi = {
+  getAlerts: async () => {
+    return api.get('/alerts');
+  },
+  getAlertCount: async () => {
+    return api.get('/alerts/count');
+  },
+  acknowledgeAlert: async (id) => {
+    return api.patch(`/alerts/${id}`, { acknowledged: true });
+  },
+  acknowledgeAll: async () => {
+    return api.patch('/alerts/acknowledge-all');
+  },
+  getRules: async () => {
+    return api.get('/alert-rules');
+  },
+  getRule: async (id) => {
+    return api.get(`/alert-rules/${id}`);
+  },
+  createRule: async (data) => {
+    return api.post('/alert-rules', data);
+  },
+  updateRule: async (id, data) => {
+    return api.put(`/alert-rules/${id}`, data);
+  },
+  toggleRule: async (id) => {
+    return api.patch(`/alert-rules/${id}/toggle`);
+  },
+  deleteRule: async (id) => {
+    return api.delete(`/alert-rules/${id}`);
+  },
+  executeRule: async (id) => {
+    return api.post(`/alert-rules/${id}/execute`);
+  },
+  executeAllRules: async () => {
+    return api.post('/alert-rules/execute-all');
+  }
+};
+
+export const rulesetApi = {
+  getAll: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return api.get(`/rulesets?${query}`);
+  },
+  getById: async (id) => {
+    return api.get(`/rulesets/${id}`);
+  },
+  create: async (data) => {
+    return api.post('/rulesets', data);
+  },
+  update: async (id, data) => {
+    return api.put(`/rulesets/${id}`, data);
+  },
+  delete: async (id) => {
+    return api.delete(`/rulesets/${id}`);
+  },
+  toggle: async (id) => {
+    return api.patch(`/rulesets/${id}/toggle`);
+  },
+  execute: async (id) => {
+    return api.post(`/rulesets/${id}/execute`);
+  },
+  preview: async (id) => {
+    return api.post(`/rulesets/${id}/preview`);
+  },
+  getHistory: async (id, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return api.get(`/rulesets/${id}/history?${query}`);
+  },
+  getExecutionDetails: async (logId) => {
+    return api.get(`/rulesets/history/${logId}`);
+  },
+  duplicate: async (id) => {
+    return api.post(`/rulesets/${id}/duplicate`);
+  }
+};

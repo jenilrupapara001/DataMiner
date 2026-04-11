@@ -9,6 +9,10 @@ exports.globalSearch = async (req, res) => {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json({ asins: [], sellers: [], actions: [] });
 
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
     const allowedSellerIds = !isAdmin ? req.user.assignedSellers.map(s => s._id) : [];
 

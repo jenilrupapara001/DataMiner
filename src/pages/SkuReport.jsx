@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IndianRupee, Package, Percent, Activity, TrendingUp, PieChart, Filter, BarChart3, Download, Search, RefreshCw, Layers, Target, Calendar, X } from 'lucide-react';
-import DateRangePicker from '../components/common/DateRangePicker';
+import { useDateRange } from '../contexts/DateRangeContext';
+import { format } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import Chart from 'react-apexcharts';
 import KPICard from '../components/KPICard';
@@ -11,11 +12,7 @@ import { PageLoader } from '@/components/application/loading-indicator/PageLoade
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 
 const SkuReport = () => {
-  const [dateRange, setDateRange] = useState('month');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [customStart, setCustomStart] = useState(null);
-  const [customEnd, setCustomEnd] = useState(null);
+  const { startDate, endDate, rangeType } = useDateRange();
   const [searchParams] = useSearchParams();
   const initialAsin = searchParams.get('asin') || '';
 
@@ -37,22 +34,18 @@ const SkuReport = () => {
   const loadSkuData = useCallback(async () => {
     setLoading(true);
     try {
-      let params = {};
-      if (dateRange === 'custom' && customStart && customEnd) {
-        params = {
-          startDate: customStart.toISOString().split('T')[0],
-          endDate: customEnd.toISOString().split('T')[0]
-        };
-      } else {
-        const firstDay = new Date(selectedYear, selectedMonth, 1);
-        const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
-        params = {
-          startDate: firstDay.toISOString().split('T')[0],
-          endDate: lastDay.toISOString().split('T')[0]
-        };
-      }
+      const params = {
+        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
+        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
+        rangeType
+      };
 
-      const query = new URLSearchParams(params).toString();
+      // Clean params: remove null/undefined/string 'null'
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
+      );
+
+      const query = new URLSearchParams(cleanParams).toString();
       const response = await api.get(`/data/sku-report?${query}`);
       const skuData = (response.data || []).map((item, idx) => ({
         id: idx + 1,
@@ -76,11 +69,11 @@ const SkuReport = () => {
       console.error('Failed to load SKU data:', error);
     }
     setLoading(false);
-  }, []);
+  }, [startDate, endDate, rangeType]);
 
   useEffect(() => {
     loadSkuData();
-  }, [loadSkuData, dateRange, selectedMonth, selectedYear, customStart, customEnd]);
+  }, [loadSkuData]);
 
   const kpis = useMemo(() => {
     const totalRevenue = data.reduce((sum, item) => sum + item.revenue, 0);
@@ -170,46 +163,6 @@ const SkuReport = () => {
             <p className="text-muted small mb-0">Deep Insights & Inventory Analytics</p>
           </div>
           <div className="d-flex align-items-center gap-2">
-            <div className="d-flex align-items-center gap-2 bg-white border border-zinc-200 p-1.5 rounded-3 shadow-sm">
-              <Calendar size={14} className="text-muted ms-2" />
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
-                style={{ width: '120px' }}
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
-              </select>
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent shadow-none"
-                style={{ width: '80px' }}
-                value={selectedYear}
-                onChange={(e) => {
-                  setSelectedYear(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
-              <DateRangePicker
-                startDate={customStart}
-                endDate={customEnd}
-                onDateChange={(start, end) => {
-                  setCustomStart(start);
-                  setCustomEnd(end);
-                  if (start && end) setDateRange('custom');
-                }}
-                placeholder="Custom Range"
-              />
-            </div>
             <button className="btn btn-white btn-sm rounded-circle p-2 shadow-sm border border-zinc-200" onClick={loadSkuData}>
               <RefreshCw size={14} className={loading ? 'spin text-primary' : 'text-zinc-500'} />
             </button>
