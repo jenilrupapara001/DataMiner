@@ -304,22 +304,45 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><ListChecks size={20} /></div>
                 <h6 className="mb-0 fw-bold text-slate-800">PRODUCT FEATURES ({asin.bulletPoints || asin.bulletPointsText?.length || 0})</h6>
               </div>
-              {asin.bulletPointsText && asin.bulletPointsText.length > 0 ? (
-                <div className="d-flex flex-wrap gap-2">
-                  {asin.bulletPointsText.map((bullet, idx) => (
-                    <div
-                      key={idx}
-                      className="px-3 py-2 bg-slate-50 rounded-lg border"
-                      style={{ fontSize: '0.8rem', maxWidth: '300px' }}
-                    >
-                      <span className="text-violet-600 fw-bold me-2">{idx + 1}.</span>
-                      <span className="text-slate-700">{bullet}</span>
+              {(() => {
+                // Determine the best source for bullet points
+                const bullets = asin.bulletPointsText || asin.bulletPointsList || asin.bullets || [];
+                
+                if (bullets.length > 0) {
+                  return (
+                    <div className="d-flex flex-column gap-3">
+                      {bullets.map((bullet, idx) => (
+                        <div
+                          key={idx}
+                          className="d-flex gap-3 p-3 bg-slate-50 rounded-2xl border-start border-4 border-indigo-200"
+                          style={{ fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                        >
+                          <div className="d-flex align-items-center justify-content-center flex-shrink-0" 
+                               style={{ width: 24, height: 24, borderRadius: '50%', background: '#6366f1', color: '#fff', fontSize: '10px', fontWeight: 700 }}>
+                            {idx + 1}
+                          </div>
+                          <div className="text-slate-700 leading-relaxed" style={{ lineHeight: '1.6' }}>{bullet}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted small mb-0">No bullet points available</p>
-              )}
+                  );
+                }
+                
+                // Fallback for raw bullet_points HTML or single string
+                if (asin.bullet_points && typeof asin.bullet_points === 'string') {
+                  return (
+                    <div className="p-3 bg-slate-50 rounded-2xl border Leading-relaxed text-slate-700" style={{ fontSize: '0.9rem' }}>
+                      <div dangerouslySetInnerHTML={{ __html: asin.bullet_points }} />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-dashed text-center">
+                    <p className="text-muted small mb-0">No bullet points discovered for this listing yet.</p>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Rating Breakdown - Always show */}

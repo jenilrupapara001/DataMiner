@@ -103,8 +103,11 @@ const calculateStructuredAttributes = (asin) => {
     }
 
     // Bullet points (5 points for 5+ bullets)
-    const bulletPoints = asin.bulletPoints || asin.bulletPointsText || '';
-    const bulletCount = Array.isArray(bulletPoints) ? bulletPoints.length : (bulletPoints.split('|').filter(b => b.trim()).length);
+    const bulletText = asin.bulletPointsText || [];
+    const bulletCount = Array.isArray(bulletText) && bulletText.length > 0 
+        ? bulletText.length 
+        : (typeof asin.bulletPointsText === 'string' ? asin.bulletPointsText.split('|').filter(b => b.trim()).length : (asin.bulletPoints || 0));
+
     if (bulletCount >= 5) {
         score += 5;
     } else if (bulletCount > 0) {
@@ -194,10 +197,12 @@ const calculateImageQuality = (asin) => {
 const calculateBulletPoints = (asin) => {
     let score = 0;
     const issues = [];
-    const bulletPoints = asin.bulletPoints || asin.bulletPointsText || '';
-    const bulletCount = Array.isArray(bulletPoints) ? bulletPoints.length : (bulletPoints.split('|').filter(b => b.trim()).length);
+    // 5 points for 5 bullets
+    const bulletText = asin.bulletPointsText || [];
+    const bulletCount = Array.isArray(bulletText) && bulletText.length > 0 
+        ? bulletText.length 
+        : (typeof asin.bulletPointsText === 'string' ? asin.bulletPointsText.split('|').filter(b => b.trim()).length : (asin.bulletPoints || 0));
 
-    // 5 points for 5 bullets with 100+ chars each
     if (bulletCount >= 5) {
         score += 5;
     } else if (bulletCount >= 3) {

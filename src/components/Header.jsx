@@ -110,13 +110,18 @@ const Header = () => {
 
     const formatTime = (date) =>
         date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
             weekday: 'short',
+            day: 'numeric',
+            month: 'short',
             hour: 'numeric',
             minute: '2-digit',
             hour12: true
-        });
+        }).replace(',', '');
+
+    const getInitials = (name) => {
+        if (!name) return 'U';
+        return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    };
 
     const getIcon = (type) => {
         if (type === 'ALERT') return <Bell size={14} />;
@@ -133,7 +138,7 @@ const Header = () => {
                 <div className="header-left-group">
                     {isMobile && (
                         <button className="header-hamburger-mini" onClick={toggleMobile}>
-                            <Menu size={16} />
+                            <Menu size={15} />
                         </button>
                     )}
                     <h1 className="header-title-premium">{pageTitle}</h1>
@@ -142,7 +147,7 @@ const Header = () => {
                 {/* CENTER SEARCH */}
                 <div className="header-search-container-premium" ref={searchRef}>
                     <div className="header-search-wrapper-mini">
-                        <Search size={14} />
+                        <Search size={12} className="text-muted" />
                         <input
                             ref={searchInputRef}
                             value={searchQuery}
@@ -220,19 +225,22 @@ const Header = () => {
                 <div className="header-right-group">
 
                     <div className="sync-info-group">
-                        <Clock size={12} />
-                        <span className="sync-time-text">{formatTime(currentTime)}</span>
+                        <span className="sync-time-text" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {formatTime(currentTime)}
+                        </span>
                     </div>
 
                     <DateRangePicker
                         startDate={startDate}
                         endDate={endDate}
                         onDateChange={(t, s, e) => updateDateRange(t, s, e)}
+                        compact={true}
                     />
 
                     <div className="context-pill">
-                        {user?.fullName}
-                        <ChevronDown size={12} />
+                        <div className="user-avatar-mini">{getInitials(user?.fullName)}</div>
+                        <span>{user?.fullName?.split(' ')[0]}</span>
+                        <ChevronDown size={10} />
                     </div>
 
                     <div className="header-divider" />
@@ -240,7 +248,7 @@ const Header = () => {
                     <Dropdown.Root>
                         <Dropdown.Trigger>
                             <button className="header-icon-btn">
-                                <Bell size={18} />
+                                <Bell size={15} />
                                 {unreadCount > 0 && <span className="notif-dot" />}
                             </button>
                         </Dropdown.Trigger>

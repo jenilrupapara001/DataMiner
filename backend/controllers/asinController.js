@@ -418,6 +418,16 @@ exports.getAsinStats = async (req, res) => {
       ? (((previousWeekTotal - twoWeeksTotal) / twoWeeksTotal) * 100).toFixed(1) 
       : 0;
 
+    const avgImages = await Asin.aggregate([
+      { $match: filter },
+      { $group: { _id: null, avgImages: { $avg: '$imagesCount' } } },
+    ]);
+
+    const avgBullets = await Asin.aggregate([
+      { $match: filter },
+      { $group: { _id: null, avgBullets: { $avg: '$bulletPoints' } } },
+    ]);
+
     res.json({
       total: totalAsins,
       active: activeAsins,
@@ -425,6 +435,8 @@ exports.getAsinStats = async (req, res) => {
       avgLQS: avgLQS[0]?.avgLQS?.toFixed(2) || 0,
       avgPrice: avgPrice[0]?.avgPrice?.toFixed(2) || 0,
       avgBSR: avgBSR[0]?.avgBSR?.toFixed(0) || 0,
+      avgImages: avgImages[0]?.avgImages?.toFixed(1) || 0,
+      avgBullets: avgBullets[0]?.avgBullets?.toFixed(1) || 0,
       totalReviews: totalReviews[0]?.totalReviews || 0,
       buyBoxRate: totalAsins > 0 ? ((buyBoxWins / totalAsins) * 100).toFixed(0) : 0,
       bestSellingAsins,

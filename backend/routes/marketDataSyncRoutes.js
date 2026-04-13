@@ -60,4 +60,7 @@ router.post('/sync-results/:sellerId', authenticate, requirePermission('sellers_
 // Bulk inject raw JSON data manually
 router.post('/bulk-inject-json', authenticate, requirePermission('sellers_manage_asins'), marketSyncController.bulkInjectJson);
 
+// Global database integrity repair
+router.post('/repair', authenticate, requirePermission('admin_manage_users'), marketSyncController.triggerRepair);
+
 module.exports = router;

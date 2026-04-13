@@ -873,3 +873,25 @@ exports.bulkInjectJson = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+/**
+ * Manually trigger the global database integrity repair process.
+ */
+exports.triggerRepair = async (req, res) => {
+    try {
+        const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Only admins can trigger global repair' });
+        }
+
+        const result = await octoparseAutomationService.runBackgroundDatabaseRepair();
+        
+        res.json({
+            success: true,
+            message: 'Global database integrity repair initiated',
+            details: result
+        });
+    } catch (error) {
+        console.error('Manual Repair Trigger Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to trigger repair: ' + error.message });
+    }
+};

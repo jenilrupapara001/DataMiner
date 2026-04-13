@@ -450,6 +450,8 @@ const AsinManagerPage = () => {
           sub: `Current: ${stats.reviewAnalysis?.currentWeek || 0} vs Previous: ${stats.reviewAnalysis?.previousWeek || 0}`
         },
         { label: 'AVG PRICE', value: '₹' + (stats.avgPrice || 0).toLocaleString(), color: '#06b6d4', icon: <IndianRupee size={14} /> },
+        { label: 'AVG IMAGES', value: stats.avgImages || 0, color: '#ec4899', icon: <Image size={14} /> },
+        { label: 'AVG BULLETS', value: stats.avgBullets || 0, color: '#8b5cf6', icon: <ListChecks size={14} /> },
       ];
     }
 
@@ -468,6 +470,8 @@ const AsinManagerPage = () => {
       { label: 'LOW LQS', value: lowLqs, color: '#ef4444', icon: <AlertTriangle size={14} /> },
       { label: 'DEALS', value: activeDeals, color: '#8b5cf6', icon: <Zap size={14} /> },
       { label: 'AVG PRICE', value: '₹' + avgPrice.toLocaleString(), color: '#06b6d4', icon: <IndianRupee size={14} /> },
+      { label: 'AVG IMAGES', value: Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / (asins.length || 1)), color: '#ec4899', icon: <Image size={14} /> },
+      { label: 'AVG BULLETS', value: Math.round(asins.reduce((sum, a) => sum + (a.bulletPoints || 0), 0) / (asins.length || 1)), color: '#8b5cf6', icon: <ListChecks size={14} /> },
     ];
   }, [asins, stats]);
 
@@ -769,26 +773,45 @@ const AsinManagerPage = () => {
     );
   };
 
-  // Collapsible Section Component
+  // Collapsible Section Component - Ultra Dense Redesign
   const CollapsibleSection = ({ title, icon: Icon, isOpen, onToggle, children, badge }) => (
-    <div className="card mb-4 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--zinc-200)' }}>
+    <div style={{ borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
       <div
-        className="card-header d-flex justify-content-between align-items-center cursor-pointer px-4 py-3"
         onClick={onToggle}
-        style={{ cursor: 'pointer', backgroundColor: '#fff', borderBottom: '1px solid var(--zinc-200)' }}
+        style={{
+          padding: '8px 20px',
+          minHeight: 36,
+          background: '#f9fafb',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer'
+        }}
       >
-        <h5 className="card-title mb-0 d-flex align-items-center gap-2" style={{ color: 'var(--zinc-900)', fontWeight: 600 }}>
-          <div className="p-2 bg-primary-subtle text-primary rounded-3">
-            <Icon size={18} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 20, height: 20, borderRadius: 4, background: '#eff6ff', color: '#2563eb',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon size={12} />
           </div>
-          {title}
-          {badge && <span className="badge rounded-pill bg-primary shadow-sm ms-2" style={{ fontSize: '10px' }}>{badge}</span>}
-        </h5>
-        <button className="btn btn-sm btn-light rounded-circle p-1 border-0 shadow-none hover-bg-light">
-          {isOpen ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
-        </button>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {title}
+          </span>
+          {badge && (
+            <span style={{
+              fontSize: 10, padding: '1px 8px', background: '#2563eb', color: '#fff',
+              borderRadius: 10, fontWeight: 600
+            }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <div>
+          {isOpen ? <ChevronUp size={14} color="#9ca3af" /> : <ChevronDown size={14} color="#9ca3af" />}
+        </div>
       </div>
-      {isOpen && <div className="card-body px-4 pb-4 pt-4" style={{ backgroundColor: '#fff' }}>{children}</div>}
+      {isOpen && <div style={{ padding: '12px 20px' }}>{children}</div>}
     </div>
   );
 
@@ -846,790 +869,523 @@ const AsinManagerPage = () => {
     );
   }
 
+  const thStyle = {
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: '#6b7280',
+    padding: '6px 8px',
+    background: '#f3f4f6',
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
+    whiteSpace: 'nowrap',
+    border: '1px solid #e5e7eb'
+  };
+
+  const tdStyle = {
+    padding: '5px 8px',
+    fontSize: '0.75rem',
+    borderBottom: '1px solid #f3f4f6',
+    verticalAlign: 'middle',
+    color: '#374151',
+    height: '38px',
+    borderLeft: '1px solid #f3f4f6',
+    borderRight: '1px solid #f3f4f6'
+  };
+
+  const actionBtnStyle = {
+    padding: '2px 8px',
+    fontSize: '10px',
+    fontWeight: '600',
+    height: '24px',
+    borderRadius: '12px'
+  };
+
   return (
-    <div className="page-container pb-5">
-      <div className="page-header mb-4">
-        <div className="d-flex justify-content-between align-items-center">
-          <div>
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <div className="p-2 bg-primary-subtle text-primary rounded-3">
-                <Scan size={20} />
-              </div>
-              <h1 className="page-title mb-0">ASIN Manager</h1>
-            </div>
-            <p className="text-muted small mb-0">Operational Inventory tracking & Listing Quality Metrics</p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#fff' }}>
+      {/* [B] Page Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 20px',
+        borderBottom: '1px solid #e5e7eb',
+        background: '#fff',
+        flexShrink: 0,
+        gap: 12
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: '#eff6ff', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Scan size={14} color="#2563eb" />
           </div>
-          <div className="d-flex align-items-center gap-3">
-            <div className="btn-group p-1 bg-white border border-zinc-200 shadow-sm rounded-pill">
-              <button className="btn btn-sm px-3 rounded-pill border-0 transition-all btn-primary shadow-sm" style={{ fontSize: '11px', fontWeight: '600' }}>
-                <TrendingUp size={12} className="me-1" /> Performance
-              </button>
-              <button className="btn btn-sm px-3 rounded-pill border-0 transition-all text-muted hover-bg-light" style={{ fontSize: '11px', fontWeight: '600' }}>
-                <Table size={12} className="me-1" /> Analytics
-              </button>
-            </div>
-            <button 
-              className="btn btn-white border border-zinc-200 shadow-sm d-flex align-items-center gap-2 rounded-pill px-4 py-2 transition-all hover-bg-slate" 
-              onClick={handleBulkScrape}
-              disabled={syncing}
-              style={{ fontWeight: '600' }}
-            >
-              <RefreshCw size={18} className={syncing ? 'spin' : ''} />
-              Sync All
+          <div>
+            <h1 style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0, lineHeight: 1.2 }}>
+              ASIN Manager
+            </h1>
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: 0, lineHeight: 1 }}>
+              Operational Inventory tracking & Listing Quality Metrics
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 20, padding: 2, gap: 0 }}>
+            <button style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 18,
+                             background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              <TrendingUp size={10} style={{ marginRight: 4 }} />Performance
             </button>
-            <button 
-              className="btn btn-white border border-zinc-200 shadow-sm d-flex align-items-center gap-2 rounded-pill px-4 py-2 transition-all hover-bg-slate" 
-              onClick={() => setShowUploadModal(true)}
-              style={{ fontWeight: '600' }}
-            >
-              <Download size={18} />
-              Upload CSV
+            <button style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 18,
+                             background: 'transparent', color: '#6b7280', border: 'none', cursor: 'pointer' }}>
+              <Table size={10} style={{ marginRight: 4 }} />Analytics
             </button>
-            <button className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 py-2 shadow-sm border-0 transition-transform active-scale-95" onClick={() => setShowAddModal(true)} style={{ fontWeight: '600' }}>
-              <Plus size={18} /> Add ASIN
-            </button>
-            <div className="input-group input-group-sm rounded-pill overflow-hidden border border-zinc-200 shadow-sm" style={{ width: '280px', backgroundColor: '#fff' }}>
-              <span className="input-group-text bg-white border-0 text-muted ps-3"><Search size={14} /></span>
-              <input 
-                type="text" 
-                className="form-control border-0 ps-0" 
-                placeholder="Search ASIN, SKU or Product..." 
-                style={{ fontSize: '13px' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button 
-                  className="btn btn-link text-muted position-absolute end-0 pe-2" 
-                  onClick={() => setSearchQuery('')}
-                  style={{ textDecoration: 'none', zIndex: 10 }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
+          </div>
+
+          <button onClick={handleBulkScrape} disabled={syncing}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                     fontSize: 11, fontWeight: 600, borderRadius: 20, border: '1px solid #d1d5db',
+                     background: '#fff', cursor: 'pointer', color: '#374151' }}>
+            <RefreshCw size={12} className={syncing ? 'spin' : ''} /> Sync All
+          </button>
+
+          <button onClick={() => setShowUploadModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                     fontSize: 11, fontWeight: 600, borderRadius: 20, border: '1px solid #d1d5db',
+                     background: '#fff', cursor: 'pointer', color: '#374151' }}>
+            <Download size={12} /> Upload CSV
+          </button>
+
+          <button onClick={() => setShowAddModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 14px',
+                     fontSize: 11, fontWeight: 700, borderRadius: 20, border: 'none',
+                     background: '#2563eb', color: '#fff', cursor: 'pointer' }}>
+            <Plus size={12} /> Add ASIN
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', background: '#f9fafb',
+                        border: '1px solid #e5e7eb', borderRadius: 20, padding: '4px 12px',
+                        gap: 6, width: 240 }}>
+            <Search size={12} color="#9ca3af" />
+            <input type="text" placeholder="Search ASIN, SKU or Product..."
+              value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ border: 'none', background: 'transparent', fontSize: 11,
+                       color: '#374151', outline: 'none', width: '100%' }} />
           </div>
         </div>
       </div>
 
-      <div className="page-content">
+      <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* [H] Error Banner */}
         {error && (
-          <div className="alert alert-warning d-flex align-items-center mb-4 mx-2 border-0 shadow-sm rounded-4" role="alert" style={{ padding: '0.75rem 1.25rem' }}>
-            <AlertTriangle className="me-2 text-warning" size={18} />
-            <span className="small fw-500">Database connection intermittent. Performance metrics may reflect cached or baseline data.</span>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 20px',
+            background: '#fffbeb', borderBottom: '1px solid #fde68a',
+            fontSize: 11, color: '#92400e', flexShrink: 0
+          }}>
+            <AlertTriangle size={12} color="#d97706" />
+            {error} — Showing cached data
           </div>
         )}
 
+        {/* [G] Scrape Progress Banner */}
         {scrapeProgress && (
-          <div className="card border-0 shadow rounded-4 mb-4" style={{ overflow: 'hidden', borderLeft: '4px solid #4f46e5' }}>
-            <div className="card-body p-4 bg-white">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <div className="fw-bold text-primary d-flex align-items-center gap-2">
-                  <RefreshCw size={18} className="animate-spin" />
-                  Live Syncing Operation Data...
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '6px 20px',
+            background: '#eff6ff',
+            borderBottom: '1px solid #bfdbfe',
+            fontSize: 11,
+            flexShrink: 0
+          }}>
+            <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} color="#2563eb" />
+            <span style={{ fontWeight: 600, color: '#1d4ed8' }}>Live Sync</span>
+            <span style={{ color: '#3b82f6' }}>{scrapeProgress.processed}/{scrapeProgress.total} ASINs</span>
+            <div style={{ flex: 1 }}>
+              <ProgressBar value={(scrapeProgress.processed/scrapeProgress.total)*100} color="primary" size="xs" />
+            </div>
+            <span style={{ color: '#6b7280' }}>{scrapeProgress.status}</span>
+          </div>
+        )}
+
+        {/* [C] KPI Strip */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(8, 1fr)',
+          borderBottom: '1px solid #e5e7eb',
+          background: '#fafafa',
+          flexShrink: 0
+        }}>
+          {kpis.map((kpi, idx) => (
+            <div key={idx} style={{
+              padding: '10px 16px',
+              borderRight: idx < 7 ? '1px solid #e5e7eb' : 'none',
+              display: 'flex', flexDirection: 'column', gap: 2
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4,
+                              background: kpi.color + '15', color: kpi.color,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {kpi.icon}
                 </div>
-                <div className="fw-bold text-primary smallest">
-                  {scrapeProgress.processed} / {scrapeProgress.total} ASINs PROCESSED
-                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af',
+                               textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {kpi.label}
+                </span>
               </div>
-              <ProgressBar
-                value={(scrapeProgress.processed / scrapeProgress.total) * 100}
-                color="primary"
-                size="md"
-              />
-              <div className="text-muted smallest mt-2 fw-medium d-flex align-items-center gap-2">
-                <div className="spinner-grow spinner-grow-sm text-primary" style={{ width: '8px', height: '8px' }}></div>
-                {scrapeProgress.status}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontSize: 17, fontWeight: 700, color: '#111827', lineHeight: 1 }}>
+                  {kpi.value}
+                </span>
+                {kpi.sub && <span style={{ fontSize: 10, color: '#9ca3af' }}>{kpi.sub}</span>}
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
 
-        {/* Single Collapsible Section containing KPIs and Performance Overview */}
+        {/* [D] Performance Overview */}
         <CollapsibleSection
           title="ASIN Performance Overview"
           icon={TrendingUp}
           isOpen={showDashboard}
           onToggle={() => setShowDashboard(!showDashboard)}
         >
-          {/* KPI Dashboard - Compact Dot Badges */}
-          <div className="d-flex flex-wrap gap-3 mb-4 mt-2">
-            {kpis.map((kpi, idx) => (
-              <div
-                key={idx}
-                className="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border bg-white border-light-subtle shadow-sm transition-all hover-shadow-md"
-                style={{ fontSize: '13px', fontWeight: '500', minWidth: 'fit-content' }}
-              >
-                <div
-                  className="d-flex align-items-center justify-content-center rounded-circle"
-                  style={{ width: '24px', height: '24px', backgroundColor: kpi.color + '20', color: kpi.color }}
-                >
-                  {kpi.icon}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {/* Price Dynamics Card */}
+            <div style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: '#f0fdf4', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <IndianRupee size={14} />
                 </div>
-                <div className="d-flex flex-column" style={{ lineHeight: '1.1' }}>
-                  <span className="text-muted text-uppercase" style={{ fontSize: '9px', fontWeight: '700', letterSpacing: '0.05em' }}>{kpi.label}</span>
-                  <span className="fw-bold text-dark" style={{ fontSize: '14px' }}>{kpi.value}</span>
-                  {kpi.sub && <span className="text-muted" style={{ fontSize: '9px' }}>{kpi.sub}</span>}
-                </div>
+                <h6 style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Price Dynamics</h6>
               </div>
-            ))}
-          </div>
-
-          {/* Performance Summary Cards */}
-          <div className="row g-4 mb-4">
-            <div className="col-lg-4">
-              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-center gap-3 mb-4">
-                    <div className="p-2 bg-success-subtle text-success rounded-3"><IndianRupee size={20} /></div>
-                    <div>
-                      <h6 className="mb-0 fw-bold text-zinc-900">Price Dynamics</h6>
-                      <p className="text-muted smallest mb-0">Historical listing trends</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Average Price</span>
-                      <span className="fw-bold text-zinc-900">₹{(stats?.avgPrice || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Highest Recorded</span>
-                      <span className="fw-bold text-success">₹{(Math.max(...asins.map(a => a.currentPrice || 0), 0)).toLocaleString()}</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Lowest Entry</span>
-                      <span className="fw-bold text-danger">₹{(Math.min(...asins.map(a => a.currentPrice || 0), Infinity) === Infinity ? 0 : Math.min(...asins.map(a => a.currentPrice || 0))).toLocaleString()}</span>
-                    </div>
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Avg Price</span>
+                  <span style={{ fontWeight: 700 }}>₹{(stats?.avgPrice || 0).toLocaleString()}</span>
                 </div>
-              </div>
-            </div>
-            
-            <div className="col-lg-4">
-              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-center gap-3 mb-4">
-                    <div className="p-2 bg-primary-subtle text-primary rounded-3"><BarChart2 size={20} /></div>
-                    <div>
-                      <h6 className="mb-0 fw-bold text-zinc-900">Algorithm Visibility</h6>
-                      <p className="text-muted smallest mb-0">BSR & Category performance</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Average BSR</span>
-                      <span className="fw-bold text-zinc-900">#{(stats?.avgBSR || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Best Performer</span>
-                      <span className="fw-bold text-primary">#{(Math.min(...asins.map(a => a.bsr || 9999999), 9999999) === 9999999 ? 0 : Math.min(...asins.map(a => a.bsr || 9999999))).toLocaleString()}</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Tracking Pool</span>
-                      <span className="fw-bold text-zinc-900">{stats?.total || 0} Active ASINs</span>
-                    </div>
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>High Watermark</span>
+                  <span style={{ fontWeight: 700, color: '#16a34a' }}>₹{(Math.max(...asins.map(a => a.currentPrice || 0), 0)).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Low Point</span>
+                  <span style={{ fontWeight: 700, color: '#dc2626' }}>₹{(Math.min(...asins.map(a => a.currentPrice || 0), Infinity) === Infinity ? 0 : Math.min(...asins.map(a => a.currentPrice || 0))).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
-            <div className="col-lg-4">
-              <div className="card h-100 border-zinc-200 shadow-sm" style={{ borderRadius: '16px', border: '1px solid var(--zinc-200)' }}>
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-center gap-3 mb-4">
-                    <div className="p-2 bg-warning-subtle text-warning rounded-3"><Zap size={20} /></div>
-                    <div>
-                      <h6 className="mb-0 fw-bold text-zinc-900">Optimization Index</h6>
-                      <p className="text-muted smallest mb-0">A+ Content & Media Assets</p>
-                    </div>
-                  </div>
+            {/* Algorithm Visibility Card */}
+            <div style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <BarChart2 size={14} />
+                </div>
+                <h6 style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Algorithm Visibility</h6>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Avg BSR</span>
+                  <span style={{ fontWeight: 700 }}>#{(stats?.avgBSR || 0).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Best Rank</span>
+                  <span style={{ fontWeight: 700, color: '#2563eb' }}>#{(Math.min(...asins.map(a => a.bsr || 9999999), 9999999) === 9999999 ? 0 : Math.min(...asins.map(a => a.bsr || 9999999))).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Tracking Pool</span>
+                  <span style={{ fontWeight: 700 }}>{stats?.total || 0} ASINs</span>
+                </div>
+              </div>
+            </div>
 
-                  <div className="space-y-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">A+ Content Adoption</span>
-                      <span className="fw-bold text-zinc-900">{asins.filter(a => a.hasAplus).length} / {asins.length}</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Avg Description</span>
-                      <span className="fw-bold text-zinc-900">{Math.round(asins.reduce((sum, a) => sum + (a.descLength || 0), 0) / (asins.length || 1))} chars</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="text-zinc-500 small">Avg Media Assets</span>
-                      <span className="fw-bold text-zinc-900">{Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / (asins.length || 1))} imgs</span>
-                    </div>
-                  </div>
+            {/* Optimization Index Card */}
+            <div style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Zap size={14} />
+                </div>
+                <h6 style={{ fontSize: 12, fontWeight: 700, margin: 0 }}>Optimization Index</h6>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>A+ Content</span>
+                  <span style={{ fontWeight: 700 }}>{asins.filter(a => a.hasAplus).length} / {asins.length}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Rich Descriptions</span>
+                  <span style={{ fontWeight: 700 }}>{Math.round(asins.reduce((sum, a) => sum + (a.descLength || 0), 0) / (asins.length || 1))} ch</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Media Assets</span>
+                  <span style={{ fontWeight: 700 }}>{Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / (asins.length || 1))} imgs</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Avg Bullets</span>
+                  <span style={{ fontWeight: 700 }}>{parseFloat((asins.reduce((sum, a) => sum + (a.bulletPoints || 0), 0) / (asins.length || 1)).toFixed(1))} pts</span>
                 </div>
               </div>
             </div>
           </div>
         </CollapsibleSection>
 
-        {/* Inventory & Performance Ledger Table */}
-        <div className="card border-zinc-200 shadow-sm" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--zinc-200)' }}>
-          <div className="card-header d-flex justify-content-between align-items-center px-4 py-3" style={{ backgroundColor: '#fff', borderBottom: '1px solid var(--zinc-200)' }}>
-            <h5 className="card-title mb-0 d-flex align-items-center gap-2 text-zinc-900 fw-bold" style={{ fontSize: '1.1rem' }}>
-              <Table size={18} className="text-primary" />
-              Inventory & Performance Ledger
-              <span className="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle smallest px-3 ms-2" style={{ fontWeight: 600 }}>
-                {asins.length} Active SKUs
+        {/* [E] High-Density Table Area */}
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          background: '#fff', borderTop: '1px solid #e5e7eb'
+        }}>
+          {/* Table Toolbar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 20px', background: '#fff', borderBottom: '1px solid #e5e7eb',
+            flexShrink: 0
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                INVENTORY & PERFORMANCE LEDGER
+                <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 10, background: '#eff6ff', color: '#2563eb', fontSize: 10 }}>
+                  {pagination.total} SKUs
+                </span>
               </span>
-            </h5>
-            <button
-              className="btn btn-sm btn-light p-1 border-0 shadow-none hover-bg-light"
-              onClick={() => setShowTable(!showTable)}
-            >
-              {showTable ? <ChevronUp size={20} className="text-muted" /> : <ChevronDown size={20} className="text-muted" />}
-            </button>
-          </div>
-          {showTable && (
-            <div className="card-body p-0" style={{ backgroundColor: '#fff' }}>
-              <div className="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom bg-zinc-50">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="input-group input-group-sm rounded-pill overflow-hidden border border-zinc-200 shadow-sm" style={{ width: '320px', backgroundColor: '#fff' }}>
-                    <span className="input-group-text bg-white border-0 text-muted ps-3"><Search size={14} /></span>
-                    <input type="text" className="form-control border-0 ps-0" placeholder="Search ASIN, SKU or Product..." style={{ fontSize: '13px' }} />
-                  </div>
-                </div>
-                <div className="d-flex gap-2">
-                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={handleBulkCreateActions} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
-                    <Zap size={14} className="text-amber-500" /> Actions
-                  </button>
-                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={() => console.log('Export CSV')} style={{ fontSize: '12px' }}>
-                    <Download size={14} className="text-primary" /> Export
-                  </button>
-                  <button className="btn btn-white btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border border-zinc-200 rounded-pill px-3 py-1.5" onClick={handleBulkScrape} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
-                    <RefreshCw size={14} className="text-zinc-500" /> Scrape All
-                  </button>
-                  <button className="btn btn-primary btn-sm fw-bold d-flex align-items-center gap-2 shadow-sm border-0 rounded-pill px-3 py-1.5" onClick={handleBulkScrape} disabled={asins.length === 0} style={{ fontSize: '12px' }}>
-                    <RefreshCw size={14} /> Sync All
-                  </button>
-                </div>
-              </div>
-
-              {/* Scrollable table container */}
-              <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', margin: '0' }}>
-                <table className="table table-bordered table-hover mb-0 w-100" style={{ fontSize: '0.8rem', minWidth: '1200px' }}>
-                  <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f9fafb', zIndex: 10 }}>
-                    <tr>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>ASIN</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Management / Buy Box</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>SKU</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Category</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', minWidth: '180px' }}>Product</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem' }}>Price</th>
-                      <th 
-                        colSpan={showFullPriceHistory ? totalHistoryCols : visibleHistoryCols} 
-                        style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #c7d2fe', fontSize: '12px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowAllPriceHistory(true)}
-                        title="Click to view all price history"
-                      >
-                        <div className="d-flex align-items-center justify-content-center gap-2">
-                          <span>Price by Week</span>
-                          <button 
-                            className="btn btn-sm btn-link p-0" 
-                            style={{ fontSize: '10px', color: '#3730a3' }}
-                            onClick={(e) => { e.stopPropagation(); setShowAllPriceHistory(true); }}
-                          >
-                            <Eye size={12} />
-                          </button>
-                        </div>
-                      </th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>BSR</th>
-                      <th 
-                        colSpan={showFullBsrHistory ? totalHistoryCols : visibleHistoryCols} 
-                        style={{ backgroundColor: '#f0fdf4', color: '#166534', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #bbf7d0', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowAllBsrHistory(true)}
-                        title="Click to view all BSR history"
-                      >
-                        <div className="d-flex align-items-center justify-content-center gap-2">
-                          <BarChart2 size={12} /> BSR by Week
-                          <button 
-                            className="btn btn-sm btn-link p-0" 
-                            style={{ fontSize: '10px', color: '#166534' }}
-                            onClick={(e) => { e.stopPropagation(); setShowAllBsrHistory(true); }}
-                          >
-                            <Eye size={12} />
-                          </button>
-                        </div>
-                      </th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Rating</th>
-                      <th 
-                        colSpan={showFullRatingHistory ? totalHistoryCols : visibleHistoryCols} 
-                        style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, textAlign: 'center', padding: '0.5rem', borderBottom: '1px solid #fde68a', fontSize: '10px', textTransform: 'uppercase', cursor: 'pointer' }}
-                        onClick={() => setShowAllRatingHistory(true)}
-                        title="Click to view all rating history"
-                      >
-                        <div className="d-flex align-items-center justify-content-center gap-2">
-                          <Star size={12} /> Rating by Week
-                          <button 
-                            className="btn btn-sm btn-link p-0" 
-                            style={{ fontSize: '10px', color: '#92400e' }}
-                            onClick={(e) => { e.stopPropagation(); setShowAllRatingHistory(true); }}
-                          >
-                            <Eye size={12} />
-                          </button>
-                        </div>
-                      </th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Reviews</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>5/1 Split</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>LQS</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Buy Box</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>A+</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Images</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Bullets</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Status</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Scraped</th>
-                      <th rowSpan="3" style={{ verticalAlign: 'middle', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 600, borderBottom: '2px solid #d1d5db', padding: '0.75rem 0.5rem', textAlign: 'center' }}>Actions</th>
-                    </tr>
-                    <tr>
-                      {/* Week Group Headers for Price */}
-                      {visiblePriceStructure.map(week => (
-                        <th key={`week-price-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#ebf0ff', color: '#4338ca', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #c7d2fe' }}>{week.label}</th>
-                      ))}
-                      {/* Week Group Headers for BSR */}
-                      {visibleBsrStructure.map(week => (
-                        <th key={`week-bsr-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#dcfce7', color: '#166534', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #bbf7d0' }}>{week.label}</th>
-                      ))}
-                      {/* Week Group Headers for Rating */}
-                      {visibleRatingStructure.map(week => (
-                        <th key={`week-rating-${week.label}`} colSpan={week.dates.length} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700, fontSize: '10px', textAlign: 'center', borderBottom: '1px solid #fde68a' }}>{week.label}</th>
-                      ))}
-                    </tr>
-                    <tr>
-                      {/* Date Sub-headers for Price */}
-                      {visiblePriceStructure.map(week => week.dates.map((date, idx) => (
-                        <th key={`date-price-${week.label}-${idx}`} style={{ backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #c7d2fe', textAlign: 'center' }}>{date.label}</th>
-                      )))}
-                      {/* Date Sub-headers for BSR */}
-                      {visibleBsrStructure.map(week => week.dates.map((date, idx) => (
-                        <th key={`date-bsr-${week.label}-${idx}`} style={{ backgroundColor: '#dcfce7', color: '#166534', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #bbf7d0', textAlign: 'center' }}>{date.label}</th>
-                      )))}
-                      {/* Date Sub-headers for Rating */}
-                      {visibleRatingStructure.map(week => week.dates.map((date, idx) => (
-                        <th key={`date-rating-${week.label}-${idx}`} style={{ backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 500, fontSize: '0.65rem', padding: '0.25rem', border: '1px solid #fde68a', textAlign: 'center' }}>{date.label}</th>
-                      )))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAsins.map((asin, index) => (
-                      <tr key={asin._id || index} style={{ backgroundColor: '#fff' }}>
-                        <td style={{ fontWeight: 600, color: '#111827', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
-                          <div className="d-flex align-items-center gap-2">
-                            <span 
-                              onClick={() => handleViewAsin(asin)} 
-                              style={{ cursor: 'pointer', color: '#2563eb' }}
-                              className="hover-underline"
-                            >
-                              {asin.asinCode}
-                            </span>
-                            <button 
-                              onClick={() => handleViewTrends(asin)} 
-                              className="btn btn-link p-0 text-zinc-400 hover:text-primary transition-colors"
-                              title="View Trends"
-                            >
-                              <Eye size={14} />
-                            </button>
-                          </div>
-                        </td>
-                        <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
-                          <div className="d-flex flex-column" style={{ fontSize: '0.7rem' }}>
-                            <span className="fw-bold text-dark">{asin.seller?.name || asin.seller || <span className="text-muted">Global</span>}</span>
-                            {asin.soldBy && (
-                              <span className="text-primary mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
-                                <Store size={10} /> {asin.soldBy}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>{asin.sku || <span style={{ color: '#9ca3af' }}>-</span>}</td>
-                        <td style={{ color: '#4b5563', padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', fontSize: '0.75rem', maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={asin.category || ''}>{asin.category || <span style={{ color: '#9ca3af' }}>-</span>}</td>
-                        <td style={{ padding: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>
-                          <div className="d-flex align-items-center gap-2" style={{ maxWidth: '280px' }}>
-                            <img src={asin.imageUrl} alt={asin.title} style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
-                              <span 
-                                onClick={() => handleViewAsin(asin)}
-                                style={{
-                                  display: 'block',
-                                  whiteSpace: 'normal',
-                                  wordBreak: 'break-word',
-                                  lineHeight: '1.3',
-                                  fontSize: '0.85rem',
-                                  cursor: 'pointer'
-                                }}
-                                className="hover-text-primary"
-                              >
-                                {asin.title}
-                              </span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb' }}>
-                          <div className="d-flex flex-column align-items-center">
-                            <span 
-                              onClick={(e) => handleViewPrice(asin, e)}
-                              style={{ fontWeight: 600, color: '#059669', cursor: 'pointer' }}
-                              className="hover-underline"
-                            >
-                              {asin.uploadedPrice > 0 ? `₹${asin.uploadedPrice.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
-                            </span>
-                            {asin.uploadedPrice > 0 && asin.currentPrice > 0 && asin.uploadedPrice !== asin.currentPrice && (
-                              <span className="text-zinc-400" style={{ fontSize: '0.6rem' }}>Live: ₹{asin.currentPrice.toLocaleString()}</span>
-                            )}
-                          </div>
-                        </td>
-                        {/* Price by Week columns */}
-                        {visiblePriceStructure.map(week => week.dates.map((date, idx) => {
-                          const dateKey = date.raw;
-                          const wData = asin.weekHistory?.find(w => {
-                            const wDate = new Date(w.date);
-                            const wDateKey = wDate.toISOString().split('T')[0];
-                            return wDateKey === dateKey;
-                          });
-                          return (
-                            <td key={`price-${week.label}-${idx}`} style={{ backgroundColor: '#f5f3ff', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                              {wData && wData.price ? getWeekHistoryBadge(wData.price, 'price') : '-'}
-                            </td>
-                          );
-                        }))}
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
-                          <div className="d-flex flex-column align-items-center">
-                            <span 
-                              onClick={(e) => handleViewBsr(asin, e)}
-                              style={{ fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}
-                              className="hover-underline"
-                            >
-                              {asin.bsr ? `#${asin.bsr.toLocaleString()}` : <span style={{ color: '#9ca3af' }}>-</span>}
-                            </span>
-                            {asin.subBSRs && asin.subBSRs.length > 0 && (
-                              <div className="mt-1 d-flex flex-column gap-1 w-100">
-                                {asin.subBSRs.map((sub, idx) => (
-                                  <span key={idx} className="smallest text-muted text-center" style={{ fontSize: '0.65rem', lineHeight: '1.2' }}>
-                                    #{sub}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        {/* BSR by Week columns */}
-                        {visibleBsrStructure.map(week => week.dates.map((date, idx) => {
-                          const dateKey = date.raw;
-                          const wData = asin.weekHistory?.find(w => {
-                            const wDate = new Date(w.date);
-                            const wDateKey = wDate.toISOString().split('T')[0];
-                            return wDateKey === dateKey;
-                          });
-                          return (
-                            <td key={`bsr-${week.label}-${idx}`} style={{ backgroundColor: '#f0fdf4', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                              {wData && wData.bsr ? (
-                                <div className="d-flex flex-column align-items-center">
-                                  {getWeekHistoryBadge(wData.bsr, 'number')}
-                                  {wData.subBSRs && wData.subBSRs.length > 0 && (
-                                    <div className="mt-1 d-flex flex-column gap-1 w-100">
-                                      {wData.subBSRs.map((sub, sIdx) => (
-                                        <span key={sIdx} className="smallest text-muted text-center" style={{ fontSize: '0.6rem', lineHeight: '1.2' }}>
-                                          #{sub}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : '-'}
-                            </td>
-                          );
-                        }))}
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', verticalAlign: 'middle' }}>
-                          {asin.rating ? (
-                            <div 
-                              onClick={(e) => handleViewRating(asin, e)}
-                              className="d-flex align-items-center justify-content-center gap-1 hover-underline"
-                              style={{ cursor: 'pointer' }}
-                            >
-                              <Star size={12} className="text-warning fill-warning" />
-                              <span style={{ fontWeight: 500 }}>{asin.rating}</span>
-                            </div>
-                          ) : <span style={{ color: '#9ca3af', display: 'block', textAlign: 'center' }}>-</span>}
-                        </td>
-                        {/* Rating by Week columns */}
-                        {visibleRatingStructure.map(week => week.dates.map((date, idx) => {
-                          const dateKey = date.raw;
-                          const wData = asin.weekHistory?.find(w => {
-                            const wDate = new Date(w.date);
-                            const wDateKey = wDate.toISOString().split('T')[0];
-                            return wDateKey === dateKey;
-                          });
-                          return (
-                            <td key={`rating-${week.label}-${idx}`} style={{ backgroundColor: '#fffbeb', padding: '0.5rem 0.25rem', border: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                              {wData && wData.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
-                            </td>
-                          );
-                        }))}
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.reviewCount ? asin.reviewCount.toLocaleString() : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {renderRatingBreakdown(asin.ratingBreakdown)}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.lqs ? getLqsBadge(asin.lqs) : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {getBuyBoxBadge(asin.buyBoxWin, asin.status)}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {getAplusBadge(asin.hasAplus, asin.status)}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.imagesCount ? (
-                            <span className="badge" style={{ backgroundColor: '#f3f4f6', color: '#374151', fontWeight: 500 }}>
-                              {asin.imagesCount}
-                            </span>
-                          ) : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.bulletPoints ? (
-                            <span className="badge" style={{ backgroundColor: '#f3f4f6', color: '#374151', fontWeight: 500 }}>
-                              {asin.bulletPoints}
-                            </span>
-                          ) : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.descLength ? (
-                            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                              {asin.descLength}
-                            </span>
-                          ) : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {getStatusBadge(asin.status)}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          {asin.lastScraped ? (
-                            <span style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
-                              {new Date(asin.lastScraped).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          ) : <span style={{ color: '#9ca3af' }}>-</span>}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.5rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                          <div className="d-flex align-items-center justify-content-center gap-1">
-                            <button
-                              className="btn btn-sm btn-outline-primary rounded-pill d-flex align-items-center gap-1"
-                              style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
-                              onClick={() => handleIndividualScrape(asin._id)}
-                              disabled={scrapingIds.has(asin._id) || asin.scrapeStatus === 'SCRAPING'}
-                            >
-                              {(scrapingIds.has(asin._id) || asin.scrapeStatus === 'SCRAPING') ? (
-                                <><RefreshCw size={12} className="spin" /> Scraping...</>
-                              ) : (
-                                <><RefreshCw size={12} /> Scrape</>
-                              )}
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-success rounded-pill d-flex align-items-center gap-1"
-                              style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem', whiteSpace: 'nowrap' }}
-                              onClick={() => handleCreateTasks(asin._id, asin.asinCode)}
-                            >
-                              <Plus size={12} /> Create Task
-                            </button>
-                            {asin.imagesCount < 7 && (
-                              <button
-                                className="btn btn-sm btn-warning rounded-pill d-flex align-items-center gap-1"
-                                style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem', whiteSpace: 'nowrap', backgroundColor: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}
-                                onClick={() => handleGenerateAiImages(asin._id, asin.asinCode)}
-                                disabled={scrapingIds.has(asin._id)}
-                              >
-                                {scrapingIds.has(asin._id) ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
-                                AI Image
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination UI */}
-              <div className="d-flex justify-content-between align-items-center p-4 border-top bg-light-subtle">
-                <div className="text-muted small">
-                  Showing <span className="fw-bold">{asins.length}</span> of <span className="fw-bold">{pagination.total}</span> ASINs
-                </div>
-                <nav>
-                  <ul className="pagination pagination-sm mb-0 gap-1">
-                    <li className={`page-item ${pagination.page === 1 ? 'disabled' : ''}`}>
-                      <button
-                        className="page-link rounded-pill border-0 shadow-sm px-3"
-                        onClick={() => loadData(pagination.page - 1)}
-                        disabled={pagination.page === 1}
-                      >
-                        Previous
-                      </button>
-                    </li>
-                    {[...Array(pagination.totalPages)].map((_, i) => {
-                      const pageNum = i + 1;
-                      // Only show first, last, and pages around current
-                      if (
-                        pageNum === 1 ||
-                        pageNum === pagination.totalPages ||
-                        (pageNum >= pagination.page - 1 && pageNum <= pagination.page + 1)
-                      ) {
-                        return (
-                          <li key={pageNum} className={`page-item ${pagination.page === pageNum ? 'active' : ''}`}>
-                            <button
-                              className={`page-link rounded-circle border-0 shadow-sm mx-1 ${pagination.page === pageNum ? 'bg-primary' : ''}`}
-                              onClick={() => loadData(pageNum)}
-                              style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              {pageNum}
-                            </button>
-                          </li>
-                        );
-                      } else if (
-                        pageNum === pagination.page - 2 ||
-                        pageNum === pagination.page + 2
-                      ) {
-                        return <li key={pageNum} className="page-item disabled"><span className="page-link border-0">...</span></li>;
-                      }
-                      return null;
-                    })}
-                    <li className={`page-item ${pagination.page === pagination.totalPages ? 'disabled' : ''}`}>
-                      <button
-                        className="page-link rounded-pill border-0 shadow-sm px-3"
-                        onClick={() => loadData(pagination.page + 1)}
-                        disabled={pagination.page === pagination.totalPages}
-                      >
-                        Next
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
-              </div>
             </div>
-          )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={handleBulkCreateActions} disabled={asins.length === 0}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+                         fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
+                         background: '#fff', cursor: 'pointer' }}>
+                <Zap size={10} color="#f59e0b" /> Bulk Action
+              </button>
+              <button 
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+                         fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
+                         background: '#fff', cursor: 'pointer' }}>
+                <Download size={10} color="#2563eb" /> Export
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable Table Container */}
+          <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+                <tr>
+                  <th style={{ ...thStyle, width: '100px', left: 0, zIndex: 21 }}>ASIN</th>
+                  <th style={{ ...thStyle, width: '120px' }}>Owner/BB</th>
+                  <th style={{ ...thStyle, width: '100px' }}>SKU</th>
+                  <th style={{ ...thStyle, width: '280px' }}>Product</th>
+                  <th style={{ ...thStyle, width: '80px', textAlign: 'right' }}>Price</th>
+                  <th colSpan={visibleHistoryCols} style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center' }}>
+                    Price History (Weekly)
+                  </th>
+                  <th style={{ ...thStyle, width: '70px', textAlign: 'center' }}>BSR</th>
+                  <th colSpan={visibleHistoryCols} style={{ ...thStyle, background: '#f0fdf4', color: '#166534', textAlign: 'center' }}>
+                    BSR History (Weekly)
+                  </th>
+                  <th style={{ ...thStyle, width: '60px', textAlign: 'center' }}>Rating</th>
+                  <th style={{ ...thStyle, width: '70px', textAlign: 'center' }}>BuyBox</th>
+                  <th style={{ ...thStyle, width: '40px', textAlign: 'center' }}>Imgs</th>
+                  <th style={{ ...thStyle, width: '40px', textAlign: 'center' }}>Pts</th>
+                  <th style={{ ...thStyle, width: '50px', textAlign: 'center' }}>A+</th>
+                  <th style={{ ...thStyle, width: '100px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAsins.map((asin, idx) => (
+                  <tr key={asin._id || idx} className="table-row-hover" style={{
+                    background: idx % 2 === 0 ? '#fff' : '#f9fafb'
+                  }}>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: '#2563eb', cursor: 'pointer' }} 
+                        onClick={() => handleViewAsin(asin)}>
+                      {asin.asinCode}
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <span style={{ fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          {asin.seller?.name || asin.seller || 'Global'}
+                        </span>
+                        <span style={{ fontSize: 9, color: '#9ca3af' }}>{asin.soldBy || '-'}</span>
+                      </div>
+                    </td>
+                    <td style={tdStyle}>{asin.sku || '-'}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <img src={asin.imageUrl} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'cover' }} />
+                        <span style={{ 
+                          whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden',
+                          fontSize: 11, cursor: 'pointer' 
+                        }} onClick={() => handleViewAsin(asin)} title={asin.title}>
+                          {asin.title}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>
+                      ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
+                    </td>
+                    {visiblePriceStructure.map(week => week.dates.map((date, dIdx) => {
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw);
+                      return (
+                        <td key={`p-${week.label}-${dIdx}`} style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40 }}>
+                          {wData?.price ? getWeekHistoryBadge(wData.price, 'price') : '-'}
+                        </td>
+                      );
+                    }))}
+                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: '#2563eb' }}>
+                      {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
+                    </td>
+                    {visibleBsrStructure.map(week => week.dates.map((date, dIdx) => {
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw);
+                      return (
+                        <td key={`b-${week.label}-${dIdx}`} style={{ ...tdStyle, textAlign: 'center', background: '#f0fdf433', width: 40 }}>
+                          {wData?.bsr ? getWeekHistoryBadge(wData.bsr, 'number') : '-'}
+                        </td>
+                      );
+                    }))}
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                        <Star size={10} className="text-warning fill-warning" />
+                        <span style={{ fontWeight: 600 }}>{asin.rating || '-'}</span>
+                      </div>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>{getBuyBoxBadge(asin.buyBoxWin, asin.status)}</td>
+                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>
+                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.bulletPoints || 0}</td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>{getAplusBadge(asin.hasAplus, asin.status)}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                        <button onClick={() => handleIndividualScrape(asin._id)} disabled={scrapingIds.has(asin._id)}
+                          style={{ padding: '2px 8px', fontSize: 10, fontWeight: 600, borderRadius: 10, 
+                                   border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>
+                          {scrapingIds.has(asin._id) ? <RefreshCw size={10} className="spin" /> : 'Sync'}
+                        </button>
+                        <button onClick={() => handleCreateTasks(asin._id, asin.asinCode)}
+                          style={{ padding: '2px 8px', fontSize: 10, fontWeight: 600, borderRadius: 10, 
+                                   border: 'none', background: '#eff6ff', color: '#2563eb', cursor: 'pointer' }}>
+                          Task
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* [F] Pagination Footer */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb',
+            flexShrink: 0
+          }}>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>
+              Showing <b>{asins.length}</b> of <b>{pagination.total}</b> entries
+            </span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button disabled={pagination.page === 1} onClick={() => loadData(pagination.page - 1)}
+                style={{ padding: '4px 12px', fontSize: 11, borderRadius: 4, border: '1px solid #e5e7eb',
+                         background: pagination.page === 1 ? '#f3f4f6' : '#fff', cursor: pagination.page === 1 ? 'not-allowed' : 'pointer' }}>
+                Previous
+              </button>
+              {[...Array(pagination.totalPages)].map((_, i) => (
+                <button key={i} onClick={() => loadData(i + 1)}
+                  style={{ width: 24, height: 24, fontSize: 11, borderRadius: 4, border: 'none',
+                           background: pagination.page === i + 1 ? '#2563eb' : 'transparent',
+                           color: pagination.page === i + 1 ? '#fff' : '#374151', cursor: 'pointer' }}>
+                  {i + 1}
+                </button>
+              ))}
+              <button disabled={pagination.page === pagination.totalPages} onClick={() => loadData(pagination.page + 1)}
+                style={{ padding: '4px 12px', fontSize: 11, borderRadius: 4, border: '1px solid #e5e7eb',
+                         background: pagination.page === pagination.totalPages ? '#f3f4f6' : '#fff', 
+                         cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer' }}>
+                Next
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Add ASIN Modal */}
+        {/* [M] Modals Consolidated */}
         {showAddModal && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(17, 24, 39, 0.7)', backdropFilter: 'blur(4px)' }}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '24px' }}>
-                <div className="modal-header border-0 px-4 pt-4 pb-0">
-                  <h5 className="h5 fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-                    <div className="p-2 bg-primary-subtle text-primary rounded-3">
-                      <Plus size={20} />
-                    </div>
-                    Add New ASINs
-                  </h5>
-                  <button type="button" className="btn-close" onClick={() => setShowAddModal(false)}></button>
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)'
+          }}>
+            <div style={{ width: 450, background: '#fff', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between' }}>
+                <h5 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Add New ASINs</h5>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowAddModal(false)} />
+              </div>
+              <div style={{ padding: 20 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>ASIN LIST (COMMA SEPARATED)</label>
+                  <textarea value={newAsin} onChange={(e) => setNewAsin(e.target.value)}
+                    placeholder="B0XXXXXXX, B0YYYYYYY"
+                    style={{ width: '100%', padding: 12, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, height: 80 }} />
                 </div>
-                <div className="modal-body px-4 py-4">
-                  <p className="text-muted small mb-4">Enter Amazon Standard Identification Numbers separated by commas. Our agents will begin scraping live performance data immediately.</p>
-                  <div className="mb-0">
-                    <label className="form-label fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
-                      <Scan size={14} className="text-primary" /> Target ASIN List
-                    </label>
-                    <textarea
-                      className="form-control border shadow-sm"
-                      rows="4"
-                      style={{ borderRadius: '12px', fontSize: '14px', padding: '12px' }}
-                      placeholder="Enter ASINs here (one per line or comma separated)..."
-                      value={newAsin}
-                      onChange={(e) => setNewAsin(e.target.value)}
-                    ></textarea>
-                  </div>
-                  <div className="mt-4">
-                    <label className="form-label fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
-                       <Store size={14} className="text-primary" /> Target Seller Association
-                    </label>
-                    <select 
-                      className="form-select border shadow-sm"
-                      style={{ borderRadius: '12px', fontSize: '14px', padding: '10px' }}
-                      value={selectedSellerId}
-                      onChange={(e) => setSelectedSellerId(e.target.value)}
-                    >
-                      <option value="">Select a seller...</option>
-                      {sellers.map(seller => (
-                        <option key={seller._id} value={seller._id}>{seller.name}</option>
-                      ))}
-                    </select>
-                    <p className="text-muted smallest mt-2 px-1">Mapping these ASINs to a seller ensures correct inventory tracking and performance attribution.</p>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>ASSOCIATE WITH SELLER</label>
+                  <select value={selectedSellerId} onChange={(e) => setSelectedSellerId(e.target.value)}
+                    style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}>
+                    <option value="">Select Seller...</option>
+                    {sellers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                  </select>
                 </div>
-                <div className="modal-footer border-0 px-4 pb-4 pt-0">
-                  <button type="button" className="btn btn-light fw-bold rounded-pill px-4" onClick={() => setShowAddModal(false)}>Cancel</button>
-                  <button type="button" className="btn btn-primary fw-bold rounded-pill px-4 shadow-sm" onClick={handleSync} disabled={syncing}>
-                    {syncing ? <><RefreshCw size={16} className="me-2 spin" /> Initiating...</> : 'Start Scraping'}
-                  </button>
-                </div>
+              </div>
+              <div style={{ padding: '12px 20px', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button onClick={() => setShowAddModal(false)}
+                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff' }}>
+                  Cancel
+                </button>
+                <button onClick={handleSync} disabled={syncing}
+                  style={{ padding: '6px 20px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff' }}>
+                  {syncing ? 'Adding...' : 'Add ASINs'}
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* CSV Upload Modal */}
         {showUploadModal && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(17, 24, 39, 0.7)', backdropFilter: 'blur(4px)' }}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '24px' }}>
-                <div className="modal-header border-0 px-4 pt-4 pb-0">
-                  <h5 className="h5 fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-                    <div className="p-2 bg-success-subtle text-success rounded-3">
-                      <Download size={20} />
-                    </div>
-                    Upload ASINs from CSV
-                  </h5>
-                  <button type="button" className="btn-close" onClick={() => setShowUploadModal(false)}></button>
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)'
+          }}>
+            <div style={{ width: 450, background: '#fff', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between' }}>
+                <h5 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Upload CSV</h5>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowUploadModal(false)} />
+              </div>
+              <div style={{ padding: 20 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>SELECT SELLER</label>
+                  <select value={selectedSellerId} onChange={(e) => setSelectedSellerId(e.target.value)}
+                    style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}>
+                    <option value="">Select Seller...</option>
+                    {sellers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                  </select>
                 </div>
-                <div className="modal-body px-4 py-4">
-                  <p className="text-muted small mb-4">Upload a CSV file with columns: ASIN, SKU, Price. The price will be saved as your baseline/initial price.</p>
-                  <div className="mb-4">
-                    <label className="form-label fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
-                      <Store size={14} className="text-primary" /> Select Seller
-                    </label>
-                    <select 
-                      className="form-select border shadow-sm"
-                      style={{ borderRadius: '12px', fontSize: '14px', padding: '10px' }}
-                      value={selectedSellerId}
-                      onChange={(e) => setSelectedSellerId(e.target.value)}
-                    >
-                      <option value="">Select a seller...</option>
-                      {sellers.map(seller => (
-                        <option key={seller._id} value={seller._id}>{seller.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mb-0">
-                    <label className="form-label fw-bold text-dark small mb-2 d-flex align-items-center gap-2">
-                      <Download size={14} className="text-success" /> CSV File
-                    </label>
-                    <input 
-                      type="file" 
-                      accept=".csv,.txt,.xlsx"
-                      className="form-control border shadow-sm"
-                      style={{ borderRadius: '12px', fontSize: '14px', padding: '10px' }}
-                      onChange={handleCsvUpload}
-                    />
-                    <p className="text-muted smallest mt-2 px-1">CSV format: ASIN, SKU, Price (e.g., B07XYZ123, SKU001, 2499)</p>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>CSV FILE</label>
+                  <input type="file" accept=".csv" onChange={handleCsvUpload}
+                    style={{ width: '100%', fontSize: 12 }} />
                 </div>
-                <div className="modal-footer border-0 px-4 pb-4 pt-0">
-                  <button type="button" className="btn btn-light fw-bold rounded-pill px-4" onClick={() => setShowUploadModal(false)}>Cancel</button>
-                  <button 
-                    type="button" 
-                    className="btn btn-success fw-bold rounded-pill px-4 shadow-sm" 
-                    onClick={() => document.querySelector('input[type="file"]')?.click()}
-                    disabled={uploading || !selectedSellerId}
-                  >
-                    {uploading ? <><RefreshCw size={16} className="me-2 spin" /> Importing...</> : 'Import ASINs'}
-                  </button>
-                </div>
+              </div>
+              <div style={{ padding: '12px 20px', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button onClick={() => setShowUploadModal(false)}
+                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff' }}>
+                  Cancel
+                </button>
+                <button onClick={() => document.querySelector('input[type="file"]')?.click()}
+                  disabled={uploading || !selectedSellerId}
+                  style={{ padding: '6px 20px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', background: '#16a34a', color: '#fff' }}>
+                  {uploading ? 'Uploading...' : 'Import CSV'}
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* [N] Secondary Modals */}
       <AsinDetailModal 
         asin={selectedAsin} 
         isOpen={showDetailModal} 

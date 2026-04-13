@@ -375,7 +375,7 @@ class OctoparseAutomationService {
                 // The percentages after the star labels are in sequence for 5,4,3,2,1 stars
                 // We need to find where the star breakdown starts
                 const starLabelsIndex = ratingRaw.indexOf('5 star');
-                if (starLabelsIndex !== -1 && allPercents.length >= 5) {
+                if (starLabelsIndex !== -1) {
                     // Find where percentages start after starLabelsIndex
                     const afterStars = ratingRaw.substring(starLabelsIndex);
                     const percentMatches = afterStars.match(/(\d+)%/g) || [];
@@ -540,26 +540,29 @@ class OctoparseAutomationService {
                 updateData.status = 'Active';
 
                 // Map Rating Breakdown if available (expecting fields like five_star, etc. as "75%")
-                const starFields = {
-                    fiveStar: item.five_star || item.Field12 || '',
-                    fourStar: item.four_star || item.Field13 || '',
-                    threeStar: item.three_star || item.Field14 || '',
-                    twoStar: item.two_star || item.Field15 || '',
-                    oneStar: item.one_star || item.Field16 || ''
-                };
+                // Only use these if ratingBreakdown wasn't already successfully parsed from the Rating string
+                if (!updateData.ratingBreakdown) {
+                    const starFields = {
+                        fiveStar: item.five_star || item.Field12 || '',
+                        fourStar: item.four_star || item.Field13 || '',
+                        threeStar: item.three_star || item.Field14 || '',
+                        twoStar: item.two_star || item.Field15 || '',
+                        oneStar: item.one_star || item.Field16 || ''
+                    };
 
-                const ratingBreakdown = {};
-                let hasBreakdown = false;
-                for (const [key, val] of Object.entries(starFields)) {
-                    if (val) {
-                        const numeric = parseInt(val.toString().replace(/[^0-9]/g, ''));
-                        if (!isNaN(numeric)) {
-                            ratingBreakdown[key] = numeric;
-                            hasBreakdown = true;
+                    const ratingBreakdown = {};
+                    let hasBreakdown = false;
+                    for (const [key, val] of Object.entries(starFields)) {
+                        if (val) {
+                            const numeric = parseInt(val.toString().replace(/[^0-9]/g, ''));
+                            if (!isNaN(numeric)) {
+                                ratingBreakdown[key] = numeric;
+                                hasBreakdown = true;
+                            }
                         }
                     }
+                    if (hasBreakdown) updateData.ratingBreakdown = ratingBreakdown;
                 }
-                if (hasBreakdown) updateData.ratingBreakdown = ratingBreakdown;
 
                 // Map Buy Box & A+ Content status
                 const buyBoxRaw = item.buy_box_winner || item.buyBox || '';
@@ -740,6 +743,72 @@ class OctoparseAutomationService {
     }
 
     /**
+     * Entry point for a global database integrity check and repair
+     * Used by Scheduler and API to catch "quiet" data failures
+     */
+    async runBackgroundDatabaseRepair() {
+        this.log('info', '🏢 [GLOBAL-REPAIR] Starting proactive database integrity check...');
+        
+        try {
+            // 1. Find all active ASINs with missing critical data
+            // We focus on missing titles as the primary indicator of a failed scrape
+            const targetedAsins = await Asin.find({
+                status: 'Active',
+                $or: [
+                    { title: { $exists: false } },
+                    { title: '' },
+                    { title: /Amazon Product/i }
+                ]
+            }).select('asinCode seller').lean();
+
+            if (targetedAsins.length === 0) {
+                this.log('info', '✅ [GLOBAL-REPAIR] No ASINs with missing titles found. DB is healthy.');
+                return { success: true, count: 0 };
+            }
+
+            this.log('info', `📋 [GLOBAL-REPAIR] Found ${targetedAsins.length} ASINs requiring repair!`);
+
+            // 2. Group by seller so we can trigger tasks efficiently
+            const sellerGroups = new Map();
+            for (const asin of targetedAsins) {
+                const sellerId = asin.seller.toString();
+                if (!sellerGroups.has(sellerId)) {
+                    sellerGroups.set(sellerId, []);
+                }
+                sellerGroups.get(sellerId).push(asin.asinCode);
+            }
+
+            // 3. Process each group
+            let sellersTriggered = 0;
+            for (const [sellerId, asinCodes] of sellerGroups.entries()) {
+                const seller = await Seller.findById(sellerId);
+                if (!seller || !seller.marketSyncTaskId) {
+                    this.log('warn', `⚠️ [GLOBAL-REPAIR] Skipping seller ${sellerId} - no sync task configured`);
+                    continue;
+                }
+
+                this.log('info', `🔧 [GLOBAL-REPAIR] Triggering repair for ${seller.name} (${asinCodes.length} ASINs)...`);
+                
+                // We don't await the return - self-healing handles the background loop
+                this.startSelfHealingBackground(seller._id, seller.marketSyncTaskId);
+                sellersTriggered++;
+                
+                // Pause briefly between sellers
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            return {
+                success: true,
+                asinsFound: targetedAsins.length,
+                sellersTriggered
+            };
+        } catch (error) {
+            this.log('error', `❌ [GLOBAL-REPAIR] Critical failure: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
      * Phase 3: Self-Healing - Run as concurrent background process
      * Does not block the main pipeline - runs in background
      */
@@ -805,25 +874,33 @@ class OctoparseAutomationService {
                     this.log('info', `   ... and ${gaps.length - 5} more`);
                 }
 
-                // Step 4: Stop current task
-                this.log('info', `🛑 Stopping current task ${taskId}...`);
-                await this.stopTask(taskId);
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                // Step 4: Stop current task ONLY if it's finished or idle
+                const status = await this.getTaskStatus(taskId);
+                const taskStatus = status?.status?.toLowerCase();
 
-                // Step 5: Inject gap ASINs only
-                const gapAsins = gaps.map(g => g.asinCode);
-                const gapUrls = gapAsins.map(asin => `https://www.amazon.in/dp/${asin}`);
-                this.log('info', `📝 Injecting ${gapUrls.length} gap ASINs into task...`);
+                if (taskStatus === 'running' || taskStatus === 'extracting') {
+                    this.log('info', `⏳ Task ${taskId} is currently running. Waiting for completion instead of stopping...`);
+                    await this.startConcurrentPolling(sellerId, taskId);
+                } else {
+                    this.log('info', `🛑 Stopping current task ${taskId}...`);
+                    await this.stopTask(taskId);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
 
-                await this.injectUrls(taskId, gapUrls);
+                    // Step 5: Inject gap ASINs only
+                    const gapAsins = gaps.map(g => g.asinCode);
+                    const gapUrls = gapAsins.map(asin => `https://www.amazon.in/dp/${asin}`);
+                    this.log('info', `📝 Injecting ${gapUrls.length} gap ASINs into task...`);
 
-                // Step 6: Start new extraction
-                this.log('info', `🚀 Starting extraction for ${gapUrls.length} gap ASINs...`);
-                const lotNo = await this.startTask(taskId);
+                    await this.injectUrls(taskId, gapUrls);
 
-                // Step 7: Poll with concurrent DB updates
-                this.log('info', `⏳ Polling for completion (1-min intervals)...`);
-                await this.startConcurrentPolling(sellerId, taskId, lotNo);
+                    // Step 6: Start new extraction
+                    this.log('info', `🚀 Starting extraction for ${gapUrls.length} gap ASINs...`);
+                    const lotNo = await this.startTask(taskId);
+
+                    // Step 7: Poll with concurrent DB updates
+                    this.log('info', `⏳ Polling for completion (1-min intervals)...`);
+                    await this.startConcurrentPolling(sellerId, taskId, lotNo);
+                }
 
                 // Step 8: Fetch and process new results
                 this.log('info', `📥 Fetching new results...`);
@@ -904,11 +981,14 @@ class OctoparseAutomationService {
             if (!title) missingFields.push('title');
             if (!price || parseFloat(price) <= 0) missingFields.push('price');
 
-            // Only consider CRITICAL if BOTH are missing (not just one)
-            if (missingFields.length >= 2) {
+            // CRITICAL GAPS:
+            // 1. Missing Title (The most common sign of a failed proxy/page load)
+            // 2. Both Title and Price missing
+            // 3. Not extracted at all (Handled above)
+            if (missingFields.includes('title') || missingFields.length >= 2) {
                 criticalGaps.push({
                     asinCode: asin.asinCode,
-                    reason: 'MISSING_CRITICAL_FIELDS',
+                    reason: missingFields.includes('title') ? 'MISSING_TITLE' : 'MISSING_CRITICAL_FIELDS',
                     missingFields
                 });
             }
@@ -993,6 +1073,11 @@ class OctoparseAutomationService {
      */
     async startConcurrentPolling(sellerId, taskId, lotNo) {
         const pollKey = `poll_${taskId}`;
+
+        if (this.concurrentPollers.get(pollKey)) {
+            this.log('info', `Poller already active for task ${taskId}. Skipping duplicate start.`);
+            return { success: true, reason: 'Joined existing poller' };
+        }
 
         this.log('info', `Starting concurrent poller for seller ${sellerId}, task ${taskId}`);
 
@@ -1089,23 +1174,34 @@ class OctoparseAutomationService {
 
             const taskId = await this.ensureTaskForSeller(sellerId);
 
-            const urls = asins.map(a => `https://www.amazon.in/dp/${a.asinCode}`);
+            // CHECK STATUS: If task is already running, DON'T stop it. Just join the polling.
+            const status = await this.getTaskStatus(taskId);
+            const taskStatus = status?.status?.toLowerCase();
 
-            await Seller.findByIdAndUpdate(sellerId, {
-                marketSyncUrls: urls,
-                totalAsins: asins.length
-            });
+            if (taskStatus === 'running' || taskStatus === 'extracting') {
+                this.log('info', `⏳ Task ${taskId} is ALREADY running. Joining polling session...`);
+                await this.startConcurrentPolling(sellerId, taskId);
+            } else {
+                this.log('info', `🔄 Task ${taskId} is ${taskStatus || 'idle'}. Prepping new extraction...`);
+                
+                const urls = asins.map(a => `https://www.amazon.in/dp/${a.asinCode}`);
 
-            await this.stopTask(taskId);
-            await new Promise(resolve => setTimeout(resolve, 3000));
+                await Seller.findByIdAndUpdate(sellerId, {
+                    marketSyncUrls: urls,
+                    totalAsins: asins.length
+                });
 
-            await this.injectUrls(taskId, urls);
+                await this.stopTask(taskId);
+                await new Promise(resolve => setTimeout(resolve, 3000));
 
-            const lotNo = await this.startTask(taskId);
+                await this.injectUrls(taskId, urls);
 
-            // Start concurrent polling - updates DB every minute as data is extracted
-            this.log('info', `Starting concurrent polling (1-min intervals) for task ${taskId}`);
-            const pollResult = await this.startConcurrentPolling(sellerId, taskId, lotNo);
+                const lotNo = await this.startTask(taskId);
+
+                // Start concurrent polling - updates DB every minute as data is extracted
+                this.log('info', `Starting concurrent polling (1-min intervals) for task ${taskId}`);
+                await this.startConcurrentPolling(sellerId, taskId, lotNo);
+            }
 
             // Even if polling didn't complete, try to fetch and save data
             // (task might have been stopped but still have data)

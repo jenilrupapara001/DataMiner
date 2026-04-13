@@ -31,7 +31,8 @@ const DateRangePicker = ({
     startDate,
     endDate,
     onDateChange,
-    placeholder = 'Select date range'
+    placeholder = 'Select date range',
+    compact = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [tempRange, setTempRange] = useState([startDate || null, endDate || null]);
@@ -148,6 +149,10 @@ const DateRangePicker = ({
 
     const formatDateDisplay = () => {
         if (startDate && endDate) {
+            if (compact) {
+                const sameYear = startDate.getFullYear() === endDate.getFullYear();
+                return `${format(startDate, 'MMM d')} – ${format(endDate, sameYear ? 'MMM d' : 'MMM d, yyyy')}`;
+            }
             return `${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`;
         }
         return placeholder;
@@ -157,20 +162,21 @@ const DateRangePicker = ({
         <div className="position-relative" ref={containerRef}>
             {/* Trigger Button */}
             <div
-                className="d-flex align-items-center gap-2 px-3 py-1 border rounded-3 cursor-pointer hover-bg-light transition-all"
+                className={`d-flex align-items-center gap-2 border rounded-3 cursor-pointer hover-bg-light transition-all ${compact ? 'px-2' : 'px-3'}`}
                 style={{
-                    backgroundColor: '#f8fafc',
+                    backgroundColor: compact ? '#f9fafb' : '#f8fafc',
                     borderColor: '#e2e8f0',
-                    height: '32px',
-                    minWidth: '220px'
+                    height: compact ? '28px' : '32px',
+                    minWidth: compact ? 'auto' : '220px',
+                    borderRadius: compact ? '14px' : '6px'
                 }}
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <CalendarIcon size={14} className="text-zinc-500" />
-                <span className="flex-grow-1 smallest fw-semibold text-zinc-700">
+                <CalendarIcon size={compact ? 11 : 14} className="text-zinc-500" />
+                <span className={`flex-grow-1 fw-semibold text-zinc-700 ${compact ? '' : 'smallest'}`} style={{ fontSize: compact ? '11px' : 'inherit' }}>
                     {formatDateDisplay()}
                 </span>
-                <ChevronRight size={14} className={`text-zinc-400 transition-all ${isOpen ? 'rotate-90' : ''}`} />
+                <ChevronRight size={compact ? 11 : 14} className={`text-zinc-400 transition-all ${isOpen ? 'rotate-90' : ''}`} />
             </div>
 
             {/* Advanced Popover */}

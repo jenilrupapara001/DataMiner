@@ -1472,20 +1472,20 @@ class MarketDataSyncService {
             }
 
             // 7. Bullet Points
-            let bulletPointsList = [
+            let bulletPointsText = [
                 rawData.bp_1, rawData.bp_2, rawData.bp_3, rawData.bp_4, rawData.bp_5, rawData.bullet_points_1
             ].map(p => p?.trim()).filter(Boolean);
 
             // Fallback: Parse bullet_points HTML if plain list is empty
-            if (bulletPointsList.length === 0 && rawData.bullet_points?.includes('<li')) {
+            if (bulletPointsText.length === 0 && rawData.bullet_points?.includes('<li')) {
                 try {
                     const bpDom = new JSDOM(rawData.bullet_points);
-                    bulletPointsList = Array.from(bpDom.window.document.querySelectorAll('li')).map(li => li.textContent.trim()).filter(Boolean);
+                    bulletPointsText = Array.from(bpDom.window.document.querySelectorAll('li')).map(li => li.textContent.trim()).filter(Boolean);
                 } catch (e) {
                     console.warn('Bullet point HTML parsing failed');
                 }
             }
-            const bulletPoints = bulletPointsList.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
+            const bulletPoints = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
 
             // 8. Stock Level & A+ Content
             const stockLevel = this._cleanStock(rawData.stock_level || rawData.Field10 || rawData.stock || 0);
@@ -1515,7 +1515,7 @@ class MarketDataSyncService {
                 soldBy,
                 buyBoxSellerId: soldBy || asin.buyBoxSellerId,
                 bulletPoints,
-                bulletPointsList,
+                bulletPointsText,
                 stockLevel,
                 hasAplus,
                 lastScraped: new Date(),
@@ -1699,6 +1699,20 @@ class MarketDataSyncService {
                 subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
             }
 
+            // 7. Bullet Points (New in Bulk)
+            let bulletPointsText = [
+                rawData.bp_1, rawData.bp_2, rawData.bp_3, rawData.bp_4, rawData.bp_5, rawData.bullet_points_1, rawData.bullet_points
+            ].map(p => p?.trim()).filter(Boolean);
+            
+            // If we have HTML in bullet_points, try a quick regex extract (no JSDOM for speed in bulk)
+            if (bulletPointsText.length <= 1 && rawData.bullet_points?.includes('<li')) {
+                const matches = rawData.bullet_points.match(/<li[^>]*>(?:<span[^>]*>)?([^<]+)(?:<\/span>)?<\/li>/gi);
+                if (matches) {
+                    bulletPointsText = matches.map(m => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+                }
+            }
+            const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
+
             // Prepare update object
             const updateData = {
                 $set: {
@@ -1716,6 +1730,8 @@ class MarketDataSyncService {
                     imageUrl: mainImageUrl || asin.mainImageUrl,
                     imagesCount: imagesCount,
                     hasAplus: hasAplus,
+                    bulletPoints: bulletCount,
+                    bulletPointsText: bulletPointsText,
                     stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
                     soldBy: soldBy,
                     lastScraped: now,

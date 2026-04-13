@@ -17,7 +17,8 @@ class SchedulerService {
      * Initialize all scheduled jobs
      */
     init() {
-        console.log('🗓️ Initializing Background Scheduler...');
+        const now = new Date();
+        console.log(`🗓️ Initializing Background Scheduler at ${now.toISOString()} (${now.toString()})...`);
 
         // 1. Keepa ASIN Sync (Every 12 hours)
         // Cron: 0 minute, every 12th hour
@@ -39,22 +40,22 @@ class SchedulerService {
             console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
         }
 
-        // 3. Octoparse Nightly Full Sync (Every day at 12 AM)
-        this.jobs.triggerOctoparse = cron.schedule('0 0 * * *', async () => {
-            console.log('🕒 Starting Nightly Octoparse Market Data Sync...');
-            await this.runOctoparseTrigger();
+        // 3. Octoparse Nightly Full Sync is handled by Enterprise Pipeline at 00:00 by default
+
+        // 4. Octoparse Daily 1 PM Sync (Enterprise Pipeline)
+        this.jobs.daily1PMSync = cron.schedule('0 13 * * *', async () => {
+            console.log('🕒 Starting Daily 1 PM Octoparse Enterprise Pipeline...');
+            await this.runEnterprisePipeline();
         });
 
-        // 4. Octoparse Daily 1 PM Sync (Requested)
-        this.jobs.daily1PMSync = cron.schedule('0 16 * * *', async () => {
-            console.log('🕒 Starting Daily 1 PM Octoparse Market Data Sync...');
-            await this.runOctoparseTrigger();
-        });
-
-        // 5. Octoparse Data Fetching (Every 4 hours as a fallback for background polling)
-        this.jobs.fetchOctoparse = cron.schedule('0 */4 * * *', async () => {
-            console.log('🕒 Fetching pending Octoparse Scrape Results (Fallback)...');
-            await this.runOctoparseResultFetch();
+        // 6. Database Integrity Repair (Every 6 hours)
+        this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
+            console.log('🕒 Starting Global Database Integrity Repair Check...');
+            try {
+                await OctoparseAutomationService.runBackgroundDatabaseRepair();
+            } catch (err) {
+                console.error('❌ Failed to run background repair:', err.message);
+            }
         });
 
         console.log('✅ Background tasks scheduled');
