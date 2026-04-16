@@ -32,7 +32,16 @@ import {
   Eye,
   EyeOff,
   FileJson,
-  Scan
+  Scan,
+  Globe,
+  Key,
+  Users,
+  Layers,
+  Settings,
+  ChevronRight,
+  X,
+  Upload,
+  FileCheck
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -606,13 +615,13 @@ const SellersPage = () => {
               {
                 label: 'Inventory',
                 key: 'totalAsins',
-                width: '12%',
+                width: '10%',
                 render: (total, seller) => (
                   <div className="d-flex align-items-center gap-2 cursor-pointer group" onClick={() => handleViewAsins(seller)}>
-                    <Package size={14} className="text-zinc-400 group-hover:text-primary transition-colors" />
+                    <Package size={14} className="text-zinc-500 group-hover:text-primary transition-colors" />
                     <div>
                       <div className="fw-bold text-zinc-900" style={{ fontSize: '12px' }}>{total || 0}</div>
-                      <div className="text-zinc-400 smallest" style={{ fontSize: '10px' }}>{seller.activeAsins || 0} Live</div>
+                      <div className="text-zinc-500 smallest" style={{ fontSize: '10px' }}>{seller.activeAsins || 0} Live</div>
                     </div>
                   </div>
                 )
@@ -620,7 +629,7 @@ const SellersPage = () => {
               {
                 label: 'Quota Usage',
                 key: 'scrapeUsed',
-                width: '15%',
+                width: '12%',
                 render: (used, seller) => {
                   const limit = seller.scrapeLimit || 100;
                   const ratio = used / limit;
@@ -631,7 +640,7 @@ const SellersPage = () => {
                         color={ratio > 0.8 ? 'danger' : ratio > 0.5 ? 'warning' : 'primary'}
                         size="xs"
                       />
-                      <div className="text-zinc-400 d-flex align-items-center gap-1 mt-1" style={{ fontSize: '10px' }}>
+                      <div className="text-zinc-500 d-flex align-items-center gap-1 mt-1" style={{ fontSize: '10px' }}>
                         <Clock size={10} />
                         <span>{seller.lastScraped ? new Date(seller.lastScraped).toLocaleDateString() : 'Never'}</span>
                       </div>
@@ -642,7 +651,7 @@ const SellersPage = () => {
               {
                 label: 'Status',
                 key: 'status',
-                width: '10%',
+                width: '12%',
                 render: (status, seller) => getStatusBadge(status, seller.lastScraped)
               }
             ]}
@@ -657,51 +666,55 @@ const SellersPage = () => {
               </div>
             )}
             actions={(seller) => (
-              <div className="d-flex align-items-center gap-1">
+              <div className="d-flex align-items-center gap-2">
                 <button 
-                  className="btn btn-icon btn-white border border-zinc-200 shadow-sm rounded-pill text-zinc-900 hover-text-primary hover-bg-blue-50 transition-all d-flex align-items-center justify-content-center" 
+                  className="btn-white-icon" 
+                  onClick={() => handleEditSeller(seller)} 
+                  title="Edit Seller Details"
+                >
+                  <Edit3 size={16} />
+                </button>
+                <button 
+                  className="btn-white-icon" 
                   onClick={() => handleViewAsins(seller)} 
                   title="Manage ASINs"
-                  style={{ width: '32px', height: '32px', backgroundColor: '#fff' }}
                 >
-                  <Package size={14} strokeWidth={2.5} />
+                  <Package size={16} />
                 </button>
                 <button
-                  className="btn btn-icon btn-white border border-zinc-200 shadow-sm rounded-pill text-zinc-900 hover-text-info hover-bg-zinc-50 transition-all d-flex align-items-center justify-content-center"
+                  className="btn-white-icon"
                   onClick={() => handleSyncResults(seller._id)}
                   title="Sync Global Data"
-                  style={{ width: '32px', height: '32px', backgroundColor: '#fff' }}
                 >
-                  <RefreshCw size={14} strokeWidth={2.5} />
+                  <RefreshCw size={16} />
                 </button>
                 <button
-                  className={`btn btn-icon border shadow-sm rounded-pill transition-all d-flex align-items-center justify-content-center ${seller.status === 'Active' ? 'btn-white text-zinc-900 border-zinc-200' : 'btn-success text-white border-success'}`}
+                  className={seller.status === 'Active' ? 'btn-white-icon' : 'btn-white-icon btn-success-icon bg-success border-success text-white'}
                   onClick={() => handleToggleStatus(seller._id)}
                   title={seller.status === 'Active' ? 'Pause Store' : 'Resume Store'}
-                  style={{ width: '32px', height: '32px', backgroundColor: seller.status === 'Active' ? '#fff' : undefined }}
+                  style={seller.status !== 'Active' ? { background: 'var(--green)', border: 'none', color: '#fff' } : {}}
                 >
-                  {seller.status === 'Active' ? <Pause size={14} strokeWidth={2.5} /> : <Play size={14} strokeWidth={2.5} />}
+                  {seller.status === 'Active' ? <Pause size={16} /> : <Play size={16} />}
                 </button>
 
-                <div className="dropdown ms-1">
+                <div className="dropdown">
                   <button
-                    className="btn btn-icon btn-light rounded-circle border-0 bg-transparent text-zinc-900 hover-text-zinc-600 transition-colors d-flex align-items-center justify-content-center"
+                    className="btn-white-icon border-0 bg-transparent text-zinc-400 hover-text-zinc-900"
                     type="button"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
-                    style={{ width: '32px', height: '32px' }}
                   >
-                    <MoreHorizontal size={18} strokeWidth={2.5} />
+                    <MoreHorizontal size={18} />
                   </button>
                   <ul className="dropdown-menu dropdown-menu-end border-0 shadow-xl rounded-4 p-2 bg-white" style={{ minWidth: '180px', zIndex: 1060 }}>
                     <div className="px-3 py-2 border-bottom border-zinc-100 mb-2">
-                        <div className="smallest fw-bold text-zinc-400 text-uppercase tracking-widest">Management</div>
+                        <div className="smallest fw-bold text-zinc-500 text-uppercase tracking-widest">Management</div>
                     </div>
                     {isAdmin && (
                         <>
                             <li>
                                 <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2" onClick={() => handleEditSeller(seller)}>
-                                <Edit3 size={16} strokeWidth={2} className="text-zinc-700" />
+                                <Edit3 size={16} strokeWidth={2} className="text-zinc-600" />
                                 <span className="text-zinc-700 fw-medium">Edit Details</span>
                                 </button>
                             </li>
@@ -713,14 +726,11 @@ const SellersPage = () => {
                             </li>
                         </>
                     )}
-                    {!isAdmin && (
-                        <li className="px-3 py-2 text-center text-muted smallest italic">No extra actions</li>
-                    )}
                   </ul>
                 </div>
               </div>
             )}
-            actionWidth="160px"
+            actionWidth="190px"
             emptyState={{
               icon: Store,
               title: 'No sellers yet',
@@ -812,69 +822,86 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
   };
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.7)', backdropFilter: 'blur(8px)', zIndex: 1070 }}>
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content border-0 shadow-2xl overflow-hidden" style={{ borderRadius: '24px' }}>
-          <div className="modal-header border-0 px-5 pt-5 pb-0">
-            <h5 className="h4 fw-black mb-0 text-zinc-900 d-flex align-items-center gap-3">
-              <div className="p-2 bg-zinc-900 text-white rounded-3 shadow-lg">
-                <Store size={24} />
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(12px)', zIndex: 1070 }}>
+      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '520px' }}>
+        <div className="modal-content border border-zinc-200 shadow-2xl overflow-hidden" style={{ borderRadius: '16px', background: '#fff' }}>
+          <div className="modal-header border-0 px-4 pt-4 pb-0 d-flex align-items-center justify-content-between">
+            <h5 className="modal-title d-flex align-items-center gap-2 text-zinc-900 fw-bold" style={{ fontSize: '15px' }}>
+              <div className="p-1.5 bg-zinc-900 text-white rounded-2 shadow-sm">
+                <Store size={18} strokeWidth={2.5} />
               </div>
-              {initialData ? 'Update Seller' : 'Add New Seller'}
+              {initialData ? 'Edit Seller Details' : 'Configure New Store'}
             </h5>
-            <button type="button" className="btn-close" onClick={onClose}></button>
+            <button type="button" className="btn-white-icon border-0 shadow-none" onClick={onClose}>
+              <X size={18} />
+            </button>
           </div>
+
           <form onSubmit={handleSubmit}>
-            <div className="modal-body px-5 py-4">
+            <div className="modal-body px-4 py-4">
+              {/* store Profile Section */}
               <div className="mb-4">
-                <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Store Profile Name</label>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <div className="p-1 bg-zinc-100 rounded text-zinc-500"><LayoutGrid size={12} /></div>
+                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Identity</label>
+                </div>
                 <input
                   type="text"
-                  className="form-control form-control-lg bg-zinc-50 border border-zinc-100 px-4 fw-bold text-zinc-900 shadow-none focus-border-primary"
-                  placeholder="e.g. RetailOps Official"
+                  className="form-control bg-zinc-50 border-zinc-200 px-3 fw-bold text-zinc-900 shadow-sm focus-border-primary"
+                  placeholder="e.g. RetailOps Storefront"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  style={{ borderRadius: '14px', fontSize: '15px' }}
+                  style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
                 />
               </div>
 
-              <div className="row">
-                <div className="col-md-6 mb-4">
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Marketplace</label>
+              <div className="row g-3">
+                <div className="col-md-6 mb-3">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Globe size={12} /></div>
+                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">REGION</label>
+                  </div>
                   <select
-                    className="form-select form-control-lg bg-zinc-100 border-0 px-4 fw-semibold text-zinc-600 shadow-none"
+                    className="form-select bg-zinc-50 border-zinc-200 px-3 fw-semibold text-zinc-700 shadow-sm"
                     value={formData.marketplace}
                     onChange={(e) => setFormData({ ...formData, marketplace: e.target.value })}
-                    style={{ borderRadius: '14px', fontSize: '14px' }}
+                    style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
                   >
-                    <option value="amazon.in">Amazon India (IN)</option>
-                    <option value="amazon.com">Amazon USA (COM)</option>
-                    <option value="amazon.co.uk">Amazon UK</option>
+                    <option value="amazon.in">India (IN)</option>
+                    <option value="amazon.com">USA (COM)</option>
+                    <option value="amazon.co.uk">UK (CO.UK)</option>
+                    <option value="amazon.ca">Canada (CA)</option>
                   </select>
                 </div>
-                <div className="col-md-6 mb-4">
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Amazon Seller ID</label>
+                <div className="col-md-6 mb-3">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Key size={12} /></div>
+                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">SELLER ID</label>
+                  </div>
                   <input
                     type="text"
-                    className="form-control form-control-lg bg-zinc-50 border border-zinc-100 px-4 font-monospace fw-bold text-primary shadow-none"
+                    className="form-control bg-zinc-50 border-zinc-200 px-3 font-monospace fw-bold text-primary shadow-sm"
                     value={formData.sellerId}
                     onChange={(e) => setFormData({ ...formData, sellerId: e.target.value })}
-                    placeholder="A123BC..."
+                    placeholder="Merchant ID"
                     required
-                    style={{ borderRadius: '14px', fontSize: '14px' }}
+                    style={{ borderRadius: '10px', fontSize: '12px', height: '42px' }}
                   />
                 </div>
               </div>
 
               {isAdmin && (
                 <div className="mb-4">
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Assign Dedicated Manager</label>
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Users size={12} /></div>
+                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">ACCOUNT MANAGER</label>
+                  </div>
                   <select
-                    className="form-select form-control-lg bg-white border border-zinc-200 px-4 fw-bold text-zinc-900 shadow-sm"
+                    className="form-select bg-white border-zinc-200 px-3 fw-bold text-zinc-900 shadow-sm"
                     value={formData.managerId}
                     onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                    style={{ borderRadius: '14px', fontSize: '14px' }}
+                    style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
                   >
                     <option value="">— Unassigned (Public Pool) —</option>
                     {managers.map(m => (
@@ -886,43 +913,51 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                 </div>
               )}
 
-              <div className="row">
-                <div className="col-md-6 mb-0">
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Subscription Tier</label>
-                  <select
-                    className="form-select border-zinc-200 px-4 fw-bold text-zinc-700"
-                    value={formData.plan}
-                    onChange={(e) => setFormData({ ...formData, plan: e.target.value })}
-                    style={{ borderRadius: '14px' }}
-                  >
-                    <option value="Starter">Starter</option>
-                    <option value="Professional">Professional</option>
-                    <option value="Enterprise">Enterprise</option>
-                  </select>
-                </div>
-                <div className="col-md-6 mb-0">
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-wider mb-2">Daily Quota (ASINs)</label>
-                  <input
-                    type="number"
-                    className="form-control border-zinc-200 px-4 fw-black text-zinc-900"
-                    value={formData.scrapeLimit}
-                    onChange={(e) => setFormData({ ...formData, scrapeLimit: e.target.value })}
-                    style={{ borderRadius: '14px' }}
-                  />
+              <div className="p-4 bg-zinc-50 rounded-4 border border-zinc-100">
+                <div className="row g-3">
+                  <div className="col-md-6 mb-0">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                       <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Layers size={11} /></div>
+                       <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Tiers</label>
+                    </div>
+                    <select
+                      className="form-select border-zinc-200 px-3 fw-bold text-zinc-700 bg-white"
+                      value={formData.plan}
+                      onChange={(e) => setFormData({ ...formData, plan: e.target.value })}
+                      style={{ borderRadius: '8px', fontSize: '12px' }}
+                    >
+                      <option value="Starter">Starter</option>
+                      <option value="Professional">Professional</option>
+                      <option value="Enterprise">Enterprise</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6 mb-0">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                       <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Settings size={11} /></div>
+                       <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Limit</label>
+                    </div>
+                    <input
+                      type="number"
+                      className="form-control border-zinc-200 px-3 fw-bold text-zinc-900 bg-white"
+                      value={formData.scrapeLimit}
+                      onChange={(e) => setFormData({ ...formData, scrapeLimit: e.target.value })}
+                      style={{ borderRadius: '8px', fontSize: '12px' }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="modal-footer border-0 px-5 pb-5 pt-2 gap-3">
-              <button type="button" className="btn btn-white fw-bold px-4 py-2 border border-zinc-200 rounded-pill transition-all hover-bg-zinc-50" onClick={onClose} disabled={loading}>
+
+            <div className="modal-footer border-0 px-4 pb-4 pt-1 gap-2">
+              <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose} disabled={loading}>
                 Dismiss
               </button>
               <button 
                 type="submit" 
-                className="btn btn-zinc-900 fw-bold px-5 py-2 rounded-pill shadow-xl d-flex align-items-center gap-2 transition-all hover-scale" 
-                style={{ backgroundColor: '#18181B', color: '#fff' }}
+                className="btn-prism btn-prism-primary" 
                 disabled={loading}
               >
-                {loading ? <RefreshCw size={18} className="spin" /> : <ChevronRight size={18} />}
+                {loading ? <RefreshCw size={16} className="spin" /> : <ChevronRight size={16} />}
                 <span>{initialData ? 'Update Account' : 'Initialize Account'}</span>
               </button>
             </div>
@@ -1080,14 +1115,13 @@ const ImportSellerModal = ({ onClose, onImport }) => {
                         </div>
                     </div>
                     <div className="modal-footer border-0 px-5 pb-5 pt-0 gap-2">
-                        <button type="button" className="btn btn-white fw-bold px-4 rounded-pill border border-zinc-200" onClick={onClose}>Dismiss</button>
+                        <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose}>Dismiss</button>
                         <button 
-                            className="btn btn-zinc-900 fw-bold px-5 rounded-pill shadow-xl d-flex align-items-center gap-2" 
+                            className="btn-prism btn-prism-primary" 
                             disabled={!fileStats || isUploading}
                             onClick={handleImportComplete}
-                            style={{ backgroundColor: '#18181B', color: '#fff' }}
                         >
-                            {isUploading ? <RefreshCw size={18} className="spin" /> : <ChevronRight size={18} />}
+                            {isUploading ? <RefreshCw size={16} className="spin" /> : <ChevronRight size={16} />}
                             <span>Begin Import</span>
                         </button>
                     </div>

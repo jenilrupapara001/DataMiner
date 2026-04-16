@@ -196,22 +196,42 @@ exports.createSeller = async (req, res) => {
 // Update seller
 exports.updateSeller = async (req, res) => {
   try {
-    // Security check
-    const isAdmin = req.user && req.user.role && req.user.role.name === 'admin';
-    const isAssigned = req.user && req.user.assignedSellers.some(s => s._id.toString() === req.params.id);
+    const { id } = req.params;
+    const { managerId, ...updateData } = req.body;
+    const userRole = req.user?.role?.name || req.user?.role;
+    const isAdmin = userRole === 'admin';
 
+    // Security check
+    const isAssigned = req.user && req.user.assignedSellers.some(s => s._id.toString() === id);
     if (!isAdmin && !isAssigned) {
       return res.status(403).json({ error: 'Unauthorized to update this seller' });
     }
 
     const seller = await Seller.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+      id,
+      updateData,
       { new: true, runValidators: true }
     );
 
     if (!seller) {
       return res.status(404).json({ error: 'Seller not found' });
+    }
+
+    // Handle Manager Re-assignment (Admin only)
+    if (isAdmin && managerId !== undefined) {
+      // 1. Remove seller from all existing managers
+      await User.updateMany(
+        { assignedSellers: id },
+        { $pull: { assignedSellers: id } }
+      );
+
+      // 2. Assign to new manager if managerId is not null/empty
+      if (managerId) {
+        await User.findByIdAndUpdate(
+          managerId,
+          { $addToSet: { assignedSellers: id } }
+        );
+      }
     }
 
     // Sync to CometChat on update
@@ -287,8 +307,17 @@ exports.importSellers = async (req, res) => {
 
     for (const sellerData of sellers) {
       try {
-        const seller = new Seller(sellerData);
+        const { managerId, ...data } = sellerData;
+        const seller = new Seller(data);
         await seller.save();
+
+        // Linked: Assign manager if provided
+        if (managerId) {
+          await User.findByIdAndUpdate(
+            managerId,
+            { $addToSet: { assignedSellers: seller._id } }
+          );
+        }
 
         // Sync to CometChat
         try {

@@ -166,10 +166,39 @@ const ListView = ({
             </div>
 
             <style>{`
-                .hover-bg-slate:hover { background-color: #f8fafc; }
-                .list-view-container { border: 1px solid #f1f5f9; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); }
-                .list-row:last-child { border-bottom: none; }
-                .transition-all { transition: all 0.15s ease-in-out; }
+                .list-view-container { 
+                    border: 1px solid #e2e8f0; 
+                    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05); 
+                    background: #fff;
+                }
+                .list-view-header {
+                    background-color: #f8fafc !important;
+                    border-bottom: 2px solid #f1f5f9 !important;
+                    height: 44px;
+                }
+                .list-group-header {
+                    background-color: #f1f5f9 !important;
+                    height: 38px;
+                }
+                .list-row {
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    border-bottom: 1px solid #f1f5f9;
+                }
+                .list-row:hover {
+                    background-color: #f8fafc;
+                    transform: translateX(4px);
+                    box-shadow: inset 4px 0 0 0 #0070F3;
+                }
+                .list-row:last-child {
+                    border-bottom: none;
+                }
+                .list-actions {
+                    opacity: 0.8;
+                    transition: opacity 0.2s ease;
+                }
+                .list-row:hover .list-actions {
+                    opacity: 1;
+                }
                 .tracking-wider { letter-spacing: 0.05em; }
             `}</style>
         </div>
