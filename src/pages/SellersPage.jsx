@@ -40,7 +40,7 @@ import {
   Settings,
   ChevronRight,
   X,
-  Upload,
+  Upload as UploadIcon,
   FileCheck
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
@@ -49,86 +49,148 @@ import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const SellersPage = () => {
-    const { user: currentUser, isAdmin, hasPermission } = useAuth();
-    const [sellers, setSellers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [showAsinModal, setShowAsinModal] = useState(false);
-    const [selectedSeller, setSelectedSeller] = useState(null);
-    const [sellerAsins, setSellerAsins] = useState([]);
-    const [activeTab, setActiveTab] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [marketplaceFilter, setMarketplaceFilter] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [showPoolModal, setShowPoolModal] = useState(false);
-    const [poolStats, setPoolStats] = useState({ total: 0, assigned: 0, available: 0 });
-    const [editingSeller, setEditingSeller] = useState(null);
-    const [showEditAsinModal, setShowEditAsinModal] = useState(false);
-    const [editingAsin, setEditingAsin] = useState(null);
-    const { addToast } = useToast();
+  const { user: currentUser, isAdmin, hasPermission } = useAuth();
+  const [sellers, setSellers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showAsinModal, setShowAsinModal] = useState(false);
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const [sellerAsins, setSellerAsins] = useState([]);
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [marketplaceFilter, setMarketplaceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-    useEffect(() => {
-        loadSellers();
-        if (isAdmin) {
-            fetchPoolStats();
-        }
-    }, []);
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [totalItems, setTotalItems] = useState(0);
 
-    const fetchPoolStats = async () => {
-        try {
-            const response = await marketSyncApi.getPoolStatus();
-            if (response.success) {
-                setPoolStats(response.stats);
-            }
-        } catch (error) {
-            console.error('Failed to fetch pool stats:', error);
+  const [showPoolModal, setShowPoolModal] = useState(false);
+  const [poolStats, setPoolStats] = useState({ total: 0, assigned: 0, available: 0 });
+  const [editingSeller, setEditingSeller] = useState(null);
+  const [showEditAsinModal, setShowEditAsinModal] = useState(false);
+  const [editingAsin, setEditingAsin] = useState(null);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    loadSellers();
+    if (isAdmin) {
+      fetchPoolStats();
+    }
+  }, [isAdmin, currentUser]); // Only re-fetch when user identity changes
+
+  // Reset page to 1 on ANY filter change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, marketplaceFilter, statusFilter, searchQuery]);
+
+  const fetchPoolStats = async () => {
+    try {
+      const response = await marketSyncApi.getPoolStatus();
+      if (response.success) {
+        setPoolStats(response.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pool stats:', error);
+    }
+  };
+
+  const loadSellers = async () => {
+    setLoading(true);
+    console.debug('[DIAGNOSTIC] SellersPage: Fetching full dataset (Limit: 10000)...');
+    try {
+      // Fetch everything with zero filtering on backend
+      const response = await sellerApi.getAll({ limit: 10000 });
+
+      console.debug('[DIAGNOSTIC] SellersPage: Raw API Response:', response);
+
+      let extractedSellers = [];
+
+      // Robust multi-path extraction
+      if (response) {
+        if (response.success && response.data) {
+          extractedSellers = response.data.sellers || (Array.isArray(response.data) ? response.data : []);
+        } else if (response.sellers && Array.isArray(response.sellers)) {
+          extractedSellers = response.sellers;
+        } else if (Array.isArray(response)) {
+          extractedSellers = response;
+        } else if (response.data && Array.isArray(response.data)) {
+          extractedSellers = response.data;
         }
+      }
+
+      console.debug(`[DIAGNOSTIC] SellersPage: Extracted ${extractedSellers.length} sellers.`);
+      if (extractedSellers.length > 0) {
+        console.table(extractedSellers.slice(0, 5).map(s => ({
+          Name: s.name,
+          ID: s.sellerId,
+          Status: s.status,
+          Market: s.marketplace
+        })));
+      }
+
+      setSellers(extractedSellers);
+    } catch (error) {
+      console.error('[DIAGNOSTIC] SellersPage: Fetch Failed:', error);
+      addToast('Network error: Could not connect to data service', 'error');
+      setSellers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { filteredSellers, paginatedSellers, totalResults } = useMemo(() => {
+    if (!Array.isArray(sellers)) {
+      return { filteredSellers: [], paginatedSellers: [], totalResults: 0 };
+    }
+
+    let filtered = [...sellers];
+
+    // 1. Tab Status Filter (Case-Insensitive)
+    if (activeTab !== 'all') {
+      const target = activeTab.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.status?.toLowerCase() === target
+      );
+    }
+
+    // 2. Marketplace Filter
+    if (marketplaceFilter !== 'all') {
+      filtered = filtered.filter(s => s.marketplace === marketplaceFilter);
+    }
+
+    // 3. Status Dropdown (Secondary)
+    if (statusFilter !== 'all') {
+      const target = statusFilter.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.status?.toLowerCase() === target
+      );
+    }
+
+    // 4. Global Search
+    if (searchQuery) {
+      const search = searchQuery.toLowerCase();
+      filtered = filtered.filter(seller =>
+        (seller.name || '').toLowerCase().includes(search) ||
+        (seller.sellerId || '').toLowerCase().includes(search)
+      );
+    }
+
+    // 5. Slice and Count
+    const count = filtered.length;
+    const startIndex = (page - 1) * limit;
+    const paginated = filtered.slice(startIndex, startIndex + limit);
+
+    console.debug(`SellersPage: Filtering complete. Total: ${sellers.length}, Filtered: ${count}, Page size: ${paginated.length}`);
+
+    return {
+      filteredSellers: filtered,
+      paginatedSellers: paginated,
+      totalResults: count
     };
-
-    const loadSellers = async () => {
-        setLoading(true);
-        try {
-            const response = await sellerApi.getAll();
-            if (response && response.data && Array.isArray(response.data.sellers)) {
-                setSellers(response.data.sellers);
-            } else if (response && Array.isArray(response.sellers)) {
-                setSellers(response.sellers);
-            } else if (Array.isArray(response)) {
-                setSellers(response);
-            } else {
-                setSellers([]);
-            }
-        } catch (error) {
-            console.error('Failed to load sellers:', error);
-        }
-        setLoading(false);
-    };
-
-    const filteredSellers = useMemo(() => {
-        if (!Array.isArray(sellers)) return [];
-        
-        return sellers.filter(seller => {
-            // Tab filter
-            if (activeTab !== 'all' && seller.status?.toLowerCase() !== activeTab) return false;
-            
-            // Search filter
-            if (searchQuery) {
-                const search = searchQuery.toLowerCase();
-                const matchesName = seller.name?.toLowerCase().includes(search);
-                const matchesId = seller.sellerId?.toLowerCase().includes(search);
-                if (!matchesName && !matchesId) return false;
-            }
-            
-            // Marketplace filter
-            if (marketplaceFilter !== 'all' && seller.marketplace !== marketplaceFilter) return false;
-            
-            // Status filter (secondary)
-            if (statusFilter !== 'all' && seller.status?.toLowerCase() !== statusFilter) return false;
-            
-            return true;
-        });
-    }, [sellers, activeTab, searchQuery, marketplaceFilter, statusFilter]);
+  }, [sellers, searchQuery, page, limit, activeTab, marketplaceFilter, statusFilter]);
 
 
   const handleAddSeller = async (sellerData) => {
@@ -385,8 +447,8 @@ const SellersPage = () => {
 
     return (
       <div className="d-flex align-items-center gap-2">
-        <div 
-          className={`rounded-circle shadow-sm ${isActive ? 'bg-success' : 'bg-secondary'} ${isRecentlyActive ? 'pulse-green' : ''}`} 
+        <div
+          className={`rounded-circle shadow-sm ${isActive ? 'bg-success' : 'bg-secondary'} ${isRecentlyActive ? 'pulse-green' : ''}`}
           style={{ width: '8px', height: '8px', border: '1px solid white' }}
         ></div>
         <span className={`fw-semibold ${isActive ? 'text-success' : 'text-muted'}`} style={{ fontSize: '11px' }}>
@@ -401,11 +463,10 @@ const SellersPage = () => {
     const isCOM = marketplace === 'amazon.com';
     return (
       <span
-        className={`px-3 py-1 rounded-pill smallest fw-bold d-inline-block border ${
-            isIN ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-            isCOM ? 'bg-orange-50 text-orange-600 border-orange-100' : 
+        className={`px-3 py-1 rounded-pill smallest fw-bold d-inline-block border ${isIN ? 'bg-blue-50 text-blue-600 border-blue-100' :
+          isCOM ? 'bg-orange-50 text-orange-600 border-orange-100' :
             'bg-zinc-50 text-zinc-600 border-zinc-100'
-        }`}
+          }`}
         style={{ letterSpacing: '0.02em', fontSize: '10px' }}
       >
         {marketplace}
@@ -494,252 +555,294 @@ const SellersPage = () => {
 
         {/* Tabs and Advanced Filters */}
         <div className="bg-white border border-zinc-200 rounded-4 shadow-sm mb-4 overflow-hidden">
-            <div className="d-flex align-items-center justify-content-between p-3 border-bottom border-zinc-100 flex-wrap gap-3">
-                <div className="nav-pills-container bg-zinc-100 p-1 rounded-pill d-inline-flex border border-zinc-200">
-                    {['all', 'active', 'paused'].map(tab => (
-                        <button
-                            key={tab}
-                            className={`btn btn-sm px-4 rounded-pill border-0 transition-all fw-bold smallest ${activeTab === tab ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
-                            style={activeTab === tab ? { backgroundColor: '#18181B' } : {}}
-                            onClick={() => setActiveTab(tab)}
-                        >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="d-flex align-items-center gap-2">
-                    <div className="position-relative">
-                        <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={14} />
-                        <input
-                            type="text"
-                            className="form-control form-control-sm ps-5 bg-white border border-zinc-200 shadow-none rounded-3 smallest"
-                            placeholder="Search by name or ID..."
-                            style={{ width: '240px', height: '36px' }}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                    
-                    <select 
-                        className="form-select form-select-sm border-zinc-200 rounded-3 smallest fw-semibold text-zinc-600 shadow-none"
-                        style={{ width: '140px', height: '36px' }}
-                        value={marketplaceFilter}
-                        onChange={(e) => setMarketplaceFilter(e.target.value)}
-                    >
-                        <option value="all">All Markets</option>
-                        <option value="amazon.in">Amazon.in</option>
-                        <option value="amazon.com">Amazon.com</option>
-                    </select>
-
-                    <select 
-                        className="form-select form-select-sm border-zinc-200 rounded-3 smallest fw-semibold text-zinc-600 shadow-none"
-                        style={{ width: '120px', height: '36px' }}
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <option value="all">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="paused">Paused</option>
-                    </select>
-                </div>
+          {/* Diagnostic Banner */}
+          <div className="bg-zinc-900 text-white px-4 py-2 d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="smallest fw-bold text-zinc-400 text-uppercase tracking-widest">Global Cache</div>
+              <div className="smallest fw-black">{sellers.length} records found</div>
+              <div className="smallest text-zinc-500 font-monospace">|</div>
+              <div className="smallest fw-black">{totalResults} shown</div>
             </div>
+            <div className="d-flex align-items-center gap-3">
+              <button
+                className="btn btn-sm btn-link text-zinc-400 smallest p-0 fw-bold hover-text-white border-0 shadow-none"
+                onClick={() => {
+                  setActiveTab('all');
+                  setMarketplaceFilter('all');
+                  setStatusFilter('all');
+                  setSearchQuery('');
+                }}
+              >
+                Emergency Reset Filters
+              </button>
+              <button className="btn btn-sm btn-zinc-800 py-1 px-3 rounded-pill smallest fw-bold" onClick={loadSellers}>
+                Force Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="d-flex align-items-center justify-content-between p-3 border-bottom border-zinc-100 flex-wrap gap-3">
+            <div className="nav-pills-container bg-zinc-100 p-1 rounded-pill d-inline-flex border border-zinc-200">
+              {['all', 'active', 'paused'].map(tab => (
+                <button
+                  key={tab}
+                  className={`btn btn-sm px-4 rounded-pill border-0 transition-all fw-bold smallest ${activeTab === tab ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+                  style={activeTab === tab ? { backgroundColor: '#18181B' } : {}}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="d-flex align-items-center gap-2">
+              <div className="position-relative">
+                <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={14} />
+                <input
+                  type="text"
+                  className="form-control form-control-sm ps-5 bg-white border border-zinc-200 shadow-none rounded-3 smallest"
+                  placeholder="Search by name or ID..."
+                  style={{ width: '240px', height: '36px' }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <select
+                className="form-select form-select-sm border-zinc-200 rounded-3 smallest fw-semibold text-zinc-600 shadow-none"
+                style={{ width: '140px', height: '36px' }}
+                value={marketplaceFilter}
+                onChange={(e) => setMarketplaceFilter(e.target.value)}
+              >
+                <option value="all">All Markets</option>
+                <option value="amazon.in">Amazon.in</option>
+                <option value="amazon.com">Amazon.com</option>
+              </select>
+
+              <select
+                className="form-select form-select-sm border-zinc-200 rounded-3 smallest fw-semibold text-zinc-600 shadow-none"
+                style={{ width: '120px', height: '36px' }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className="card-body p-0">
-          <ListView
-            columns={[
-              {
-                label: 'Store Details',
-                key: 'name',
-                width: '30%',
-                render: (_, seller) => (
-                  <div className="d-flex align-items-center gap-3 py-1">
-                    <div
-                      className="seller-avatar d-flex align-items-center justify-content-center fw-bold shadow-sm"
-                      style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '12px',
-                        background: 'linear-gradient(135deg, #0145f2, #0138cc)',
-                        color: '#fff',
-                        fontSize: '11px',
-                        letterSpacing: '0.05em'
-                      }}
-                    >
-                      {seller.name.slice(0, 3).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="fw-bold text-zinc-900" style={{ fontSize: '13px' }}>{seller.name}</div>
-                      <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
-                        <span className="font-monospace opacity-75">{seller.sellerId}</span>
-                        <span className="opacity-30">•</span>
-                        <span className="fw-medium text-zinc-400">{seller.plan}</span>
+        <div className="card-body p-0 min-h-400 position-relative">
+          {loading ? (
+            <div className="d-flex flex-column align-items-center justify-content-center py-5 gap-3" style={{ minHeight: '300px' }}>
+              <ProgressBar indeterminate />
+              <div className="smallest fw-bold text-zinc-400 text-uppercase tracking-widest mt-2">Loading Storefronts...</div>
+            </div>
+          ) : (
+            <ListView
+              columns={[
+                {
+                  label: 'Store Details',
+                  key: 'name',
+                  width: '30%',
+                  render: (_, seller) => (
+                    <div className="d-flex align-items-center gap-3 py-1">
+                      <div
+                        className="seller-avatar d-flex align-items-center justify-content-center fw-bold shadow-sm"
+                        style={{
+                          width: '42px',
+                          height: '42px',
+                          borderRadius: '12px',
+                          background: 'linear-gradient(135deg, #0145f2, #0138cc)',
+                          color: '#fff',
+                          fontSize: '11px',
+                          letterSpacing: '0.05em'
+                        }}
+                      >
+                        {seller.name.slice(0, 3).toUpperCase()}
                       </div>
-                    </div>
-                  </div>
-                )
-              },
-              {
-                label: 'Account Manager',
-                key: 'managers',
-                width: '18%',
-                render: (managers) => (
-                  <div className="d-flex flex-column gap-1">
-                    {managers?.length > 0 ? (
-                      managers.map((m) => (
-                        <div key={m._id} className="d-flex align-items-center gap-2">
-                          <div
-                            className="rounded-circle border border-white shadow-sm d-flex align-items-center justify-content-center bg-zinc-100 text-zinc-900 fw-bold"
-                            style={{ width: '22px', height: '22px', flexShrink: 0, fontSize: '9px' }}
-                          >
-                            {m.firstName.charAt(0)}
-                          </div>
-                          <span className="text-zinc-700 fw-medium" style={{ fontSize: '11px' }}>
-                            {m.firstName} {m.lastName[0]}.
-                          </span>
+                      <div>
+                        <div className="fw-bold text-zinc-900" style={{ fontSize: '13px' }}>{seller.name}</div>
+                        <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
+                          <span className="font-monospace opacity-75">{seller.sellerId}</span>
+                          <span className="opacity-30">•</span>
+                          <span className="fw-medium text-zinc-400">{seller.plan}</span>
                         </div>
-                      ))
-                    ) : (
-                      <span className="text-zinc-400 smallest italic opacity-50">Unassigned</span>
-                    )}
-                  </div>
-                )
-              },
-              {
-                label: 'Health / Limit',
-                key: 'health',
-                width: '10%',
-                render: (_, seller) => getHealthIndicator(seller)
-              },
-              {
-                label: 'Inventory',
-                key: 'totalAsins',
-                width: '10%',
-                render: (total, seller) => (
-                  <div className="d-flex align-items-center gap-2 cursor-pointer group" onClick={() => handleViewAsins(seller)}>
-                    <Package size={14} className="text-zinc-500 group-hover:text-primary transition-colors" />
-                    <div>
-                      <div className="fw-bold text-zinc-900" style={{ fontSize: '12px' }}>{total || 0}</div>
-                      <div className="text-zinc-500 smallest" style={{ fontSize: '10px' }}>{seller.activeAsins || 0} Live</div>
-                    </div>
-                  </div>
-                )
-              },
-              {
-                label: 'Quota Usage',
-                key: 'scrapeUsed',
-                width: '12%',
-                render: (used, seller) => {
-                  const limit = seller.scrapeLimit || 100;
-                  const ratio = used / limit;
-                  return (
-                    <div className="d-flex flex-column gap-1 pe-3">
-                      <ProgressBar
-                        value={ratio * 100}
-                        color={ratio > 0.8 ? 'danger' : ratio > 0.5 ? 'warning' : 'primary'}
-                        size="xs"
-                      />
-                      <div className="text-zinc-500 d-flex align-items-center gap-1 mt-1" style={{ fontSize: '10px' }}>
-                        <Clock size={10} />
-                        <span>{seller.lastScraped ? new Date(seller.lastScraped).toLocaleDateString() : 'Never'}</span>
                       </div>
                     </div>
-                  );
-                }
-              },
-              {
-                label: 'Status',
-                key: 'status',
-                width: '12%',
-                render: (status, seller) => getStatusBadge(status, seller.lastScraped)
-              }
-            ]}
-            rows={filteredSellers}
-            groupBy="marketplace"
-            rowKey="_id"
-            options={{ selectable: true }}
-            renderGroupHeader={({ group, rows }) => (
-              <div className="d-flex align-items-center gap-2">
-                {getMarketplaceBadge(group)}
-                <span className="text-muted smallest fw-bold">{rows.length} STORES</span>
-              </div>
-            )}
-            actions={(seller) => (
-              <div className="d-flex align-items-center gap-2">
-                <button 
-                  className="btn-white-icon" 
-                  onClick={() => handleEditSeller(seller)} 
-                  title="Edit Seller Details"
-                >
-                  <Edit3 size={16} />
-                </button>
-                <button 
-                  className="btn-white-icon" 
-                  onClick={() => handleViewAsins(seller)} 
-                  title="Manage ASINs"
-                >
-                  <Package size={16} />
-                </button>
-                <button
-                  className="btn-white-icon"
-                  onClick={() => handleSyncResults(seller._id)}
-                  title="Sync Global Data"
-                >
-                  <RefreshCw size={16} />
-                </button>
-                <button
-                  className={seller.status === 'Active' ? 'btn-white-icon' : 'btn-white-icon btn-success-icon bg-success border-success text-white'}
-                  onClick={() => handleToggleStatus(seller._id)}
-                  title={seller.status === 'Active' ? 'Pause Store' : 'Resume Store'}
-                  style={seller.status !== 'Active' ? { background: 'var(--green)', border: 'none', color: '#fff' } : {}}
-                >
-                  {seller.status === 'Active' ? <Pause size={16} /> : <Play size={16} />}
-                </button>
-
-                <div className="dropdown">
-                  <button
-                    className="btn-white-icon border-0 bg-transparent text-zinc-400 hover-text-zinc-900"
-                    type="button"
-                    data-bs-toggle="dropdown"
-                    aria-expanded="false"
-                  >
-                    <MoreHorizontal size={18} />
-                  </button>
-                  <ul className="dropdown-menu dropdown-menu-end border-0 shadow-xl rounded-4 p-2 bg-white" style={{ minWidth: '180px', zIndex: 1060 }}>
-                    <div className="px-3 py-2 border-bottom border-zinc-100 mb-2">
-                        <div className="smallest fw-bold text-zinc-500 text-uppercase tracking-widest">Management</div>
+                  )
+                },
+                {
+                  label: 'Account Manager',
+                  key: 'managers',
+                  width: '18%',
+                  render: (managers) => (
+                    <div className="d-flex flex-column gap-1">
+                      {managers?.length > 0 ? (
+                        managers.map((m) => (
+                          <div key={m._id} className="d-flex align-items-center gap-2">
+                            <div
+                              className="rounded-circle border border-white shadow-sm d-flex align-items-center justify-content-center bg-zinc-100 text-zinc-900 fw-bold"
+                              style={{ width: '22px', height: '22px', flexShrink: 0, fontSize: '9px' }}
+                            >
+                              {m.firstName.charAt(0)}
+                            </div>
+                            <span className="text-zinc-700 fw-medium" style={{ fontSize: '11px' }}>
+                              {m.firstName} {m.lastName[0]}.
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-zinc-400 smallest italic opacity-50">Unassigned</span>
+                      )}
                     </div>
-                    {isAdmin && (
-                        <>
-                            <li>
-                                <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2" onClick={() => handleEditSeller(seller)}>
-                                <Edit3 size={16} strokeWidth={2} className="text-zinc-600" />
-                                <span className="text-zinc-700 fw-medium">Edit Details</span>
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2 text-danger" onClick={() => handleDeleteSeller(seller._id)}>
-                                <Trash2 size={16} strokeWidth={2} />
-                                <span className="fw-semibold">Delete Store</span>
-                                </button>
-                            </li>
-                        </>
-                    )}
-                  </ul>
+                  )
+                },
+                {
+                  label: 'Health / Limit',
+                  key: 'health',
+                  width: '10%',
+                  render: (_, seller) => getHealthIndicator(seller)
+                },
+                {
+                  label: 'Inventory',
+                  key: 'totalAsins',
+                  width: '10%',
+                  render: (total, seller) => (
+                    <div className="d-flex align-items-center gap-2 cursor-pointer group" onClick={() => handleViewAsins(seller)}>
+                      <Package size={14} className="text-zinc-500 group-hover:text-primary transition-colors" />
+                      <div>
+                        <div className="fw-bold text-zinc-900" style={{ fontSize: '12px' }}>{total || 0}</div>
+                        <div className="text-zinc-500 smallest" style={{ fontSize: '10px' }}>{seller.activeAsins || 0} Live</div>
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  label: 'Quota Usage',
+                  key: 'scrapeUsed',
+                  width: '10%',
+                  render: (used, seller) => {
+                    const limit = seller.scrapeLimit || 100;
+                    const ratio = used / limit;
+                    return (
+                      <div className="d-flex flex-column gap-1 pe-2">
+                        <ProgressBar
+                          value={ratio * 100}
+                          color={ratio > 0.8 ? 'danger' : ratio > 0.5 ? 'warning' : 'primary'}
+                          size="xs"
+                        />
+                        <div className="text-zinc-500 d-flex align-items-center gap-1 mt-1" style={{ fontSize: '10px' }}>
+                          <Clock size={10} />
+                          <span>{seller.lastScraped ? new Date(seller.lastScraped).toLocaleDateString() : 'Never'}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                },
+                {
+                  label: 'Status',
+                  key: 'status',
+                  width: '10%',
+                  render: (status, seller) => getStatusBadge(status, seller.lastScraped)
+                }
+              ]}
+              rows={paginatedSellers}
+              groupBy="marketplace"
+              rowKey="_id"
+              options={{ selectable: true }}
+              renderGroupHeader={({ group, rows }) => (
+                <div className="d-flex align-items-center gap-2">
+                  {getMarketplaceBadge(group)}
+                  <span className="text-muted smallest fw-bold">{rows.length} STORES</span>
                 </div>
-              </div>
-            )}
-            actionWidth="190px"
-            emptyState={{
-              icon: Store,
-              title: 'No sellers yet',
-              description: 'Add your first Amazon seller account to start tracking performance.',
-              action: { label: 'Add Seller', onClick: () => setShowAddModal(true) }
-            }}
-          />
-        </div>
-      </div>
+              )}
+              actions={(seller) => (
+                <div className="d-flex align-items-center gap-1">
+                  <button
+                    className="btn-white-icon"
+                    onClick={() => handleEditSeller(seller)}
+                    title="Edit Seller Details"
+                  >
+                    <Edit3 size={16} />
+                  </button>
+                  <button
+                    className="btn-white-icon"
+                    onClick={() => handleViewAsins(seller)}
+                    title="Manage ASINs"
+                  >
+                    <Package size={16} />
+                  </button>
+                  <button
+                    className="btn-white-icon"
+                    onClick={() => handleSyncResults(seller._id)}
+                    title="Sync Global Data"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                  <button
+                    className={seller.status === 'Active' ? 'btn-white-icon' : 'btn-white-icon btn-success-icon bg-success border-success text-white'}
+                    onClick={() => handleToggleStatus(seller._id)}
+                    title={seller.status === 'Active' ? 'Pause Store' : 'Resume Store'}
+                    style={seller.status !== 'Active' ? { background: 'var(--green)', border: 'none', color: '#fff' } : {}}
+                  >
+                    {seller.status === 'Active' ? <Pause size={16} /> : <Play size={16} />}
+                  </button>
+
+                  <div className="dropdown">
+                    <button
+                      className="btn-white-icon border-0 bg-transparent text-zinc-400 hover-text-zinc-900"
+                      type="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                    >
+                      <MoreHorizontal size={18} />
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end border-0 shadow-xl rounded-4 p-2 bg-white" style={{ minWidth: '180px', zIndex: 1060 }}>
+                      <div className="px-3 py-2 border-bottom border-zinc-100 mb-2">
+                        <div className="smallest fw-bold text-zinc-500 text-uppercase tracking-widest">Management</div>
+                      </div>
+                      {isAdmin && (
+                        <>
+                          <li>
+                            <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2" onClick={() => handleEditSeller(seller)}>
+                              <Edit3 size={16} strokeWidth={2} className="text-zinc-600" />
+                              <span className="text-zinc-700 fw-medium">Edit Details</span>
+                            </button>
+                          </li>
+                          <li>
+                            <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2 text-danger" onClick={() => handleDeleteSeller(seller._id)}>
+                              <Trash2 size={16} strokeWidth={2} />
+                              <span className="fw-semibold">Delete Store</span>
+                            </button>
+                          </li>
+                        </>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              )}
+              pagination={{
+                page,
+                limit,
+                total: totalResults,
+                onPageChange: setPage,
+                onLimitChange: (newLimit) => {
+                  setLimit(newLimit);
+                  setPage(1); // Reset to first page on limit change
+                }
+              }}
+              actionWidth="100px"
+              emptyState={{
+                icon: Store,
+                title: 'No sellers yet',
+                description: 'Add your first Amazon seller account to start tracking performance.',
+                action: { label: 'Add Seller', onClick: () => setShowAddModal(true) }
+              }}
+            />
+          )}
+        </div></div>
 
       {/* Add Seller Modal */}
       {showAddModal && (
@@ -813,11 +916,11 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
     const { managerId, ...rest } = formData;
     const payload = { ...rest };
     if (isAdmin && managerId) payload.managerId = managerId;
-    
+
     try {
-        await onSave(payload);
+      await onSave(payload);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -843,7 +946,7 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
               <div className="mb-4">
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <div className="p-1 bg-zinc-100 rounded text-zinc-500"><LayoutGrid size={12} /></div>
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Identity</label>
+                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Brand Name</label>
                 </div>
                 <input
                   type="text"
@@ -860,7 +963,7 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                 <div className="col-md-6 mb-3">
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Globe size={12} /></div>
-                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">REGION</label>
+                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Marketplace</label>
                   </div>
                   <select
                     className="form-select bg-zinc-50 border-zinc-200 px-3 fw-semibold text-zinc-700 shadow-sm"
@@ -868,10 +971,10 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                     onChange={(e) => setFormData({ ...formData, marketplace: e.target.value })}
                     style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
                   >
-                    <option value="amazon.in">India (IN)</option>
-                    <option value="amazon.com">USA (COM)</option>
+                    <option value="amazon.in">Amazon.in</option>
+                    {/* <option value="amazon.com">USA (COM)</option>
                     <option value="amazon.co.uk">UK (CO.UK)</option>
-                    <option value="amazon.ca">Canada (CA)</option>
+                    <option value="amazon.ca">Canada (CA)</option> */}
                   </select>
                 </div>
                 <div className="col-md-6 mb-3">
@@ -913,12 +1016,12 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                 </div>
               )}
 
-              <div className="p-4 bg-zinc-50 rounded-4 border border-zinc-100">
+              {/* <div className="p-4 bg-zinc-50 rounded-4 border border-zinc-100">
                 <div className="row g-3">
                   <div className="col-md-6 mb-0">
                     <div className="d-flex align-items-center gap-2 mb-2">
-                       <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Layers size={11} /></div>
-                       <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Tiers</label>
+                      <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Layers size={11} /></div>
+                      <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Tiers</label>
                     </div>
                     <select
                       className="form-select border-zinc-200 px-3 fw-bold text-zinc-700 bg-white"
@@ -933,8 +1036,8 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                   </div>
                   <div className="col-md-6 mb-0">
                     <div className="d-flex align-items-center gap-2 mb-2">
-                       <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Settings size={11} /></div>
-                       <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Limit</label>
+                      <div className="p-1 bg-white rounded shadow-xs text-zinc-500"><Settings size={11} /></div>
+                      <label className="form-label smallest fw-bold text-zinc-500 text-uppercase mb-0">Limit</label>
                     </div>
                     <input
                       type="number"
@@ -945,16 +1048,16 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
                     />
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             <div className="modal-footer border-0 px-4 pb-4 pt-1 gap-2">
               <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose} disabled={loading}>
                 Dismiss
               </button>
-              <button 
-                type="submit" 
-                className="btn-prism btn-prism-primary" 
+              <button
+                type="submit"
+                className="btn-prism btn-prism-primary"
                 disabled={loading}
               >
                 {loading ? <RefreshCw size={16} className="spin" /> : <ChevronRight size={16} />}
@@ -971,164 +1074,164 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, initialData }) => {
 
 // Import Seller Modal Component
 const ImportSellerModal = ({ onClose, onImport }) => {
-    const [isUploading, setIsUploading] = useState(false);
-    const [fileStats, setFileStats] = useState(null);
-    const [managers, setManagers] = useState([]);
-    const { addToast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
+  const [fileStats, setFileStats] = useState(null);
+  const [managers, setManagers] = useState([]);
+  const { addToast } = useToast();
 
-    useEffect(() => {
-        userApi.getManagers()
-            .then(data => setManagers(data))
-            .catch(() => setManagers([]));
-    }, []);
+  useEffect(() => {
+    userApi.getManagers()
+      .then(data => setManagers(data))
+      .catch(() => setManagers([]));
+  }, []);
 
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-        if (!file.name.endsWith('.csv')) {
-            addToast({ title: 'Invalid File', message: 'Please upload a CSV file.', type: 'error' });
-            return;
+    if (!file.name.endsWith('.csv')) {
+      addToast({ title: 'Invalid File', message: 'Please upload a CSV file.', type: 'error' });
+      return;
+    }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target.result;
+        const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+        if (lines.length < 2) throw new Error('CSV is empty or missing data rows.');
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const dataLines = lines.slice(1);
+
+        const nameIdx = headers.findIndex(h => h.includes('name'));
+        const idIdx = headers.findIndex(h => h.includes('id'));
+        const managerIdx = headers.findIndex(h => h.includes('manager'));
+        const marketIdx = headers.findIndex(h => h.includes('market'));
+
+        if (nameIdx === -1 || idIdx === -1) {
+          throw new Error('CSV must contain "Store Name" and "Seller ID" columns.');
         }
 
-        setIsUploading(true);
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const text = event.target.result;
-                const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-                if (lines.length < 2) throw new Error('CSV is empty or missing data rows.');
+        const parsedSellers = dataLines.map(line => {
+          const cells = line.split(',').map(c => c.trim());
+          const name = cells[nameIdx];
+          const sellerId = cells[idIdx];
+          const managerSearch = managerIdx !== -1 ? cells[managerIdx] : '';
+          const marketplace = marketIdx !== -1 ? (cells[marketIdx] || 'amazon.in') : 'amazon.in';
 
-                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-                const dataLines = lines.slice(1);
+          // Try to match manager by email or name
+          let managerId = '';
+          if (managerSearch) {
+            const match = managers.find(m =>
+              m.email?.toLowerCase() === managerSearch.toLowerCase() ||
+              `${m.firstName} ${m.lastName}`.toLowerCase().includes(managerSearch.toLowerCase())
+            );
+            if (match) managerId = match._id;
+          }
 
-                const nameIdx = headers.findIndex(h => h.includes('name'));
-                const idIdx = headers.findIndex(h => h.includes('id'));
-                const managerIdx = headers.findIndex(h => h.includes('manager'));
-                const marketIdx = headers.findIndex(h => h.includes('market'));
+          return { name, sellerId, marketplace, managerId, plan: 'Starter' };
+        }).filter(s => s.name && s.sellerId);
 
-                if (nameIdx === -1 || idIdx === -1) {
-                    throw new Error('CSV must contain "Store Name" and "Seller ID" columns.');
-                }
-
-                const parsedSellers = dataLines.map(line => {
-                    const cells = line.split(',').map(c => c.trim());
-                    const name = cells[nameIdx];
-                    const sellerId = cells[idIdx];
-                    const managerSearch = managerIdx !== -1 ? cells[managerIdx] : '';
-                    const marketplace = marketIdx !== -1 ? (cells[marketIdx] || 'amazon.in') : 'amazon.in';
-
-                    // Try to match manager by email or name
-                    let managerId = '';
-                    if (managerSearch) {
-                        const match = managers.find(m => 
-                            m.email?.toLowerCase() === managerSearch.toLowerCase() || 
-                            `${m.firstName} ${m.lastName}`.toLowerCase().includes(managerSearch.toLowerCase())
-                        );
-                        if (match) managerId = match._id;
-                    }
-
-                    return { name, sellerId, marketplace, managerId, plan: 'Starter' };
-                }).filter(s => s.name && s.sellerId);
-
-                setFileStats({
-                    name: file.name,
-                    count: parsedSellers.length,
-                    data: parsedSellers
-                });
-            } catch (err) {
-                addToast({ title: 'Parse Error', message: err.message, type: 'error' });
-            } finally {
-                setIsUploading(false);
-            }
-        };
-        reader.readAsText(file);
+        setFileStats({
+          name: file.name,
+          count: parsedSellers.length,
+          data: parsedSellers
+        });
+      } catch (err) {
+        addToast({ title: 'Parse Error', message: err.message, type: 'error' });
+      } finally {
+        setIsUploading(false);
+      }
     };
+    reader.readAsText(file);
+  };
 
-    const handleImportComplete = () => {
-        if (fileStats?.data) {
-            onImport(fileStats.data);
-        }
-    };
+  const handleImportComplete = () => {
+    if (fileStats?.data) {
+      onImport(fileStats.data);
+    }
+  };
 
-    const downloadTemplate = () => {
-        const template = `Store Name,Seller ID,Manager Name or Email,Marketplace\nSample Store,A1B2C3D4E5,manager@example.com,amazon.in`;
-        const blob = new Blob([template], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'sellers_import_template.csv';
-        a.click();
-    };
+  const downloadTemplate = () => {
+    const template = `Store Name,Seller ID,Manager Name or Email,Marketplace\nSample Store,A1B2C3D4E5,manager@example.com,amazon.in`;
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sellers_import_template.csv';
+    a.click();
+  };
 
-    return (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.7)', backdropFilter: 'blur(8px)', zIndex: 1070 }}>
-            <div className="modal-dialog modal-dialog-centered">
-                <div className="modal-content border-0 shadow-2xl overflow-hidden" style={{ borderRadius: '24px' }}>
-                    <div className="modal-header border-0 px-5 pt-5 pb-0">
-                        <h5 className="h4 fw-black mb-0 text-zinc-900 d-flex align-items-center gap-3">
-                            <div className="p-2 bg-zinc-900 text-white rounded-3 shadow-lg">
-                                <FileUp size={24} />
-                            </div>
-                            Bulk Store Onboarding
-                        </h5>
-                        <button type="button" className="btn-close" onClick={onClose}></button>
-                    </div>
-                    <div className="modal-body px-5 py-4">
-                        <p className="text-zinc-500 smallest mb-4">Upload a CSV file to add multiple Amazon storefronts at once. Managers will be auto-assigned based on their name or email.</p>
-                        
-                        {!fileStats ? (
-                            <div className="upload-zone border-2 border-dashed border-zinc-200 rounded-4 p-5 text-center transition-all hover-border-primary hover-bg-zinc-50 position-relative">
-                                <input 
-                                    type="file" 
-                                    accept=".csv" 
-                                    className="position-absolute inset-0 opacity-0 cursor-pointer" 
-                                    style={{ width: '100%', height: '100%', top: 0, left: 0 }}
-                                    onChange={handleFileChange}
-                                    disabled={isUploading}
-                                />
-                                <div className="mb-3 d-flex justify-content-center">
-                                    <div className="p-3 bg-zinc-100 rounded-circle"><Upload size={32} className="text-zinc-400" /></div>
-                                </div>
-                                <div className="fw-black text-zinc-900 mb-1">{isUploading ? 'Analyzing File...' : 'Choose CSV File'}</div>
-                                <div className="smallest text-zinc-400">or drag and drop your file here</div>
-                            </div>
-                        ) : (
-                            <div className="p-4 bg-zinc-900 rounded-4 text-white d-flex align-items-center justify-content-between shadow-lg">
-                                <div className="d-flex align-items-center gap-3">
-                                    <div className="p-2 bg-zinc-800 rounded-3"><FileCheck size={20} className="text-success" /></div>
-                                    <div>
-                                        <div className="fw-bold smallest">{fileStats.name}</div>
-                                        <div className="smallest opacity-60">{fileStats.count} accounts ready for import</div>
-                                    </div>
-                                </div>
-                                <button className="btn btn-sm btn-zinc-800 text-white border-0 px-3 rounded-pill smallest fw-bold" onClick={() => setFileStats(null)}>Change</button>
-                            </div>
-                        )}
+  return (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.7)', backdropFilter: 'blur(8px)', zIndex: 1070 }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content border-0 shadow-2xl overflow-hidden" style={{ borderRadius: '24px' }}>
+          <div className="modal-header border-0 px-5 pt-5 pb-0">
+            <h5 className="h4 fw-black mb-0 text-zinc-900 d-flex align-items-center gap-3">
+              <div className="p-2 bg-zinc-900 text-white rounded-3 shadow-lg">
+                <FileUp size={24} />
+              </div>
+              Bulk Store Onboarding
+            </h5>
+            <button type="button" className="btn-close" onClick={onClose}></button>
+          </div>
+          <div className="modal-body px-5 py-4">
+            <p className="text-zinc-500 smallest mb-4">Upload a CSV file to add multiple Amazon storefronts at once. Managers will be auto-assigned based on their name or email.</p>
 
-                        <div className="mt-4 d-flex align-items-center justify-content-between">
-                            <button className="btn btn-white btn-sm border border-zinc-200 rounded-pill px-3 d-flex align-items-center gap-2 transition-all hover-bg-zinc-50" onClick={downloadTemplate}>
-                                <Plus size={14} className="text-zinc-400" />
-                                <span className="fw-bold text-zinc-700 smallest">Get Template</span>
-                            </button>
-                            <span className="smallest text-zinc-400 font-monospace">Supports: UTF-8 CSV</span>
-                        </div>
-                    </div>
-                    <div className="modal-footer border-0 px-5 pb-5 pt-0 gap-2">
-                        <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose}>Dismiss</button>
-                        <button 
-                            className="btn-prism btn-prism-primary" 
-                            disabled={!fileStats || isUploading}
-                            onClick={handleImportComplete}
-                        >
-                            {isUploading ? <RefreshCw size={16} className="spin" /> : <ChevronRight size={16} />}
-                            <span>Begin Import</span>
-                        </button>
-                    </div>
+            {!fileStats ? (
+              <div className="upload-zone border-2 border-dashed border-zinc-200 rounded-4 p-5 text-center transition-all hover-border-primary hover-bg-zinc-50 position-relative">
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="position-absolute inset-0 opacity-0 cursor-pointer"
+                  style={{ width: '100%', height: '100%', top: 0, left: 0 }}
+                  onChange={handleFileChange}
+                  disabled={isUploading}
+                />
+                <div className="mb-3 d-flex justify-content-center">
+                  <div className="p-3 bg-zinc-100 rounded-circle"><UploadIcon size={32} className="text-zinc-400" /></div>
                 </div>
+                <div className="fw-black text-zinc-900 mb-1">{isUploading ? 'Analyzing File...' : 'Choose CSV File'}</div>
+                <div className="smallest text-zinc-400">or drag and drop your file here</div>
+              </div>
+            ) : (
+              <div className="p-4 bg-zinc-900 rounded-4 text-white d-flex align-items-center justify-content-between shadow-lg">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="p-2 bg-zinc-800 rounded-3"><FileCheck size={20} className="text-success" /></div>
+                  <div>
+                    <div className="fw-bold smallest">{fileStats.name}</div>
+                    <div className="smallest opacity-60">{fileStats.count} accounts ready for import</div>
+                  </div>
+                </div>
+                <button className="btn btn-sm btn-zinc-800 text-white border-0 px-3 rounded-pill smallest fw-bold" onClick={() => setFileStats(null)}>Change</button>
+              </div>
+            )}
+
+            <div className="mt-4 d-flex align-items-center justify-content-between">
+              <button className="btn btn-white btn-sm border border-zinc-200 rounded-pill px-3 d-flex align-items-center gap-2 transition-all hover-bg-zinc-50" onClick={downloadTemplate}>
+                <Plus size={14} className="text-zinc-400" />
+                <span className="fw-bold text-zinc-700 smallest">Get Template</span>
+              </button>
+              <span className="smallest text-zinc-400 font-monospace">Supports: UTF-8 CSV</span>
             </div>
+          </div>
+          <div className="modal-footer border-0 px-5 pb-5 pt-0 gap-2">
+            <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose}>Dismiss</button>
+            <button
+              className="btn-prism btn-prism-primary"
+              disabled={!fileStats || isUploading}
+              onClick={handleImportComplete}
+            >
+              {isUploading ? <RefreshCw size={16} className="spin" /> : <ChevronRight size={16} />}
+              <span>Begin Import</span>
+            </button>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
 // Seller ASINs Modal Component
@@ -1167,7 +1270,7 @@ const SellerAsinsModal = ({
         const jsonData = JSON.parse(event.target.result);
         setIsSubmitting(true);
         const result = await marketSyncApi.bulkInjectJson(seller._id, jsonData);
-        
+
         addToast({
           title: 'Import Success',
           message: result.message || 'Data injected successfully',
@@ -1245,7 +1348,7 @@ const SellerAsinsModal = ({
           type: 'success'
         });
       }
-      
+
       setNewAsinsText('');
       setShowAddAsinModal(false);
 

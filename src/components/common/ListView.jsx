@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, LayoutGrid, CheckSquare, Square } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronLeft, LayoutGrid, CheckSquare, Square } from 'lucide-react';
 
 const ListView = ({
     columns = [],
@@ -12,7 +12,8 @@ const ListView = ({
     onRowClick = null,
     actions = null,
     actionWidth = '120px',
-    emptyMessage = "No records found"
+    emptyMessage = "No records found",
+    pagination = null // { page, limit, total, onPageChange, onLimitChange }
 }) => {
     const [collapsedGroups, setCollapsedGroups] = useState(new Set());
     const [selectedRows, setSelectedRows] = useState(new Set());
@@ -70,8 +71,63 @@ const ListView = ({
         setSelectedRows(newSelected);
     };
 
+    // Pagination helper
+    const renderPagination = () => {
+        if (!pagination) return null;
+        const { page, limit, total, onPageChange, onLimitChange } = pagination;
+        const totalPages = Math.ceil(total / limit);
+        const startIdx = (page - 1) * limit + 1;
+        const endIdx = Math.min(page * limit, total);
+
+        return (
+            <div className="list-view-footer d-flex align-items-center justify-content-between px-4 py-2 border-top bg-zinc-50 border-zinc-200">
+                <div className="d-flex align-items-center gap-3">
+                    <div className="d-flex align-items-center gap-2">
+                        <span className="smallest text-zinc-500 fw-medium">Show</span>
+                        <select
+                            className="form-select form-select-sm smallest fw-bold border-zinc-200 rounded-pill bg-white py-0 h-auto"
+                            style={{ width: '65px', paddingLeft: '8px', cursor: 'pointer' }}
+                            value={limit}
+                            onChange={(e) => onLimitChange(Number(e.target.value))}
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
+                    <span className="smallest text-zinc-400">|</span>
+                    <span className="smallest text-zinc-500">
+                        Showing <span className="fw-bold text-zinc-900">{total > 0 ? startIdx : 0}-{endIdx}</span> of <span className="fw-bold text-zinc-900">{total}</span>
+                    </span>
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                    <button
+                        className={`btn-pagination ${page <= 1 ? 'disabled' : ''}`}
+                        onClick={() => page > 1 && onPageChange(page - 1)}
+                        disabled={page <= 1}
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <div className="d-flex align-items-center gap-1">
+                        <span className="smallest fw-bold text-zinc-900 px-2">Page {page}</span>
+                        <span className="smallest text-zinc-300">of {totalPages || 1}</span>
+                    </div>
+                    <button
+                        className={`btn-pagination ${page >= totalPages ? 'disabled' : ''}`}
+                        onClick={() => page < totalPages && onPageChange(page + 1)}
+                        disabled={page >= totalPages}
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     return (
-        <div className="list-view-container w-100" style={{ borderRadius: '12px', overflow: 'visible' }}>
+        <div className="list-view-container w-100" style={{ borderRadius: '12px', overflow: 'hidden' }}>
             {/* Header */}
             <div className="list-view-header d-flex align-items-center bg-white border-bottom px-4 py-3 sticky-top" style={{ zIndex: 10 }}>
                 {options.selectable && <div style={{ width: '40px' }} />}
@@ -89,7 +145,7 @@ const ListView = ({
 
             {/* Content */}
             <div className="list-view-body bg-white" style={{ overflow: 'visible' }}>
-                {groupedRows.length === 0 ? (
+                {(rows.length === 0) ? (
                     <div className="p-5 text-center text-muted">
                         <div className="mb-2"><LayoutGrid size={32} className="opacity-25" /></div>
                         <div className="small fw-bold">{emptyMessage}</div>
@@ -165,6 +221,9 @@ const ListView = ({
                 )}
             </div>
 
+            {/* Pagination Footer */}
+            {renderPagination()}
+
             <style>{`
                 .list-view-container { 
                     border: 1px solid #e2e8f0; 
@@ -174,11 +233,11 @@ const ListView = ({
                 .list-view-header {
                     background-color: #f8fafc !important;
                     border-bottom: 2px solid #f1f5f9 !important;
-                    height: 44px;
+                    height: 48px;
                 }
                 .list-group-header {
                     background-color: #f1f5f9 !important;
-                    height: 38px;
+                    height: 40px;
                 }
                 .list-row {
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -200,6 +259,34 @@ const ListView = ({
                     opacity: 1;
                 }
                 .tracking-wider { letter-spacing: 0.05em; }
+                
+                .btn-pagination {
+                    width: 32px;
+                    height: 32px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #fff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    color: #64748b;
+                    transition: all 0.2s;
+                }
+                .btn-pagination:hover:not(.disabled) {
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                    color: #0f172a;
+                    transform: scale(1.05);
+                }
+                .btn-pagination.disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
+                    background: #f1f5f9;
+                }
+                
+                .form-select.smallest {
+                    font-size: 11px;
+                }
             `}</style>
         </div>
     );

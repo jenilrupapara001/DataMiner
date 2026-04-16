@@ -83,11 +83,18 @@ exports.getSellers = async (req, res) => {
       });
     }
 
-    const { status, marketplace, page = 1, limit = 50 } = req.query;
+    const { status, marketplace, search, page = 1, limit = 50 } = req.query;
     const filter = {};
 
     if (status) filter.status = status;
     if (marketplace) filter.marketplace = marketplace;
+    
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { sellerId: { $regex: search, $options: 'i' } }
+      ];
+    }
 
     const sellers = await Seller.find(filter)
       .sort({ createdAt: -1 })
@@ -97,6 +104,8 @@ exports.getSellers = async (req, res) => {
     const total = await Seller.countDocuments(filter);
     const enrichedWithManagers = await enrichSellersWithManagers(sellers);
     const fullyEnriched = await enrichSellersWithAsinCounts(enrichedWithManagers);
+
+    console.log(`[BACKEND] Returning ${fullyEnriched.length} enriched sellers to user ${req.user.email} (Limit: ${limit})`);
 
     res.json({
       success: true,
