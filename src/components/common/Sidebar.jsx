@@ -1,241 +1,204 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import './Sidebar.css';
 import {
-    ChevronDown,
     LayoutDashboard,
     Store,
-    Target,
-    ScanLine,
-    Zap,
-    CloudDownload,
-    Kanban,
-    LayoutTemplate,
-    BarChart3,
-    BookOpen,
-    FolderOpen,
-    MessageSquare,
-    FileText,
-    TrendingUp,
+    Package,
     Activity,
-    Calculator,
-    Bell,
+    Bot,
+    GitBranch,
+    LayoutTemplate,
+    BarChart2,
+    Clock,
+    Folder,
+    MessageSquare,
+    ScanSearch,
+    TrendingUp,
+    CalendarDays,
+    Megaphone,
+    ArrowLeftRight,
+    Warehouse,
     Users,
     ShieldCheck,
-    Settings as SettingsIcon,
+    Map,
+    Settings,
     KeyRound,
-    ArrowLeftRight,
-    LogOut,
-    Moon,
-    Sun,
-    HelpCircle,
-    MoreVertical,
-    ChevronRight
+    Database,
+    ChevronLeft,
+    ChevronRight,
+    Zap,
+    LogOut
 } from 'lucide-react';
+import './Sidebar.css';
 
-const SidebarItem = ({ item, collapsed, active, onNavigate, isSubItem = false }) => {
-    const navigate = useNavigate();
-
-    const handleClick = (e) => {
-        if (item.subItems) return;
-        if (onNavigate) onNavigate();
-        navigate(item.to);
-    };
+const NavItem = ({ item, collapsed, active, onClick }) => {
+    const [isHovered, setIsHovered] = useState(false);
 
     return (
         <div
-            className={`sidebar-item d-flex align-items-center ${collapsed ? 'justify-content-center px-0' : 'gap-3 px-3'} py-2 rounded-2 transition-all mb-1 cursor-pointer ${active ? 'active-item' : 'text-muted'
-                } ${isSubItem ? 'ps-4 opacity-75' : ''}`}
-            onClick={handleClick}
+            className={`nav-item ${active ? 'active' : ''}`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            onClick={() => onClick(item.to)}
         >
-            <div className="d-flex align-items-center justify-content-center item-icon" style={{ width: collapsed ? '100%' : '18px' }}>
-                {item.icon && <item.icon size={collapsed ? 18 : 16} strokeWidth={active ? 2.5 : 2} />}
+            <div className="nav-item-icon">
+                <item.icon size={15} />
             </div>
             {!collapsed && (
-                <span className="item-label fw-medium flex-grow-1" style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
+                <span className="nav-item-label">{item.label}</span>
+            )}
+            {!collapsed && item.badge && (
+                <div className="nav-item-badge">{item.badge}</div>
+            )}
+            {collapsed && isHovered && (
+                <div className="nav-tooltip">
                     {item.label}
-                </span>
-            )}
-            {!collapsed && item.subItems && (
-                <ChevronRight size={12} className={`transition-all ${active ? 'rotate-90' : ''}`} />
-            )}
-        </div>
-    );
-};
-
-const SidebarSection = ({ section, collapsed, activePath, hasPermission, onNavigate }) => {
-    const filteredItems = section.items.filter(
-        (item) => !item.permission || hasPermission(item.permission)
-    );
-
-    if (filteredItems.length === 0) return null;
-
-    return (
-        <div className={`sidebar-section mb-3 ${collapsed ? 'px-2' : 'px-3'}`}>
-            {section.label && !collapsed && (
-                <div className="px-2 mb-2">
-                    <span className="section-label text-muted text-uppercase tracking-widest fw-bold" style={{ fontSize: '9px', opacity: 0.6 }}>
-                        {section.label}
-                    </span>
                 </div>
             )}
-            {filteredItems.map((item, idx) => (
-                <SidebarItem
-                    key={idx}
-                    item={item}
-                    collapsed={collapsed}
-                    active={activePath === item.to || (item.to !== '/' && activePath.startsWith(item.to))}
-                    onNavigate={onNavigate}
-                />
-            ))}
+            {active && !collapsed && <div className="active-indicator" />}
         </div>
     );
 };
 
 const Sidebar = () => {
     const { user, logout, hasPermission } = useAuth();
-    const { isMobile, isOpen, toggleMobile } = useSidebar();
+    const { collapsed, toggle, isMobile, isOpen, toggleMobile } = useSidebar();
     const location = useLocation();
-    const [isHovered, setIsHovered] = useState(false);
-    
-    // Snappy expansion logic
-    const isExpanded = isHovered || (isMobile && isOpen);
+    const navigate = useNavigate();
 
     const sections = [
         {
+            id: 'MAIN',
             label: 'Main',
             items: [
                 { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard', permission: 'dashboard_view' },
                 { label: 'Sellers', icon: Store, to: '/sellers', permission: 'sellers_view' },
-                { label: 'ASIN Manager', icon: ScanLine, to: '/asin-tracker', permission: 'sellers_view' },
-                { label: 'Seller Tracker', icon: Zap, to: '/seller-tracker', permission: 'sellers_view' },
-                { label: 'Scrape Tasks', icon: CloudDownload, to: '/scrape-tasks', permission: 'scraping_view' },
+                { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'sellers_view', badge: '628' },
+                { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'sellers_view' },
+                { label: 'Scrape Tasks', icon: Bot, to: '/scrape-tasks', permission: 'scraping_view' },
             ],
         },
         {
+            id: 'ACTIONS',
             label: 'Actions',
             items: [
-                { label: 'Workflows', icon: Kanban, to: '/actions', permission: 'actions_view' },
+                { label: 'Workflows', icon: GitBranch, to: '/actions', permission: 'actions_view' },
                 { label: 'Templates', icon: LayoutTemplate, to: '/actions/templates', permission: 'actions_view' },
-                { label: 'Performance', icon: BarChart3, to: '/actions/achievement-report', permission: 'reports_monthly_view' },
-                { label: 'Activity Log', icon: BookOpen, to: '/activity-log', permission: 'settings_view' },
-                { label: 'File Manager', icon: FolderOpen, to: '/file-manager' },
+                { label: 'Performance', icon: BarChart2, to: '/actions/achievement-report', permission: 'reports_monthly_view' },
+                { label: 'Activity Log', icon: Clock, to: '/activity-log', permission: 'settings_view' },
+                { label: 'File Manager', icon: Folder, to: '/file-manager' },
                 { label: 'Messaging', icon: MessageSquare, to: '/chat' },
             ],
         },
         {
+            id: 'INTELLIGENCE',
             label: 'Intelligence',
             items: [
-                { label: 'SKU Analysis', icon: FileText, to: '/sku-report', permission: 'reports_sku_view' },
+                { label: 'SKU Analysis', icon: ScanSearch, to: '/sku-report', permission: 'reports_sku_view' },
                 { label: 'Parent Trends', icon: TrendingUp, to: '/parent-asin-report', permission: 'reports_parent_view' },
-                { label: 'Monthly Recap', icon: BarChart3, to: '/month-wise-report', permission: 'reports_monthly_view' },
-                { label: 'Advertising', icon: Activity, to: '/ads-report', permission: 'reports_ads_view' },
-                { label: 'Profit & Loss', icon: TrendingUp, to: '/profit-loss', permission: 'reports_profit_view' },
-                { label: 'Inventory', icon: Store, to: '/inventory', permission: 'reports_inventory_view' },
+                { label: 'Monthly Recap', icon: CalendarDays, to: '/month-wise-report', permission: 'reports_monthly_view' },
+                { label: 'Advertising', icon: Megaphone, to: '/ads-report', permission: 'reports_ads_view' },
+                { label: 'Profit & Loss', icon: ArrowLeftRight, to: '/profit-loss', permission: 'reports_profit_view' },
+                { label: 'Inventory', icon: Warehouse, to: '/inventory', permission: 'reports_inventory_view' },
             ],
         },
         {
+            id: 'SYSTEM',
             label: 'System',
             items: [
                 { label: 'Users', icon: Users, to: '/users', permission: 'users_view' },
                 { label: 'Security Roles', icon: ShieldCheck, to: '/roles', permission: 'roles_view' },
-                { label: 'Team Map', icon: Users, to: '/team-management', permission: 'roles_view' },
-                { label: 'Settings', icon: SettingsIcon, to: '/settings', permission: 'settings_view' },
+                { label: 'Team Map', icon: Map, to: '/team-management', permission: 'roles_view' },
+                { label: 'Settings', icon: Settings, to: '/settings', permission: 'settings_view' },
                 { label: 'API Keys', icon: KeyRound, to: '/api-keys', permission: 'settings_view' },
-                { label: 'Data Migration', icon: ArrowLeftRight, to: '/upload-export', permission: 'sellers_manage_asins' },
+                { label: 'Data Migration', icon: Database, to: '/upload-export', permission: 'sellers_manage_asins' },
             ],
         },
     ];
 
+    const handleNavigate = (to) => {
+        navigate(to);
+        if (isMobile && isOpen) toggleMobile();
+    };
+
     const initials = (
         (user?.firstName?.[0] || '') + (user?.lastName?.[0] || user?.firstName?.[1] || '')
-    ).toUpperCase();
+    ).toUpperCase() || 'JR';
+
+    const pipelineActive = false; // Mock state
 
     return (
-        <div className="sidebar-wrapper" style={{ position: 'relative', width: isMobile ? 0 : '70px', zIndex: 1000 }}>
-            <motion.div
-                className="sidebar-container bg-white border-end d-flex flex-column"
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                animate={{
-                    width: isExpanded ? '260px' : '70px',
-                    x: isMobile && !isOpen ? '-100%' : 0,
-                    boxShadow: isHovered ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none'
-                }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                style={{
-                    height: '100vh',
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    overflowX: 'hidden',
-                    backgroundColor: 'white'
-                }}
-            >
-                {/* Minimalist Logo Area */}
-                <div className="sidebar-header d-flex align-items-center" style={{ height: '60px', borderBottom: '1px solid #f1f5f9', width: '100%', padding: '0 20px' }}>
-                    <div className={`d-flex align-items-center ${isExpanded ? 'gap-3' : 'justify-content-center w-100'}`}>
-                        <div className="flex-shrink-0 bg-zinc-900 d-flex align-items-center justify-content-center shadow-sm" style={{ width: '28px', height: '28px', borderRadius: '6px' }}>
-                            <Activity size={14} className="text-white" />
-                        </div>
-                        {isExpanded && (
-                            <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="fw-bold text-zinc-900 tracking-tight"
-                                style={{ fontSize: '0.95rem' }}
-                            >
-                                GMS Report
-                            </motion.span>
-                        )}
-                    </div>
+        <aside className={`sidebar-redesign ${collapsed ? 'collapsed' : ''} ${isMobile && !isOpen ? 'mobile-hidden' : ''}`}>
+            {/* Logo Area */}
+            <div className="logo-area">
+                <div className="logo-icon">
+                    <Zap size={13} fill="white" className="text-white" />
                 </div>
+                {!collapsed && (
+                    <span className="logo-text">GMS Report</span>
+                )}
+                <button className="sidebar-toggle" onClick={toggle}>
+                    <ChevronLeft size={12} style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }} />
+                </button>
+            </div>
 
-                {/* Nav Items */}
-                <div className="sidebar-content flex-grow-1 overflow-auto py-3 custom-scrollbar">
-                    {sections.map((section, idx) => (
-                        <SidebarSection
-                            key={idx}
-                            section={section}
-                            collapsed={!isExpanded}
-                            activePath={location.pathname}
-                            hasPermission={hasPermission}
-                            onNavigate={isMobile ? toggleMobile : undefined}
-                        />
-                    ))}
-                </div>
+            {/* Nav Body */}
+            <div className="nav-body custom-scrollbar">
+                {sections.map((section) => {
+                    const filteredItems = section.items.filter(
+                        (item) => !item.permission || hasPermission(item.permission)
+                    );
+                    if (filteredItems.length === 0) return null;
 
-                {/* Refined Profile Section */}
-                <div className="sidebar-footer p-3 border-top mt-auto">
-                    <div className={`d-flex align-items-center ${isExpanded ? 'gap-3' : 'justify-content-center'}`}>
-                        <div
-                            className="avatar flex-shrink-0 bg-zinc-100 text-zinc-900 fw-bold d-flex align-items-center justify-content-center border border-zinc-200"
-                            style={{ width: '30px', height: '30px', borderRadius: '6px', fontSize: '10px' }}
-                        >
-                            {initials}
+                    return (
+                        <div key={section.id} className="nav-section">
+                            {collapsed ? (
+                                <div className="section-divider" />
+                            ) : (
+                                <div className="section-header">{section.label}</div>
+                            )}
+                            {filteredItems.map((item, idx) => (
+                                <NavItem
+                                    key={idx}
+                                    item={item}
+                                    collapsed={collapsed}
+                                    active={location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))}
+                                    onClick={handleNavigate}
+                                />
+                            ))}
                         </div>
-                        {isExpanded && (
-                            <motion.div 
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="overflow-hidden flex-grow-1"
-                            >
-                                <div className="fw-semibold text-zinc-900 smallest text-truncate" style={{ fontSize: '11.5px', lineHeight: 1.2 }}>{user?.fullName || 'Account'}</div>
-                                <div className="text-muted text-truncate" style={{ fontSize: '9px', fontWeight: 500 }}>{user?.role?.title || user?.role?.name || 'Authorized User'}</div>
-                            </motion.div>
-                        )}
-                        {isExpanded && (
-                            <button className="btn btn-sm btn-ghost p-1 text-zinc-400 hover-red" onClick={logout} title="Logout">
-                                <LogOut size={13} />
-                            </button>
-                        )}
+                    );
+                })}
+            </div>
+
+            {/* Bottom Area */}
+            <div className="bottom-area">
+                {!collapsed && (
+                    <div className="pipeline-row">
+                        <div className={`pipeline-dot ${pipelineActive ? 'active' : 'idle'}`} />
+                        <span className="pipeline-text">
+                            PIPELINE {pipelineActive ? 'ACTIVE' : 'IDLE'}
+                        </span>
                     </div>
+                )}
+                <div className="user-row" onClick={() => navigate('/profile')}>
+                    <div className="user-avatar">
+                        {initials}
+                    </div>
+                    {!collapsed && (
+                        <>
+                            <div className="user-info">
+                                <div className="user-name">{user?.fullName || 'Jenil Rupapara'}</div>
+                                <div className="user-role">{user?.role?.title || 'admin'}</div>
+                            </div>
+                            <ChevronRight size={14} className="user-arrow" />
+                        </>
+                    )}
                 </div>
-            </motion.div>
-        </div>
+            </div>
+        </aside>
     );
 };
 
