@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
+import { asinApi } from '../../services/api';
 import {
     LayoutDashboard,
     Store,
@@ -65,8 +66,22 @@ const NavItem = ({ item, collapsed, active, onClick }) => {
 const Sidebar = () => {
     const { user, logout, hasPermission } = useAuth();
     const { collapsed, toggle, isMobile, isOpen, toggleMobile } = useSidebar();
-    const location = useLocation();
-    const navigate = useNavigate();
+    const [asinCount, setAsinCount] = useState('...');
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const res = await asinApi.getStats();
+                if (res && res.total !== undefined) {
+                    setAsinCount(res.total.toString());
+                }
+            } catch (err) {
+                console.error('Failed to fetch ASIN stats for sidebar:', err);
+                setAsinCount('0');
+            }
+        };
+        fetchStats();
+    }, []);
 
     const sections = [
         {
@@ -75,7 +90,7 @@ const Sidebar = () => {
             items: [
                 { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard', permission: 'dashboard_view' },
                 { label: 'Sellers', icon: Store, to: '/sellers', permission: 'sellers_view' },
-                { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'sellers_view', badge: '628' },
+                { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'sellers_view', badge: asinCount },
                 { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'sellers_view' },
                 { label: 'Scrape Tasks', icon: Bot, to: '/scrape-tasks', permission: 'scraping_view' },
             ],

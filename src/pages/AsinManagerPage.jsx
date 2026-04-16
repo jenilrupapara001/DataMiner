@@ -315,6 +315,8 @@ const AsinManagerPage = () => {
   const [showAllBsrHistory, setShowAllBsrHistory] = useState(false);
   const [showAllRatingHistory, setShowAllRatingHistory] = useState(false);
   const [allAsins, setAllAsins] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [selectedBrand, setSelectedBrand] = useState('');
 
   // Filter asins based on search query
   const filteredAsins = useMemo(() => {
@@ -375,14 +377,14 @@ const AsinManagerPage = () => {
     setSelectedAsinForRating(asin);
   };
 
-  const loadData = useCallback(async (page = 1, limit = pagination.limit) => {
+  const loadData = useCallback(async (page = 1, limit = pagination.limit, brand = selectedBrand) => {
     try {
       setLoading(true);
 
       const [asinRes, allAsinsRes, statsRes] = await Promise.all([
-        asinApi.getAll({ page, limit }),
+        asinApi.getAll({ page, limit, brand }),
         asinApi.getAllWithoutPagination(),
-        asinApi.getStats()
+        asinApi.getStats({ brand })
       ]);
 
       setAsins(asinRes?.asins || []);
@@ -397,7 +399,7 @@ const AsinManagerPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.limit]);
+  }, [pagination.limit, selectedBrand]);
 
   const handleChangePage = (event, newPage) => {
     // MUI uses 0-indexed pages, API uses 1-indexed
@@ -437,7 +439,20 @@ const AsinManagerPage = () => {
         console.error('Error fetching sellers:', err);
       }
     };
+    
+    const fetchBrands = async () => {
+      try {
+        const response = await asinApi.getBrands();
+        if (response.success) {
+          setBrands(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching brands:', err);
+      }
+    };
+
     fetchSellers();
+    fetchBrands();
   }, []);
 
   const kpis = useMemo(() => {
@@ -1011,6 +1026,31 @@ const AsinManagerPage = () => {
                      background: '#2563eb', color: '#fff', cursor: 'pointer' }}>
             <Plus size={12} /> Add ASIN
           </button>
+
+          <select 
+            value={selectedBrand}
+            onChange={(e) => {
+              setSelectedBrand(e.target.value);
+              loadData(1, pagination.limit, e.target.value);
+            }}
+            style={{ 
+              padding: '5px 12px', 
+              fontSize: 11, 
+              fontWeight: 600, 
+              borderRadius: 20, 
+              border: '1px solid #d1d5db',
+              background: '#fff', 
+              cursor: 'pointer', 
+              color: '#374151',
+              outline: 'none',
+              maxWidth: '150px'
+            }}
+          >
+            <option value="">All Brands</option>
+            {brands.map(brand => (
+              <option key={brand} value={brand}>{brand}</option>
+            ))}
+          </select>
 
           <div style={{ display: 'flex', alignItems: 'center', background: '#f9fafb',
                         border: '1px solid #e5e7eb', borderRadius: 20, padding: '4px 12px',

@@ -565,6 +565,14 @@ export const asinApi = {
     if (!res.ok) throw new Error('Failed to fetch ASIN stats');
     return res.json();
   },
+  
+  getBrands: async () => {
+    const res = await fetch(`${API_BASE}/asins/brands`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch brands');
+    return res.json();
+  },
 
   getBySeller: async (sellerId, params = {}) => {
     const query = new URLSearchParams(params).toString();

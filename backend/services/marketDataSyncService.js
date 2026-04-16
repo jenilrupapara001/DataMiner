@@ -1790,24 +1790,18 @@ class MarketDataSyncService {
 
     _cleanRating(str) {
         if (!str) return 0;
-        const ratingStr = str.toString().trim();
+        const s = str.toString().trim();
         
-        // Match standard format "4.4 out of 5" or "4.4 out of 5 stars"
-        const outOfMatch = ratingStr.match(/([0-5](?:[.,]\d+)?)\s*(?:out\s*of\s*5|\/5|(?=\s*stars?))/i);
-        if (outOfMatch) return parseFloat(outOfMatch[1].replace(',', '.')) || 0;
-        
-        // Match fallback "4.4" at the start
-        const startMatch = ratingStr.match(/^([0-5](?:[.,]\d+)?)/);
-        if (startMatch) return parseFloat(startMatch[1].replace(',', '.')) || 0;
-        
-        // If neither matches, try just picking the first number between 0-5
-        const firstMatch = ratingStr.match(/([0-5](?:[.,]\d+)?)/);
-        if (firstMatch) {
-            const val = parseFloat(firstMatch[1].replace(',', '.')) || 0;
-            if (val <= 5) return val;
-        }
+        // Match numbers like 4.4, 4,4, 4 anywhere in the string
+        const matches = s.match(/([0-5](?:[.,]\d+)?)/);
+        if (!matches) return 0;
 
-        return 0;
+        let rating = parseFloat(matches[1].replace(',', '.'));
+        
+        if (isNaN(rating)) return 0;
+        // Cap and round to 1 decimal place
+        rating = Math.min(5, Math.max(0, rating));
+        return Math.round(rating * 10) / 10;
     }
 
     _cleanReviewCount(str) {

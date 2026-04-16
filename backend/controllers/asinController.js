@@ -29,6 +29,7 @@ exports.getAsins = async (req, res) => {
 
     if (status) filter.status = status;
     if (category) filter.category = category;
+    if (req.query.brand) filter.brand = req.query.brand;
 
     const sortOptions = {
       status: 1, // 'Active' comes before 'Pending'/'Scraping'
@@ -83,6 +84,7 @@ exports.getAllAsinsWithHistory = async (req, res) => {
 
     if (status) filter.status = status;
     if (category) filter.category = category;
+    if (req.query.brand) filter.brand = req.query.brand;
 
     const asins = await Asin.find(filter)
       .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails')
@@ -926,3 +928,28 @@ exports.importFromCsv = async (req, res) => {
 };
 
 module.exports = exports;
+// Get unique brands for filtering
+exports.getAsinBrands = async (req, res) => {
+  try {
+    const filter = {};
+    const roleName = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    
+    if (!isGlobalUser) {
+      if (!req.user.assignedSellers || req.user.assignedSellers.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+      filter.seller = { $in: req.user.assignedSellers.map(s => s._id || s) };
+    }
+
+    const brands = await Asin.distinct('brand', filter);
+    const cleanBrands = brands.filter(Boolean).sort();
+
+    res.json({
+      success: true,
+      data: cleanBrands
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

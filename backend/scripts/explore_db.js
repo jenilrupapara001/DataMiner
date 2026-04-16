@@ -17,7 +17,8 @@ async function explore() {
             { asinCode: { $exists: true } },
             { asin: { $exists: true } },
             { rating: { $exists: true } },
-            { bsr: { $exists: true } }
+            { bsr: { $exists: true } },
+            { currentPrice: { $exists: true } }
           ]
         });
 

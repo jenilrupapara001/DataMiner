@@ -34,6 +34,7 @@ router.post('/:id/generate-images', protect, requirePermission('sellers_manage_a
 // Search and stats
 router.get('/search', protect, requirePermission('sellers_view'), asinController.searchAsins);
 router.get('/stats', protect, requirePermission('sellers_view'), asinController.getAsinStats);
+router.get('/brands', protect, requirePermission('sellers_view'), asinController.getAsinBrands);
 router.get('/lqs-top', protect, requirePermission('sellers_view'), asinController.getAsinsByLQS);
 
 // Main routes
