@@ -531,20 +531,22 @@ const AsinManagerPage = () => {
 
   const historyStructure = useMemo(() => {
     if (asins.length > 0) {
-      // Collect ALL unique dates across ALL ASINs to build complete column structure
-      // Group by date (YYYY-MM-DD only, no time) and keep the latest entry for each date
-      const dateMap = new Map(); // key: YYYY-MM-DD, value: { dateStr, timestamp }
-      const asinsWithHistory = asins.filter(a => a.weekHistory && a.weekHistory.length > 0);
+      const dateMap = new Map();
+      
+      const asinsWithHistory = asins.filter(a => (a.weekHistory && a.weekHistory.length > 0) || (a.history && a.history.length > 0));
       
       if (asinsWithHistory.length > 0) {
         asinsWithHistory.forEach(asin => {
-          asin.weekHistory.forEach(h => {
+          const allHistory = [
+            ...(asin.weekHistory || []),
+            ...(asin.history || [])
+          ];
+          
+          allHistory.forEach(h => {
             if (h.date) {
-              // Extract just the date part (YYYY-MM-DD) without time
               const dateObj = new Date(h.date);
               const dateKey = dateObj.toISOString().split('T')[0];
               
-              // Keep only the latest timestamp for each date
               const existing = dateMap.get(dateKey);
               if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
                 dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
@@ -553,7 +555,6 @@ const AsinManagerPage = () => {
           });
         });
         
-        // Sort dates chronologically and build structure
         const sortedDates = Array.from(dateMap.keys()).sort();
         return generateHistoryStructureFromDates(sortedDates);
       }
@@ -1316,7 +1317,8 @@ const AsinManagerPage = () => {
                       ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
                     </td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
-                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw);
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                        || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
                       return (
                         <td key={`p-${week.label}-${dIdx}`} 
                             onClick={(e) => handleViewPrice(asin, e)}
@@ -1330,7 +1332,8 @@ const AsinManagerPage = () => {
                       {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                     </td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
-                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw);
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                        || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
                       return (
                         <td key={`b-${week.label}-${dIdx}`} 
                             onClick={(e) => handleViewBsr(asin, e)}
@@ -1349,7 +1352,8 @@ const AsinManagerPage = () => {
                       </div>
                     </td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
-                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw);
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                        || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
                       return (
                         <td key={`r-${week.label}-${dIdx}`} 
                             onClick={(e) => handleViewRating(asin, e)}

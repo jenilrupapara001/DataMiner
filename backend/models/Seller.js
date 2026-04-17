@@ -4,6 +4,18 @@ const sellerSchema = new mongoose.Schema({
   name: { type: String, required: true },
   marketplace: { type: String, required: true, enum: ['amazon.in'] },
   sellerId: { type: String, required: true, unique: true },
+  amazonSellerId: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        // Allow null/undefined during migration; validate only if set
+        if (v == null) return true;
+        return /^A[A-Z0-9]{5,}$/.test(v);
+      },
+      message: props => `${props.value} is not a valid Amazon seller ID!`
+    }
+  },
+  invalid: { type: Boolean, default: false },
   apiKey: { type: String },
   plan: { type: String, enum: ['Starter', 'Pro', 'Enterprise'], default: 'Starter' },
   scrapeLimit: { type: Number, default: 100 },

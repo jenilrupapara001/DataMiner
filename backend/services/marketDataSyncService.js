@@ -1761,14 +1761,18 @@ class MarketDataSyncService {
 
         console.log(`📝 DEBUG: Prepared ${bulkOps.length} bulk update operations`);
         
+        const BATCH_SIZE = 100;
         if (bulkOps.length > 0) {
             try {
-                const result = await Asin.bulkWrite(bulkOps);
-                console.log(`📝 DEBUG: bulkWrite result:`, {
-                    matchedCount: result.matchedCount,
-                    modifiedCount: result.modifiedCount,
-                    upsertedCount: result.upsertedCount
-                });
+                for (let i = 0; i < bulkOps.length; i += BATCH_SIZE) {
+                    const batch = bulkOps.slice(i, i + BATCH_SIZE);
+                    const result = await Asin.bulkWrite(batch);
+                    console.log(`📝 DEBUG: bulkWrite batch ${Math.floor(i/BATCH_SIZE) + 1}:`, {
+                        matchedCount: result.matchedCount,
+                        modifiedCount: result.modifiedCount,
+                        upsertedCount: result.upsertedCount
+                    });
+                }
             } catch (bulkError) {
                 console.error(`❌ bulkWrite ERROR:`, bulkError.message);
             }
