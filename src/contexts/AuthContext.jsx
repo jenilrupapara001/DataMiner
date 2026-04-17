@@ -115,6 +115,10 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
         setUser(null);
         setError(null);
+        // Navigate to login page
+        if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+        }
     };
 
     const refreshUser = (updatedUser) => {

@@ -214,6 +214,14 @@ const Sidebar = () => {
                         </>
                     )}
                 </div>
+                <button 
+                    className="logout-btn" 
+                    onClick={logout}
+                    title="Logout"
+                >
+                    <LogOut size={16} />
+                    {!collapsed && <span>Logout</span>}
+                </button>
             </div>
         </aside>
     );

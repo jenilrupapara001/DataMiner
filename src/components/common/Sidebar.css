@@ -353,3 +353,38 @@
     background: var(--border);
     border-radius: 10px;
 }
+
+/* Logout Button */
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: calc(100% - 24px);
+    margin: 8px 12px 12px;
+    padding: 10px 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+
+.sidebar-redesign.collapsed .logout-btn {
+    justify-content: center;
+    width: 44px;
+    margin: 8px auto;
+    padding: 10px;
+}
+
+.sidebar-redesign.collapsed .logout-btn span {
+    display: none;
+}
