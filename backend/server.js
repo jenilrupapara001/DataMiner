@@ -3,6 +3,22 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
+// Memory monitoring - Log memory usage every 5 minutes
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
+  const heapTotal = Math.round(mem.heapTotal / 1024 / 1024);
+  const percent = Math.round((heapUsed / heapTotal) * 100);
+  
+  console.log(`📊 Memory: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
+  
+  // Auto-GC if memory above 80%
+  if (percent > 80 && global.gc) {
+    console.log('🧹 Running garbage collection...');
+    global.gc();
+  }
+}, 5 * 60 * 1000);
+
 const app = express();
 app.use(cors({
   origin: [
@@ -12,6 +28,8 @@ app.use(cors({
     'http://localhost:3000',
     'http://127.0.0.1:5173',
     'https://retailops.vercel.app',
+    'https://retail-ops.onrender.com',
+    /\.onrender\.com$/,
     process.env.FRONTEND_URL,
     /\.vercel\.app$/
   ].filter(Boolean),

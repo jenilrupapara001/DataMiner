@@ -7,6 +7,14 @@ const config = require('../config/env');
 const imageGenerationService = require('./imageGenerationService');
 const { JSDOM } = require('jsdom');
 const SocketService = require('./socketService');
+const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
+
+// Initialize memory-safe processor
+const memProcessor = new MemorySafeProcessor({
+    batchSize: 50,
+    delay: 50,
+    maxMemoryPercent: 70
+});
 
 /**
  * Discreet service for syncing market data from external provider.
@@ -1600,185 +1608,153 @@ class MarketDataSyncService {
         }
     }
 
-    /**
-     * High-performance processing of an array of results using MongoDB bulkWrite.
-     * Ideal for 5,000+ results per seller.
+/**
+     * Memory-safe streaming bulk processing with pagination
+     * Handles 10,000+ results without heap errors
      */
     async processBatchResults(sellerId, rawResults) {
         if (!rawResults || rawResults.length === 0) return 0;
         
-        console.log(`🚀 Bulk Processing ${rawResults.length} market results for seller ${sellerId}...`);
+        console.log(`🚀 Memory-safe bulk processing ${rawResults.length} results for seller ${sellerId}...`);
+        console.log(`📊 Memory: ${memProcessor.getMemoryStats().heapUsed}`);
         
-        const bulkOps = [];
         let updatedCount = 0;
-
-        // Prepare context
         const now = new Date();
         
-        // DEBUG: Log first 3 raw results to see what data looks like
-        console.log(`📋 DEBUG: Sample raw data (first 3 items):`);
-        rawResults.slice(0, 3).forEach((r, i) => {
-            console.log(`   Item ${i+1}:`, {
-                Original_URL: r.Original_URL?.substring(0, 50),
-                Title: r.Title?.substring(0, 30),
-                asp: r.asp,
-                mrp: r.mrp
-            });
-        });
-
-        // Fetch all current ASIN documents in one go to handle logic in memory
-        // Use case-insensitive matching with $or + $regex
-        const asinCodesToFind = rawResults.map(r => this._extractAsinFromData(r)).filter(Boolean);
-        console.log(`🔍 DEBUG: Extracted ${asinCodesToFind.length} unique ASINs from raw data`);
+        // Process in smaller chunks to avoid memory issues
+        const CHUNK_SIZE = 200;
+        const ASIN_BATCH = 50;
         
-        if (asinCodesToFind.length === 0) {
-            console.error(`❌ CRITICAL: No ASINs could be extracted from the raw data!`);
-            console.error(`❌ Check _extractAsinFromData - it's not finding ASINs from Original_URL`);
-            return 0;
-        }
-        
-        const currentAsins = await Asin.find({
-            seller: sellerId,
-            $or: asinCodesToFind.map(code => ({ asinCode: { $regex: new RegExp(`^${code}$`, 'i') } }))
-        });
-        
-        console.log(`🔍 DEBUG: Found ${currentAsins.length} ASINs in database matching the raw data`);
-
-        // Create lowercase map for case-insensitive lookup
-        const asinMap = new Map(currentAsins.map(a => [a.asinCode.toLowerCase(), a]));
-
-        // DEBUG: List which ASINs were found vs not found
-        const foundAsins = new Set();
-        const notFoundAsins = [];
-        for (const code of asinCodesToFind.slice(0, 10)) {
-            if (asinMap.has(code.toLowerCase())) {
-                foundAsins.add(code);
-            } else {
-                notFoundAsins.push(code);
+        for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
+            // Check memory before chunk
+            if (memProcessor.isMemoryCritical()) {
+                console.log(`🧹 Memory critical - cleaning up...`);
+                await memProcessor.cleanup();
             }
-        }
-        console.log(`🔍 DEBUG: First 10 ASINs - Found: ${foundAsins.size}, Not Found: ${notFoundAsins.length}`, { notFound: notFoundAsins });
-
-        for (const rawData of rawResults) {
-            const code = this._extractAsinFromData(rawData);
-            if (!code) continue;
-
-            // Case-insensitive lookup
-            const asin = asinMap.get(code.toLowerCase());
-            if (!asin) continue;
-
-            // 1. Core Numeric Metrics
-            const price = this._cleanPrice(rawData.asp || rawData.price || rawData.Field2 || rawData.currentPrice);
-            const mrp = this._cleanPrice(rawData.mrp || rawData.listPrice || rawData.Field3);
-            const bsr = this._cleanBsr(rawData.sub_BSR || rawData.Field9 || rawData.BSR || rawData.bsr);
             
-            // 2. Title & Metadata
-            const title = (rawData.Title || rawData.title || asin.title || '').trim();
-            const soldBy = (rawData.sold_by || rawData.Field11 || asin.soldBy || '').trim();
-            const hasAplus = this._parseBoolean(rawData.A_plus || rawData.has_aplus || false);
-
-            // 3. Category Breadcrumb Parsing
-            let category = (rawData.category || asin.category || '').trim();
-            if (category.includes('<li')) {
-                const liMatch = category.match(/<li[^>]*>(?:<span[^>]*>)?(?:<a[^>]*>)?([^<]+)(?:<\/a>)?(?:<\/span>)?<\/li>$/i);
-                if (liMatch) category = liMatch[1].trim().replace(/^›\s*/, '').replace(/\s*›$/, '').trim();
-            }
-
-            // 4. Rating & Reviews
-            const rating = this._cleanRating(rawData.Rating || rawData.rating);
-            const reviewCount = this._cleanReviewCount(rawData.ReviewCount || rawData.rating || rawData.Reviews || '');
-
-            // 5. Image & Gallery Data
-            const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || asin.mainImageUrl;
-            let imagesCount = asin.imagesCount || 0;
-            if (rawData.image_count?.includes('<li')) {
-                imagesCount = (rawData.image_count.match(/<li/g) || []).length;
-            }
-
-            // 6. SubBSRs extraction
-            let subBSRs = asin.subBSRs || [];
-            const bsrString = rawData.sub_BSR || rawData.BSR || '';
-            if (bsrString && typeof bsrString === 'string') {
-                const parts = bsrString.split(/\s{2,}|\n/).map(p => p.trim()).filter(Boolean);
-                subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
-            }
-
-            // 7. Bullet Points (New in Bulk)
-            let bulletPointsText = [
-                rawData.bp_1, rawData.bp_2, rawData.bp_3, rawData.bp_4, rawData.bp_5, rawData.bullet_points_1, rawData.bullet_points
-            ].map(p => p?.trim()).filter(Boolean);
+            const chunk = rawResults.slice(chunkStart, chunkStart + CHUNK_SIZE);
+            console.log(`📦 Processing chunk ${Math.floor(chunkStart/CHUNK_SIZE) + 1} (${chunk.length} items)...`);
             
-            // If we have HTML in bullet_points, try a quick regex extract (no JSDOM for speed in bulk)
-            if (bulletPointsText.length <= 1 && rawData.bullet_points?.includes('<li')) {
-                const matches = rawData.bullet_points.match(/<li[^>]*>(?:<span[^>]*>)?([^<]+)(?:<\/span>)?<\/li>/gi);
-                if (matches) {
-                    bulletPointsText = matches.map(m => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+            // Extract ASIN codes for this chunk
+            const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r)).filter(Boolean);
+            if (asinCodesToFind.length === 0) continue;
+            
+            // Fetch ASINs for this chunk only (paginated)
+            let currentAsins = [];
+            for (let i = 0; i < asinCodesToFind.length; i += ASIN_BATCH) {
+                const codeBatch = asinCodesToFind.slice(i, i + ASIN_BATCH);
+                const docs = await Asin.find({
+                    seller: sellerId,
+                    $or: codeBatch.map(code => ({ asinCode: { $regex: new RegExp(`^${code}$`, 'i') } }))
+                }).lean();
+                currentAsins.push(...docs);
+                
+                if (memProcessor.isMemoryCritical()) {
+                    await memProcessor.cleanup();
                 }
             }
-            const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
-
-            // Prepare update object
-            const updateData = {
-                $set: {
-                    title: title || asin.title,
-                    titleLength: title.length || asin.titleLength,
-                    currentPrice: price > 0 ? price : asin.currentPrice,
-                    currentASP: price > 0 ? price : asin.currentASP,
-                    mrp: mrp > 0 ? mrp : asin.mrp,
-                    bsr: bsr > 0 ? bsr : asin.bsr,
-                    subBSRs: subBSRs,
-                    rating: rating > 0 ? rating : asin.rating,
-                    reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
-                    category: category || asin.category,
-                    mainImageUrl: mainImageUrl || asin.mainImageUrl,
-                    imageUrl: mainImageUrl || asin.mainImageUrl,
-                    imagesCount: imagesCount,
-                    hasAplus: hasAplus,
-                    bulletPoints: bulletCount,
-                    bulletPointsText: bulletPointsText,
-                    stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
-                    soldBy: soldBy,
-                    lastScraped: now,
-                    scrapeStatus: 'COMPLETED',
-                    status: 'Active'
-                },
-                $push: {
-                    history: { 
-                        $each: [{ date: now, price, bsr, rating }],
-                        $slice: -30 
+            
+            // Create map for lookups
+            const asinMap = new Map(currentAsins.map(a => [a.asinCode.toLowerCase(), a]));
+            
+            // Build bulk ops for this chunk
+            const bulkOps = [];
+            for (const rawData of chunk) {
+                const code = this._extractAsinFromData(rawData);
+                if (!code) continue;
+                
+                const asin = asinMap.get(code.toLowerCase());
+                if (!asin) continue;
+                
+                const price = this._cleanPrice(rawData.asp || rawData.price || rawData.Field2 || rawData.currentPrice);
+                const mrp = this._cleanPrice(rawData.mrp || rawData.listPrice || rawData.Field3);
+                const bsr = this._cleanBsr(rawData.sub_BSR || rawData.Field9 || rawData.BSR || rawData.bsr);
+                const title = (rawData.Title || rawData.title || asin.title || '').trim();
+                const soldBy = (rawData.sold_by || rawData.Field11 || asin.soldBy || '').trim();
+                const hasAplus = this._parseBoolean(rawData.A_plus || rawData.has_aplus || false);
+                let category = (rawData.category || asin.category || '').trim();
+                if (category.includes('<li')) {
+                    const liMatch = category.match(/<li[^>]*>(?:<span[^>]*>)?(?:<a[^>]*>)?([^<]+)(?:<\/a>)?(?:<\/span>)?<\/li>$/i);
+                    if (liMatch) category = liMatch[1].trim().replace(/^›\s*/, '').replace(/\s*›$/, '').trim();
+                }
+                const rating = this._cleanRating(rawData.Rating || rawData.rating);
+                const reviewCount = this._cleanReviewCount(rawData.ReviewCount || rawData.rating || rawData.Reviews || '');
+                const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || asin.mainImageUrl;
+                let imagesCount = asin.imagesCount || 0;
+                if (rawData.image_count?.includes('<li')) {
+                    imagesCount = (rawData.image_count.match(/<li/g) || []).length;
+                }
+                let subBSRs = asin.subBSRs || [];
+                const bsrString = rawData.sub_BSR || rawData.BSR || '';
+                if (bsrString && typeof bsrString === 'string') {
+                    const parts = bsrString.split(/\s{2,}|\n/).map(p => p.trim()).filter(Boolean);
+                    subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
+                }
+                let bulletPointsText = [
+                    rawData.bp_1, rawData.bp_2, rawData.bp_3, rawData.bp_4, rawData.bp_5, rawData.bullet_points_1, rawData.bullet_points
+                ].map(p => p?.trim()).filter(Boolean);
+                if (bulletPointsText.length <= 1 && rawData.bullet_points?.includes('<li')) {
+                    const matches = rawData.bullet_points.match(/<li[^>]*>(?:<span[^>]*>)?([^<]+)(?:<\/span>)?<\/li>/gi);
+                    if (matches) {
+                        bulletPointsText = matches.map(m => m.replace(/[^>]+>/g, '').trim()).filter(Boolean);
                     }
                 }
-            };
-
-            bulkOps.push({
-                updateOne: {
-                    filter: { _id: asin._id },
-                    update: updateData
-                }
-            });
-            updatedCount++;
-        }
-
-        console.log(`📝 DEBUG: Prepared ${bulkOps.length} bulk update operations`);
-        
-        const BATCH_SIZE = 100;
-        if (bulkOps.length > 0) {
-            try {
-                for (let i = 0; i < bulkOps.length; i += BATCH_SIZE) {
-                    const batch = bulkOps.slice(i, i + BATCH_SIZE);
-                    const result = await Asin.bulkWrite(batch);
-                    console.log(`📝 DEBUG: bulkWrite batch ${Math.floor(i/BATCH_SIZE) + 1}:`, {
-                        matchedCount: result.matchedCount,
-                        modifiedCount: result.modifiedCount,
-                        upsertedCount: result.upsertedCount
-                    });
-                }
-            } catch (bulkError) {
-                console.error(`❌ bulkWrite ERROR:`, bulkError.message);
+                const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
+                
+                const updateData = {
+                    $set: {
+                        title: title || asin.title,
+                        titleLength: title.length || asin.titleLength,
+                        currentPrice: price > 0 ? price : asin.currentPrice,
+                        currentASP: price > 0 ? price : asin.currentASP,
+                        mrp: mrp > 0 ? mrp : asin.mrp,
+                        bsr: bsr > 0 ? bsr : asin.bsr,
+                        subBSRs: subBSRs,
+                        rating: rating > 0 ? rating : asin.rating,
+                        reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
+                        category: category || asin.category,
+                        mainImageUrl: mainImageUrl || asin.mainImageUrl,
+                        imageUrl: mainImageUrl || asin.mainImageUrl,
+                        imagesCount: imagesCount,
+                        hasAplus: hasAplus,
+                        bulletPoints: bulletCount,
+                        bulletPointsText: bulletPointsText,
+                        stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
+                        soldBy: soldBy,
+                        lastScraped: now,
+                        scrapeStatus: 'COMPLETED',
+                        status: 'Active'
+                    },
+                    $push: {
+                        history: { $each: [{ date: now, price, bsr, rating }], $slice: -30 }
+                    }
+                };
+                
+                bulkOps.push({ updateOne: { filter: { _id: asin._id }, update: updateData } });
+                updatedCount++;
             }
+            
+            // Execute bulk write for chunk
+            if (bulkOps.length > 0) {
+                try {
+                    const BATCH = 50;
+                    for (let i = 0; i < bulkOps.length; i += BATCH) {
+                        const batch = bulkOps.slice(i, i + BATCH);
+                        await Asin.bulkWrite(batch);
+                    }
+                } catch (bulkError) {
+                    console.error(`❌ bulkWrite chunk error:`, bulkError.message);
+                }
+            }
+            
+            // Clear references for GC
+            asinMap.clear();
+            clearArray(bulkOps);
+            
+            console.log(`📊 Memory after chunk: ${memProcessor.getMemoryStats().heapUsed}`);
         }
 
-        console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated via bulkWrite.`);
+console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated`);
         return updatedCount;
     }
 
