@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://retailops.work.gd/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Auth helper functions
 const getAuthHeader = () => {
@@ -668,7 +668,7 @@ export const asinApi = {
 };
 
 
-const REVENUE_API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/revenue`;
+const REVENUE_API_BASE = `${import.meta.env.VITE_API_URL || '/api'}/revenue`;
 
 export const dashboardApi = {
   getSummary: async (params = {}) => {

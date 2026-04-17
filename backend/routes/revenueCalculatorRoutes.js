@@ -12,8 +12,12 @@ const {
   RevenueUser
 } = require('../models/RevenueCalculatorModel');
 const { calculateProfits } = require('../services/feeCalculationEngine');
+const authController = require('../controllers/authController');
 
 const { authenticate, requirePermission } = require('../middleware/auth');
+
+// Auth Proxy for Revenue Calculator (used by revenueApi in frontend)
+router.post('/auth/login', authController.login);
 
 // --- Fee Management Routes ---
 // Get all fee structures by type
