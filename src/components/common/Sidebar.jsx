@@ -154,7 +154,7 @@ const Sidebar = () => {
                     <Zap size={13} fill="white" className="text-white" />
                 </div>
                 {!collapsed && (
-                    <span className="logo-text">GMS Report</span>
+                    <span className="logo-text">RetailOps</span>
                 )}
                 <button className="sidebar-toggle" onClick={toggle}>
                     <ChevronLeft size={12} style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }} />
