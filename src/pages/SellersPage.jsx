@@ -556,15 +556,15 @@ const SellersPage = () => {
                   <LayoutGrid size={16} className="text-zinc-500" />
                   <span className="fw-bold text-zinc-700">Octoparse Pool ({poolStats.available})</span>
                 </button>
-                  <button
-                    className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3"
-                    onClick={handleIngestAll}
-                    disabled={loading}
-                    title="Force check all Octoparse tasks for results"
-                  >
-                    <RefreshCw size={16} className={`text-primary ${loading ? 'spin' : ''}`} />
-                    <span className="fw-bold text-zinc-700">{loading ? 'Fetching...' : 'Fetch Latest Data'}</span>
-                  </button>
+                <button
+                  className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3"
+                  onClick={handleIngestAll}
+                  disabled={loading}
+                  title="Force check all Octoparse tasks for results"
+                >
+                  <RefreshCw size={16} className={`text-primary ${loading ? 'spin' : ''}`} />
+                  <span className="fw-bold text-zinc-700">{loading ? 'Fetching...' : 'Fetch Latest Data'}</span>
+                </button>
               </>
             )}
             <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
@@ -693,8 +693,8 @@ const SellersPage = () => {
                         <div className="fw-bold text-zinc-900" style={{ fontSize: '13px' }}>{seller.name}</div>
                         <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
                           <span className="font-monospace opacity-75">{seller.sellerId}</span>
-                          <span className="opacity-30">•</span>
-                          <span className="fw-medium text-zinc-400">{seller.plan}</span>
+                          {/* <span className="opacity-30">•</span>
+                          <span className="fw-medium text-zinc-400">{seller.plan}</span> */}
                         </div>
                       </div>
                     </div>
@@ -713,10 +713,10 @@ const SellersPage = () => {
                               className="rounded-circle border border-white shadow-sm d-flex align-items-center justify-content-center bg-zinc-100 text-zinc-900 fw-bold"
                               style={{ width: '22px', height: '22px', flexShrink: 0, fontSize: '9px' }}
                             >
-                              {m.firstName.charAt(0)}
+                              {m.firstName.charAt(0)}{m.lastName.charAt(0)}
                             </div>
                             <span className="text-zinc-700 fw-medium" style={{ fontSize: '11px' }}>
-                              {m.firstName} {m.lastName[0]}.
+                              {m.firstName} {m.lastName}
                             </span>
                           </div>
                         ))
@@ -726,12 +726,12 @@ const SellersPage = () => {
                     </div>
                   )
                 },
-                {
-                  label: 'Health / Limit',
-                  key: 'health',
-                  width: '10%',
-                  render: (_, seller) => getHealthIndicator(seller)
-                },
+                // {
+                //   label: 'Health / Limit',
+                //   key: 'health',
+                //   width: '10%',
+                //   render: (_, seller) => getHealthIndicator(seller)
+                // },
                 {
                   label: 'Inventory',
                   key: 'totalAsins',
@@ -1263,7 +1263,7 @@ const ImportSellerModal = ({ onClose, onImport }) => {
                     <button className="btn btn-sm btn-zinc-800 text-white border-0 px-3 rounded-pill smallest fw-bold" onClick={() => setFileStats(null)}>Change</button>
                   )}
                 </div>
-                
+
                 {isImporting && (
                   <div className="pt-2">
                     <ProgressBar value={progress} label="Importing Stores..." hint color="success" size="sm" />
@@ -1340,7 +1340,7 @@ const SellerAsinsModal = ({
         const jsonData = JSON.parse(event.target.result);
         setIsSubmitting(true);
         setSubmitProgress(10);
-        
+
         pInterval = setInterval(() => {
           setSubmitProgress(prev => Math.min(prev + 5, 95));
         }, 300);
@@ -1365,7 +1365,7 @@ const SellerAsinsModal = ({
         if (pInterval) clearInterval(pInterval);
         setIsSubmitting(false);
         setSubmitProgress(0);
-        e.target.value = ''; 
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -1458,7 +1458,7 @@ const SellerAsinsModal = ({
                 <ProgressBar value={submitProgress} label="Processing operation..." size="xs" color="primary" />
               </div>
             )}
-            
+
             <div className="px-1 py-4 flex-grow-1 overflow-auto">
               <div className="px-3">
                 <div className="d-flex justify-content-between align-items-center mb-4 px-1">
@@ -1477,8 +1477,8 @@ const SellerAsinsModal = ({
                       <FileJson size={14} className="text-zinc-600" />
                       <span className="fw-bold">Bulk JSON Sync</span>
                     </button>
-                    <button 
-                      className="btn btn-zinc-900 btn-sm shadow-sm d-flex align-items-center gap-2 px-3 rounded-3" 
+                    <button
+                      className="btn btn-zinc-900 btn-sm shadow-sm d-flex align-items-center gap-2 px-3 rounded-3"
                       onClick={() => setShowAddAsinModal(true)}
                       style={{ height: '34px', fontSize: '12px', background: '#18181B', color: '#fff' }}
                     >
@@ -1569,7 +1569,7 @@ const SellerAsinsModal = ({
 
                 {pagination.page < pagination.totalPages && (
                   <div className="py-4 d-flex justify-content-center">
-                    <button 
+                    <button
                       className="btn btn-white border-zinc-200 px-4 rounded-pill fw-bold smallest text-zinc-600 shadow-sm"
                       onClick={onLoadMore}
                       disabled={loading}
