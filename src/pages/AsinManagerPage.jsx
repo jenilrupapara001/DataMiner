@@ -1089,7 +1089,7 @@ const AsinManagerPage = () => {
               <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
                 INVENTORY & PERFORMANCE LEDGER
                 <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 10, background: '#eff6ff', color: '#2563eb', fontSize: 10 }}>
-                  {pagination.total} SKUs
+                  {pagination.total} ASINs
                 </span>
               </span>
             </div>
