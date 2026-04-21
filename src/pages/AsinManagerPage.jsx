@@ -39,7 +39,8 @@ import {
   LayoutGrid,
   X,
   AlertCircle,
-  Clock
+  Clock,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -1456,7 +1457,7 @@ const AsinManagerPage = () => {
                       style={{ cursor: 'pointer', width: '14px', height: '14px' }}
                     />
                   </th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '90px', left: '40px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>ASIN ID</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px', left: '40px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>ASIN ID</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SELLER / BRAND</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '90px' }}>SKU</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '220px' }}>PRODUCT TITLE</th>
@@ -1551,13 +1552,34 @@ const AsinManagerPage = () => {
                       color: '#2563eb',
                       cursor: 'pointer',
                       position: 'sticky',
+                      width: '110px',
                       left: '40px',
                       background: idx % 2 === 0 ? '#fff' : '#f9fafb',
                       zIndex: 5,
                       borderRight: '2px solid #e5e7eb'
                     }}
                       onClick={() => handleViewAsin(asin)}>
-                      {asin.asinCode}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span>{asin.asinCode}</span>
+                        <a 
+                          href={`https://www.amazon.in/dp/${asin.asinCode}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          title="Open on Amazon"
+                          style={{ 
+                            color: '#9ca3af', 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            marginLeft: '4px',
+                            transition: 'color 0.2s'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                          onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
+                        >
+                          <ExternalLink size={13} />
+                        </a>
+                      </div>
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
