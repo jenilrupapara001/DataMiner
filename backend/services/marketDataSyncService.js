@@ -1730,7 +1730,7 @@ class MarketDataSyncService {
                                  ? true
                                  : this._parseBoolean(rawAplusBulk || false);
                                  
-                const availabilityStatus = rawData.status || rawData.availabilityStatus || rawData.availability || asin.availabilityStatus || 'Available';
+                const availabilityStatus = rawData.status || rawData.availabilityStatus || rawData.availability || rawData.In_Stock || asin.availabilityStatus || 'Available';
                 
                 let aplusAbsentSince = asin.aplusAbsentSince;
                 let aplusPresentSince = asin.aplusPresentSince;
@@ -1749,17 +1749,28 @@ class MarketDataSyncService {
                         category = matches.map(m => m.replace(/<[^>]+>/g, '').replace(/^›\s*/, '').replace(/\s*›$/, '').trim()).filter(Boolean).join(' › ');
                     }
                 }
-                const rating = this._cleanRating(rawData.Rating || rawData.rating);
-                // Important: parse string correctly to drop "out of 5" before evaluating numbers
-                const parsedReviewStr = rawData.Review_Count || rawData.ReviewCount || rawData.rating || rawData.Reviews || '';
+                const ratingData = this._cleanRating(rawData.RT || rawData.Rating || rawData.rating || '');
+                const rating = ratingData.value;
+                
+                // Priority: check review_count (lowercase), then Review_Count, then ReviewCount, then fallback to noise-cleaning rating string
+                const parsedReviewStr = rawData.review_count || rawData.Review_Count || rawData.ReviewCount || rawData.rating || rawData.Reviews || rawData.RT || '';
                 const reviewCount = this._cleanReviewCount(parsedReviewStr) || asin.reviewCount;
                 
+                // Use extracted percentages if available, otherwise use raw fields
+                const percentages = ratingData.percentages || {
+                    '5': parseFloat(rawData['5_star'] || rawData.five_star || 0),
+                    '4': parseFloat(rawData['4_star'] || rawData.four_star || 0),
+                    '3': parseFloat(rawData['3_star'] || rawData.three_star || 0),
+                    '2': parseFloat(rawData['2_star'] || rawData.two_star || 0),
+                    '1': parseFloat(rawData['1_star'] || rawData.one_star || 0)
+                };
+
                 const ratingBreakdown = {
-                    fiveStar: Math.round((parseFloat(rawData['5_star'] || rawData.five_star || 0) / 100) * reviewCount) || asin.ratingBreakdown?.fiveStar || 0,
-                    fourStar: Math.round((parseFloat(rawData['4_star'] || rawData.four_star || 0) / 100) * reviewCount) || asin.ratingBreakdown?.fourStar || 0,
-                    threeStar: Math.round((parseFloat(rawData['3_star'] || rawData.three_star || 0) / 100) * reviewCount) || asin.ratingBreakdown?.threeStar || 0,
-                    twoStar: Math.round((parseFloat(rawData['2_star'] || rawData.two_star || 0) / 100) * reviewCount) || asin.ratingBreakdown?.twoStar || 0,
-                    oneStar: Math.round((parseFloat(rawData['1_star'] || rawData.one_star || 0) / 100) * reviewCount) || asin.ratingBreakdown?.oneStar || 0,
+                    fiveStar: Math.round((percentages['5'] / 100) * reviewCount) || asin.ratingBreakdown?.fiveStar || 0,
+                    fourStar: Math.round((percentages['4'] / 100) * reviewCount) || asin.ratingBreakdown?.fourStar || 0,
+                    threeStar: Math.round((percentages['3'] / 100) * reviewCount) || asin.ratingBreakdown?.threeStar || 0,
+                    twoStar: Math.round((percentages['2'] / 100) * reviewCount) || asin.ratingBreakdown?.twoStar || 0,
+                    oneStar: Math.round((percentages['1'] / 100) * reviewCount) || asin.ratingBreakdown?.oneStar || 0,
                 };
 
                 const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || asin.mainImageUrl;
@@ -1783,7 +1794,8 @@ class MarketDataSyncService {
                     }
                 }
                 const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
-                const dealBadge = (rawData.deal_badge && rawData.deal_badge !== 'null' && rawData.deal_badge !== '') ? rawData.deal_badge.trim() : asin.dealBadge || 'No deal found';
+                const rawDeal = rawData.deal_badge || rawData.dealBadge || rawData.deal || '';
+                const dealBadge = this._cleanDealBadge(rawDeal) || asin.dealBadge || 'No deal found';
                 
                 const updateData = {
                     $set: {
@@ -1871,32 +1883,92 @@ console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated`);
     }
 
     _cleanRating(str) {
-        if (!str) return 0;
+        if (!str) return { value: 0, percentages: null };
         const s = str.toString().trim();
         
-        // Match numbers like 4.4, 4,4, 4 anywhere in the string
+        // Always try to extract percentages for the breakdown, regardless of primary rating format
+        const percentages = this._extractBreakdown(s);
+        
+        // Priority 1: "X.X out of 5" (Amazon's standard format)
+        const outOfMatch = s.match(/([0-5](?:[.,]\d+)?)\s*out\s*of\s*5/i);
+        if (outOfMatch) {
+            const val = parseFloat(outOfMatch[1].replace(',', '.'));
+            return { value: isNaN(val) ? 0 : val, percentages };
+        }
+
+        // Priority 2: Use weighted average from messy percentage stack
+        if (percentages) {
+            // Weighted average calculation
+            const weighted = (5 * percentages['5'] + 4 * percentages['4'] + 3 * percentages['3'] + 2 * percentages['2'] + 1 * percentages['1']) / 100;
+            return { value: Math.round(weighted * 10) / 10, percentages };
+        }
+
+        // Priority 3: Leading number (Amazon's messy format usually starts with "5 star" or "4.5 star")
+        const specificMatch = s.match(/^([0-4](?:[.,]\d+)?)\s*star/i);
+        if (specificMatch) return { value: parseFloat(specificMatch[1].replace(',', '.')), percentages };
+
+        // Fallback: Match any number like 4.4, 4,4, 4 anywhere in the string
         const matches = s.match(/([0-5](?:[.,]\d+)?)/);
-        if (!matches) return 0;
+        if (!matches) return { value: 0, percentages };
 
         let rating = parseFloat(matches[1].replace(',', '.'));
-        
-        if (isNaN(rating)) return 0;
-        // Cap and round to 1 decimal place
+        if (isNaN(rating)) return { value: 0, percentages };
         rating = Math.min(5, Math.max(0, rating));
-        return Math.round(rating * 10) / 10;
+        return { value: Math.round(rating * 10) / 10, percentages };
+    }
+
+    _extractBreakdown(str) {
+        if (!str) return null;
+        // Look for multiple percentages, often found in Amazon's messy feedback strings
+        // order is always 5, 4, 3, 2, 1 star
+        const matches = str.match(/(\d+)%/g);
+        if (matches && matches.length >= 5) {
+            // If there's more than 5, we look for the cluster that sums closest to 100
+            // but usually the first 5 in the rating section are the ones.
+            return {
+                '5': parseFloat(matches[0]) || 0,
+                '4': parseFloat(matches[1]) || 0,
+                '3': parseFloat(matches[2]) || 0,
+                '2': parseFloat(matches[3]) || 0,
+                '1': parseFloat(matches[4]) || 0
+            };
+        }
+        return null;
     }
 
     _cleanReviewCount(str) {
         if (!str) return 0;
-        const s = str.toString().trim();
+        let s = str.toString().trim();
         
-        // Priority 1: "123 global ratings/reviews"
+        // Remove common Amazon rating noise that often smashes into the review count
+        // e.g. "53.8 out of 5424 global ratings" -> "424 global ratings"
+        s = s.replace(/out\s+of\s+[0-5](?:\.[0-9])?/gi, '');
+        s = s.replace(/[0-5]\s*stars?/gi, '');
+        
+        // Priority 1: Parenthesized numbers with commas (e.g. "(2,441)")
+        const parenMatch = s.match(/\(([\d,]+)\)/);
+        if (parenMatch) {
+            const val = parseInt(parenMatch[1].replace(/,/g, ''));
+            if (val > 0) return val;
+        }
+
+        // Priority 2: "123 global ratings/reviews"
         const globalMatch = s.match(/([\d,]+)\s*(?:global\s*ratings?|reviews?)/i);
         if (globalMatch) return parseInt(globalMatch[1].replace(/,/g, '')) || 0;
 
-        // Priority 2: Numbers in parentheses (e.g. "(22)")
-        const parenMatch = s.match(/\(([\d,]+)\)/);
-        if (parenMatch) return parseInt(parenMatch[1].replace(/,/g, '')) || 0;
+        // Priority 3: Decimal numbers in parentheses (e.g. "(2.5K)")
+        const kMatch = s.match(/\(([\d.]+)\s*k\)/i);
+        if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1000);
+
+        // Priority 4: Look for any number > 10 that isn't a percentage
+        const allNumericMatches = s.match(/\b[\d,]+\b(?!\s*%)/g);
+        if (allNumericMatches) {
+            for (const m of allNumericMatches) {
+                const val = parseInt(m.replace(/,/g, ''));
+                if (val > 10 && val < 50000000) return val;
+                if (val > 0 && !s.toLowerCase().includes('star')) return val;
+            }
+        }
         
         // Fallback: If still not found, try to clean the string of "X out of 5" noise
         const noiseFree = s
@@ -1906,11 +1978,31 @@ console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated`);
         const fallbackMatch = noiseFree.match(/[\d,]+/);
         if (fallbackMatch) {
             const val = parseInt(fallbackMatch[0].replace(/,/g, ''));
-            // Safety: review counts shouldn't be suspiciously large
             if (val > 0 && val < 10000000) return val;
         }
 
         return 0;
+    }
+
+    _cleanDealBadge(str) {
+        if (!str || str === 'null' || str === '') return '';
+        const s = str.toString().toLowerCase();
+        
+        // Amazon specific deals
+        if (s.includes('limited time deal')) return 'Limited Time Deal';
+        if (s.includes('deal of the day')) return 'Deal of the Day';
+        if (s.includes('lightning deal')) return 'Lightning Deal';
+        if (s.includes('prime deal')) return 'Prime Deal';
+        if (s.includes('great indian festival')) return 'GIF Deal';
+        if (s.includes('coupon')) return 'Coupon Available';
+        
+        // Extract first significant words if it's some other badge but not the messy duration text
+        const cleaned = str.trim()
+            .replace(/\s+/g, ' ')
+            .split(/NO_OF/)[0] // Stop at Octoparse placeholders
+            .trim();
+            
+        return cleaned.length > 30 ? cleaned.substring(0, 27) + '...' : cleaned;
     }
 
     _parseBoolean(val) {

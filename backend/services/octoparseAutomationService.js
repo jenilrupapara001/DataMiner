@@ -602,6 +602,20 @@ class OctoparseAutomationService {
             const soldBy = item.sold_by || item.Field11 || item.soldBy || '';
             if (soldBy) updateData.soldBy = soldBy;
 
+            // Second ASP mapping
+            const secondAsp = item.second_asp || item.secondAsp || '';
+            if (secondAsp) {
+                const cleanSecondAsp = secondAsp.toString().replace(/[₹,\s]/g, '');
+                const secondPriceNum = parseFloat(cleanSecondAsp);
+                if (secondPriceNum > 0 && secondPriceNum < 1000000) {
+                    updateData.secondAsp = secondPriceNum;
+                }
+            }
+
+            // Second Sold By mapping
+            const soldBySec = item.Sold_by_sec || item.soldBySec || '';
+            if (soldBySec) updateData.soldBySec = soldBySec;
+
             // Image count - count <li> tags in image_count field
             const imageCountRaw = item.image_count || item.Field6 || '';
             if (imageCountRaw) {
@@ -688,6 +702,19 @@ class OctoparseAutomationService {
                 if (aPlusRaw) {
                     updateData.hasAplus = aPlusRaw.toString().toLowerCase().includes('yes') || 
                                          aPlusRaw.toString().length > 100; // HTML content
+                }
+
+                // ASP Difference Business Logic (Difference with competitor)
+                if (updateData.currentPrice || asin.currentPrice) {
+                    const primaryPrice = updateData.currentPrice || asin.currentPrice;
+                    if (updateData.secondAsp && updateData.secondAsp > 0) {
+                        // Diff is the difference between primary price and second ASP. 
+                        // Typically: Competitor Price - Our Price. 
+                        // Let's just track absolute difference, or CompetitorASP - primary ASP securely.
+                        updateData.aspDifference = updateData.secondAsp - primaryPrice;
+                    } else {
+                        updateData.aspDifference = 0;
+                    }
                 }
 
                 // Apply updates to the document to calculate LQS

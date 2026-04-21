@@ -42,6 +42,9 @@ const asinSchema = new mongoose.Schema({
   mrp: { type: Number, default: 0 },
   category: { type: String },
   soldBy: { type: String, default: '' },
+  secondAsp: { type: Number, default: 0 },
+  soldBySec: { type: String, default: '' },
+  aspDifference: { type: Number, default: 0 },
   imageUrl: { type: String }, // Backwards compatibility
   mainImageUrl: { type: String }, // Modern mapping
   images: [{ type: String }],

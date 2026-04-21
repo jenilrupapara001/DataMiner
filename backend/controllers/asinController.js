@@ -85,7 +85,7 @@ exports.getAsins = async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
     const asins = await Asin.find(filter)
-      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs subBsr rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails availabilityStatus aplusAbsentSince aplusPresentSince')
+      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs subBsr rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy secondAsp soldBySec aspDifference history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails availabilityStatus aplusAbsentSince aplusPresentSince')
       .populate('seller', 'name marketplace')
       .sort(sortOptions)
       .skip((page - 1) * limit)
@@ -155,7 +155,7 @@ exports.getAllAsinsWithHistory = async (req, res) => {
     if (req.query.brand) filter.brand = req.query.brand;
 
     const asins = await Asin.find(filter)
-      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs subBsr rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails availabilityStatus aplusAbsentSince aplusPresentSince')
+      .select('asinCode title sku currentPrice uploadedPrice bsr subBSRs subBsr rating reviewCount ratingBreakdown bulletPointsText bulletPoints imageUrl status category soldBy secondAsp soldBySec aspDifference history weekHistory lqs buyBoxWin hasAplus imagesCount descLength lastScraped scrapeStatus dealDetails availabilityStatus aplusAbsentSince aplusPresentSince')
       .populate('seller', 'name marketplace')
       .sort({ status: 1, title: -1, createdAt: -1 })
       .lean(); // Use lean for faster performance

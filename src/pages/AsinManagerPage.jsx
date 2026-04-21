@@ -841,20 +841,38 @@ const AsinManagerPage = () => {
   };
 
   const getBuyBoxBadge = (asin) => {
-    const { buyBoxWin, status, soldBy } = asin;
+    const { buyBoxWin, status, soldBy, secondAsp, currentPrice } = asin;
     if (status === 'Scraping') return <span style={{ color: '#9ca3af' }}>-</span>;
 
+    const formatRupee = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
+
     if (buyBoxWin) {
+      const diff = secondAsp > 0 ? (secondAsp - currentPrice) : null;
+      let alertMsg = null;
+      if (diff !== null && diff <= 5 && diff >= -50) {
+          alertMsg = "Close competition. May lose Buy Box.";
+      }
       return (
-        <span
-          className="badge"
-          style={{ backgroundColor: '#059669', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
-        >
-          Won
-        </span>
+        <div className="d-flex flex-column align-items-center">
+          <div className="d-flex align-items-center gap-1">
+            <span
+              className="badge mb-1"
+              style={{ backgroundColor: '#059669', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
+            >
+              Won
+            </span>
+            {alertMsg && <AlertTriangle size={14} className="text-danger mb-1" title={alertMsg} />}
+          </div>
+          {diff !== null && (
+            <div className={`smallest fw-bold ${alertMsg ? 'text-danger' : 'text-zinc-500'}`} style={{ fontSize: '9px' }} title="Competitor vs Our ASP Diff">
+               Diff: {diff > 0 ? '+' : ''}{formatRupee(diff)}
+            </div>
+          )}
+        </div>
       );
     }
 
+    const diff = secondAsp > 0 ? (secondAsp - currentPrice) : null;
     return (
       <div className="d-flex flex-column align-items-center">
         <span
@@ -863,7 +881,14 @@ const AsinManagerPage = () => {
         >
           Lost
         </span>
-        <span className="smallest text-zinc-500 fw-bold" style={{ fontSize: '9px', lineHeight: 1 }}>{soldBy || 'N/A'}</span>
+        <span className="smallest text-zinc-500 fw-bold text-center" style={{ fontSize: '9px', lineHeight: 1.2, maxWidth: '100px', whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis' }} title={soldBy}>
+          {soldBy || 'N/A'}
+        </span>
+        {diff !== null && (
+          <div className="smallest mt-1 text-danger fw-bold d-flex gap-1 align-items-center" style={{ fontSize: '9px' }} title="Our loss vs Winner ASP Diff">
+            Diff: {formatRupee(diff)}
+          </div>
+        )}
       </div>
     );
   };
@@ -1632,8 +1657,31 @@ const AsinManagerPage = () => {
                         {asin.availabilityStatus || 'Available'}
                       </span>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', fontWeight: 600, color: asin.dealBadge !== 'No deal found' ? '#dc2626' : '#9ca3af' }}>
-                      {asin.dealBadge || '-'}
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
+                        <span 
+                          className="badge" 
+                          style={{ 
+                            backgroundColor: '#fef2f2', 
+                            color: '#dc2626', 
+                            border: '1px solid #fecaca',
+                            fontWeight: 700, 
+                            fontSize: '0.65rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            display: 'inline-block',
+                            maxWidth: '75px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title={asin.dealBadge}
+                        >
+                          {asin.dealBadge}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>
+                      )}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>{getBuyBoxBadge(asin)}</td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>
