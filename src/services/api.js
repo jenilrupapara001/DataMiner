@@ -312,6 +312,23 @@ export const marketSyncApi = {
       throw new Error(error.error || 'Failed to trigger bulk ASIN injection');
     }
     return res.json();
+  },
+  
+  uploadOctoparseJson: async (file, sellerId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sellerId', sellerId);
+    
+    const res = await fetch(`${API_BASE}/upload/octoparse`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || error.message || 'Failed to upload Octoparse JSON');
+    }
+    return res.json();
   }
 };
 

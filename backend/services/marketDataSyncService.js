@@ -1470,18 +1470,16 @@ class MarketDataSyncService {
             const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || rawData.Field5 || asin.imageUrl;
 
             // 6. Rating & Reviews
-            let rating = 0;
-            const ratingStr = rawData.Rating || rawData.Field7 || '';
-            if (ratingStr) {
-                const rMatch = ratingStr.match(/([\d.]+)\s+out of 5/i);
-                if (rMatch) rating = parseFloat(rMatch[1]);
-            }
-            
-            // Clean review count carefully
-            let reviewCount = this._cleanReviewCount(rawData.review_count || rawData.Review_Count || rawData.Rating_Count || ratingStr);
-            
-            // Calculate rating breakdown absolute values from percentages via robust Regex mapping
+            // Strictly use avg_rating field – no other parsing methods
+            let rating = parseFloat(rawData.avg_rating);
+            if (isNaN(rating)) rating = 0;
+
+            // Clean review count (keep existing logic, as it doesn't affect rating value)
+            let reviewCount = this._cleanReviewCount(rawData.review_count || rawData.Review_Count || rawData.Rating_Count || rawData.rating || '');
+
+            // Rating breakdown percentages – keep as is
             let p5 = 0, p4 = 0, p3 = 0, p2 = 0, p1 = 0;
+            const ratingStr = rawData.Rating || rawData.Field7 || '';
             if (ratingStr) {
                 // Extracts the first continuous 5 percentages out of the html histogram string
                 const percMatch = ratingStr.match(/(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%/);
@@ -1570,6 +1568,8 @@ class MarketDataSyncService {
                 mainImageUrl: mainImageUrl || asin.mainImageUrl,
                 imageUrl: mainImageUrl || asin.imageUrl, // Compatibility
                 soldBy,
+                secondAsp,
+                soldBySec,
                 buyBoxWin: isBuyBoxWinner(soldBy),
                 buyBoxSellerId: soldBy || asin.buyBoxSellerId,
                 bulletPoints,
@@ -1724,6 +1724,8 @@ class MarketDataSyncService {
                 const bsr = this._cleanBsr(rawData.sub_BSR || rawData.Field9 || rawData.BSR || rawData.bsr);
                 const title = (rawData.Title || rawData.title || asin.title || '').trim();
                 const soldBy = (rawData.sold_by || rawData.Field11 || asin.soldBy || '').trim();
+                const secondAsp = this._cleanPrice(rawData.second_asp || '') || asin.secondAsp;
+                const soldBySec = (rawData.Sold_by_sec || asin.soldBySec || '').trim();
                 
                 const rawAplusBulk = rawData.A_plus || rawData.has_aplus || '';
                 const hasAplus = (typeof rawAplusBulk === 'string' && rawAplusBulk.trim().length > 20)
@@ -1749,15 +1751,17 @@ class MarketDataSyncService {
                         category = matches.map(m => m.replace(/<[^>]+>/g, '').replace(/^›\s*/, '').replace(/\s*›$/, '').trim()).filter(Boolean).join(' › ');
                     }
                 }
-                const ratingData = this._cleanRating(rawData.RT || rawData.Rating || rawData.rating || '');
-                const rating = ratingData.value;
+                // Strictly use avg_rating field – no other parsing methods
+                let rating = parseFloat(rawData.avg_rating);
+                if (isNaN(rating)) rating = 0;
                 
                 // Priority: check review_count (lowercase), then Review_Count, then ReviewCount, then fallback to noise-cleaning rating string
                 const parsedReviewStr = rawData.review_count || rawData.Review_Count || rawData.ReviewCount || rawData.rating || rawData.Reviews || rawData.RT || '';
                 const reviewCount = this._cleanReviewCount(parsedReviewStr) || asin.reviewCount;
                 
-                // Use extracted percentages if available, otherwise use raw fields
-                const percentages = ratingData.percentages || {
+                // Extract breakdown independently if ratingData is gone
+                const breakdownStr = rawData.Rating || rawData.RT || rawData.rating || '';
+                const percentages = this._extractBreakdown(breakdownStr) || {
                     '5': parseFloat(rawData['5_star'] || rawData.five_star || 0),
                     '4': parseFloat(rawData['4_star'] || rawData.four_star || 0),
                     '3': parseFloat(rawData['3_star'] || rawData.three_star || 0),
@@ -1822,6 +1826,8 @@ class MarketDataSyncService {
                         bulletPointsText: bulletPointsText,
                         stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
                         soldBy: soldBy,
+                        secondAsp: secondAsp,
+                        soldBySec: soldBySec,
                         buyBoxWin: isBuyBoxWinner(soldBy),
                         lastScraped: now,
                         scrapeStatus: 'COMPLETED',
@@ -1882,6 +1888,9 @@ console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated`);
         return match ? parseInt(match[1]) : 0;
     }
 
+    /**
+     * @deprecated Strictly use avg_rating field from JSON instead.
+     */
     _cleanRating(str) {
         if (!str) return { value: 0, percentages: null };
         const s = str.toString().trim();
@@ -2161,6 +2170,34 @@ console.log(`✅ Bulk Sync Finished: ${updatedCount} ASINs updated`);
         } catch (error) {
             console.error('❌ Resolve Task ID Error:', error.message);
             return null;
+        }
+    }
+    /**
+     * Process manually uploaded Octoparse JSON data.
+     * This is a wrapper around processBatchResults for manual file uploads.
+     */
+    async processManualJsonSync(sellerId, jsonData) {
+        if (!jsonData || !Array.isArray(jsonData)) {
+            throw new Error('Invalid JSON data format. Expected an array of records.');
+        }
+
+        console.log(`📂 Manual Octoparse JSON Sync started for seller ${sellerId} with ${jsonData.length} records.`);
+        
+        try {
+            // Re-use the robust batch processing logic
+            const updatedCount = await this.processBatchResults(sellerId, jsonData);
+            
+            // Log completion
+            console.log(`✅ Manual Octoparse JSON Sync completed. Updated ${updatedCount} ASINs.`);
+            
+            return {
+                message: `Successfully processed ${jsonData.length} records and updated ${updatedCount} ASINs.`,
+                updatedCount,
+                totalProcessed: jsonData.length
+            };
+        } catch (error) {
+            console.error('❌ Manual JSON Sync Error:', error.message);
+            throw new Error('Failed to process Octoparse JSON data: ' + error.message);
         }
     }
 }

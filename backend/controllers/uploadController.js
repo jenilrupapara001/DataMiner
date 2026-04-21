@@ -4,6 +4,7 @@ const path = require("path");
 const Monthly = require("../models/MonthlyPerformance");
 const Master = require("../models/Master");
 const AdsPerformance = require("../models/AdsPerformance");
+const marketDataSyncService = require("../services/marketDataSyncService");
 
 exports.uploadMonthlyData = async (req, res) => {
   try {
@@ -355,7 +356,59 @@ exports.uploadAdsData = async (req, res) => {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(400).json({ error: err.message || "Upload failed" });
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * Handle manual Octoparse JSON data upload.
+ * Maps Octoparse export data to dashboard ASIN metrics.
+ */
+exports.uploadOctoparseData = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const sellerId = req.body.sellerId;
+    if (!sellerId) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ success: false, error: 'Seller ID is required for sync' });
+    }
+
+    const filePath = req.file.path;
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    let jsonData;
+
+    try {
+      jsonData = JSON.parse(fileContent);
+    } catch (parseError) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(400).json({ success: false, error: 'Invalid JSON file format' });
+    }
+
+    // Process the data via MarketDataSyncService
+    const result = await marketDataSyncService.processManualJsonSync(sellerId, jsonData);
+
+    // Clean up uploaded file
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    res.json({
+      success: true,
+      message: result.message,
+      data: {
+        updatedCount: result.updatedCount,
+        totalProcessed: result.totalProcessed
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Octoparse Upload Error:', error.message);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process Octoparse data: ' + error.message 
+    });
   }
 };
 

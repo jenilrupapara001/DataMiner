@@ -13,13 +13,14 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel',
     'text/csv',
-    'application/csv'
+    'application/csv',
+    'application/json'
   ];
   
-  if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.csv')) {
+  if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.csv') || file.originalname.endsWith('.json')) {
     cb(null, true);
   } else {
-    cb(new Error('Only Excel (.xlsx, .xls) and CSV files are accepted'), false);
+    cb(new Error('Only Excel (.xlsx, .xls), CSV, and JSON files are accepted'), false);
   }
 };
 
@@ -35,6 +36,7 @@ const upload = multer({
 
 router.post('/upload/upload-monthly', upload.single('file'), uploadController.uploadMonthlyData);
 router.post('/upload/upload-ads', upload.single('file'), uploadController.uploadAdsData);
+router.post('/upload/octoparse', upload.single('file'), uploadController.uploadOctoparseData);
 router.get('/upload/upload-stats', uploadController.getUploadStats);
 
 module.exports = router;

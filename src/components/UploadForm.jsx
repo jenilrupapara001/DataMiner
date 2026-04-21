@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { sellerApi, marketSyncApi } from '../services/api';
 import '../App.css';
 
 const UploadForm = () => {
@@ -8,16 +8,46 @@ const UploadForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [errors, setErrors] = useState([]);
+  const [uploadType, setUploadType] = useState('monthly'); // 'monthly' or 'octoparse'
+  const [sellers, setSellers] = useState([]);
+  const [selectedSeller, setSelectedSeller] = useState('');
+  const [isFetchingSellers, setIsFetchingSellers] = useState(false);
+
+  useEffect(() => {
+    if (uploadType === 'octoparse') {
+      fetchSellers();
+    }
+  }, [uploadType]);
+
+  const fetchSellers = async () => {
+    setIsFetchingSellers(true);
+    try {
+      const response = await sellerApi.getAll();
+      setSellers(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch sellers:', err);
+      setErrors(['Failed to load sellers. Please try again.']);
+    } finally {
+      setIsFetchingSellers(false);
+    }
+  };
 
   const validateFile = (selectedFile) => {
-    const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
-    if (!validTypes.includes(selectedFile.type)) {
-      return 'Only Excel files (.xlsx, .xls) are accepted';
+    const validExcelTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+    const isJson = selectedFile.type === 'application/json' || selectedFile.name.endsWith('.json');
+    const isExcel = validExcelTypes.includes(selectedFile.type);
+
+    if (uploadType === 'monthly' && !isExcel) {
+      return 'Only Excel files (.xlsx, .xls) are accepted for monthly data';
+    }
+    
+    if (uploadType === 'octoparse' && !isJson) {
+      return 'Only JSON files are accepted for Octoparse sync';
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 20 * 1024 * 1024; // 20MB
     if (selectedFile.size > maxSize) {
-      return 'File size must be less than 10MB';
+      return 'File size must be less than 20MB';
     }
 
     return null;
@@ -43,11 +73,19 @@ const UploadForm = () => {
 
     // Validate inputs
     const fileError = file ? validateFile(file) : 'Please select a file';
-    const monthError = validateMonth(month);
+    let monthError = null;
+    let sellerError = null;
+
+    if (uploadType === 'monthly') {
+      monthError = validateMonth(month);
+    } else {
+      if (!selectedSeller) sellerError = 'Please select a seller';
+    }
 
     const validationErrors = [];
     if (fileError) validationErrors.push(fileError);
     if (monthError) validationErrors.push(monthError);
+    if (sellerError) validationErrors.push(sellerError);
 
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
@@ -56,24 +94,38 @@ const UploadForm = () => {
 
     setIsLoading(true);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('month', month);
-
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/upload-monthly`, formData);
-      setUploadStatus({
-        type: 'success',
-        message: `✅ Uploaded Successfully: ${res.data.inserted} records added.`,
-        details: res.data
-      });
+      let res;
+      if (uploadType === 'monthly') {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('month', month);
+        res = await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/upload/upload-monthly`, formData, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        setUploadStatus({
+          type: 'success',
+          message: `✅ Uploaded Successfully: ${res.data.inserted} records added.`,
+          details: res.data
+        });
+      } else {
+        // Octoparse manual sync
+        const response = await marketSyncApi.uploadOctoparseJson(file, selectedSeller);
+        setUploadStatus({
+          type: 'success',
+          message: `✅ Sync Completed: ${response.message}`,
+          details: response.data
+        });
+      }
+      
       setFile(null);
       setMonth('');
+      // Keep selectedSeller for convenience if uploading multiple files for same seller
     } catch (err) {
       console.error("❌ Upload error:", err);
       setUploadStatus({
         type: 'error',
-        message: err.response?.data?.error || "❌ Upload failed. Please try again.",
+        message: err.message || "❌ Upload failed. Please try again.",
         details: err.response?.data
       });
     } finally {
@@ -108,28 +160,91 @@ const UploadForm = () => {
 
   return (
     <div className="upload-form">
-      <h6 className="card-title mb-4">
-        <i className="bi bi-cloud-upload me-2" style={{ color: 'var(--color-primary-600)' }}></i>
-        Upload Monthly Data
-      </h6>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h6 className="card-title mb-0">
+          <i className="bi bi-cloud-upload me-2" style={{ color: 'var(--color-primary-600)' }}></i>
+          Upload Data
+        </h6>
+        <div className="btn-group btn-group-sm">
+          <button 
+            className={`btn ${uploadType === 'monthly' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => {
+              setUploadType('monthly');
+              setFile(null);
+              setErrors([]);
+              setUploadStatus(null);
+            }}
+          >
+            Monthly Sales
+          </button>
+          <button 
+            className={`btn ${uploadType === 'octoparse' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => {
+              setUploadType('octoparse');
+              setFile(null);
+              setErrors([]);
+              setUploadStatus(null);
+            }}
+          >
+            Octoparse Sync
+          </button>
+        </div>
+      </div>
+
+      {/* Month Selection (Monthly only) */}
+      {uploadType === 'monthly' && (
+        <div className="form-group pb-3">
+          <label className="form-label">📅 Select Month</label>
+          <input
+            type="month"
+            className={`form-control ${errors.some(e => e.includes('month')) ? 'is-invalid' : ''}`}
+            onChange={handleMonthChange}
+            placeholder="Select Month"
+            value={month}
+          />
+        </div>
+      )}
+
+      {/* Seller Selection (Octoparse only) */}
+      {uploadType === 'octoparse' && (
+        <div className="form-group pb-3">
+          <label className="form-label">🏪 Select Seller</label>
+          <select 
+            className={`form-select ${errors.some(e => e.includes('seller')) ? 'is-invalid' : ''}`}
+            value={selectedSeller}
+            onChange={(e) => setSelectedSeller(e.target.value)}
+            disabled={isFetchingSellers}
+          >
+            <option value="">Choose a seller for sync...</option>
+            {sellers.map(s => (
+              <option key={s._id} value={s._id}>{s.name} ({s.marketplace})</option>
+            ))}
+          </select>
+          {isFetchingSellers && <small className="text-muted">Loading sellers...</small>}
+        </div>
+      )}
 
       {/* File Upload */}
       <div className="form-group">
-        <label className="form-label">📄 Select Excel File</label>
+        <label className="form-label">
+          {uploadType === 'monthly' ? '📄 Select Excel File' : '📄 Select Octoparse JSON File'}
+        </label>
         <div className="upload-area" onClick={() => document.getElementById('fileInput').click()}>
           <div className="upload-icon">
-            <i className="bi bi-file-earmark-spreadsheet" style={{ fontSize: '48px', color: 'var(--color-success-500)' }}></i>
+            <i className={`bi ${uploadType === 'monthly' ? 'bi-file-earmark-spreadsheet' : 'bi-filetype-json'}`} style={{ fontSize: '48px', color: uploadType === 'monthly' ? 'var(--color-success-500)' : 'var(--color-primary-500)' }}></i>
           </div>
           <p className="upload-text">
             {file ? file.name : 'Click to upload or drag and drop'}
           </p>
-          <p className="upload-hint">Excel files only (.xlsx, .xls)</p>
+          <p className="upload-hint">
+            {uploadType === 'monthly' ? 'Excel files only (.xlsx, .xls)' : 'JSON files only (.json)'}
+          </p>
           <input
             id="fileInput"
             type="file"
             className="d-none"
             onChange={handleFileChange}
-            accept=".xlsx,.xls"
+            accept={uploadType === 'monthly' ? ".xlsx,.xls" : ".json"}
           />
         </div>
         {file && (
@@ -140,18 +255,6 @@ const UploadForm = () => {
             </span>
           </div>
         )}
-      </div>
-
-      {/* Month Selection */}
-      <div className="form-group">
-        <label className="form-label">📅 Select Month</label>
-        <input
-          type="month"
-          className={`form-control ${errors.length > 0 ? 'is-invalid' : ''}`}
-          onChange={handleMonthChange}
-          placeholder="Select Month"
-          value={month}
-        />
       </div>
 
       {/* Validation Errors */}
@@ -177,18 +280,18 @@ const UploadForm = () => {
         <button
           className={`btn btn-primary ${isLoading ? 'disabled' : ''}`}
           onClick={handleUpload}
-          disabled={isLoading || !file || !month}
+          disabled={isLoading || !file || (uploadType === 'monthly' && !month) || (uploadType === 'octoparse' && !selectedSeller)}
           style={{ flex: 1 }}
         >
           {isLoading ? (
             <>
               <span className="spinner-border spinner-border-sm me-2"></span>
-              Uploading...
+              {uploadType === 'monthly' ? 'Uploading...' : 'Syncing...'}
             </>
           ) : (
             <>
-              <i className="bi bi-cloud-arrow-up me-2"></i>
-              Upload Data
+              <i className={`bi ${uploadType === 'monthly' ? 'bi-cloud-arrow-up' : 'bi-arrow-repeat'} me-2`}></i>
+              {uploadType === 'monthly' ? 'Upload Data' : 'Start Octoparse Sync'}
             </>
           )}
         </button>
@@ -215,12 +318,21 @@ const UploadForm = () => {
         <p className="text-sm text-muted mb-2">
           <strong>📋 Instructions:</strong>
         </p>
-        <ul className="text-sm text-muted mb-0" style={{ paddingLeft: 'var(--space-4)' }}>
-          <li>File format: Excel (.xlsx, .xls)</li>
-          <li>Size limit: 10 MB</li>
-          <li>Required columns: ASIN, Ordered Revenue, Ordered Units</li>
-          <li>Ensure all ASINs exist in master product data</li>
-        </ul>
+        {uploadType === 'monthly' ? (
+          <ul className="text-sm text-muted mb-0" style={{ paddingLeft: 'var(--space-4)' }}>
+            <li>File format: Excel (.xlsx, .xls)</li>
+            <li>Size limit: 20 MB</li>
+            <li>Required columns: ASIN, Ordered Revenue, Ordered Units</li>
+            <li>Ensure all ASINs exist in master product data</li>
+          </ul>
+        ) : (
+          <ul className="text-sm text-muted mb-0" style={{ paddingLeft: 'var(--space-4)' }}>
+            <li>File format: JSON (.json) exported from Octoparse</li>
+            <li>Size limit: 20 MB</li>
+            <li>Structure: Array of objects with field RT/Rating, ASIN, etc.</li>
+            <li>Maps directly to ASIN metrics including Rating breakdown.</li>
+          </ul>
+        )}
       </div>
     </div>
   );
