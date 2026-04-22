@@ -185,10 +185,17 @@ const calculateImageQuality = (asin) => {
         issues.push('No images');
     }
 
-    // IAI (Image Inside Amazon) - 5 points
-    if (asin.images && Array.isArray(asin.images)) {
-        const iaiImages = asin.images.filter(img => img.source === 'amazon' || img.isAmazonHosted);
-        score += Math.min(5, iaiImages.length);
+    // 3. AI-Driven Quality Signals (5 points each)
+    if (asin.lqsDetails?.hasWhiteBackground === false) {
+        issues.push('Non-white background detected by AI');
+    } else {
+        score += 5;
+    }
+
+    if (asin.lqsDetails?.hasHighResolution === false) {
+        issues.push('Low resolution image detected by AI');
+    } else {
+        score += 5;
     }
 
     return { score: Math.min(100, score), issues };

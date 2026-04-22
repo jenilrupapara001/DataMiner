@@ -81,7 +81,7 @@ exports.getSellers = async (req, res) => {
 
       const total = await Seller.countDocuments(filter);
       const sellers = await Seller.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ name: 1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum);
 
@@ -114,7 +114,7 @@ exports.getSellers = async (req, res) => {
     }
 
     const sellers = await Seller.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ name: 1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 

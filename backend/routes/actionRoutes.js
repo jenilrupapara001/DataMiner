@@ -68,6 +68,12 @@ router.post('/bulk-create-from-analysis', protect, requireAnyPermission(['action
 
         // Build ASIN filter: global users see all, others see only their assigned sellers
         const filter = {};
+        
+        // SUPPORT SELECTED ASINs
+        if (req.body.asinIds && Array.isArray(req.body.asinIds) && req.body.asinIds.length > 0) {
+            filter._id = { $in: req.body.asinIds };
+        }
+
         if (!isGlobalUser) {
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => s._id || s);
             if (assignedSellerIds.length === 0) {

@@ -40,7 +40,9 @@ import {
   X,
   AlertCircle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Video,
+  PlayCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -75,11 +77,11 @@ const generateHistoryStructure = (history) => {
   }));
 };
 
-// Helper to generate history structure from sorted date strings (YYYY-MM-DD format)
+// Helper to generate history structure from actual availability (Oldest to Newer)
 const generateHistoryStructureFromDates = (sortedDates) => {
   if (!sortedDates || sortedDates.length === 0) return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
-
-  // Limit to the last 7 unique days for the "Current Week" view in the table
+  
+  // Limit to most recent 7 unique days available in the data
   const recentDates = sortedDates.slice(-7);
 
   return [{
@@ -643,6 +645,7 @@ const AsinManagerPage = () => {
           });
         });
 
+        // Lexical sort on YYYY-MM-DD gives chronological order (Oldest -> Newest)
         const sortedDates = Array.from(dateMap.keys()).sort();
         return generateHistoryStructureFromDates(sortedDates);
       }
@@ -811,7 +814,10 @@ const AsinManagerPage = () => {
 
   const handleBulkCreateActions = async () => {
     try {
-      if (!window.confirm('Auto-generate optimization tasks for all ASINs?')) return;
+      const totalCount = stats?.total || asins.length;
+      if (!window.confirm(`Auto-generate optimization tasks for ALL ${totalCount} ASINs? This will analyze every ASIN in the current filter.`)) return;
+      
+      setSyncing(true);
       const res = await db.createBulkActionsFromAnalysis();
       if (res && res.count > 0) {
         alert(`✅ Successfully generated ${res.count} bulk optimization tasks!`);
@@ -823,6 +829,62 @@ const AsinManagerPage = () => {
     } catch (err) {
       console.error('Bulk task creation failed:', err);
       alert('Failed to create bulk tasks: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSelectedCreateActions = async () => {
+    try {
+      const selectedAsinIds = Array.from(selectedIds);
+      if (selectedAsinIds.length === 0) return;
+
+      if (!window.confirm(`Create specialized optimization tasks for the ${selectedAsinIds.length} selected ASINs?`)) return;
+      
+      setSyncing(true);
+      const res = await db.createBulkActionsFromAnalysis(selectedAsinIds);
+      if (res && res.count > 0) {
+        alert(`✅ Successfully generated ${res.count} tasks for your selected ASINs!`);
+        clearSelection();
+      } else if (res && res.success === false) {
+        alert(`❌ Error: ${res.message || 'Failed to create tasks'}`);
+      } else {
+        alert('Selected ASINs analyzed. No immediate optimizations required for these specific items.');
+      }
+    } catch (err) {
+      console.error('Selected task creation failed:', err);
+      alert('Failed to create selected tasks: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleBulkSyncSelected = async () => {
+    const selectedAsinIds = Array.from(selectedIds);
+    if (selectedAsinIds.length === 0) return;
+
+    if (!window.confirm(`Force-sync and refresh data for the ${selectedAsinIds.length} selected ASINs?`)) return;
+
+    try {
+      setSyncing(true);
+      // For each selected, trigger individual sync (or if there's a bulk sync by ID, use that)
+      // Since there is no bulk-sync-by-id api, we'll loop or just call syncAll if many?
+      // Better: Use a Promise.all or similar for selection
+      
+      setScrapingIds(prev => new Set([...prev, ...selectedAsinIds]));
+      
+      const syncPromises = selectedAsinIds.map(id => marketSyncApi.syncAsin(id));
+      await Promise.allSettled(syncPromises);
+      
+      await loadData(pagination.page);
+      alert(`✅ Sync initiated for ${selectedAsinIds.length} selected items.`);
+      clearSelection();
+    } catch (err) {
+      console.error('Selected sync failed:', err);
+      alert('❌ Failed to start sync for some items: ' + err.message);
+    } finally {
+      setSyncing(false);
+      setScrapingIds(new Set());
     }
   };
 
@@ -1398,21 +1460,27 @@ const AsinManagerPage = () => {
 
 
               {selectedIds.size > 0 && (
-                <div className="d-flex align-items-center gap-2 pe-3 me-2 border-end border-zinc-200">
-                  <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2">
+                <div className="d-flex align-items-center gap-2 pe-3 me-2 border-end border-zinc-200 animate-in fade-in slide-in-from-right-4">
+                  <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200">
                     {selectedIds.size} SELECTED
                   </span>
                   <button
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1"
-                    onClick={() => {
-                      // Example: Trigger sync for each selected ID or pass to a bulk handler
-                      alert(`Syncing ${selectedIds.size} selected items...`);
-                      // In real case: syncBulk(Array.from(selectedIds))
-                    }}
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
+                    onClick={handleBulkSyncSelected}
                     style={{ fontSize: '10px' }}
+                    disabled={syncing}
                   >
-                    <RefreshCw size={10} className="text-blue-600" />
+                    <RefreshCw size={10} className={`text-blue-600 ${syncing ? 'spin' : ''}`} />
                     <span className="fw-bold">Sync Selected</span>
+                  </button>
+                  <button
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
+                    onClick={handleSelectedCreateActions}
+                    style={{ fontSize: '10px' }}
+                    disabled={syncing}
+                  >
+                    <Zap size={10} className="text-amber-500 fill-amber-500" />
+                    <span className="fw-bold">Tasks for Selected</span>
                   </button>
                   <button
                     className="btn btn-ghost-danger btn-xs d-flex align-items-center gap-1 rounded-2 px-2 py-1"
@@ -1425,13 +1493,21 @@ const AsinManagerPage = () => {
                 </div>
               )}
 
-              <button onClick={handleBulkCreateActions} disabled={asins.length === 0}
+              <button 
+                onClick={handleBulkCreateActions} 
+                disabled={asins.length === 0 || syncing}
+                className="btn-premium d-flex align-items-center gap-2 px-3 py-1 border rounded-2 transition-all"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
-                  fontSize: 9, fontWeight: 700, borderRadius: 4, border: '1px solid #e4e4e7',
-                  background: '#fff', cursor: 'pointer', color: '#27272a'
-                }}>
-                <Zap size={9} color="#f59e0b" fill="#f59e0b" /> Optimization
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f4f4f5 100%)',
+                  border: '1px solid #e4e4e7',
+                  color: '#18181b',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >
+                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} /> 
+                Bulk Optimization
               </button>
               <button
                 style={{
@@ -1461,6 +1537,7 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SELLER / BRAND</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '90px' }}>SKU</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '220px' }}>PRODUCT TITLE</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '130px' }}>CATEGORY</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right' }}>PRICE</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', color: '#6b7280' }}>MRP</th>
                   <th colSpan={visibleHistoryCols}
@@ -1469,6 +1546,8 @@ const AsinManagerPage = () => {
                     Price Trend (7 Days) <Eye size={10} />
                   </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>BSR</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SUB-BSR</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }} title="Video Present">V</th>
                   <th colSpan={visibleHistoryCols}
                     onClick={async () => { setShowAllBsrHistory(true); }}
                     style={{ ...thStyle, background: '#f0fdf4', color: '#166534', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #dcfce7' }}>
@@ -1486,10 +1565,13 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>BUYBOX</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center' }}>SEC BB</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>I</th>
+                  <th colSpan={visibleHistoryCols}
+                    style={{ ...thStyle, background: '#fdf2f8', color: '#be185d', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #fbcfe8' }}>
+                    IMG TREND (7D)
+                  </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>B</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center' }}>A+</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', color: '#b91c1c' }}>A+ DAYS</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center' }}>ACTIONS</th>
                 </tr>
                 <tr>
                   {/* Price Trend Dates */}
@@ -1507,6 +1589,12 @@ const AsinManagerPage = () => {
                   {/* Rating Trend Dates */}
                   {historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
+                      {date.label}
+                    </th>
+                  )))}
+                  {/* Image Trend Dates */}
+                  {historyStructure.map(week => week.dates.map((date, idx) => (
+                    <th key={`i-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fdf2f8', color: '#db2777' }}>
                       {date.label}
                     </th>
                   )))}
@@ -1601,6 +1689,20 @@ const AsinManagerPage = () => {
                         </span>
                       </div>
                     </td>
+                    <td style={tdStyle}>
+                      <div className="d-flex flex-column" style={{ overflow: 'hidden' }}>
+                        <span style={{ 
+                          fontWeight: 500, 
+                          color: '#4b5563', 
+                          fontSize: '10.5px',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden'
+                        }} title={asin.category?.replace(/&amp;/g, '&')}>
+                          {(asin.category || '').replace(/&amp;/g, '&').split(/[›>]/).pop()?.trim() || '-'}
+                        </span>
+                      </div>
+                    </td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}
                       onClick={(e) => handleViewPrice(asin, e)}>
                       ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
@@ -1624,10 +1726,45 @@ const AsinManagerPage = () => {
                       <div style={{ fontWeight: 600, color: '#2563eb' }}>
                         {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                       </div>
-                      {asin.subBsr && (
-                        <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px', margin: '2px auto 0' }} title={asin.subBsr}>
-                          {asin.subBsr}
-                        </div>
+                    </td>
+                    <td style={{ ...tdStyle, width: '120px' }}>
+                      {(() => {
+                        const subBsrValue = asin.subBsr || (Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '';
+                        const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
+                        
+                        return subBsrValue ? (
+                          <div className="d-flex align-items-center gap-1">
+                            <span style={{ 
+                              fontSize: '10px', 
+                              color: '#4b5563', 
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: hasMultiple ? '85px' : '110px'
+                            }} title={subBsrValue}>
+                              {subBsrValue}
+                            </span>
+                            {hasMultiple && (
+                              <span 
+                                className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200" 
+                                style={{ fontSize: '8px', padding: '1px 4px' }}
+                                title={asin.subBSRs.slice(1).join('\n')}
+                              >
+                                +{asin.subBSRs.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#9ca3af' }}>-</span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ ...tdStyle, width: '35px', textAlign: 'center' }}>
+                      {asin.videoCount > 0 ? (
+                        <PlayCircle size={14} color="#059669" fill="#ecfdf5" title={`${asin.videoCount} video(s) found`} />
+                      ) : (
+                        <Video size={14} color="#9ca3af" style={{ opacity: 0.4 }} title="No video found" />
                       )}
                     </td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
@@ -1722,29 +1859,24 @@ const AsinManagerPage = () => {
                       ) : <span style={{ color: '#9ca3af' }}>-</span>}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>
+                    {historyStructure.map(week => week.dates.map((date, dIdx) => {
+                      const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                        || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                      return (
+                        <td key={`i-${week.label}-${dIdx}`}
+                          style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>
+                          <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
+                            {wData?.imageCount || '-'}
+                          </span>
+                        </td>
+                      );
+                    }))}
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.bulletPoints || 0}</td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>{getAplusBadge(asin.hasAplus, asin.status)}</td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
                       {asin.aplusAbsentSince && !asin.hasAplus 
                         ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24)) 
                         : '-'}
-                    </td>
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: 3, justifyContent: 'center', height: '100%', alignItems: 'center' }}>
-                        <button onClick={() => handleIndividualScrape(asin._id)} disabled={scrapingIds.has(asin._id)}
-                          className="btn btn-white btn-xs p-1 d-flex align-items-center justify-content-center"
-                          style={{ width: '20px', height: '20px', border: '1px solid #e4e4e7', borderRadius: '4px' }}
-                          title="Sync Data"
-                        >
-                          <RefreshCw size={10} className={scrapingIds.has(asin._id) ? 'spin' : 'text-zinc-500'} />
-                        </button>
-                        <button onClick={() => handleCreateTasks(asin._id, asin.asinCode)}
-                          className="btn btn-xs d-flex align-items-center justify-content-center fw-bold"
-                          style={{ height: '20px', padding: '0 6px', fontSize: '8.5px', background: '#f4f4f5', color: '#18181b', border: '1px solid #e4e4e7', borderRadius: '4px' }}
-                        >
-                          ACTION
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 )))}

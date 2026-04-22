@@ -2,6 +2,7 @@ const octoparseAutomationService = require('../services/octoparseAutomationServi
 const marketDataSyncService = require('../services/marketDataSyncService');
 const Asin = require('../models/Asin');
 const Seller = require('../models/Seller');
+const { updateSellerAsinCount } = require('./asinController');
 
 /**
  * Controller for discreet Market Data Synchronization.
@@ -336,6 +337,9 @@ exports.fetchAndApplyResults = async (req, res) => {
         }
 
         const updatedCount = await octoparseAutomationService.processBatchResults(sellerId, data);
+        
+        // Update seller counts and emit socket signal
+        await updateSellerAsinCount(sellerId, req.app.get('io'));
 
         res.json({
             success: true,
@@ -423,6 +427,9 @@ exports.ingestTaskResults = async (req, res) => {
 
         // 5. High-Performance Bulk Update
         const updatedCount = await octoparseAutomationService.processBatchResults(seller._id, data);
+
+        // Update seller counts and emit socket signal
+        await updateSellerAsinCount(seller._id, req.app.get('io'));
 
         res.json({
             success: true,
@@ -764,6 +771,9 @@ exports.syncResults = async (req, res) => {
             message: `Successfully synced ${mappingResult.count} records.`, 
             count: mappingResult.count 
         });
+
+        // Trigger real-time count update on Sellers page after sync completes
+        updateSellerAsinCount(sellerId, req.app.get('io')).catch(e => console.error('Error in post-sync count update:', e));
     } catch (error) {
         console.error('❌ Results Sync Error:', error.message);
         

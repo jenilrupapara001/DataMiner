@@ -244,6 +244,7 @@ exports.getAsin = async (req, res) => {
   try {
     const asin = await Asin.findById(req.params.id)
       .populate('seller', 'name marketplace sellerId');
+      // Added rawOctoparseData for inspection
 
     if (!asin) {
       return res.status(404).json({ error: 'ASIN not found' });
@@ -599,7 +600,7 @@ exports.createAsin = async (req, res) => {
     await asin.save();
 
     // Update seller ASIN count
-    await updateSellerAsinCount(asin.seller);
+    await updateSellerAsinCount(asin.seller, req.app.get('io'));
 
     // BACKGROUND: Automate URL Injection & Scrape
     if (marketDataSyncService.isConfigured()) {
@@ -656,6 +657,12 @@ exports.createAsins = async (req, res) => {
       if (existingCodes.includes(key)) {
         duplicates.push(a.asinCode);
       } else {
+        // Initialize A+ absence tracking if not provided
+        if (a.hasAplus === undefined || a.hasAplus === false) {
+          a.aplusAbsentSince = new Date();
+        } else if (a.hasAplus === true) {
+          a.aplusPresentSince = new Date();
+        }
         newAsins.push(a);
       }
     }
@@ -682,7 +689,7 @@ exports.createAsins = async (req, res) => {
 
       // Step 3: Post-Update counts and sync
       for (const sellerId of sellerIds) {
-        await updateSellerAsinCount(sellerId);
+        await updateSellerAsinCount(sellerId, req.app.get('io'));
         if (marketDataSyncService.isConfigured()) {
           console.log(`🤖 Automated Sync Trigger for seller: ${sellerId}`);
           marketDataSyncService.syncSellerAsinsToOctoparse(sellerId, { triggerScrape: true })
@@ -727,7 +734,7 @@ exports.updateAsin = async (req, res) => {
     );
 
     if (req.body.status && req.body.status !== asin.status) {
-      await updateSellerAsinCount(asin.seller);
+      await updateSellerAsinCount(asin.seller, req.app.get('io'));
     }
 
     const asinObj = updatedAsin.toObject ? updatedAsin.toObject() : updatedAsin;
@@ -790,7 +797,7 @@ exports.deleteAsin = async (req, res) => {
     await asin.deleteOne();
 
     // Update seller ASIN count
-    await updateSellerAsinCount(sellerId);
+    await updateSellerAsinCount(sellerId, req.app.get('io'));
 
     res.json({ message: 'ASIN deleted successfully' });
   } catch (error) {
@@ -904,17 +911,17 @@ exports.generateImages = async (req, res) => {
 };
 
 // Helper function to update seller ASIN counts
-async function updateSellerAsinCount(sellerId) {
+async function updateSellerAsinCount(sellerId, io) {
   if (!sellerId) return;
-
   try {
-    const total = await Asin.countDocuments({ seller: sellerId });
-    const active = await Asin.countDocuments({ seller: sellerId, status: 'Active' });
-
-    await Seller.findByIdAndUpdate(sellerId, {
-      totalAsins: total,
-      activeAsins: active,
-    });
+    const totalAsins = await Asin.countDocuments({ seller: sellerId });
+    const activeAsins = await Asin.countDocuments({ seller: sellerId, status: 'Active' });
+    await Seller.findByIdAndUpdate(sellerId, { totalAsins, activeAsins });
+    
+    // Emit socket event for real-time UI updates
+    if (io) {
+      io.emit('SELLERS_UPDATED', { sellerId });
+    }
   } catch (error) {
     console.error('Error updating seller ASIN count:', error);
   }
@@ -1167,5 +1174,6 @@ exports.getAsinFilterOptions = async (req, res) => {
   }
 };
 
+exports.updateSellerAsinCount = updateSellerAsinCount;
 module.exports = exports;
 

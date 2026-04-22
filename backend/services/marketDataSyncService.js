@@ -7,6 +7,7 @@ const config = require('../config/env');
 const imageGenerationService = require('./imageGenerationService');
 const { JSDOM } = require('jsdom');
 const SocketService = require('./socketService');
+const nvidiaAiService = require('./nvidiaAiService');
 const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
 
@@ -1449,8 +1450,9 @@ class MarketDataSyncService {
                 subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
             }
 
-            // 5. Image Processing (Gallery extraction)
+            // 5. Image Processing (Gallery extraction + Video Detection)
             let imageCount = 0;
+            let videoCount = 0;
             let images = [];
             const imgHtml = rawData.image_count || rawData.Field6 || '';
             if (imgHtml && typeof imgHtml === 'string' && imgHtml.includes('<li')) {
@@ -1458,12 +1460,18 @@ class MarketDataSyncService {
                     const imgDom = new JSDOM(imgHtml);
                     const liTags = imgDom.window.document.querySelectorAll('li');
                     imageCount = liTags.length;
+                    
+                    // Check for video thumbnails (usually have class 'videoThumbnail')
+                    const videoTags = Array.from(imgDom.window.document.querySelectorAll('.videoThumbnail, .video-thumbnail, video'));
+                    videoCount = videoTags.length;
+                    
                     images = Array.from(imgDom.window.document.querySelectorAll('img')).map(img => img.src).filter(Boolean);
                 } catch (e) {
                     console.warn('Image HTML parsing failed');
                 }
             } else {
                 imageCount = parseInt(rawData.imageCount || rawData.imagesCount || rawData.Field6 || 0);
+                videoCount = parseInt(rawData.videoCount || rawData.video_count || 0);
             }
             const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || rawData.Field5 || asin.imageUrl;
 
@@ -1565,6 +1573,7 @@ class MarketDataSyncService {
                 rating: rating > 0 ? rating : asin.rating,
                 reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
                 imagesCount: imageCount > 0 ? imageCount : asin.imagesCount,
+                videoCount: videoCount >= 0 ? videoCount : asin.videoCount,
                 images,
                 mainImageUrl: mainImageUrl || asin.mainImageUrl,
                 imageUrl: mainImageUrl || asin.imageUrl, // Compatibility
@@ -1581,6 +1590,7 @@ class MarketDataSyncService {
                 aplusPresentSince,
                 availabilityStatus,
                 ratingBreakdown,
+                rawOctoparseData: rawData, // Preserve complete original data
                 lastScraped: new Date(),
                 scrapeStatus: 'COMPLETED',
                 status: 'Active',
@@ -1594,6 +1604,8 @@ class MarketDataSyncService {
                 bsr: updates.bsr,
                 rating: updates.rating,
                 reviewCount: updates.reviewCount,
+                imageCount: updates.imagesCount,
+                videoCount: updates.videoCount,
                 lqs: asin.lqs || 0
             });
             if (asin.history.length > 30) asin.history = asin.history.slice(-30);
@@ -1618,7 +1630,8 @@ class MarketDataSyncService {
                 bulletPoints: updates.bulletPoints,
                 subBSRs: updates.subBSRs,
                 hasAplus: updates.hasAplus,
-                stockLevel: updates.stockLevel
+                stockLevel: updates.stockLevel,
+                videoCount: updates.videoCount
             });
 
             Object.assign(asin, updates);
@@ -1632,6 +1645,15 @@ class MarketDataSyncService {
                     sellerId: asin.seller,
                     asinCode: asin.asinCode,
                     timestamp: new Date()
+                });
+            }
+
+            // 11. Trigger AI Listing Quality Audit (Non-blocking)
+            // Only trigger if image audit is missing or older than 7 days
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            if (!asin.lqsDetails?.imageAuditDate || asin.lqsDetails.imageAuditDate < sevenDaysAgo) {
+                nvidiaAiService.auditAsinImage(asin._id).catch(err => {
+                    console.error(`[AI-AUDIT] Background execution failed for ${asin.asinCode}:`, err.message);
                 });
             }
 
@@ -1734,6 +1756,7 @@ class MarketDataSyncService {
                                  : this._parseBoolean(rawAplusBulk || false);
                                  
                 const availabilityStatus = rawData.status || rawData.availabilityStatus || rawData.availability || rawData.In_Stock || asin.availabilityStatus || 'Available';
+                const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || rawData.Field5 || asin.mainImageUrl || asin.imageUrl;
                 
                 let aplusAbsentSince = asin.aplusAbsentSince;
                 let aplusPresentSince = asin.aplusPresentSince;
@@ -1778,10 +1801,18 @@ class MarketDataSyncService {
                     oneStar: percentages['1'] || asin.ratingBreakdown?.oneStar || 0
                 };
 
-                const mainImageUrl = rawData.Main_Image || rawData.mainImage || rawData.imageUrl || asin.mainImageUrl;
                 let imagesCount = asin.imagesCount || 0;
+                let videoCount = 0;
                 if (rawData.image_count?.includes('<li')) {
-                    imagesCount = (rawData.image_count.match(/<li/g) || []).length;
+                    const liMatches = rawData.image_count.match(/<li[^>]*>[\s\S]*?<\/li>/gi) || [];
+                    imagesCount = liMatches.length;
+                    
+                    // Video detection - look for video indicators in the li HTML
+                    for (const li of liMatches) {
+                        if (li.toLowerCase().includes('video') || li.toLowerCase().includes('vjs') || li.match(/<div[^>]*video[^>]*>/i)) {
+                            videoCount++;
+                        }
+                    }
                 }
                 let subBSRs = asin.subBSRs || [];
                 const bsrString = rawData.sub_BSR || rawData.alt_sub_bsr || rawData.BSR || rawData.alt_bsr || '';
@@ -1817,6 +1848,7 @@ class MarketDataSyncService {
                     rating: rating > 0 ? rating : asin.rating,
                     reviews: reviewCount > 0 ? reviewCount : asin.reviewCount,
                     imageCount: imagesCount,
+                    videoCount: videoCount,
                     titleLength: title.length || (asin.title ? asin.title.length : 0),
                     bulletPoints: bulletCount,
                     subBSRs: subBSRs,
@@ -1854,6 +1886,7 @@ class MarketDataSyncService {
                         mainImageUrl: mainImageUrl || asin.mainImageUrl,
                         imageUrl: mainImageUrl || asin.mainImageUrl,
                         imagesCount: imagesCount,
+                        videoCount: videoCount,
                         hasAplus: hasAplus,
                         aplusAbsentSince: aplusAbsentSince,
                         aplusPresentSince: aplusPresentSince,
@@ -1862,6 +1895,7 @@ class MarketDataSyncService {
                         dealBadge: dealBadge,
                         bulletPoints: bulletCount,
                         bulletPointsText: bulletPointsText,
+                        rawOctoparseData: rawData,
                         stockLevel: this._cleanStock(rawData.stock || rawData.inventory || 0),
                         soldBy: soldBy,
                         secondAsp: secondAsp,
@@ -1870,10 +1904,18 @@ class MarketDataSyncService {
                         weekHistory: updatedWeekHistory,
                         lastScraped: now,
                         scrapeStatus: 'COMPLETED',
-                        status: 'Active'
-                    },
-                    $push: {
-                        history: { $each: [{ date: now, price, bsr, rating }], $slice: -30 }
+                        status: 'Active',
+                        history: (() => {
+                            const hList = Array.isArray(asin.history) ? [...asin.history] : [];
+                            const tStr = now.toISOString().split('T')[0];
+                            const idx = hList.findIndex(h => new Date(h.date).toISOString().split('T')[0] === tStr);
+                            const entry = { date: now, price, bsr, rating, reviewCount, imageCount: imagesCount, videoCount };
+                            
+                            if (idx >= 0) hList[idx] = { ...hList[idx], ...entry };
+                            else hList.push(entry);
+                            
+                            return hList.slice(-30);
+                        })()
                     }
                 };
                 

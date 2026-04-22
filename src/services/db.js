@@ -534,8 +534,11 @@ class DatabaseService {
   /**
    * Bulk create grouped actions from ASIN analysis
    */
-  async createBulkActionsFromAnalysis() {
-    return this.request('/actions/bulk-create-from-analysis', { method: 'POST' }, null);
+  async createBulkActionsFromAnalysis(asinIds = []) {
+    return this.request('/actions/bulk-create-from-analysis', { 
+      method: 'POST', 
+      body: JSON.stringify({ asinIds }) 
+    }, null);
   }
 
   /**

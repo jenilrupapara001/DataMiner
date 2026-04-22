@@ -48,6 +48,7 @@ import { PageLoader } from '@/components/application/loading-indicator/PageLoade
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 
 const AddSellerModal = lazy(() => import('../components/sellers/AddSellerModal'));
 const ImportSellerModal = lazy(() => import('../components/sellers/ImportSellerModal'));
@@ -79,22 +80,14 @@ const SellersPage = () => {
    const [loadingAsins, setLoadingAsins] = useState(false);
    const [selectedSellerIds, setSelectedSellerIds] = useState([]);
    const { addToast } = useToast();
+   const socket = useSocket();
 
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
   useEffect(() => {
-    loadSellers();
-  }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearchQuery]);
-
-  useEffect(() => {
-    if (isGlobalUser) {
-      fetchPoolStats();
-    }
-  }, [isGlobalUser]);
-
-  useEffect(() => {
     setPage(1);
   }, [activeTab, marketplaceFilter, statusFilter, debouncedSearchQuery]);
+
 
   const fetchPoolStats = useCallback(async () => {
     try {
@@ -107,8 +100,8 @@ const SellersPage = () => {
     }
   }, []);
 
-  const loadSellers = useCallback(async () => {
-    setLoading(true);
+  const loadSellers = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const response = await sellerApi.getAll({
         page,
@@ -146,6 +139,29 @@ const SellersPage = () => {
       setLoading(false);
     }
   }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearchQuery, addToast]);
+
+  useEffect(() => {
+    loadSellers();
+  }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearchQuery, loadSellers]);
+
+  useEffect(() => {
+    if (isGlobalUser) {
+      fetchPoolStats();
+    }
+  }, [isGlobalUser, fetchPoolStats]);
+
+  // Real-time seller updates
+  useEffect(() => {
+    if (socket) {
+      const handleSellersUpdate = (data) => {
+        console.log('📢 Real-time update received:', data);
+        loadSellers(true);
+      };
+
+      socket.on('SELLERS_UPDATED', handleSellersUpdate);
+      return () => socket.off('SELLERS_UPDATED', handleSellersUpdate);
+    }
+  }, [socket, loadSellers]);
 
   const { paginatedSellers, totalResults } = useMemo(() => {
     return {
@@ -836,7 +852,7 @@ const SellersPage = () => {
           <ListView
             columns={listViewColumns}
             rows={paginatedSellers}
-            loading={loading}
+            loading={loading && sellers.length === 0}
             groupBy="marketplace"
             rowKey="_id"
             options={{ selectable: true }}
@@ -885,7 +901,11 @@ const SellersPage = () => {
           <SellerAsinsModal
             seller={selectedSeller}
             asins={sellerAsins}
-            onClose={() => { setShowAsinModal(false); setSelectedSeller(null); }}
+            onClose={() => { 
+              setShowAsinModal(false); 
+              setSelectedSeller(null); 
+              loadSellers(true); // Silent update on close
+            }}
             onAddAsin={handleAddAsin}
             onDeleteAsin={handleDeleteAsin}
             onToggleStatus={handleToggleAsinStatus}
@@ -893,7 +913,10 @@ const SellersPage = () => {
             onSyncAsin={handleSyncAsin}
             isAdmin={isAdmin}
             isGlobalUser={isGlobalUser}
-            onRefresh={() => handleViewAsins(selectedSeller, 1)}
+            onRefresh={() => {
+              handleViewAsins(selectedSeller, 1);
+              loadSellers(true); // Silent update on internal changes
+            }}
             pagination={asinPagination}
             onLoadMore={handleLoadMoreAsins}
             loading={loadingAsins}

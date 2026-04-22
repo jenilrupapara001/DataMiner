@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Chart from 'react-apexcharts';
-import { X, TrendingUp, TrendingDown, IndianRupee, Star, Award, Activity, BarChart3, Clock, LayoutGrid } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, IndianRupee, Star, Award, Activity, BarChart3, Clock, LayoutGrid, PlayCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { Skeleton, Box } from '@mui/material';
 
@@ -94,35 +94,66 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
       toolbar: { show: false },
       zoom: { enabled: false },
       sparkline: { enabled: false },
-      fontFamily: 'Inter, sans-serif'
+      fontFamily: 'Inter, sans-serif',
+      animations: { enabled: true, easing: 'easeinout', speed: 800 }
     },
     colors: [color],
-    stroke: { curve: 'smooth', width: 2.5 },
+    stroke: { curve: 'smooth', width: 3, lineCap: 'round' },
     fill: {
       type: 'gradient',
       gradient: {
         shadeIntensity: 1,
-        opacityFrom: 0.45,
+        opacityFrom: type === 'area' ? 0.6 : 0,
         opacityTo: 0.05,
-        stops: [20, 100, 100, 100]
+        stops: [0, 90, 100]
       }
     },
     xaxis: {
-      categories: filteredDateRange.map(d => getCategoryLabel({ date: d.toISOString() })),
-      labels: { show: true, style: { fontSize: '10px', fontWeight: 500, colors: '#94a3b8' }, rotate: -45, rotateAlways: false },
+      categories: filteredDateRange.map(d => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+      labels: { 
+        show: true, 
+        style: { fontSize: '10px', fontWeight: 600, colors: '#64748b' },
+        offsetY: 0
+      },
       axisBorder: { show: false },
       axisTicks: { show: false },
       tooltip: { enabled: false }
     },
     yaxis: {
-      labels: { style: { fontSize: '10px', fontWeight: 600, colors: '#64748b' } }
+      labels: { 
+        style: { fontSize: '10px', fontWeight: 700, colors: '#475569' },
+        formatter: (val) => val?.toLocaleString()
+      }
     },
-    markers: { size: 0, hover: { size: 5 } },
-    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { left: 10, right: 10 } },
+    markers: { 
+      size: 4, 
+      colors: ['#fff'], 
+      strokeColors: color, 
+      strokeWidth: 2,
+      hover: { size: 6, strokeWidth: 3 } 
+    },
+    grid: { 
+      borderColor: '#f1f5f9', 
+      strokeDashArray: 3, 
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+      padding: { top: 10, bottom: 10, left: 20, right: 20 } 
+    },
     tooltip: {
-      theme: 'light',
-      x: { show: true },
-      y: { formatter: (val) => val ? val.toLocaleString() : 'N/A' }
+      theme: 'dark',
+      custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+        const val = series[seriesIndex][dataPointIndex];
+        const date = w.globals.categoryLabels[dataPointIndex];
+        return `
+          <div class="px-3 py-2 bg-slate-900 border-0 rounded-3 shadow-xl">
+            <div class="extra-small text-slate-400 fw-bold mb-1">${date}</div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="w-2 h-2 rounded-circle" style="background: ${color}"></div>
+              <div class="fw-bold text-white small">${val?.toLocaleString() || 'N/A'}</div>
+            </div>
+          </div>
+        `;
+      }
     }
   });
 
@@ -284,7 +315,13 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
                    <Chart 
                       options={{
                         ...chartOptions('#10b981', 'line'),
-                        yaxis: { labels: { style: { fontSize: '10px' } }, reversed: true }
+                        yaxis: { 
+                          reversed: true,
+                          labels: { 
+                            style: { fontSize: '10px', fontWeight: 700, colors: '#10b981' },
+                            formatter: (val) => `#${val?.toLocaleString()}`
+                          }
+                        }
                       }} 
                       series={[{ name: 'BSR Rank', data: generateSeriesData('bsr', false) }]} 
                       type="line" 
@@ -299,6 +336,37 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
                       type="area" 
                       height={180} 
                    />
+                </div>
+
+                <div className="mt-5 row g-4">
+                   <div className="col-md-6">
+                      <h6 className="mb-3 fw-bold text-slate-800 d-flex align-items-center gap-2">
+                         <LayoutGrid size={16} className="text-violet-600" />
+                         Image History
+                      </h6>
+                      <div className="bg-slate-50 p-2 rounded-3">
+                         <Chart 
+                            options={chartOptions('#8b5cf6', 'line')} 
+                            series={[{ name: 'Images', data: generateSeriesData('imageCount', true) }]} 
+                            type="line" 
+                            height={150} 
+                         />
+                      </div>
+                   </div>
+                   <div className="col-md-6">
+                      <h6 className="mb-3 fw-bold text-slate-800 d-flex align-items-center gap-2">
+                         <PlayCircle size={16} className="text-rose-600" />
+                         Video History
+                      </h6>
+                      <div className="bg-slate-50 p-2 rounded-3">
+                         <Chart 
+                            options={chartOptions('#e11d48', 'line')} 
+                            series={[{ name: 'Videos', data: generateSeriesData('videoCount', true) }]} 
+                            type="line" 
+                            height={150} 
+                         />
+                      </div>
+                   </div>
                 </div>
              </div>
           </div>

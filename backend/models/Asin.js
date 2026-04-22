@@ -64,6 +64,7 @@ const asinSchema = new mongoose.Schema({
   },
   reviewCount: { type: Number, default: 0 },
   bulletPoints: { type: Number, default: 0 }, // List count
+  videoCount: { type: Number, default: 0 }, // Top level video count
   bulletPointsText: [{ type: String }], // Actual bullet point text
   lqs: { type: Number, default: 0 }, // Listing Quality Score
   buyBoxWin: { type: Boolean, default: false }, // Buy Box winner status
@@ -99,6 +100,8 @@ const asinSchema = new mongoose.Schema({
     descriptionLength: Number,
     reviewRating: Number,
     reviewCount: Number,
+    hasWhiteBackground: { type: Boolean, default: true },
+    hasHighResolution: { type: Boolean, default: true },
   },
 
   // CDQ (Content Data Quality) - New Enhanced Scoring
@@ -143,6 +146,8 @@ const asinSchema = new mongoose.Schema({
     reviewCount: { type: Number, default: 0 },
     offers: { type: Number, default: 0 },
     lqs: { type: Number, default: 0 },
+    imageCount: { type: Number, default: 0 },
+    videoCount: { type: Number, default: 0 },
   }],
 
   // Rating history (existing)
@@ -157,6 +162,7 @@ const asinSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  rawOctoparseData: { type: mongoose.Schema.Types.Mixed }, // Store exact JSON from scrape for debugging
 });
 
 // Compound index for unique ASIN per seller
@@ -212,6 +218,15 @@ asinSchema.methods.getTrends = function () {
 
 asinSchema.pre('save', function (next) {
   this.updatedAt = new Date();
+  
+  // Initialize A+ absence tracking if missing
+  if (this.hasAplus === false && !this.aplusAbsentSince) {
+    this.aplusAbsentSince = new Date();
+  } else if (this.hasAplus === true) {
+    this.aplusPresentSince = this.aplusPresentSince || new Date();
+    this.aplusAbsentSince = null;
+  }
+  
   next();
 });
 

@@ -1,7 +1,10 @@
 const axios = require('axios');
 const Seller = require('../models/Seller');
 const Asin = require('../models/Asin');
+const Action = require('../models/Action');
 const { calculateLQS, calculateCDQ, getGrade } = require('../utils/lqs');
+const SocketService = require('./socketService');
+const nvidiaAiService = require('./nvidiaAiService');
 
 class OctoparseAutomationService {
     constructor() {
@@ -21,6 +24,62 @@ class OctoparseAutomationService {
         
         // Retry tracking for data gaps
         this._lastRunData = new Map(); // Store last run's data per seller for comparison
+        
+        // Rate limiting & Concurrency Control
+        this._apiCallCount = 0;
+        this._lastApiCall = 0;
+        this._executingSetups = 0;
+        this._maxConcurrentSetups = 3;
+        this._setupQueue = [];
+    }
+
+    /**
+     * Internal semaphore to control concurrent API-heavy operations (Inject/Start)
+     */
+    async _acquireSetupLock() {
+        if (this._executingSetups < this._maxConcurrentSetups) {
+            this._executingSetups++;
+            return;
+        }
+        return new Promise(resolve => {
+            this._setupQueue.push(resolve);
+        });
+    }
+
+    _releaseSetupLock() {
+        this._executingSetups--;
+        if (this._setupQueue.length > 0) {
+            this._executingSetups++;
+            const next = this._setupQueue.shift();
+            next();
+        }
+    }
+
+    async wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Executes an async mapper function on an array of items with a concurrency limit.
+     */
+    async _throttledMap(items, mapper, concurrency = 3) {
+        const results = [];
+        const executing = new Set();
+        
+        for (const item of items) {
+            const p = Promise.resolve().then(() => mapper(item, items));
+            results.push(p);
+            executing.add(p);
+            
+            const clean = () => executing.delete(p);
+            p.then(clean).catch(clean);
+            
+            if (executing.size >= concurrency) {
+                await Promise.race(executing);
+            }
+        }
+        
+        return Promise.all(results);
     }
 
     isConfigured() {
@@ -419,126 +478,52 @@ class OctoparseAutomationService {
                 updateData.title = titleStr;
             }
 
-            // Price mapping - Octoparse uses "asp" field
-            const price = item.asp || item.Field2 || item.Price || item.price || item.Current_Price || item.currentPrice || item.Selling_Price || '';
-            if (price) {
-                // Handle currency symbols and extract numeric value
-                const cleanPrice = price.toString().replace(/[₹,\s]/g, '');
-                const priceNum = parseFloat(cleanPrice);
-                if (priceNum > 0 && priceNum < 1000000) { // Reasonable price range
-                    updateData.currentPrice = priceNum;
-                }
+            // Price mapping - standardize cleaning
+            const rawPrice = item.asp || item.Field2 || item.Price || item.Current_Price || '';
+            const priceNum = this._cleanPrice(rawPrice);
+            if (priceNum > 0) {
+                updateData.currentPrice = priceNum;
             }
 
-            // MRP mapping - Octoparse uses "mrp" field
-            const mrp = item.mrp || item.Field3 || item.MRP || item.List_Price || item.listPrice || '';
-            if (mrp) {
-                const cleanMrp = mrp.toString().replace(/[₹,\s]/g, '');
-                updateData.mrp = parseFloat(cleanMrp) || 0;
+            // MRP mapping - standardize cleaning
+            const rawMrp = item.mrp || item.Field3 || item.MRP || item.List_Price || '';
+            const mrpNum = this._cleanPrice(rawMrp);
+            if (mrpNum > 0) {
+                updateData.mrp = mrpNum;
             }
 
-            // Rating mapping - Octoparse uses "Rating" field
-            const ratingRaw = (item.Rating || item.Field7 || item.rating || item.Average_Rating || '').toString();
-
-            // 1. Robust Rating Extraction
-            const outOfMatch = ratingRaw.match(/([0-5](?:[.,]\d+)?)\s*(?:out\s*of\s*5|\/5|(?=\s*stars?))/i);
-            const startMatch = ratingRaw.match(/^([0-5](?:[.,]\d+)?)/);
-            const firstMatch = ratingRaw.match(/([0-5](?:[.,]\d+)?)/);
-
-            let ratingNum = 0;
-            if (outOfMatch) ratingNum = parseFloat(outOfMatch[1].replace(',', '.')) || 0;
-            else if (startMatch) ratingNum = parseFloat(startMatch[1].replace(',', '.')) || 0;
-            else if (firstMatch) {
-                const val = parseFloat(firstMatch[1].replace(',', '.')) || 0;
-                if (val <= 5) ratingNum = val;
+            // 1. Rating mapping - Strictly use avg_rating field (No other parsing methods)
+            let rating = parseFloat(item.avg_rating);
+            if (isNaN(rating)) rating = 0;
+            if (rating > 0) {
+                updateData.rating = rating;
             }
 
-            if (ratingNum > 0) {
-                updateData.rating = ratingNum;
+            // 2. Review Count Extraction - Use standardized cleaning logic
+            const rawReviewStr = item.review_count || item.Review_Count || item.ReviewCount || item.rating || item.Reviews || item.RT || '';
+            const reviewCount = this._cleanReviewCount(rawReviewStr);
+            if (reviewCount > 0) {
+                updateData.reviewCount = reviewCount;
             }
 
-            // 2. Rating Breakdown - USE STAR PERCENTAGE FIELDS DIRECTLY (no extra processing)
-            // Support multiple field naming conventions: five_star, 5_star, Field12, etc.
-            const starPercentFields = {
-                fiveStar: item.five_star || item['5_star'] || item.Field12 || '',
-                fourStar: item.four_star || item['4_star'] || item.Field13 || '',
-                threeStar: item.three_star || item['3_star'] || item.Field14 || '',
-                twoStar: item.two_star || item['2_star'] || item.Field15 || '',
-                oneStar: item.one_star || item['1_star'] || item.Field16 || ''
+            // 3. Rating Breakdown - Use standardized extraction logic
+            const rawBreakdownStr = item.Rating || item.RT || item.rating || '';
+            const percentages = this._extractBreakdown(rawBreakdownStr) || {
+                '5': parseFloat(item['5_star'] || item.five_star || 0),
+                '4': parseFloat(item['4_star'] || item.four_star || 0),
+                '3': parseFloat(item['3_star'] || item.three_star || 0),
+                '2': parseFloat(item['2_star'] || item.two_star || 0),
+                '1': parseFloat(item['1_star'] || item.one_star || 0)
             };
 
-            const ratingBreakdown = {};
-            let hasBreakdown = false;
-            for (const [key, val] of Object.entries(starPercentFields)) {
-                if (val && val.toString().trim()) {
-                    // Extract numeric percentage (handle "53%" or "53")
-                    const numeric = parseInt(val.toString().replace(/[^0-9]/g, '')) || 0;
-                    if (numeric > 0) {
-                        ratingBreakdown[key] = numeric;
-                        hasBreakdown = true;
-                    }
-                }
-            }
-            if (hasBreakdown) {
-                updateData.ratingBreakdown = ratingBreakdown;
-            }
-
-            // 3. Review Count Extraction - ROBUST LOGIC
-            const reviewsField = (
-                item.reviews_count || item.Review_Count || item.review_count || 
-                item.Count || item.count || item.RatingCount || item.Rating_Count ||
-                item.Reviews || item.reviews || item.ReviewCount || item.Reviews_Count || 
-                item.Total_Reviews || item.totalReviews || ''
-            ).toString().trim();
-            const ratingStr = (item.Rating || item.Field7 || item.rating || '').toString().trim();
-            
-            // Search for matches in dedicated field first, then rating string
-            const searchTargets = [reviewsField, ratingStr];
-            let reviewCount = 0;
-
-            for (const target of searchTargets) {
-                if (!target) continue;
-
-                // Priority 0: Specific fix for "out of 5[Count] global ratings" concatenation bug
-                // This happens when Octoparse fails to put a space after the rating
-                const concatMatch = target.match(/out\s*of\s*5(\d+)\s*(?:global\s*ratings?|reviews?)/i);
-                if (concatMatch) {
-                    reviewCount = parseInt(concatMatch[1]) || 0;
-                    if (reviewCount > 0) break;
-                }
-
-                // Priority 1: "123 global ratings/reviews"
-                const globalMatch = target.match(/([\d,]+)\s*(?:global\s*ratings?|reviews?)/i);
-                if (globalMatch) {
-                    reviewCount = parseInt(globalMatch[1].replace(/,/g, '')) || 0;
-                    if (reviewCount > 0) break;
-                }
-
-                // Priority 2: Numbers in parentheses (e.g. "(22)")
-                const parenMatch = target.match(/\(([\d,]+)\)/);
-                if (parenMatch) {
-                    reviewCount = parseInt(parenMatch[1].replace(/,/g, '')) || 0;
-                    if (reviewCount > 0) break;
-                }
-
-                // Priority 3: Pure numbers (common in dedicated fields)
-                const pureNumMatch = target.match(/^[\d,]+$/);
-                if (pureNumMatch) {
-                    reviewCount = parseInt(target.replace(/,/g, '')) || 0;
-                    if (reviewCount > 0) break;
-                }
-            }
-
-            // Fallback: If still not found, try to clean the string of "X out of 5" noise
-            if (reviewCount === 0) {
-                const noiseFree = searchTargets.join(' ')
-                    .replace(/[0-5](?:\.[0-9])?\s+out\s+of\s+5\s+stars?/i, '')
-                    .replace(/[0-5]\s*stars?/i, '');
-                
-                const fallbackMatch = noiseFree.match(/[\d,]+/);
-                if (fallbackMatch) {
-                    reviewCount = parseInt(fallbackMatch[0].replace(/,/g, '')) || 0;
-                }
+            if (percentages) {
+                updateData.ratingBreakdown = {
+                    fiveStar: percentages['5'] || 0,
+                    fourStar: percentages['4'] || 0,
+                    threeStar: percentages['3'] || 0,
+                    twoStar: percentages['2'] || 0,
+                    oneStar: percentages['1'] || 0
+                };
             }
 
             // Only update if value is valid and not suspiciously large (protect against ASIN leaks)
@@ -546,81 +531,68 @@ class OctoparseAutomationService {
                 updateData.reviewCount = reviewCount;
             }
 
-            // BSR mapping - handle BSR, sub_BSR, alt_bsr, and alt_sub_bsr fields
-            let bsrValue = 0;
-            // Try multiple possible field names for main BSR
-            const bsrRaw = item.BSR || item.Field9 || item.bsr || item.Best_Seller_Rank || item.bsrRank || item.alt_bsr || '';
-            // Try multiple possible field names for sub BSR
+            // BSR mapping - standardized cleaning
+            const bsrRaw = item.BSR || item.Field9 || item.bsr || item.alt_bsr || '';
+            const bsrNum = this._cleanBsr(bsrRaw);
+            if (bsrNum > 0) {
+                updateData.bsr = bsrNum;
+            }
+
+            // Store sub-BSR ranks separately
             const subBsrRaw = item.sub_BSR || item.alt_sub_bsr || '';
-
-            // Try main BSR first
-            if (bsrRaw) {
-                bsrValue = this.extractBsrFromString(bsrRaw);
-            }
-
-            // If no main BSR found, try sub_BSR
-            if (bsrValue === 0 && subBsrRaw) {
-                bsrValue = this.extractBsrFromString(subBsrRaw);
-            }
-
-            if (bsrValue > 0) {
-                updateData.bsr = bsrValue;
-            }
-
-            // Store sub-BSR ranks separately (use alt_sub_bsr too)
-            const subBsrs = [];
-            if (subBsrRaw && subBsrRaw !== bsrRaw) {
-                const parsed = this.extractBsrFromString(subBsrRaw);
-                if (parsed > 0) {
-                    subBsrs.push(parsed.toString());
-                }
-            }
-            if (subBsrs.length > 0) {
-                updateData.subBSRs = subBsrs;
-            }
-
-            // Category mapping - extract last breadcrumb only
-            const categoryRaw = item.category || item.Field4 || item.Category || item.Product_Category || '';
-            if (categoryRaw) {
-                // Extract last breadcrumb from HTML
-                const liMatch = categoryRaw.match(/<li[^>]*>(?:<span[^>]*>)?(?:<a[^>]*>)?([^<]+)(?:<\/a>)?(?:<\/span>)?<\/li>$/i);
-                if (liMatch) {
-                    updateData.category = liMatch[1].trim().replace(/^›\s*/, '').replace(/\s*›$/, '').trim();
-                } else {
-                    // Fallback to original if regex doesn't match
-                    updateData.category = categoryRaw.replace(/<[^>]*>/g, '').trim();
+            if (subBsrRaw && typeof subBsrRaw === 'string') {
+                const parts = subBsrRaw.split(/\s{2,}|\n/).map(p => p.trim()).filter(Boolean);
+                const subBSRs = parts.filter(p => p.includes('#') && (p.toLowerCase().includes(' in ') || p.toLowerCase().includes(' ( ')));
+                if (subBSRs.length > 0) {
+                    updateData.subBSRs = subBSRs;
+                    updateData.subBsr = subBSRs[0]; // Set the primary one for the dedicated column
                 }
             }
 
-            // Image mapping - Octoparse uses "Main_Image" field
-            const image = item.Main_Image || item.Field5 || item.Image || item.imageUrl || item.image || '';
+            // Category mapping - Standardized breadcrumb extraction
+            let category = (item.category || item.Field4 || item.Category || '').trim();
+            if (category.includes('<li')) {
+                const matches = category.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+                if (matches) {
+                    category = matches.map(m => m.replace(/<[^>]+>/g, '').replace(/^›\s*/, '').replace(/\s*›$/, '').trim()).filter(Boolean).join(' › ');
+                }
+            } else {
+                category = category.replace(/<[^>]*>/g, '').trim();
+            }
+            if (category) updateData.category = category;
+
+            // Image mapping
+            const image = item.Main_Image || item.Field5 || item.imageUrl || item.image || '';
             if (image) updateData.imageUrl = image;
 
             // Sold by mapping
-            const soldBy = item.sold_by || item.Field11 || item.soldBy || '';
+            const soldBy = (item.sold_by || item.Field11 || item.soldBy || '').trim();
             if (soldBy) updateData.soldBy = soldBy;
 
-            // Second ASP mapping
-            const secondAsp = item.second_asp || item.secondAsp || '';
-            if (secondAsp) {
-                const cleanSecondAsp = secondAsp.toString().replace(/[₹,\s]/g, '');
-                const secondPriceNum = parseFloat(cleanSecondAsp);
-                if (secondPriceNum > 0 && secondPriceNum < 1000000) {
-                    updateData.secondAsp = secondPriceNum;
-                }
+            // Second ASP mapping - standardized cleaning
+            const secondAspNum = this._cleanPrice(item.second_asp || item.secondAsp || '');
+            if (secondAspNum > 0) {
+                updateData.secondAsp = secondAspNum;
             }
 
             // Second Sold By mapping
-            const soldBySec = item.Sold_by_sec || item.soldBySec || '';
+            const soldBySec = (item.Sold_by_sec || item.soldBySec || '').trim();
             if (soldBySec) updateData.soldBySec = soldBySec;
 
-            // Image count - count <li> tags in image_count field
+            // Image count & Video detection
             const imageCountRaw = item.image_count || item.Field6 || '';
             if (imageCountRaw) {
-                const liMatches = imageCountRaw.match(/<li[^>]*>/g);
-                if (liMatches) {
-                    updateData.imagesCount = liMatches.length;
+                const liMatches = imageCountRaw.match(/<li[^>]*>[\s\S]*?<\/li>/gi) || [];
+                updateData.imagesCount = liMatches.length;
+                
+                // Video detection - look for video indicators in the li HTML
+                let videoCount = 0;
+                for (const li of liMatches) {
+                    if (li.toLowerCase().includes('video') || li.toLowerCase().includes('vjs') || li.match(/<div[^>]*video[^>]*>/i)) {
+                        videoCount++;
+                    }
                 }
+                updateData.videoCount = videoCount;
             }
 
             // Bullet points - combine all bp_1, bp_2, etc. or parse bullet_points HTML
@@ -660,31 +632,6 @@ class OctoparseAutomationService {
                 updateData.lastScraped = new Date();
                 updateData.scrapeStatus = 'COMPLETED';
                 updateData.status = 'Active';
-
-                // Map Rating Breakdown if available (expecting fields like five_star/5_star/Field12 containing "53%")
-                // Only use these if ratingBreakdown wasn't already successfully parsed earlier
-                if (!updateData.ratingBreakdown) {
-                    const starFields = {
-                        fiveStar: item.five_star || item['5_star'] || item.Field12 || '',
-                        fourStar: item.four_star || item['4_star'] || item.Field13 || '',
-                        threeStar: item.three_star || item['3_star'] || item.Field14 || '',
-                        twoStar: item.two_star || item['2_star'] || item.Field15 || '',
-                        oneStar: item.one_star || item['1_star'] || item.Field16 || ''
-                    };
-
-                    const ratingBreakdown = {};
-                    let hasBreakdown = false;
-                    for (const [key, val] of Object.entries(starFields)) {
-                        if (val && val.toString().trim()) {
-                            const numeric = parseInt(val.toString().replace(/[^0-9]/g, '')) || 0;
-                            if (!isNaN(numeric) && numeric > 0) {
-                                ratingBreakdown[key] = numeric;
-                                hasBreakdown = true;
-                            }
-                        }
-                    }
-                    if (hasBreakdown) updateData.ratingBreakdown = ratingBreakdown;
-                }
 
                 // Map Buy Box & A+ Content status
                 const buyBoxRaw = item.buy_box_winner || item.buyBox || '';
@@ -726,6 +673,23 @@ class OctoparseAutomationService {
                 // Detailed metrics for LQS
                 if (asin.title) asin.titleLength = asin.title.length;
 
+                // NVIDIA AI Listing Image Audit (White Background & Resolution)
+                if (asin.mainImageUrl) {
+                    try {
+                        const analysis = await nvidiaAiService.analyzeListingImage(asin.mainImageUrl);
+                        asin.lqsDetails = asin.lqsDetails || {};
+                        asin.lqsDetails.hasWhiteBackground = analysis.hasWhiteBackground;
+                        asin.lqsDetails.hasHighResolution = analysis.isHighResolution;
+                        
+                        // Automated Task Creation for Quality Violations
+                        if (!analysis.hasWhiteBackground || !analysis.isHighResolution) {
+                            await this.createAutomatedImageTask(asin, analysis);
+                        }
+                    } catch (aiError) {
+                        this.log('error', `⚠️ NVIDIA Analysis failed for ${asinCode}: ${aiError.message}`);
+                    }
+                }
+
                 // Calculate CDQ (Content Data Quality) score
                 const cdq = calculateCDQ(asin);
                 asin.cdq = Math.round(cdq.totalScore);
@@ -760,10 +724,37 @@ class OctoparseAutomationService {
                     reviews: asin.reviewCount,
                     lqs: asin.lqs,
                     imageCount: asin.imagesCount,
+                    videoCount: asin.videoCount || 0,
                     hasAplus: asin.hasAplus,
                     titleLength: asin.titleLength || (asin.title ? asin.title.length : 0),
                     bulletPoints: asin.bulletPoints || 0
                 });
+
+                // Idempotent Daily History Update (One entry per day)
+                if (!asin.history) asin.history = [];
+                const todayStr = now.toISOString().split('T')[0];
+                const histIdx = asin.history.findIndex(h => 
+                    new Date(h.date).toISOString().split('T')[0] === todayStr
+                );
+
+                const histEntry = {
+                    date: now,
+                    price: asin.currentPrice,
+                    bsr: asin.bsr,
+                    rating: asin.rating,
+                    reviewCount: asin.reviewCount,
+                    lqs: asin.lqs,
+                    imageCount: asin.imagesCount,
+                    videoCount: asin.videoCount || 0
+                };
+
+                if (histIdx >= 0) {
+                    asin.history[histIdx] = { ...asin.history[histIdx].toObject(), ...histEntry };
+                } else {
+                    asin.history.push(histEntry);
+                }
+
+                if (asin.history.length > 30) asin.history = asin.history.slice(-30);
 
                 await asin.save();
                 updatedCount++;
@@ -1285,8 +1276,9 @@ class OctoparseAutomationService {
                 return { success: false, reason: 'Task failed' };
             }
 
-            // Wait 1 minute before next poll
-            await new Promise(resolve => setTimeout(resolve, this.pollInterval));
+            // Wait 1 minute before next poll (with 1-5s jitter to avoid synchronized bursts)
+            const jitter = Math.floor(Math.random() * 5000);
+            await new Promise(resolve => setTimeout(resolve, this.pollInterval + jitter));
         }
 
         this.concurrentPollers.delete(pollKey);
@@ -1341,15 +1333,15 @@ class OctoparseAutomationService {
             const asinCode = this.parseAsinFromData(item);
             if (asinCode) {
                 const title = item.Title || item.Field1 || item.title || '';
-                const price = item.asp || item.Field2 || item.Price || item.Current_Price || 0;
-                const bsr = item.BSR || item.Field9 || item.bsr || 0;
-                const rating = item.Rating || item.Field7 || item.rating || 0;
+                const price = this._cleanPrice(item.asp || item.Field2 || item.Price || item.Current_Price || 0);
+                const bsr = this._cleanBsr(item.BSR || item.Field9 || item.bsr || 0);
+                const rating = parseFloat(item.avg_rating) || 0;
                 
                 resultMap.set(asinCode.toUpperCase(), {
                     title: title.toString().trim(),
-                    currentPrice: parseFloat(price) || 0,
-                    bsr: parseInt(bsr) || 0,
-                    rating: parseFloat(rating) || 0
+                    currentPrice: price,
+                    bsr: bsr,
+                    rating: rating
                 });
             }
         }
@@ -1483,12 +1475,40 @@ class OctoparseAutomationService {
                     totalAsins: asins.length
                 });
 
-                await this.stopTask(taskId);
-                await new Promise(resolve => setTimeout(resolve, 3000));
-
-                await this.injectUrls(taskId, urls);
-
-                const lotNo = await this.startTask(taskId);
+                let lotNo = null;
+                const maxInitRetries = 3;
+                
+                // ACQUIRE LOCK for API-heavy setup phase
+                await this._acquireSetupLock();
+                try {
+                    for (let attempt = 1; attempt <= maxInitRetries; attempt++) {
+                        try {
+                            this.log('info', `[Attempt ${attempt}/${maxInitRetries}] Starting setup for task ${taskId}`);
+                            
+                            await this.stopTask(taskId);
+                            await this.wait(3000);
+                            
+                            await this.injectUrls(taskId, urls);
+                            await this.wait(2000);
+                            
+                            lotNo = await this.startTask(taskId);
+                            if (lotNo) {
+                                this.log('info', `✅ Task ${taskId} started on attempt ${attempt}`);
+                                break;
+                            }
+                        } catch (err) {
+                            this.log('warn', `⚠️ Setup attempt ${attempt} failed for task ${taskId}: ${err.message}`);
+                            if (attempt === maxInitRetries) throw err;
+                            
+                            const backoff = 10000 * attempt;
+                            this.log('info', `⏳ Backing off for ${backoff/1000}s...`);
+                            await this.wait(backoff);
+                        }
+                    }
+                } finally {
+                    // RELEASE LOCK so next seller in queue can start setup
+                    this._releaseSetupLock();
+                }
 
                 // Start concurrent polling - updates DB every minute as data is extracted
                 this.log('info', `Starting concurrent polling (1-min intervals) for task ${taskId}`);
@@ -1531,6 +1551,17 @@ class OctoparseAutomationService {
                 retryResult,
                 selfHealing: 'started in background'
             });
+            
+            // Broadcast final completion for this seller
+            const io = SocketService.getIo();
+            if (io) {
+                io.emit('seller_sync_complete', {
+                    sellerId,
+                    executionId,
+                    status: 'COMPLETED',
+                    dataGapsFound: missingGaps.length
+                });
+            }
 
             return {
                 success: true,
@@ -1576,24 +1607,27 @@ class OctoparseAutomationService {
             return { success: false, reason: 'No active sellers' };
         }
 
-        this.log('info', `🚀 Launching ${sellers.length} seller pipelines CONCURRENTLY...`);
+        this.log('info', `🚀 Launching ${sellers.length} seller pipelines with concurrency: 5...`);
 
-        // Run ALL seller pipelines concurrently
-        const promises = sellers.map(seller =>
-            this.executePipeline(seller._id).then(result => ({
-                sellerId: seller._id,
-                sellerName: seller.name,
-                ...result
-            })).catch(err => ({
-                sellerId: seller._id,
-                sellerName: seller.name,
-                success: false,
-                error: err.message,
-                executionId: `error_${seller._id}`
-            }))
-        );
-
-        const results = await Promise.all(promises);
+        // Use throttled execution to avoid 429s from Octoparse
+        const results = await this._throttledMap(sellers, async (seller) => {
+            try {
+                const result = await this.executePipeline(seller._id);
+                return {
+                    sellerId: seller._id,
+                    sellerName: seller.name,
+                    ...result
+                };
+            } catch (err) {
+                return {
+                    sellerId: seller._id,
+                    sellerName: seller.name,
+                    success: false,
+                    error: err.message,
+                    executionId: `error_${seller._id}`
+                };
+            }
+        }, 5);
 
         const successCount = results.filter(r => r.success).length;
         const totalDuration = Date.now() - startTime;
@@ -1669,6 +1703,118 @@ class OctoparseAutomationService {
         } catch (err) {
             this.log('warn', `Bulk status check failed`, { error: err.message });
             return [];
+        }
+    }
+
+    _extractBreakdown(str) {
+        if (!str) return null;
+        // Look for multiple percentages, often found in Amazon's messy feedback strings
+        // order is always 5, 4, 3, 2, 1 star
+        const matches = str.match(/(\d+)%/g);
+        if (matches && matches.length >= 5) {
+            return {
+                '5': parseFloat(matches[0]) || 0,
+                '4': parseFloat(matches[1]) || 0,
+                '3': parseFloat(matches[2]) || 0,
+                '2': parseFloat(matches[3]) || 0,
+                '1': parseFloat(matches[4]) || 0
+            };
+        }
+        return null;
+    }
+
+    _cleanReviewCount(str) {
+        if (!str) return 0;
+        let s = str.toString().trim();
+        
+        // Remove common Amazon rating noise that often smashes into the review count
+        s = s.replace(/out\s+of\s+[0-5](?:\.[0-9])?/gi, '');
+        s = s.replace(/[0-5]\s*stars?/gi, '');
+        
+        // Priority 1: Parenthesized numbers with commas (e.g. "(2,441)")
+        const parenMatch = s.match(/\(([\d,]+)\)/);
+        if (parenMatch) {
+            const val = parseInt(parenMatch[1].replace(/,/g, ''));
+            if (val > 0) return val;
+        }
+
+        // Priority 2: "123 global ratings/reviews"
+        const globalMatch = s.match(/([\d,]+)\s*(?:global\s*ratings?|reviews?)/i);
+        if (globalMatch) return parseInt(globalMatch[1].replace(/,/g, '')) || 0;
+
+        // Priority 3: Decimal numbers in parentheses (e.g. "(2.5K)")
+        const kMatch = s.match(/\(([\d.]+)\s*k\)/i);
+        if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1000);
+
+        // Priority 4: Look for any number > 10 that isn't a percentage
+        const allNumericMatches = s.match(/\b[\d,]+\b(?!\s*%)/g);
+        if (allNumericMatches) {
+            for (const m of allNumericMatches) {
+                const val = parseInt(m.replace(/,/g, ''));
+                if (val > 10 && val < 50000000) return val;
+                if (val > 0 && !s.toLowerCase().includes('star')) return val;
+            }
+        }
+        
+        // Fallback: Just return any numeric digits found
+        return parseInt(s.replace(/[^0-9]/g, '')) || 0;
+    }
+
+    _cleanPrice(str) {
+        if (!str) return 0;
+        const cleaned = str.toString().replace(/₹|,/g, '').trim();
+        const match = cleaned.match(/\d+(\.\d+)?/);
+        return match ? parseFloat(match[0]) : 0;
+    }
+
+    _cleanStock(val) {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        const cleaned = val.toString().replace(/[^0-9]/g, '').trim();
+        return parseInt(cleaned) || 0;
+    }
+
+    _cleanBsr(str) {
+        if (!str) return 0;
+        const cleaned = str.toString().replace(/,/g, '').trim();
+        const match = cleaned.match(/\d+/);
+        return match ? parseInt(match[0]) : 0;
+    }
+
+    /**
+     * Create an automated Action/Task for image quality issues
+     */
+    async createAutomatedImageTask(asin, analysis) {
+        try {
+            const issues = [];
+            if (!analysis.hasWhiteBackground) issues.push("Non-white background detected");
+            if (!analysis.isHighResolution) issues.push("Low image resolution (< 1000px equivalent)");
+
+            const existingAction = await Action.findOne({ 
+                resolvedAsins: asin.asinCode, 
+                type: 'IMAGE_OPTIMIZATION',
+                status: 'PENDING' 
+            });
+
+            if (existingAction) return; // Don't duplicate tasks
+
+            const action = new Action({
+                title: `Optimize Main Image: ${asin.asinCode}`,
+                description: `AI Audit for ${asin.asinCode} failed image quality standards.\n\nIssues Found:\n- ${issues.join('\n- ')}\n\nAI Reasoning: ${analysis.reasoning || 'No details available.'}\n\nSolution: Use the AI Reconstruction tool or upload a high-resolution image with a pure white (#FFFFFF) background to improve LQS and conversion.`,
+                type: 'IMAGE_OPTIMIZATION',
+                priority: 'HIGH',
+                status: 'PENDING',
+                sellerId: asin.seller,
+                resolvedAsins: [asin.asinCode],
+                asins: [asin._id],
+                createdBy: asin.seller, // Using seller ID as creator for system-level tasks
+                isAIGenerated: true,
+                aiReasoning: analysis.reasoning
+            });
+
+            await action.save();
+        } catch (error) {
+            console.error(`❌ Failed to create automated task: ${error.message}`);
         }
     }
 }
