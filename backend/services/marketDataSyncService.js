@@ -1467,7 +1467,7 @@ class MarketDataSyncService {
 
             // 7. Bullet Points
             const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
-            const bulletPoints = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
+            const bulletPoints = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
 
             // 8. Stock Level, A+ Content & Availability
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
@@ -1786,7 +1786,7 @@ class MarketDataSyncService {
                 const videoCount = mediaData.videoCount;
 
                 const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
-                const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count || 0);
+                const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
                 const rawDeal = rawData.deal_badge || rawData.dealBadge || rawData.deal || '';
                 const dealBadge = this._cleanDealBadge(rawDeal) || asin.dealBadge || 'No deal found';
 
@@ -1810,7 +1810,8 @@ class MarketDataSyncService {
                     bulletPoints: bulletCount,
                     subBSRs: subBSRs,
                     hasAplus: hasAplus,
-                    stockLevel: this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0))
+                    stockLevel: this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0)),
+                    lqs: asin.lqs || 0
                 };
 
                 // Update weekHistory in memory to avoid duplicates on the same date
@@ -1940,7 +1941,7 @@ class MarketDataSyncService {
             // Extract the main rank number
             const mainMatch = bsrField.match(/#([\d,]+)\s+in\s+([^#(]+)/);
             if (mainMatch) {
-                main = parseInt(mainMatch[1].replace(/,/g, ''));
+                main = parseInt(mainMatch[1].replace(/,/g, '')) || 0;
                 allRanks.push(mainMatch[0].trim());
             }
 
@@ -1955,7 +1956,7 @@ class MarketDataSyncService {
         if (subBsrField && typeof subBsrField === 'string' && subBsrField.trim()) {
             const subMatch = subBsrField.match(/#([\d,]+)\s+in\s+(.+)/);
             if (subMatch) {
-                sub = parseInt(subMatch[1].replace(/,/g, ''));
+                sub = parseInt(subMatch[1].replace(/,/g, '')) || 0;
                 subBsrString = subBsrField.trim();
                 if (!allRanks.includes(subBsrString)) {
                     allRanks.push(subBsrString);
@@ -1964,7 +1965,7 @@ class MarketDataSyncService {
                 // Just a number without category
                 const numMatch = subBsrField.match(/#([\d,]+)/);
                 if (numMatch) {
-                    sub = parseInt(numMatch[1].replace(/,/g, ''));
+                    sub = parseInt(numMatch[1].replace(/,/g, '')) || 0;
                     subBsrString = subBsrField.trim();
                 }
             }
@@ -2018,8 +2019,8 @@ class MarketDataSyncService {
             }
         } else {
             // Fallback to numeric fields
-            imagesCount = parseInt(this._getFromRaw(rawData, ['imageCount', 'imagesCount', 'Field6'], 0));
-            videoCount = parseInt(this._getFromRaw(rawData, ['videoCount', 'video_count', 'videos'], 0));
+            imagesCount = parseInt(this._getFromRaw(rawData, ['imageCount', 'imagesCount', 'Field6'], 0)) || 0;
+            videoCount = parseInt(this._getFromRaw(rawData, ['videoCount', 'video_count', 'videos'], 0)) || 0;
         }
 
         // Ensure we have at least main image counted
@@ -2137,11 +2138,11 @@ class MarketDataSyncService {
         // Extract percentages from the pattern (e.g., "53%23%12%5%7%")
         const percMatch = s.match(/(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%/);
         if (percMatch) {
-            breakdown.fiveStar = parseFloat(percMatch[1]);
-            breakdown.fourStar = parseFloat(percMatch[2]);
-            breakdown.threeStar = parseFloat(percMatch[3]);
-            breakdown.twoStar = parseFloat(percMatch[4]);
-            breakdown.oneStar = parseFloat(percMatch[5]);
+            breakdown.fiveStar = parseFloat(percMatch[1]) || 0;
+            breakdown.fourStar = parseFloat(percMatch[2]) || 0;
+            breakdown.threeStar = parseFloat(percMatch[3]) || 0;
+            breakdown.twoStar = parseFloat(percMatch[4]) || 0;
+            breakdown.oneStar = parseFloat(percMatch[5]) || 0;
         }
 
         return breakdown;
