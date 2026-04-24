@@ -46,7 +46,8 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    server: {
+     server: {
+      host: '0.0.0.0',
       proxy: {
         '/api': {
           target: 'http://localhost:3001',
@@ -55,7 +56,15 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
-      allowedHosts: [domain, `www.${domain}`],
+      allowedHosts: [
+        domain,
+        `www.${domain}`,
+        'data.brandcentral.in',
+        'www.data.brandcentral.in',
+        'localhost',
+        '127.0.0.1',
+        '0.0.0.0',
+      ],
     },
   }
 })
