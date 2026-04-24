@@ -147,6 +147,52 @@ const SellerAsinsModal = ({
     }
   };
 
+  const handleOctoparseUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      addToast({ 
+        title: 'Invalid File', 
+        message: 'Please upload a JSON file.', 
+        type: 'error' 
+      });
+      return;
+    }
+
+    let pInterval;
+    setIsSubmitting(true);
+    setSubmitProgress(10);
+
+    pInterval = setInterval(() => {
+      setSubmitProgress(prev => Math.min(prev + 5, 90));
+    }, 400);
+
+    try {
+      const result = await marketSyncApi.uploadOctoparseJson(file, seller._id);
+      setSubmitProgress(100);
+
+      addToast({
+        title: 'Octoparse Data Ingested',
+        message: result.message || 'JSON data processed successfully.',
+        type: 'success'
+      });
+
+      if (onRefresh) await onRefresh();
+    } catch (error) {
+      addToast({
+        title: 'Upload Failed',
+        message: error.message || 'Failed to process JSON file',
+        type: 'error'
+      });
+    } finally {
+      if (pInterval) clearInterval(pInterval);
+      setIsSubmitting(false);
+      setSubmitProgress(0);
+      e.target.value = '';
+    }
+  };
+
   const handleEditAsin = (asin) => {
     setEditingAsin(asin);
     setShowEditAsinModal(true);
@@ -292,21 +338,43 @@ const SellerAsinsModal = ({
                       Catalog View
                     </div>
                   </div>
-                  <div className="d-flex gap-2">
-                    <input type="file" id="catalogUpload" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
-                    <button
-                      className="btn btn-white btn-sm border-zinc-200 shadow-sm d-flex align-items-center gap-2 px-3 rounded-pill hover-bg-zinc-50 transition-all"
-                      onClick={() => document.getElementById('catalogUpload').click()}
-                      disabled={isSubmitting}
-                      style={{ height: '36px', fontSize: '11px' }}
-                    >
-                      <FileSpreadsheet size={14} className="text-zinc-600" />
-                      <span className="fw-black uppercase tracking-wider">Bulk Catalog Sync</span>
-                    </button>
+                  <div className="d-flex align-items-center gap-2">
+                    {/* Catalog Management Group */}
+                    <div className="d-flex align-items-center bg-zinc-100/50 p-1 rounded-pill border border-zinc-200">
+                      <input type="file" id="catalogUpload" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                      <button
+                        className="btn btn-white btn-sm border-0 shadow-none d-flex align-items-center gap-2 px-3 rounded-pill hover-bg-white transition-all"
+                        onClick={() => document.getElementById('catalogUpload').click()}
+                        disabled={isSubmitting}
+                        style={{ height: '32px', fontSize: '10px' }}
+                        title="Upload CSV/Excel with ASIN and SKU columns"
+                      >
+                        <FileSpreadsheet size={13} className="text-zinc-500" />
+                        <span className="fw-black uppercase tracking-wider">Bulk ASIN/SKU Sync</span>
+                      </button>
+                    </div>
+
+                    {/* Market Data Group */}
+                    <div className="d-flex align-items-center bg-zinc-100/50 p-1 rounded-pill border border-zinc-200">
+                      <input type="file" id="octoparseUpload" hidden accept=".json" onChange={handleOctoparseUpload} />
+                      <button
+                        className="btn btn-white btn-sm border-0 shadow-none d-flex align-items-center gap-2 px-3 rounded-pill hover-bg-white transition-all"
+                        onClick={() => document.getElementById('octoparseUpload').click()}
+                        disabled={isSubmitting}
+                        style={{ height: '32px', fontSize: '10px' }}
+                        title="Upload Octoparse JSON results (Price, Rank, etc.)"
+                      >
+                        <FileJson size={13} className="text-zinc-500" />
+                        <span className="fw-black uppercase tracking-wider">Octoparse Data Ingest</span>
+                      </button>
+                    </div>
+
+                    <div className="vr mx-1 opacity-10"></div>
+
                     <button
                       className="btn btn-zinc-900 btn-sm shadow-lg d-flex align-items-center gap-2 px-4 rounded-pill hover-scale transition-all"
                       onClick={() => setShowAddAsinModal(true)}
-                      style={{ height: '36px', fontSize: '11px', background: '#18181B', color: '#fff' }}
+                      style={{ height: '34px', fontSize: '11px', background: '#18181B', color: '#fff' }}
                     >
                       <Plus size={14} />
                       <span className="fw-black uppercase tracking-wider">Add ASIN(s)</span>
