@@ -1927,46 +1927,90 @@ class MarketDataSyncService {
      * Handles both alt_bsr and sub_BSR fields correctly
      */
     _parseBSR(rawData) {
-        // Priority: alt_bsr (main rank), BSR, then fallback
-        const bsrField = this._getFromRaw(rawData, ['alt_bsr', 'BSR', 'bsr', 'Field9'], '');
-        const subBsrField = this._getFromRaw(rawData, ['alt_sub_bsr', 'sub_BSR', 'Field10'], '');
+        if (!rawData) return { main: 0, sub: 0, subBsrString: '', allRanks: [] };
+
+        const mainFields = ['alt_bsr', 'BSR', 'bsr', 'Field9'];
+        const subFields = ['alt_sub_bsr', 'sub_BSR', 'Field10', 'alt_bsr', 'BSR'];
 
         let main = 0;
         let sub = 0;
         let subBsrString = '';
         let allRanks = [];
 
-        // Parse main BSR from alt_bsr (e.g., "#1,341 in Home & Kitchen (See Top 100...)")
-        if (bsrField && typeof bsrField === 'string' && bsrField.trim()) {
-            // Extract the main rank number
-            const mainMatch = bsrField.match(/#([\d,]+)\s+in\s+([^#(]+)/);
-            if (mainMatch) {
-                main = parseInt(mainMatch[1].replace(/,/g, '')) || 0;
-                allRanks.push(mainMatch[0].trim());
-            }
+        // Helper to extract rank from a string
+        const extractRank = (str) => {
+            if (!str || typeof str !== 'string') return null;
+            const s = str.trim();
+            if (!s) return null;
 
-            // Extract all rank entries (for subBSRs array)
-            const allMatches = bsrField.match(/#[\d,]+[\s\S]+?(?=#|$)/g);
-            if (allMatches && allMatches.length > 0) {
-                allRanks = allMatches.map(m => m.trim().replace(/\s+/g, ' ')).filter(Boolean);
+            const match = s.match(/#([\d,]+)\s+in\s+([^#(]+)/);
+            if (match) {
+                return {
+                    rank: parseInt(match[1].replace(/,/g, '')),
+                    full: match[0].trim(),
+                    category: match[2].trim()
+                };
+            }
+            const numMatch = s.match(/#([\d,]+)/);
+            if (numMatch) {
+                return {
+                    rank: parseInt(numMatch[1].replace(/,/g, '')),
+                    full: s,
+                    category: ''
+                };
+            }
+            return null;
+        };
+
+        // 1. Try to find main rank
+        for (const field of mainFields) {
+            const val = rawData[field];
+            const res = extractRank(val);
+            if (res) {
+                main = res.rank;
+                if (!allRanks.includes(res.full)) allRanks.push(res.full);
+                break;
             }
         }
 
-        // Parse sub BSR from alt_sub_bsr (e.g., "#44 in Jars & Containers")
-        if (subBsrField && typeof subBsrField === 'string' && subBsrField.trim()) {
-            const subMatch = subBsrField.match(/#([\d,]+)\s+in\s+(.+)/);
-            if (subMatch) {
-                sub = parseInt(subMatch[1].replace(/,/g, '')) || 0;
-                subBsrString = subBsrField.trim();
-                if (!allRanks.includes(subBsrString)) {
-                    allRanks.push(subBsrString);
+        // 2. Try to find sub ranks
+        for (const field of subFields) {
+            const val = rawData[field];
+            if (!val || typeof val !== 'string') continue;
+
+            // Split by '#' to handle cases where multiple ranks are in one field
+            const parts = val.split(/(?=#)/g);
+            for (const part of parts) {
+                const res = extractRank(part);
+                if (res) {
+                    if (!allRanks.includes(res.full)) allRanks.push(res.full);
+                    if (sub === 0 && res.rank !== main) {
+                        sub = res.rank;
+                        subBsrString = res.full;
+                    }
                 }
-            } else {
-                // Just a number without category
-                const numMatch = subBsrField.match(/#([\d,]+)/);
-                if (numMatch) {
-                    sub = parseInt(numMatch[1].replace(/,/g, '')) || 0;
-                    subBsrString = subBsrField.trim();
+            }
+        }
+
+        // 3. Fallback: If main is 0 but we have ranks, use the first rank as main
+        if (main === 0 && allRanks.length > 0) {
+            const firstRes = extractRank(allRanks[0]);
+            if (firstRes) {
+                main = firstRes.rank;
+                // If sub was the same as main, clear sub or pick next
+                if (sub === main) {
+                    const nextRank = allRanks.find(r => {
+                        const res = extractRank(r);
+                        return res && res.rank !== main;
+                    });
+                    if (nextRank) {
+                        const nextRes = extractRank(nextRank);
+                        sub = nextRes.rank;
+                        subBsrString = nextRes.full;
+                    } else {
+                        sub = 0;
+                        subBsrString = '';
+                    }
                 }
             }
         }
@@ -2013,7 +2057,6 @@ class MarketDataSyncService {
                     const allLiMatches = imgHtml.match(/<li[^>]*>/gi) || [];
                     imagesCount = allLiMatches.length - videoLiMatches.length;
                 }
-
             } catch (e) {
                 console.warn('Image count parsing failed:', e.message);
             }
