@@ -32,6 +32,8 @@ app.use(cors({
     'https://retailops.work.gd',
     'http://data.brandcentral.in',
     'http://data.brandcentral.in/',
+    'https://data.brandcentral.in',
+    'https://data.brandcentral.in/',
     /\.work\.gd$/,
     /\.brandcentral\.in$/,
     process.env.FRONTEND_URL,
@@ -193,6 +195,8 @@ const io = new Server(server, {
       'http://127.0.0.1:5173',
       'http://data.brandcentral.in',
       'http://data.brandcentral.in/',
+      'https://data.brandcentral.in',
+      'https://data.brandcentral.in/',
       'https://retailops.vercel.app', // Production Frontend
       process.env.FRONTEND_URL,
       /\.vercel\.app$/,
