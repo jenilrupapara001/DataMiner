@@ -63,7 +63,7 @@ class MarketDataSyncService {
         this.tokenType = 'Bearer';
         this.syncLocks = new Map(); // Concurrency control per sellerId
         this.statusCache = new Map(); // Simple status cache to prevent 429s (TTL: 10s)
-        
+
         // Throttling for setup operations
         this._executingSetups = 0;
         this._maxConcurrentSetups = 3;
@@ -137,7 +137,7 @@ class MarketDataSyncService {
 
         // Use the consolidated duplicateTask method
         const newTaskId = await this.duplicateTask(seller.Name);
-        
+
         await pool.request()
             .input('newTaskId', sql.VarChar, newTaskId)
             .input('sellerId', sql.VarChar, sellerId)
@@ -1452,7 +1452,7 @@ class MarketDataSyncService {
                 .input('totalAsins', sql.Int, asins.length)
                 .input('sellerId', sql.VarChar, sellerId)
                 .query('UPDATE Sellers SET ScrapeUsed = @totalAsins, UpdatedAt = GETDATE() WHERE Id = @sellerId');
-            
+
             console.log(`💾 Updated metadata for seller: ${sellerId}`);
 
             console.log(`🔄 Syncing ${urls.length} ASINs to task ${taskId}...`);
@@ -1590,7 +1590,7 @@ class MarketDataSyncService {
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
             const hasAplus = this._detectAplusContent(rawData);
             const availabilityStatus = rawData.unavilable || rawData.status || rawData.availabilityStatus || rawData.availability || asin.AvailabilityStatus || 'Available';
-            
+
             let aplusAbsentSince = asin.AplusAbsentSince;
             let aplusPresentSince = asin.AplusPresentSince;
             const now = new Date();
@@ -1653,15 +1653,15 @@ class MarketDataSyncService {
             }
 
             // 10. CDQ Calculation (Standardized)
-            const cdqBreakdown = getCDQBreakdown({
-                title,
-                category,
-                brand: rawData.brand || asin.Brand,
-                imagesCount,
-                hasAplus,
-                bulletPointsText,
-                lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
-            });
+            // const cdqBreakdown = getCDQBreakdown({
+            //     title,
+            //     category,
+            //     brand: rawData.brand || asin.Brand,
+            //     imagesCount,
+            //     hasAplus,
+            //     bulletPointsText,
+            //     lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
+            // });
 
             const updates = {
                 Title: title,
@@ -1670,7 +1670,7 @@ class MarketDataSyncService {
                 BSR: bsr > 0 ? bsr : asin.BSR,
                 Rating: rating > 0 ? rating : asin.Rating,
                 ReviewCount: reviewCount,
-                LQS: cdqBreakdown.totalScore,
+                LQS: lqsScore,
                 LqsDetails: JSON.stringify(cdqBreakdown.issues), // Storing issues in Details for now
                 CdqComponents: JSON.stringify(cdqBreakdown.components),
                 BuyBoxStatus: buyBoxWin ? 1 : 0,
@@ -1705,7 +1705,7 @@ class MarketDataSyncService {
                 request.input(`val${i}`, updates[k]);
             });
             request.input('asinId', sql.VarChar, asinId);
-            
+
             await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
 
             // 11. History Tracking
@@ -1775,7 +1775,7 @@ class MarketDataSyncService {
         if (!rawResults || rawResults.length === 0) return 0;
 
         console.log(`🚀 Memory-safe SQL bulk processing ${rawResults.length} results for seller ${sellerId}...`);
-        
+
         let updatedCount = 0;
         let skippedNoCode = 0;
         let skippedNoMatch = 0;
@@ -1793,7 +1793,7 @@ class MarketDataSyncService {
             const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r))
                 .filter(Boolean)
                 .map(code => code.toUpperCase()); // Normalize to uppercase
-            
+
             if (chunkStart === 0 && chunk.length > 0) {
                 console.log(`[DEBUG] First record raw data keys:`, Object.keys(chunk[0]));
                 const firstCode = this._extractAsinFromData(chunk[0]);
@@ -1813,15 +1813,15 @@ class MarketDataSyncService {
             const asinRequest = pool.request();
             asinCodesToFind.forEach((code, i) => asinRequest.input(`code${i}`, code));
             const codeParams = asinCodesToFind.map((_, i) => `@code${i}`).join(', ');
-            
+
             // FIX: Use parameterized query to prevent SQL injection and ensure proper matching
+            asinRequest.input('sellerId', sellerId.toUpperCase()); // Add sellerId parameter BEFORE query
             const asinResult = await asinRequest.query(
                 `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
             );
-            asinRequest.input('sellerId', sellerId.toUpperCase());
-            
+
             console.log(`[DEBUG] Found ${asinResult.recordset.length} ASINs in DB for chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (Seller: ${sellerId})`);
-            
+
             // Create lookup map with uppercase keys for case-insensitive matching
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
@@ -1869,16 +1869,9 @@ class MarketDataSyncService {
                     const reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'ReviewCount', 'rating', 'Reviews', 'RT'], '')) || asin.ReviewCount;
                     const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0));
 
-                    // CDQ
-                    const cdqBreakdown = getCDQBreakdown({
-                        title,
-                        category: this._parseCategory(rawData) || asin.Category,
-                        brand: rawData.brand || asin.Brand,
-                        imagesCount,
-                        hasAplus,
-                        bulletPointsText,
-                        lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
-                    });
+
+                    // Use existing LQS from ASIN or calculate a simple score
+                    const lqsScore = asin.LQS || 0;
 
                     // Update ASIN
                     await pool.request()
@@ -1888,7 +1881,7 @@ class MarketDataSyncService {
                         .input('bsr', sql.Int, bsr > 0 ? bsr : asin.BSR)
                         .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
                         .input('reviewCount', sql.Int, reviewCount)
-                        .input('lqs', sql.Decimal(5, 2), cdqBreakdown.totalScore)
+                        .input('lqs', sql.Decimal(5, 2), lqsScore)
                         .input('buyBoxWin', sql.Bit, buyBoxWin)
                         .input('stockLevel', sql.Int, stockLevel)
                         .input('lastScraped', sql.DateTime, now)
@@ -1911,7 +1904,7 @@ class MarketDataSyncService {
                         .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
                         .input('reviewCount', sql.Int, reviewCount)
                         .input('stockLevel', sql.Int, stockLevel)
-                        .input('lqs', sql.Decimal(5, 2), cdqBreakdown.totalScore)
+                        .input('lqs', sql.Decimal(5, 2), lqsScore)
                         .query(`
                             IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
                                 UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, StockLevel = @stockLevel, LQS = @lqs
@@ -1962,7 +1955,7 @@ class MarketDataSyncService {
      */
     _parseCategory(rawData) {
         if (!rawData) return '';
-        
+
         const catFields = ['category', 'Category', 'breadcrumbs', 'Breadcrumb', 'Field4'];
         let rawCat = '';
 
@@ -1996,7 +1989,7 @@ class MarketDataSyncService {
                         .filter(p => p && p !== '›');
                     parts.push(...textParts);
                 }
-                
+
                 if (parts.length > 0) {
                     // Unescape HTML entities (basic)
                     return parts.join(' › ').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ');
@@ -2032,21 +2025,21 @@ class MarketDataSyncService {
         // Helper to extract rank and category from a string
         const extractRankInfo = (s) => {
             if (!s || typeof s !== 'string') return [];
-            
+
             // Clean string: remove newlines and extra spaces
             const cleanStr = s.replace(/\s+/g, ' ').trim();
-            
+
             // Extract all rank matches: #123,456 in Category Name
             const matches = [];
             // This regex captures the rank number and the category following "in"
             // It stops at another "#", a newline, or common Amazon "See Top 100" suffixes
             const rankRegex = /#([\d,]+)\s+in\s+([^#\n]+?)(?=\s*(?:\(|#|Best Sellers Rank|$))/gi;
             let m;
-            
+
             while ((m = rankRegex.exec(cleanStr)) !== null) {
                 const rankValue = parseInt(m[1].replace(/,/g, ''));
                 const categoryName = m[2].trim().replace(/\s*\(See Top 100 in.*\)\s*/i, '').trim();
-                
+
                 matches.push({
                     rank: rankValue,
                     category: categoryName,
@@ -2065,7 +2058,7 @@ class MarketDataSyncService {
                     });
                 }
             }
-            
+
             return matches;
         };
 
@@ -2088,7 +2081,7 @@ class MarketDataSyncService {
             if (!allRanks.includes(item.full)) allRanks.push(item.full);
 
             // Check if this is a top-level category rank
-            const isTopLevel = AMAZON_TOP_LEVEL_CATEGORIES.some(cat => 
+            const isTopLevel = AMAZON_TOP_LEVEL_CATEGORIES.some(cat =>
                 item.category.toLowerCase().trim() === cat.toLowerCase().trim() ||
                 item.category.toLowerCase().startsWith(cat.toLowerCase() + ' ')
             );
@@ -2498,7 +2491,7 @@ class MarketDataSyncService {
                 /[?&]asin=([A-Z0-9]{10})/i, // ASIN in query parameters
                 /[?&]ASIN=([A-Z0-9]{10})/i
             ];
-            
+
             for (const pattern of patterns) {
                 const match = urlField.match(pattern);
                 if (match) {
@@ -2519,11 +2512,11 @@ class MarketDataSyncService {
     async assignTaskFromPool(sellerId) {
         try {
             const pool = await getPool();
-            
+
             // 1. Find an unassigned task
             const taskResult = await pool.request()
                 .query("SELECT TOP 1 Id, TaskId FROM OctoTasks WHERE IsAssigned = 0 ORDER BY CreatedAt ASC");
-            
+
             const task = taskResult.recordset[0];
             if (!task) {
                 console.warn('⚠️ No available Octoparse tasks in the pool.');
@@ -2575,7 +2568,7 @@ class MarketDataSyncService {
                         END
                         ELSE SELECT 0 as Added;
                     `);
-                
+
                 if (result.recordset[0]?.Added) addedCount++;
             }
 
@@ -2602,11 +2595,11 @@ class MarketDataSyncService {
                     SUM(CASE WHEN IsAssigned = 1 THEN 1 ELSE 0 END) as Assigned
                 FROM OctoTasks
             `);
-            
+
             const total = result.recordset[0].Total || 0;
             const assigned = result.recordset[0].Assigned || 0;
             const available = total - assigned;
-            
+
             return { total, assigned, available };
         } catch (error) {
             console.error('❌ Get Pool Stats Error:', error.message);
