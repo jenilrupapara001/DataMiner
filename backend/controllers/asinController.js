@@ -36,13 +36,13 @@ exports.getAsins = async (req, res) => {
       }
       
       if (seller && allowedSellerIds.includes(seller)) {
-        whereClause += ' AND SellerId = @seller';
+        whereClause += ' AND a.SellerId = @seller';
         request.input('seller', sql.VarChar, seller);
       } else {
-        whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
       }
     } else if (seller) {
-      whereClause += ' AND SellerId = @seller';
+      whereClause += ' AND a.SellerId = @seller';
       request.input('seller', sql.VarChar, seller);
     }
 
@@ -105,7 +105,7 @@ exports.getAsins = async (req, res) => {
     }
 
     // [5] Count Total
-    const countResult = await request.query(`SELECT COUNT(*) as total FROM Asins ${whereClause}`);
+    const countResult = await request.query(`SELECT COUNT(*) as total FROM Asins a ${whereClause}`);
     const total = countResult.recordset[0].total;
 
     // [6] Fetch ASINs
@@ -116,7 +116,7 @@ exports.getAsins = async (req, res) => {
                       sortBy === 'lqs' ? 'LQS' : 
                       sortBy === 'status' ? 'Status' : 'CreatedAt';
     
-    const asinsResult = await pool.request()
+    const asinsResult = await request
         .input('offset', sql.Int, offset)
         .input('limit', sql.Int, limitNum)
         .query(`

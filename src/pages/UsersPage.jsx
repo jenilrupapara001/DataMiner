@@ -310,9 +310,9 @@ const UsersPage = () => {
                                     onChange={(e) => handleFilterChange('role', e.target.value)}
                                 >
                                     <option value="">All Roles</option>
-                                    {roles.map(role => (
-                                        <option key={role._id} value={role._id}>{role.displayName}</option>
-                                    ))}
+                                     {roles.map((role, idx) => (
+                                         <option key={role._id || `role-filter-${idx}`} value={role._id}>{role.displayName}</option>
+                                     ))}
                                 </select>
                             </div>
                             <div className="col-md-3">
@@ -393,9 +393,9 @@ const UsersPage = () => {
                                     render: (supervisors) => (
                                         <div className="d-flex flex-wrap gap-1">
                                             {supervisors?.length > 0 ? (
-                                                supervisors.map(s => (
-                                                    <span key={s._id} className="smallest text-muted bg-light px-2 py-1 rounded" style={{ fontSize: '10px' }}>
-                                                        {s.firstName} {s.lastName[0]}.
+                                                supervisors.map((s, idx) => (
+                                                    <span key={s?._id || s?.id || `sup-${idx}`} className="smallest text-muted bg-light px-2 py-1 rounded" style={{ fontSize: '10px' }}>
+                                                        {s?.firstName} {s?.lastName?.[0]}.
                                                     </span>
                                                 ))
                                             ) : (
@@ -567,9 +567,9 @@ const UsersPage = () => {
                                             required
                                         >
                                             <option value="">Select Level</option>
-                                            {roles.map(role => (
-                                                <option key={role._id} value={role._id}>{role.displayName}</option>
-                                            ))}
+                                             {roles.map((role, idx) => (
+                                                 <option key={role._id || `role-opt-${idx}`} value={role._id}>{role.displayName}</option>
+                                             ))}
                                         </select>
                                     </div>
 
@@ -587,8 +587,8 @@ const UsersPage = () => {
                                                     <div className="card shadow-none border-0 bg-light-subtle" style={{ borderRadius: '16px', backgroundColor: '#f9fafb' }}>
                                                         <div className="card-body p-3">
                                                             <div className="row g-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                                {sellers.map(seller => (
-                                                                    <div key={seller._id} className="col-md-4 col-sm-6">
+                                                                {sellers.map((seller, idx) => (
+                                                                    <div key={seller._id || `sell-opt-${idx}`} className="col-md-4 col-sm-6">
                                                                         <div
                                                                             className={`p-2 rounded-3 border transition-all cursor-pointer d-flex align-items-center gap-2 ${formData.assignedSellers.includes(seller._id) ? 'bg-primary-subtle border-primary-subtle' : 'bg-white border-light'}`}
                                                                             onClick={() => toggleSeller(seller._id)}
@@ -628,8 +628,8 @@ const UsersPage = () => {
                                         <div className="card shadow-none border-0 bg-light-subtle" style={{ borderRadius: '16px', backgroundColor: '#f9fafb' }}>
                                             <div className="card-body p-3">
                                                 <div className="row g-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                    {users.filter(u => u._id !== editingUser?._id && (u.role?.level || 0) >= (formData.role ? roles.find(r => r._id === formData.role)?.level || 0 : 0)).map(u => (
-                                                        <div key={u._id} className="col-md-4 col-sm-6">
+                                                    {users.filter(u => u._id !== editingUser?._id && (u.role?.level || 0) >= (formData.role ? roles.find(r => r._id === formData.role)?.level || 0 : 0)).map((u, idx) => (
+                                                        <div key={u._id || `user-sup-${idx}`} className="col-md-4 col-sm-6">
                                                             <div
                                                                 className={`p-2 rounded-3 border transition-all cursor-pointer d-flex align-items-center gap-2 ${formData.supervisors.includes(u._id) ? 'bg-primary-subtle border-primary-subtle' : 'bg-white border-light'}`}
                                                                 onClick={() => {
@@ -667,14 +667,14 @@ const UsersPage = () => {
                                         <div className="card shadow-none border-0 bg-light-subtle" style={{ borderRadius: '16px', backgroundColor: '#f9fafb' }}>
                                             <div className="card-body p-3">
                                                 <div className="row g-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                    {allPermissions.map(perm => {
+                                                    {allPermissions.map((perm, idx) => {
                                                         const isInherited = rolePermissionIds.includes(perm._id);
                                                         const isExcluded = formData.excludedPermissions.includes(perm._id);
                                                         const isExtra = formData.extraPermissions.includes(perm._id);
                                                         const isActive = (isInherited && !isExcluded) || isExtra;
 
                                                         return (
-                                                            <div key={perm._id} className="col-md-4 col-sm-6">
+                                                            <div key={perm._id || `perm-opt-${idx}`} className="col-md-4 col-sm-6">
                                                                 <div
                                                                     className={`p-2 rounded-3 border transition-all d-flex align-items-center gap-2 cursor-pointer ${isActive ? 'bg-primary-subtle border-primary-subtle' : 'bg-white border-light'
                                                                         } ${isExcluded ? 'bg-danger-subtle border-danger-subtle opacity-75' : ''}`}

@@ -61,14 +61,19 @@ exports.getUsers = async (req, res) => {
     // For performance, we could do this in separate queries or joins, but since limit is small (20), we can do it here.
     const users = await Promise.all(usersResult.recordset.map(async (u) => {
       const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
-      const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
+      const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id as _id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
       
       return {
-        ...u,
         _id: u.Id,
+        id: u.Id,
+        firstName: u.FirstName,
+        lastName: u.LastName,
+        email: u.Email,
+        phone: u.Phone,
+        isActive: u.IsActive,
         role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, color: u.RoleColor, level: u.RoleLevel },
-        assignedSellers: sellers.recordset.map(s => ({ ...s, _id: s.Id })),
-        supervisors: supervisors.recordset
+        assignedSellers: sellers.recordset.map(s => ({ _id: s.Id, id: s.Id, name: s.Name, marketplace: s.Marketplace })),
+        supervisors: supervisors.recordset.map(s => ({ _id: s._id, id: s._id, firstName: s.FirstName, lastName: s.LastName, email: s.Email }))
       };
     }));
 
@@ -95,7 +100,7 @@ exports.getUsers = async (req, res) => {
 exports.getManagers = async (req, res) => {
   try {
     const pool = await getPool();
-    const managers = await pool.request().query(`
+    const result = await pool.request().query(`
       SELECT U.Id, U.FirstName, U.LastName, U.Email, R.Name as RoleName, R.DisplayName as RoleDisplayName
       FROM Users U
       JOIN Roles R ON U.RoleId = R.Id
@@ -104,10 +109,13 @@ exports.getManagers = async (req, res) => {
 
     res.json({
       success: true,
-      data: managers.recordset.map(m => ({
-        ...m,
-        _id: m.Id,
-        role: { name: m.RoleName, displayName: m.RoleDisplayName }
+      data: result.recordset.map(u => ({
+        _id: u.Id,
+        id: u.Id,
+        firstName: u.FirstName,
+        lastName: u.LastName,
+        email: u.Email,
+        role: { name: u.RoleName, displayName: u.RoleDisplayName }
       }))
     });
   } catch (error) {
@@ -133,17 +141,23 @@ exports.getUser = async (req, res) => {
     const u = userResult.recordset[0];
 
     const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
-    const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
+    const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id as _id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
     
     // Fetch role permissions
     const perms = await pool.request().input('roleId', sql.VarChar, u.RoleId).query('SELECT P.Name FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
 
     const user = {
-      ...u,
       _id: u.Id,
-      role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, level: u.RoleLevel, permissions: perms.recordset },
-      assignedSellers: sellers.recordset.map(s => ({ ...s, _id: s.Id })),
-      supervisors: supervisors.recordset.map(s => ({ ...s, _id: s.Id }))
+      id: u.Id,
+      firstName: u.FirstName,
+      lastName: u.LastName,
+      email: u.Email,
+      phone: u.Phone,
+      isActive: u.IsActive,
+      lastLogin: u.LastSeen,
+      role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, level: u.RoleLevel, permissions: perms.recordset.map(p => p.Name) },
+      assignedSellers: sellers.recordset.map(s => ({ _id: s.Id, id: s.Id, name: s.Name, marketplace: s.Marketplace })),
+      supervisors: supervisors.recordset.map(s => ({ _id: s._id, id: s._id, firstName: s.FirstName, lastName: s.LastName, email: s.Email }))
     };
 
     res.json({ success: true, data: user });

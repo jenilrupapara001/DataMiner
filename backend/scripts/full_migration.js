@@ -21,7 +21,7 @@ async function migrate() {
     }
 
     const mongoClient = new MongoClient(process.env.MONGO_URI);
-    
+
     try {
         await mongoClient.connect();
         const mongoDb = mongoClient.db();
@@ -29,11 +29,13 @@ async function migrate() {
 
         console.log('✅ Connected to both databases.');
 
-        // 0. Optional: Clear existing data for a clean migration
-        // console.log('🧹 Clearing existing SQL data for a clean start...');
-        // await sqlPool.request().query('DELETE FROM UserSellers; DELETE FROM AsinHistory; DELETE FROM Asins; DELETE FROM Users; DELETE FROM Sellers;');
-
-        // 1. Roles
+        console.log('🧹 Clearing existing SQL data for high-volume tables...');
+        await sqlPool.request().query(`
+            DELETE FROM AsinWeekHistory;
+            DELETE FROM AsinHistory;
+            DELETE FROM Asins;
+            DELETE FROM SystemLogs;
+        `);
         await migrateCollection(mongoDb, sqlPool, 'roles', 'Roles', row => ({
             Id: row._id.toString(),
             Name: row.name,
@@ -94,7 +96,7 @@ async function migrate() {
                                     INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)
                                 `);
                             bridgeCount++;
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                 }
             }
@@ -119,40 +121,65 @@ async function migrate() {
             UpdatedAt: row.updatedAt || new Date()
         }));
 
-        // 5. Asins (BULK)
-        await migrateBulk(mongoDb, sqlPool, 'asins', 'Asins', row => ({
-            Id: row._id.toString(),
-            AsinCode: row.asinCode || row.asin,
-            SellerId: row.seller?.toString() || row.sellerId?.toString(),
-            Status: (row.status || 'Active').substring(0, 50),
-            ScrapeStatus: (row.scrapeStatus || 'Idle').substring(0, 50),
-            Category: (row.category || '').substring(0, 255),
-            Brand: (row.brand || '').substring(0, 255),
-            Title: row.title || '',
-            ImageUrl: row.imageUrl || '',
-            CurrentPrice: parseFloat(row.currentPrice) || 0,
-            BSR: parseInt(row.bsr) || 0,
-            Rating: parseFloat(row.rating) || 0,
-            ReviewCount: parseInt(row.reviewCount) || 0,
-            LQS: parseFloat(row.lqs) || 0,
-            LqsDetails: row.lqsDetails ? JSON.stringify(row.lqsDetails) : null,
-            CdqComponents: row.cdqComponents ? JSON.stringify(row.cdqComponents) : null,
-            FeePreview: row.feePreview ? JSON.stringify(row.feePreview) : null,
-            BuyBoxStatus: row.buyBoxStatus ? 1 : 0,
-            LastScrapedAt: row.lastScrapedAt || null,
-            CreatedAt: row.createdAt || new Date(),
-            UpdatedAt: row.updatedAt || new Date()
-        }));
+        // // 5. Asins (BULK) - COMPREHENSIVE MAPPING
+        // await migrateBulk(mongoDb, sqlPool, 'asins', 'Asins', row => ({
+        //     Id: row._id.toString(),
+        //     AsinCode: row.asinCode || row.asin,
+        //     SellerId: row.seller?.toString() || row.sellerId?.toString(),
+        //     Status: (row.status || 'Active').substring(0, 50),
+        //     ScrapeStatus: (row.scrapeStatus || 'Idle').substring(0, 50),
+        //     Category: (row.category || '').substring(0, 255),
+        //     Brand: (row.brand || '').substring(0, 255),
+        //     Title: row.title || '',
+        //     ImageUrl: row.imageUrl || '',
+        //     CurrentPrice: parseFloat(row.currentPrice) || 0,
+        //     BSR: parseInt(row.bsr) || 0,
+        //     Rating: parseFloat(row.rating) || 0,
+        //     ReviewCount: parseInt(row.reviewCount) || 0,
+        //     LQS: parseFloat(row.lqs) || 0,
+        //     LqsDetails: row.lqsDetails ? JSON.stringify(row.lqsDetails) : null,
+        //     CdqComponents: row.cdqComponents ? JSON.stringify(row.cdqComponents) : null,
+        //     FeePreview: row.feePreview ? JSON.stringify(row.feePreview) : null,
+        //     BuyBoxStatus: row.buyBoxStatus ? 1 : 0,
+        //     LastScrapedAt: row.lastScrapedAt || null,
+        //     CreatedAt: row.createdAt || new Date(),
+        //     UpdatedAt: row.updatedAt || new Date(),
 
-        // 6. AsinHistory (BULK)
-        await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
+        //     // Missing fields found in SQL schema
+        //     SoldBy: row.soldBy || '',
+        //     BuyBoxWin: row.buyBoxWin ? 1 : 0,
+        //     BuyBoxSellerId: row.buyBoxSellerId || '',
+        //     Sku: row.sku || '',
+        //     HasAplus: row.hasAplus ? 1 : 0,
+        //     StockLevel: row.stockLevel || 0,
+        //     VideoCount: row.videoCount || 0,
+        //     ImagesCount: row.imagesCount || 0,
+        //     BulletPoints: row.bulletPoints ? JSON.stringify(row.bulletPoints) : null,
+        //     BulletPointsText: row.bulletPointsText || '',
+        //     StapleLevel: row.stapleLevel || 'Regular',
+        //     Weight: parseFloat(row.weight) || 0,
+        //     LossPerReturn: parseFloat(row.lossPerReturn) || 0
+        // }));
+
+        // // 6. AsinHistory (BULK)
+        // await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
+        //     AsinId: row.asin?.toString() || row.asinId?.toString(),
+        //     Date: row.date || new Date(),
+        //     Price: parseFloat(row.price) || 0,
+        //     BSR: parseInt(row.bsr) || 0,
+        //     Rating: parseFloat(row.rating) || 0,
+        //     ReviewCount: parseInt(row.reviewCount) || 0,
+        //     BuyBoxStatus: row.buyBoxStatus ? 1 : 0
+        // }));
+
+        // 6b. AsinWeekHistory (BULK) - Required for Trends/Dashboard
+        await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinWeekHistory', row => ({
             AsinId: row.asin?.toString() || row.asinId?.toString(),
-            Date: row.date || new Date(),
-            Price: parseFloat(row.price) || 0,
-            BSR: parseInt(row.bsr) || 0,
-            Rating: parseFloat(row.rating) || 0,
-            ReviewCount: parseInt(row.reviewCount) || 0,
-            BuyBoxStatus: row.buyBoxStatus ? 1 : 0
+            WeekStartDate: row.date || new Date(),
+            AvgPrice: parseFloat(row.price) || 0,
+            AvgBSR: parseInt(row.bsr) || 0,
+            AvgRating: parseFloat(row.rating) || 0,
+            TotalReviews: parseInt(row.reviewCount) || 0
         }));
 
         // 7. OKR Entities
@@ -269,18 +296,18 @@ async function migrate() {
 async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper) {
     console.log(`\n🚀 BULK Migrating ${mongoCollName} -> ${sqlTableName}...`);
     const collStartTime = Date.now();
-    
+
     try {
         const collection = mongoDb.collection(mongoCollName);
         const count = await collection.countDocuments();
-        
+
         if (count === 0) {
             console.log(`⚠️  Collection ${mongoCollName} is empty. Skipping.`);
             return;
         }
 
         const table = new sql.Table(sqlTableName);
-        
+
         // Get table schema to define bulk columns
         const schemaResult = await sqlPool.request().query(`
             SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
@@ -290,9 +317,9 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
         `);
 
         for (const col of schemaResult.recordset) {
-            if (col.COLUMN_NAME === 'Id' && col.DATA_TYPE === 'bigint' && sqlTableName === 'AsinHistory') continue; // Identity col
-            if (col.COLUMN_NAME === 'Id' && col.DATA_TYPE === 'bigint' && sqlTableName === 'SystemLogs') continue; // Identity col
-            
+            // Skip identity columns
+            if (col.COLUMN_NAME === 'Id' && (sqlTableName === 'AsinHistory' || sqlTableName === 'SystemLogs' || sqlTableName === 'AsinWeekHistory')) continue;
+
             let type;
             switch (col.DATA_TYPE) {
                 case 'varchar': type = sql.VarChar(col.CHARACTER_MAXIMUM_LENGTH); break;
@@ -301,6 +328,7 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
                 case 'bigint': type = sql.BigInt; break;
                 case 'decimal': type = sql.Decimal(18, 4); break;
                 case 'datetime2': type = sql.DateTime2; break;
+                case 'datetime': type = sql.DateTime; break;
                 case 'date': type = sql.Date; break;
                 case 'bit': type = sql.Bit; break;
                 default: type = sql.NVarChar(sql.MAX);
@@ -310,11 +338,10 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
 
         const cursor = collection.find({});
         let processed = 0;
-        const BATCH_SIZE = 5000;
+        const BATCH_SIZE = 2000;
 
         while (await cursor.hasNext()) {
             const batchTable = new sql.Table(sqlTableName);
-            // Re-add columns to the batch table (same as original table)
             for (const col of table.columns) {
                 batchTable.columns.add(col.name, col.type, { nullable: col.nullable });
             }
@@ -324,7 +351,7 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
                 const mapped = mapper(row);
                 const rowValues = [];
                 for (const col of batchTable.columns) {
-                    rowValues.push(mapped[col.name]);
+                    rowValues.push(mapped[col.name] !== undefined ? mapped[col.name] : null);
                 }
                 batchTable.rows.add(...rowValues);
             }
@@ -347,11 +374,11 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
 async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper) {
     console.log(`\n📦 Migrating ${mongoCollName} -> ${sqlTableName}...`);
     const collStartTime = Date.now();
-    
+
     try {
         const collection = mongoDb.collection(mongoCollName);
         const count = await collection.countDocuments();
-        
+
         if (count === 0) {
             console.log(`⚠️  Collection ${mongoCollName} is empty. Skipping.`);
             return { raw: [] };
@@ -370,12 +397,12 @@ async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, 
                 const request = sqlPool.request();
                 const columns = [];
                 const values = [];
-                
+
                 for (const [key, val] of Object.entries(mapped)) {
                     const paramName = `p_${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
                     columns.push(`[${key}]`);
                     values.push(`@${paramName}`);
-                    
+
                     if (val instanceof Date) {
                         request.input(paramName, sql.DateTime2, val);
                     } else if (typeof val === 'number') {
@@ -394,11 +421,11 @@ async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, 
                 `;
 
                 await request.query(query);
-            } catch (err) {}
+            } catch (err) { }
 
             processed++;
             if (processed % 10 === 0 || processed === count) {
-                process.stdout.write(`\r   ⏳ Progress: ${processed}/${count} (${Math.round(processed/count*100)}%)`);
+                process.stdout.write(`\r   ⏳ Progress: ${processed}/${count} (${Math.round(processed / count * 100)}%)`);
             }
         }
 

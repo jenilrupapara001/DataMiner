@@ -112,13 +112,13 @@ exports.getSellers = async (req, res) => {
     `;
     let sellers;
     try {
-        const sellersResult = await pool.request()
+        const sellersResult = await request
             .input('offset', sql.Int, offset)
             .input('limit', sql.Int, limitNum)
             .query(sqlQuery);
         sellers = sellersResult.recordset.map(s => ({
             ...s,
-            status: s.IsActive ? 'Active' : 'Inactive',
+            status: s.status ? 'Active' : 'Inactive',
             plan: s.sellerPlan
         }));
         console.log('Fetched sellers count:', sellers.length);
@@ -191,6 +191,8 @@ exports.getSeller = async (req, res) => {
           ...seller, 
           _id: seller.Id, 
           name: seller.Name, 
+          marketplace: seller.Marketplace,
+          sellerId: seller.SellerId,
           status: seller.IsActive ? 'Active' : 'Inactive',
           octoparseId: seller.OctoparseId,
           plan: seller.Plan,

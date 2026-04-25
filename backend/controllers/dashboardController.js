@@ -131,9 +131,9 @@ exports.getDashboardData = async (req, res) => {
           AP.Clicks
         FROM AdsPerformance AP
         JOIN Asins A ON AP.Asin = A.AsinCode
-        ${asinFilter ? asinFilter.replace('WHERE', 'AND') : ''}
         WHERE AP.Date BETWEEN @startDate AND @endDate
         AND AP.ReportType = 'daily'
+        ${asinFilter ? asinFilter.replace('WHERE', 'AND') : ''}
       `);
 
     const adsData = adsDataResult.recordset;
@@ -177,7 +177,7 @@ exports.getDashboardData = async (req, res) => {
       LEFT JOIN AdsPerformance AP ON A.AsinCode = AP.Asin AND AP.Date BETWEEN @startDate AND @endDate
       ${asinFilter}
       GROUP BY A.Id, A.AsinCode, A.Sku, A.Title, A.Category, A.CurrentPrice, S.Name
-      ORDER BY A.CurrentPrice DESC
+      ORDER BY TotalAdSales DESC
     `);
 
     const tableData = topAsinsResult.recordset.map(asin => {
