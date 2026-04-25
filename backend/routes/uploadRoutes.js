@@ -16,7 +16,7 @@ const fileFilter = (req, file, cb) => {
     'application/csv',
     'application/json'
   ];
-  
+
   if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.csv') || file.originalname.endsWith('.json')) {
     cb(null, true);
   } else {
@@ -25,13 +25,13 @@ const fileFilter = (req, file, cb) => {
 };
 
 const limits = {
-  fileSize: 20 * 1024 * 1024 // 20MB
+  fileSize: 200 * 1024 * 1024 // 20MB
 };
 
-const upload = multer({ 
-  storage, 
-  fileFilter, 
-  limits 
+const upload = multer({
+  storage,
+  fileFilter,
+  limits
 });
 
 router.post('/upload/upload-monthly', upload.single('file'), uploadController.uploadMonthlyData);

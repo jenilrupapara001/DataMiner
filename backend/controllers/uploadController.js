@@ -251,34 +251,58 @@ exports.uploadOctoparseData = async (req, res) => {
       return res.status(400).json({ error: "Seller ID is required for Octoparse upload" });
     }
 
-    let jsonData = [];
-    if (filePath.toLowerCase().endsWith('.json')) {
+    const ext = filePath.toLowerCase().split('.').pop();
+    let rawDataArray = [];
+
+    if (ext === 'txt' || ext === 'text' || ext === 'csv') {
+      // Handle raw tab-delimited format
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      jsonData = JSON.parse(fileContent);
+      // Split by double newline (each entry separated by blank line)
+      rawDataArray = fileContent.split(/\n\s*\n/).filter(entry => entry.trim().length > 0);
+    } else if (ext === 'json') {
+      // JSON array
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const jsonData = JSON.parse(fileContent);
+      rawDataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     } else {
+      // Excel format
       const workbook = XLSX.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      rawDataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     }
 
-    if (!Array.isArray(jsonData)) {
-      jsonData = [jsonData]; // Handle single object case
-    }
+    console.log(`📊 Octoparse upload: Processing ${rawDataArray.length} records for seller ${sellerId}`);
 
-    console.log(`📊 Manual Octoparse upload: Processing ${jsonData.length} records for seller ${sellerId}`);
-    
-    // Call the robust batch processor in marketDataSyncService
-    const updatedCount = await marketDataSyncService.processBatchResults(sellerId, jsonData);
+    // Use our new AsinDataParser for raw format
+    const AsinDataParser = require('../services/asinDataParser');
+    const results = await AsinDataParser.bulkUpsertAsins(rawDataArray, sellerId);
+
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.filter(r => !r.success).length;
+
+    // Update seller scrape stats
+    const pool = await getPool();
+    await pool.request()
+      .input('sellerId', sql.VarChar, sellerId)
+      .input('count', sql.Int, successCount)
+      .query(`
+        UPDATE Sellers
+        SET ScrapeUsed = ScrapeUsed + @count,
+            LastScrapedAt = GETDATE(),
+            UpdatedAt = GETDATE()
+        WHERE Id = @sellerId
+      `);
 
     // Cleanup
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
     res.json({
       success: true,
-      message: `Processed ${jsonData.length} records. Successfully updated ${updatedCount} ASINs.`,
-      totalProcessed: jsonData.length,
-      updatedCount
+      message: `Processed ${rawDataArray.length} entries`,
+      stats: { total: rawDataArray.length, success: successCount, failed: errorCount },
+      errors: errorCount > 0 ? results.filter(r => !r.success).slice(0, 5) : []
     });
   } catch (err) {
     console.error("❌ Octoparse Upload Error:", err);

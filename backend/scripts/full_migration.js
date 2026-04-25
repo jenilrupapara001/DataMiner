@@ -342,7 +342,15 @@ async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper
             }
 
             const request = new sql.Request(sqlPool);
-            await request.bulk(batchTable);
+            try {
+                await request.bulk(batchTable);
+            } catch (batchErr) {
+                console.error(`\n❌ Batch error on table ${sqlTableName}:`);
+                console.error('   Columns:', batchTable.columns.map(c => c.name).join(', '));
+                console.error('   First row values:', batchTable.rows[0] || 'empty');
+                console.error('   Error:', batchErr.message);
+                throw batchErr;
+            }
 
             processed += batchTable.rows.length;
             const percentage = Math.round(processed / count * 100);

@@ -1150,9 +1150,58 @@ exports.testParseRaw = async (req, res) => {
             return res.status(400).json({ error: 'rawData string required' });
         }
 
+        const AsinDataParser = require('../services/asinDataParser');
         const parsed = AsinDataParser.transformToAsinRow(rawData, 'test-seller-id');
         res.json({ success: true, parsed });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+/**
+ * Simple text upload endpoint for raw Octoparse data
+ * POST /api/asins/upload-raw-text
+ * Body: { sellerId: string, entries: [string, string...] }
+ */
+exports.uploadRawText = async (req, res) => {
+    try {
+        const { sellerId, entries } = req.body;
+        const userId = req.user.Id || req.user._id;
+
+        if (!sellerId) {
+            return res.status(400).json({ error: 'sellerId is required' });
+        }
+
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return res.status(400).json({ error: 'entries array with raw text data is required' });
+        }
+
+        const AsinDataParser = require('../services/asinDataParser');
+        const results = await AsinDataParser.bulkUpsertAsins(entries, sellerId);
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = results.filter(r => !r.success).length;
+
+        // Update seller's scrape stats
+        const pool = await getPool();
+        await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .input('count', sql.Int, successCount)
+            .query(`
+                UPDATE Sellers
+                SET ScrapeUsed = ScrapeUsed + @count,
+                    LastScrapedAt = GETDATE(),
+                    UpdatedAt = GETDATE()
+                WHERE Id = @sellerId
+            `);
+
+        res.json({
+            success: true,
+            message: `Processed ${entries.length} entries`,
+            stats: { total: entries.length, success: successCount, failed: errorCount },
+            results: results.slice(0, 10)
+        });
+    } catch (error) {
+        console.error('Upload raw ASINs error:', error);
         res.status(500).json({ error: error.message });
     }
 };
