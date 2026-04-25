@@ -1,240 +1,181 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const mongoose = require('mongoose');
+const { sql, getPool } = require('../database/db');
 const config = require('../config/env');
 
-// Demo mode bypass for development
 const DEMO_MODE = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
 
+/**
+ * SQL-based Authentication Middleware
+ */
 exports.authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-    // DEMO_MODE: always allow in development for easier testing
-    if (DEMO_MODE) {
-        req.userId = 'demo-user';
-        req.user = { 
-            _id: 'demo-user', 
-            role: { name: 'admin' }, 
-            assignedSellers: [],
-            isActive: true,
-            hasPermission: async () => true,
-            hasAnyPermission: async () => true
-        };
-        console.log('[DEBUG] Demo mode enabled, bypassing strict auth');
-        return next();
+  if (DEMO_MODE) {
+    req.userId = 'demo-user';
+    req.user = {
+      Id: 'demo-user',
+      _id: 'demo-user',
+      role: { Name: 'admin', name: 'admin' },
+      assignedSellers: [],
+      isActive: true,
+      hasPermission: async () => true,
+      hasAnyPermission: async () => true
+    };
+    return next();
+  }
+
+  try {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    try {
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ success: false, message: 'Authentication required' });
-        }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, config.jwtSecret);
+    const pool = await getPool();
 
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, config.jwtSecret);
+    // 1. Fetch User and Role
+    const userResult = await pool.request()
+      .input('id', sql.VarChar, decoded.userId)
+      .query(`
+        SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName 
+        FROM Users U
+        LEFT JOIN Roles R ON U.RoleId = R.Id
+        WHERE U.Id = @id
+      `);
 
-    // Check if MongoDB is currently connected before attempting a DB lookup
-    const isDbConnected = mongoose.connection.readyState === 1;
-
-    if (!isDbConnected) {
-      // Fall back to JWT payload — avoids the 10s buffer timeout when Atlas is down
-      console.warn('[Auth] MongoDB not connected — using JWT payload as fallback');
-      let userId;
-      try { userId = new mongoose.Types.ObjectId(decoded.userId); } catch { userId = decoded.userId; }
-      req.userId = userId;
-      req.user = {
-        _id: userId,
-        email: decoded.email,
-        role: decoded.role || { name: 'admin' },
-        assignedSellers: decoded.assignedSellers || [],
-        isActive: true,
-        hasPermission: async () => true,
-        hasAnyPermission: async () => true,
-      };
-      return next();
-    }
-
-    const user = await User.findById(decoded.userId)
-      .populate('role')
-      .populate('role.permissions')
-      .populate('assignedSellers');
-
-    if (!user) {
+    if (userResult.recordset.length === 0) {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    if (!user.isActive) {
+    const userData = userResult.recordset[0];
+    if (!userData.IsActive) {
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
     }
 
-    req.userId = user._id;
-    req.user = user;
+    // 2. Fetch Permissions
+    const permissionsResult = await pool.request()
+      .input('roleId', sql.VarChar, userData.RoleId)
+      .query(`
+        SELECT P.Name 
+        FROM Permissions P
+        JOIN RolePermissions RP ON P.Id = RP.PermissionId
+        WHERE RP.RoleId = @roleId
+      `);
+    const permissions = permissionsResult.recordset.map(p => p.Name);
+
+    // 3. Fetch Assigned Sellers
+    const sellersResult = await pool.request()
+      .input('userId', sql.VarChar, userData.Id)
+      .query(`SELECT SellerId FROM UserSellers WHERE UserId = @userId`);
+    const assignedSellers = sellersResult.recordset.map(s => s.SellerId);
+
+    // 4. Construct User Object
+    req.userId = userData.Id;
+    req.user = {
+      ...userData,
+      _id: userData.Id, // Compatibility with legacy code
+      role: { Name: userData.RoleName, name: userData.RoleName, DisplayName: userData.RoleDisplayName },
+      assignedSellers: assignedSellers,
+      permissions: permissions,
+      hasPermission: async (perm) => permissions.includes(perm),
+      hasAnyPermission: async (perms) => perms.some(p => permissions.includes(p))
+    };
+
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: 'Token expired' });
-    }
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
-    console.error('Auth middleware error:', error);
+    if (error.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired' });
+    if (error.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Invalid token' });
     res.status(500).json({ success: false, message: 'Authentication failed' });
   }
 };
 
-
+/**
+ * Require Permission Middleware (SQL Version)
+ */
 exports.requirePermission = (permissionName) => {
   return async (req, res, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ success: false, message: 'Authentication required' });
-      }
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin') return next();
 
-      // Admin has all permissions
-      if (req.user.role && req.user.role.name === 'admin') {
-        return next();
-      }
-
-      const hasPermission = await req.user.hasPermission(permissionName);
-
-      if (!hasPermission) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to perform this action'
-        });
-      }
-
-      next();
-    } catch (error) {
-      console.error('Permission check error:', error);
-      res.status(500).json({ success: false, message: 'Permission check failed' });
-    }
+    const hasPerm = await req.user.hasPermission(permissionName);
+    if (!hasPerm) return res.status(403).json({ success: false, message: 'Missing required permission' });
+    next();
   };
 };
 
+/**
+ * Require Any Permission Middleware (SQL Version)
+ */
 exports.requireAnyPermission = (permissionNames) => {
   return async (req, res, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ success: false, message: 'Authentication required' });
-      }
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin') return next();
 
-      // Admin has all permissions
-      if (req.user.role && req.user.role.name === 'admin') {
-        return next();
-      }
-
-      const hasPermission = await req.user.hasAnyPermission(permissionNames);
-
-      if (!hasPermission) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to perform this action'
-        });
-      }
-
-      next();
-    } catch (error) {
-      console.error('Permission check error:', error);
-      res.status(500).json({ success: false, message: 'Permission check failed' });
-    }
+    const hasAny = await req.user.hasAnyPermission(permissionNames);
+    if (!hasAny) return res.status(403).json({ success: false, message: 'Missing required permissions' });
+    next();
   };
 };
 
+/**
+ * Require Role Middleware (SQL Version)
+ */
 exports.requireRole = (...roles) => {
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
-
-    if (!req.user.role || !roles.includes(req.user.role.name)) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have the required role'
-      });
-    }
-
+    if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    const currentRole = req.user.role?.Name || req.user.role?.name || req.user.role;
+    if (!roles.includes(currentRole)) return res.status(403).json({ success: false, message: 'Required role not found' });
     next();
   };
 };
 
-// Middleware to check if user has access to a specific seller
+/**
+ * Check Seller Access Middleware (SQL Version)
+ */
 exports.checkSellerAccess = async (req, res, next) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
+  if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
-    if (isGlobalUser) {
-      return next();
-    }
+  const roleName = req.user.role?.Name || req.user.role?.name;
+  const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+  if (isGlobalUser) return next();
 
-    const sellerId = req.params.sellerId || req.body.sellerId || req.query.sellerId;
-    if (!sellerId) {
-      return next(); // If no sellerId is provided, we skip this check (it should be handled by validators if required)
-    }
+  const sellerId = req.params.sellerId || req.body.sellerId || req.query.sellerId || req.params.id; // Added params.id as fallback for some routes
+  if (!sellerId) return next();
 
-    const assignedSellers = req.user.assignedSellers.map(s => s._id.toString());
-    if (!assignedSellers.includes(sellerId.toString())) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have access to this seller\'s data'
-      });
-    }
-
-    next();
-  } catch (error) {
-    console.error('Seller access check error:', error);
-    res.status(500).json({ success: false, message: 'Seller access check failed' });
+  if (!req.user.assignedSellers.includes(sellerId.toString())) {
+    return res.status(403).json({ success: false, message: 'Access to this seller denied' });
   }
+  next();
 };
 
-// Middleware to check if user has access to another user based on hierarchy
+/**
+ * Check User Hierarchy Access Middleware (SQL Version)
+ */
 exports.checkUserHierarchyAccess = async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+  const targetUserId = req.params.id;
+  if (!targetUserId || req.user.Id === targetUserId || req.user._id === targetUserId) return next();
+
+  const roleName = req.user.role?.Name || req.user.role?.name;
+  if (['admin', 'operational_manager'].includes(roleName)) return next();
+
+  const hasGlobalView = await req.user.hasPermission('users_view');
+  if (hasGlobalView) return next();
+
   try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
+    const pool = await getPool();
+    // Simplified: Check if target user has the current user as supervisor
+    const supervisorResult = await pool.request()
+      .input('userId', sql.VarChar, targetUserId)
+      .input('supervisorId', sql.VarChar, req.user.Id || req.user._id)
+      .query('SELECT 1 FROM UserSupervisors WHERE UserId = @userId AND SupervisorId = @supervisorId');
 
-    const targetUserId = req.params.id;
-    if (!targetUserId) return next();
+    if (supervisorResult.recordset.length > 0) return next();
 
-    // 1. Self access is always allowed
-    if (req.user._id.toString() === targetUserId) {
-      return next();
-    }
-
-    const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
-
-    // 2. Global access is allowed
-    if (isGlobalUser) {
-      return next();
-    }
-
-    // 3. Check if user has global users_view permission (e.g., HR, Manager with global view)
-    const hasGlobalView = await req.user.hasPermission('users_view');
-    if (hasGlobalView) {
-      return next();
-    }
-
-    // 4. Check if target user is a subordinate
-    const hierarchyService = require('../services/hierarchyService');
-    const subordinates = await hierarchyService.getSubordinateIds(req.user._id);
-
-    if (subordinates.includes(targetUserId)) {
-      return next();
-    }
-
-    // 5. Fallback to 403
-    res.status(403).json({
-      success: false,
-      message: 'You do not have permission to access this user\'s profile'
-    });
+    res.status(403).json({ success: false, message: 'Access denied: User is not in your hierarchy' });
   } catch (error) {
-    console.error('Hierarchy access check error:', error);
-    res.status(500).json({ success: false, message: 'Hierarchy access check failed' });
+    res.status(500).json({ success: false, message: 'Hierarchy check failed' });
   }
 };
 

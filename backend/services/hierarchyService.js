@@ -1,19 +1,28 @@
-const User = require('../models/User');
+const { sql, getPool } = require('../database/db');
 
 /**
- * Recursively find all subordinates of a user
+ * Recursively find all subordinates of a user (SQL Version)
  * @param {string} userId - The user ID to find subordinates for
  * @returns {Promise<string[]>} - Array of subordinate user IDs
  */
 exports.getSubordinateIds = async (userId) => {
-    const subordinates = await User.find({ supervisors: userId }).select('_id');
-    const ids = subordinates.map(s => s._id.toString());
-
-    let allIds = [...ids];
-    for (const id of ids) {
-        const nestedIds = await exports.getSubordinateIds(id);
-        allIds = [...allIds, ...nestedIds];
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                WITH Hierarchy AS (
+                    SELECT UserId FROM UserSupervisors WHERE SupervisorId = @userId
+                    UNION ALL
+                    SELECT US.UserId FROM UserSupervisors US
+                    JOIN Hierarchy H ON US.SupervisorId = H.UserId
+                )
+                SELECT DISTINCT UserId FROM Hierarchy
+            `);
+        
+        return result.recordset.map(row => row.UserId);
+    } catch (error) {
+        console.error('getSubordinateIds error:', error);
+        return [];
     }
-
-    return [...new Set(allIds)]; // Return unique IDs
 };

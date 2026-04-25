@@ -1,292 +1,223 @@
-const User = require('../models/User');
-const Role = require('../models/Role');
+const { sql, getPool, generateId } = require('../database/db');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config/env');
 
 const generateTokens = (userId) => {
-  const accessToken = jwt.sign(
-    { userId },
-    config.jwtSecret,
-    { expiresIn: '24h' }
-  );
-  const refreshToken = jwt.sign(
-    { userId, type: 'refresh' },
-    config.jwtSecret,
-    { expiresIn: '30d' }
-  );
+  const accessToken = jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
+  const refreshToken = jwt.sign({ userId, type: 'refresh' }, config.jwtSecret, { expiresIn: '30d' });
   return { accessToken, refreshToken };
 };
 
-const getResolvedUserResponse = async (user) => {
-  const permissions = await user.getPermissions();
-  const userData = user.toJSON ? user.toJSON() : user;
+const getResolvedUserResponse = async (user, pool) => {
+  // Fetch permissions
+  const permsResult = await pool.request()
+    .input('roleId', sql.VarChar, user.RoleId)
+    .query(`
+      SELECT P.Name FROM Permissions P
+      JOIN RolePermissions RP ON P.Id = RP.PermissionId
+      WHERE RP.RoleId = @roleId
+    `);
+  
   return {
-    ...userData,
-    permissions: permissions.map(p => p.name)
+    ...user,
+    _id: user.Id,
+    id: user.Id,
+    permissions: permsResult.recordset.map(p => p.Name)
   };
 };
 
 exports.register = async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;
+    const pool = await getPool();
 
     // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email already registered' });
-    }
+    const existing = await pool.request().input('email', sql.NVarChar, email).query('SELECT Id FROM Users WHERE Email = @email');
+    if (existing.recordset.length > 0) return res.status(400).json({ success: false, message: 'Email already registered' });
 
-    // Get role from body or default to viewer
+    // Get role
     let roleId;
     if (req.body.role) {
-      const requestedRole = await Role.findOne({ name: req.body.role });
-      if (requestedRole) {
-        roleId = requestedRole._id;
-      }
+      const roleResult = await pool.request().input('name', sql.NVarChar, req.body.role).query('SELECT Id FROM Roles WHERE Name = @name');
+      if (roleResult.recordset.length > 0) roleId = roleResult.recordset[0].Id;
     }
-
     if (!roleId) {
-      // Get default role (viewer)
-      let defaultRole = await Role.findOne({ name: 'viewer' });
-      if (!defaultRole) {
-        // Lazy create viewer role if not exists
-        defaultRole = await Role.create({
-          name: 'viewer',
-          displayName: 'Viewer',
-          description: 'Read-only access to dashboards and reports',
-          isSystem: true,
-          level: 10,
-          color: '#6B7280',
-        });
-      }
-      roleId = defaultRole._id;
+      const viewerRole = await pool.request().query("SELECT Id FROM Roles WHERE Name = 'viewer'");
+      roleId = viewerRole.recordset[0]?.Id;
     }
 
-    // Create user
-    const user = await (await User.create({
-      email,
-      password,
-      firstName,
-      lastName,
-      role: roleId,
-    })).populate({
-      path: 'role',
-      populate: { path: 'permissions' }
-    });
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const userId = generateId();
 
-    // Validated: Sync to CometChat
-    try {
-      const { syncUserToCometChat } = require('../services/cometChatService');
-      syncUserToCometChat(user); // Fire and forget, don't block registration
-    } catch (chatError) {
-      console.error('CometChat Sync Error during registration:', chatError);
-    }
+    await pool.request()
+      .input('id', sql.VarChar, userId)
+      .input('email', sql.NVarChar, email)
+      .input('password', sql.NVarChar, hashedPassword)
+      .input('firstName', sql.NVarChar, firstName)
+      .input('lastName', sql.NVarChar, lastName)
+      .input('roleId', sql.VarChar, roleId)
+      .query(`
+        INSERT INTO Users (Id, Email, Password, FirstName, LastName, RoleId, IsActive, CreatedAt, UpdatedAt)
+        VALUES (@id, @email, @password, @firstName, @lastName, @roleId, 1, GETDATE(), GETDATE())
+      `);
 
-    const { accessToken, refreshToken } = generateTokens(user._id);
+    const { accessToken, refreshToken } = generateTokens(userId);
+    await pool.request()
+      .input('id', sql.VarChar, userId)
+      .input('token', sql.NVarChar, refreshToken)
+      .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
 
-    // Save refresh token
-    user.refreshToken = refreshToken;
-    await user.save();
+    const user = (await pool.request().input('id', sql.VarChar, userId).query('SELECT * FROM Users WHERE Id = @id')).recordset[0];
+    const resolvedUser = await getResolvedUserResponse(user, pool);
 
-    const resolvedUser = await getResolvedUserResponse(user);
-
-    res.status(201).json({
-      success: true,
-      data: {
-        user: resolvedUser,
-        accessToken,
-        refreshToken,
-      },
-    });
+    res.status(201).json({ success: true, data: { user: resolvedUser, accessToken, refreshToken } });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ success: false, message: 'Registration failed' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const pool = await getPool();
 
-    // Find user
-    const user = await User.findOne({ email }).populate({
-      path: 'role',
-      populate: { path: 'permissions' }
-    });
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    const result = await pool.request()
+      .input('email', sql.NVarChar, email)
+      .query('SELECT * FROM Users WHERE Email = @email');
+
+    if (result.recordset.length === 0) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    const user = result.recordset[0];
+
+    if (user.LockUntil && new Date(user.LockUntil) > new Date()) {
+      return res.status(423).json({ success: false, message: 'Account is temporarily locked' });
     }
 
-    // Check if account is locked
-    if (user.isLocked) {
-      return res.status(423).json({
-        success: false,
-        message: 'Account is temporarily locked. Please try again later.'
-      });
-    }
+    if (!user.IsActive) return res.status(403).json({ success: false, message: 'Account is deactivated' });
 
-    // Check if account is active
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, message: 'Account is deactivated' });
-    }
-
-    // Verify password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.Password);
     if (!isMatch) {
-      await user.incLoginAttempts();
+      const attempts = (user.LoginAttempts || 0) + 1;
+      let lockUntil = null;
+      if (attempts >= 5) lockUntil = new Date(Date.now() + 30 * 60 * 1000);
+      
+      await pool.request()
+        .input('id', sql.VarChar, user.Id)
+        .input('attempts', sql.Int, attempts)
+        .input('lockUntil', sql.DateTime, lockUntil)
+        .query('UPDATE Users SET LoginAttempts = @attempts, LockUntil = @lockUntil WHERE Id = @id');
+      
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Reset login attempts on successful login
-    await user.updateOne({
-      $set: {
-        loginAttempts: 0,
-        lastLogin: new Date(),
-        refreshToken: null,
-      },
-    });
+    await pool.request()
+      .input('id', sql.VarChar, user.Id)
+      .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL, LastSeen = GETDATE() WHERE Id = @id');
 
-    const { accessToken, refreshToken } = generateTokens(user._id);
+    const { accessToken, refreshToken } = generateTokens(user.Id);
+    await pool.request()
+      .input('id', sql.VarChar, user.Id)
+      .input('token', sql.NVarChar, refreshToken)
+      .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
 
-    // Save refresh token
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    const resolvedUser = await getResolvedUserResponse(user);
-
-    res.json({
-      success: true,
-      data: {
-        user: resolvedUser,
-        accessToken,
-        refreshToken,
-      },
-    });
+    const resolvedUser = await getResolvedUserResponse(user, pool);
+    res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken } });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ success: false, message: 'Login failed' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ success: false, message: 'Token required' });
 
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, message: 'Refresh token required' });
-    }
-
-    // Verify refresh token
     const decoded = jwt.verify(refreshToken, config.jwtSecret);
-    if (decoded.type !== 'refresh') {
-      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
-    }
+    const pool = await getPool();
 
-    // Find user and check if refresh token matches
-    const user = await User.findById(decoded.userId).populate('role');
-    if (!user || user.refreshToken !== refreshToken) {
-      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
-    }
+    const result = await pool.request().input('id', sql.VarChar, decoded.userId).query('SELECT * FROM Users WHERE Id = @id');
+    const user = result.recordset[0];
 
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, message: 'Account is deactivated' });
-    }
+    if (!user || user.RefreshToken !== refreshToken) return res.status(401).json({ success: false, message: 'Invalid token' });
+    if (!user.IsActive) return res.status(403).json({ success: false, message: 'Deactivated' });
 
-    const tokens = generateTokens(user._id);
+    const tokens = generateTokens(user.Id);
+    await pool.request()
+      .input('id', sql.VarChar, user.Id)
+      .input('token', sql.NVarChar, tokens.refreshToken)
+      .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
 
-    // Update refresh token
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
-
-    res.json({
-      success: true,
-      data: tokens,
-    });
+    res.json({ success: true, data: tokens });
   } catch (error) {
-    console.error('Token refresh error:', error);
-    res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    res.status(401).json({ success: false, message: 'Invalid token' });
   }
 };
 
 exports.logout = async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
-    if (user) {
-      user.refreshToken = null;
-      await user.save();
-    }
-    res.json({ success: true, message: 'Logged out successfully' });
+    const pool = await getPool();
+    await pool.request().input('id', sql.VarChar, req.userId).query('UPDATE Users SET RefreshToken = NULL WHERE Id = @id');
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Logout failed' });
+    res.status(500).json({ success: false });
   }
 };
 
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.userId)
-      .populate({
-        path: 'role',
-        populate: { path: 'permissions' }
-      });
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const resolvedUser = await getResolvedUserResponse(user);
+    const pool = await getPool();
+    const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT * FROM Users WHERE Id = @id');
+    if (result.recordset.length === 0) return res.status(404).json({ success: false });
+    const resolvedUser = await getResolvedUserResponse(result.recordset[0], pool);
     res.json({ success: true, data: resolvedUser });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to get user info' });
+    res.status(500).json({ success: false });
   }
 };
 
 exports.updateProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, preferences } = req.body;
+    const pool = await getPool();
 
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      {
-        firstName,
-        lastName,
-        phone,
-        preferences: { ...preferences },
-      },
-      { new: true, runValidators: true }
-    ).populate('role');
+    await pool.request()
+      .input('id', sql.VarChar, req.userId)
+      .input('fn', sql.NVarChar, firstName)
+      .input('ln', sql.NVarChar, lastName)
+      .input('ph', sql.NVarChar, phone)
+      .input('pref', sql.NVarChar, JSON.stringify(preferences))
+      .query(`
+        UPDATE Users SET 
+          FirstName = @fn, LastName = @ln, Phone = @ph, Preferences = @pref, UpdatedAt = GETDATE()
+        WHERE Id = @id
+      `);
 
-    // Sync to CometChat on profile update
-    try {
-      const { syncUserToCometChat } = require('../services/cometChatService');
-      syncUserToCometChat(user);
-    } catch (chatError) {
-      console.error('CometChat Sync Error during profile update:', chatError);
-    }
-
-    res.json({ success: true, data: user });
+    const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT * FROM Users WHERE Id = @id');
+    res.json({ success: true, data: result.recordset[0] });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to update profile' });
+    res.status(500).json({ success: false });
   }
 };
 
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    const pool = await getPool();
 
-    const user = await User.findById(req.userId);
+    const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT Password FROM Users WHERE Id = @id');
+    const user = result.recordset[0];
 
-    // Verify current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
-    }
+    const isMatch = await bcrypt.compare(currentPassword, user.Password);
+    if (!isMatch) return res.status(400).json({ success: false, message: 'Current password incorrect' });
 
-    // Update password
-    user.password = newPassword;
-    await user.save();
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await pool.request()
+      .input('id', sql.VarChar, req.userId)
+      .input('pw', sql.NVarChar, hashed)
+      .query('UPDATE Users SET Password = @pw, UpdatedAt = GETDATE() WHERE Id = @id');
 
-    res.json({ success: true, message: 'Password changed successfully' });
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to change password' });
+    res.status(500).json({ success: false });
   }
 };

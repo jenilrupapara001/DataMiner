@@ -1,9 +1,9 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const { getPool, sql } = require('./database/db');
 
-// Memory monitoring - Log memory usage every 5 minutes
+// Memory monitoring
 setInterval(() => {
   const mem = process.memoryUsage();
   const heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
@@ -12,7 +12,6 @@ setInterval(() => {
   
   console.log(`📊 Memory: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
   
-  // Auto-GC if memory above 80%
   if (percent > 80 && global.gc) {
     console.log('🧹 Running garbage collection...');
     global.gc();
@@ -36,40 +35,19 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// MongoDB connection options
-const mongoOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-};
+// SQL Server connection verification
+async function verifySqlConnection() {
+  try {
+    const pool = await getPool();
+    await pool.request().query('SELECT 1 as test');
+    console.log('✅ SQL Server Connected successfully');
+  } catch (err) {
+    console.error('❌ SQL Server Connection Error:', err.message);
+    console.log('⚠️  Server will continue, but SQL-dependent features will not work');
+  }
+}
 
-// Connect MongoDB
-console.log('🔄 Connecting to MongoDB...');
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/easysell', mongoOptions)
-  .then(() => {
-    console.log('✅ MongoDB Connected successfully');
-    console.log(`📦 Database: ${mongoose.connection.name}`);
-    initializeDefaults();
-  })
-  .catch(err => {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    console.log('⚠️  Server will run without database connection');
-    console.log('💡 Make sure MongoDB is running or check your MONGO_URI');
-  });
-
-// MongoDB connection events
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.warn('MongoDB disconnected');
-});
-
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected');
-});
+verifySqlConnection();
 
 // Request Logging Middleware
 app.use((req, res, next) => {
@@ -77,7 +55,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// Routes (same as before)
 const dataRoutes = require('./routes/dataRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const alertsRoutes = require('./routes/alertsRoutes');
@@ -94,6 +72,18 @@ const fileRoutes = require('./routes/fileRoutes');
 const apiKeyRoutes = require('./routes/apiKeyRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const rulesetRoutes = require('./routes/rulesetRoutes');
+const objectiveRoutes = require('./routes/objectiveRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const marketSyncRoutes = require('./routes/marketDataSyncRoutes');
+const growthExecutionRoutes = require('./routes/growthExecutionRoutes');
+const systemLogRoutes = require('./routes/systemLogRoutes');
+const systemSettingRoutes = require('./routes/systemSettingRoutes');
+const aiRoutes = require('./routes/aiRoutes');
+const sellerAsinTrackerRoutes = require('./routes/sellerAsinTrackerRoutes');
+const revenueRoutes = require('./routes/revenueRoutes');
+const goalRoutes = require('./routes/goalRoutes');
+const asinTableRoutes = require('./routes/asinTableRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -111,52 +101,37 @@ app.use('/api/actions', actionRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/keys', apiKeyRoutes);
 app.use('/api/teams', teamRoutes);
-const objectiveRoutes = require('./routes/objectiveRoutes');
 app.use('/api/objectives', objectiveRoutes);
-const notificationRoutes = require('./routes/notificationRoutes');
-const chatRoutes = require('./routes/chatRoutes');
-const marketSyncRoutes = require('./routes/marketDataSyncRoutes');
-const growthExecutionRoutes = require('./routes/growthExecutionRoutes');
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/market-sync', marketSyncRoutes);
 app.use('/api', growthExecutionRoutes);
-
-const systemLogRoutes = require('./routes/systemLogRoutes');
-const systemSettingRoutes = require('./routes/systemSettingRoutes');
 app.use('/api/logs', systemLogRoutes);
 app.use('/api/settings', systemSettingRoutes);
-
-// Brandcentral AI Strategy Routes
-const aiRoutes = require('./routes/aiRoutes');
 app.use('/api/strategy', aiRoutes);
-
-// Keepa Seller ASIN Tracker Routes
-const sellerAsinTrackerRoutes = require('./routes/sellerAsinTrackerRoutes');
 app.use('/api/seller-tracker', sellerAsinTrackerRoutes);
-
-// Unified Revenue Engine Routes
-const revenueRoutes = require('./routes/revenueRoutes');
 app.use('/api/revenue-engine', revenueRoutes);
-
-// GMS Goal Tracking Routes
-const goalRoutes = require('./routes/goalRoutes');
 app.use('/api/goals', goalRoutes);
-
-// Unified ASIN Table Routes
-const asinTableRoutes = require('./routes/asinTableRoutes');
 app.use('/api/asins-table', asinTableRoutes);
 
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  const dbState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    database: dbState,
-    uptime: process.uptime()
-  });
+// Health check endpoint - SQL version
+app.get('/api/health', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request().query('SELECT 1 as test');
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database: 'sql-server-connected',
+      uptime: process.uptime()
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: err.message
+    });
+  }
 });
 
 // Error handling
@@ -196,48 +171,14 @@ const io = new Server(server, {
 const SocketService = require('./services/socketService');
 SocketService.init(io);
 
-if (io) {
-  console.log('✅ Socket.io initialized successfully');
-} else {
-  console.error('❌ Socket.io failed to initialize');
-}
+if (io) console.log('✅ Socket.io initialized successfully');
+else console.error('❌ Socket.io failed to initialize');
 
 app.set('io', io);
 
-server.listen(PORT, () => {
-  console.log(`🚀 Backend server running at http://localhost:${PORT}`);
+const onlineUsers = new Map();
 
-  // Start recurring task scheduler
-  const recurringTaskScheduler = require('./services/recurringTaskScheduler');
-  recurringTaskScheduler.start();
-
-  // Start Keepa ASIN Sync Scheduler
-  const schedulerService = require('./services/schedulerService');
-  schedulerService.init();
-  
-  // Start ASIN Auto-Scraper (only if Octoparse automation is disabled)
-  if (process.env.AUTOMATION_ENABLED !== 'true') {
-    console.log('🌐 Direct Scraper initialized (Simple mode)');
-    const autoScrape = require('./cron/autoScrape');
-    autoScrape.init();
-  } else {
-    console.log('🤖 Octoparse Automation enabled - Direct scraper disabled');
-  }
-  
-  console.log('⏰ Recurring task scheduler initialized');
-
-  // Trigger initial CometChat sync on startup
-  try {
-    const { syncAllToCometChat } = require('./services/cometChatService');
-    syncAllToCometChat(); // Fire and forget
-  } catch (err) {
-    // console.error('Initial CometChat sync failed:', err);
-  }
-});
-
-const onlineUsers = new Map(); // userId -> socketId
-
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('🔌 New client connected:', socket.id);
 
   socket.on('join', async (userId) => {
@@ -245,18 +186,23 @@ io.on('connection', (socket) => {
       socket.userId = userId;
       onlineUsers.set(userId, socket.id);
 
-      // Update user status in DB
-      const User = require('./models/User');
-      await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: Date.now() });
+      // Update user status in DB using SQL
+      const pool = await getPool();
+      await pool.request()
+        .input('id', sql.VarChar, userId)
+        .query("UPDATE Users SET IsOnline = 1, LastSeen = GETDATE() WHERE Id = @id");
+
+      // Get user's assigned sellers to join rooms
+      const sellersResult = await pool.request()
+        .input('userId', sql.VarChar, userId)
+        .query("SELECT SellerId FROM UserSellers WHERE UserId = @userId");
 
       // Join personal room
       socket.join(userId);
 
-      // Join rooms for all active conversations
-      const Conversation = require('./models/Conversation');
-      const conversations = await Conversation.find({ participants: userId, isActive: true });
-      conversations.forEach(conv => {
-        socket.join(conv._id.toString());
+      // Join rooms for each seller
+      sellersResult.recordset.forEach(row => {
+        socket.join(`seller:${row.SellerId}`);
       });
 
       console.log(`👤 User ${userId} joined their rooms`);
@@ -279,29 +225,49 @@ io.on('connection', (socket) => {
 
   socket.on('send_message', async (data) => {
     try {
-      const Message = require('./models/Message');
-      const Conversation = require('./models/Conversation');
-
       const { conversationId, senderId, content, type, fileUrl, replyTo } = data;
+      const pool = await getPool();
 
-      const message = await Message.create({
-        conversationId,
-        sender: senderId,
-        type: type || 'TEXT',
-        content,
-        fileUrl,
-        replyTo
-      });
+      // Check participant
+      const partCheck = await pool.request()
+        .input('convId', sql.VarChar, conversationId)
+        .input('userId', sql.VarChar, senderId)
+        .query(`SELECT 1 FROM ConversationParticipants WHERE ConversationId = @convId AND UserId = @userId`);
 
-      const populatedMessage = await Message.findById(message._id)
-        .populate('sender', 'firstName lastName avatar')
-        .populate('replyTo');
+      if (partCheck.recordset.length === 0) {
+        return; // Not authorized
+      }
 
-      await Conversation.findByIdAndUpdate(conversationId, {
-        lastMessage: message._id,
-        updatedAt: Date.now()
-      });
+      const messageId = require('crypto').randomUUID().replace(/-/g, '').substring(0, 24);
 
+      await pool.request()
+        .input('Id', sql.VarChar, messageId)
+        .input('ConversationId', sql.VarChar, conversationId)
+        .input('SenderId', sql.VarChar, senderId)
+        .input('Type', sql.NVarChar, type || 'TEXT')
+        .input('Content', sql.NVarChar, content)
+        .input('FileUrl', sql.NVarChar, fileUrl || null)
+        .input('ReplyToId', sql.VarChar, replyTo || null)
+        .query(`
+          INSERT INTO Messages (Id, ConversationId, SenderId, Type, Content, FileUrl, ReplyToId, CreatedAt)
+          VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, GETDATE())
+        `);
+
+      await pool.request()
+        .input('convId', sql.VarChar, conversationId)
+        .input('msgId', sql.VarChar, messageId)
+        .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = GETDATE() WHERE Id = @convId`);
+
+      const msgResult = await pool.request()
+        .input('msgId', sql.VarChar, messageId)
+        .query(`
+          SELECT m.*, u.FirstName, u.LastName, u.Avatar
+          FROM Messages m
+          JOIN Users u ON m.SenderId = u.Id
+          WHERE m.Id = @msgId
+        `);
+
+      const populatedMessage = msgResult.recordset[0];
       io.to(conversationId).emit('receive_message', populatedMessage);
     } catch (err) {
       console.error('Socket send_message error:', err);
@@ -310,14 +276,31 @@ io.on('connection', (socket) => {
 
   socket.on('add_reaction', async ({ messageId, emoji, userId }) => {
     try {
-      const Message = require('./models/Message');
-      const message = await Message.findByIdAndUpdate(
-        messageId,
-        { $push: { reactions: { userId, emoji } } },
-        { new: true }
-      ).populate('sender', 'firstName lastName avatar');
+      const pool = await getPool();
+      const { sql } = require('./database/db');
 
-      io.to(message.conversationId.toString()).emit('message_reaction_updated', { messageId, reactions: message.reactions });
+      await pool.request()
+        .input('msgId', sql.VarChar, messageId)
+        .input('uid', sql.VarChar, userId)
+        .input('emoji', sql.NVarChar, emoji)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1 FROM MessageReactions WHERE MessageId = @msgId AND UserId = @uid AND Emoji = @emoji
+          )
+          BEGIN
+            INSERT INTO MessageReactions (MessageId, UserId, Emoji, CreatedAt)
+            VALUES (@msgId, @uid, @emoji, GETDATE())
+          END
+        `);
+
+      const reactionsResult = await pool.request()
+        .input('msgId', sql.VarChar, messageId)
+        .query(`SELECT Emoji, COUNT(*) as count FROM MessageReactions WHERE MessageId = @msgId GROUP BY Emoji`);
+
+      io.to(conversationIdFromMessage(messageId)).emit('message_reaction_updated', {
+        messageId,
+        reactions: reactionsResult.recordset
+      });
     } catch (err) {
       console.error('Socket add_reaction error:', err);
     }
@@ -325,42 +308,44 @@ io.on('connection', (socket) => {
 
   socket.on('message_read', async ({ messageId, userId }) => {
     try {
-      const Message = require('./models/Message');
-      const message = await Message.findByIdAndUpdate(
-        messageId,
-        { $addToSet: { 'status.readBy': userId } },
-        { new: true }
-      );
-
-      if (message) {
-        io.to(message.conversationId.toString()).emit('message_status_updated', {
-          messageId,
-          status: message.status
-        });
-      }
+      const pool = await getPool();
+      await pool.request()
+        .input('msgId', sql.VarChar, messageId)
+        .input('userId', sql.VarChar, userId)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1 FROM MessageStatus WHERE MessageId = @msgId AND UserId = @userId
+          )
+          BEGIN
+            INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
+            VALUES (@msgId, @userId, 1, GETDATE())
+          END
+        `);
     } catch (err) {
       console.error('Socket message_read error:', err);
     }
   });
 
-  // Calling Signaling
   socket.on('invite_to_call', async ({ conversationId, callerId, type, receiverId }) => {
     try {
-      const Call = require('./models/Call');
-      const call = await Call.create({
-        conversationId,
-        callerId,
-        receiverId,
-        type,
-        status: 'INITIATED'
-      });
+      const pool = await getPool();
+      const { sql, generateId } = require('./database/db');
+      const callId = generateId();
 
-      const populatedCall = await Call.findById(call._id).populate('callerId', 'firstName lastName avatar');
+      await pool.request()
+        .input('Id', sql.VarChar, callId)
+        .input('ConversationId', sql.VarChar, conversationId)
+        .input('CallerId', sql.VarChar, callerId)
+        .input('ReceiverId', sql.VarChar, receiverId)
+        .input('Type', sql.NVarChar, type)
+        .input('Status', sql.NVarChar, 'INITIATED')
+        .query(`
+          INSERT INTO CallLogs (Id, ConversationId, CallerId, ReceiverId, Type, Status, StartedAt)
+          VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, GETDATE())
+        `);
 
-      // Notify the receiver
-      io.to(receiverId).emit('incoming_call', populatedCall);
-      // Notify the caller (confirmation)
-      socket.emit('call_initiated', populatedCall);
+      io.to(receiverId).emit('incoming_call', { callId, conversationId, callerId, type, status: 'INITIATED' });
+      socket.emit('call_initiated', { callId, conversationId, callerId, type, status: 'INITIATED' });
     } catch (err) {
       console.error('Socket invite_to_call error:', err);
     }
@@ -368,15 +353,25 @@ io.on('connection', (socket) => {
 
   socket.on('accept_call', async ({ callId }) => {
     try {
-      const Call = require('./models/Call');
-      const call = await Call.findByIdAndUpdate(callId, {
-        status: 'ONGOING',
-        startedAt: new Date()
-      }, { new: true }).populate('callerId receiverId');
+      const pool = await getPool();
+      await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .query(`UPDATE CallLogs SET Status = 'ONGOING', StartedAt = GETDATE() WHERE Id = @callId AND Status = 'INITIATED'`);
 
+      const callResult = await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .query(`
+          SELECT cl.*, u1.FirstName + ' ' + u1.LastName as callerName, u2.FirstName + ' ' + u2.LastName as receiverName
+          FROM CallLogs cl
+          JOIN Users u1 ON cl.CallerId = u1.Id
+          JOIN Users u2 ON cl.ReceiverId = u2.Id
+          WHERE cl.Id = @callId
+        `);
+
+      const call = callResult.recordset[0];
       if (call) {
-        io.to(call.callerId._id.toString()).emit('call_accepted', call);
-        io.to(call.receiverId._id.toString()).emit('call_accepted', call);
+        io.to(call.CallerId).emit('call_accepted', call);
+        io.to(call.ReceiverId).emit('call_accepted', call);
       }
     } catch (err) {
       console.error('Socket accept_call error:', err);
@@ -385,10 +380,17 @@ io.on('connection', (socket) => {
 
   socket.on('reject_call', async ({ callId }) => {
     try {
-      const Call = require('./models/Call');
-      const call = await Call.findByIdAndUpdate(callId, { status: 'REJECTED' }, { new: true });
-      if (call) {
-        io.to(call.callerId.toString()).emit('call_rejected', { callId });
+      const pool = await getPool();
+      await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .query(`UPDATE CallLogs SET Status = 'REJECTED' WHERE Id = @callId AND Status = 'INITIATED'`);
+
+      const callResult = await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .query(`SELECT CallerId FROM CallLogs WHERE Id = @callId`);
+
+      if (callResult.recordset.length > 0) {
+        io.to(callResult.recordset[0].CallerId).emit('call_rejected', { callId });
       }
     } catch (err) {
       console.error('Socket reject_call error:', err);
@@ -397,123 +399,78 @@ io.on('connection', (socket) => {
 
   socket.on('end_call', async ({ callId }) => {
     try {
-      const Call = require('./models/Call');
-      const call = await Call.findById(callId);
-      if (call && call.status !== 'ENDED') {
-        const endedAt = new Date();
-        const duration = call.startedAt ? Math.floor((endedAt - call.startedAt) / 1000) : 0;
+      const pool = await getPool();
+      const callResult = await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .query(`SELECT * FROM CallLogs WHERE Id = @callId AND Status = 'ONGOING'`);
 
-        const updatedCall = await Call.findByIdAndUpdate(callId, {
-          status: 'ENDED',
-          endedAt,
-          duration
-        }, { new: true });
+      if (callResult.recordset.length === 0) return;
 
-        io.to(call.callerId.toString()).emit('call_ended', { callId, duration });
-        if (call.receiverId) {
-          io.to(call.receiverId.toString()).emit('call_ended', { callId, duration });
-        }
+      const call = callResult.recordset[0];
+      const endedAt = new Date();
+      const duration = call.StartedAt ? Math.floor((endedAt - new Date(call.StartedAt)) / 1000) : 0;
+
+      await pool.request()
+        .input('callId', sql.VarChar, callId)
+        .input('duration', sql.Int, duration)
+        .query(`UPDATE CallLogs SET Status = 'ENDED', EndedAt = GETDATE(), Duration = @duration WHERE Id = @callId`);
+
+      io.to(call.CallerId).emit('call_ended', { callId, duration });
+      if (call.ReceiverId) {
+        io.to(call.ReceiverId).emit('call_ended', { callId, duration });
       }
     } catch (err) {
       console.error('Socket end_call error:', err);
     }
   });
 
-  // WebRTC Signaling Passthrough
-  socket.on('webrtc_signal', ({ targetId, signal, callId }) => {
-    io.to(targetId).emit('webrtc_signal', { fromId: socket.userId, signal, callId });
-  });
-
   socket.on('disconnect', async () => {
     console.log('🔌 Socket disconnected:', socket.id);
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
-      const User = require('./models/User');
-      await User.findByIdAndUpdate(socket.userId, { isOnline: false, lastSeen: Date.now() });
+      try {
+        const pool = await getPool();
+        await pool.request()
+          .input('id', sql.VarChar, socket.userId)
+          .query("UPDATE Users SET IsOnline = 0, LastSeen = GETDATE() WHERE Id = @id");
+      } catch (e) {}
       io.emit('user_status_change', { userId: socket.userId, status: 'offline' });
     }
   });
 });
 
-// Initialize defaults
-const initializeDefaults = async () => {
-  try {
-    // Initialize default alert rules
-    const { AlertRule } = require('./models/AlertModel');
-    const existingRules = await AlertRule.countDocuments();
+// Make sql and getPool available globally for socket handlers
+global.getPool = getPool;
+global.sql = require('./database/db').sql;
 
-    if (existingRules === 0) {
-      console.log('🔧 Initializing default alert rules');
+server.listen(PORT, () => {
+  console.log(`🚀 Backend server running at http://localhost:${PORT}`);
 
-      const defaultRules = [
-        {
-          name: 'Revenue Drop Alert',
-          type: 'revenue',
-          condition: { metric: 'revenue', operator: 'decrease', value: 10, period: '7d' },
-          severity: 'warning',
-          active: true,
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-01')
-        },
-        {
-          name: 'Low Inventory Alert',
-          type: 'inventory',
-          condition: { metric: 'stock', operator: '<', value: 50, period: '1d' },
-          severity: 'critical',
-          active: true,
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-01')
-        },
-        {
-          name: 'High ACOS Alert',
-          type: 'ads',
-          condition: { metric: 'acos', operator: '>', value: 25, period: '7d' },
-          severity: 'warning',
-          active: true,
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-01')
-        }
-      ];
+  const recurringTaskScheduler = require('./services/recurringTaskScheduler');
+  recurringTaskScheduler.start();
 
-      await AlertRule.insertMany(defaultRules);
-      console.log('✅ Default alert rules initialized');
-    }
+  const schedulerService = require('./services/schedulerService');
+  schedulerService.init();
 
-    // Initialize roles and permissions
-    const Role = require('./models/Role');
-    const Permission = require('./models/Permission');
-    const existingRoles = await Role.countDocuments();
-
-    if (existingRoles === 0) {
-      console.log('🔧 Initializing roles and permissions');
-      await Role.seedDefaultRoles(Permission);
-      console.log('✅ Default roles and permissions initialized');
-    }
-
-    // Create admin user if not exists
-    const User = require('./models/User');
-    const existingAdmin = await User.findOne({ email: 'admin@gms.com' });
-
-    if (!existingAdmin) {
-      console.log('🔧 Creating admin user');
-      const adminRole = await Role.findOne({ name: 'admin' });
-      if (adminRole) {
-        await User.create({
-          email: 'admin@gms.com',
-          password: 'admin123',
-          firstName: 'Admin',
-          lastName: 'User',
-          role: adminRole._id,
-          isEmailVerified: true,
-        });
-        console.log('✅ Admin user created (email: admin@gms.com, password: admin123)');
-      }
-    }
-
-    // Initialize Revenue Calculator data
-    const { seedInitialData } = require('./models/RevenueCalculatorModel');
-    await seedInitialData();
-  } catch (error) {
-    console.error('❌ Error initializing defaults:', error);
+  if (process.env.AUTOMATION_ENABLED !== 'true') {
+    console.log('🌐 Direct Scraper initialized (Simple mode)');
+    const autoScrape = require('./cron/autoScrape');
+    autoScrape.init();
+  } else {
+    console.log('🤖 Octoparse Automation enabled - Direct scraper disabled');
   }
-};
+
+  try {
+    const { syncAllToCometChat } = require('./services/cometChatService');
+    syncAllToCometChat();
+  } catch (err) {}
+});
+
+// Make getPool available globally for socket handlers
+global.getPool = getPool;
+global.sql = sql;
+
+// Helper to get conversation ID from message ID
+function conversationIdFromMessage(messageId) {
+  return '';
+}

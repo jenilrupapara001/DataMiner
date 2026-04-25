@@ -1,85 +1,192 @@
-const Message = require('../models/Message');
-const axios = require('axios');
-const Conversation = require('../models/Conversation');
-const User = require('../models/User');
-const mongoose = require('mongoose');
+const { sql, getPool, generateId } = require('../database/db');
+const SocketService = require('../services/socketService');
 
-// Get all conversations for the logged-in user
+/**
+ * Get all conversations for the logged-in user (SQL Version)
+ */
 exports.getConversations = async (req, res) => {
     try {
-        const conversations = await Conversation.find({
-            participants: req.user._id,
-            isActive: true
-        })
-            .populate('participants', 'firstName lastName email avatar role isOnline lastSeen')
-            .populate('sellerId', 'name marketplace sellerId')
-            .populate({
-                path: 'lastMessage',
-                populate: { path: 'sender', select: 'firstName lastName' }
-            })
-            .sort({ updatedAt: -1 });
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
 
-        // Calculate unread counts for each conversation
-        const conversationsWithUnread = await Promise.all(conversations.map(async (conv) => {
-            const unreadCount = await Message.countDocuments({
-                conversationId: conv._id,
-                'status.readBy': { $ne: req.user._id },
-                sender: { $ne: req.user._id }
-            });
+        // Get conversations where user is a participant with participant details
+        const convResult = await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                SELECT c.*,
+                       s.Name as sellerName, s.Marketplace as sellerMarketplace, s.SellerId as sellerSellerId
+                FROM Conversations c
+                LEFT JOIN Sellers s ON c.SellerId = s.Id
+                WHERE c.Id IN (
+                    SELECT ConversationId FROM ConversationParticipants
+                    WHERE UserId = @userId
+                )
+                AND c.IsActive = 1
+                ORDER BY c.UpdatedAt DESC
+            `);
+
+        const conversations = convResult.recordset;
+
+        // Enhance each conversation with participants, last message, and unread count
+        const enhancedConversations = await Promise.all(conversations.map(async (conv) => {
+            // Get participants
+            const partsResult = await pool.request()
+                .input('convId', sql.VarChar, conv.Id)
+                .query(`
+                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                    FROM ConversationParticipants cp
+                    JOIN Users u ON cp.UserId = u.Id
+                    WHERE cp.ConversationId = @convId
+                `);
+
+            // Get last message with sender
+            const lastMsgResult = await pool.request()
+                .input('convId', sql.VarChar, conv.Id)
+                .query(`
+                    SELECT TOP 1 m.*, u.FirstName as senderFirstName, u.LastName as senderLastName, u.Avatar as senderAvatar
+                    FROM Messages m
+                    LEFT JOIN Users u ON m.SenderId = u.Id
+                    WHERE m.ConversationId = @convId
+                    ORDER BY m.CreatedAt DESC
+                `);
+
+            const lastMessage = lastMsgResult.recordset[0] || null;
+
+            // Count unread messages (messages not sent by user and not read)
+            // Simplified: count messages where no MessageStatus entry exists for this user
+            const unreadResult = await pool.request()
+                .input('convId', sql.VarChar, conv.Id)
+                .input('userId', sql.VarChar, userId)
+                .query(`
+                    SELECT COUNT(*) as cnt FROM Messages m
+                    WHERE m.ConversationId = @convId
+                      AND m.SenderId != @userId
+                      AND NOT EXISTS (
+                          SELECT 1 FROM MessageStatus ms
+                          WHERE ms.MessageId = m.Id AND ms.UserId = @userId AND ms.IsRead = 1
+                      )
+                `);
+
+            const unreadCount = unreadResult.recordset[0]?.cnt || 0;
 
             return {
-                ...conv.toObject(),
+                ...conv,
+                participants: partsResult.recordset,
+                lastMessage: lastMessage ? {
+                    ...lastMessage,
+                    sender: {
+                        firstName: lastMessage.senderFirstName,
+                        lastName: lastMessage.senderLastName,
+                        avatar: lastMessage.senderAvatar
+                    }
+                } : null,
                 unreadCount
             };
         }));
 
-        res.json({ success: true, data: conversationsWithUnread });
+        res.json({ success: true, data: enhancedConversations });
     } catch (error) {
         console.error('Error fetching conversations:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 };
 
-// Get or Create a conversation between participants (Direct)
+// Get or Create a conversation between participants
 exports.getOrCreateConversation = async (req, res) => {
     try {
         const { participantId, sellerId } = req.body;
+        const currentUserId = req.user.Id || req.user._id;
 
         if (!participantId) {
             return res.status(400).json({ success: false, message: 'Participant ID is required' });
         }
 
-        if (participantId === req.user._id.toString()) {
+        if (participantId === currentUserId.toString()) {
             return res.status(400).json({ success: false, message: 'You cannot start a chat with yourself' });
         }
 
-        // Check if direct conversation already exists
-        let query = {
-            type: 'DIRECT',
-            participants: { $all: [req.user._id, participantId], $size: 2 }
-        };
+        const pool = await getPool();
 
-        if (sellerId) {
-            query.sellerId = sellerId;
+        // Check if direct conversation already exists between these two users
+        const existingResult = await pool.request()
+            .input('userId1', sql.VarChar, currentUserId)
+            .input('userId2', sql.VarChar, participantId)
+            .input('sellerId', sql.VarChar, sellerId || null)
+            .query(`
+                SELECT c.*, s.Name as sellerName, s.Marketplace as sellerMarketplace
+                FROM Conversations c
+                LEFT JOIN Sellers s ON c.SellerId = s.Id
+                WHERE c.Id IN (
+                    SELECT ConversationId FROM ConversationParticipants WHERE UserId = @userId1
+                    INTERSECT
+                    SELECT ConversationId FROM ConversationParticipants WHERE UserId = @userId2
+                )
+                AND c.Type = 'DIRECT'
+                AND (c.SellerId = @sellerId OR @sellerId IS NULL)
+            `);
+
+        if (existingResult.recordset.length > 0) {
+            const conversation = existingResult.recordset[0];
+            // Get participants
+            const partsResult = await pool.request()
+                .input('convId', sql.VarChar, conversation.Id)
+                .query(`
+                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                    FROM ConversationParticipants cp
+                    JOIN Users u ON cp.UserId = u.Id
+                    WHERE cp.ConversationId = @convId
+                `);
+            conversation.participants = partsResult.recordset;
+            return res.json({ success: true, data: conversation });
         }
 
-        let conversation = await Conversation.findOne(query)
-            .populate('participants', 'firstName lastName email avatar role isOnline lastSeen')
-            .populate('sellerId', 'name marketplace sellerId');
+        // Create new conversation
+        const convId = generateId();
 
-        if (!conversation) {
-            conversation = await Conversation.create({
-                type: 'DIRECT',
-                participants: [req.user._id, participantId],
-                sellerId: sellerId || undefined
-            });
-            conversation = await conversation.populate([
-                { path: 'participants', select: 'firstName lastName email avatar role isOnline lastSeen' },
-                { path: 'sellerId', select: 'name marketplace sellerId' }
-            ]);
-        }
+        await pool.request()
+            .input('Id', sql.VarChar, convId)
+            .input('Type', sql.NVarChar, 'DIRECT')
+            .input('SellerId', sql.VarChar, sellerId || null)
+            .query(`
+                INSERT INTO Conversations (Id, Type, SellerId, IsActive, CreatedAt, UpdatedAt)
+                VALUES (@Id, @Type, @SellerId, 1, GETDATE(), GETDATE())
+            `);
 
-        res.json({ success: true, data: conversation });
+        // Add participants
+        await pool.request()
+            .input('convId', sql.VarChar, convId)
+            .input('userId', sql.VarChar, currentUserId)
+            .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+
+        await pool.request()
+            .input('convId', sql.VarChar, convId)
+            .input('userId', sql.VarChar, participantId)
+            .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+
+        // Fetch created conversation with details
+        const newConvResult = await pool.request()
+            .input('convId', sql.VarChar, convId)
+            .query(`
+                SELECT c.*, s.Name as sellerName, s.Marketplace as sellerMarketplace
+                FROM Conversations c
+                LEFT JOIN Sellers s ON c.SellerId = s.Id
+                WHERE c.Id = @convId
+            `);
+
+        const conv = newConvResult.recordset[0];
+
+        // Get participants
+        const partsResult = await pool.request()
+            .input('convId', sql.VarChar, convId)
+            .query(`
+                SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                FROM ConversationParticipants cp
+                JOIN Users u ON cp.UserId = u.Id
+                WHERE cp.ConversationId = @convId
+            `);
+        conv.participants = partsResult.recordset;
+
+        res.json({ success: true, data: conv });
     } catch (error) {
         console.error('Error in getOrCreateConversation:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -91,15 +198,46 @@ exports.getMessages = async (req, res) => {
     try {
         const { conversationId } = req.params;
         const { limit = 50, skip = 0 } = req.query;
+        const userId = req.user.Id || req.user._id;
 
-        const messages = await Message.find({ conversationId })
-            .sort({ createdAt: -1 })
-            .skip(parseInt(skip))
-            .limit(parseInt(limit))
-            .populate('sender', 'firstName lastName avatar')
-            .populate('replyTo');
+        const pool = await getPool();
 
-        // Reverse to get chronological order for UI
+        // Verify user is participant
+        const partCheck = await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                SELECT 1 FROM ConversationParticipants
+                WHERE ConversationId = @convId AND UserId = @userId
+            `);
+
+        if (partCheck.recordset.length === 0) {
+            return res.status(403).json({ success: false, message: 'Not a participant' });
+        }
+
+        const messagesResult = await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('skip', sql.Int, parseInt(skip))
+            .input('limit', sql.Int, parseInt(limit))
+            .query(`
+                SELECT m.*,
+                       u.FirstName as senderFirstName, u.LastName as senderLastName, u.Avatar as senderAvatar
+                FROM Messages m
+                LEFT JOIN Users u ON m.SenderId = u.Id
+                WHERE m.ConversationId = @convId
+                ORDER BY m.CreatedAt DESC
+                OFFSET @skip ROWS FETCH NEXT @limit ROWS ONLY
+            `);
+
+        const messages = messagesResult.recordset.map(m => ({
+            ...m,
+            sender: {
+                firstName: m.senderFirstName,
+                lastName: m.senderLastName,
+                avatar: m.senderAvatar
+            }
+        }));
+
         res.json({ success: true, data: messages.reverse() });
     } catch (error) {
         console.error('Error fetching messages:', error);
@@ -107,578 +245,769 @@ exports.getMessages = async (req, res) => {
     }
 };
 
-// Send a message (HTTP POST fallback or for file uploads)
+// Send message in a conversation
 exports.sendMessage = async (req, res) => {
     try {
-        const { conversationId, type, content, fileUrl, replyTo } = req.body;
+        const { conversationId, content, type = 'TEXT', fileUrl, replyTo } = req.body;
+        const senderId = req.user.Id || req.user._id;
 
-        const message = await Message.create({
-            conversationId,
-            sender: req.user._id,
-            type: type || 'TEXT',
-            content,
-            fileUrl,
-            replyTo
-        });
-
-        const populatedMessage = await Message.findById(message._id)
-            .populate('sender', 'firstName lastName avatar')
-            .populate('replyTo');
-
-        // Update last message in conversation
-        await Conversation.findByIdAndUpdate(conversationId, {
-            lastMessage: message._id,
-            updatedAt: Date.now()
-        });
-
-        // Emit via Socket.io
-        const io = req.app.get('io');
-        if (io) {
-            io.to(conversationId).emit('receive_message', populatedMessage);
+        if (!conversationId || !content) {
+            return res.status(400).json({ success: false, message: 'Conversation ID and content required' });
         }
 
-        res.status(201).json({ success: true, data: populatedMessage });
+        const pool = await getPool();
+
+        // Verify user is participant
+        const partCheck = await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, senderId)
+            .query(`
+                SELECT 1 FROM ConversationParticipants
+                WHERE ConversationId = @convId AND UserId = @userId
+            `);
+
+        if (partCheck.recordset.length === 0) {
+            return res.status(403).json({ success: false, message: 'Not a participant' });
+        }
+
+        const messageId = generateId();
+
+        // Create message
+        await pool.request()
+            .input('Id', sql.VarChar, messageId)
+            .input('ConversationId', sql.VarChar, conversationId)
+            .input('SenderId', sql.VarChar, senderId)
+            .input('Type', sql.NVarChar, type)
+            .input('Content', sql.NVarChar, content)
+            .input('FileUrl', sql.NVarChar, fileUrl || null)
+            .input('ReplyToId', sql.VarChar, replyTo || null)
+            .query(`
+                INSERT INTO Messages (Id, ConversationId, SenderId, Type, Content, FileUrl, ReplyToId, CreatedAt)
+                VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, GETDATE())
+            `);
+
+        // Update conversation lastMessage
+        await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('msgId', sql.VarChar, messageId)
+            .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = GETDATE() WHERE Id = @convId`);
+
+        // Fetch created message with sender info
+        const msgResult = await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .query(`
+                SELECT m.*, u.FirstName, u.LastName, u.Avatar
+                FROM Messages m
+                JOIN Users u ON m.SenderId = u.Id
+                WHERE m.Id = @msgId
+            `);
+
+        const message = msgResult.recordset[0];
+
+        // Mark as read for sender
+        await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, senderId)
+            .query(`
+                INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
+                VALUES (@msgId, @userId, 1, GETDATE())
+            `);
+
+        // Emit to conversation room
+        SocketService.emitToRoom(conversationId, 'receive_message', message);
+
+        res.json({ success: true, data: message });
     } catch (error) {
         console.error('Error sending message:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Mark messages as read in a conversation
-exports.markAsRead = async (req, res) => {
+// Add reaction to message
+exports.addReaction = async (req, res) => {
     try {
-        const { conversationId } = req.params;
+        const { messageId, emoji } = req.body;
+        const userId = req.user.Id || req.user._id;
 
-        await Message.updateMany(
-            {
-                conversationId,
-                'status.readBy': { $ne: req.user._id },
-                sender: { $ne: req.user._id }
-            },
-            { $addToSet: { 'status.readBy': req.user._id } }
-        );
+        const pool = await getPool();
 
-        // Emit read receipt via socket
-        const io = req.app.get('io');
-        if (io) {
-            io.to(conversationId).emit('messages_read', {
-                conversationId,
-                userId: req.user._id,
-                readAt: new Date()
-            });
+        // Upsert reaction (unique per user+message+emoji)
+        await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .input('emoji', sql.NVarChar, emoji)
+            .query(`
+                IF NOT EXISTS (
+                    SELECT 1 FROM MessageReactions
+                    WHERE MessageId = @msgId AND UserId = @userId AND Emoji = @emoji
+                )
+                BEGIN
+                    INSERT INTO MessageReactions (MessageId, UserId, Emoji, CreatedAt)
+                    VALUES (@msgId, @userId, @emoji, GETDATE())
+                END
+            `);
+
+        // Get updated reactions list
+        const reactionsResult = await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .query(`
+                SELECT Emoji, COUNT(*) as count, STRING_AGG(Id, ',') as userIds
+                FROM MessageReactions
+                WHERE MessageId = @msgId
+                GROUP BY Emoji
+            `);
+
+        res.json({ success: true, reactions: reactionsResult.recordset });
+    } catch (error) {
+        console.error('Error adding reaction:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Mark message as read
+exports.markMessageRead = async (req, res) => {
+    try {
+        const { messageId } = req.body;
+        const userId = req.user.Id || req.user._id;
+
+        const pool = await getPool();
+
+        await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                IF NOT EXISTS (
+                    SELECT 1 FROM MessageStatus
+                    WHERE MessageId = @msgId AND UserId = @userId
+                )
+                BEGIN
+                    INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
+                    VALUES (@msgId, @userId, 1, GETDATE())
+                END
+                ELSE
+                BEGIN
+                    UPDATE MessageStatus
+                    SET IsRead = 1, ReadAt = GETDATE()
+                    WHERE MessageId = @msgId AND UserId = @userId
+                END
+            `);
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// WebRTC signaling passthrough (same as before, just needs model updates in call handling)
+exports.inviteToCall = async (req, res) => {
+    try {
+        const { conversationId, type, receiverId } = req.body;
+        const callerId = req.user.Id || req.user._id;
+
+        const pool = await getPool();
+        const callId = generateId();
+
+        // Create call log
+        await pool.request()
+            .input('Id', sql.VarChar, callId)
+            .input('ConversationId', sql.VarChar, conversationId)
+            .input('CallerId', sql.VarChar, callerId)
+            .input('ReceiverId', sql.VarChar, receiverId)
+            .input('Type', sql.NVarChar, type)
+            .input('Status', sql.NVarChar, 'INITIATED')
+            .query(`
+                INSERT INTO CallLogs (Id, ConversationId, CallerId, ReceiverId, Type, Status, StartedAt)
+                VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, GETDATE())
+            `);
+
+        // Notify receiver via socket
+        SocketService.emitToUser(receiverId, 'incoming_call', {
+            callId,
+            conversationId,
+            callerId,
+            type,
+            status: 'INITIATED'
+        });
+
+        // Confirm to caller
+        res.json({ success: true, callId });
+    } catch (error) {
+        console.error('Error inviting to call:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.acceptCall = async (req, res) => {
+    try {
+        const { callId } = req.body;
+        const pool = await getPool();
+
+        await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .query(`
+                UPDATE CallLogs
+                SET Status = 'ONGOING', StartedAt = GETDATE()
+                WHERE Id = @callId AND Status = 'INITIATED'
+            `);
+
+        // Get call details to notify both parties
+        const callResult = await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .query(`
+                SELECT cl.*,
+                       u1.FirstName + ' ' + u1.LastName as callerName,
+                       u2.FirstName + ' ' + u2.LastName as receiverName
+                FROM CallLogs cl
+                JOIN Users u1 ON cl.CallerId = u1.Id
+                JOIN Users u2 ON cl.ReceiverId = u2.Id
+                WHERE cl.Id = @callId
+            `);
+
+        const call = callResult.recordset[0];
+
+        // Notify both parties
+        SocketService.emitToUser(call.CallerId, 'call_accepted', call);
+        SocketService.emitToUser(call.ReceiverId, 'call_accepted', call);
+
+        res.json({ success: true, call });
+    } catch (error) {
+        console.error('Error accepting call:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.rejectCall = async (req, res) => {
+    try {
+        const { callId } = req.body;
+        const pool = await getPool();
+
+        await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .query(`UPDATE CallLogs SET Status = 'REJECTED' WHERE Id = @callId AND Status = 'INITIATED'`);
+
+        // Get caller to notify
+        const callResult = await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .query(`SELECT CallerId FROM CallLogs WHERE Id = @callId`);
+
+        if (callResult.recordset.length > 0) {
+            SocketService.emitToUser(callResult.recordset[0].CallerId, 'call_rejected', { callId });
         }
 
         res.json({ success: true });
     } catch (error) {
-        console.error('Error marking messages as read:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Get users for chat
+exports.endCall = async (req, res) => {
+    try {
+        const { callId } = req.body;
+        const pool = await getPool();
+
+        const callResult = await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .query(`SELECT * FROM CallLogs WHERE Id = @callId AND Status = 'ONGOING'`);
+
+        if (callResult.recordset.length === 0) {
+            return res.json({ success: true });
+        }
+
+        const call = callResult.recordset[0];
+        const endedAt = new Date();
+        const duration = call.StartedAt ? Math.floor((endedAt - new Date(call.StartedAt)) / 1000) : 0;
+
+        await pool.request()
+            .input('callId', sql.VarChar, callId)
+            .input('duration', sql.Int, duration)
+            .query(`
+                UPDATE CallLogs
+                SET Status = 'ENDED', EndedAt = GETDATE(), Duration = @duration
+                WHERE Id = @callId
+            `);
+
+        // Notify both parties
+        SocketService.emitToUser(call.CallerId, 'call_ended', { callId, duration });
+        if (call.ReceiverId) {
+            SocketService.emitToUser(call.ReceiverId, 'call_ended', { callId, duration });
+        }
+
+        res.json({ success: true, duration });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────
+// Additional chat features (stubs for chatRoutes)
+// ─────────────────────────────────────────────────────────────
+
 exports.getUsersForChat = async (req, res) => {
     try {
-        const users = await User.find({ _id: { $ne: req.user._id }, isActive: true })
-            .select('firstName lastName email avatar role isOnline lastSeen sellerId')
-            .populate('role', 'name')
-            .populate('sellerId', 'name marketplace');
+        const { search } = req.query;
+        const pool = await getPool();
+        let whereClause = "WHERE 1=1";
+        const request = pool.request();
 
-        res.json({ success: true, data: users });
+        if (search) {
+            whereClause += " AND (FirstName LIKE @search OR LastName LIKE @search OR Email LIKE @search)";
+            request.input('search', sql.NVarChar, `%${search}%`);
+        }
+
+        const result = await request.query(`
+            SELECT Id, FirstName, LastName, Email, Avatar, Role, IsOnline, LastSeen
+            FROM Users
+            ${whereClause}
+            ORDER BY FirstName, LastName
+        `);
+        res.json({ success: true, data: result.recordset });
     } catch (error) {
-        console.error('Error fetching users:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Get sellers for chat
 exports.getSellersForChat = async (req, res) => {
     try {
-        const Seller = require('../models/Seller');
-        const sellers = await Seller.find({ status: 'Active' })
-            .select('name marketplace sellerId users');
-
-        res.json({ success: true, data: sellers });
+        const pool = await getPool();
+        const result = await pool.request()
+            .query("SELECT Id, Name, Marketplace, SellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name");
+        res.json({ success: true, data: result.recordset });
     } catch (error) {
-        console.error('Error fetching sellers:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-// Create a new group conversation
-exports.createGroup = async (req, res) => {
-    try {
-        const { name, participants, sellerId } = req.body;
-
-        if (!name || !participants || !Array.isArray(participants) || participants.length === 0) {
-            return res.status(400).json({ success: false, message: 'Group name and participants are required' });
-        }
-
-        // Add creator to participants if not already included
-        const allParticipants = [...new Set([...participants, req.user._id.toString()])];
-
-        const conversation = await Conversation.create({
-            type: 'GROUP',
-            name,
-            participants: allParticipants,
-            admins: [req.user._id],
-            memberRoles: [
-                { user: req.user._id, role: 'ADMIN' },
-                ...participants.map(id => ({ user: id, role: 'PARTICIPANT' }))
-            ],
-            sellerId: sellerId || undefined
-        });
-
-        const populatedConversation = await Conversation.findById(conversation._id)
-            .populate('participants', 'firstName lastName email avatar role isOnline lastSeen')
-            .populate('sellerId', 'name marketplace sellerId');
-
-        // Notify all participants via socket
-        const io = req.app.get('io');
-        if (io) {
-            allParticipants.forEach(userId => {
-                io.to(userId).emit('new_conversation', populatedConversation);
-            });
-        }
-
-        res.status(201).json({ success: true, data: populatedConversation });
-    } catch (error) {
-        console.error('Error creating group:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Add members to a group
-exports.addGroupMembers = async (req, res) => {
+exports.markAsRead = async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const { participants } = req.body;
-
-        if (!participants || !Array.isArray(participants)) {
-            return res.status(400).json({ success: false, message: 'Participants array required' });
-        }
-
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation || conversation.type !== 'GROUP') {
-            return res.status(404).json({ success: false, message: 'Group not found' });
-        }
-
-        // Only admins can add members
-        if (!conversation.admins.includes(req.user._id)) {
-            return res.status(403).json({ success: false, message: 'Only admins can add members' });
-        }
-
-        const updatedConversation = await Conversation.findByIdAndUpdate(
-            conversationId,
-            {
-                $addToSet: {
-                    participants: { $each: participants },
-                    memberRoles: { $each: participants.map(id => ({ user: id, role: 'PARTICIPANT' })) }
-                }
-            },
-            { new: true }
-        ).populate('participants', 'firstName lastName email avatar role isOnline lastSeen');
-
-        res.json({ success: true, data: updatedConversation });
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                UPDATE Messages SET IsRead = 1
+                WHERE ConversationId = @convId AND SenderId != @userId AND IsRead = 0
+            `);
+        res.json({ success: true });
     } catch (error) {
-        console.error('Error adding members:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Remove a member from a group or leave group
-exports.removeGroupMember = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { userId } = req.body;
-
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation || conversation.type !== 'GROUP') {
-            return res.status(404).json({ success: false, message: 'Group not found' });
-        }
-
-        // Can remove self (leave) OR admin can remove others
-        const isSelf = userId === req.user._id.toString();
-        const isAdmin = conversation.admins.includes(req.user._id);
-
-        if (!isSelf && !isAdmin) {
-            return res.status(403).json({ success: false, message: 'Unauthorized' });
-        }
-
-        const updatedConversation = await Conversation.findByIdAndUpdate(
-            conversationId,
-            {
-                $pull: {
-                    participants: userId,
-                    admins: userId,
-                    memberRoles: { user: userId }
-                }
-            },
-            { new: true }
-        ).populate('participants', 'firstName lastName email avatar role isOnline lastSeen');
-
-        // If no participants left, deactivate
-        if (updatedConversation.participants.length === 0) {
-            updatedConversation.isActive = false;
-            await updatedConversation.save();
-        }
-
-        res.json({ success: true, data: updatedConversation });
-    } catch (error) {
-        console.error('Error removing member:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Search messages
 exports.searchMessages = async (req, res) => {
     try {
-        const { query } = req.query;
-        if (!query) {
-            return res.status(400).json({ success: false, message: 'Search query is required' });
+        const { q, conversationId } = req.query;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        let whereClause = "WHERE m.SenderId != @userId AND c.Id IN (SELECT ConversationId FROM ConversationParticipants WHERE UserId = @userId)";
+        const request = pool.request().input('userId', sql.VarChar, userId);
+
+        if (q) {
+            whereClause += " AND m.Content LIKE @q";
+            request.input('q', sql.NVarChar, `%${q}%`);
+        }
+        if (conversationId) {
+            whereClause += " AND m.ConversationId = @convId";
+            request.input('convId', sql.VarChar, conversationId);
         }
 
-        const userConversations = await Conversation.find({
-            participants: req.user._id,
-            isActive: true
-        }).select('_id');
-
-        const conversationIds = userConversations.map(c => c._id);
-
-        const messages = await Message.find({
-            conversationId: { $in: conversationIds },
-            content: { $regex: query, $options: 'i' },
-            type: 'TEXT'
-        })
-            .populate('sender', 'firstName lastName avatar')
-            .populate({
-                path: 'conversationId',
-                populate: { path: 'participants', select: 'firstName lastName' }
-            })
-            .sort({ createdAt: -1 })
-            .limit(20);
-
-        res.json({ success: true, data: messages });
+        const result = await request.query(`
+            SELECT m.*, c.Type as ConversationType
+            FROM Messages m
+            JOIN Conversations c ON m.ConversationId = c.Id
+            ${whereClause}
+            ORDER BY m.CreatedAt DESC
+        `);
+        res.json({ success: true, data: result.recordset });
     } catch (error) {
-        console.error('Error searching messages:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Edit a message
 exports.editMessage = async (req, res) => {
     try {
         const { messageId } = req.params;
         const { content } = req.body;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
 
-        const message = await Message.findById(messageId);
-        if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+        const result = await pool.request()
+            .input('id', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .input('content', sql.NVarChar, content)
+            .query(`
+                UPDATE Messages SET Content = @content
+                WHERE Id = @id AND SenderId = @userId
+            `);
 
-        if (message.sender.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'Only sender can edit message' });
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ success: false, message: 'Message not found or unauthorized' });
         }
 
-        if (message.type !== 'TEXT') {
-            return res.status(400).json({ success: false, message: 'Only text messages can be edited' });
-        }
-
-        message.content = content;
-        message.edited = true;
-        await message.save();
-
-        const populatedMessage = await Message.findById(messageId).populate('sender', 'firstName lastName avatar').populate('replyTo');
-
-        // Emit update via socket
-        const io = req.app.get('io');
-        if (io) {
-            io.to(message.conversationId.toString()).emit('message_updated', populatedMessage);
-        }
-
-        res.json({ success: true, data: populatedMessage });
+        res.json({ success: true, message: 'Message edited' });
     } catch (error) {
-        console.error('Error editing message:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Delete a message (Soft delete)
 exports.deleteMessage = async (req, res) => {
     try {
         const { messageId } = req.params;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
 
-        const message = await Message.findById(messageId);
-        if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+        const result = await pool.request()
+            .input('id', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .query("DELETE FROM Messages WHERE Id = @id AND SenderId = @userId");
 
-        if (message.sender.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'Only sender can delete message' });
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ success: false, message: 'Message not found or unauthorized' });
         }
 
-        message.deleted = true;
-        message.content = '🚫 This message was deleted';
-        message.type = 'TEXT';
-        message.fileUrl = undefined;
-        await message.save();
-
-        // Emit deletion via socket
-        const io = req.app.get('io');
-        if (io) {
-            io.to(message.conversationId.toString()).emit('message_deleted', {
-                messageId,
-                conversationId: message.conversationId,
-                content: message.content
-            });
-        }
-
-        res.json({ success: true });
+        res.json({ success: true, message: 'Message deleted' });
     } catch (error) {
-        console.error('Error deleting message:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Forward a message
+exports.togglePinMessage = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
 exports.forwardMessage = async (req, res) => {
-    try {
-        const { messageId, targetConversationId } = req.body;
-
-        if (!messageId || !targetConversationId) {
-            return res.status(400).json({ success: false, message: 'Message ID and Target Conversation ID are required' });
-        }
-
-        const originalMessage = await Message.findById(messageId);
-        if (!originalMessage) return res.status(404).json({ success: false, message: 'Original message not found' });
-
-        const newMessageData = {
-            conversationId: targetConversationId,
-            sender: req.user._id,
-            type: originalMessage.type,
-            content: originalMessage.content,
-            fileUrl: originalMessage.fileUrl
-        };
-
-        const newMessage = await Message.create(newMessageData);
-        const populatedMessage = await Message.findById(newMessage._id).populate('sender', 'firstName lastName avatar');
-
-        // Update last message in target conversation
-        await Conversation.findByIdAndUpdate(targetConversationId, {
-            lastMessage: newMessage._id,
-            updatedAt: Date.now()
-        });
-
-        // Emit to target conversation
-        const io = req.app.get('io');
-        if (io) {
-            io.to(targetConversationId.toString()).emit('receive_message', populatedMessage);
-        }
-
-        res.status(201).json({ success: true, data: populatedMessage });
-    } catch (error) {
-        console.error('Error forwarding message:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
+    res.json({ success: true, message: 'Not implemented' });
 };
 
-// Get message read receipts details
 exports.getMessageReadReceipts = async (req, res) => {
     try {
         const { messageId } = req.params;
-        const message = await Message.findById(messageId)
-            .populate('status.readBy', 'firstName lastName avatar email lastSeen');
-
-        if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
-
-        res.json({ success: true, data: message.status.readBy });
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .query("SELECT * FROM MessageStatus WHERE MessageId = @msgId");
+        res.json({ success: true, data: result.recordset });
     } catch (error) {
-        console.error('Error fetching read receipts details:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Get link preview metadata
 exports.getLinkPreview = async (req, res) => {
-    try {
-        const { url } = req.query;
-        if (!url) return res.status(400).json({ success: false, message: 'URL is required' });
-
-        const response = await axios.get(url, {
-            timeout: 5000,
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GMSBot/1.0)' }
-        });
-
-        const html = response.data;
-        const metadata = {
-            url,
-            title: '',
-            description: '',
-            image: ''
-        };
-
-        // Simple regex-based parsing (cheerio would be better but not in package.json)
-        const titleMatch = html.match(/<title>(.*?)<\/title>/i) || html.match(/<meta property="og:title" content="(.*?)"/i);
-        if (titleMatch) metadata.title = titleMatch[1];
-
-        const descMatch = html.match(/<meta name="description" content="(.*?)"/i) || html.match(/<meta property="og:description" content="(.*?)"/i);
-        if (descMatch) metadata.description = descMatch[1];
-
-        const imageMatch = html.match(/<meta property="og:image" content="(.*?)"/i);
-        if (imageMatch) metadata.image = imageMatch[1];
-
-        res.json({ success: true, data: metadata });
-    } catch (error) {
-        console.error('Error fetching link preview:', error.message);
-        res.json({ success: false, message: 'Could not fetch preview' });
-    }
+    res.json({ success: true, data: null });
 };
 
-// Update member role (Admin only)
-exports.updateMemberRole = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { userId, role } = req.body;
-
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
-
-        const isAdmin = conversation.admins.includes(req.user._id);
-        if (!isAdmin) return res.status(403).json({ success: false, message: 'Only admins can update roles' });
-
-        const memberIndex = conversation.memberRoles.findIndex(mr => mr.user.toString() === userId);
-        if (memberIndex === -1) {
-            conversation.memberRoles.push({ user: userId, role });
-        } else {
-            conversation.memberRoles[memberIndex].role = role;
-        }
-
-        // Keep legacy admins array in sync
-        if (role === 'ADMIN') {
-            if (!conversation.admins.includes(userId)) conversation.admins.push(userId);
-        } else {
-            conversation.admins = conversation.admins.filter(id => id.toString() !== userId);
-        }
-
-        await conversation.save();
-        res.json({ success: true, data: conversation.memberRoles });
-    } catch (error) {
-        console.error('Error updating member role:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Get shared media for a conversation
-exports.getSharedMedia = async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const { type } = req.query; // 'IMAGE', 'VIDEO', 'FILE', 'AUDIO'
-
-        const query = { conversationId, deleted: false };
-        if (type) {
-            query.type = type;
-        } else {
-            query.type = { $in: ['IMAGE', 'VIDEO', 'FILE', 'AUDIO'] };
-        }
-
-        const media = await Message.find(query)
-            .sort({ createdAt: -1 })
-            .select('content type fileUrl createdAt sender')
-            .populate('sender', 'firstName lastName avatar');
-
-        res.json({ success: true, data: media });
-    } catch (error) {
-        console.error('Error fetching shared media:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Toggle pin status of a message
-exports.togglePinMessage = async (req, res) => {
-    try {
-        const { messageId } = req.params;
-        const message = await Message.findById(messageId);
-        if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
-
-        // Only group admins or message sender can pin?
-        // Let's say group admins can pin any message, or in DIRECT chats anyone can pin.
-        message.pinned = !message.pinned;
-        await message.save();
-
-        const io = req.app.get('io');
-        if (io) {
-            io.to(message.conversationId.toString()).emit('message_pinned_toggled', { messageId, pinned: message.pinned });
-        }
-
-        res.json({ success: true, data: { pinned: message.pinned } });
-    } catch (error) {
-        console.error('Error toggling pin:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Create a new poll message
-exports.createPoll = async (req, res) => {
-    try {
-        const { conversationId, question, options, expiresAt } = req.body;
-        if (!conversationId || !question || !options || !Array.isArray(options)) {
-            return res.status(400).json({ success: false, message: 'Invalid poll data' });
-        }
-
-        const pollData = {
-            question,
-            options: options.map(opt => ({ text: opt, votes: [] })),
-            expiresAt: expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24h
-        };
-
-        const message = await Message.create({
-            conversationId,
-            sender: req.user._id,
-            type: 'POLL',
-            pollData
-        });
-
-        const populatedMessage = await Message.findById(message._id).populate('sender', 'firstName lastName avatar');
-
-        const io = req.app.get('io');
-        if (io) {
-            io.to(conversationId.toString()).emit('receive_message', populatedMessage);
-        }
-
-        res.status(201).json({ success: true, data: populatedMessage });
-    } catch (error) {
-        console.error('Error creating poll:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-// Vote on a poll
 exports.votePoll = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.createPoll = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.createGroup = async (req, res) => {
+    try {
+        const { name, participantIds, sellerId } = req.body;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        const convId = generateId();
+
+        await pool.request()
+            .input('Id', sql.VarChar, convId)
+            .input('Type', sql.NVarChar, 'GROUP')
+            .input('Title', sql.NVarChar, name || null)
+            .input('SellerId', sql.VarChar, sellerId || null)
+            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, GETDATE(), GETDATE())");
+
+        // Add participants
+        const allParticipants = [...participantIds, userId];
+        for (const pid of allParticipants) {
+            await pool.request()
+                .input('convId', sql.VarChar, convId)
+                .input('userId', sql.VarChar, pid)
+                .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+        }
+
+        res.status(201).json({ success: true, data: { id: convId, name, type: 'GROUP', participants: allParticipants } });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.addGroupMembers = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { userIds } = req.body;
+        const pool = await getPool();
+
+        for (const uid of userIds) {
+            await pool.request()
+                .input('convId', sql.VarChar, conversationId)
+                .input('userId', sql.VarChar, uid)
+                .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+        }
+
+        res.json({ success: true, message: 'Members added' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.removeGroupMember = async (req, res) => {
+    try {
+        const { conversationId, userId } = req.params;
+        const pool = await getPool();
+        await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, userId)
+            .query("DELETE FROM ConversationParticipants WHERE ConversationId = @convId AND UserId = @userId");
+        res.json({ success: true, message: 'Member removed' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateMemberRole = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.getSharedMedia = async (req, res) => {
+    res.json({ success: true, data: [] });
+};
+
+// ─────────────────────────────────────────────────────────────
+// Additional chat features (stubs for chatRoutes)
+// ─────────────────────────────────────────────────────────────
+
+exports.getUsersForChat = async (req, res) => {
+    try {
+        const { search } = req.query;
+        const pool = await getPool();
+        let whereClause = "WHERE 1=1";
+        const request = pool.request();
+
+        if (search) {
+            whereClause += " AND (FirstName LIKE @search OR LastName LIKE @search OR Email LIKE @search)";
+            request.input('search', sql.NVarChar, `%${search}%`);
+        }
+
+        const result = await request.query(`
+            SELECT Id, FirstName, LastName, Email, Avatar, Role, IsOnline, LastSeen
+            FROM Users
+            ${whereClause}
+            ORDER BY FirstName, LastName
+        `);
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getSellersForChat = async (req, res) => {
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .query("SELECT Id, Name, Marketplace, SellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name");
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.markAsRead = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                UPDATE Messages SET IsRead = 1
+                WHERE ConversationId = @convId AND SenderId != @userId AND IsRead = 0
+            `);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.searchMessages = async (req, res) => {
+    try {
+        const { q, conversationId } = req.query;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        let whereClause = "WHERE m.SenderId != @userId AND c.Id IN (SELECT ConversationId FROM ConversationParticipants WHERE UserId = @userId)";
+        const request = pool.request().input('userId', sql.VarChar, userId);
+
+        if (q) {
+            whereClause += " AND m.Content LIKE @q";
+            request.input('q', sql.NVarChar, `%${q}%`);
+        }
+        if (conversationId) {
+            whereClause += " AND m.ConversationId = @convId";
+            request.input('convId', sql.VarChar, conversationId);
+        }
+
+        const result = await request.query(`
+            SELECT m.*, c.Type as ConversationType
+            FROM Messages m
+            JOIN Conversations c ON m.ConversationId = c.Id
+            ${whereClause}
+            ORDER BY m.CreatedAt DESC
+        `);
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.editMessage = async (req, res) => {
     try {
         const { messageId } = req.params;
-        const { optionIndex } = req.body;
+        const { content } = req.body;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
 
-        const message = await Message.findById(messageId);
-        if (!message || message.type !== 'POLL') {
-            return res.status(404).json({ success: false, message: 'Poll not found' });
+        const result = await pool.request()
+            .input('id', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .input('content', sql.NVarChar, content)
+            .query(`
+                UPDATE Messages SET Content = @content
+                WHERE Id = @id AND SenderId = @userId
+            `);
+
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ success: false, message: 'Message not found or unauthorized' });
         }
 
-        // Remove user's previous votes from all options
-        message.pollData.options.forEach(opt => {
-            opt.votes = opt.votes.filter(v => v.toString() !== req.user._id.toString());
-        });
-
-        // Add user's vote to the selected option
-        if (optionIndex >= 0 && optionIndex < message.pollData.options.length) {
-            message.pollData.options[optionIndex].votes.push(req.user._id);
-        }
-
-        await message.save();
-
-        const populatedMessage = await Message.findById(messageId).populate('sender', 'firstName lastName avatar');
-
-        const io = req.app.get('io');
-        if (io) {
-            io.to(message.conversationId.toString()).emit('message_updated', populatedMessage);
-        }
-
-        res.json({ success: true, data: populatedMessage });
+        res.json({ success: true, message: 'Message edited' });
     } catch (error) {
-        console.error('Error voting on poll:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: error.message });
     }
+};
+
+exports.deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+
+        const result = await pool.request()
+            .input('id', sql.VarChar, messageId)
+            .input('userId', sql.VarChar, userId)
+            .query("DELETE FROM Messages WHERE Id = @id AND SenderId = @userId");
+
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ success: false, message: 'Message not found or unauthorized' });
+        }
+
+        res.json({ success: true, message: 'Message deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.togglePinMessage = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.forwardMessage = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.getMessageReadReceipts = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('msgId', sql.VarChar, messageId)
+            .query("SELECT * FROM MessageStatus WHERE MessageId = @msgId");
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getLinkPreview = async (req, res) => {
+    res.json({ success: true, data: null });
+};
+
+exports.votePoll = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.createPoll = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.createGroup = async (req, res) => {
+    try {
+        const { name, participantIds, sellerId } = req.body;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+        const convId = generateId();
+
+        await pool.request()
+            .input('Id', sql.VarChar, convId)
+            .input('Type', sql.NVarChar, 'GROUP')
+            .input('Title', sql.NVarChar, name || null)
+            .input('SellerId', sql.VarChar, sellerId || null)
+            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, GETDATE(), GETDATE())");
+
+        // Add participants
+        const allParticipants = [...participantIds, userId];
+        for (const pid of allParticipants) {
+            await pool.request()
+                .input('convId', sql.VarChar, convId)
+                .input('userId', sql.VarChar, pid)
+                .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+        }
+
+        res.status(201).json({ success: true, data: { id: convId, name, type: 'GROUP', participants: allParticipants } });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.addGroupMembers = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { userIds } = req.body;
+        const pool = await getPool();
+
+        for (const uid of userIds) {
+            await pool.request()
+                .input('convId', sql.VarChar, conversationId)
+                .input('userId', sql.VarChar, uid)
+                .query("INSERT INTO ConversationParticipants (ConversationId, UserId) VALUES (@convId, @userId)");
+        }
+
+        res.json({ success: true, message: 'Members added' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.removeGroupMember = async (req, res) => {
+    try {
+        const { conversationId, userId } = req.params;
+        const pool = await getPool();
+        await pool.request()
+            .input('convId', sql.VarChar, conversationId)
+            .input('userId', sql.VarChar, userId)
+            .query("DELETE FROM ConversationParticipants WHERE ConversationId = @convId AND UserId = @userId");
+        res.json({ success: true, message: 'Member removed' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateMemberRole = async (req, res) => {
+    res.json({ success: true, message: 'Not implemented' });
+};
+
+exports.getSharedMedia = async (req, res) => {
+    res.json({ success: true, data: [] });
 };

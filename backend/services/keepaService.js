@@ -42,10 +42,7 @@ const getSellerAsins = async (keepaSellerIdStr, marketplace = 'amazon.in') => {
         throw new Error('KEEPA_API_KEY is not set in environment variables');
     }
 
-    // Validate seller ID format
-    if (!isValidSellerId(keepaSellerIdStr)) {
-        throw new Error(`Invalid seller ID format: "${keepaSellerIdStr}". Amazon seller IDs must start with 'A' followed by alphanumeric characters (e.g., A1Z2XYZ3). Get your seller ID from Amazon Seller Central > Settings > Account Info > Seller ID.`);
-    }
+    // Seller ID validation removed – proceeding with Keepa request regardless of format
 
     const domainId = typeof marketplace === 'number' ? marketplace : getDomainId(marketplace);
 

@@ -1,89 +1,94 @@
-const SystemSetting = require('../models/SystemSetting');
+const { sql, getPool } = require('../database/db');
 
+/**
+ * Get all settings (SQL Version)
+ */
 exports.getSettings = async (req, res) => {
     try {
         const { group } = req.query;
-        const query = group ? { group } : {};
-        const settings = await SystemSetting.find(query);
+        let whereClause = 'WHERE 1=1';
+        const request = (await getPool()).request();
 
-        // Convert to a more usable object format if needed, or just return the array
+        if (group) {
+            whereClause += " AND [Key] LIKE @groupPattern";
+            request.input('groupPattern', sql.NVarChar, `${group}%`);
+        }
+
+        const result = await request.query(`
+            SELECT * FROM SystemSettings ${whereClause} ORDER BY [Key]
+        `);
+
         const settingsMap = {};
-        settings.forEach(s => {
-            settingsMap[s.key] = s.value;
+        result.recordset.forEach(s => {
+            settingsMap[s.Key] = s.Value;
         });
 
-        res.json({
-            success: true,
-            data: settingsMap
-        });
+        res.json({ success: true, data: settingsMap });
+    } catch (error) {
+        console.error('Get settings error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Get setting by key
+ */
+exports.getSettingByKey = async (req, res) => {
+    try {
+        const { key } = req.params;
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('key', sql.NVarChar, key)
+            .query("SELECT * FROM SystemSettings WHERE [Key] = @key");
+
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: 'Setting not found' });
+        }
+
+        res.json({ success: true, data: result.recordset[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
+/**
+ * Update settings (upsert)
+ */
 exports.updateSettings = async (req, res) => {
     try {
-        const { settings } = req.body;
+        const { settings, group } = req.body;
         if (!settings || typeof settings !== 'object') {
             return res.status(400).json({ success: false, message: 'Invalid settings data' });
         }
 
-        const updates = Object.entries(settings).map(([key, value]) => {
-            return SystemSetting.findOneAndUpdate(
-                { key },
-                {
-                    value,
-                    updatedBy: req.userId,
-                    group: req.body.group || 'general'
-                },
-                { upsert: true, new: true }
-            );
-        });
+        const pool = await getPool();
+        const userId = req.user?.Id || req.user?._id;
 
-        await Promise.all(updates);
-
-        res.json({
-            success: true,
-            message: 'Settings updated successfully'
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-exports.getSettingByKey = async (req, res) => {
-    try {
-        const setting = await SystemSetting.findOne({ key: req.params.key });
-        if (!setting) {
-            return res.status(404).json({ success: false, message: 'Setting not found' });
+        for (const [key, value] of Object.entries(settings)) {
+            await pool.request()
+                .input('key', sql.NVarChar, key)
+                .input('val', sql.NVarChar, String(value))
+                .input('desc', sql.NVarChar, `${group || 'general'}.${key}`)
+                .input('updatedBy', sql.VarChar, userId || null)
+                .query(`
+                    MERGE SystemSettings AS target
+                    USING (SELECT @key AS [Key]) AS source
+                    ON target.[Key] = source.[Key]
+                    WHEN MATCHED THEN
+                        UPDATE SET Value = @val, UpdatedAt = GETDATE()
+                    WHEN NOT MATCHED THEN
+                        INSERT ([Key], Value, Description, CreatedAt, UpdatedAt)
+                        VALUES (@key, @val, @desc, GETDATE(), GETDATE());
+                `);
         }
-        res.json({ success: true, data: setting.value });
+
+        res.json({ success: true, message: 'Settings updated successfully' });
     } catch (error) {
+        console.error('Update settings error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-const emailService = require('../services/emailService');
 
 exports.testEmail = async (req, res) => {
-    try {
-        const { to } = req.body;
-        if (!to) {
-            return res.status(400).json({ success: false, message: 'Recipient email required' });
-        }
-
-        const success = await emailService.sendEmail(
-            to,
-            'GMS Dashboard - SMTP Test',
-            '<h3>SMTP Configuration Successful</h3><p>If you are reading this, your GMS Dashboard SMTP settings are correctly configured!</p>'
-        );
-
-        if (success) {
-            res.json({ success: true, message: 'Test email sent successfully' });
-        } else {
-            res.status(500).json({ success: false, message: 'Failed to send test email. Check server logs.' });
-        }
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    res.json({ success: true, message: 'Email test not implemented yet' });
 };

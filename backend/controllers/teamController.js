@@ -1,261 +1,329 @@
-const Team = require('../models/Team');
-const User = require('../models/User');
+const { sql, getPool, generateId } = require('../database/db');
 
-// @desc    Get all teams for current user
-// @route   GET /api/teams
-// @access  Private
+/**
+ * Get all teams for current user (SQL Version)
+ * Returns teams where user is either owner or member
+ */
 exports.getTeams = async (req, res) => {
     try {
-        const teams = await Team.find({
-            $or: [
-                { owner: req.user._id },
-                { 'members.user': req.user._id }
-            ]
-        }).populate('owner', 'firstName lastName email avatar')
-            .populate('members.user', 'firstName lastName email avatar role')
-            .populate('members.resourceAccess', 'name marketplace');
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
 
-        res.status(200).json({
-            success: true,
-            count: teams.length,
-            data: teams
-        });
+        const teamsResult = await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .query(`
+                SELECT DISTINCT t.*, u.FirstName as ManagerFirstName, u.LastName as ManagerLastName, u.Email as ManagerEmail
+                FROM Teams t
+                LEFT JOIN Users u ON t.ManagerId = u.Id
+                WHERE t.Id IN (
+                    SELECT TeamId FROM TeamMembers WHERE UserId = @userId
+                )
+                OR t.ManagerId = @userId
+                ORDER BY t.Name ASC
+            `);
+
+        const teams = await Promise.all(teamsResult.recordset.map(async (team) => {
+            // Get members
+            const membersResult = await pool.request()
+                .input('teamId', sql.VarChar, team.Id)
+                .query(`
+                    SELECT tm.*, u.Id as userId, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role as userRole
+                    FROM TeamMembers tm
+                    JOIN Users u ON tm.UserId = u.Id
+                    WHERE tm.TeamId = @teamId
+                `);
+
+            const members = membersResult.recordset.map(m => ({
+                _id: m.UserId,
+                user: { _id: m.UserId, firstName: m.FirstName, lastName: m.LastName, email: m.Email, avatar: m.Avatar, role: m.userRole },
+                role: m.Role,
+                resourceAccess: m.ResourceAccess ? JSON.parse(m.ResourceAccess) : []
+            }));
+
+            // Get stats
+            const statsResult = await pool.request()
+                .input('teamId', sql.VarChar, team.Id)
+                .query(`
+                    SELECT 
+                        COUNT(DISTINCT tm.UserId) as memberCount,
+                        COUNT(DISTINCT CASE WHEN u.IsOnline = 1 THEN tm.UserId END) as onlineCount,
+                        COUNT(DISTINCT s.Id) as sellerCount
+                    FROM TeamMembers tm
+                    LEFT JOIN Users u ON tm.UserId = u.Id
+                    LEFT JOIN UserSellers us ON tm.UserId = us.UserId
+                    LEFT JOIN Sellers s ON us.SellerId = s.Id
+                    WHERE tm.TeamId = @teamId
+                `);
+
+            const stats = statsResult.recordset[0];
+
+            return {
+                ...team,
+                _id: team.Id,
+                owner: team.ManagerId ? {
+                    _id: team.ManagerId,
+                    firstName: team.ManagerFirstName,
+                    lastName: team.ManagerLastName,
+                    email: team.ManagerEmail
+                } : null,
+                members,
+                stats
+            };
+        }));
+
+        res.json({ success: true, count: teams.length, data: teams });
     } catch (error) {
+        console.error('Get teams error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Create new team
-// @route   POST /api/teams
-// @access  Private
+/**
+ * Create new team
+ */
 exports.createTeam = async (req, res) => {
     try {
-        req.body.owner = req.user._id;
+        const { name, description } = req.body;
+        const userId = req.user.Id || req.user._id;
+        const pool = await getPool();
+
+        const teamId = generateId();
+
+        await pool.request()
+            .input('Id', sql.VarChar, teamId)
+            .input('Name', sql.NVarChar, name)
+            .input('Description', sql.NVarChar, description || '')
+            .input('ManagerId', sql.VarChar, userId)
+            .query(`
+                INSERT INTO Teams (Id, Name, Description, ManagerId, CreatedAt, UpdatedAt)
+                VALUES (@Id, @Name, @Description, @ManagerId, GETDATE(), GETDATE())
+            `);
 
         // Add owner as lead member
-        req.body.members = [{
-            user: req.user._id,
-            role: 'lead'
-        }];
-
-        const team = await Team.create(req.body);
+        await pool.request()
+            .input('TeamId', sql.VarChar, teamId)
+            .input('UserId', sql.VarChar, userId)
+            .input('Role', sql.NVarChar, 'lead')
+            .query(`
+                INSERT INTO TeamMembers (TeamId, UserId, Role)
+                VALUES (@TeamId, @UserId, @Role)
+            `);
 
         // Update user's current team
-        await User.findByIdAndUpdate(req.user._id, { currentTeam: team._id });
+        await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .input('teamId', sql.VarChar, teamId)
+            .query("UPDATE Users SET CurrentTeam = @teamId WHERE Id = @userId");
 
+        // Fetch created team with details
+        const teamResult = await pool.request()
+            .input('id', sql.VarChar, teamId)
+            .query(`
+                SELECT t.*, u.FirstName as ManagerFirstName, u.LastName as ManagerLastName, u.Email as ManagerEmail
+                FROM Teams t
+                LEFT JOIN Users u ON t.ManagerId = u.Id
+                WHERE t.Id = @id
+            `);
+
+        const team = teamResult.recordset[0];
         res.status(201).json({
             success: true,
-            data: team
+            data: {
+                ...team,
+                _id: team.Id,
+                owner: team.ManagerId ? { _id: team.ManagerId, firstName: team.ManagerFirstName, lastName: team.ManagerLastName, email: team.ManagerEmail } : null,
+                members: [{
+                    user: { _id: userId },
+                    role: 'lead',
+                    resourceAccess: []
+                }]
+            }
         });
     } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+        console.error('Create team error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Get team members
-// @route   GET /api/teams/:id/members
-// @access  Private
+/**
+ * Get team members
+ */
 exports.getTeamMembers = async (req, res) => {
     try {
-        const team = await Team.findById(req.params.id)
-            .populate({
-                path: 'members.user',
-                select: 'firstName lastName email avatar role isActive',
-                populate: {
-                    path: 'role',
-                    select: 'displayName name color'
-                }
-            })
-            .populate('members.resourceAccess', 'name marketplace');
+        const { id } = req.params;
+        const pool = await getPool();
 
-        if (!team) {
-            return res.status(404).json({ success: false, message: 'Team not found' });
-        }
+        const membersResult = await pool.request()
+            .input('teamId', sql.VarChar, id)
+            .query(`
+                SELECT tm.*, u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role as userRole, u.IsOnline
+                FROM TeamMembers tm
+                JOIN Users u ON tm.UserId = u.Id
+                WHERE tm.TeamId = @teamId
+            `);
 
-        res.status(200).json({
-            success: true,
-            data: team.members
-        });
+        const members = membersResult.recordset.map(m => ({
+            _id: m.Id,
+            firstName: m.FirstName,
+            lastName: m.LastName,
+            email: m.Email,
+            avatar: m.Avatar,
+            role: m.userRole,
+            isOnline: m.IsOnline,
+            teamRole: m.Role,
+            resourceAccess: m.ResourceAccess ? JSON.parse(m.ResourceAccess) : []
+        }));
+
+        res.json({ success: true, count: members.length, data: members });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Update member in team
-// @route   PUT /api/teams/:id/members/:userId
-// @access  Private
+/**
+ * Add member to team
+ */
+exports.addMember = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, role = 'member', resourceAccess = [] } = req.body;
+        const pool = await getPool();
+
+        // Check if team exists and user is manager
+        const teamCheck = await pool.request()
+            .input('teamId', sql.VarChar, id)
+            .input('managerId', sql.VarChar, req.user.Id || req.user._id)
+            .query("SELECT ManagerId FROM Teams WHERE Id = @teamId AND ManagerId = @managerId");
+
+        if (teamCheck.recordset.length === 0) {
+            return res.status(403).json({ success: false, message: 'Only team manager can add members' });
+        }
+
+        await pool.request()
+            .input('TeamId', sql.VarChar, id)
+            .input('UserId', sql.VarChar, userId)
+            .input('Role', sql.NVarChar, role)
+            .input('ResourceAccess', sql.NVarChar, JSON.stringify(resourceAccess))
+            .query(`
+                IF NOT EXISTS (SELECT 1 FROM TeamMembers WHERE TeamId = @TeamId AND UserId = @UserId)
+                BEGIN
+                    INSERT INTO TeamMembers (TeamId, UserId, Role, ResourceAccess)
+                    VALUES (@TeamId, @UserId, @Role, @ResourceAccess)
+                END
+            `);
+
+        res.json({ success: true, message: 'Member added' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Remove member from team
+ */
+exports.removeMember = async (req, res) => {
+    try {
+        const { id, userId } = req.params;
+        const pool = await getPool();
+
+        await pool.request()
+            .input('teamId', sql.VarChar, id)
+            .input('memberId', sql.VarChar, userId)
+            .query("DELETE FROM TeamMembers WHERE TeamId = @teamId AND UserId = @memberId");
+
+        res.json({ success: true, message: 'Member removed' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Update team member (role/resource access)
+ */
 exports.updateMember = async (req, res) => {
     try {
+        const { id, userId } = req.params;
         const { role, resourceAccess } = req.body;
-        const team = await Team.findById(req.params.id);
+        const pool = await getPool();
 
-        if (!team) {
-            return res.status(404).json({ success: false, message: 'Team not found' });
-        }
+        const updates = [];
+        const request = pool.request();
+        let idx = 0;
 
-        // Check if user is owner, lead, or admin
-        const member = team.members.find(m => m.user.toString() === req.user._id.toString());
-        const isLead = member && member.role === 'lead';
+        if (role) { updates.push(`Role = @p${idx++}`); request.input(`p${idx-1}`, sql.NVarChar, role); }
+        if (resourceAccess !== undefined) { updates.push(`ResourceAccess = @p${idx++}`); request.input(`p${idx-1}`, sql.NVarChar, JSON.stringify(resourceAccess)); }
 
-        if (team.owner.toString() !== req.user._id.toString() && !isLead && req.user.role.name !== 'admin') {
-            return res.status(403).json({ success: false, message: 'Not authorized' });
-        }
+        if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        // Find member to update
-        const memberIdx = team.members.findIndex(m => m.user.toString() === req.params.userId);
-        if (memberIdx === -1) {
+        updates.push('UpdatedAt = GETDATE()');
+        request.input('teamId', sql.VarChar, id);
+        request.input('userId', sql.VarChar, userId);
+        const updateSql = `UPDATE TeamMembers SET ${updates.join(', ')} WHERE TeamId = @teamId AND UserId = @userId; SELECT * FROM TeamMembers WHERE TeamId = @teamId AND UserId = @userId;`;
+        const result = await request.query(updateSql);
+
+        if (result.recordset[1]?.length === 0) {
             return res.status(404).json({ success: false, message: 'Member not found' });
         }
 
-        if (role) team.members[memberIdx].role = role;
-        if (resourceAccess) team.members[memberIdx].resourceAccess = resourceAccess;
-
-        await team.save();
-
-        res.status(200).json({
-            success: true,
-            data: team.members[memberIdx]
-        });
+        res.json({ success: true, data: result.recordset[1][0] });
     } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Add member to team
-// @route   POST /api/teams/:id/members
-// @access  Private
-exports.addMember = async (req, res) => {
-    try {
-        const { email, userId, role, resourceAccess } = req.body;
-        const team = await Team.findById(req.params.id);
-
-        if (!team) {
-            return res.status(404).json({ success: false, message: 'Team not found' });
-        }
-
-        // Check if user is owner, lead, or admin
-        const member = team.members.find(m => m.user.toString() === req.user._id.toString());
-        const isLead = member && member.role === 'lead';
-
-        if (team.owner.toString() !== req.user._id.toString() && !isLead && req.user.role.name !== 'admin') {
-            return res.status(403).json({ success: false, message: 'Not authorized to add members' });
-        }
-
-        const userToAdd = userId ? await User.findById(userId) : await User.findOne({ email });
-
-        if (!userToAdd) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        // Check if user is already a member
-        const alreadyMember = team.members.find(m => m.user.toString() === userToAdd._id.toString());
-        if (alreadyMember) {
-            return res.status(400).json({ success: false, message: 'User is already a member' });
-        }
-
-        team.members.push({
-            user: userToAdd._id,
-            role: role || 'member',
-            resourceAccess: resourceAccess || []
-        });
-        await team.save();
-
-        res.status(200).json({
-            success: true,
-            message: 'Member added successfully',
-            data: team
-        });
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-// @desc    Remove member from team
-// @route   DELETE /api/teams/:id/members/:userId
-// @access  Private
-exports.removeMember = async (req, res) => {
-    try {
-        const team = await Team.findById(req.params.id);
-
-        if (!team) {
-            return res.status(404).json({ success: false, message: 'Team not found' });
-        }
-
-        // Check if user is owner of team or admin
-        if (team.owner.toString() !== req.user._id.toString() && req.user.role.name !== 'admin') {
-            return res.status(403).json({ success: false, message: 'Not authorized to remove members' });
-        }
-
-        // Cannot remove owner
-        if (team.owner.toString() === req.params.userId) {
-            return res.status(400).json({ success: false, message: 'Cannot remove team owner' });
-        }
-
-        team.members = team.members.filter(m => m.user.toString() !== req.params.userId);
-        await team.save();
-
-        res.status(200).json({
-            success: true,
-            message: 'Member removed successfully'
-        });
-    } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
-    }
-};
-
-// @desc    Update team
-// @route   PUT /api/teams/:id
-// @access  Private
+/**
+ * Update team details
+ */
 exports.updateTeam = async (req, res) => {
     try {
-        let team = await Team.findById(req.params.id);
+        const { id } = req.params;
+        const { name, description } = req.body;
+        const pool = await getPool();
 
-        if (!team) {
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .input('name', sql.NVarChar, name)
+            .input('desc', sql.NVarChar, description || '')
+            .query(`
+                UPDATE Teams 
+                SET Name = @name, Description = @desc, UpdatedAt = GETDATE()
+                WHERE Id = @id
+            `);
+
+        const result = await pool.request()
+            .input('id', sql.VarChar, id)
+            .query("SELECT * FROM Teams WHERE Id = @id");
+
+        if (result.recordset.length === 0) {
             return res.status(404).json({ success: false, message: 'Team not found' });
         }
 
-        // Check if user is owner
-        if (team.owner.toString() !== req.user._id.toString() && req.user.role.name !== 'admin') {
-            return res.status(403).json({ success: false, message: 'Not authorized' });
-        }
-
-        team = await Team.findByIdAndUpdate(req.params.id, req.body, {
-            new: true,
-            runValidators: true
-        });
-
-        res.status(200).json({
-            success: true,
-            data: team
-        });
+        res.json({ success: true, data: result.recordset[0] });
     } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Delete team
-// @route   DELETE /api/teams/:id
-// @access  Private
+/**
+ * Delete team
+ */
 exports.deleteTeam = async (req, res) => {
     try {
-        const team = await Team.findById(req.params.id);
+        const { id } = req.params;
+        const pool = await getPool();
 
-        if (!team) {
-            return res.status(404).json({ success: false, message: 'Team not found' });
-        }
+        // Remove members first
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .query("DELETE FROM TeamMembers WHERE TeamId = @id");
 
-        // Check if user is owner
-        if (team.owner.toString() !== req.user._id.toString() && req.user.role.name !== 'admin') {
-            return res.status(403).json({ success: false, message: 'Not authorized' });
-        }
+        // Remove team
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .query("DELETE FROM Teams WHERE Id = @id");
 
-        await team.deleteOne();
-
-        res.status(200).json({
-            success: true,
-            message: 'Team deleted'
-        });
+        res.json({ success: true, message: 'Team deleted' });
     } catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };

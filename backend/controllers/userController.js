@@ -1,55 +1,76 @@
-const User = require('../models/User');
-const Role = require('../models/Role');
+const { sql, getPool, generateId } = require('../database/db');
+const bcrypt = require('bcryptjs');
+const hierarchyService = require('../services/hierarchyService');
 
+/**
+ * Get Users (SQL Version)
+ */
 exports.getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, role, isActive, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const { page = 1, limit = 20, search, role, isActive, sortBy = 'CreatedAt', sortOrder = 'desc' } = req.query;
+    const pool = await getPool();
 
-    const query = {};
-
-    if (search) {
-      query.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-      ];
-    }
-
-    if (role) {
-      query.role = role;
-    }
-
-    if (isActive !== undefined) {
-      query.isActive = isActive === 'true';
-    }
-
-    const sort = {};
-    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-
-    const roleName = req.user?.role?.name || req.user?.role;
+    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
     
+    let subordinateIds = [];
     if (!isGlobalUser) {
-      const hierarchyService = require('../services/hierarchyService');
-      const subordinates = await hierarchyService.getSubordinateIds(req.user._id);
-      query.$or = [
-        { _id: req.user._id }, // Include self
-        { _id: { $in: subordinates } }
-      ];
+      subordinateIds = await hierarchyService.getSubordinateIds(req.user.Id || req.user._id);
+      subordinateIds.push(req.user.Id || req.user._id); // Include self
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    let whereClauses = [];
+    const request = pool.request();
 
-    const [users, total] = await Promise.all([
-      User.find(query)
-        .populate('role', 'name displayName color level')
-        .populate('assignedSellers', 'name marketplace')
-        .populate('supervisors', 'firstName lastName email')
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit)),
-      User.countDocuments(query),
-    ]);
+    if (search) {
+      whereClauses.push('(FirstName LIKE @search OR LastName LIKE @search OR Email LIKE @search)');
+      request.input('search', sql.NVarChar, `%${search}%`);
+    }
+    if (role) {
+      whereClauses.push('RoleId = @roleId');
+      request.input('roleId', sql.VarChar, role);
+    }
+    if (isActive !== undefined) {
+      whereClauses.push('IsActive = @isActive');
+      request.input('isActive', sql.Bit, isActive === 'true' ? 1 : 0);
+    }
+    if (!isGlobalUser) {
+      whereClauses.push('Id IN (' + subordinateIds.map(id => `'${id}'`).join(',') + ')');
+    }
+
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+    const orderSql = `ORDER BY ${sortBy} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+
+    const usersResult = await request
+      .input('offset', sql.Int, offset)
+      .input('limit', sql.Int, parseInt(limit))
+      .query(`
+        SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName, R.Color as RoleColor, R.Level as RoleLevel
+        FROM Users U
+        LEFT JOIN Roles R ON U.RoleId = R.Id
+        ${whereSql}
+        ${orderSql}
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+
+    const totalResult = await pool.request().query(`SELECT COUNT(*) as Total FROM Users ${whereSql}`);
+    const total = totalResult.recordset[0].Total;
+
+    // Fetch associated data for each user (assigned sellers, supervisors)
+    // For performance, we could do this in separate queries or joins, but since limit is small (20), we can do it here.
+    const users = await Promise.all(usersResult.recordset.map(async (u) => {
+      const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
+      const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
+      
+      return {
+        ...u,
+        _id: u.Id,
+        role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, color: u.RoleColor, level: u.RoleLevel },
+        assignedSellers: sellers.recordset.map(s => ({ ...s, _id: s.Id })),
+        supervisors: supervisors.recordset
+      };
+    }));
 
     res.json({
       success: true,
@@ -64,274 +85,242 @@ exports.getUsers = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get users' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Get Managers (SQL Version)
+ */
 exports.getManagers = async (req, res) => {
   try {
-    // Find roles that qualify as managers (admin, manager, or Brand Manager)
-    const roles = await Role.find({ name: { $in: ['admin', 'manager', 'Brand Manager'] } });
-    const roleIds = roles.map(r => r._id);
-
-    const managers = await User.find({
-      role: { $in: roleIds },
-      isActive: true
-    })
-      .select('firstName lastName email role')
-      .populate('role', 'name displayName');
+    const pool = await getPool();
+    const managers = await pool.request().query(`
+      SELECT U.Id, U.FirstName, U.LastName, U.Email, R.Name as RoleName, R.DisplayName as RoleDisplayName
+      FROM Users U
+      JOIN Roles R ON U.RoleId = R.Id
+      WHERE R.Name IN ('admin', 'manager', 'Brand Manager') AND U.IsActive = 1
+    `);
 
     res.json({
       success: true,
-      data: managers
+      data: managers.recordset.map(m => ({
+        ...m,
+        _id: m.Id,
+        role: { name: m.RoleName, displayName: m.RoleDisplayName }
+      }))
     });
   } catch (error) {
-    console.error('Get managers error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get managers' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Get User (SQL Version)
+ */
 exports.getUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id)
-      .populate('role')
-      .populate('role.permissions')
-      .populate('assignedSellers', 'name marketplace')
-      .populate('supervisors', 'firstName lastName email');
+    const { id } = req.params;
+    const pool = await getPool();
+    const userResult = await pool.request().input('id', sql.VarChar, id).query(`
+      SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName, R.Level as RoleLevel
+      FROM Users U
+      LEFT JOIN Roles R ON U.RoleId = R.Id
+      WHERE U.Id = @id
+    `);
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    if (userResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const u = userResult.recordset[0];
+
+    const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
+    const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
+    
+    // Fetch role permissions
+    const perms = await pool.request().input('roleId', sql.VarChar, u.RoleId).query('SELECT P.Name FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
+
+    const user = {
+      ...u,
+      _id: u.Id,
+      role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, level: u.RoleLevel, permissions: perms.recordset },
+      assignedSellers: sellers.recordset.map(s => ({ ...s, _id: s.Id })),
+      supervisors: supervisors.recordset.map(s => ({ ...s, _id: s.Id }))
+    };
 
     res.json({ success: true, data: user });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to get user' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Create User (SQL Version)
+ */
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone, role: roleId, assignedSellers } = req.body;
+    const { email, password, firstName, lastName, phone, role: roleId, assignedSellers, supervisors } = req.body;
+    const pool = await getPool();
 
-    // Check if email exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email already registered' });
-    }
+    const existing = await pool.request().input('email', sql.NVarChar, email).query('SELECT Id FROM Users WHERE Email = @email');
+    if (existing.recordset.length > 0) return res.status(400).json({ success: false, message: 'Email registered' });
 
-    // Verify role exists
-    const role = await Role.findById(roleId);
-    if (!role) {
-      return res.status(400).json({ success: false, message: 'Invalid role' });
-    }
+    const roleResult = await pool.request().input('rid', sql.VarChar, roleId).query('SELECT * FROM Roles WHERE Id = @rid');
+    if (roleResult.recordset.length === 0) return res.status(400).json({ success: false, message: 'Invalid role' });
 
-    const user = await User.create({
-      email,
-      password,
-      firstName,
-      lastName,
-      phone,
-      role: roleId,
-      assignedSellers: assignedSellers || [],
-      supervisors: req.body.supervisors || [],
-      extraPermissions: req.body.extraPermissions || [],
-      excludedPermissions: req.body.excludedPermissions || [],
-      createdBy: req.user._id,
-    });
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const userId = generateId();
 
-    // Validated: Sync to CometChat
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
     try {
-      const { syncUserToCometChat } = require('../services/cometChatService');
-      syncUserToCometChat(user);
-    } catch (chatError) {
-      console.error('CometChat Sync Error during user creation:', chatError);
+      await transaction.request()
+        .input('id', sql.VarChar, userId)
+        .input('email', sql.NVarChar, email)
+        .input('password', sql.NVarChar, hashedPassword)
+        .input('fn', sql.NVarChar, firstName)
+        .input('ln', sql.NVarChar, lastName)
+        .input('ph', sql.NVarChar, phone)
+        .input('rid', sql.VarChar, roleId)
+        .query(`
+          INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt)
+          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, GETDATE(), GETDATE())
+        `);
+
+      if (assignedSellers && Array.isArray(assignedSellers)) {
+        for (const sId of assignedSellers) {
+          await transaction.request().input('uid', sql.VarChar, userId).input('sid', sql.VarChar, sId).query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+        }
+      }
+
+      if (supervisors && Array.isArray(supervisors)) {
+        for (const supId of supervisors) {
+          await transaction.request().input('uid', sql.VarChar, userId).input('supid', sql.VarChar, supId).query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supid)');
+        }
+      }
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
     }
 
-    await user.populate('role', 'name displayName color');
-
-    res.status(201).json({ success: true, data: user });
+    res.status(201).json({ success: true, data: { Id: userId, _id: userId, Email: email } });
   } catch (error) {
-    console.error('Create user error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create user' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Update User (SQL Version)
+ */
 exports.updateUser = async (req, res) => {
   try {
-    const { firstName, lastName, phone, role: roleId, isActive, assignedSellers } = req.body;
+    const { id } = req.params;
+    const { firstName, lastName, phone, role: roleId, isActive, assignedSellers, supervisors } = req.body;
+    const pool = await getPool();
 
-    const userToUpdate = await User.findById(req.params.id).populate('role');
-    if (!userToUpdate) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    const userResult = await pool.request().input('id', sql.VarChar, id).query('SELECT U.*, R.Level as RoleLevel FROM Users U LEFT JOIN Roles R ON U.RoleId = R.Id WHERE U.Id = @id');
+    if (userResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const userToUpdate = userResult.recordset[0];
 
-    // Role-based hierarchical check
-    const currentUserRoleLevel = req.user.role?.level || 0;
-    const targetUserRoleLevel = userToUpdate.role?.level || 0;
-    const roleName = req.user?.role?.name || req.user?.role;
+    const currentUserRoleLevel = req.user.role?.level || req.user.role?.Level || 0;
+    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
     const isAdmin = roleName === 'admin';
-    const isOperationalManager = roleName === 'operational_manager';
 
-    if (!isAdmin && targetUserRoleLevel >= currentUserRoleLevel && req.user._id.toString() !== req.params.id) {
-      return res.status(403).json({ success: false, message: 'You cannot update a user with a higher or equal role level' });
+    if (!isAdmin && userToUpdate.RoleLevel >= currentUserRoleLevel && (req.user.Id || req.user._id) !== id) {
+      return res.status(403).json({ success: false, message: 'Permission denied' });
     }
 
-    const updateData = { firstName, lastName, phone, isActive };
-
-    if (assignedSellers) {
-      updateData.assignedSellers = assignedSellers;
-    }
-
-    if (req.body.supervisors) {
-      updateData.supervisors = req.body.supervisors;
-    }
-
-    if (req.body.extraPermissions) {
-      updateData.extraPermissions = req.body.extraPermissions;
-    }
-
-    if (req.body.excludedPermissions) {
-      updateData.excludedPermissions = req.body.excludedPermissions;
-    }
-
-    if (roleId) {
-      const newRole = await Role.findById(roleId);
-      if (!newRole) {
-        return res.status(400).json({ success: false, message: 'Invalid role' });
-      }
-
-      // Prevent non-admins from promoting users to higher/equal level
-      if (!isAdmin && newRole.level >= currentUserRoleLevel) {
-        return res.status(403).json({ success: false, message: 'You cannot assign a role level higher than or equal to your own' });
-      }
-
-      updateData.role = roleId;
-    }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('role');
-
-    // Sync to CometChat on update
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
     try {
-      const { syncUserToCometChat } = require('../services/cometChatService');
-      syncUserToCometChat(updatedUser);
-    } catch (chatError) {
-      console.error('CometChat Sync Error during user update:', chatError);
+      await transaction.request()
+        .input('id', sql.VarChar, id)
+        .input('fn', sql.NVarChar, firstName)
+        .input('ln', sql.NVarChar, lastName)
+        .input('ph', sql.NVarChar, phone)
+        .input('rid', sql.VarChar, roleId || userToUpdate.RoleId)
+        .input('active', sql.Bit, isActive !== undefined ? (isActive ? 1 : 0) : userToUpdate.IsActive)
+        .query(`
+          UPDATE Users SET 
+            FirstName = @fn, LastName = @ln, Phone = @ph, RoleId = @rid, IsActive = @active, UpdatedAt = GETDATE()
+          WHERE Id = @id
+        `);
+
+      if (assignedSellers) {
+        await transaction.request().input('uid', sql.VarChar, id).query('DELETE FROM UserSellers WHERE UserId = @uid');
+        for (const sId of assignedSellers) {
+          await transaction.request().input('uid', sql.VarChar, id).input('sid', sql.VarChar, sId).query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+        }
+      }
+
+      if (supervisors) {
+        await transaction.request().input('uid', sql.VarChar, id).query('DELETE FROM UserSupervisors WHERE UserId = @uid');
+        for (const supId of supervisors) {
+          await transaction.request().input('uid', sql.VarChar, id).input('supid', sql.VarChar, supId).query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supid)');
+        }
+      }
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
     }
 
-    res.json({ success: true, data: updatedUser });
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to update user' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Delete User (SQL Version)
+ */
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).populate('role');
+    const { id } = req.params;
+    const pool = await getPool();
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
+    if (roleName !== 'admin') return res.status(403).json({ success: false, message: 'Admin only' });
 
-    const roleName = req.user?.role?.name || req.user?.role;
-    const isAdmin = roleName === 'admin';
+    if ((req.user.Id || req.user._id) === id) return res.status(400).json({ success: false, message: 'Cannot delete self' });
 
-    // ONLY Super Admin can delete users
-    if (!isAdmin) {
-      return res.status(403).json({ success: false, message: 'Only Super Administrators can delete users' });
-    }
-
-    // Prevent deleting self
-    if (user._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
-    }
-
-    const uid = require('../services/cometChatService').sanitizeUid(user.email);
-    await User.findByIdAndDelete(req.params.id);
-
-    // Sync to CometChat on deletion
-    try {
-      const { deleteFromCometChat } = require('../services/cometChatService');
-      deleteFromCometChat(uid); // Fire and forget
-    } catch (chatError) {
-      console.error('CometChat Deletion Error:', chatError);
-    }
-
-    res.json({ success: true, message: 'User deleted successfully' });
+    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Users WHERE Id = @id');
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to delete user' });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
+/**
+ * Toggle Status (SQL Version)
+ */
 exports.toggleUserStatus = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).populate('role');
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Role-based hierarchical check
-    const currentUserRoleLevel = req.user.role?.level || 0;
-    const targetUserRoleLevel = user.role?.level || 0;
-    const isAdmin = req.user.role?.name === 'admin';
-
-    if (!isAdmin && targetUserRoleLevel >= currentUserRoleLevel) {
-      return res.status(403).json({ success: false, message: 'You cannot modify a user with a higher or equal role level' });
-    }
-
-    // Prevent deactivating self
-    if (user._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({ success: false, message: 'Cannot deactivate your own account' });
-    }
-
-    user.isActive = !user.isActive;
-    await user.save();
-
-    await user.populate('role', 'name displayName color');
-
-    // Sync to CometChat on status toggle
-    try {
-      const { syncUserToCometChat } = require('../services/cometChatService');
-      syncUserToCometChat(user);
-    } catch (chatError) {
-      console.error('CometChat Sync Error during user status toggle:', chatError);
-    }
-
-    res.json({ success: true, data: user });
+    const { id } = req.params;
+    const pool = await getPool();
+    const userResult = await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM Users WHERE Id = @id');
+    if (userResult.recordset.length === 0) return res.status(404).json({ success: false });
+    
+    const user = userResult.recordset[0];
+    await pool.request().input('id', sql.VarChar, id).input('active', sql.Bit, user.IsActive ? 0 : 1).query('UPDATE Users SET IsActive = @active WHERE Id = @id');
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to toggle user status' });
+    res.status(500).json({ success: false });
   }
 };
 
+/**
+ * Reset Password (SQL Version)
+ */
 exports.resetUserPassword = async (req, res) => {
   try {
+    const { id } = req.params;
     const { newPassword } = req.body;
+    const pool = await getPool();
 
-    const user = await User.findById(req.params.id).populate('role');
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Role-based hierarchical check
-    const currentUserRoleLevel = req.user.role?.level || 0;
-    const targetUserRoleLevel = user.role?.level || 0;
-    const isAdmin = req.user.role?.name === 'admin';
-
-    if (!isAdmin && targetUserRoleLevel >= currentUserRoleLevel && req.user._id.toString() !== req.params.id) {
-      return res.status(403).json({ success: false, message: 'You cannot reset password for a user with a higher or equal role level' });
-    }
-
-    user.password = newPassword;
-    await user.save();
-
-    res.json({ success: true, message: 'Password reset successfully' });
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await pool.request().input('id', sql.VarChar, id).input('pw', sql.NVarChar, hashed).query('UPDATE Users SET Password = @pw WHERE Id = @id');
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to reset password' });
+    res.status(500).json({ success: false });
   }
 };
