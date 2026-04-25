@@ -242,9 +242,49 @@ exports.uploadAdsData = async (req, res) => {
 };
 
 exports.uploadOctoparseData = async (req, res) => {
-  // This will be migrated later when we address marketDataSyncService.
-  // For now, return a "not yet available" response to avoid crash.
-  res.status(501).json({ success: false, message: 'Octoparse direct upload not yet migrated to SQL' });
+  try {
+    const filePath = req.file.path;
+    const sellerId = req.body.sellerId;
+
+    if (!sellerId) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(400).json({ error: "Seller ID is required for Octoparse upload" });
+    }
+
+    let jsonData = [];
+    if (filePath.toLowerCase().endsWith('.json')) {
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      jsonData = JSON.parse(fileContent);
+    } else {
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    }
+
+    if (!Array.isArray(jsonData)) {
+      jsonData = [jsonData]; // Handle single object case
+    }
+
+    console.log(`📊 Manual Octoparse upload: Processing ${jsonData.length} records for seller ${sellerId}`);
+    
+    // Call the robust batch processor in marketDataSyncService
+    const updatedCount = await marketDataSyncService.processBatchResults(sellerId, jsonData);
+
+    // Cleanup
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    res.json({
+      success: true,
+      message: `Processed ${jsonData.length} records. Successfully updated ${updatedCount} ASINs.`,
+      totalProcessed: jsonData.length,
+      updatedCount
+    });
+  } catch (err) {
+    console.error("❌ Octoparse Upload Error:", err);
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 exports.getUploadStats = async (req, res) => {

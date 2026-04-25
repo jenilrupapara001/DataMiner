@@ -35,9 +35,10 @@ exports.getDashboardData = async (req, res) => {
     const sellerIds = assignedSellers.map(s => typeof s === 'string' ? s : s._id || s.Id);
 
     // 1. Base Filters
-    let sellerFilter = isGlobalUser ? '' : 'WHERE Id IN (' + sellerIds.map(id => `'${id}'`).join(',') + ')';
-    let asinFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + sellerIds.map(id => `'${id}'`).join(',') + ')';
-    let alertFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + sellerIds.map(id => `'${id}'`).join(',') + ')';
+    const safeSellerIds = sellerIds.length > 0 ? sellerIds : ['000000000000000000000000']; // Fallback to non-existent ID
+    let sellerFilter = isGlobalUser ? '' : 'WHERE Id IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    let asinFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    let alertFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
 
     // 2. Aggregate Counts
     const sellerCounts = await pool.request().query(`
@@ -51,7 +52,7 @@ exports.getDashboardData = async (req, res) => {
       SELECT 
         COUNT(*) as Total,
         SUM(CASE WHEN Status IN ('Active', 'Scraping') THEN 1 ELSE 0 END) as Active,
-        SUM(CurrentPrice) as PortfolioValue
+        SUM(ISNULL(CurrentPrice, 0)) as PortfolioValue
       FROM Asins ${asinFilter}
     `);
 
@@ -136,16 +137,17 @@ exports.getDashboardData = async (req, res) => {
         ${asinFilter ? asinFilter.replace('WHERE', 'AND') : ''}
       `);
 
-    const adsData = adsDataResult.recordset;
+    const adsData = adsDataResult.recordset || [];
     const totalAdSales = adsData.reduce((sum, ad) => sum + (ad.AdSales || 0), 0);
     const totalAdSpend = adsData.reduce((sum, ad) => sum + (ad.AdSpend || 0), 0);
     const totalOrders = adsData.reduce((sum, ad) => sum + (ad.Orders || 0), 0);
-    const totalCatalogValue = asinCounts.recordset[0].PortfolioValue || 0;
+    const totalCatalogValue = (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].PortfolioValue || 0 : 0;
 
+    const activeAsinCount = (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].Active || 0 : 0;
     const kpi = [
       { id: 1, title: 'Total Ad Sales', value: `₹${totalAdSales.toLocaleString()}`, icon: 'bi-graph-up-arrow', trend: totalOrders, trendType: 'positive' },
       { id: 2, title: 'Total Ad Spend', value: `₹${totalAdSpend.toLocaleString()}`, icon: 'bi-cash-stack', trend: 0, trendType: 'neutral' },
-      { id: 3, title: 'Active ASINs', value: (asinCounts.recordset[0].Active || 0).toLocaleString(), icon: 'bi-box-seam', trend: asinCounts.recordset[0].Active, trendType: 'positive' },
+      { id: 3, title: 'Active ASINs', value: activeAsinCount.toLocaleString(), icon: 'bi-box-seam', trend: activeAsinCount, trendType: 'positive' },
       { id: 4, title: 'Catalog Value', value: `₹${totalCatalogValue.toLocaleString()}`, icon: 'bi-currency-rupee', trend: 0, trendType: 'neutral' },
     ];
 
@@ -214,10 +216,10 @@ exports.getDashboardData = async (req, res) => {
         time: formatTimeAgo(a.CreatedAt),
       })),
       stats: {
-        totalSellers: sellerCounts.recordset[0].Total,
-        activeSellers: sellerCounts.recordset[0].Active,
-        totalAsins: asinCounts.recordset[0].Total,
-        activeAsins: asinCounts.recordset[0].Active,
+        totalSellers: (sellerCounts.recordset && sellerCounts.recordset[0]) ? sellerCounts.recordset[0].Total || 0 : 0,
+        activeSellers: (sellerCounts.recordset && sellerCounts.recordset[0]) ? sellerCounts.recordset[0].Active || 0 : 0,
+        totalAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].Total || 0 : 0,
+        activeAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].Active || 0 : 0,
       }
     });
   } catch (error) {

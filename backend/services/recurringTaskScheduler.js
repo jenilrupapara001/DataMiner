@@ -35,7 +35,7 @@ class RecurringTaskScheduler {
                 }
                 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
                 const pool = await getPool();
-                const sellersResult = await pool.request().query("SELECT * FROM Sellers WHERE Status = 'Active'");
+                const sellersResult = await pool.request().query("SELECT * FROM Sellers WHERE IsActive = 1");
                 const sellers = sellersResult.recordset;
 
                 for (const seller of sellers) {

@@ -1777,6 +1777,8 @@ class MarketDataSyncService {
         console.log(`🚀 Memory-safe SQL bulk processing ${rawResults.length} results for seller ${sellerId}...`);
         
         let updatedCount = 0;
+        let skippedNoCode = 0;
+        let skippedNoMatch = 0;
         const now = new Date();
         const pool = await getPool();
 
@@ -1787,24 +1789,64 @@ class MarketDataSyncService {
             const chunk = rawResults.slice(chunkStart, chunkStart + CHUNK_SIZE);
             console.log(`📦 Processing chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (${chunk.length} items)...`);
 
-            // Extract ASIN codes for this chunk
-            const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r)).filter(Boolean);
-            if (asinCodesToFind.length === 0) continue;
+            // Extract ASIN codes for this chunk - normalize to uppercase
+            const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r))
+                .filter(Boolean)
+                .map(code => code.toUpperCase()); // Normalize to uppercase
+            
+            if (chunkStart === 0 && chunk.length > 0) {
+                console.log(`[DEBUG] First record raw data keys:`, Object.keys(chunk[0]));
+                const firstCode = this._extractAsinFromData(chunk[0]);
+                console.log(`[DEBUG] Extracted ASIN from first record:`, firstCode);
+                if (firstCode) {
+                    console.log(`[DEBUG] Normalized ASIN (uppercase):`, firstCode.toUpperCase());
+                }
+            }
 
-            // Fetch ASINs for this chunk
+            if (asinCodesToFind.length === 0) {
+                console.log(`[DEBUG] No ASIN codes found in chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1}`);
+                skippedNoCode += chunk.length;
+                continue;
+            }
+
+            // Fetch ASINs for this chunk - use parameterized query for sellerId
             const asinRequest = pool.request();
             asinCodesToFind.forEach((code, i) => asinRequest.input(`code${i}`, code));
             const codeParams = asinCodesToFind.map((_, i) => `@code${i}`).join(', ');
             
-            const asinResult = await asinRequest.query(`SELECT * FROM Asins WHERE SellerId = '${sellerId}' AND AsinCode IN (${codeParams})`);
-            const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toLowerCase(), a]));
+            // FIX: Use parameterized query to prevent SQL injection and ensure proper matching
+            const asinResult = await asinRequest.query(
+                `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
+            );
+            asinRequest.input('sellerId', sellerId.toUpperCase());
+            
+            console.log(`[DEBUG] Found ${asinResult.recordset.length} ASINs in DB for chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (Seller: ${sellerId})`);
+            
+            // Create lookup map with uppercase keys for case-insensitive matching
+            const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
+
+            // Log which ASIN codes were found vs not found
+            const notFoundCodes = asinCodesToFind.filter(code => !asinMap.has(code));
+            if (notFoundCodes.length > 0) {
+                console.log(`[DEBUG] ASIN codes NOT found in DB:`, notFoundCodes.slice(0, 10));
+                if (notFoundCodes.length > 10) {
+                    console.log(`[DEBUG] ... and ${notFoundCodes.length - 10} more`);
+                }
+            }
 
             for (const rawData of chunk) {
                 const code = this._extractAsinFromData(rawData);
-                if (!code) continue;
+                if (!code) {
+                    skippedNoCode++;
+                    continue;
+                }
 
-                const asin = asinMap.get(code.toLowerCase());
-                if (!asin) continue;
+                const normalizedCode = code.toUpperCase();
+                const asin = asinMap.get(normalizedCode);
+                if (!asin) {
+                    skippedNoMatch++;
+                    continue;
+                }
 
                 try {
                     // Re-use logic from updateAsinMetrics or similar parsing
@@ -1887,6 +1929,12 @@ class MarketDataSyncService {
         }
 
         console.log(`✅ Bulk processing completed. Updated ${updatedCount} ASINs.`);
+        if (skippedNoCode > 0) {
+            console.log(`[DEBUG] Skipped ${skippedNoCode} records with no ASIN code extracted`);
+        }
+        if (skippedNoMatch > 0) {
+            console.log(`[DEBUG] Skipped ${skippedNoMatch} records with ASIN not found in database`);
+        }
         return updatedCount;
     }
 
@@ -2426,15 +2474,40 @@ class MarketDataSyncService {
     _extractAsinFromData(rawData) {
         if (!rawData) return null;
 
-        // Direct fields
-        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code'], '');
-        if (direct && direct.length === 10) return direct;
+        // Direct fields - check common ASIN field names
+        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE'], '');
+        if (direct && direct.length === 10) {
+            // Ensure it's a valid ASIN format (alphanumeric, 10 chars)
+            if (/^[A-Z0-9]{10}$/i.test(direct)) {
+                return direct.toUpperCase(); // Return normalized uppercase
+            }
+        }
 
-        // URL extraction
-        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url'], '');
+        // URL extraction - check multiple URL field names
+        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url'], '');
         if (urlField && typeof urlField === 'string') {
-            const match = urlField.match(/\/dp\/([A-Z0-9]{10})/i) || urlField.match(/\/product\/([A-Z0-9]{10})/i);
-            if (match) return match[1];
+            // Enhanced regex to match various Amazon URL formats
+            // Supports: /dp/ASIN, /product/ASIN, /gp/product/ASIN, /gp/offer-listing/ASIN
+            // Also handles URLs with query parameters and fragments
+            const patterns = [
+                /\/dp\/([A-Z0-9]{10})/i,
+                /\/product\/([A-Z0-9]{10})/i,
+                /\/gp\/product\/([A-Z0-9]{10})/i,
+                /\/gp\/offer-listing\/([A-Z0-9]{10})/i,
+                /\/([A-Z0-9]{10})(?:[?\/]|$)/i, // Fallback: ASIN at path root
+                /[?&]asin=([A-Z0-9]{10})/i, // ASIN in query parameters
+                /[?&]ASIN=([A-Z0-9]{10})/i
+            ];
+            
+            for (const pattern of patterns) {
+                const match = urlField.match(pattern);
+                if (match) {
+                    const asin = match[1].toUpperCase();
+                    if (/^[A-Z0-9]{10}$/.test(asin)) {
+                        return asin;
+                    }
+                }
+            }
         }
 
         return null;

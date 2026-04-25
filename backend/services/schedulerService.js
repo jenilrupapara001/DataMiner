@@ -69,7 +69,7 @@ class SchedulerService {
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE Status = 'Active' AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             console.log(`🔄 [RECOVERY] Found ${sellers.length} sellers - running with concurrency limit...`);
@@ -126,7 +126,7 @@ class SchedulerService {
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE Status = 'Active' AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for sync.`);
@@ -187,7 +187,7 @@ class SchedulerService {
     async runKeepaSync() {
         try {
             const pool = await getPool();
-            const sellersResult = await pool.request().query("SELECT * FROM Sellers WHERE Status = 'Active'");
+            const sellersResult = await pool.request().query("SELECT * FROM Sellers WHERE IsActive = 1");
             const sellers = sellersResult.recordset;
 
             console.log(`[Scheduler] syncing ${sellers.length} sellers...`);
@@ -228,7 +228,7 @@ class SchedulerService {
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE Status = 'Active' AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             console.log(`[Scheduler] 🚀 Starting Nightly Octoparse Sync for ${sellers.length} sellers...`);
@@ -255,7 +255,7 @@ class SchedulerService {
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE Status = 'Active' AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             for (const seller of sellers) {
