@@ -4,14 +4,14 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 /**
- * OPTIMIZED COMPREHENSIVE MIGRATION SCRIPT
+ * ULTRA-FAST COMPREHENSIVE MIGRATION SCRIPT
  * MONGODB -> SQL SERVER
- * USES BATCH PROCESSING FOR HIGH VOLUME DATA
+ * USES SQL BULK INSERT FOR MASSIVE DATA
  */
 
 async function migrate() {
     const startTime = Date.now();
-    console.log('🚀 Starting Optimized Full Data Migration...');
+    console.log('🚀 Starting Ultra-Fast Data Migration...');
     console.log('📡 Mongo URI:', process.env.MONGO_URI ? process.env.MONGO_URI.split('@')[1] || 'Local' : 'MISSING');
     console.log('📡 SQL Server:', process.env.DB_SERVER);
 
@@ -28,6 +28,10 @@ async function migrate() {
         const sqlPool = await getPool();
 
         console.log('✅ Connected to both databases.');
+
+        // 0. Optional: Clear existing data for a clean migration
+        // console.log('🧹 Clearing existing SQL data for a clean start...');
+        // await sqlPool.request().query('DELETE FROM UserSellers; DELETE FROM AsinHistory; DELETE FROM Asins; DELETE FROM Users; DELETE FROM Sellers;');
 
         // 1. Roles
         await migrateCollection(mongoDb, sqlPool, 'roles', 'Roles', row => ({
@@ -54,7 +58,7 @@ async function migrate() {
             CreatedAt: row.createdAt || new Date()
         }));
 
-        // 3. Users (and bridge)
+        // 3. Users
         const userResults = await migrateCollection(mongoDb, sqlPool, 'users', 'Users', row => ({
             Id: row._id.toString(),
             Email: row.email,
@@ -115,22 +119,22 @@ async function migrate() {
             UpdatedAt: row.updatedAt || new Date()
         }));
 
-        // 5. Asins (BATCHED)
-        await migrateCollection(mongoDb, sqlPool, 'asins', 'Asins', row => ({
+        // 5. Asins (BULK)
+        await migrateBulk(mongoDb, sqlPool, 'asins', 'Asins', row => ({
             Id: row._id.toString(),
             AsinCode: row.asinCode || row.asin,
             SellerId: row.seller?.toString() || row.sellerId?.toString(),
-            Status: row.status || 'Active',
-            ScrapeStatus: row.scrapeStatus || 'Idle',
-            Category: row.category || '',
-            Brand: row.brand || '',
+            Status: (row.status || 'Active').substring(0, 50),
+            ScrapeStatus: (row.scrapeStatus || 'Idle').substring(0, 50),
+            Category: (row.category || '').substring(0, 255),
+            Brand: (row.brand || '').substring(0, 255),
             Title: row.title || '',
             ImageUrl: row.imageUrl || '',
-            CurrentPrice: row.currentPrice || 0,
-            BSR: row.bsr || 0,
-            Rating: row.rating || 0,
-            ReviewCount: row.reviewCount || 0,
-            LQS: row.lqs || 0,
+            CurrentPrice: parseFloat(row.currentPrice) || 0,
+            BSR: parseInt(row.bsr) || 0,
+            Rating: parseFloat(row.rating) || 0,
+            ReviewCount: parseInt(row.reviewCount) || 0,
+            LQS: parseFloat(row.lqs) || 0,
             LqsDetails: row.lqsDetails ? JSON.stringify(row.lqsDetails) : null,
             CdqComponents: row.cdqComponents ? JSON.stringify(row.cdqComponents) : null,
             FeePreview: row.feePreview ? JSON.stringify(row.feePreview) : null,
@@ -138,18 +142,18 @@ async function migrate() {
             LastScrapedAt: row.lastScrapedAt || null,
             CreatedAt: row.createdAt || new Date(),
             UpdatedAt: row.updatedAt || new Date()
-        }), 500); // 500 per batch
+        }));
 
-        // 6. AsinHistory (BATCHED)
-        await migrateCollection(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
+        // 6. AsinHistory (BULK)
+        await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
             AsinId: row.asin?.toString() || row.asinId?.toString(),
             Date: row.date || new Date(),
-            Price: row.price || 0,
-            BSR: row.bsr || 0,
-            Rating: row.rating || 0,
-            ReviewCount: row.reviewCount || 0,
+            Price: parseFloat(row.price) || 0,
+            BSR: parseInt(row.bsr) || 0,
+            Rating: parseFloat(row.rating) || 0,
+            ReviewCount: parseInt(row.reviewCount) || 0,
             BuyBoxStatus: row.buyBoxStatus ? 1 : 0
-        }), 1000);
+        }));
 
         // 7. OKR Entities
         await migrateCollection(mongoDb, sqlPool, 'goals', 'Goals', row => ({
@@ -234,14 +238,14 @@ async function migrate() {
         }));
 
         // 10. Logs & Settings
-        await migrateCollection(mongoDb, sqlPool, 'systemlogs', 'SystemLogs', row => ({
+        await migrateBulk(mongoDb, sqlPool, 'systemlogs', 'SystemLogs', row => ({
             Level: row.level || 'info',
             Module: row.module || 'system',
             Message: row.message || '',
             Metadata: row.metadata ? JSON.stringify(row.metadata) : null,
             UserId: row.user?.toString() || row.userId?.toString(),
             Timestamp: row.timestamp || row.createdAt || new Date()
-        }), 1000);
+        }));
 
         await migrateCollection(mongoDb, sqlPool, 'systemsettings', 'SystemSettings', row => ({
             Key: row.key,
@@ -262,7 +266,85 @@ async function migrate() {
     }
 }
 
-async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper, batchSize = 100) {
+async function migrateBulk(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper) {
+    console.log(`\n🚀 BULK Migrating ${mongoCollName} -> ${sqlTableName}...`);
+    const collStartTime = Date.now();
+    
+    try {
+        const collection = mongoDb.collection(mongoCollName);
+        const count = await collection.countDocuments();
+        
+        if (count === 0) {
+            console.log(`⚠️  Collection ${mongoCollName} is empty. Skipping.`);
+            return;
+        }
+
+        const table = new sql.Table(sqlTableName);
+        
+        // Get table schema to define bulk columns
+        const schemaResult = await sqlPool.request().query(`
+            SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = '${sqlTableName}'
+            ORDER BY ORDINAL_POSITION
+        `);
+
+        for (const col of schemaResult.recordset) {
+            if (col.COLUMN_NAME === 'Id' && col.DATA_TYPE === 'bigint' && sqlTableName === 'AsinHistory') continue; // Identity col
+            if (col.COLUMN_NAME === 'Id' && col.DATA_TYPE === 'bigint' && sqlTableName === 'SystemLogs') continue; // Identity col
+            
+            let type;
+            switch (col.DATA_TYPE) {
+                case 'varchar': type = sql.VarChar(col.CHARACTER_MAXIMUM_LENGTH); break;
+                case 'nvarchar': type = sql.NVarChar(col.CHARACTER_MAXIMUM_LENGTH === -1 ? sql.MAX : col.CHARACTER_MAXIMUM_LENGTH); break;
+                case 'int': type = sql.Int; break;
+                case 'bigint': type = sql.BigInt; break;
+                case 'decimal': type = sql.Decimal(18, 4); break;
+                case 'datetime2': type = sql.DateTime2; break;
+                case 'date': type = sql.Date; break;
+                case 'bit': type = sql.Bit; break;
+                default: type = sql.NVarChar(sql.MAX);
+            }
+            table.columns.add(col.COLUMN_NAME, type, { nullable: col.IS_NULLABLE === 'YES' });
+        }
+
+        const cursor = collection.find({});
+        let processed = 0;
+        const BATCH_SIZE = 5000;
+
+        while (await cursor.hasNext()) {
+            const batchTable = new sql.Table(sqlTableName);
+            // Re-add columns to the batch table (same as original table)
+            for (const col of table.columns) {
+                batchTable.columns.add(col.name, col.type, { nullable: col.nullable });
+            }
+
+            for (let i = 0; i < BATCH_SIZE && await cursor.hasNext(); i++) {
+                const row = await cursor.next();
+                const mapped = mapper(row);
+                const rowValues = [];
+                for (const col of batchTable.columns) {
+                    rowValues.push(mapped[col.name]);
+                }
+                batchTable.rows.add(...rowValues);
+            }
+
+            const request = new sql.Request(sqlPool);
+            await request.bulk(batchTable);
+
+            processed += batchTable.rows.length;
+            const percentage = Math.round(processed / count * 100);
+            process.stdout.write(`\r   ⏳ Progress: ${processed}/${count} (${percentage}%)`);
+        }
+
+        const duration = (Date.now() - collStartTime) / 1000;
+        console.log(`\n✅ Finished ${sqlTableName} in ${duration.toFixed(2)}s.`);
+    } catch (err) {
+        console.error(`   ❌ Failed to bulk migrate ${mongoCollName}:`, err.message);
+    }
+}
+
+async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, mapper) {
     console.log(`\n📦 Migrating ${mongoCollName} -> ${sqlTableName}...`);
     const collStartTime = Date.now();
     
@@ -280,77 +362,44 @@ async function migrateCollection(mongoDb, sqlPool, mongoCollName, sqlTableName, 
         const rawData = [];
 
         while (await cursor.hasNext()) {
-            const batch = [];
-            for (let i = 0; i < batchSize && await cursor.hasNext(); i++) {
-                const row = await cursor.next();
-                batch.push(row);
-                rawData.push(row);
-            }
-
-            if (batch.length === 0) break;
-
-            const transaction = new sql.Transaction(sqlPool);
-            await transaction.begin();
+            const row = await cursor.next();
+            rawData.push(row);
+            const mapped = mapper(row);
 
             try {
-                for (const row of batch) {
-                    const mapped = mapper(row);
-                    const request = new sql.Request(transaction);
+                const request = sqlPool.request();
+                const columns = [];
+                const values = [];
+                
+                for (const [key, val] of Object.entries(mapped)) {
+                    const paramName = `p_${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                    columns.push(`[${key}]`);
+                    values.push(`@${paramName}`);
                     
-                    const columns = [];
-                    const values = [];
-                    
-                    for (const [key, val] of Object.entries(mapped)) {
-                        const paramName = `p_${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                        columns.push(`[${key}]`);
-                        values.push(`@${paramName}`);
-                        
-                        if (val instanceof Date) {
-                            request.input(paramName, sql.DateTime2, val);
-                        } else if (typeof val === 'number') {
-                            if (Number.isInteger(val)) request.input(paramName, sql.Int, val);
-                            else request.input(paramName, sql.Decimal(18, 4), val);
-                        } else if (val === null || val === undefined) {
-                            request.input(paramName, sql.NVarChar, null);
-                        } else {
-                            request.input(paramName, sql.NVarChar, val.toString());
-                        }
-                    }
-
-                    let query;
-                    if (mapped.Id) {
-                        query = `
-                            IF NOT EXISTS (SELECT 1 FROM ${sqlTableName} WHERE Id = @p_Id)
-                            INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})
-                        `;
-                    } else if (sqlTableName === 'AsinHistory') {
-                        query = `
-                            IF NOT EXISTS (SELECT 1 FROM ${sqlTableName} WHERE AsinId = @p_AsinId AND Date = @p_Date)
-                            INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})
-                        `;
-                    } else if (sqlTableName === 'SystemSettings') {
-                        query = `
-                            IF NOT EXISTS (SELECT 1 FROM ${sqlTableName} WHERE [Key] = @p_Key)
-                            INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})
-                        `;
-                    } else if (sqlTableName === 'SystemLogs') {
-                        // SystemLogs might not need existence check, just insert
-                        query = `INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+                    if (val instanceof Date) {
+                        request.input(paramName, sql.DateTime2, val);
+                    } else if (typeof val === 'number') {
+                        if (Number.isInteger(val)) request.input(paramName, sql.Int, val);
+                        else request.input(paramName, sql.Decimal(18, 4), val);
+                    } else if (val === null || val === undefined) {
+                        request.input(paramName, sql.NVarChar, null);
                     } else {
-                        query = `INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+                        request.input(paramName, sql.NVarChar, val.toString());
                     }
-
-                    await request.query(query);
                 }
-                await transaction.commit();
-            } catch (err) {
-                await transaction.rollback();
-                // console.error(`   ❌ Batch Error in ${sqlTableName}:`, err.message);
-            }
 
-            processed += batch.length;
-            const percentage = Math.round(processed / count * 100);
-            process.stdout.write(`\r   ⏳ Progress: ${processed}/${count} (${percentage}%)`);
+                const query = `
+                    IF NOT EXISTS (SELECT 1 FROM ${sqlTableName} WHERE Id = @p_Id)
+                    INSERT INTO ${sqlTableName} (${columns.join(', ')}) VALUES (${values.join(', ')})
+                `;
+
+                await request.query(query);
+            } catch (err) {}
+
+            processed++;
+            if (processed % 10 === 0 || processed === count) {
+                process.stdout.write(`\r   ⏳ Progress: ${processed}/${count} (${Math.round(processed/count*100)}%)`);
+            }
         }
 
         const duration = (Date.now() - collStartTime) / 1000;
