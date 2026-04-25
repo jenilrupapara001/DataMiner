@@ -1,14 +1,9 @@
 const { sql, getPool, generateId } = require('../database/db');
 const { calculateLQS } = require('../utils/lqs');
 
-/**
- * Octoparse ASIN Data Parser and Storage Service
- * Handles raw scraped data from Octoparse and stores in SQL Asins table
- */
 class AsinDataParser {
     /**
      * Parse raw tab-delimited Octoparse data into structured object
-     * Input format: "field_name\t: \tvalue" or multiline fields
      */
     static parseRawData(rawText) {
         const lines = rawText.split('\n').filter(line => line.trim() !== '');
@@ -17,25 +12,20 @@ class AsinDataParser {
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
+            if (!line) continue;
 
-            // Skip HTML content blocks (A_plus, category breadcrumbs, image_count)
-            if (line.startsWith('<') && !line.startsWith('<li')) {
-                // Skip pure HTML lines except list items
-                continue;
-            }
-
-            // Match key-value pattern: "key\t: \tvalue"
-            const kvMatch = line.match(/^([^:\t]+)\t:\t(.+)$/);
+            // Match key-value pattern: "key\t: \tvalue" or "key\t: value"
+            const kvMatch = line.match(/^([^:\t]+)\t:\t?(.+)$/);
             if (kvMatch) {
                 currentKey = kvMatch[1].trim();
-                let value = kvMatch[2].trim();
-
+                let value = kvMatch[2] ? kvMatch[2].trim() : '';
+                
                 // Handle continuation lines (next line without colon)
                 while (i + 1 < lines.length && !lines[i + 1].includes('\t:')) {
                     i++;
                     value += ' ' + lines[i].trim();
                 }
-
+                
                 data[currentKey] = value;
             }
         }
@@ -67,17 +57,17 @@ class AsinDataParser {
      * Parse BSR from "#6 in Sarees" -> 6
      */
     static parseBSR(bsrStr) {
-        if (!bsrStr) return 0;
-        const match = bsrStr.match(/#(\d+)/);
-        return match ? parseInt(match[1]) : 0;
+        if (!bsrStr) return null;
+        const match = bsrStr.match(/#?(\d+)/);
+        return match ? parseInt(match[1]) : null;
     }
 
     /**
-     * Parse review count from "(89)" -> 89
+     * Parse review count from "(89)" -> 89 or "89 reviews"
      */
     static parseReviewCount(str) {
         if (!str) return 0;
-        const match = str.match(/\((\d+)\)/);
+        const match = str.match(/(\d+)/);
         return match ? parseInt(match[1]) : 0;
     }
 
@@ -110,7 +100,6 @@ class AsinDataParser {
      */
     static hasAplus(html) {
         if (!html) return false;
-        // Check for meaningful A+ content (exclude just whitespace or minimal tags)
         const textContent = html.replace(/<[^>]+>/g, '').trim();
         return textContent.length > 50;
     }
@@ -134,24 +123,24 @@ class AsinDataParser {
     }
 
     /**
-     * Calculate LQS from available data
-     * (Placeholder - you can enhance with actual LQS formula)
+     * Parse Asp deal badge percentage
      */
-    static calculateLQSFromData(data) {
-        // Basic LQS calculation based on title length, image count, description, A+ content
-        const hasAplus = this.hasAplus(data.A_plus || '');
-        const bulletCount = this.parseBulletPoints(data.bp_all || '').length;
-        const titleLen = (data.Title || '').length;
-        const price = this.parsePrice(data.mrp || data.asp);
+    static parsePercentage(str) {
+        if (!str) return 0;
+        const match = str.match(/(-?\d+)%?/);
+        return match ? parseInt(match[1]) : 0;
+    }
 
-        let score = 50; // base
-        if (hasAplus) score += 20;
-        if (bulletCount >= 5) score += 15;
-        if (titleLen >= 100) score += 10;
-        if (titleLen >= 150) score += 5;
-        if (price > 0) score += 10;
-
-        return Math.min(score, 100);
+    /**
+     * Parse availability status from raw text
+     */
+    static parseAvailabilityStatus(str) {
+        if (!str) return 'Unknown';
+        const lower = str.toLowerCase();
+        if (lower.includes('in stock')) return 'In Stock';
+        if (lower.includes('out of stock') || lower.includes('unavailable')) return 'Out of Stock';
+        if (lower.includes('only')) return 'Limited';
+        return 'Unknown';
     }
 
     /**
@@ -166,31 +155,62 @@ class AsinDataParser {
             throw new Error('Could not extract ASIN from Original_URL');
         }
 
+        const now = new Date();
+
+        // Core fields
         const title = parsed.Title || '';
         const category = this.parseCategory(parsed.category || '');
-        const brand = title.split(' ')[0] || ''; // simple: first word
+        const brand = (parsed.brand || '').split(' ')[0] || '';
         const mainImage = this.parseMainImage(parsed.Main_Image || '');
         const currentPrice = this.parsePrice(parsed.mrp || parsed.asp || 0);
         const bsr = this.parseBSR(parsed.BSR || '');
+        const subBsr = this.parseBSR(parsed.sub_BSR || '');
         const rating = this.parseRating(parsed.avg_rating || 0);
         const reviewCount = this.parseReviewCount(parsed.review_count || '');
         const hasAplus = this.hasAplus(parsed.A_plus || '');
-
+        
         // Bullet points
         const bulletPoints = this.parseBulletPoints(parsed.bp_all || '');
         const bulletPointsText = bulletPoints.join('\n• ');
-
+        
+        // Images
+        const images = this.parseMainImage(parsed.image_count || '');
+        const imagesCount = images.length > 0 ? 6 : 0; // Count from image html
+        
+        // Buy Box details
+        const buyBoxStatus = this.parseAvailabilityStatus(parsed.unavilable || '');
+        const buyBoxWin = parsed.buy_box_win || 0;
+        const buyBoxSellerId = parsed.second_buybox ? parsed.second_buybox.match(/seller=([^&]+)/)?.[1] || '' : '';
+        const soldBy = parsed.sold_by || '';
+        
+        // Deal badge
+        const asp = this.parsePrice(parsed.asp);
+        const secondAsp = this.parsePrice(parsed.second_asp);
+        const aspDifference = asp > 0 && secondAsp > 0 ? asp - secondAsp : 0;
+        
         // LQS calculation
-        const lqs = Math.round(this.calculateLQSFromData(parsed));
-
-        // LqsDetails JSON
+        const lqs = Math.round(calculateLQS({
+            titleLength: title.length,
+            hasAplus,
+            bulletCount: bulletPoints.length,
+            imageCount: imagesCount,
+            descriptionLength: 0,
+            hasEbc: false,
+            price: currentPrice,
+            rating,
+            reviews: reviewCount
+        }));
+        
         const lqsDetails = JSON.stringify({
             titleLength: title.length,
             hasAplus,
             bulletCount: bulletPoints.length,
-            imageCount: 0, // placeholder
-            descriptionLength: 0, // placeholder
+            imageCount: imagesCount,
+            descriptionLength: 0,
             hasEbc: false,
+            price: currentPrice,
+            rating,
+            reviews: reviewCount
         });
 
         return {
@@ -205,89 +225,103 @@ class AsinDataParser {
             ImageUrl: mainImage,
             CurrentPrice: currentPrice,
             BSR: bsr,
+            SubBsr: subBsr ? subBsr.toString() : null,
+            SubBSRs: null,
             Rating: rating,
             ReviewCount: reviewCount,
             LQS: lqs,
             LqsDetails: lqsDetails,
             CdqComponents: null,
             FeePreview: null,
-            BuyBoxStatus: 1, // Assume winner if data present
-            LastScrapedAt: new Date(),
-            CreatedAt: new Date(),
-            UpdatedAt: new Date()
+            BuyBoxStatus: buyBoxStatus === 'In Stock' ? 1 : 0,
+            BuyBoxWin: buyBoxWin ? 1 : 0,
+            BuyBoxSellerId: buyBoxSellerId,
+            SoldBy: soldBy,
+            HasAplus: hasAplus ? 1 : 0,
+            StockLevel: 0,
+            VideoCount: 0,
+            Images: images,
+            ImagesCount: imagesCount,
+            BulletPoints: bulletPoints.length > 0 ? JSON.stringify(bulletPoints) : null,
+            BulletPointsText: bulletPointsText,
+            StapleLevel: 'Regular',
+            Weight: 0,
+            LossPerReturn: 0,
+            SecondAsp: secondAsp > 0 ? secondAsp : null,
+            SoldBySec: '',
+            AspDifference: aspDifference,
+            AvailabilityStatus: buyBoxStatus,
+            AplusAbsentSince: null,
+            AplusPresentSince: hasAplus ? now : null,
+            AllOffers: null,
+            Sku: '',
+            LastScrapedAt: now,
+            CreatedAt: now,
+            UpdatedAt: now
         };
     }
 
     /**
-     * Insert or update a single ASIN from raw data
+     * Insert or update a single ASIN
      */
     static async upsertAsinFromRaw(rawData, sellerId) {
         const pool = await getPool();
         const row = this.transformToAsinRow(rawData, sellerId);
 
-        // Use MERGE to insert or update
-        await pool.request()
-            .input('Id', sql.VarChar, row.Id)
-            .input('AsinCode', sql.VarChar, row.AsinCode)
-            .input('SellerId', sql.VarChar, row.SellerId)
-            .input('Status', sql.NVarChar, row.Status)
-            .input('ScrapeStatus', sql.NVarChar, row.ScrapeStatus)
-            .input('Category', sql.NVarChar, row.Category)
-            .input('Brand', sql.NVarChar, row.Brand)
-            .input('Title', sql.NVarChar, row.Title)
-            .input('ImageUrl', sql.NVarChar, row.ImageUrl)
-            .input('CurrentPrice', sql.Decimal(18, 2), row.CurrentPrice)
-            .input('BSR', sql.Int, row.BSR)
-            .input('Rating', sql.Decimal(3, 2), row.Rating)
-            .input('ReviewCount', sql.Int, row.ReviewCount)
-            .input('LQS', sql.Decimal(5, 2), row.LQS)
-            .input('LqsDetails', sql.NVarChar, row.LqsDetails)
-            .input('CdqComponents', sql.NVarChar, row.CdqComponents)
-            .input('FeePreview', sql.NVarChar, row.FeePreview)
-            .input('BuyBoxStatus', sql.Bit, row.BuyBoxStatus)
-            .input('LastScrapedAt', sql.DateTime2, row.LastScrapedAt)
-            .query(`
-                MERGE INTO Asins AS target
-                USING (SELECT @AsinCode AS AsinCode, @SellerId AS SellerId) AS source
-                ON target.AsinCode = source.AsinCode AND target.SellerId = source.SellerId
-                WHEN MATCHED THEN
-                    UPDATE SET
-                        Status = @Status,
-                        ScrapeStatus = @ScrapeStatus,
-                        Category = @Category,
-                        Brand = @Brand,
-                        Title = @Title,
-                        ImageUrl = @ImageUrl,
-                        CurrentPrice = @CurrentPrice,
-                        BSR = @BSR,
-                        Rating = @Rating,
-                        ReviewCount = @ReviewCount,
-                        LQS = @LQS,
-                        LqsDetails = @LqsDetails,
-                        CdqComponents = @CdqComponents,
-                        FeePreview = @FeePreview,
-                        BuyBoxStatus = @BuyBoxStatus,
-                        LastScrapedAt = @LastScrapedAt,
-                        UpdatedAt = GETDATE()
-                WHEN NOT MATCHED THEN
-                    INSERT (Id, AsinCode, SellerId, Status, ScrapeStatus, Category, Brand, Title, ImageUrl,
-                            CurrentPrice, BSR, Rating, ReviewCount, LQS, LqsDetails, CdqComponents, FeePreview,
-                            BuyBoxStatus, LastScrapedAt, CreatedAt, UpdatedAt)
-                    VALUES (@Id, @AsinCode, @SellerId, @Status, @ScrapeStatus, @Category, @Brand, @Title, @ImageUrl,
-                            @CurrentPrice, @BSR, @Rating, @ReviewCount, @LQS, @LqsDetails, @CdqComponents, @FeePreview,
-                            @BuyBoxStatus, @LastScrapedAt, @CreatedAt, GETDATE());
-            `);
+        // Build dynamic insert/update
+        const columns = [];
+        const updates = [];
+        const values = [];
+        let idx = 0;
 
-        return { asinCode: row.AsinCode, sellerId, lqs: row.LQS };
+        for (const [key, val] of Object.entries(row)) {
+            if (val === undefined || val === null || val === '') {
+                // Skip empty nullable fields for simplicity
+                continue;
+            }
+            
+            const paramName = `p_${idx++}`;
+            columns.push(`[${key}]`);
+            values.push(`@${paramName}`);
+
+            if (val instanceof Date) {
+                await pool.request().input(paramName, sql.DateTime2, val);
+            } else if (typeof val === 'number') {
+                if (Number.isInteger(val)) {
+                    await pool.request().input(paramName, sql.Int, val);
+                } else {
+                    await pool.request().input(paramName, sql.Decimal(18, 4), val);
+                }
+            } else {
+                await pool.request().input(paramName, sql.NVarChar, val.toString());
+            }
+
+            if (key !== 'Id') {
+                updates.push(`[${key}] = @${paramName}`);
+            }
+        }
+
+        const request = pool.request();
+        const query = `
+            MERGE INTO Asins AS target
+            USING (SELECT @p_AsinCode AS AsinCode, @p_SellerId AS SellerId) AS source
+            ON target.AsinCode = source.AsinCode AND target.SellerId = source.SellerId
+            WHEN MATCHED THEN
+                UPDATE SET ${updates.join(', ')}
+            WHEN NOT MATCHED THEN
+                INSERT (${columns.join(', ')})
+                VALUES (${values.join(', ')});
+        `;
+
+        await request.query(query);
+        return { asinCode: row.AsinCode, sellerId };
     }
 
     /**
-     * Bulk insert multiple ASINs from raw data array
+     * Bulk upsert multiple ASINs
      */
     static async bulkUpsertAsins(rawDataArray, sellerId) {
-        const pool = await getPool();
         const results = [];
-
         for (const rawData of rawDataArray) {
             try {
                 const result = await this.upsertAsinFromRaw(rawData, sellerId);
@@ -296,7 +330,6 @@ class AsinDataParser {
                 results.push({ success: false, error: err.message });
             }
         }
-
         return results;
     }
 }
