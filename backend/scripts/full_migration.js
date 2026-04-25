@@ -121,56 +121,41 @@ async function migrate() {
             UpdatedAt: row.updatedAt || new Date()
         }));
 
-        // // 5. Asins (BULK) - COMPREHENSIVE MAPPING
-        // await migrateBulk(mongoDb, sqlPool, 'asins', 'Asins', row => ({
-        //     Id: row._id.toString(),
-        //     AsinCode: row.asinCode || row.asin,
-        //     SellerId: row.seller?.toString() || row.sellerId?.toString(),
-        //     Status: (row.status || 'Active').substring(0, 50),
-        //     ScrapeStatus: (row.scrapeStatus || 'Idle').substring(0, 50),
-        //     Category: (row.category || '').substring(0, 255),
-        //     Brand: (row.brand || '').substring(0, 255),
-        //     Title: row.title || '',
-        //     ImageUrl: row.imageUrl || '',
-        //     CurrentPrice: parseFloat(row.currentPrice) || 0,
-        //     BSR: parseInt(row.bsr) || 0,
-        //     Rating: parseFloat(row.rating) || 0,
-        //     ReviewCount: parseInt(row.reviewCount) || 0,
-        //     LQS: parseFloat(row.lqs) || 0,
-        //     LqsDetails: row.lqsDetails ? JSON.stringify(row.lqsDetails) : null,
-        //     CdqComponents: row.cdqComponents ? JSON.stringify(row.cdqComponents) : null,
-        //     FeePreview: row.feePreview ? JSON.stringify(row.feePreview) : null,
-        //     BuyBoxStatus: row.buyBoxStatus ? 1 : 0,
-        //     LastScrapedAt: row.lastScrapedAt || null,
-        //     CreatedAt: row.createdAt || new Date(),
-        //     UpdatedAt: row.updatedAt || new Date(),
-
-        //     // Missing fields found in SQL schema
-        //     SoldBy: row.soldBy || '',
-        //     BuyBoxWin: row.buyBoxWin ? 1 : 0,
-        //     BuyBoxSellerId: row.buyBoxSellerId || '',
-        //     Sku: row.sku || '',
-        //     HasAplus: row.hasAplus ? 1 : 0,
-        //     StockLevel: row.stockLevel || 0,
-        //     VideoCount: row.videoCount || 0,
-        //     ImagesCount: row.imagesCount || 0,
-        //     BulletPoints: row.bulletPoints ? JSON.stringify(row.bulletPoints) : null,
-        //     BulletPointsText: row.bulletPointsText || '',
-        //     StapleLevel: row.stapleLevel || 'Regular',
-        //     Weight: parseFloat(row.weight) || 0,
-        //     LossPerReturn: parseFloat(row.lossPerReturn) || 0
-        // }));
+        // 5. Asins (BULK) - COMPREHENSIVE MAPPING
+        await migrateBulk(mongoDb, sqlPool, 'asins', 'Asins', row => ({
+            Id: row._id.toString(),
+            AsinCode: row.asinCode || row.asin,
+            SellerId: row.seller?.toString() || row.sellerId?.toString(),
+            Status: (row.status || 'Active').substring(0, 50),
+            ScrapeStatus: (row.scrapeStatus || 'Idle').substring(0, 50),
+            Category: (row.category || '').substring(0, 255),
+            Brand: (row.brand || '').substring(0, 255),
+            Title: row.title || '',
+            ImageUrl: row.imageUrl || '',
+            CurrentPrice: parseFloat(row.currentPrice) || 0,
+            BSR: parseInt(row.bsr) || 0,
+            Rating: parseFloat(row.rating) || 0,
+            ReviewCount: parseInt(row.reviewCount) || 0,
+            LQS: parseFloat(row.lqs) || 0,
+            LqsDetails: row.lqsDetails ? JSON.stringify(row.lqsDetails) : null,
+            CdqComponents: row.cdqComponents ? JSON.stringify(row.cdqComponents) : null,
+            FeePreview: row.feePreview ? JSON.stringify(row.feePreview) : null,
+            BuyBoxStatus: row.buyBoxStatus ? 1 : 0,
+            LastScrapedAt: row.lastScrapedAt || null,
+            CreatedAt: row.createdAt || new Date(),
+            UpdatedAt: row.updatedAt || new Date()
+        }));
 
         // // 6. AsinHistory (BULK)
-        // await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
-        //     AsinId: row.asin?.toString() || row.asinId?.toString(),
-        //     Date: row.date || new Date(),
-        //     Price: parseFloat(row.price) || 0,
-        //     BSR: parseInt(row.bsr) || 0,
-        //     Rating: parseFloat(row.rating) || 0,
-        //     ReviewCount: parseInt(row.reviewCount) || 0,
-        //     BuyBoxStatus: row.buyBoxStatus ? 1 : 0
-        // }));
+        await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinHistory', row => ({
+            AsinId: row.asin?.toString() || row.asinId?.toString(),
+            Date: row.date || new Date(),
+            Price: parseFloat(row.price) || 0,
+            BSR: parseInt(row.bsr) || 0,
+            Rating: parseFloat(row.rating) || 0,
+            ReviewCount: parseInt(row.reviewCount) || 0,
+            BuyBoxStatus: row.buyBoxStatus ? 1 : 0
+        }));
 
         // 6b. AsinWeekHistory (BULK) - Required for Trends/Dashboard
         await migrateBulk(mongoDb, sqlPool, 'asinhistory', 'AsinWeekHistory', row => ({

@@ -58,6 +58,10 @@ router.post('/bulk-update', protect, requirePermission('sellers_manage_asins'), 
 router.post('/bulk-week-history', protect, requirePermission('sellers_manage_asins'), asinController.bulkUpdateWeekHistory);
 router.post('/import-csv', protect, requirePermission('sellers_manage_asins'), upload.single('file'), asinController.importFromCsv);
 
+// Raw data upload endpoints (Octoparse format)
+router.post('/upload-raw', protect, requirePermission('sellers_manage_asins'), asinController.uploadRawAsins);
+router.post('/parse-test', protect, requirePermission('sellers_manage_asins'), asinController.testParseRaw);
+
 router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);
 router.delete('/:id', protect, requirePermission('sellers_manage_asins'), asinController.deleteAsin);

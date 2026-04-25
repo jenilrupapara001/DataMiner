@@ -4,6 +4,7 @@ const marketDataSyncService = require('../services/marketDataSyncService');
 const imageGenerationService = require('../services/imageGenerationService');
 const XLSX = require('xlsx');
 const fs = require('fs');
+const AsinDataParser = require('../services/asinDataParser');
 
 /**
  * Get all ASINs (SQL Version)
@@ -1090,4 +1091,70 @@ exports.bulkUpdateWeekHistory = async (req, res) => {
 };
 
 exports.updateSellerAsinCount = updateSellerAsinCount;
+
+/**
+ * POST /api/asins/upload-raw
+ * Upload raw scraped ASIN data (Octoparse format)
+ * Body: { sellerId, data: [rawText1, rawText2, ...] } OR multipart form
+ */
+exports.uploadRawAsins = async (req, res) => {
+    try {
+        const { sellerId, data: rawDataArray } = req.body;
+        const userId = req.user.Id || req.user._id;
+
+        if (!sellerId) {
+            return res.status(400).json({ error: 'sellerId is required' });
+        }
+
+        if (!Array.isArray(rawDataArray) || rawDataArray.length === 0) {
+            return res.status(400).json({ error: 'data array with raw scraped entries is required' });
+        }
+
+        const results = await AsinDataParser.bulkUpsertAsins(rawDataArray, sellerId);
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = results.filter(r => !r.success).length;
+
+        // Update seller's scrape stats
+        const pool = await getPool();
+        await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .input('count', sql.Int, successCount)
+            .query(`
+                UPDATE Sellers
+                SET ScrapeUsed = ScrapeUsed + @count,
+                    LastScrapedAt = GETDATE(),
+                    UpdatedAt = GETDATE()
+                WHERE Id = @sellerId
+            `);
+
+        res.json({
+            success: true,
+            message: `Processed ${rawDataArray.length} entries`,
+            stats: { total: rawDataArray.length, success: successCount, failed: errorCount },
+            results: results.slice(0, 10) // Return first 10 for debugging
+        });
+    } catch (error) {
+        console.error('Upload raw ASINs error:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+/**
+ * POST /api/asins/parse-test
+ * Test parsing without saving (for debugging)
+ */
+exports.testParseRaw = async (req, res) => {
+    try {
+        const { rawData } = req.body;
+        if (!rawData) {
+            return res.status(400).json({ error: 'rawData string required' });
+        }
+
+        const parsed = AsinDataParser.transformToAsinRow(rawData, 'test-seller-id');
+        res.json({ success: true, parsed });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 module.exports = exports;
