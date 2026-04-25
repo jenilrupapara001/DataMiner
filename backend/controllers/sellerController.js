@@ -239,7 +239,7 @@ exports.createSeller = async (req, res) => {
             .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
     }
 
-    res.status(201).json({ _id: id, name, marketplace, sellerId, status });
+     res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
 
     if (marketDataSyncService.isConfigured()) {
       marketDataSyncService.ensureTaskForSeller(id).catch(console.error);
