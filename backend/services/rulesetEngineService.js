@@ -1,8 +1,4 @@
-const Asin = require('../models/Asin');
-const Ruleset = require('../models/Ruleset');
-const RulesetExecutionLog = require('../models/RulesetExecutionLog');
-const Action = require('../models/Action');
-const Notification = require('../models/Notification');
+const { sql, getPool, generateId } = require('../database/db');
 
 const DATE_RANGE_MAP = {
   'Last 7 days': 7,
@@ -31,15 +27,26 @@ async function getEntityData(type, sellerId, dateRange, excludeDays) {
   const excludeEndDate = new Date();
   excludeEndDate.setDate(excludeEndDate.getDate() - excludeCount);
   
-  const sellerFilter = sellerId ? { seller: sellerId } : {};
+  const pool = await getPool();
 
   if (type === 'ASIN' || type === 'Product') {
-    const asins = await Asin.find(sellerFilter)
-      .select('asinCode title currentPrice bsr rating reviewCount lqs buyBoxWin hasAplus imageCount descLength category brand tags status weekHistory history')
-      .lean();
+    let query = "SELECT * FROM Asins WHERE Status = 'Active'";
+    const request = pool.request();
+    if (sellerId) {
+      query += " AND SellerId = @sellerId";
+      request.input('sellerId', sql.VarChar, sellerId);
+    }
+    
+    const result = await request.query(query);
+    const asins = result.recordset;
 
     return asins.map(asin => {
-      const history = asin.weekHistory || asin.history || [];
+      let history = [];
+      try {
+        history = JSON.parse(asin.WeekHistory || asin.History || '[]');
+      } catch (e) {
+        history = [];
+      }
       
       const filteredHistory = history.filter(h => {
         const hDate = new Date(h.date);
@@ -47,21 +54,21 @@ async function getEntityData(type, sellerId, dateRange, excludeDays) {
       });
 
       const metrics = {
-        asinCode: asin.asinCode,
-        title: asin.title,
-        current_price: asin.currentPrice || 0,
-        bsr: asin.bsr || 0,
-        rating: asin.rating || 0,
-        review_count: asin.reviewCount || 0,
-        lqs: asin.lqs || 0,
-        buy_box_winner: asin.buyBoxWin || false,
-        has_aplus: asin.hasAplus || false,
-        image_count: asin.imageCount || 0,
-        desc_length: asin.descLength || 0,
-        category: asin.category || '',
-        brand: asin.brand || '',
-        tags: asin.tags || [],
-        asin_status: asin.status || 'Active',
+        asinCode: asin.AsinCode,
+        title: asin.Title,
+        current_price: asin.CurrentPrice || 0,
+        bsr: asin.Bsr || 0,
+        rating: asin.Rating || 0,
+        review_count: asin.ReviewCount || 0,
+        lqs: asin.Lqs || 0,
+        buy_box_winner: asin.BuyBoxWin || false,
+        has_aplus: asin.HasAplus || false,
+        image_count: asin.ImageCount || 0,
+        desc_length: asin.DescLength || 0,
+        category: asin.Category || '',
+        brand: asin.Brand || '',
+        tags: asin.Tags ? JSON.parse(asin.Tags) : [],
+        asin_status: asin.Status || 'Active',
         sessions: filteredHistory.reduce((sum, h) => sum + (h.sessions || 0), 0),
         page_views: filteredHistory.reduce((sum, h) => sum + (h.pageViews || h.impressions || 0), 0),
         orders: filteredHistory.reduce((sum, h) => sum + (h.orders || h.revenue || 0), 0),
@@ -74,7 +81,7 @@ async function getEntityData(type, sellerId, dateRange, excludeDays) {
       };
 
       if (metrics.ad_spend > 0) {
-        metrics.acos = (metrics.ad_spend / metrics.ad_sales) * 100;
+        metrics.acos = (metrics.ad_spend / (metrics.ad_sales || 1)) * 100;
         metrics.roas = metrics.ad_sales / metrics.ad_spend;
       }
 
@@ -83,7 +90,7 @@ async function getEntityData(type, sellerId, dateRange, excludeDays) {
         metrics.session_pct = (metrics.sessions / metrics.sessions) * 100;
       }
 
-      if (metrics.ad_spend > 0) {
+      if (metrics.ad_spend > 0 && metrics.revenue > 0) {
         metrics.tacos = (metrics.ad_spend / metrics.revenue) * 100;
       }
 
@@ -161,19 +168,24 @@ function evaluateRule(rule, entity) {
 
 async function applyAction(entity, action, type, sellerId, userId) {
   const results = [];
+  const pool = await getPool();
 
   switch (action.actionType) {
     case 'send_email':
     case 'send_notification':
       try {
-        const notification = new Notification({
-          user: userId,
-          type: 'RULESET',
-          title: `Ruleset Action: ${action.actionType}`,
-          message: `Action applied to ${entity.asinCode || entity.entityId}: ${action.actionType}`,
-          read: false
-        });
-        await notification.save();
+        const id = generateId();
+        await pool.request()
+          .input('Id', sql.VarChar, id)
+          .input('UserId', sql.VarChar, userId)
+          .input('Type', sql.NVarChar, 'RULESET')
+          .input('Title', sql.NVarChar, `Ruleset Action: ${action.actionType}`)
+          .input('Message', sql.NVarChar, `Action applied to ${entity.asinCode || entity.entityId}: ${action.actionType}`)
+          .input('Read', sql.Bit, 0)
+          .query(`
+            INSERT INTO Notifications (Id, UserId, Type, Title, Message, [Read], CreatedAt)
+            VALUES (@Id, @UserId, @Type, @Title, @Message, @Read, GETDATE())
+          `);
         results.push({ action: 'notification_created', status: 'success' });
       } catch (err) {
         results.push({ action: 'notification_failed', status: 'failed', error: err.message });
@@ -182,16 +194,21 @@ async function applyAction(entity, action, type, sellerId, userId) {
 
     case 'create_task':
       try {
-        const task = new Action({
-          title: `Ruleset: ${action.actionType}`,
-          description: `Automated action from ruleset on ${entity.asinCode || entity.entityId}`,
-          priority: 'medium',
-          status: 'pending',
-          type: 'automated',
-          seller: sellerId
-        });
-        await task.save();
-        results.push({ action: 'task_created', status: 'success', taskId: task._id });
+        const id = generateId();
+        await pool.request()
+          .input('Id', sql.VarChar, id)
+          .input('Title', sql.NVarChar, `Ruleset: ${action.actionType}`)
+          .input('Description', sql.NVarChar, `Automated action from ruleset on ${entity.asinCode || entity.entityId}`)
+          .input('Priority', sql.NVarChar, 'medium')
+          .input('Status', sql.NVarChar, 'pending')
+          .input('Type', sql.NVarChar, 'automated')
+          .input('SellerId', sql.VarChar, sellerId)
+          .input('CreatedBy', sql.VarChar, userId)
+          .query(`
+            INSERT INTO Actions (Id, Title, Description, Priority, Status, Type, SellerId, CreatedBy, CreatedAt, UpdatedAt)
+            VALUES (@Id, @Title, @Description, @Priority, @Status, @Type, @SellerId, @CreatedBy, GETDATE(), GETDATE())
+          `);
+        results.push({ action: 'task_created', status: 'success', taskId: id });
       } catch (err) {
         results.push({ action: 'task_failed', status: 'failed', error: err.message });
       }
@@ -225,17 +242,25 @@ async function evaluateRuleset(rulesetId, options = {}) {
   const dryRun = options.dryRun || false;
   const triggeredBy = options.triggeredBy || 'manual';
 
-  const ruleset = await Ruleset.findById(rulesetId);
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.VarChar, rulesetId)
+    .query("SELECT * FROM Rulesets WHERE Id = @id");
+  
+  const ruleset = result.recordset[0];
   if (!ruleset) {
     throw new Error('Ruleset not found');
   }
 
+  // Parse JSON fields
+  ruleset.Rules = JSON.parse(ruleset.Rules || '[]');
+
   const startTime = Date.now();
   const entities = await getEntityData(
-    ruleset.type,
-    ruleset.seller,
-    ruleset.usingDataFrom,
-    ruleset.excludeDays
+    ruleset.Type,
+    ruleset.SellerId,
+    ruleset.UsingDataFrom,
+    ruleset.ExcludeDays
   );
 
   const summary = {
@@ -252,8 +277,8 @@ async function evaluateRuleset(rulesetId, options = {}) {
     let matchedRule = null;
     let matchedIndex = -1;
 
-    for (let i = 0; i < ruleset.rules.length; i++) {
-      const rule = ruleset.rules[i];
+    for (let i = 0; i < ruleset.Rules.length; i++) {
+      const rule = ruleset.Rules[i];
       if (evaluateRule(rule, entity)) {
         matchedRule = rule;
         matchedIndex = i;
@@ -268,14 +293,14 @@ async function evaluateRuleset(rulesetId, options = {}) {
         const actionResults = await applyAction(
           entity,
           matchedRule.action,
-          ruleset.type,
-          ruleset.seller,
-          ruleset.createdBy
+          ruleset.Type,
+          ruleset.SellerId,
+          ruleset.CreatedBy
         );
 
         const entry = {
           entityId: entity.asinCode || entity.entityId,
-          entityType: ruleset.type,
+          entityType: ruleset.Type,
           entityName: entity.title || entity.name || entity.asinCode,
           ruleName: matchedRule.name,
           ruleOrder: matchedIndex,
@@ -290,7 +315,7 @@ async function evaluateRuleset(rulesetId, options = {}) {
       } else {
         const entry = {
           entityId: entity.asinCode || entity.entityId,
-          entityType: ruleset.type,
+          entityType: ruleset.Type,
           entityName: entity.title || entity.name || entity.asinCode,
           ruleName: matchedRule.name,
           ruleOrder: matchedIndex,
@@ -311,34 +336,49 @@ async function evaluateRuleset(rulesetId, options = {}) {
   summary.executionTimeMs = Date.now() - startTime;
 
   if (!dryRun) {
-    const log = new RulesetExecutionLog({
-      ruleset: ruleset._id,
-      executedAt: new Date(),
-      triggeredBy,
-      summary,
-      entries,
-      seller: ruleset.seller,
-      createdBy: ruleset.createdBy
-    });
-    await log.save();
+    const logId = generateId();
+    await pool.request()
+      .input('Id', sql.VarChar, logId)
+      .input('RulesetId', sql.VarChar, rulesetId)
+      .input('TriggeredBy', sql.NVarChar, triggeredBy)
+      .input('Summary', sql.NVarChar, JSON.stringify(summary))
+      .input('Entries', sql.NVarChar, JSON.stringify(entries))
+      .input('SellerId', sql.VarChar, ruleset.SellerId)
+      .input('CreatedBy', sql.VarChar, ruleset.CreatedBy)
+      .query(`
+        INSERT INTO RulesetExecutionLogs (Id, RulesetId, ExecutedAt, TriggeredBy, Summary, Entries, SellerId, CreatedBy)
+        VALUES (@Id, @RulesetId, GETDATE(), @TriggeredBy, @Summary, @Entries, @SellerId, @CreatedBy)
+      `);
 
-    ruleset.lastRunAt = new Date();
-    ruleset.totalRunCount = (ruleset.totalRunCount || 0) + 1;
-    ruleset.lastRunSummary = summary;
-    await ruleset.save();
+    await pool.request()
+      .input('id', sql.VarChar, rulesetId)
+      .input('summary', sql.NVarChar, JSON.stringify(summary))
+      .query(`
+        UPDATE Rulesets 
+        SET LastRunAt = GETDATE(), 
+            TotalRunCount = ISNULL(TotalRunCount, 0) + 1,
+            LastRunSummary = @summary,
+            UpdatedAt = GETDATE()
+        WHERE Id = @id
+      `);
   }
 
   return { summary, entries };
 }
 
 async function scheduleRuleset(rulesetId) {
-  const ruleset = await Ruleset.findById(rulesetId);
-  if (!ruleset || !ruleset.isActive || !ruleset.isAutomated) {
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('id', sql.VarChar, rulesetId)
+    .query("SELECT * FROM Rulesets WHERE Id = @id");
+  
+  const ruleset = result.recordset[0];
+  if (!ruleset || !ruleset.IsActive || !ruleset.IsAutomated) {
     return null;
   }
 
-  const result = await evaluateRuleset(rulesetId, { triggeredBy: 'scheduled' });
-  return result;
+  const syncResult = await evaluateRuleset(rulesetId, { triggeredBy: 'scheduled' });
+  return syncResult;
 }
 
 module.exports = {

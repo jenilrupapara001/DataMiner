@@ -1,15 +1,14 @@
 const nodemailer = require('nodemailer');
-const SystemSetting = require('../models/SystemSetting');
+const { sql, getPool } = require('../database/db');
 
 const getTransporter = async () => {
     try {
-        // Try to get SMTP settings from the database
-        const settings = await SystemSetting.find({
-            key: { $in: ['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpSecure'] }
-        });
-
+        const pool = await getPool();
+        const settingsRes = await pool.request()
+            .query("SELECT [Key], [Value] FROM SystemSettings WHERE [Key] IN ('smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpSecure')");
+        
         const settingsMap = {};
-        settings.forEach(s => { settingsMap[s.key] = s.value; });
+        settingsRes.recordset.forEach(s => { settingsMap[s.Key] = s.Value; });
 
         const user = settingsMap.smtpUser || process.env.SMTP_USER;
         const pass = settingsMap.smtpPass || process.env.SMTP_PASS;
@@ -45,9 +44,11 @@ const sendEmail = async (to, subject, html) => {
             return false;
         }
 
-        // Get sender address from settings or fallback to user
-        const settings = await SystemSetting.findOne({ key: 'smtpUser' });
-        const fromEmail = settings?.value || process.env.SMTP_USER;
+        const pool = await getPool();
+        const fromRes = await pool.request()
+            .query("SELECT [Value] FROM SystemSettings WHERE [Key] = 'smtpUser'");
+        
+        const fromEmail = fromRes.recordset[0]?.Value || process.env.SMTP_USER;
 
         const info = await transporter.sendMail({
             from: `"GMS Dashboard" <${fromEmail}>`,
@@ -89,7 +90,7 @@ const sendOverdueReminder = async (user, action) => {
     <p>The following task is now overdue:</p>
     <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #ffeeba;">
       <h3 style="margin-top: 0;">${action.title}</h3>
-      <p><strong>Due Date:</strong> ${new Date(action.timeTracking.deadline).toLocaleDateString()}</p>
+      <p><strong>Due Date:</strong> ${new Date(action.DueDate).toLocaleDateString()}</p>
       <p><strong>Priority:</strong> ${action.priority}</p>
     </div>
     <p>Please update the status or complete this task as soon as possible.</p>

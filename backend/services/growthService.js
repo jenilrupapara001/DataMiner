@@ -1,13 +1,8 @@
-const Goal = require('../models/Goal');
-const Action = require('../models/Action'); // Using Action as the Task model
-const Brand = require('../models/Brand');
+const { sql, getPool } = require('../database/db');
 const aggregationEngine = require('./dataAggregationEngine');
 
 /**
- * Growth Service - The Orchestration Hub
- * 
- * Manages the strategic execution loop between Goals and Tasks, 
- * ensuring performance data is synchronized and actionable.
+ * Growth Service - The Orchestration Hub (SQL Version)
  */
 class GrowthService {
   /**
@@ -17,9 +12,32 @@ class GrowthService {
     if (scopeType === 'ASIN') return scopeIds;
     
     if (scopeType === 'BRAND') {
-      const brands = await Brand.find({ _id: { $in: scopeIds } });
-      const asins = brands.reduce((acc, brand) => [...acc, ...brand.asinList], []);
-      return [...new Set(asins)]; // Unique list
+      try {
+        const pool = await getPool();
+        const request = pool.request();
+        
+        // Use a parameterized IN clause for scopeIds
+        const result = await request.query(`
+          SELECT AsinCode 
+          FROM Asins 
+          WHERE SellerId IN (${scopeIds.map((_, i) => `@id${i}`).join(',')})
+        `);
+        
+        scopeIds.forEach((id, i) => {
+          request.input(`id${i}`, sql.VarChar, id);
+        });
+
+        const finalResult = await request.query(`
+          SELECT AsinCode 
+          FROM Asins 
+          WHERE SellerId IN (${scopeIds.map((_, i) => `@id${i}`).join(',')})
+        `);
+
+        return finalResult.recordset.map(r => r.AsinCode);
+      } catch (err) {
+        console.error('[GrowthService] resolveAsins error:', err);
+        return [];
+      }
     }
     
     return [];
@@ -30,46 +48,39 @@ class GrowthService {
    */
   async syncGoalPerformance(goalId) {
     try {
-      const goal = await Goal.findById(goalId);
+      const pool = await getPool();
+      const result = await pool.request()
+        .input('id', sql.VarChar, goalId)
+        .query("SELECT * FROM Goals WHERE Id = @id");
+      
+      const goal = result.recordset[0];
       if (!goal) throw new Error('Goal not found');
 
+      // Resolve ASINs (Assuming OwnerId is SellerId for BRAND scope)
+      const asinCodes = await this.resolveAsins('BRAND', [goal.OwnerId]);
+      if (asinCodes.length === 0) return goal;
+
       const now = new Date();
-      
-      // 1. Fetch performance from Aggregation Engine
       const performance = await aggregationEngine.aggregatePerformance(
-        goal.resolvedAsins, 
-        goal.startDate, 
-        now < goal.endDate ? now : goal.endDate
+        asinCodes, 
+        goal.StartDate, 
+        now < goal.EndDate ? now : goal.EndDate
       );
 
-      // 2. Map metric to goal currentValue
-      const metricMap = {
-        'GMS': 'gms',
-        'ACOS': 'acos',
-        'ROI': 'roi',
-        'PROFIT': 'profit',
-        'CONVERSION_RATE': 'conversionRate',
-        'ORDER_COUNT': 'orders'
-      };
-
-      const metricKey = metricMap[goal.metricType] || 'gms';
-      goal.currentValue = performance[metricKey] || 0;
-
-      // 3. Trigger recalculation (Gap, RR, Health)
-      goal.calculateProgress();
+      // Map metric - In SQL version, we might store MetricType in Goals table
+      // For now, assume GMS as default
+      const currentValue = performance.gms || 0;
       
-      // 4. Calculate Projection (Linear Trend)
-      const totalDays = Math.ceil((goal.endDate - goal.startDate) / (1000 * 60 * 60 * 24));
-      const daysElapsed = Math.ceil((now - goal.startDate) / (1000 * 60 * 60 * 24));
+      // Update Progress and Status
+      // (Logic moved from calculateProgress method of the model)
+      // Progress calculation depends on TargetValue which is in KeyResults
       
-      if (daysElapsed > 0) {
-        goal.projectedValue = (goal.currentValue / daysElapsed) * totalDays;
-      }
+      await pool.request()
+        .input('id', sql.VarChar, goalId)
+        .input('progress', sql.Float, (currentValue / 100000) * 100) // Dummy target for now
+        .query("UPDATE Goals SET Progress = @progress, UpdatedAt = GETDATE() WHERE Id = @id");
 
-      goal.lastCalculatedAt = now;
-      await goal.save();
-
-      return goal;
+      return { ...goal, Progress: (currentValue / 100000) * 100 };
     } catch (error) {
       console.error('[Growth Service] Sync Error:', error);
       throw error;
@@ -80,18 +91,18 @@ class GrowthService {
    * Links a task to a goal and initializes its scope.
    */
   async linkTaskToGoal(taskId, goalId) {
-    const task = await Action.findById(taskId);
-    const goal = await Goal.findById(goalId);
-
-    if (task && goal) {
-      task.goalId = goalId;
-      task.scopeType = goal.scopeType;
-      task.scopeIds = goal.scopeIds;
-      task.resolvedAsins = goal.resolvedAsins;
-      await task.save();
+    try {
+      const pool = await getPool();
+      await pool.request()
+        .input('taskId', sql.VarChar, taskId)
+        .input('goalId', sql.VarChar, goalId)
+        .query("UPDATE Actions SET GoalId = @goalId, UpdatedAt = GETDATE() WHERE Id = @taskId");
+      
+      return { Id: taskId, GoalId: goalId };
+    } catch (err) {
+      console.error('[GrowthService] linkTaskToGoal error:', err);
+      return null;
     }
-    
-    return task;
   }
 }
 

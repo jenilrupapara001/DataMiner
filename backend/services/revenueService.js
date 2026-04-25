@@ -1,167 +1,94 @@
-const Order = require('../models/Order');
-const AdsPerformance = require('../models/AdsPerformance');
-const RevenueSummary = require('../models/RevenueSummary');
+const { sql, getPool } = require('../database/db');
 
 /**
- * Revenue Service - Unified Revenue Engine Logic
- * Built with modular aggregation to support future migration to .NET Core.
+ * Revenue Service - Unified Revenue Engine Logic (SQL Version)
  */
 class RevenueService {
   /**
    * Get Daily Revenue Summary for a specific ASIN and Date Range
-   * @param {string} asin 
-   * @param {Object} dateRange { start, end }
    */
   async getDailyRevenue(asin, { start, end }) {
-    const pipeline = [
-      {
-        $match: {
-          asin,
-          date: { $gte: new Date(start), $lte: new Date(end) }
-        }
-      },
-      {
-        // Join with AdsPerformance to get ad_sales
-        $lookup: {
-          from: 'adsperformances', // MongoDB collection name
-          let: { asin: '$asin', date: '$date' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$asin', '$$asin'] },
-                    { $eq: ['$date', '$$date'] },
-                    { $eq: ['$reportType', 'daily'] }
-                  ]
-                }
-              }
-            }
-          ],
-          as: 'adData'
-        }
-      },
-      {
-        $unwind: { path: '$adData', preserveNullAndEmptyArrays: true }
-      },
-      {
-        $project: {
-          asin: 1,
-          date: 1,
-          units: 1,
-          totalRevenue: '$revenue',
-          adRevenue: { $ifNull: ['$adData.ad_sales', 0] },
-          returns: 1,
-          // totalRevenue = organic + ad (user's formula)
-          // Since Order.revenue is total, organic = total - ad
-          organicRevenue: {
-            $max: [0, { $subtract: ['$revenue', { $ifNull: ['$adData.ad_sales', 0] }] }]
-          },
-          netRevenue: { $subtract: ['$revenue', '$returns'] },
-          adsRatio: {
-            $cond: [
-              { $gt: ['$revenue', 0] },
-              { $divide: [{ $ifNull: ['$adData.ad_sales', 0] }, '$revenue'] },
-              0
-            ]
-          }
-        }
-      },
-      { $sort: { date: 1 } }
-    ];
+    try {
+      const pool = await getPool();
+      
+      const result = await pool.request()
+        .input('asin', sql.NVarChar, asin)
+        .input('start', sql.DateTime, new Date(start))
+        .input('end', sql.DateTime, new Date(end))
+        .query(`
+          SELECT 
+            a.Asin as asin,
+            a.Date as date,
+            (ISNULL(a.Orders, 0) + ISNULL(a.OrganicOrders, 0)) as units,
+            (ISNULL(a.AdSales, 0) + ISNULL(a.OrganicSales, 0)) as totalRevenue,
+            ISNULL(a.AdSales, 0) as adRevenue,
+            ISNULL(a.OrganicSales, 0) as organicRevenue,
+            0 as returns, -- Returns currently only in Orders table, need to decide if we join
+            (ISNULL(a.AdSales, 0) + ISNULL(a.OrganicSales, 0)) as netRevenue,
+            CASE 
+              WHEN (ISNULL(a.AdSales, 0) + ISNULL(a.OrganicSales, 0)) > 0 
+              THEN (ISNULL(a.AdSales, 0) / (ISNULL(a.AdSales, 0) + ISNULL(a.OrganicSales, 0)))
+              ELSE 0 
+            END as adsRatio
+          FROM AdsPerformance a
+          WHERE a.Asin = @asin 
+          AND a.Date >= @start AND a.Date <= @end
+          ORDER BY a.Date ASC
+        `);
 
-    return await Order.aggregate(pipeline);
+      return result.recordset;
+    } catch (error) {
+      console.error('[RevenueService] getDailyRevenue error:', error);
+      throw error;
+    }
   }
 
   /**
    * Get Monthly Revenue Summary for a specific ASIN and Month
-   * @param {string} asin 
-   * @param {number|string} month (ISO string or month number)
    */
   async getMonthlyRevenue(asin, month) {
-    const startDate = new Date(month);
-    startDate.setDate(1);
-    startDate.setHours(0, 0, 0, 0);
+    try {
+      const startDate = new Date(month);
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
 
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 1);
-    endDate.setDate(0);
-    endDate.setHours(23, 59, 59, 999);
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(0);
+      endDate.setHours(23, 59, 59, 999);
 
-    const pipeline = [
-      {
-        $match: {
-          asin,
-          date: { $gte: startDate, $lte: endDate }
-        }
-      },
-      {
-        $group: {
-          _id: { asin: '$asin', month: { $month: '$date' }, year: { $year: '$date' } },
-          units: { $sum: '$units' },
-          totalRevenue: { $sum: '$revenue' },
-          returns: { $sum: '$returns' }
-        }
-      },
-      {
-        // Join with AdsPerformance (Monthly report if exists or sum of daily)
-        $lookup: {
-          from: 'adsperformances',
-          let: { asin: '$_id.asin', start: startDate, end: endDate },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$asin', '$$asin'] },
-                    { $gte: ['$date', '$$start'] },
-                    { $lte: ['$date', '$$end'] },
-                    { $eq: ['$reportType', 'daily'] }
-                  ]
-                }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                totalAdSales: { $sum: '$ad_sales' }
-              }
-            }
-          ],
-          as: 'adData'
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          asin: '$_id.asin',
-          month: '$_id.month',
-          year: '$_id.year',
-          units: 1,
-          totalRevenue: 1,
-          adRevenue: { $ifNull: [{ $arrayElemAt: ['$adData.totalAdSales', 0] }, 0] },
-          returns: 1,
-          organicRevenue: {
-            $max: [0, { $subtract: ['$totalRevenue', { $ifNull: [{ $arrayElemAt: ['$adData.totalAdSales', 0] }, 0] }] }]
-          },
-          netRevenue: { $subtract: ['$totalRevenue', '$returns'] }
-        }
-      },
-      {
-        $addFields: {
-          adsRatio: {
-            $cond: [
-              { $gt: ['$totalRevenue', 0] },
-              { $divide: ['$adRevenue', '$totalRevenue'] },
-              0
-            ]
-          }
-        }
-      }
-    ];
+      const pool = await getPool();
+      const result = await pool.request()
+        .input('asin', sql.NVarChar, asin)
+        .input('start', sql.DateTime, startDate)
+        .input('end', sql.DateTime, endDate)
+        .query(`
+          SELECT 
+            Asin as asin,
+            MONTH(Date) as month,
+            YEAR(Date) as year,
+            SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as units,
+            SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as totalRevenue,
+            SUM(ISNULL(AdSales, 0)) as adRevenue,
+            SUM(ISNULL(OrganicSales, 0)) as organicRevenue,
+            0 as returns,
+            SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as netRevenue,
+            CASE 
+              WHEN SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) > 0 
+              THEN (SUM(ISNULL(AdSales, 0)) / SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)))
+              ELSE 0 
+            END as adsRatio
+          FROM AdsPerformance
+          WHERE Asin = @asin 
+          AND Date >= @start AND Date <= @end
+          GROUP BY Asin, MONTH(Date), YEAR(Date)
+        `);
 
-    const result = await Order.aggregate(pipeline);
-    return result[0] || null;
+      return result.recordset[0] || null;
+    } catch (error) {
+      console.error('[RevenueService] getMonthlyRevenue error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -170,14 +97,13 @@ class RevenueService {
   async getCombinedSummary(asin, { start, end }) {
     const dailyData = await this.getDailyRevenue(asin, { start, end });
     
-    // Aggregate daily into a total summary object
     const summary = dailyData.reduce((acc, curr) => ({
-      units: acc.units + curr.units,
-      totalRevenue: acc.totalRevenue + curr.totalRevenue,
-      adRevenue: acc.adRevenue + curr.adRevenue,
-      returns: acc.returns + curr.returns,
-      organicRevenue: acc.organicRevenue + curr.organicRevenue,
-      netRevenue: acc.netRevenue + curr.netRevenue
+      units: acc.units + (curr.units || 0),
+      totalRevenue: acc.totalRevenue + (curr.totalRevenue || 0),
+      adRevenue: acc.adRevenue + (curr.adRevenue || 0),
+      returns: acc.returns + (curr.returns || 0),
+      organicRevenue: acc.organicRevenue + (curr.organicRevenue || 0),
+      netRevenue: acc.netRevenue + (curr.netRevenue || 0)
     }), { units: 0, totalRevenue: 0, adRevenue: 0, returns: 0, organicRevenue: 0, netRevenue: 0 });
 
     summary.adsRatio = summary.totalRevenue > 0 ? (summary.adRevenue / summary.totalRevenue) : 0;

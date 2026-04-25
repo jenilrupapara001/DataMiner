@@ -1,4 +1,4 @@
-const Asin = require('../models/Asin');
+const { sql, getPool } = require('../database/db');
 const directScraperService = require('./directScraperService');
 const socketService = require('./socketService');
 const { calculateCDQ } = require('../utils/lqs');
@@ -17,18 +17,28 @@ class ScraperRunner {
      * Identifies ASINs with missing or generic data for a specific seller.
      */
     async findIncompleteAsins(sellerId) {
-        return await Asin.find({
-            seller: sellerId,
-            status: { $ne: 'Paused' },
-            $or: [
-                { title: { $exists: false } },
-                { title: '' },
-                { title: /Amazon Product/i }, // Generic Octoparse placeholder
-                { currentPrice: 0 },
-                { bsr: 0 },
-                { imageUrl: { $exists: false } }
-            ]
-        }).select('asinCode _id');
+        try {
+            const pool = await getPool();
+            const result = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query(`
+                    SELECT Id, AsinCode FROM Asins
+                    WHERE SellerId = @sellerId
+                    AND Status != 'Paused'
+                    AND (
+                        Title IS NULL OR 
+                        Title = '' OR 
+                        Title LIKE '%Amazon Product%' OR
+                        CurrentPrice = 0 OR
+                        BSR = 0 OR
+                        ImageUrl IS NULL
+                    )
+                `);
+            return result.recordset;
+        } catch (error) {
+            console.error('[ScraperRunner] findIncompleteAsins Error:', error);
+            return [];
+        }
     }
 
     /**
@@ -71,6 +81,7 @@ class ScraperRunner {
         console.log(`🚀 Starting repair job for seller ${sellerId} (${asins.length} ASINs)`);
         
         const job = this.activeJobs.get(sellerId.toString());
+        const pool = await getPool();
         
         // Process in chunks based on concurrency limit
         for (let i = 0; i < asins.length; i += this.concurrencyLimit) {
@@ -78,31 +89,44 @@ class ScraperRunner {
             
             await Promise.all(chunk.map(async (asinDoc) => {
                 try {
-                    const scrapedData = await directScraperService.scrapeAsin(asinDoc.asinCode);
+                    const scrapedData = await directScraperService.scrapeAsin(asinDoc.AsinCode);
                     
                     if (scrapedData && scrapedData.title) {
-                        const asin = await Asin.findById(asinDoc._id);
-                        if (asin) {
-                            // Update data
-                            Object.assign(asin, scrapedData);
-                            
-                            // Recalculate CDQ/LQS
-                            const cdq = calculateCDQ(asin);
-                            asin.cdq = Math.round(cdq.totalScore);
-                            asin.cdqGrade = cdq.grade;
-                            asin.lqs = asin.cdq;
-                            
-                            asin.scrapeStatus = 'COMPLETED';
-                            asin.lastScraped = new Date();
-                            
-                            await asin.save();
-                            job.processed++;
-                        }
+                        // Recalculate CDQ/LQS
+                        const cdq = calculateCDQ(scrapedData);
+                        const lqs = Math.round(cdq.totalScore);
+                        
+                        await pool.request()
+                            .input('id', sql.VarChar, asinDoc.Id)
+                            .input('title', sql.NVarChar, scrapedData.title)
+                            .input('imageUrl', sql.NVarChar, scrapedData.imageUrl)
+                            .input('currentPrice', sql.Decimal(18, 2), scrapedData.currentPrice)
+                            .input('bsr', sql.Int, scrapedData.bsr)
+                            .input('rating', sql.Decimal(3, 2), scrapedData.rating)
+                            .input('reviewCount', sql.Int, scrapedData.reviewCount)
+                            .input('lqs', sql.Decimal(5, 2), lqs)
+                            .input('scrapeStatus', sql.NVarChar, 'COMPLETED')
+                            .query(`
+                                UPDATE Asins SET
+                                    Title = @title,
+                                    ImageUrl = @imageUrl,
+                                    CurrentPrice = @currentPrice,
+                                    BSR = @bsr,
+                                    Rating = @rating,
+                                    ReviewCount = @reviewCount,
+                                    LQS = @lqs,
+                                    ScrapeStatus = @scrapeStatus,
+                                    LastScrapedAt = GETDATE(),
+                                    UpdatedAt = GETDATE()
+                                WHERE Id = @id
+                            `);
+                        
+                        job.processed++;
                     } else {
                         job.failed++;
                     }
                 } catch (err) {
-                    console.error(`❌ Repair failed for ${asinDoc.asinCode}:`, err.message);
+                    console.error(`❌ Repair failed for ${asinDoc.AsinCode}:`, err.message);
                     job.failed++;
                 }
 

@@ -1,25 +1,18 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const Asin = require('../models/Asin');
-const Action = require('../models/Action');
+const { sql, getPool, generateId } = require('../database/db');
 const imageGenerationService = require('./imageGenerationService');
 
 const INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const MODEL_NAME = "meta/llama-3.2-90b-vision-instruct";
 
 /**
- * Service to handle NVIDIA NIM AI interactions for listing quality auditing.
+ * Service to handle NVIDIA NIM AI interactions (SQL Version)
  */
 class NvidiaAiService {
     constructor() {
         this.apiKey = process.env.NVIDIA_NIM_API_KEY;
     }
 
-    /**
-     * Standalone utility to analyze a listing image for quality standards.
-     * Used by test suites and individual audits.
-     */
     async analyzeListingImage(imageUrl) {
         if (!this.apiKey) throw new Error('NVIDIA_NIM_API_KEY not configured');
 
@@ -59,132 +52,114 @@ class NvidiaAiService {
         return typeof content === 'string' ? JSON.parse(content) : content;
     }
 
-    /**
-     * Specifically generates just the reconstruction prompt for an image.
-     */
     async generateReconstructionPrompt(imageUrl) {
         const analysis = await this.analyzeListingImage(imageUrl);
         return analysis.recreationPrompt || analysis.description;
     }
 
-    /**
-     * Interface for the test suite to trigger image generation.
-     */
     async reconstructImage(prompt, asinCode) {
         console.log(`🎨 [AI-RECON] Reconstructing image for ${asinCode}...`);
         return await imageGenerationService.generateImage(prompt, asinCode);
     }
 
-    /**
-     * Audits an ASIN's main image for listing quality standards.
-     * Checks for white background and high resolution.
-     */
     async auditAsinImage(asinId) {
-        if (!this.apiKey) {
-            console.error('❌ NVIDIA_NIM_API_KEY not configured.');
-            return null;
-        }
+        if (!this.apiKey) return null;
 
         try {
-            const asin = await Asin.findById(asinId);
-            if (!asin || !asin.mainImageUrl) {
-                console.warn(`⚠️ No image found for ASIN ${asin?.asinCode || asinId}`);
-                return null;
-            }
+            const pool = await getPool();
+            const result = await pool.request()
+                .input('id', sql.VarChar, asinId)
+                .query("SELECT * FROM Asins WHERE Id = @id");
+            
+            const asin = result.recordset[0];
+            if (!asin || !asin.ImageUrl) return null;
 
-            console.log(`👁️ [AI-AUDIT] Auditing image for ASIN: ${asin.asinCode}...`);
+            console.log(`👁️ [AI-AUDIT] Auditing image for ASIN: ${asin.AsinCode}...`);
+            const parsedResults = await this.analyzeListingImage(asin.ImageUrl);
 
-            // Use the standalone analyzer
-            const parsedResults = await this.analyzeListingImage(asin.mainImageUrl);
+            // Update ASIN LQS Details
+            let lqsDetails = {};
+            try {
+                lqsDetails = JSON.parse(asin.LqsDetails || '{}');
+            } catch (e) { lqsDetails = {}; }
 
-            console.log(`✅ [AI-AUDIT] Results for ${asin.asinCode}:`, parsedResults);
+            lqsDetails.hasWhiteBackground = parsedResults.hasWhiteBackground;
+            lqsDetails.hasHighResolution = parsedResults.hasHighResolution;
+            lqsDetails.imageAuditDate = new Date();
 
-            // 3. Update ASIN LQS Details
-            await Asin.findByIdAndUpdate(asinId, {
-                'lqsDetails.hasWhiteBackground': parsedResults.hasWhiteBackground,
-                'lqsDetails.hasHighResolution': parsedResults.hasHighResolution,
-                'lqsDetails.imageAuditDate': new Date()
-            });
+            await pool.request()
+                .input('id', sql.VarChar, asinId)
+                .input('lqsDetails', sql.NVarChar, JSON.stringify(lqsDetails))
+                .query("UPDATE Asins SET LqsDetails = @lqsDetails, UpdatedAt = GETDATE() WHERE Id = @id");
 
-            // 4. Act on results: Create Task or Auto-Generate
             if (!parsedResults.hasWhiteBackground || !parsedResults.hasHighResolution) {
                 await this.handleAuditFailure(asin, parsedResults);
             }
 
             return parsedResults;
         } catch (error) {
-            console.error('❌ NVIDIA AI Audit Error:', error.response?.data || error.message);
+            console.error('❌ NVIDIA AI Audit Error:', error.message);
             return null;
         }
     }
 
-    /**
-     * Handles an audit failure by creating a task or auto-generating an image.
-     */
     async handleAuditFailure(asin, results) {
-        const title = `Optimize Main Image: ${asin.asinCode}`;
-        const description = `AI Audit failed for the main image.\n\n` +
-            `Reason: ${!results.hasWhiteBackground ? "Non-white background detected. " : ""}${!results.hasHighResolution ? "Low resolution detected. " : ""}\n\n` +
-            `AI Vision Description: ${results.description}\n\n` +
-            `Solution: Use the AI recreation prompt to generate a compliant image.`;
+        try {
+            const pool = await getPool();
+            const title = `Optimize Main Image: ${asin.AsinCode}`;
+            const description = `AI Audit failed for the main image.\n\n` +
+                `Reason: ${!results.hasWhiteBackground ? "Non-white background detected. " : ""}${!results.hasHighResolution ? "Low resolution detected. " : ""}\n\n` +
+                `AI Vision Description: ${results.description}\n\n` +
+                `Solution: Use the AI recreation prompt to generate a compliant image.`;
 
-        // 1. Create the Action (Task)
-        let action;
-        const existingTask = await Action.findOne({ 
-            resolvedAsins: asin.asinCode, 
-            type: 'IMAGE_OPTIMIZATION',
-            status: { $in: ['PENDING', 'IN_PROGRESS'] }
-        });
+            // Check for existing task
+            const existingRes = await pool.request()
+                .input('asinId', sql.VarChar, asin.Id)
+                .input('type', sql.NVarChar, 'IMAGE_OPTIMIZATION')
+                .query("SELECT Id FROM Actions WHERE AsinId = @asinId AND Type = @type AND Status IN ('PENDING', 'IN_PROGRESS')");
 
-        if (!existingTask) {
-            console.log(`📝 [AI-ACTION] Creating optimization task for ${asin.asinCode}...`);
-            action = await Action.create({
-                title,
-                description,
-                type: 'IMAGE_OPTIMIZATION',
-                priority: 'HIGH',
-                resolvedAsins: [asin.asinCode],
-                asins: [asin._id],
-                isAIGenerated: true,
-                aiReason: description,
-                sellerId: asin.seller,
-                createdBy: asin.seller
-            });
-        } else {
-            action = existingTask;
-        }
-
-        // 2. AUTO-GENERATION (Requested "or creates image itself")
-        if (results.recreationPrompt && action) {
-            try {
-                console.log(`🎨 [AI-GEN] Triggering auto-recreation for ${asin.asinCode}...`);
-                const imageUrl = await this.reconstructImage(results.recreationPrompt, asin.asinCode);
-                
-                if (imageUrl) {
-                    console.log(`✅ [AI-GEN] Image generated: ${imageUrl}`);
-                    // Update task with the generated image
-                    await Action.findByIdAndUpdate(action._id, {
-                        $set: { 
-                            description: action.description + `\n\n✅ AI GENERAED IMAGE READY: ${imageUrl}`,
-                            data: { generatedImageUrl: imageUrl }
-                        }
-                    });
-                }
-            } catch (genError) {
-                console.error(`❌ [AI-GEN] Auto-recreation failed for ${asin.asinCode}:`, genError.message);
+            let actionId;
+            if (existingRes.recordset.length === 0) {
+                actionId = generateId();
+                await pool.request()
+                    .input('Id', sql.VarChar, actionId)
+                    .input('Title', sql.NVarChar, title)
+                    .input('Description', sql.NVarChar, description)
+                    .input('Type', sql.NVarChar, 'IMAGE_OPTIMIZATION')
+                    .input('Priority', sql.NVarChar, 'HIGH')
+                    .input('Status', sql.NVarChar, 'PENDING')
+                    .input('AsinId', sql.VarChar, asin.Id)
+                    .input('IsAIGenerated', sql.Bit, 1)
+                    .input('AiReasoning', sql.NVarChar, description)
+                    .input('SellerId', sql.VarChar, asin.SellerId)
+                    .input('CreatedBy', sql.VarChar, asin.SellerId)
+                    .query(`
+                        INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, AsinId, IsAIGenerated, AiReasoning, SellerId, CreatedBy, CreatedAt, UpdatedAt)
+                        VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @AsinId, @IdAIGenerated, @AiReasoning, @SellerId, @CreatedBy, GETDATE(), GETDATE())
+                    `);
+            } else {
+                actionId = existingRes.recordset[0].Id;
             }
+
+            if (results.recreationPrompt && actionId) {
+                const imageUrl = await this.reconstructImage(results.recreationPrompt, asin.AsinCode);
+                if (imageUrl) {
+                    await pool.request()
+                        .input('id', sql.VarChar, actionId)
+                        .input('desc', sql.NVarChar, description + `\n\n✅ AI GENERATED IMAGE READY: ${imageUrl}`)
+                        .query("UPDATE Actions SET Description = @desc, UpdatedAt = GETDATE() WHERE Id = @id");
+                }
+            }
+        } catch (err) {
+            console.error('[NvidiaAiService] handleAuditFailure error:', err);
         }
     }
 
-    /**
-     * Helper to fetch image and convert to base64
-     */
     async _getImageAsBase64(url) {
         try {
             const response = await axios.get(url, { responseType: 'arraybuffer' });
             return Buffer.from(response.data, 'binary').toString('base64');
         } catch (err) {
-            console.error('❌ Failed to convert image to base64:', err.message);
             return null;
         }
     }

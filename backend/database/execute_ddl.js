@@ -22,7 +22,8 @@ async function executeDDL() {
         await sql.connect(config);
         console.log('✅ Connected to SQL Server');
 
-        const schemaPath = path.join(__dirname, 'schema_v1.sql');
+        const fileName = process.argv[2] || 'schema_v1.sql';
+        const schemaPath = path.isAbsolute(fileName) ? fileName : path.join(__dirname, fileName);
         const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
         // Split by semicolon and filter out empty strings

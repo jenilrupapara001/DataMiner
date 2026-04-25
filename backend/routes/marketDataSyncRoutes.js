@@ -55,7 +55,6 @@ router.post('/bulk-inject-asins', authenticate, requirePermission('admin_manage_
 router.post('/start-task/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.startTask);
 
 // Fetch and map results for a seller
-router.post('/sync-results/:sellerId', authenticate, requirePermission('sellers_manage_asins'), checkSellerAccess, marketSyncController.syncResults);
 
 // Bulk inject raw JSON data manually
 router.post('/bulk-inject-json', authenticate, requirePermission('sellers_manage_asins'), marketSyncController.bulkInjectJson);

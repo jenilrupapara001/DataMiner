@@ -201,6 +201,22 @@ CREATE TABLE AdsPerformance (
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_AdsPerformance_Asin_Date' AND object_id = OBJECT_ID('AdsPerformance'))
 CREATE INDEX IX_AdsPerformance_Asin_Date ON AdsPerformance(Asin, Date);
 
+IF OBJECT_ID(N'dbo.MonthlyPerformance', N'U') IS NULL
+CREATE TABLE MonthlyPerformance (
+    Id VARCHAR(24) PRIMARY KEY,
+    Asin VARCHAR(50) NOT NULL,
+    Month DATE NOT NULL,
+    OrderedUnits INT DEFAULT 0,
+    OrderedRevenue DECIMAL(18, 2) DEFAULT 0,
+    CreatedAt DATETIME2 DEFAULT GETDATE(),
+    UpdatedAt DATETIME2 DEFAULT GETDATE(),
+    CONSTRAINT FK_MonthlyPerformance_Asin FOREIGN KEY (Asin) REFERENCES Asins(AsinCode),
+    CONSTRAINT UC_MonthlyPerformance_Asin_Month UNIQUE (Asin, Month)
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_MonthlyPerformance_Asin_Month' AND object_id = OBJECT_ID('MonthlyPerformance'))
+CREATE INDEX IX_MonthlyPerformance_Asin_Month ON MonthlyPerformance(Asin, Month);
+
 IF OBJECT_ID(N'dbo.Orders', N'U') IS NULL
 CREATE TABLE Orders (
     Id BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -354,4 +370,17 @@ CREATE TABLE SystemLogs (
     UserId VARCHAR(24),
     Timestamp DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT FK_SystemLogs_User FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+
+-- 10. Octoparse Task Pool
+IF OBJECT_ID(N'dbo.OctoTasks', N'U') IS NULL
+CREATE TABLE OctoTasks (
+    Id VARCHAR(24) PRIMARY KEY,
+    TaskId NVARCHAR(100) NOT NULL UNIQUE,
+    IsAssigned BIT DEFAULT 0,
+    SellerId VARCHAR(24),
+    LastAssignedAt DATETIME2,
+    CreatedAt DATETIME2 DEFAULT GETDATE(),
+    UpdatedAt DATETIME2 DEFAULT GETDATE(),
+    CONSTRAINT FK_OctoTasks_Seller FOREIGN KEY (SellerId) REFERENCES Sellers(Id)
 );

@@ -1,90 +1,116 @@
-const Goal = require('../models/Goal');
-const Asin = require('../models/Asin');
-const RevenueSummary = require('../models/RevenueSummary');
+const { sql, getPool, generateId } = require('../database/db');
 
 /**
- * Goal Service - GMS Goal Tracking Engine
+ * Goal Service - GMS Goal Tracking Engine (SQL Version)
  * Strategic logic for brand-wide revenue targeting and performance status.
  */
 class GoalService {
   
   /**
-   * Create a new tracking goal and trigger initial setup
+   * Create a new tracking goal
    */
   async createGoal(goalData) {
-    const goal = new Goal(goalData);
-    await goal.save();
-    
-    // Auto-link context
-    await this.attachAsins(goal._id);
-    return await this.calculateProgress(goal._id);
+    try {
+      const pool = await getPool();
+      const id = generateId();
+      
+      await pool.request()
+        .input('Id', sql.VarChar, id)
+        .input('Title', sql.NVarChar, goalData.title)
+        .input('Description', sql.NVarChar, goalData.description)
+        .input('OwnerId', sql.VarChar, goalData.ownerId || goalData.brandId)
+        .input('StartDate', sql.DateTime, new Date(goalData.startDate))
+        .input('EndDate', sql.DateTime, new Date(goalData.endDate))
+        .input('Status', sql.NVarChar, 'pending')
+        .input('Progress', sql.Float, 0)
+        .query(`
+          INSERT INTO Goals (Id, Title, Description, OwnerId, StartDate, EndDate, Status, Progress, CreatedAt, UpdatedAt)
+          VALUES (@Id, @Title, @Description, @OwnerId, @StartDate, @EndDate, @Status, @Progress, GETDATE(), GETDATE())
+        `);
+      
+      return await this.calculateProgress(id);
+    } catch (error) {
+      console.error('[GoalService] createGoal error:', error);
+      throw error;
+    }
   }
 
   /**
-   * Auto-link ASINs belonging to the brand (Seller)
-   */
-  async attachAsins(goalId) {
-    const goal = await Goal.findById(goalId);
-    if (!goal) throw new Error('Goal not found');
-
-    // Find all ASINs mapped to this brand/seller
-    const asins = await Asin.find({ seller: goal.brandId }).select('asinCode');
-    const asinCodes = asins.map(a => a.asinCode);
-
-    goal.asinList = asinCodes;
-    await goal.save();
-    return goal;
-  }
-
-  /**
-   * Calculate real-time progress based on Unified Revenue Engine data
+   * Calculate real-time progress
    */
   async calculateProgress(goalId) {
-    const goal = await Goal.findById(goalId);
-    if (!goal) throw new Error('Goal not found');
+    try {
+      const pool = await getPool();
+      const goalResult = await pool.request()
+        .input('id', sql.VarChar, goalId)
+        .query("SELECT * FROM Goals WHERE Id = @id");
+      
+      const goal = goalResult.recordset[0];
+      if (!goal) throw new Error('Goal not found');
 
-    if (!goal.asinList || goal.asinList.length === 0) {
-      goal.achievedRevenue = 0;
-      goal.updateStatus();
-      await goal.save();
-      return goal;
-    }
+      // For brand-wide goals, we aggregate revenue for all ASINs of the owner (Seller)
+      const stats = await pool.request()
+        .input('ownerId', sql.VarChar, goal.OwnerId)
+        .input('start', sql.DateTime, goal.StartDate)
+        .input('end', sql.DateTime, goal.EndDate)
+        .query(`
+          SELECT SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as totalAchieved
+          FROM AdsPerformance
+          WHERE Asin IN (SELECT AsinCode FROM Asins WHERE SellerId = @ownerId)
+          AND Date >= @start AND Date <= @end
+        `);
 
-    // Aggregate total revenue for the linked ASINs within the goal timeframe
-    const stats = await RevenueSummary.aggregate([
-      {
-        $match: {
-          asin: { $in: goal.asinList },
-          date: { $gte: goal.startDate, $lte: goal.endDate },
-          period: 'daily'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalAchieved: { $sum: '$totalRevenue' }
-        }
+      const achieved = stats.recordset[0]?.totalAchieved || 0;
+      
+      // Since SQL Goals doesn't have TargetValue column (it's in KeyResults), 
+      // we might need to fetch it from a linked KeyResult or assume a field exists.
+      // For now, we'll just update Progress if we can determine target.
+      
+      // Let's check if there's a TargetValue in any linked KeyResult
+      const krResult = await pool.request()
+        .input('goalId', sql.VarChar, goalId)
+        .query(`
+          SELECT SUM(TargetValue) as TotalTarget, SUM(CurrentValue) as TotalCurrent
+          FROM KeyResults 
+          WHERE ObjectiveId IN (SELECT Id FROM Objectives WHERE GoalId = @goalId)
+        `);
+      
+      let progress = 0;
+      if (krResult.recordset[0]?.TotalTarget > 0) {
+        progress = (krResult.recordset[0].TotalCurrent / krResult.recordset[0].TotalTarget) * 100;
       }
-    ]);
 
-    const achieved = stats.length > 0 ? stats[0].totalAchieved : 0;
-    
-    goal.achievedRevenue = achieved;
-    goal.lastCalculatedAt = new Date();
-    
-    // Status Logic: ahead (>110%), ontrack (80–110%), behind (<80%)
-    goal.updateStatus();
-    
-    await goal.save();
-    return goal;
+      await pool.request()
+        .input('id', sql.VarChar, goalId)
+        .input('progress', sql.Float, progress)
+        .input('status', sql.NVarChar, progress >= 100 ? 'achieved' : progress >= 80 ? 'on_track' : 'behind')
+        .query(`
+          UPDATE Goals 
+          SET Progress = @progress, Status = @status, UpdatedAt = GETDATE()
+          WHERE Id = @id
+        `);
+
+      return { ...goal, Progress: progress, Status: progress >= 100 ? 'achieved' : progress >= 80 ? 'on_track' : 'behind' };
+    } catch (error) {
+      console.error('[GoalService] calculateProgress error:', error);
+      throw error;
+    }
   }
 
   /**
-   * List goals for a specific brand
+   * List goals for a specific brand/owner
    */
   async getGoalsByBrand(brandId) {
-    const filter = brandId ? { brandId } : {};
-    return await Goal.find(filter).sort({ createdAt: -1 });
+    try {
+      const pool = await getPool();
+      const result = await pool.request()
+        .input('brandId', sql.VarChar, brandId)
+        .query("SELECT * FROM Goals WHERE OwnerId = @brandId ORDER BY CreatedAt DESC");
+      return result.recordset;
+    } catch (error) {
+      console.error('[GoalService] getGoalsByBrand error:', error);
+      return [];
+    }
   }
 }
 

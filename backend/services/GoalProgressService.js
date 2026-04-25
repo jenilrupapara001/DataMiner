@@ -1,10 +1,8 @@
-const KeyResult = require('../models/KeyResult');
-const Objective = require('../models/Objective');
+const { sql, getPool } = require('../database/db');
 const DataAggregationEngine = require('./dataAggregationEngine');
-const aiTaskService = require('./aiTaskService');
 
 /**
- * Goal Progress Service - The Strategic Execution Core
+ * Goal Progress Service - The Strategic Execution Core (SQL Version)
  * 
  * Performs real-time goal tracking, health analysis, and 
  * autonomous recovery triggers for the growth engine.
@@ -15,83 +13,103 @@ class GoalProgressService {
      */
     async calculateGoalProgress(krId) {
         try {
-            const kr = await KeyResult.findById(krId).populate('objectiveId');
+            const pool = await getPool();
+            
+            // 1. Fetch Key Result and parent Objective
+            const krResult = await pool.request()
+                .input('krId', sql.VarChar, krId)
+                .query(`
+                    SELECT kr.*, obj.StartDate as ObjectiveStartDate, obj.EndDate as ObjectiveEndDate, obj.SellerId
+                    FROM KeyResults kr
+                    LEFT JOIN Objectives obj ON kr.ObjectiveId = obj.Id
+                    WHERE kr.Id = @krId
+                `);
+            
+            const kr = krResult.recordset[0];
             if (!kr) throw new Error('Key Result not found');
 
-            const objective = kr.objectiveId;
-            if (!objective) throw new Error('Parent objective not found');
+            const asins = kr.ResolvedAsins ? JSON.parse(kr.ResolvedAsins) : await this.getObjectiveAsins(kr.ObjectiveId, kr.SellerId);
 
-            const asins = kr.resolvedAsins && kr.resolvedAsins.length > 0 
-                ? kr.resolvedAsins 
-                : await this.getObjectiveAsins(objective);
+            if (!asins || asins.length === 0) return kr;
 
-            if (asins.length === 0) return kr;
-
-            // 1. Fetch live data from aggregation engine
+            // 2. Fetch live data from aggregation engine
             const performance = await DataAggregationEngine.aggregatePerformance(
                 asins, 
-                objective.startDate, 
-                objective.endDate
+                kr.ObjectiveStartDate, 
+                kr.ObjectiveEndDate
             );
 
-            // 2. Map metric type to performance value
+            // 3. Map metric type to performance value
             let currentValue = 0;
-            switch (kr.metricType) {
+            switch (kr.MetricType) {
                 case 'GMS': currentValue = performance.gms; break;
                 case 'ORDERS': currentValue = performance.orders; break;
                 case 'ACOS': currentValue = performance.acos; break;
                 case 'CONVERSION_RATE': currentValue = performance.conversionRate; break;
-                default: currentValue = kr.currentValue || 0;
+                default: currentValue = kr.CurrentValue || 0;
             }
 
-            // 3. Compute Progress Metrics
+            // 4. Compute Progress Metrics
             const now = new Date();
-            const start = new Date(objective.startDate);
-            const end = new Date(objective.endDate);
+            const start = new Date(kr.ObjectiveStartDate);
+            const end = new Date(kr.ObjectiveEndDate);
             const totalDays = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
             const daysElapsed = Math.max(1, (Math.min(now, end) - start) / (1000 * 60 * 60 * 24));
             const daysRemaining = Math.max(1, (end - now) / (1000 * 60 * 60 * 24));
 
-            const achievementPercent = kr.targetValue > 0 ? (currentValue / kr.targetValue) * 100 : 0;
-            const gap = Math.max(0, kr.targetValue - currentValue);
+            const achievementPercent = kr.TargetValue > 0 ? (currentValue / kr.TargetValue) * 100 : 0;
+            const gap = Math.max(0, kr.TargetValue - currentValue);
             
             const currentDailyRate = currentValue / daysElapsed;
             const projectedValue = currentDailyRate * totalDays;
             const dailyRunRateRequired = daysRemaining > 0 ? gap / daysRemaining : 0;
 
-            // 4. Determine Health Status
+            // 5. Determine Health Status
             let healthStatus = 'ON_TRACK';
-            if (projectedValue < kr.targetValue * 0.85) {
+            if (projectedValue < kr.TargetValue * 0.85) {
                 healthStatus = 'BEHIND';
-            } else if (projectedValue > kr.targetValue * 1.15) {
+            } else if (projectedValue > kr.TargetValue * 1.15) {
                 healthStatus = 'AHEAD';
             }
 
-            // 5. Update Key Result
-            kr.currentValue = currentValue;
-            kr.achievementPercent = achievementPercent;
-            kr.projectedValue = projectedValue;
-            kr.dailyRunRateRequired = dailyRunRateRequired;
-            kr.healthStatus = healthStatus;
-            kr.resolvedAsins = asins;
-            
-            // Sync status field for legacy compatibility
-            if (achievementPercent >= 100) kr.status = 'COMPLETED';
-            else if (healthStatus === 'BEHIND') kr.status = 'BEHIND';
-            else kr.status = 'IN_PROGRESS';
+            // 6. Update Key Result in SQL
+            let status = kr.Status;
+            if (achievementPercent >= 100) status = 'COMPLETED';
+            else if (healthStatus === 'BEHIND') status = 'BEHIND';
+            else status = 'IN_PROGRESS';
 
-            await kr.save();
+            await pool.request()
+                .input('krId', sql.VarChar, krId)
+                .input('currentValue', sql.Decimal(18, 2), currentValue)
+                .input('achievementPercent', sql.Decimal(18, 4), achievementPercent)
+                .input('projectedValue', sql.Decimal(18, 4), projectedValue)
+                .input('dailyRunRateRequired', sql.Decimal(18, 4), dailyRunRateRequired)
+                .input('healthStatus', sql.NVarChar, healthStatus)
+                .input('status', sql.NVarChar, status)
+                .input('resolvedAsins', sql.NVarChar, JSON.stringify(asins))
+                .query(`
+                    UPDATE KeyResults SET
+                        CurrentValue = @currentValue,
+                        AchievementPercent = @achievementPercent,
+                        ProjectedValue = @projectedValue,
+                        DailyRunRateRequired = @dailyRunRateRequired,
+                        HealthStatus = @healthStatus,
+                        Status = @status,
+                        ResolvedAsins = @resolvedAsins,
+                        UpdatedAt = GETDATE()
+                    WHERE Id = @krId
+                `);
 
-            // 6. CLOSED LOOP: Trigger Recovery if Behind
-            if (healthStatus === 'BEHIND' && kr.status !== 'COMPLETED') {
-                await this.triggerRecoveryFlow(kr);
+            // 7. CLOSED LOOP: Trigger Recovery if Behind
+            if (healthStatus === 'BEHIND' && status !== 'COMPLETED') {
+                await this.triggerRecoveryFlow({ ...kr, Id: krId, Title: kr.Title, Status: status });
             }
 
             // Also refresh parent objective progress
             const ObjectiveService = require('./ObjectiveService');
-            await ObjectiveService.refreshProgress(objective._id);
+            await ObjectiveService.refreshProgress(kr.ObjectiveId);
 
-            return kr;
+            return { ...kr, CurrentValue: currentValue, AchievementPercent: achievementPercent, HealthStatus: healthStatus, Status: status };
         } catch (error) {
             console.error('[GoalProgressService] Error:', error);
             throw error;
@@ -101,11 +119,19 @@ class GoalProgressService {
     /**
      * Resolves ASINs for an objective if not explicitly set in Key Result.
      */
-    async getObjectiveAsins(objective) {
-        if (!objective.sellerId) return [];
-        const Asin = require('../models/Asin');
-        const asins = await Asin.find({ seller: objective.sellerId }).select('asinCode');
-        return asins.map(a => a.asinCode);
+    async getObjectiveAsins(objectiveId, sellerId) {
+        if (!sellerId) return [];
+        try {
+            const pool = await getPool();
+            const result = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId`);
+            
+            return result.recordset.map(a => a.AsinCode);
+        } catch (error) {
+            console.error('[GoalProgressService] getObjectiveAsins Error:', error);
+            return [];
+        }
     }
 
     /**
@@ -113,24 +139,27 @@ class GoalProgressService {
      */
     async triggerRecoveryFlow(kr) {
         try {
-            console.log(`[Closed-Loop] Goal "${kr.title}" is BEHIND. Triggering AI Recovery...`);
+            console.log(`[Closed-Loop] Goal "${kr.Title}" is BEHIND. Triggering AI Recovery...`);
+            
+            const pool = await getPool();
             
             // Check if we already generated recovery tasks recently to avoid spam
-            const Action = require('../models/Action');
-            const recentRecovery = await Action.findOne({
-                keyResultId: kr._id,
-                'autoGenerated.source': 'RECOVERY_ENGINE',
-                createdAt: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24h
-            });
+            const recentRecoveryResult = await pool.request()
+                .input('krId', sql.VarChar, kr.Id)
+                .query(`
+                    SELECT TOP 1 Id FROM Actions
+                    WHERE KeyResultId = @krId
+                    AND AutoGeneratedSource = 'RECOVERY_ENGINE'
+                    AND CreatedAt > DATEADD(day, -1, GETDATE())
+                `);
 
-            if (recentRecovery) {
-                console.log(`[Closed-Loop] Skip: Recovery tasks already generated today for "${kr.title}".`);
+            if (recentRecoveryResult.recordset.length > 0) {
+                console.log(`[Closed-Loop] Skip: Recovery tasks already generated today for "${kr.Title}".`);
                 return;
             }
 
             // Use AI Task Service to generate a recovery plan
-            // In a real scenario, this would call AI with the gap/health context
-            // For now, we'll mark the goal for recovery and wait for user trigger or implement handleRecovery in Service
+            // (This logic would be implemented in aiTaskService)
             return true;
         } catch (err) {
             console.error('[GoalProgressService] Recovery Flow Error:', err);

@@ -5,7 +5,7 @@
 
 const { sql, getPool, generateId } = require('../database/db');
 const { getSellerAsins, getTokenStatus, getDomainId, isValidSellerId } = require('../services/keepaService');
-const octoparseAutomationService = require('../services/octoparseAutomationService');
+const MarketSyncService = require('../services/marketDataSyncService');
 
 
 /**
@@ -187,9 +187,9 @@ const syncSellerFromKeepa = async (seller) => {
         }
 
         // BACKGROUND: Trigger Octoparse sync for the newly discovered ASINs
-        if (newAsins.length > 0 && octoparseAutomationService.isConfigured()) {
+        if (newAsins.length > 0 && MarketSyncService.isConfigured()) {
             console.log(`🤖 [SellerTracker] Triggering ROBUST Octoparse sync for: ${seller.name} (+${newAsins.length} ASINs)`);
-            octoparseAutomationService.syncSellerAsinsToOctoparse(seller.Id, { triggerScrape: true })
+            MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { triggerScrape: true })
                 .catch(err => console.error(`⚠️ [SellerTracker] Octoparse trigger failed for ${seller.name}:`, err.message));
         }
     } else {

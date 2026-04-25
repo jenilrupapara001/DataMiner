@@ -1,8 +1,5 @@
 const axios = require('axios');
-const Asin = require('../models/Asin');
-const Action = require('../models/Action');
-const OctoTask = require('../models/OctoTask');
-const Seller = require('../models/Seller');
+const { sql, getPool, generateId, query } = require('../database/db');
 const config = require('../config/env');
 const imageGenerationService = require('./imageGenerationService');
 const { JSDOM } = require('jsdom');
@@ -10,6 +7,7 @@ const SocketService = require('./socketService');
 const nvidiaAiService = require('./nvidiaAiService');
 const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
+const { calculateLQS, calculateCDQ, getGrade } = require('../utils/lqs');
 
 // Amazon India Top-Level Categories for BSR classification
 const AMAZON_TOP_LEVEL_CATEGORIES = [
@@ -53,17 +51,100 @@ const memProcessor = new MemorySafeProcessor({
 
 /**
  * Discreet service for syncing market data from external provider.
- * Naming is abstract (MarketDataSync) to avoid provider exposure.
+ * Consolidated from OctoparseAutomationService and MarketDataSyncService.
  */
 class MarketDataSyncService {
     constructor() {
-        this.baseUrl = 'https://openapi.octoparse.com';
+        this.baseUrl = process.env.OCTOPARSE_BASE_URL || 'https://openapi.octoparse.com';
+        this.masterTaskId = process.env.OCTOPARSE_MASTER_TASK_ID;
+        this.groupId = process.env.OCTOPARSE_GROUP_ID;
         this.token = null;
-        this.refreshToken = null;
         this.tokenExpiry = null;
         this.tokenType = 'Bearer';
         this.syncLocks = new Map(); // Concurrency control per sellerId
         this.statusCache = new Map(); // Simple status cache to prevent 429s (TTL: 10s)
+        
+        // Throttling for setup operations
+        this._executingSetups = 0;
+        this._maxConcurrentSetups = 3;
+        this._setupQueue = [];
+    }
+
+    /**
+     * Internal semaphore to control concurrent API-heavy operations (Inject/Start)
+     */
+    async _acquireSetupLock() {
+        if (this._executingSetups < this._maxConcurrentSetups) {
+            this._executingSetups++;
+            return;
+        }
+        return new Promise(resolve => {
+            this._setupQueue.push(resolve);
+        });
+    }
+
+    _releaseSetupLock() {
+        this._executingSetups--;
+        if (this._setupQueue.length > 0) {
+            this._executingSetups++;
+            const next = this._setupQueue.shift();
+            next();
+        }
+    }
+
+    async wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    log(level, message, data = {}) {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, Object.keys(data).length ? JSON.stringify(data) : '');
+    }
+
+    async validateMasterTask() {
+        if (!this.masterTaskId) {
+            throw new Error('OCTOPARSE_MASTER_TASK_ID not configured in environment');
+        }
+        return true;
+    }
+
+    async ensureTaskForSeller(sellerId) {
+        const pool = await getPool();
+        const sellerResult = await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .query('SELECT Id, Name, OctoparseId FROM Sellers WHERE Id = @sellerId');
+
+        const seller = sellerResult.recordset[0];
+        if (!seller) {
+            throw new Error(`Seller not found: ${sellerId}`);
+        }
+
+        if (seller.OctoparseId) {
+            this.log('info', `Seller ${seller.Name} already has task: ${seller.OctoparseId}`);
+            return seller.OctoparseId;
+        }
+
+        // Validate master task configuration before cloning
+        await this.validateMasterTask();
+
+        const asinsResult = await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+
+        if (asinsResult.recordset.length === 0) {
+            throw new Error(`No active ASINs found for seller: ${sellerId}`);
+        }
+
+        // Use the consolidated duplicateTask method
+        const newTaskId = await this.duplicateTask(seller.Name);
+        
+        await pool.request()
+            .input('newTaskId', sql.VarChar, newTaskId)
+            .input('sellerId', sql.VarChar, sellerId)
+            .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = GETDATE() WHERE Id = @sellerId');
+
+        this.log('info', `Created new Octoparse task ${newTaskId} for seller ${seller.Name}`);
+        return newTaskId;
     }
 
     /**
@@ -216,15 +297,19 @@ class MarketDataSyncService {
      */
     async triggerSync(taskId, parameters) {
         try {
-            // Find seller by taskId
-            const seller = await Seller.findOne({ marketSyncTaskId: taskId });
+            const pool = await getPool();
+            const sellerResult = await pool.request()
+                .input('taskId', sql.NVarChar, taskId)
+                .query('SELECT Id, Name FROM Sellers WHERE OctoparseId = @taskId');
+
+            const seller = sellerResult.recordset[0];
             if (!seller) {
                 console.warn(`⚠️ triggerSync called for unknown task ${taskId}. Falling back to standard cloud start.`);
                 return await this.startCloudExtraction(taskId);
             }
 
-            console.log(`🔄 Redirecting legacy triggerSync for seller ${seller.name} to robust sync-all...`);
-            const success = await this.syncSellerAsinsToOctoparse(seller._id, { triggerScrape: true });
+            console.log(`🔄 Redirecting legacy triggerSync for seller ${seller.Name} to robust sync-all...`);
+            const success = await this.syncSellerAsinsToOctoparse(seller.Id, { triggerScrape: true });
             return { success, taskId };
         } catch (error) {
             console.error('❌ Legacy Trigger Sync Error:', error.message);
@@ -994,11 +1079,12 @@ class MarketDataSyncService {
                             const count = await this.processBatchResults(sellerId, rawData);
 
                             // Update Seller metadata
-                            const Seller = require('../models/Seller');
-                            await Seller.findByIdAndUpdate(sellerId, {
-                                lastScraped: new Date(),
-                                scrapeUsed: count
-                            });
+                            const pool = await getPool();
+                            await pool.request()
+                                .input('sellerId', sql.VarChar, sellerId)
+                                .input('lastScraped', sql.DateTime2, new Date())
+                                .input('scrapeUsed', sql.Int, count)
+                                .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = GETDATE() WHERE Id = @sellerId');
 
                             console.log(`🎉 [AUTO] Successfully ingested ${count} metrics for seller ${sellerId}.`);
 
@@ -1266,18 +1352,23 @@ class MarketDataSyncService {
      */
     async ensureTaskForSeller(sellerId) {
         try {
-            const seller = await Seller.findById(sellerId);
+            const pool = await getPool();
+            const sellerResult = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('SELECT Id, Name, OctoparseId FROM Sellers WHERE Id = @sellerId');
+
+            const seller = sellerResult.recordset[0];
             if (!seller) throw new Error('Seller not found');
 
             // 1. Check if they already have a task
-            if (seller.marketSyncTaskId) {
-                console.log(`ℹ️ Seller ${seller.name} already has task: ${seller.marketSyncTaskId}`);
-                return seller.marketSyncTaskId;
+            if (seller.OctoparseId) {
+                console.log(`ℹ️ Seller ${seller.Name} already has task: ${seller.OctoparseId}`);
+                return seller.OctoparseId;
             }
 
             // 2. Duplicate from Master Template
-            console.log(`🏗️ Creating new Octoparse task for seller: ${seller.name}...`);
-            const taskName = `${seller.name} Sync`;
+            console.log(`🏗️ Creating new Octoparse task for seller: ${seller.Name}...`);
+            const taskName = `${seller.Name} Sync`;
             const newTaskId = await this.duplicateTask(taskName);
 
             if (!newTaskId) {
@@ -1285,10 +1376,12 @@ class MarketDataSyncService {
             }
 
             // 3. Save to Seller record
-            seller.marketSyncTaskId = newTaskId;
-            await seller.save();
+            await pool.request()
+                .input('newTaskId', sql.NVarChar, newTaskId)
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = GETDATE() WHERE Id = @sellerId');
 
-            console.log(`✅ Seller ${seller.name} now linked to task: ${newTaskId}`);
+            console.log(`✅ Seller ${seller.Name} now linked to task: ${newTaskId}`);
             return newTaskId;
         } catch (error) {
             console.error('❌ Error in ensureTaskForSeller:', error.message);
@@ -1315,6 +1408,8 @@ class MarketDataSyncService {
         this.syncLocks.set(sellerId.toString(), true);
 
         try {
+            const pool = await getPool();
+
             // 1. Ensure Task Exists
             const taskId = await this.ensureTaskForSeller(sellerId);
             if (!taskId) {
@@ -1335,10 +1430,11 @@ class MarketDataSyncService {
 
             // 3. Get All Active ASINs for this seller from database
             console.log(`📊 Fetching all active ASINs from database for seller ${sellerId}...`);
-            const asins = await Asin.find({
-                seller: sellerId,
-                status: 'Active'
-            }).select('asinCode');
+            const asinsResult = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+
+            const asins = asinsResult.recordset;
 
             if (asins.length === 0) {
                 console.log(`⚠️ No active ASINs to sync for seller: ${sellerId}`);
@@ -1348,39 +1444,35 @@ class MarketDataSyncService {
             console.log(`✅ Found ${asins.length} active ASINs in database`);
 
             // Create URLs from ASINs
-            const asinCodes = asins.map(a => a.asinCode);
+            const asinCodes = asins.map(a => a.AsinCode);
             const urls = asinCodes.map(code => `https://www.amazon.in/dp/${code}`);
 
-            // 3. PERSIST URLs to Database for record-keeping and formal injection
-            await Seller.findByIdAndUpdate(sellerId, {
-                marketSyncUrls: urls,
-                totalAsins: asins.length // Update metadata while we are here
-            });
-            console.log(`💾 Persisted ${urls.length} URLs to Database for seller: ${sellerId}`);
+            // 4. PERSIST metadata to Database
+            await pool.request()
+                .input('totalAsins', sql.Int, asins.length)
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('UPDATE Sellers SET ScrapeUsed = @totalAsins, UpdatedAt = GETDATE() WHERE Id = @sellerId');
+            
+            console.log(`💾 Updated metadata for seller: ${sellerId}`);
 
             console.log(`🔄 Syncing ${urls.length} ASINs to task ${taskId}...`);
 
-            // 4. Update task URLs (using FILE endpoint only as per user request)
-            const seller = await Seller.findById(sellerId).select('marketSyncUrls');
-            const syncUrls = seller?.marketSyncUrls || urls;
-
+            // 5. Update task URLs (using FILE endpoint)
             try {
-                await this.updateTaskUrlsWithFile(taskId, syncUrls);
+                await this.updateTaskUrlsWithFile(taskId, urls);
             } catch (injectionError) {
                 console.error(`❌ File-based injection failed for task ${taskId}: ${injectionError.message}`);
-                // Don't fall back to Loop Items anymore
                 throw injectionError;
             }
 
 
-            // 5. Trigger Scrape if requested
+            // 6. Trigger Scrape if requested
             if (triggerScrape) {
                 console.log(`🚀 Automated trigger: Starting scrape for task ${taskId}...`);
                 const startResult = await this.startCloudExtraction(taskId);
                 console.log(`✅ Cloud extraction started for task ${taskId}:`, startResult);
 
                 // START BACKGROUND AUTOMATION: Poll and Ingest once done
-                // We do NOT await this so the response returns to user immediately
                 console.log(`🔄 Starting background polling for seller ${sellerId}, task ${taskId}...`);
                 this.pollAndAutomate(sellerId, taskId, { fullSync: options.fullSync }).catch(err => {
                     console.error(`❌ Background Automation Critical Error for seller ${sellerId}:`, err.message);
@@ -1442,7 +1534,12 @@ class MarketDataSyncService {
      */
     async updateAsinMetrics(asinId, rawData) {
         try {
-            const asin = await Asin.findById(asinId);
+            const pool = await getPool();
+            const asinResult = await pool.request()
+                .input('asinId', sql.VarChar, asinId)
+                .query('SELECT * FROM Asins WHERE Id = @asinId');
+
+            const asin = asinResult.recordset[0];
             if (!asin) throw new Error('ASIN not found');
 
             // --- Robust Advanced Mapping (Octoparse Specialized) ---
@@ -1454,11 +1551,11 @@ class MarketDataSyncService {
             const priceType = dealBadge !== 'No deal found' ? 'Deal Price' : 'Standard Price';
 
             // 2. Title & Character Count
-            const title = (rawData.Title || rawData.title || rawData.Field1 || asin.title || '').trim();
+            const title = (rawData.Title || rawData.title || rawData.Field1 || asin.Title || '').trim();
             const titleLength = title.length;
 
             // 3. Category Breadcrumbs
-            const category = this._parseCategory(rawData) || asin.category || '';
+            const category = this._parseCategory(rawData) || asin.Category || '';
 
             // 4. BSR Parsing
             const bsrData = this._parseBSR(rawData);
@@ -1471,21 +1568,19 @@ class MarketDataSyncService {
             const imagesCount = mediaData.imagesCount;
             const videoCount = mediaData.videoCount;
             const images = mediaData.images || [];
-            const mainImageUrl = this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl', 'Field5'], asin.mainImageUrl);
+            const mainImageUrl = this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl', 'Field5'], asin.ImageUrl);
 
             // 6. Rating & Reviews
             let rating = parseFloat(rawData.avg_rating);
             if (isNaN(rating)) rating = 0;
 
-            let reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'Rating_Count', 'rating', 'RT'], ''));
+            let reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'Rating_Count', 'rating', 'RT'], '')) || asin.ReviewCount;
 
             const ratingBreakdown = this._parseRatingBreakdown(rawData.Rating || rawData.Field7 || rawData.Rating_breakdown || '');
 
             // Ensure we don't lose data if breakdown is empty but we had it before
             const hasBreakdown = Object.values(ratingBreakdown).some(v => v > 0);
-            if (!hasBreakdown && asin.ratingBreakdown) {
-                Object.assign(ratingBreakdown, asin.ratingBreakdown);
-            }
+            const finalRatingBreakdown = hasBreakdown ? ratingBreakdown : (asin.RatingBreakdown ? JSON.parse(asin.RatingBreakdown) : ratingBreakdown);
 
             // 7. Bullet Points
             const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
@@ -1494,30 +1589,33 @@ class MarketDataSyncService {
             // 8. Stock Level, A+ Content & Availability
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
             const hasAplus = this._detectAplusContent(rawData);
-            const availabilityStatus = rawData.unavilable || rawData.status || rawData.availabilityStatus || rawData.availability || asin.availabilityStatus || 'Available';
-            let aplusAbsentSince = asin.aplusAbsentSince;
-            let aplusPresentSince = asin.aplusPresentSince;
+            const availabilityStatus = rawData.unavilable || rawData.status || rawData.availabilityStatus || rawData.availability || asin.AvailabilityStatus || 'Available';
+            
+            let aplusAbsentSince = asin.AplusAbsentSince;
+            let aplusPresentSince = asin.AplusPresentSince;
+            const now = new Date();
+
             if (hasAplus) {
-                aplusPresentSince = aplusPresentSince || new Date();
+                aplusPresentSince = aplusPresentSince || now;
                 aplusAbsentSince = null;
             } else {
-                aplusAbsentSince = aplusAbsentSince || new Date();
+                aplusAbsentSince = aplusAbsentSince || now;
                 aplusPresentSince = null;
             }
 
             // 9. Sold By & Second Buy Box
-            const soldBy = this._extractSellerFromRaw(rawData) || asin.soldBy || '';
+            const soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
             const buyBoxWin = this._isBuyBoxWinner(soldBy);
 
-            let secondAsp = asin.secondAsp;
-            let soldBySec = asin.soldBySec;
+            let secondAsp = asin.SecondAsp;
+            let soldBySec = asin.SoldBySec;
             let allOffers = [];
 
             // Add primary buy box as the first offer
             if (soldBy) {
                 allOffers.push({
                     seller: soldBy,
-                    price: price || asin.currentPrice || 0,
+                    price: price || asin.CurrentPrice || 0,
                     isBuyBoxWinner: true
                 });
             }
@@ -1533,7 +1631,6 @@ class MarketDataSyncService {
 
                 // Add all secondary offers to allOffers
                 secondBuyboxData.offers.forEach(offer => {
-                    // Avoid duplicating the primary offer if it was already added
                     if (offer.seller !== soldBy || allOffers.length === 0) {
                         allOffers.push({
                             seller: offer.seller,
@@ -1555,110 +1652,98 @@ class MarketDataSyncService {
                 }
             }
 
-            const updates = {
+            // 10. CDQ Calculation (Standardized)
+            const cdqBreakdown = getCDQBreakdown({
                 title,
-                titleLength,
-                description: rawData.description || asin.description,
                 category,
-                mrp: mrp > 0 ? mrp : asin.mrp,
-                currentPrice: price > 0 ? price : asin.currentPrice,
-                currentASP: price > 0 ? price : asin.currentASP,
-                priceType,
-                dealBadge,
-                bsr,
-                subBsr,
-                subBSRs,
-                rating: rating > 0 ? rating : asin.rating,
-                reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
-                imagesCount: imagesCount > 0 ? imagesCount : asin.imagesCount,
-                videoCount: videoCount >= 0 ? videoCount : asin.videoCount,
-                images,
-                mainImageUrl: mainImageUrl || asin.mainImageUrl,
-                imageUrl: mainImageUrl || asin.imageUrl,
-                soldBy,
-                secondAsp,
-                soldBySec,
-                allOffers,
-                buyBoxWin,
-                buyBoxSellerId: soldBy || asin.buyBoxSellerId,
-                bulletPoints,
-                bulletPointsText,
-                stockLevel,
+                brand: rawData.brand || asin.Brand,
+                imagesCount,
                 hasAplus,
-                aplusAbsentSince,
-                aplusPresentSince,
-                availabilityStatus,
-                ratingBreakdown,
-                rawOctoparseData: rawData,
-                lastScraped: new Date(),
-                scrapeStatus: 'COMPLETED',
-                status: 'Active',
-                updatedAt: new Date()
+                bulletPointsText,
+                lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
+            });
+
+            const updates = {
+                Title: title,
+                Category: category,
+                CurrentPrice: price > 0 ? price : asin.CurrentPrice,
+                BSR: bsr > 0 ? bsr : asin.BSR,
+                Rating: rating > 0 ? rating : asin.Rating,
+                ReviewCount: reviewCount,
+                LQS: cdqBreakdown.totalScore,
+                LqsDetails: JSON.stringify(cdqBreakdown.issues), // Storing issues in Details for now
+                CdqComponents: JSON.stringify(cdqBreakdown.components),
+                BuyBoxStatus: buyBoxWin ? 1 : 0,
+                ImageUrl: mainImageUrl,
+                SubBsr: subBsr,
+                SubBSRs: JSON.stringify(subBSRs),
+                Images: JSON.stringify(images),
+                ImagesCount: imagesCount,
+                VideoCount: videoCount,
+                BulletPoints: bulletPoints,
+                BulletPointsText: JSON.stringify(bulletPointsText),
+                StockLevel: stockLevel,
+                SoldBy: soldBy,
+                BuyBoxWin: buyBoxWin ? 1 : 0,
+                BuyBoxSellerId: soldBy, // Map to seller name if ID not available
+                SecondAsp: secondAsp,
+                SoldBySec: soldBySec,
+                AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
+                HasAplus: hasAplus ? 1 : 0,
+                AvailabilityStatus: availabilityStatus,
+                AplusAbsentSince: aplusAbsentSince,
+                AplusPresentSince: aplusPresentSince,
+                AllOffers: JSON.stringify(allOffers),
+                LastScrapedAt: now,
+                UpdatedAt: now
             };
 
-            // Update history
-            asin.history.push({
-                date: new Date(),
-                price: updates.currentPrice,
-                bsr: updates.bsr,
-                rating: updates.rating,
-                reviewCount: updates.reviewCount,
-                imageCount: updates.imagesCount,
-                videoCount: updates.videoCount,
-                lqs: asin.lqs || 0
+            // Build SQL UPDATE
+            const setClause = Object.keys(updates).map((k, i) => `${k} = @val${i}`).join(', ');
+            const request = pool.request();
+            Object.keys(updates).forEach((k, i) => {
+                request.input(`val${i}`, updates[k]);
             });
-            if (asin.history.length > 30) asin.history = asin.history.slice(-30);
+            request.input('asinId', sql.VarChar, asinId);
+            
+            await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
 
-            // Calculate current week string
-            const now = new Date();
-            const start = new Date(now.getFullYear(), 0, 0);
-            const diff = now - start;
-            const weekOfYr = Math.floor(diff / (1000 * 60 * 60 * 24 * 7));
-            const weekStr = `W${weekOfYr}-${now.getFullYear()}`;
+            // 11. History Tracking
+            const today = now.toISOString().split('T')[0];
+            await pool.request()
+                .input('asinId', sql.VarChar, asinId)
+                .input('date', sql.Date, today)
+                .input('price', sql.Decimal(18, 2), updates.CurrentPrice)
+                .input('bsr', sql.Int, updates.BSR)
+                .input('rating', sql.Decimal(3, 2), updates.Rating)
+                .input('reviewCount', sql.Int, updates.ReviewCount)
+                .input('buyBoxStatus', sql.Bit, updates.BuyBoxStatus)
+                .input('stockLevel', sql.Int, updates.StockLevel)
+                .input('lqs', sql.Decimal(5, 2), updates.LQS)
+                .query(`
+                    IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                        UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
+                        WHERE AsinId = @asinId AND Date = @date
+                    ELSE
+                        INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
+                        VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
+                `);
 
-            // Update Week-on-Week History
-            asin.updateWeekHistory({
-                week: weekStr,
-                date: now,
-                price: updates.currentPrice,
-                bsr: updates.bsr,
-                rating: updates.rating,
-                reviews: updates.reviewCount,
-                imageCount: updates.imagesCount,
-                titleLength: updates.titleLength,
-                bulletPoints: updates.bulletPoints,
-                subBSRs: updates.subBSRs,
-                hasAplus: updates.hasAplus,
-                stockLevel: updates.stockLevel,
-                videoCount: updates.videoCount
-            });
-
-            Object.assign(asin, updates);
-            await asin.save();
-
-            // Emit socket event for real-time UI updates
+            // 12. Socket Notification
             const io = SocketService.getIo();
             if (io) {
                 io.emit('scrape_data_ingested', {
-                    asinId: asin._id,
-                    sellerId: asin.seller,
-                    asinCode: asin.asinCode,
-                    timestamp: new Date()
+                    asinId: asinId,
+                    sellerId: asin.SellerId,
+                    asinCode: asin.AsinCode,
+                    timestamp: now
                 });
             }
 
-            // 11. Trigger AI Listing Quality Audit (Non-blocking)
-            // Only trigger if image audit is missing or older than 7 days
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            if (!asin.lqsDetails?.imageAuditDate || asin.lqsDetails.imageAuditDate < sevenDaysAgo) {
-                nvidiaAiService.auditAsinImage(asin._id).catch(err => {
-                    console.error(`[AI-AUDIT] Background execution failed for ${asin.asinCode}:`, err.message);
-                });
-            }
-
-            return asin;
+            console.log(`✅ SQL Metrics updated for ASIN: ${asin.AsinCode}`);
+            return true;
         } catch (error) {
-            console.error('❌ ASIN Update Error:', error.message);
+            console.error(`❌ SQL Metric Update Error (${asinId}):`, error.message);
             throw error;
         }
     }
@@ -1668,45 +1753,37 @@ class MarketDataSyncService {
      */
     async updateAsinMetricsByCode(asinCode, rawData) {
         try {
-            // Case-insensitive search to handle both old (uppercase) and new (original case) data
-            const asin = await Asin.findOne({
-                asinCode: { $regex: new RegExp(`^${asinCode}$`, 'i') }
-            });
+            const pool = await getPool();
+            const asinResult = await pool.request()
+                .input('asinCode', sql.VarChar, asinCode)
+                .query('SELECT Id FROM Asins WHERE AsinCode = @asinCode');
+
+            const asin = asinResult.recordset[0];
             if (!asin) {
-                console.warn(`[MarketDataSync] ASIN ${asinCode} not found in DB. Skipping update.`);
-                return null;
+                console.warn(`[MarketSync] ASIN ${asinCode} not found in database. Skipping.`);
+                return false;
             }
-            return await this.updateAsinMetrics(asin._id, rawData);
+
+            return await this.updateAsinMetrics(asin.Id, rawData);
         } catch (error) {
-            console.error('❌ ASIN By Code Update Error:', error.message);
-            throw error;
+            console.error(`❌ ASIN Update by Code Error (${asinCode}):`, error.message);
+            return false;
         }
     }
 
-    /**
-         * Memory-safe streaming bulk processing with pagination
-         * Handles 10,000+ results without heap errors
-         */
     async processBatchResults(sellerId, rawResults) {
         if (!rawResults || rawResults.length === 0) return 0;
 
-        console.log(`🚀 Memory-safe bulk processing ${rawResults.length} results for seller ${sellerId}...`);
-        console.log(`📊 Memory: ${memProcessor.getMemoryStats().heapUsed}`);
-
+        console.log(`🚀 Memory-safe SQL bulk processing ${rawResults.length} results for seller ${sellerId}...`);
+        
         let updatedCount = 0;
         const now = new Date();
+        const pool = await getPool();
 
         // Process in smaller chunks to avoid memory issues
-        const CHUNK_SIZE = 200;
-        const ASIN_BATCH = 50;
+        const CHUNK_SIZE = 100;
 
         for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
-            // Check memory before chunk
-            if (memProcessor.isMemoryCritical()) {
-                console.log(`🧹 Memory critical - cleaning up...`);
-                await memProcessor.cleanup();
-            }
-
             const chunk = rawResults.slice(chunkStart, chunkStart + CHUNK_SIZE);
             console.log(`📦 Processing chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (${chunk.length} items)...`);
 
@@ -1714,26 +1791,14 @@ class MarketDataSyncService {
             const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r)).filter(Boolean);
             if (asinCodesToFind.length === 0) continue;
 
-            // Fetch ASINs for this chunk only (paginated)
-            let currentAsins = [];
-            for (let i = 0; i < asinCodesToFind.length; i += ASIN_BATCH) {
-                const codeBatch = asinCodesToFind.slice(i, i + ASIN_BATCH);
-                const docs = await Asin.find({
-                    seller: sellerId,
-                    $or: codeBatch.map(code => ({ asinCode: { $regex: new RegExp(`^${code}$`, 'i') } }))
-                }).lean();
-                currentAsins.push(...docs);
+            // Fetch ASINs for this chunk
+            const asinRequest = pool.request();
+            asinCodesToFind.forEach((code, i) => asinRequest.input(`code${i}`, code));
+            const codeParams = asinCodesToFind.map((_, i) => `@code${i}`).join(', ');
+            
+            const asinResult = await asinRequest.query(`SELECT * FROM Asins WHERE SellerId = '${sellerId}' AND AsinCode IN (${codeParams})`);
+            const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toLowerCase(), a]));
 
-                if (memProcessor.isMemoryCritical()) {
-                    await memProcessor.cleanup();
-                }
-            }
-
-            // Create map for lookups
-            const asinMap = new Map(currentAsins.map(a => [a.asinCode.toLowerCase(), a]));
-
-            // Build bulk ops for this chunk
-            const bulkOps = [];
             for (const rawData of chunk) {
                 const code = this._extractAsinFromData(rawData);
                 if (!code) continue;
@@ -1741,188 +1806,87 @@ class MarketDataSyncService {
                 const asin = asinMap.get(code.toLowerCase());
                 if (!asin) continue;
 
-                const price = this._cleanPrice(this._getFromRaw(rawData, ['asp', 'price', 'Field2', 'currentPrice']));
-                const mrp = this._cleanPrice(this._getFromRaw(rawData, ['mrp', 'listPrice', 'Field3']));
-
-                // Use new BSR helper
-                const bsrData = this._parseBSR(rawData);
-                const bsr = bsrData.main;
-                const subBsr = bsrData.subBsrString || bsrData.sub;
-                const subBSRs = bsrData.allRanks;
-
-                const title = (rawData.Title || rawData.title || asin.title || '').trim();
-
-                // Use new seller helpers
-                const soldBy = this._extractSellerFromRaw(rawData) || asin.soldBy || '';
-                const buyBoxWin = this._isBuyBoxWinner(soldBy);
-
-                let secondAsp = asin.secondAsp;
-                let soldBySec = asin.soldBySec;
-                const secondBuyboxData = this._parseSecondaryBuybox(rawData.second_buybox || rawData.Alt_buyBox || rawData.Field25 || '');
-                if (secondBuyboxData.offers.length > 0) {
-                    const alternateOffer = secondBuyboxData.offers.find(o => o.seller !== soldBy) || secondBuyboxData.offers[0];
-                    if (alternateOffer) {
-                        secondAsp = alternateOffer.price || secondAsp;
-                        soldBySec = alternateOffer.seller || soldBySec;
-                    }
-                } else {
-                    secondAsp = this._cleanPrice(rawData.second_asp || '') || secondAsp;
-                    soldBySec = (rawData.Sold_by_sec || asin.soldBySec || '').trim();
-                }
-
-                // Use new A+ helper
-                const hasAplus = this._detectAplusContent(rawData);
-
-                const availabilityStatus = rawData.status || rawData.availabilityStatus || rawData.availability || rawData.In_Stock || asin.availabilityStatus || 'Available';
-                const mainImageUrl = this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl', 'Field5'], asin.mainImageUrl || asin.imageUrl);
-
-                let aplusAbsentSince = asin.aplusAbsentSince;
-                let aplusPresentSince = asin.aplusPresentSince;
-                if (hasAplus) {
-                    aplusPresentSince = aplusPresentSince || now;
-                    aplusAbsentSince = null;
-                } else {
-                    aplusAbsentSince = aplusAbsentSince || now;
-                    aplusPresentSince = null;
-                }
-
-                let category = this._parseCategory(rawData) || asin.category || '';
-                // Strictly use avg_rating field – no other parsing methods
-                let rating = parseFloat(rawData.avg_rating);
-                if (isNaN(rating)) rating = 0;
-
-                // Use _getFromRaw for reviews
-                const parsedReviewStr = this._getFromRaw(rawData, ['review_count', 'Review_Count', 'ReviewCount', 'rating', 'Reviews', 'RT'], '');
-                const reviewCount = this._cleanReviewCount(parsedReviewStr) || asin.reviewCount;
-
-                const ratingBreakdown = this._parseRatingBreakdown(rawData.Rating || rawData.RT || rawData.rating || rawData.Rating_breakdown || '');
-                // Ensure we don't lose data if breakdown is empty but we had it before
-                const hasBatchBreakdown = Object.values(ratingBreakdown).some(v => v > 0);
-                if (!hasBatchBreakdown && asin.ratingBreakdown) {
-                    Object.assign(ratingBreakdown, asin.ratingBreakdown);
-                }
-
-                // Use new Image/Video helper
-                const mediaData = this._countImagesAndVideos(rawData);
-                const imagesCount = mediaData.imagesCount || asin.imagesCount || 0;
-                const videoCount = mediaData.videoCount;
-
-                const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
-                const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
-                const rawDeal = rawData.deal_badge || rawData.dealBadge || rawData.deal || '';
-                const dealBadge = this._cleanDealBadge(rawDeal) || asin.dealBadge || 'No deal found';
-
-                // Calculate current week string for history
-                const startOfYr = new Date(now.getFullYear(), 0, 0);
-                const diffOfYr = now - startOfYr;
-                const weekOfYr = Math.floor(diffOfYr / (1000 * 60 * 60 * 24 * 7));
-                const weekStr = `W${weekOfYr}-${now.getFullYear()}`;
-
-                // Prepare Week-on-Week History data
-                const weekData = {
-                    week: weekStr,
-                    date: now,
-                    price: price > 0 ? price : asin.currentPrice,
-                    bsr: bsr > 0 ? bsr : asin.bsr,
-                    rating: rating > 0 ? rating : asin.rating,
-                    reviews: reviewCount > 0 ? reviewCount : asin.reviewCount,
-                    imageCount: imagesCount,
-                    videoCount: videoCount,
-                    titleLength: title.length || (asin.title ? asin.title.length : 0),
-                    bulletPoints: bulletCount,
-                    subBSRs: subBSRs,
-                    hasAplus: hasAplus,
-                    stockLevel: this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0)),
-                    lqs: asin.lqs || 0
-                };
-
-                // Update weekHistory in memory to avoid duplicates on the same date
-                const todayStr = now.toDateString();
-                const existingIndex = (asin.weekHistory || []).findIndex(w => new Date(w.date).toDateString() === todayStr);
-
-                let updatedWeekHistory = Array.isArray(asin.weekHistory) ? [...asin.weekHistory] : [];
-                if (existingIndex >= 0) {
-                    updatedWeekHistory[existingIndex] = { ...updatedWeekHistory[existingIndex], ...weekData };
-                } else {
-                    updatedWeekHistory.push(weekData);
-                }
-
-                // Sort and Slice as per model logic
-                updatedWeekHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
-                if (updatedWeekHistory.length > 24) updatedWeekHistory = updatedWeekHistory.slice(-24);
-
-                const updateData = {
-                    $set: {
-                        title: title || asin.title,
-                        titleLength: title.length || (asin.title ? asin.title.length : 0),
-                        currentPrice: price > 0 ? price : asin.currentPrice,
-                        currentASP: price > 0 ? price : asin.currentASP,
-                        mrp: mrp > 0 ? mrp : asin.mrp,
-                        bsr: bsr > 0 ? bsr : asin.bsr,
-                        subBsr: subBsr || asin.subBsr,
-                        subBSRs: subBSRs,
-                        rating: rating > 0 ? rating : asin.rating,
-                        reviewCount: reviewCount > 0 ? reviewCount : asin.reviewCount,
-                        category: category || asin.category,
-                        mainImageUrl: mainImageUrl || asin.mainImageUrl,
-                        imageUrl: mainImageUrl || asin.mainImageUrl,
-                        imagesCount: imagesCount,
-                        videoCount: videoCount,
-                        hasAplus: hasAplus,
-                        aplusAbsentSince: aplusAbsentSince,
-                        aplusPresentSince: aplusPresentSince,
-                        availabilityStatus: availabilityStatus,
-                        ratingBreakdown: ratingBreakdown,
-                        dealBadge: dealBadge,
-                        bulletPoints: bulletCount,
-                        bulletPointsText: bulletPointsText,
-                        rawOctoparseData: rawData,
-                        stockLevel: this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0)),
-                        soldBy: soldBy,
-                        buyBoxWin: buyBoxWin,
-                        buyBoxSellerId: soldBy || asin.buyBoxSellerId,
-                        secondAsp: secondAsp,
-                        soldBySec: soldBySec,
-                        weekHistory: updatedWeekHistory,
-                        lastScraped: now,
-                        scrapeStatus: 'COMPLETED',
-                        status: 'Active',
-                        history: (() => {
-                            const hList = Array.isArray(asin.history) ? [...asin.history] : [];
-                            const tStr = now.toISOString().split('T')[0];
-                            const idx = hList.findIndex(h => new Date(h.date).toISOString().split('T')[0] === tStr);
-                            const entry = { date: now, price, bsr, rating, reviewCount, imageCount: imagesCount, videoCount };
-
-                            if (idx >= 0) hList[idx] = { ...hList[idx], ...entry };
-                            else hList.push(entry);
-
-                            return hList.slice(-30);
-                        })()
-                    }
-                };
-
-                bulkOps.push({ updateOne: { filter: { _id: asin._id }, update: updateData } });
-                updatedCount++;
-            }
-
-            // Execute bulk write for chunk
-            if (bulkOps.length > 0) {
                 try {
-                    const BATCH = 50;
-                    for (let i = 0; i < bulkOps.length; i += BATCH) {
-                        const batch = bulkOps.slice(i, i + BATCH);
-                        await Asin.bulkWrite(batch);
-                    }
-                } catch (bulkError) {
-                    console.error(`❌ bulkWrite chunk error:`, bulkError.message);
+                    // Re-use logic from updateAsinMetrics or similar parsing
+                    const price = this._cleanPrice(this._getFromRaw(rawData, ['asp', 'price', 'Field2', 'currentPrice']));
+                    const mrp = this._cleanPrice(this._getFromRaw(rawData, ['mrp', 'listPrice', 'Field3']));
+                    const bsrData = this._parseBSR(rawData);
+                    const bsr = bsrData.main;
+                    const subBsr = bsrData.subBsrString || bsrData.sub;
+                    const subBSRs = bsrData.allRanks;
+                    const title = (rawData.Title || rawData.title || asin.Title || '').trim();
+                    const soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
+                    const buyBoxWin = this._isBuyBoxWinner(soldBy);
+                    const mediaData = this._countImagesAndVideos(rawData);
+                    const imagesCount = mediaData.imagesCount || asin.ImagesCount || 0;
+                    const videoCount = mediaData.videoCount;
+                    const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
+                    const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
+                    const hasAplus = this._detectAplusContent(rawData);
+                    const rating = parseFloat(rawData.avg_rating) || 0;
+                    const reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'ReviewCount', 'rating', 'Reviews', 'RT'], '')) || asin.ReviewCount;
+                    const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0));
+
+                    // CDQ
+                    const cdqBreakdown = getCDQBreakdown({
+                        title,
+                        category: this._parseCategory(rawData) || asin.Category,
+                        brand: rawData.brand || asin.Brand,
+                        imagesCount,
+                        hasAplus,
+                        bulletPointsText,
+                        lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
+                    });
+
+                    // Update ASIN
+                    await pool.request()
+                        .input('id', sql.VarChar, asin.Id)
+                        .input('title', sql.NVarChar, title)
+                        .input('price', sql.Decimal(18, 2), price > 0 ? price : asin.CurrentPrice)
+                        .input('bsr', sql.Int, bsr > 0 ? bsr : asin.BSR)
+                        .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
+                        .input('reviewCount', sql.Int, reviewCount)
+                        .input('lqs', sql.Decimal(5, 2), cdqBreakdown.totalScore)
+                        .input('buyBoxWin', sql.Bit, buyBoxWin)
+                        .input('stockLevel', sql.Int, stockLevel)
+                        .input('lastScraped', sql.DateTime, now)
+                        .query(`
+                            UPDATE Asins SET 
+                                Title = @title, CurrentPrice = @price, BSR = @bsr, 
+                                Rating = @rating, ReviewCount = @reviewCount, LQS = @lqs, 
+                                BuyBoxWin = @buyBoxWin, StockLevel = @stockLevel, 
+                                LastScrapedAt = @lastScraped, UpdatedAt = @lastScraped
+                            WHERE Id = @id
+                        `);
+
+                    // Update History
+                    const today = now.toISOString().split('T')[0];
+                    await pool.request()
+                        .input('asinId', sql.VarChar, asin.Id)
+                        .input('date', sql.Date, today)
+                        .input('price', sql.Decimal(18, 2), price > 0 ? price : asin.CurrentPrice)
+                        .input('bsr', sql.Int, bsr > 0 ? bsr : asin.BSR)
+                        .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
+                        .input('reviewCount', sql.Int, reviewCount)
+                        .input('stockLevel', sql.Int, stockLevel)
+                        .input('lqs', sql.Decimal(5, 2), cdqBreakdown.totalScore)
+                        .query(`
+                            IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, StockLevel = @stockLevel, LQS = @lqs
+                                WHERE AsinId = @asinId AND Date = @date
+                            ELSE
+                                INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, StockLevel, LQS)
+                                VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @stockLevel, @lqs)
+                        `);
+
+                    updatedCount++;
+                } catch (err) {
+                    console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);
                 }
             }
-            // Clear references for memory
-            currentAsins = null;
-            asinMap.clear();
         }
 
-        console.log(`✅ Bulk processing complete. Updated ${updatedCount} ASINs.`);
+        console.log(`✅ Bulk processing completed. Updated ${updatedCount} ASINs.`);
         return updatedCount;
     }
 
@@ -2481,28 +2445,33 @@ class MarketDataSyncService {
      */
     async assignTaskFromPool(sellerId) {
         try {
-            const availableTask = await OctoTask.findOneAndUpdate(
-                { isAssigned: false },
-                {
-                    isAssigned: true,
-                    sellerId: sellerId,
-                    lastAssignedAt: new Date()
-                },
-                { new: true, sort: { createdAt: 1 } }
-            );
-
-            if (!availableTask) {
+            const pool = await getPool();
+            
+            // 1. Find an unassigned task
+            const taskResult = await pool.request()
+                .query("SELECT TOP 1 Id, TaskId FROM OctoTasks WHERE IsAssigned = 0 ORDER BY CreatedAt ASC");
+            
+            const task = taskResult.recordset[0];
+            if (!task) {
                 console.warn('⚠️ No available Octoparse tasks in the pool.');
                 return null;
             }
 
-            // Sync with Seller model
-            await Seller.findByIdAndUpdate(sellerId, {
-                marketSyncTaskId: availableTask.taskId
-            });
+            // 2. Mark as assigned
+            await pool.request()
+                .input('id', sql.VarChar, task.Id)
+                .input('sellerId', sql.VarChar, sellerId)
+                .input('now', sql.DateTime2, new Date())
+                .query("UPDATE OctoTasks SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = @now, UpdatedAt = GETDATE() WHERE Id = @id");
 
-            console.log(`✅ Assigned Pool Task ${availableTask.taskId} to seller: ${sellerId}`);
-            return availableTask.taskId;
+            // 3. Sync with Seller model
+            await pool.request()
+                .input('octoparseId', sql.NVarChar, task.TaskId)
+                .input('sellerId', sql.VarChar, sellerId)
+                .query("UPDATE Sellers SET OctoparseId = @octoparseId, UpdatedAt = GETDATE() WHERE Id = @sellerId");
+
+            console.log(`✅ Assigned Pool Task ${task.TaskId} to seller: ${sellerId}`);
+            return task.TaskId;
         } catch (error) {
             console.error('❌ Assign Task From Pool Error:', error.message);
             return null;
@@ -2514,18 +2483,32 @@ class MarketDataSyncService {
      */
     async importTaskPool(taskIds) {
         try {
-            const operations = taskIds.map(id => ({
-                updateOne: {
-                    filter: { taskId: id.trim() },
-                    update: { $setOnInsert: { taskId: id.trim(), isAssigned: false } },
-                    upsert: true
-                }
-            }));
+            const pool = await getPool();
+            let addedCount = 0;
 
-            const result = await OctoTask.bulkWrite(operations);
+            for (const id of taskIds) {
+                const taskId = id.trim();
+                if (!taskId) continue;
+
+                const result = await pool.request()
+                    .input('taskId', sql.NVarChar, taskId)
+                    .input('newId', sql.VarChar, generateId())
+                    .query(`
+                        IF NOT EXISTS (SELECT 1 FROM OctoTasks WHERE TaskId = @taskId)
+                        BEGIN
+                            INSERT INTO OctoTasks (Id, TaskId, IsAssigned, CreatedAt, UpdatedAt)
+                            VALUES (@newId, @taskId, 0, GETDATE(), GETDATE());
+                            SELECT 1 as Added;
+                        END
+                        ELSE SELECT 0 as Added;
+                    `);
+                
+                if (result.recordset[0]?.Added) addedCount++;
+            }
+
             const stats = await this.getPoolStats();
             return {
-                added: result.upsertedCount,
+                added: addedCount,
                 stats
             };
         } catch (error) {
@@ -2539,9 +2522,18 @@ class MarketDataSyncService {
      */
     async getPoolStats() {
         try {
-            const total = await OctoTask.countDocuments();
-            const assigned = await OctoTask.countDocuments({ isAssigned: true });
+            const pool = await getPool();
+            const result = await pool.request().query(`
+                SELECT 
+                    COUNT(*) as Total,
+                    SUM(CASE WHEN IsAssigned = 1 THEN 1 ELSE 0 END) as Assigned
+                FROM OctoTasks
+            `);
+            
+            const total = result.recordset[0].Total || 0;
+            const assigned = result.recordset[0].Assigned || 0;
             const available = total - assigned;
+            
             return { total, assigned, available };
         } catch (error) {
             console.error('❌ Get Pool Stats Error:', error.message);

@@ -1,16 +1,12 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
-const Asin = require('../models/Asin');
-const Action = require('../models/Action');
+const { sql, getPool } = require('../database/db');
 
 const INVOKE_URL = "https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-3-medium";
 
 /**
- * Generates an image using Nvidia NIM (Stable Diffusion 3)
- * @param {string} prompt - The prompt for image generation
- * @param {string} asinCode - The ASIN code for directory naming
- * @returns {Promise<string>} - The path to the saved image
+ * Generates an image using Nvidia NIM (SQL Version)
  */
 async function generateImage(prompt, asinCode) {
     const apiKey = process.env.NVIDIA_NIM_API_KEY;
@@ -29,7 +25,7 @@ async function generateImage(prompt, asinCode) {
         "cfg_scale": 5,
         "aspect_ratio": "16:9",
         "seed": 0,
-        "steps": 30, // Reduced from 50 for faster response in dashboard
+        "steps": 30,
         "negative_prompt": "blurry, low quality, distorted, watermark, text, signature"
     };
 
@@ -48,18 +44,16 @@ async function generateImage(prompt, asinCode) {
 
     const responseBody = await response.json();
     
-    // Check if artifacts exist (Stable Diffusion 3 Medium response structure)
-    if (!responseBody.artifacts || responseBody.artifacts.length === 0) {
-        // Some versions return { image: "base64..." } or similar
-        // Let's handle the expected structure from user snippet
-        if (responseBody.image) {
-            return saveImage(responseBody.image, asinCode);
-        }
-        throw new Error("No image data found in Nvidia response");
+    if (responseBody.image) {
+        return saveImage(responseBody.image, asinCode);
     }
 
-    const b64 = responseBody.artifacts[0].base64;
-    return saveImage(b64, asinCode);
+    if (responseBody.artifacts && responseBody.artifacts.length > 0) {
+        const b64 = responseBody.artifacts[0].base64;
+        return saveImage(b64, asinCode);
+    }
+
+    throw new Error("No image data found in Nvidia response");
 }
 
 /**
@@ -78,7 +72,6 @@ function saveImage(b64, asinCode) {
     
     fs.writeFileSync(filePath, buffer);
     
-    // Return relative path for frontend access
     return `/uploads/asin_images/${asinCode}/${fileName}`;
 }
 
@@ -87,17 +80,18 @@ function saveImage(b64, asinCode) {
  */
 async function triggerAiImageTask(asinId) {
     try {
-        const asin = await Asin.findById(asinId);
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('id', sql.VarChar, asinId)
+            .query("SELECT * FROM Asins WHERE Id = @id");
+        
+        const asin = result.recordset[0];
         if (!asin) return;
 
-        // Construct a descriptive prompt based on product title and category
-        const prompt = `Professional product photography of ${asin.title}, ${asin.category || ''}, studio lighting, high resolution, 8k, pristine white background, commercial quality.`;
+        const prompt = `Professional product photography of ${asin.Title}, ${asin.Category || ''}, studio lighting, high resolution, 8k, pristine white background, commercial quality.`;
 
-        const imageUrl = await generateImage(prompt, asin.asinCode);
-
-        // Optional: Update ASIN or create an action item to review this image
-        // For now, we'll just log it. In a real scenario, we might add it to a "Generated Content" gallery.
-        console.log(`[AI-IMAGE] Successfully generated image for ${asin.asinCode}: ${imageUrl}`);
+        const imageUrl = await generateImage(prompt, asin.AsinCode);
+        console.log(`[AI-IMAGE] Successfully generated image for ${asin.AsinCode}: ${imageUrl}`);
         
         return imageUrl;
     } catch (error) {

@@ -1,4 +1,4 @@
-// const fetch = require('node-fetch'); // Native fetch in Node 18+
+const { sql, getPool } = require('../database/db');
 
 const COMETCHAT_APP_ID = process.env.COMETCHAT_APP_ID || "1675623ba4da04e9e";
 const COMETCHAT_REGION = process.env.COMETCHAT_REGION || "in";
@@ -10,14 +10,17 @@ const getAvatar = (name) => {
 };
 
 const sanitizeUid = (id) => {
+    if (!id) return 'unknown';
     return id.replace(/[@.]/g, '_').toLowerCase();
 };
 
 const syncUserToCometChat = async (user) => {
     try {
-        const uid = sanitizeUid(user.email);
-        const name = `${user.firstName} ${user.lastName}`;
-        const avatar = user.avatar || getAvatar(name);
+        const uid = sanitizeUid(user.Email || user.email);
+        const firstName = user.FirstName || user.firstName || '';
+        const lastName = user.LastName || user.lastName || '';
+        const name = `${firstName} ${lastName}`.trim() || 'User';
+        const avatar = user.Avatar || user.avatar || getAvatar(name);
 
         const payload = {
             uid: uid,
@@ -26,8 +29,6 @@ const syncUserToCometChat = async (user) => {
             role: 'default',
             tags: ['gms-user']
         };
-
-        // console.log(`💬 Syncing User to CometChat: ${name} (${uid})`);
 
         const response = await fetch(COMETCHAT_API_URL, {
             method: 'POST',
@@ -40,45 +41,45 @@ const syncUserToCometChat = async (user) => {
         });
 
         const data = await response.json();
+        const pool = await getPool();
+        const userId = user.Id || user._id;
 
-        if (response.ok) {
-            // console.log(`✅ CometChat User Created: ${uid}`);
-            user.cometChatUid = uid;
-            await user.save();
-            return { success: true, data };
-        } else if (data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
-            // console.log(`ℹ️ CometChat User already exists, updating tags: ${uid}`);
-            // Update to ensure tags are set
-            await fetch(`${COMETCHAT_API_URL}/${uid}`, {
-                method: 'PUT',
-                headers: {
-                    'apiKey': COMETCHAT_API_KEY,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: name,
-                    avatar: avatar,
-                    tags: ['gms-user']
-                })
-            });
-            user.cometChatUid = uid;
-            await user.save();
-            return { success: true, message: 'User updated' };
+        if (response.ok || data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
+            if (data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
+                await fetch(`${COMETCHAT_API_URL}/${uid}`, {
+                    method: 'PUT',
+                    headers: {
+                        'apiKey': COMETCHAT_API_KEY,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ name, avatar, tags: ['gms-user'] })
+                });
+            }
+            
+            if (userId) {
+                await pool.request()
+                    .input('id', sql.VarChar, userId)
+                    .input('uid', sql.NVarChar, uid)
+                    .query("UPDATE Users SET CometChatUid = @uid WHERE Id = @id");
+            }
+            return { success: true, uid };
         } else {
-            // console.error(`❌ CometChat User Creation Failed:`, data);
             return { success: false, error: data };
         }
     } catch (error) {
-        // console.error('❌ CometChat Sync Error:', error);
+        console.error('❌ CometChat User Sync Error:', error);
         return { success: false, error: error.message };
     }
 };
 
 const syncSellerToCometChat = async (seller) => {
     try {
-        const uid = `seller_${sanitizeUid(seller.sellerId)}`;
-        const name = seller.name;
+        const sellerId = seller.SellerId || seller.sellerId;
+        if (!sellerId) return { success: false, error: 'No SellerId provided' };
+        
+        const uid = `seller_${sanitizeUid(sellerId)}`;
+        const name = seller.Name || seller.name;
         const avatar = getAvatar(name);
 
         const payload = {
@@ -89,8 +90,6 @@ const syncSellerToCometChat = async (seller) => {
             tags: ['gms-user']
         };
 
-        // console.log(`💬 Syncing Seller to CometChat: ${name} (${uid})`);
-
         const response = await fetch(COMETCHAT_API_URL, {
             method: 'POST',
             headers: {
@@ -102,73 +101,63 @@ const syncSellerToCometChat = async (seller) => {
         });
 
         const data = await response.json();
+        const pool = await getPool();
+        const dbId = seller.Id || seller._id;
 
-        if (response.ok) {
-            // console.log(`✅ CometChat Seller Created: ${uid}`);
-            seller.cometChatUid = uid;
-            await seller.save();
-            return { success: true, data };
-        } else if (data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
-            // console.log(`ℹ️ CometChat Seller already exists, updating tags: ${uid}`);
-            await fetch(`${COMETCHAT_API_URL}/${uid}`, {
-                method: 'PUT',
-                headers: {
-                    'apiKey': COMETCHAT_API_KEY,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: name,
-                    avatar: avatar,
-                    tags: ['gms-user']
-                })
-            });
-            seller.cometChatUid = uid;
-            await seller.save();
-            return { success: true, message: 'Seller updated' };
+        if (response.ok || data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
+            if (data.error?.code === 'ERR_UID_ALREADY_EXISTS') {
+                await fetch(`${COMETCHAT_API_URL}/${uid}`, {
+                    method: 'PUT',
+                    headers: {
+                        'apiKey': COMETCHAT_API_KEY,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ name, avatar, tags: ['gms-user'] })
+                });
+            }
+            
+            if (dbId) {
+                await pool.request()
+                    .input('id', sql.VarChar, dbId)
+                    .input('uid', sql.NVarChar, uid)
+                    .query("UPDATE Sellers SET CometChatUid = @uid WHERE Id = @id");
+            }
+            return { success: true, uid };
         } else {
-            // console.error(`❌ CometChat Seller Creation Failed:`, data);
             return { success: false, error: data };
         }
     } catch (error) {
-        // console.error('❌ CometChat Sync Error:', error);
-        // Don't modify return here so we don't break the caller if they don't await/check
+        console.error('❌ CometChat Seller Sync Error:', error);
         return { success: false, error: error.message };
     }
 };
 
 const syncAllToCometChat = async () => {
     try {
-        // console.log('🚀 Starting Background CometChat Sync...');
-        const User = require('../models/User');
-        const Seller = require('../models/Seller');
-
+        const pool = await getPool();
+        
         // Sync Users
-        const users = await User.find({});
-        // console.log(`📊 Syncing ${users.length} users...`);
-        for (const user of users) {
+        const usersResult = await pool.request().query("SELECT * FROM Users");
+        for (const user of usersResult.recordset) {
             await syncUserToCometChat(user);
         }
 
         // Sync Sellers
-        const sellers = await Seller.find({});
-        // console.log(`📊 Syncing ${sellers.length} sellers...`);
-        for (const seller of sellers) {
+        const sellersResult = await pool.request().query("SELECT * FROM Sellers");
+        for (const seller of sellersResult.recordset) {
             await syncSellerToCometChat(seller);
         }
 
-        // console.log('✅ Background CometChat Sync Completed');
         return { success: true };
     } catch (error) {
-        // console.error('❌ Background CometChat Sync Failed:', error);
+        console.error('❌ Background CometChat Sync Failed:', error);
         return { success: false, error: error.message };
     }
 };
 
 const deleteFromCometChat = async (uid) => {
     try {
-        // console.log(`💬 Deleting from CometChat: ${uid}`);
-
         const response = await fetch(`${COMETCHAT_API_URL}/${uid}`, {
             method: 'DELETE',
             headers: {
@@ -179,19 +168,13 @@ const deleteFromCometChat = async (uid) => {
         });
 
         const data = await response.json();
-
-        if (response.ok) {
-            // console.log(`✅ CometChat Entity Deleted: ${uid}`);
-            return { success: true, data };
-        } else if (data.error?.code === 'ERR_UID_NOT_FOUND') {
-            // console.log(`ℹ️ CometChat Entity not found, already deleted: ${uid}`);
-            return { success: true, message: 'Entity not found' };
+        if (response.ok || data.error?.code === 'ERR_UID_NOT_FOUND') {
+            return { success: true };
         } else {
-            // console.error(`❌ CometChat Deletion Failed:`, data);
             return { success: false, error: data };
         }
     } catch (error) {
-        // console.error('❌ CometChat Deletion Error:', error);
+        console.error('❌ CometChat Deletion Error:', error);
         return { success: false, error: error.message };
     }
 };

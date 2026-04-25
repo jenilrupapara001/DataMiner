@@ -1,10 +1,9 @@
 const aiTaskService = require('../services/aiTaskService');
-const growthService = require('../services/growthService');
-const Action = require('../models/Action');
+const { sql, getPool, generateId } = require('../database/db');
 const responseHandler = require('../utils/responseHandler');
 
 /**
- * AI Task Controller - Intent-based Task Enrichment
+ * AI Task Controller - Intent-based Task Enrichment (SQL Version)
  */
 class AITaskController {
   /**
@@ -14,42 +13,46 @@ class AITaskController {
   async createEnrichedTask(req, res) {
     try {
       const { intent, goalId } = req.body;
-      const managerId = req.user?._id || req.user?.id;
+      const managerId = req.user?.Id || req.user?._id || req.user?.id;
 
-      // 1. Fetch Goal Context if available
       let goalContext = {};
       if (goalId) {
-        const KeyResult = require('../models/KeyResult');
         const GoalProgressService = require('../services/GoalProgressService');
-        // Always recalculate to get latest context
         const kr = await GoalProgressService.calculateGoalProgress(goalId);
         if (kr) {
           goalContext = {
-            title: kr.title,
-            currentValue: kr.currentValue,
-            targetValue: kr.targetValue,
-            gap: kr.targetValue - kr.currentValue,
-            metricType: kr.metricType,
-            healthStatus: kr.healthStatus
+            title: kr.Title,
+            currentValue: kr.CurrentValue,
+            targetValue: kr.TargetValue,
+            gap: kr.TargetValue - kr.CurrentValue,
+            metricType: kr.MetricType,
+            healthStatus: kr.HealthStatus
           };
         }
       }
 
-      // 2. Generate task details via AI with context
       const enriched = await aiTaskService.generateEnrichedTask(intent, goalContext);
+      const pool = await getPool();
+      const id = generateId();
 
-      // 3. Create the task
-      const task = new Action({
-        ...enriched,
-        keyResultId: goalId || null,
-        createdBy: managerId,
-        deadline: new Date(Date.now() + (3 * 24 * 60 * 60 * 1000)), // Default 3 days
-        aiGenerated: true
-      });
+      await pool.request()
+        .input('Id', sql.VarChar, id)
+        .input('Title', sql.NVarChar, enriched.title)
+        .input('Description', sql.NVarChar, enriched.description)
+        .input('Type', sql.NVarChar, enriched.type)
+        .input('Priority', sql.NVarChar, enriched.priority)
+        .input('Status', sql.NVarChar, 'PENDING')
+        .input('CreatedBy', sql.VarChar, managerId)
+        .input('KeyResultId', sql.VarChar, goalId || null)
+        .input('IsAIGenerated', sql.Bit, 1)
+        .input('AiReasoning', sql.NVarChar, enriched.aiReason)
+        .input('DueDate', sql.DateTime, new Date(Date.now() + (3 * 24 * 60 * 60 * 1000)))
+        .query(`
+          INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, CreatedBy, KeyResultId, IsAIGenerated, AiReasoning, DueDate, CreatedAt, UpdatedAt)
+          VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, @DueDate, GETDATE(), GETDATE())
+        `);
 
-      await task.save();
-
-      return responseHandler.success(res, task, 'AI-Enriched task created successfully', 201);
+      return responseHandler.success(res, { Id: id, ...enriched }, 'AI-Enriched task created successfully', 201);
     } catch (error) {
       console.error('[AI Task Controller] Error:', error);
       return responseHandler.error(res, 'Failed to generate AI-enriched task', 500, error);
@@ -63,33 +66,49 @@ class AITaskController {
   async generateRecoveryTasks(req, res) {
     try {
       const { objectiveId } = req.body;
-      const managerId = req.user?._id || req.user?.id;
+      const managerId = req.user?.Id || req.user?._id || req.user?.id;
 
       if (!objectiveId) {
         return responseHandler.error(res, 'Objective ID is required', 400);
       }
 
-      // 1. Fetch Goal Context
       const GoalProgressService = require('../services/GoalProgressService');
       const kr = await GoalProgressService.calculateGoalProgress(objectiveId);
 
-      if (!kr || kr.healthStatus !== 'BEHIND') {
+      if (!kr || kr.HealthStatus !== 'BEHIND') {
         return responseHandler.error(res, 'Goal is either not found or not in BEHIND status', 400);
       }
 
-      // 2. Generate Recovery Tasks via Service
-      const tasks = await aiTaskService.generateRecoveryTasks(kr);
+      const tasks = await aiTaskService.generateRecoveryTasks({
+        title: kr.Title,
+        currentValue: kr.CurrentValue,
+        targetValue: kr.TargetValue,
+        gap: kr.TargetValue - kr.CurrentValue,
+        metricType: kr.MetricType
+      });
 
-      // 3. Save tasks to DB
-      const savedTasks = await Promise.all(tasks.map(t => {
-        const action = new Action({
-          ...t,
-          keyResultId: kr._id,
-          createdBy: managerId,
-          aiGenerated: true
-        });
-        return action.save();
-      }));
+      const pool = await getPool();
+      const savedTasks = [];
+
+      for (const t of tasks) {
+        const id = generateId();
+        await pool.request()
+          .input('Id', sql.VarChar, id)
+          .input('Title', sql.NVarChar, t.title)
+          .input('Description', sql.NVarChar, t.description)
+          .input('Type', sql.NVarChar, 'RECOVERY')
+          .input('Priority', sql.NVarChar, t.priority)
+          .input('Status', sql.NVarChar, 'PENDING')
+          .input('CreatedBy', sql.VarChar, managerId)
+          .input('KeyResultId', sql.VarChar, objectiveId)
+          .input('IsAIGenerated', sql.Bit, 1)
+          .input('AiReasoning', sql.NVarChar, t.aiReason)
+          .query(`
+            INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, CreatedBy, KeyResultId, IsAIGenerated, AiReasoning, CreatedAt, UpdatedAt)
+            VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, GETDATE(), GETDATE())
+          `);
+        savedTasks.push({ Id: id, ...t });
+      }
 
       return responseHandler.success(res, savedTasks, `Generated ${savedTasks.length} recovery tasks`, 201);
     } catch (error) {
