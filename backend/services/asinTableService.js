@@ -116,6 +116,11 @@ class AsinTableService {
           cdq: asin.Cdq || 0,
           cdqGrade: asin.CdqGrade || 'D',
           buyBoxWin: asin.BuyBoxWin === 1 || asin.BuyBoxWin === true || isBuyBoxWinner(asin.SoldBy),
+          soldBy: asin.SoldBy || 'N/A',
+          soldBySec: asin.SoldBySec || 'N/A',
+          secondAsp: asin.SecondAsp || 0,
+          availabilityStatus: asin.AvailabilityStatus || 'Available',
+          discountPercentage: asin.DiscountPercentage || 0,
           hasAPlus: asin.HasAplus === 1 || asin.HasAplus === true,
           imagesCount: asin.ImagesCount || 0,
           videoCount: asin.VideoCount || 0,
@@ -126,7 +131,8 @@ class AsinTableService {
           computedFields: {
             isHighlyRated: asin.Rating >= 4.5,
             needsImageAudit: (asin.ImagesCount || 0) < 7,
-            bsrTrend: this._calculateTrend(recentHistory, 'bsr')
+            bsrTrend: this._calculateTrend(recentHistory, 'bsr'),
+            priceTrend: this._calculateTrend(recentHistory, 'price')
           }
         };
       });

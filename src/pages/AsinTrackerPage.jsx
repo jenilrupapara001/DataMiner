@@ -32,15 +32,19 @@ const demoAsinData = [
     sku: 'SKU-WE-001',
     title: 'Wireless Earbuds Pro with Active Noise Cancellation',
     category: 'Electronics',
-    price: 2499,
+    currentPrice: 2499,
+    mrp: 3499,
     bsr: 1250,
     rating: 4.5,
-    reviews: 1250,
+    reviewCount: 1250,
     lqs: 85,
-    buyBox: true,
+    buyBoxWin: true,
+    soldBy: 'Cocoblu Retail',
     hasAplus: true,
     descLength: 520,
     imageCount: 8,
+    discountPercentage: 28,
+    availabilityStatus: 'In Stock',
     history: generateHistoryData(2499, 1250, 4.5, 1250)
   },
   {
@@ -48,15 +52,19 @@ const demoAsinData = [
     sku: 'SKU-SW-002',
     title: 'Smart Watch Elite Series 5 GPS',
     category: 'Electronics',
-    price: 8999,
+    currentPrice: 8999,
+    mrp: 12999,
     bsr: 890,
     rating: 4.2,
-    reviews: 890,
+    reviewCount: 890,
     lqs: 72,
-    buyBox: true,
+    buyBoxWin: true,
+    soldBy: 'Cocoblu Retail',
     hasAplus: true,
     descLength: 480,
     imageCount: 12,
+    discountPercentage: 30,
+    availabilityStatus: 'In Stock',
     history: generateHistoryData(8999, 890, 4.2, 890)
   },
   {
@@ -64,15 +72,19 @@ const demoAsinData = [
     sku: 'SKU-YM-003',
     title: 'Premium Yoga Mat Extra Wide Non-Slip',
     category: 'Sports',
-    price: 1299,
+    currentPrice: 1299,
+    mrp: 1999,
     bsr: 3200,
     rating: 4.8,
-    reviews: 2100,
+    reviewCount: 2100,
     lqs: 92,
-    buyBox: false,
+    buyBoxWin: false,
+    soldBy: 'Fitness World India',
     hasAplus: true,
     descLength: 350,
     imageCount: 6,
+    discountPercentage: 35,
+    availabilityStatus: 'In Stock',
     history: generateHistoryData(1299, 3200, 4.8, 2100)
   },
   {
@@ -80,15 +92,19 @@ const demoAsinData = [
     sku: 'SKU-CM-004',
     title: 'Automatic Coffee Maker Deluxe 12-Cup',
     category: 'Home & Kitchen',
-    price: 4599,
+    currentPrice: 4599,
+    mrp: 5999,
     bsr: 1560,
     rating: 4.3,
-    reviews: 650,
+    reviewCount: 650,
     lqs: 68,
-    buyBox: true,
+    buyBoxWin: true,
+    soldBy: 'Cocoblu Retail',
     hasAplus: false,
     descLength: 620,
     imageCount: 10,
+    discountPercentage: 23,
+    availabilityStatus: 'In Stock',
     history: generateHistoryData(4599, 1560, 4.3, 650)
   },
   {
@@ -96,65 +112,21 @@ const demoAsinData = [
     sku: 'SKU-BS-005',
     title: 'Bluetooth Speaker Waterproof 360° Sound',
     category: 'Electronics',
-    price: 1999,
+    currentPrice: 1999,
+    mrp: 2999,
     bsr: 2100,
     rating: 4.1,
-    reviews: 1800,
+    reviewCount: 1800,
     lqs: 75,
-    buyBox: true,
+    buyBoxWin: true,
+    soldBy: 'Cocoblu Retail',
     hasAplus: true,
     descLength: 410,
     imageCount: 9,
+    discountPercentage: 33,
+    availabilityStatus: 'In Stock',
     history: generateHistoryData(1999, 2100, 4.1, 1800)
-  },
-  {
-    asin: 'B07MNO678',
-    sku: 'SKU-RS-006',
-    title: 'Running Shoes Pro Lightweight Cushion',
-    category: 'Sports',
-    price: 3499,
-    bsr: 980,
-    rating: 4.6,
-    reviews: 520,
-    lqs: 88,
-    buyBox: false,
-    hasAplus: true,
-    descLength: 380,
-    imageCount: 7,
-    history: generateHistoryData(3499, 980, 4.6, 520)
-  },
-  {
-    asin: 'B07PQR901',
-    sku: 'SKU-CW-007',
-    title: 'Professional Cookware Set 5-Piece Stainless Steel',
-    category: 'Home & Kitchen',
-    price: 5499,
-    bsr: 4500,
-    rating: 4.4,
-    reviews: 320,
-    lqs: 65,
-    buyBox: true,
-    hasAplus: false,
-    descLength: 780,
-    imageCount: 15,
-    history: generateHistoryData(5499, 4500, 4.4, 320)
-  },
-  {
-    asin: 'B07STU234',
-    sku: 'SKU-TS-008',
-    title: 'Adjustable Tablet Stand Aluminum Alloy',
-    category: 'Electronics',
-    price: 1299,
-    bsr: 5600,
-    rating: 4.0,
-    reviews: 890,
-    lqs: 58,
-    buyBox: true,
-    hasAplus: true,
-    descLength: 290,
-    imageCount: 5,
-    history: generateHistoryData(1299, 5600, 4.0, 890)
-  },
+  }
 ];
 
 const AsinTrackerPage = () => {
@@ -380,25 +352,27 @@ const AsinTrackerPage = () => {
         >
            <DataTable
              data={asins}
-             columns={['asin', 'sku', 'title', 'price', 'mrp', 'bsr', 'rating', 'reviews', 'lqs', 'hasAplus', 'descLength', 'imageCount', 'priceTrend', 'bsrTrend']}
+             columns={['asin', 'sku', 'title', 'price', 'mrp', 'discountPercentage', 'soldBy', 'buyBoxWin', 'bsr', 'rating', 'reviewCount', 'lqs', 'hasAplus', 'availabilityStatus', 'priceTrend', 'bsrTrend']}
              searchable={true}
              sortable={true}
              pagination={true}
              pageSize={10}
              customRenderers={{
-                 price: (asin) => <span className="fw-medium">{asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : '-'}</span>,
-                 mrp: (asin) => <span className="text-muted">{asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '-'}</span>,
-                 bsr: (asin) => <span>{asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}</span>,
-                rating: (asin) => asin.rating ? getRatingStars(asin.rating) : '-',
-                reviews: (asin) => asin.reviewCount ? asin.reviewCount.toLocaleString() : '-',
-                lqs: (asin) => asin.lqs ? getLqsBadge(asin.lqs) : '-',
-                buyBox: (asin) => typeof asin.buyBoxWin !== 'undefined' ? getBuyBoxBadge(asin.buyBoxWin) : '-',
-                hasAplus: (asin) => typeof asin.hasAplus !== 'undefined' ? getAplusBadge(asin.hasAplus) : '-',
-                descLength: (asin) => <span className="text-muted">{asin.descLength ? `${asin.descLength.toLocaleString()} chars` : '-'}</span>,
-                imageCount: (asin) => <span>{asin.imageCount || '-'}</span>,
-                priceTrend: (asin) => getPriceTrend(asin.history),
-                bsrTrend: (asin) => getBsrTrend(asin.history),
-            }}
+                 asin: (asin) => <span className="fw-bold text-primary">{asin.asin || asin.asinCode}</span>,
+                 price: (asin) => <span className="fw-medium text-dark">{asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : '-'}</span>,
+                 mrp: (asin) => <span className="text-muted text-decoration-line-through">{asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '-'}</span>,
+                 discountPercentage: (asin) => <span className="badge bg-danger bg-opacity-10 text-danger">{asin.discountPercentage ? `${asin.discountPercentage}% OFF` : '-'}</span>,
+                 soldBy: (asin) => <span className="text-truncate d-inline-block" style={{ maxWidth: '120px' }}>{asin.soldBy || '-'}</span>,
+                 buyBoxWin: (asin) => typeof asin.buyBoxWin !== 'undefined' ? getBuyBoxBadge(asin.buyBoxWin) : '-',
+                 bsr: (asin) => <span className="fw-500">#{asin.bsr ? asin.bsr.toLocaleString() : '-'}</span>,
+                 rating: (asin) => asin.rating ? getRatingStars(asin.rating) : '-',
+                 reviewCount: (asin) => <span className="text-muted">{asin.reviewCount ? asin.reviewCount.toLocaleString() : '-'}</span>,
+                 lqs: (asin) => asin.lqs ? getLqsBadge(asin.lqs) : '-',
+                 hasAplus: (asin) => typeof asin.hasAplus !== 'undefined' ? getAplusBadge(asin.hasAplus) : '-',
+                 availabilityStatus: (asin) => <span className={`badge ${asin.availabilityStatus?.toLowerCase().includes('in stock') ? 'bg-success' : 'bg-warning'} bg-opacity-10 text-dark`}>{asin.availabilityStatus || 'Available'}</span>,
+                 priceTrend: (asin) => getPriceTrend(asin.history),
+                 bsrTrend: (asin) => getBsrTrend(asin.history),
+             }}
             actions={[
               { label: 'View', icon: 'bi-eye', className: 'btn-sm', onClick: handleViewDetails },
               { label: 'Sync', icon: 'bi-arrow-repeat', className: 'btn-sm btn-outline-primary', onClick: handleSync },
@@ -476,6 +450,10 @@ const AsinTrackerPage = () => {
                            <div className="mb-3">
                              <small className="text-muted">Buy Box Status</small>
                              <div className="mt-1">{getBuyBoxBadge(selectedAsin.buyBoxWin)}</div>
+                           </div>
+                           <div className="mb-3">
+                             <small className="text-muted">Buy Box Seller</small>
+                             <div className="fw-medium text-primary">{selectedAsin.soldBy || 'Unknown'}</div>
                            </div>
                         </div>
                       </div>

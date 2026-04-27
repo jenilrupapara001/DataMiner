@@ -3,14 +3,14 @@ const asinTableService = require('../services/asinTableService');
 async function verify() {
     console.log('🚀 Verifying ASIN Table Service...');
     try {
-        const result = await asinTableService.getAsinTableData({ 
+        const result = await asinTableService.getAsinTableData({
             limit: 5,
-            search: 'B0DHD5BVVM'
+            search: 'B09SQ5QX4K'
         });
-        
+
         console.log('✅ Response Structure Check:');
         console.log('Pagination:', JSON.stringify(result.pagination, null, 2));
-        
+
         if (result.data.length > 0) {
             const first = result.data[0];
             console.log('\n✅ Mapping Check (First ASIN):');

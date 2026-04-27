@@ -1724,6 +1724,7 @@ class MarketDataSyncService {
                 SecondAsp: secondAsp,
                 SoldBySec: soldBySec,
                 AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
+                DiscountPercentage: this._parseDiscount(rawData, price, mrp),
                 HasAplus: hasAplus ? 1 : 0,
                 AvailabilityStatus: availabilityStatus,
                 AplusAbsentSince: aplusAbsentSince,
@@ -1879,14 +1880,35 @@ class MarketDataSyncService {
                     skippedNoCode++;
                     continue;
                 }
-
+ 
                 const normalizedCode = code.toUpperCase();
-                const asin = asinMap.get(normalizedCode);
+                let asin = asinMap.get(normalizedCode);
+                
                 if (!asin) {
-                    skippedNoMatch++;
-                    continue;
+                    // Create missing ASIN if it's found in Octoparse data but not in SQL
+                    try {
+                        const newAsinId = generateId();
+                        const productName = this._getFromRaw(rawData, ['Product_Name', 'title', 'Field1'], 'Unknown Product');
+                        
+                        await pool.request()
+                            .input('id', sql.VarChar, newAsinId)
+                            .input('sellerId', sql.VarChar, sellerId)
+                            .input('asinCode', sql.VarChar, normalizedCode)
+                            .input('name', sql.NVarChar, productName)
+                            .query(`
+                                INSERT INTO Asins (Id, SellerId, AsinCode, Name, Status, CreatedAt, UpdatedAt)
+                                VALUES (@id, @sellerId, @asinCode, @name, 'Active', GETDATE(), GETDATE())
+                            `);
+                        
+                        console.log(`[MarketSync] Automatically created missing ASIN ${normalizedCode} for seller ${sellerId}`);
+                        asin = { Id: newAsinId, AsinCode: normalizedCode };
+                    } catch (createErr) {
+                        console.error(`❌ Error creating missing ASIN ${normalizedCode}:`, createErr.message);
+                        skippedNoMatch++;
+                        continue;
+                    }
                 }
-
+ 
                 try {
                     await this.updateAsinMetrics(asin.Id, rawData);
                     updatedCount++;
@@ -2137,6 +2159,18 @@ class MarketDataSyncService {
     /**
      * Detect A+ Content presence from Octoparse data
      */
+    _parseDiscount(rawData, price, mrp) {
+        const perc = this._getFromRaw(rawData, ['percentage', 'Discount', 'discount', 'Field15'], '');
+        if (perc) {
+            const match = perc.match(/(\d+)/);
+            if (match) return parseInt(match[1]);
+        }
+        if (mrp > price && mrp > 0) {
+            return Math.round(((mrp - price) / mrp) * 100);
+        }
+        return 0;
+    }
+
     _detectAplusContent(rawData) {
         // Priority 1: Explicit boolean/flag fields
         const explicitFlags = ['has_aplus', 'A_plus', 'aplus', 'hasAplus', 'isAplus'];

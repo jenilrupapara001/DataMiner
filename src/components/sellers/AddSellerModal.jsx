@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Store, X, LayoutGrid, Globe, Key, Users } from 'lucide-react';
 import { userApi } from '../../services/api';
+import { TagPicker } from 'rsuite';
 
 const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData }) => {
   const [formData, setFormData] = useState({
@@ -10,37 +11,37 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
     apiKey: initialData?.apiKey || 'Default',
     plan: initialData?.plan || 'Starter',
     scrapeLimit: initialData?.scrapeLimit || 100,
-    managerId: initialData?.managers?.[0]?._id || '',
+    assignedUserIds: initialData?.managers?.map(m => m._id) || [],
   });
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isGlobalUser) {
-      userApi.getManagers()
-        .then(data => setManagers(data))
-        .catch(() => setManagers([]));
-    }
-  }, [isAdmin, isGlobalUser]);
+    userApi.getManagers()
+      .then(data => setManagers(data))
+      .catch(() => setManagers([]));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const { managerId, ...rest } = formData;
-    const payload = { ...rest };
-    if (isGlobalUser && managerId) payload.managerId = managerId;
-
+    
     try {
-      await onSave(payload);
+      await onSave(formData);
     } finally {
       setLoading(false);
     }
   };
 
+  const managerOptions = managers.map(m => ({
+    label: `${m.firstName} ${m.lastName} (${m.email})`,
+    value: m._id
+  }));
+
   return (
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(12px)', zIndex: 1070 }}>
       <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '520px' }}>
-        <div className="modal-content border border-zinc-200 shadow-2xl overflow-hidden" style={{ borderRadius: '16px', background: '#fff' }}>
+        <div className="modal-content border border-zinc-200 shadow-2xl" style={{ borderRadius: '16px', background: '#fff' }}>
           <div className="modal-header border-0 px-4 pt-4 pb-0 d-flex align-items-center justify-content-between">
             <h5 className="modal-title d-flex align-items-center gap-2 text-zinc-900 fw-bold" style={{ fontSize: '15px' }}>
               <div className="p-1.5 bg-zinc-900 text-white rounded-2 shadow-sm">
@@ -54,7 +55,7 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div className="modal-body px-4 py-4">
+            <div className="modal-body px-4 py-4" style={{ position: 'relative' }}>
               <div className="mb-4">
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <div className="p-1 bg-zinc-100 rounded text-zinc-500"><LayoutGrid size={12} /></div>
@@ -103,27 +104,27 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
                 </div>
               </div>
 
-              {isGlobalUser && (
-                <div className="mb-4">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Users size={12} /></div>
-                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">ACCOUNT MANAGER</label>
-                  </div>
-                  <select
-                    className="form-select bg-white border-zinc-200 px-3 fw-bold text-zinc-900 shadow-sm"
-                    value={formData.managerId}
-                    onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                    style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
-                  >
-                    <option value="">— Unassigned (Public Pool) —</option>
-                    {managers.map(m => (
-                      <option key={m._id} value={m._id}>
-                        {m.firstName} {m.lastName} ({m.email})
-                      </option>
-                    ))}
-                  </select>
+              <div className="mb-4">
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Users size={12} /></div>
+                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">BRAND MANAGER</label>
                 </div>
-              )}
+                <TagPicker
+                  data={managerOptions}
+                  value={formData.assignedUserIds}
+                  onChange={(val) => setFormData({ ...formData, assignedUserIds: val })}
+                  placeholder="— Unassigned (Public Pool) —"
+                  block
+                  className="fw-bold"
+                  placement="bottomStart"
+                  style={{ 
+                    borderRadius: '10px', 
+                    fontSize: '13px',
+                    border: '1px solid #e4e4e7',
+                    backgroundColor: '#fff'
+                  }}
+                />
+              </div>
             </div>
 
             <div className="modal-footer border-0 px-4 pb-4 pt-1 gap-2">

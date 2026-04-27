@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 async function compare() {
-    const asinToMatch = 'B0DHD5BVVM';
+    const asinToMatch = 'B09SQ5QX4K';
     console.log(`🔍 Comparing data for ASIN: ${asinToMatch}`);
 
     // Connect to MongoDB

@@ -160,17 +160,72 @@ exports.getAsins = async (req, res) => {
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
-      const history = (historyMap[a.Id] || []).reverse(); // Reverse to get chronological order for sparkline
+      const history = (historyMap[a.Id] || []).reverse(); 
+      
+      // Parse JSON strings back to objects/arrays
+      let allOffers = [];
+      try {
+        allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : [];
+      } catch (e) {
+        allOffers = [];
+      }
+      
+      let subBSRs = [];
+      try {
+        subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : [];
+      } catch (e) {
+        subBSRs = [];
+      }
+      
+      let bulletPointsText = [];
+      try {
+        bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : [];
+      } catch (e) {
+        bulletPointsText = [];
+      }
+      
+      let ratingBreakdown = {};
+      try {
+        ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {};
+      } catch (e) {
+        ratingBreakdown = {};
+      }
+      
+      let historyParsed = [];
+      try {
+        historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : [];
+      } catch (e) {
+        historyParsed = [];
+      }
+
       return {
         ...a,
         _id: a.Id,
         asinCode: a.AsinCode,
         sku: a.Sku,
         currentPrice: a.CurrentPrice,
+        mrp: a.Mrp,
         bsr: a.BSR,
         rating: a.Rating,
         reviewCount: a.ReviewCount,
         lqs: a.LQS,
+        buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
+        soldBy: a.SoldBy || 'N/A',
+        secondAsp: a.SecondAsp || 0,
+        hasAplus: a.HasAplus === 1 || a.HasAplus === true,
+        dealBadge: a.DealBadge || 'No deal found',
+        availabilityStatus: a.AvailabilityStatus || 'Available',
+        imagesCount: a.ImagesCount || 0,
+        videoCount: a.VideoCount || 0,
+        bulletPoints: parseInt(a.BulletPoints) || 0,
+        descLength: a.DescLength || 0,
+        discountPercentage: a.DiscountPercentage || 0,
+        allOffers,
+        subBSRs,
+        bulletPointsText,
+        ratingBreakdown,
+        weekHistory: historyParsed,
+        history,
         status: a.Status,
         category: a.Category,
         brand: a.Brand,
@@ -182,9 +237,7 @@ exports.getAsins = async (req, res) => {
           _id: a.SellerId,
           name: a.sellerName,
           marketplace: a.sellerMarketplace
-        },
-        history,
-        buyBoxWin: isBuyBoxWinner(a.SoldBy)
+        }
       };
     });
 
@@ -237,17 +290,60 @@ exports.getAsin = async (req, res) => {
     }
 
     // Map to Frontend Object
+    let allOffers = [];
+    try {
+      allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : [];
+    } catch (e) {
+      allOffers = [];
+    }
+    
+    let subBSRs = [];
+    try {
+      subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : [];
+    } catch (e) {
+      subBSRs = [];
+    }
+    
+    let bulletPointsText = [];
+    try {
+      bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : [];
+    } catch (e) {
+      bulletPointsText = [];
+    }
+    
+    let ratingBreakdown = {};
+    try {
+      ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {};
+    } catch (e) {
+      ratingBreakdown = {};
+    }
+
     const asin = {
       ...a,
       _id: a.Id,
       asinCode: a.AsinCode,
+      currentPrice: a.CurrentPrice,
+      mrp: a.Mrp,
+      bsr: a.BSR,
+      rating: a.Rating,
+      reviewCount: a.ReviewCount,
+      lqs: a.LQS,
+      buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
+      soldBy: a.SoldBy || 'N/A',
+      secondAsp: a.SecondAsp || 0,
+      hasAplus: a.HasAplus === 1 || a.HasAplus === true,
+      availabilityStatus: a.AvailabilityStatus || 'Available',
+      discountPercentage: a.DiscountPercentage || 0,
+      allOffers,
+      subBSRs,
+      bulletPointsText,
+      ratingBreakdown,
       seller: {
         _id: a.SellerId,
         name: a.sellerName,
         marketplace: a.sellerMarketplace,
         sellerId: a.sellerExtId
-      },
-      buyBoxWin: isBuyBoxWinner(a.SoldBy)
+      }
     };
 
     res.json(asin);

@@ -4,10 +4,10 @@ const { getPool, sql } = require('../database/db');
 
 async function testFinalFix() {
     console.log('🚀 Testing Final Fix (SoldBy & History)...');
-    
-    const sellerId = '69e85c3f1e4de9e2dc81f2b7'; 
-    const asinCode = 'B0DHD5BVVM';
-    
+
+    const sellerId = '69e861361e4de9e2dc81f83b';
+    const asinCode = 'B09SQ5QX4K';
+
     // Simulate raw data with HTML in soldBy
     const rawData = {
         Original_URL: `https://www.amazon.in/dp/${asinCode}`,
@@ -24,7 +24,7 @@ async function testFinalFix() {
     try {
         console.log('📡 Calling processBatchResults...');
         const result = await marketDataSyncService.processBatchResults(sellerId, [rawData]);
-        
+
         console.log('📊 Result:', result);
 
         if (result.updatedCount === 1) {
@@ -32,7 +32,7 @@ async function testFinalFix() {
             const updated = await pool.request()
                 .input('asin', asinCode)
                 .query('SELECT Title, SoldBy, History, BuyBoxWin, AllOffers FROM Asins WHERE AsinCode = @asin');
-            
+
             const row = updated.recordset[0];
             console.log('\n--- Verified DB Values ---');
             console.log(`- Title: ${row.Title}`);
@@ -40,13 +40,13 @@ async function testFinalFix() {
             console.log(`- BuyBoxWin: ${row.BuyBoxWin}`);
             console.log(`- AllOffers: ${row.AllOffers}`);
             console.log(`- History: ${row.History}`);
-            
+
             if (row.SoldBy === 'Rushwak Retail') {
                 console.log('✅ SoldBy extracted correctly from HTML!');
             } else {
                 console.log('❌ SoldBy extraction failed.');
             }
-            
+
             if (row.History && JSON.parse(row.History).length > 0) {
                 console.log('✅ History tracking working!');
             } else {

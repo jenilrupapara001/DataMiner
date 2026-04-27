@@ -83,3 +83,8 @@
     font-weight: 600 !important;
     padding: 4px 16px !important;
 }
+
+/* Ensure all rsuite picker menus are above modals */
+.rs-picker-menu, .rs-picker-select-menu, .rs-picker-check-menu {
+    z-index: 2100 !important;
+}

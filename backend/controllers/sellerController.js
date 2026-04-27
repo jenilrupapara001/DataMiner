@@ -213,7 +213,7 @@ exports.createSeller = async (req, res) => {
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
     const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-    const { managerId, name, marketplace, sellerId, status } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
 
     const pool = await getPool();
     const id = generateId();
@@ -232,13 +232,19 @@ exports.createSeller = async (req, res) => {
         VALUES (@id, @name, @marketplace, @sellerId, @isActive, @octoparseId, @plan, @scrapeLimit, GETDATE(), GETDATE())
       `);
 
-    // Assign to manager
-    let assignToManagerId = isManager ? req.user._id : (isGlobalUser && managerId ? managerId : null);
-    if (assignToManagerId) {
-        await pool.request()
-            .input('userId', sql.VarChar, assignToManagerId.toString())
-            .input('sellerId', sql.VarChar, id)
-            .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+    // Assign to users
+    const usersToAssign = assignedUserIds && Array.isArray(assignedUserIds) ? assignedUserIds : [];
+    if (isManager && !usersToAssign.includes(req.user._id)) {
+        usersToAssign.push(req.user._id);
+    }
+
+    if (usersToAssign.length > 0) {
+        for (const uId of usersToAssign) {
+            await pool.request()
+                .input('userId', sql.VarChar, uId.toString())
+                .input('sellerId', sql.VarChar, id)
+                .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+        }
     }
 
      res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
@@ -258,7 +264,7 @@ exports.createSeller = async (req, res) => {
 exports.updateSeller = async (req, res) => {
   try {
     const { id } = req.params;
-    const { managerId, name, marketplace, sellerId, status } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
 
@@ -280,13 +286,15 @@ exports.updateSeller = async (req, res) => {
         WHERE Id = @id
       `);
 
-    if (isGlobalUser && managerId !== undefined) {
+    if (isGlobalUser && assignedUserIds !== undefined) {
       await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
-      if (managerId) {
-        await pool.request()
-          .input('userId', sql.VarChar, managerId)
-          .input('sellerId', sql.VarChar, id)
-          .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+      if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
+        for (const uId of assignedUserIds) {
+          await pool.request()
+            .input('userId', sql.VarChar, uId)
+            .input('sellerId', sql.VarChar, id)
+            .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+        }
       }
     }
 
