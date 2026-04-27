@@ -275,12 +275,17 @@ exports.uploadOctoparseData = async (req, res) => {
 
     console.log(`📊 Octoparse upload: Processing ${rawDataArray.length} records for seller ${sellerId}`);
 
-    // Use our new AsinDataParser for raw format
-    const AsinDataParser = require('../services/asinDataParser');
-    const results = await AsinDataParser.bulkUpsertAsins(rawDataArray, sellerId);
+    // If raw text format, parse into objects first
+    if (ext === 'txt' || ext === 'text' || ext === 'csv') {
+      const AsinDataParser = require('../services/asinDataParser');
+      rawDataArray = rawDataArray.map(entry => AsinDataParser.parseRawData(entry));
+    }
 
-    const successCount = results.filter(r => r.success).length;
-    const errorCount = results.filter(r => !r.success).length;
+    // Use unified ingestion pipeline for consistent mapping and tracking
+    const batchResult = await marketDataSyncService.processBatchResults(sellerId, rawDataArray);
+
+    const successCount = batchResult.updatedCount || 0;
+    const errorCount = (batchResult.skippedNoCode || 0) + (batchResult.skippedNoMatch || 0);
 
     // Update seller scrape stats
     const pool = await getPool();
@@ -301,8 +306,13 @@ exports.uploadOctoparseData = async (req, res) => {
     res.json({
       success: true,
       message: `Processed ${rawDataArray.length} entries`,
-      stats: { total: rawDataArray.length, success: successCount, failed: errorCount },
-      errors: errorCount > 0 ? results.filter(r => !r.success).slice(0, 5) : []
+      stats: { 
+        total: rawDataArray.length, 
+        success: successCount, 
+        failed: errorCount,
+        skippedNoCode: batchResult.skippedNoCode,
+        skippedNoMatch: batchResult.skippedNoMatch
+      }
     });
   } catch (err) {
     console.error("❌ Octoparse Upload Error:", err);

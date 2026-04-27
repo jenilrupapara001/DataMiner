@@ -1702,6 +1702,9 @@ class MarketDataSyncService {
                 AplusAbsentSince: aplusAbsentSince,
                 AplusPresentSince: aplusPresentSince,
                 AllOffers: JSON.stringify(allOffers),
+                Brand: (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim(),
+                ScrapeStatus: 'COMPLETED',
+                Status: asin.Status === 'Scraping' ? 'Active' : asin.Status,
                 LastScrapedAt: now,
                 UpdatedAt: now
             };
@@ -1866,13 +1869,13 @@ class MarketDataSyncService {
         }
 
         console.log(`✅ Bulk processing completed. Updated ${updatedCount} ASINs.`);
-        if (skippedNoCode > 0) {
-            console.log(`[DEBUG] Skipped ${skippedNoCode} records with no ASIN code extracted`);
-        }
-        if (skippedNoMatch > 0) {
-            console.log(`[DEBUG] Skipped ${skippedNoMatch} records with ASIN not found in database`);
-        }
-        return updatedCount;
+        return {
+            success: true,
+            updatedCount,
+            skippedNoCode,
+            skippedNoMatch,
+            total: rawResults.length
+        };
     }
 
     // ==================== HELPER METHODS FOR DATA MAPPING ====================
