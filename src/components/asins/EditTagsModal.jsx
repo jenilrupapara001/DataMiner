@@ -113,27 +113,19 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                         </label>
                         <div 
                             className="tag-input-container d-flex flex-wrap gap-2 p-2 border rounded-xl bg-slate-50/50"
-                            style={{ minHeight: '100px', alignContent: 'flex-start', transition: 'all 0.2s', borderColor: '#e2e8f0' }}
+                            style={{ minHeight: '60px', alignContent: 'flex-start', transition: 'all 0.2s', borderColor: '#e2e8f0' }}
                         >
-                            {tags.map(tag => (
-                                <span key={tag} className="tag-badge">
-                                    {tag}
-                                    <X size={12} className="tag-remove cursor-pointer" onClick={() => removeTag(tag)} />
-                                </span>
-                            ))}
-                            <input
-                                type="text"
-                                className="border-0 bg-transparent flex-grow-1 p-1"
-                                placeholder={tags.length === 0 ? "Type and press Enter..." : ""}
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleAddTag}
-                                style={{ outline: 'none', fontSize: '12px', minWidth: '100px' }}
-                            />
+                            {tags.length === 0 ? (
+                                <p className="smallest text-slate-400 m-0 p-2">No tags assigned. Import tags via CSV in Bulk Import.</p>
+                            ) : (
+                                tags.map(tag => (
+                                    <span key={tag} className="tag-badge">
+                                        {tag}
+                                        <X size={12} className="tag-remove cursor-pointer" onClick={() => removeTag(tag)} />
+                                    </span>
+                                ))
+                            )}
                         </div>
-                        <p className="smallest text-slate-400 mt-2">
-                            Press <strong>Enter</strong> or <strong>comma</strong> to add a tag
-                        </p>
                     </div>
                 </div>
 

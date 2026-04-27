@@ -30,7 +30,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Zap,
-    LogOut
+    LogOut,
+    ListTodo
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -102,6 +103,7 @@ const Sidebar = () => {
             label: 'Actions',
             items: [
                 { label: 'Workflows', icon: GitBranch, to: '/actions', permission: 'actions_view' },
+                { label: 'Optimization Tasks', icon: ListTodo, to: '/tasks', permission: 'dashboard_view' },
                 { label: 'Templates', icon: LayoutTemplate, to: '/actions/templates', permission: 'actions_view' },
                 { label: 'Performance', icon: BarChart2, to: '/actions/achievement-report', permission: 'reports_monthly_view' },
                 { label: 'Activity Log', icon: Clock, to: '/activity-log', permission: 'settings_view' },

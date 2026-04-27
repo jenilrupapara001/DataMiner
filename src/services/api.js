@@ -1370,3 +1370,21 @@ export const rulesetApi = {
     return api.post(`/rulesets/${id}/duplicate`);
   }
 };
+
+export const taskApi = {
+    getAll: async (params = {}) => {
+        return api.get('/tasks', params);
+    },
+    generate: async (asinIds) => {
+        return api.post('/tasks/generate', { asinIds });
+    },
+    updateStatus: async (taskId, status, remarks) => {
+        return api.put(`/tasks/${taskId}/status`, { status, remarks });
+    },
+    assign: async (taskId, userId) => {
+        return api.put(`/tasks/${taskId}/assign`, { userId });
+    },
+    delete: async (taskId) => {
+        return api.delete(`/tasks/${taskId}`);
+    }
+};

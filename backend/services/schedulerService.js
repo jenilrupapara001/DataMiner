@@ -171,7 +171,7 @@ class SchedulerService {
             // Create notification for admin
             try {
                 const adminsResult = await pool.request()
-                    .query("SELECT Id FROM Users WHERE Role = 'admin' OR Role IN (SELECT Id FROM Roles WHERE Name = 'admin')");
+                    .query("SELECT u.Id FROM Users u JOIN Roles r ON u.RoleId = r.Id WHERE r.Name = 'admin'");
                 
                 const { createNotification } = require('../controllers/notificationController');
                 for (const admin of adminsResult.recordset) {
@@ -204,7 +204,7 @@ class SchedulerService {
 
             const { createNotification } = require('../controllers/notificationController');
             const adminsResult = await pool.request()
-                .query("SELECT Id FROM Users WHERE Role = 'admin' OR Role IN (SELECT Id FROM Roles WHERE Name = 'admin')");
+                .query("SELECT u.Id FROM Users u JOIN Roles r ON u.RoleId = r.Id WHERE r.Name = 'admin'");
             const admins = adminsResult.recordset;
 
             for (const seller of sellers) {

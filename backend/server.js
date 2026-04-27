@@ -104,6 +104,7 @@ const goalRoutes = require('./routes/goalRoutes');
 const asinTableRoutes = require('./routes/asinTableRoutes');
 const listingQualityRoutes = require('./routes/listingQualityRoutes');
 const bulkRoutes = require('./routes/bulkRoutes');
+const taskRoutes = require('./routes/taskRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -135,6 +136,7 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/asins-table', asinTableRoutes);
 app.use('/api/listing-quality', listingQualityRoutes);
 app.use('/api/bulk', bulkRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {

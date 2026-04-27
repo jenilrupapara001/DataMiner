@@ -43,6 +43,7 @@ const GoalAchievementReport = lazy(() => import('./pages/GoalAchievementReport')
 const RevenueCalculatorPage = lazy(() => import('./pages/RevenueCalculatorPage'));
 const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage'));
 const TasksOperationsPage = lazy(() => import('./pages/TasksOperationsPage'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChatContainer = lazy(() => import('./components/chat/ChatContainer'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
@@ -149,6 +150,7 @@ function AppRoutes() {
                   <Route path="/actions/templates" element={<ProtectedRoute permission="actions_manage"><TemplateManagerPage /></ProtectedRoute>} />
                   <Route path="/actions/achievement-report" element={<ProtectedRoute permission="reports_monthly_view"><GoalAchievementReport /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
+                  <Route path="/tasks" element={<ProtectedRoute permission="dashboard_view"><TasksPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:id" element={<ProfilePage />} />

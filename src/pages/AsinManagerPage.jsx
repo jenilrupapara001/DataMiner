@@ -5,7 +5,7 @@ import ProgressBar from '../components/common/ProgressBar';
 import EmptyState from '../components/common/EmptyState';
 import octoparseService from '../services/octoparseService';
 import { db } from '../services/db';
-import { asinApi, marketSyncApi, sellerApi } from '../services/api';
+import { asinApi, marketSyncApi, sellerApi, taskApi } from '../services/api';
 import InfiniteScrollSelect from '../components/common/InfiniteScrollSelect';
 import { useSocket } from '../contexts/SocketContext';
 import { calculateLQS } from '../utils/lqs';
@@ -936,14 +936,20 @@ const AsinManagerPage = () => {
   const handleSelectedCreateActions = async () => {
     try {
       const selectedAsinIds = Array.from(selectedIds);
-      if (selectedAsinIds.length === 0) return;
+      if (selectedAsinIds.length === 0) {
+        alert('Please select at least one ASIN first.');
+        return;
+      }
 
-      if (!window.confirm(`Create specialized optimization tasks for the ${selectedAsinIds.length} selected ASINs?`)) return;
+      if (!window.confirm(`Analyze ${selectedAsinIds.length} ASINs and generate optimization tasks?`)) return;
       
       setSyncing(true);
-      const res = await db.createBulkActionsFromAnalysis(selectedAsinIds);
-      if (res && res.count > 0) {
-        alert(`✅ Successfully generated ${res.count} tasks for your selected ASINs!`);
+      const res = await taskApi.generate(selectedAsinIds);
+      
+      if (res.success) {
+        alert(`✅ Generated ${res.savedCount} optimization tasks from ${res.summary.analyzed} ASINs!\n\n` +
+          `By Category: ${JSON.stringify(res.summary.byCategory)}\n` +
+          `High Priority: ${res.summary.byPriority.High} | Medium: ${res.summary.byPriority.Medium}`);
         clearSelection();
       } else if (res && res.success === false) {
         alert(`❌ Error: ${res.message || 'Failed to create tasks'}`);
@@ -1767,11 +1773,6 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>B</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center' }}>A+</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', color: '#b91c1c' }}>A+ DAYS</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '130px', textAlign: 'left', color: '#4338ca' }}>
-                    <div className="d-flex align-items-center justify-content-between">
-                      TAGS
-                    </div>
-                  </th>
                 </tr>
                 <tr>
                   <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>
@@ -2257,17 +2258,6 @@ const AsinManagerPage = () => {
                       {asin.aplusAbsentSince && !asin.hasAplus 
                         ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24)) 
                         : '-'}
-                    </td>
-                    {/* ===== TAGS CELL ===== */}
-                    <td style={{ ...tdStyle, padding: '4px 6px' }}>
-                      <TagsCell
-                        asin={asin}
-                        onUpdate={(id, tags) => {
-                          setAsins(prev => prev.map(a => 
-                            (a._id === id || a.Id === id) ? { ...a, tags, Tags: JSON.stringify(tags) } : a
-                          ));
-                        }}
-                      />
                     </td>
                   </tr>
                 )))}
