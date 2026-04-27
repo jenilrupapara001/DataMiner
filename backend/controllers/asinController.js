@@ -225,7 +225,7 @@ exports.getAsins = async (req, res) => {
         bulletPointsText,
         ratingBreakdown,
         weekHistory: historyParsed,
-        history,
+        history: historyParsed,
         status: a.Status,
         category: a.Category,
         brand: a.Brand,
@@ -318,6 +318,13 @@ exports.getAsin = async (req, res) => {
       ratingBreakdown = {};
     }
 
+    let historyParsed = [];
+    try {
+      historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : [];
+    } catch (e) {
+      historyParsed = [];
+    }
+
     const asin = {
       ...a,
       _id: a.Id,
@@ -338,6 +345,8 @@ exports.getAsin = async (req, res) => {
       subBSRs,
       bulletPointsText,
       ratingBreakdown,
+      history: historyParsed,
+      weekHistory: historyParsed,
       seller: {
         _id: a.SellerId,
         name: a.sellerName,

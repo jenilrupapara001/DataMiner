@@ -1911,7 +1911,7 @@ const AsinManagerPage = () => {
                         <td key={`i-${week.label}-${dIdx}`}
                           style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>
                           <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
-                            {wData?.imageCount || '-'}
+                            {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
                           </span>
                         </td>
                       );

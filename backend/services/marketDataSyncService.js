@@ -1677,6 +1677,10 @@ class MarketDataSyncService {
             history.push({
                 price: price > 0 ? price : (asin.CurrentPrice || 0),
                 bsr: bsr > 0 ? bsr : (asin.BSR || 0),
+                rating: rating > 0 ? rating : (asin.Rating || 0),
+                reviews: reviewCount || asin.ReviewCount || 0,
+                imageCount: imagesCount || asin.ImagesCount || 0,
+                videoCount: videoCount || asin.VideoCount || 0,
                 date: now.toISOString().split('T')[0]
             });
             
@@ -1894,10 +1898,10 @@ class MarketDataSyncService {
                             .input('id', sql.VarChar, newAsinId)
                             .input('sellerId', sql.VarChar, sellerId)
                             .input('asinCode', sql.VarChar, normalizedCode)
-                            .input('name', sql.NVarChar, productName)
+                            .input('title', sql.NVarChar, productName)
                             .query(`
-                                INSERT INTO Asins (Id, SellerId, AsinCode, Name, Status, CreatedAt, UpdatedAt)
-                                VALUES (@id, @sellerId, @asinCode, @name, 'Active', GETDATE(), GETDATE())
+                                INSERT INTO Asins (Id, SellerId, AsinCode, Title, Status, CreatedAt, UpdatedAt)
+                                VALUES (@id, @sellerId, @asinCode, @title, 'Active', GETDATE(), GETDATE())
                             `);
                         
                         console.log(`[MarketSync] Automatically created missing ASIN ${normalizedCode} for seller ${sellerId}`);
