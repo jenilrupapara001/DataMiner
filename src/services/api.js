@@ -925,6 +925,24 @@ export const settingsApi = {
     if (!res.ok) throw new Error('Failed to fetch setting');
     return res.json();
   },
+
+  getOctoparseAutomation: async () => {
+    const res = await fetch(`${API_BASE}/settings/octoparse-automation`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch octoparse automation setting');
+    return res.json();
+  },
+  
+  toggleOctoparseAutomation: async (enabled) => {
+    const res = await fetch(`${API_BASE}/settings/octoparse-automation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) throw new Error('Failed to toggle octoparse automation');
+    return res.json();
+  },
 };
 
 // Generic API Client

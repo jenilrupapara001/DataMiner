@@ -92,3 +92,60 @@ exports.updateSettings = async (req, res) => {
 exports.testEmail = async (req, res) => {
     res.json({ success: true, message: 'Email test not implemented yet' });
 };
+
+/**
+ * Get Octoparse automation status
+ * GET /api/settings/octoparse-automation
+ */
+exports.getOctoparseAutomation = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('key', sql.NVarChar, 'octoparse_automation_enabled')
+      .query('SELECT Value FROM SystemSettings WHERE [Key] = @key');
+    
+    const enabled = result.recordset[0]?.Value === 'true' || result.recordset[0]?.Value === true;
+    
+    res.json({
+      success: true,
+      data: { enabled }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Toggle Octoparse automation on/off
+ * POST /api/settings/octoparse-automation
+ */
+exports.toggleOctoparseAutomation = async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const pool = await getPool();
+    
+    // Upsert the setting
+    await pool.request()
+      .input('key', sql.NVarChar, 'octoparse_automation_enabled')
+      .input('value', sql.NVarChar, String(enabled === true))
+      .query(`
+        IF EXISTS (SELECT 1 FROM SystemSettings WHERE [Key] = @key)
+          UPDATE SystemSettings SET Value = @value, UpdatedAt = GETDATE() WHERE [Key] = @key
+        ELSE
+          INSERT INTO SystemSettings ([Key], Value, CreatedAt, UpdatedAt) VALUES (@key, @value, GETDATE(), GETDATE())
+      `);
+    
+    // Also update environment variable in memory
+    process.env.AUTOMATION_ENABLED = String(enabled === true);
+    
+    console.log(`🔧 Octoparse Automation ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    
+    res.json({
+      success: true,
+      data: { enabled: enabled === true },
+      message: `Octoparse automation ${enabled ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

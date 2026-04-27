@@ -5,6 +5,9 @@ const { auth, isAdmin, authenticate } = require('../middleware/auth');
 
 // GET settings: any authenticated user can read (needed for ASIN optimization rules etc.)
 router.get('/', auth, systemSettingController.getSettings);
+router.get('/octoparse-automation', auth, systemSettingController.getOctoparseAutomation);
+router.post('/octoparse-automation', auth, isAdmin, systemSettingController.toggleOctoparseAutomation);
+
 router.get('/:key', auth, systemSettingController.getSettingByKey);
 
 // Write routes: admin only

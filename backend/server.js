@@ -49,6 +49,24 @@ async function verifySqlConnection() {
 
 verifySqlConnection();
 
+async function loadAutomationSetting() {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query("SELECT Value FROM SystemSettings WHERE [Key] = 'octoparse_automation_enabled'");
+    
+    if (result.recordset.length > 0) {
+      process.env.AUTOMATION_ENABLED = result.recordset[0].Value;
+      console.log(`🔧 Loaded automation setting: ${process.env.AUTOMATION_ENABLED}`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not load automation setting:', err.message);
+  }
+}
+
+// Call after DB connection
+loadAutomationSetting();
+
 // Request Logging Middleware
 app.use((req, res, next) => {
   console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -459,12 +477,10 @@ server.listen(PORT, () => {
   const schedulerService = require('./services/schedulerService');
   schedulerService.init();
 
-  if (process.env.AUTOMATION_ENABLED !== 'true') {
-    console.log('🌐 Direct Scraper initialized (Simple mode)');
-    const autoScrape = require('./cron/autoScrape');
-    autoScrape.init();
+  if (process.env.AUTOMATION_ENABLED === 'true') {
+    console.log('🤖 Octoparse Automation enabled');
   } else {
-    console.log('🤖 Octoparse Automation enabled - Direct scraper disabled');
+    console.log('🛑 Octoparse Automation paused (Direct scraper deprecated)');
   }
 
   try {

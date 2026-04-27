@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import OctoparseAutomationToggle from '../components/settings/OctoparseAutomationToggle';
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState({
@@ -80,22 +81,27 @@ const SettingsPage = () => {
     setTestingOctoparse(false);
   };
 
-   return (
-     <>
-       {loading && (
-         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #4F46E5, #10B981)', zIndex: 9999 }}>
-         </div>
-       )}
-       <div className="page-header">
-         <h1 className="page-title"><i className="bi bi-gear"></i>Settings</h1>
-       </div>
-       <div className="page-content">
+  return (
+    <>
+      {loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #4F46E5, #10B981)', zIndex: 9999 }}>
+        </div>
+      )}
+      <div className="page-header">
+        <h1 className="page-title"><i className="bi bi-gear"></i>Settings</h1>
+      </div>
+      <div className="page-content">
         <div className="row">
           <div className="col-lg-8">
+            <div className="settings-section">
+              <h5 className="fw-bold mb-3">Automation Controls</h5>
+              <OctoparseAutomationToggle />
+            </div>
+
             {/* Octoparse API Settings */}
             <div className="card mb-4">
               <div className="card-header">
-                <h5 className="mb-0"><i className="bi bi-cloud"></i> Octoparse Cloud API</h5>
+                <h5 className="mb-0"><i className="bi bi-cloud"></i>Cloud API</h5>
               </div>
               <div className="card-body">
                 <p className="text-muted mb-3">

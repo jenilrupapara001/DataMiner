@@ -154,7 +154,7 @@ class MarketDataSyncService {
     isConfigured() {
         const username = process.env.MARKET_SYNC_USERNAME;
         const password = process.env.MARKET_SYNC_PASSWORD;
-
+        
         // Strictly use username/password flow for generating Access Tokens
         return !!(username && password &&
             username !== 'demo-provider' &&
@@ -1683,7 +1683,7 @@ class MarketDataSyncService {
 
             // 10. Listing Quality Analysis (LQS) - New Implementation
             const productDescription = this._getFromRaw(rawData, ['Product_Description', 'product_description', 'Field9'], asin.ProductDescription || '');
-            
+
             const lqsAnalysis = listingQualityService.analyzeRaw({
                 title,
                 bulletPointsText,
@@ -1696,7 +1696,7 @@ class MarketDataSyncService {
 
             const lqsScore = lqsAnalysis.totalScore;
             const lqsGrade = lqsAnalysis.totalGrade;
-            
+
             // --- Price Trend History (Last 7 Days) ---
             let history = [];
             try {
@@ -1704,7 +1704,7 @@ class MarketDataSyncService {
             } catch (e) {
                 history = [];
             }
-            
+
             // Add current point
             history.push({
                 price: price > 0 ? price : (asin.CurrentPrice || 0),
@@ -1715,7 +1715,7 @@ class MarketDataSyncService {
                 videoCount: videoCount || asin.VideoCount || 0,
                 date: now.toISOString().split('T')[0]
             });
-            
+
             // Keep last 7 unique days
             const uniqueHistory = [];
             const seenDates = new Set();
@@ -1742,32 +1742,32 @@ class MarketDataSyncService {
                 LQS: lqsScore,
                 LQSGrade: lqsGrade,
                 LqsDetails: JSON.stringify(lqsAnalysis.components.title.issues), // Fallback for legacy
-                
+
                 // Detailed Quality Components
                 TitleScore: lqsAnalysis.components.title.score,
                 TitleGrade: lqsAnalysis.components.title.grade,
                 TitleIssues: JSON.stringify(lqsAnalysis.components.title.issues),
                 TitleRecommendations: JSON.stringify(lqsAnalysis.components.title.recommendations),
                 TitleDetails: JSON.stringify(lqsAnalysis.components.title.details),
-                
+
                 BulletScore: lqsAnalysis.components.bullets.score,
                 BulletGrade: lqsAnalysis.components.bullets.grade,
                 BulletIssues: JSON.stringify(lqsAnalysis.components.bullets.issues),
                 BulletRecommendations: JSON.stringify(lqsAnalysis.components.bullets.recommendations),
                 BulletDetails: JSON.stringify(lqsAnalysis.components.bullets.details),
-                
+
                 ImageScore: lqsAnalysis.components.images.score,
                 ImageGrade: lqsAnalysis.components.images.grade,
                 ImageIssues: JSON.stringify(lqsAnalysis.components.images.issues),
                 ImageRecommendations: JSON.stringify(lqsAnalysis.components.images.recommendations),
                 ImageDetails: JSON.stringify(lqsAnalysis.components.images.details),
-                
+
                 DescriptionScore: lqsAnalysis.components.description.score,
                 DescriptionGrade: lqsAnalysis.components.description.grade,
                 DescriptionIssues: JSON.stringify(lqsAnalysis.components.description.issues),
                 DescriptionRecommendations: JSON.stringify(lqsAnalysis.components.description.recommendations),
                 DescriptionDetails: JSON.stringify(lqsAnalysis.components.description.details),
-                
+
                 ProductDescription: productDescription,
                 BuyBoxStatus: buyBoxWin ? 1 : 0,
                 ImageUrl: mainImageUrl,
@@ -1781,7 +1781,7 @@ class MarketDataSyncService {
                 StockLevel: stockLevel,
                 SoldBy: soldBy || asin.SoldBy || '',
                 BuyBoxWin: buyBoxWin ? 1 : 0,
-                BuyBoxSellerId: soldBy || asin.SoldBy || '', 
+                BuyBoxSellerId: soldBy || asin.SoldBy || '',
                 SecondAsp: secondAsp,
                 SoldBySec: soldBySec,
                 AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
@@ -1843,7 +1843,7 @@ class MarketDataSyncService {
             }
             */
 
-            console.log(`✅ SQL Metrics updated for ASIN: ${asin.AsinCode}`);
+            // console.log(`✅ SQL Metrics updated for ASIN: ${asin.AsinCode}`);
             return true;
         } catch (error) {
             console.error(`❌ SQL Metric Update Error (${asinId}):`, error.message);
@@ -1946,13 +1946,13 @@ class MarketDataSyncService {
 
                 const normalizedCode = code.toUpperCase();
                 let asin = asinMap.get(normalizedCode);
-                
+
                 if (!asin) {
                     // Create missing ASIN if it's found in Octoparse data but not in SQL
                     try {
                         const newAsinId = generateId();
                         const productName = this._getFromRaw(rawData, ['Product_Name', 'title', 'Field1'], 'Unknown Product');
-                        
+
                         await pool.request()
                             .input('id', sql.VarChar, newAsinId)
                             .input('sellerId', sql.VarChar, sellerId)
@@ -1962,7 +1962,7 @@ class MarketDataSyncService {
                                 INSERT INTO Asins (Id, SellerId, AsinCode, Title, Status, CreatedAt, UpdatedAt)
                                 VALUES (@id, @sellerId, @asinCode, @title, 'Active', GETDATE(), GETDATE())
                             `);
-                        
+
                         console.log(`[MarketSync] Automatically created missing ASIN ${normalizedCode} for seller ${sellerId}`);
                         asin = { Id: newAsinId, AsinCode: normalizedCode };
                     } catch (createErr) {
@@ -2309,7 +2309,7 @@ class MarketDataSyncService {
                 if (value.includes('<') && value.includes('>')) {
                     const extracted = this._extractSellerFromBuyboxHtml(value);
                     if (extracted) return extracted;
-                    
+
                     // Simple regex fallback if helper fails
                     let clean = value.replace(/<[^>]+>/g, '').trim();
                     clean = clean.replace(/^(Sold by|Ships from)\s*/i, '').trim();
@@ -2320,7 +2320,7 @@ class MarketDataSyncService {
                 return clean;
             }
         }
-        
+
         // Fallback: check secondary buybox or other fields that might contain HTML
         const htmlFields = ['second_buybox', 'Alt_buyBox', 'Field25', 'buybox_html'];
         for (const field of htmlFields) {
@@ -2330,7 +2330,7 @@ class MarketDataSyncService {
                 if (extracted) return extracted;
             }
         }
-        
+
         return '';
     }
 

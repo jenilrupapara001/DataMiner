@@ -187,7 +187,8 @@ const syncSellerFromKeepa = async (seller) => {
         }
 
         // BACKGROUND: Trigger Octoparse sync for the newly discovered ASINs
-        if (newAsins.length > 0 && MarketSyncService.isConfigured()) {
+        const automationEnabled = process.env.AUTOMATION_ENABLED !== 'false';
+        if (newAsins.length > 0 && MarketSyncService.isConfigured() && automationEnabled) {
             console.log(`🤖 [SellerTracker] Triggering ROBUST Octoparse sync for: ${seller.name} (+${newAsins.length} ASINs)`);
             MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { triggerScrape: true })
                 .catch(err => console.error(`⚠️ [SellerTracker] Octoparse trigger failed for ${seller.name}:`, err.message));

@@ -30,16 +30,22 @@ class SchedulerService {
         const [scheduleHour, scheduleMinute] = scheduleTime.split(':');
         const cronExpr = `${scheduleMinute || 0} ${scheduleHour || 0} * * *`;
         
-        if (process.env.AUTOMATION_ENABLED !== 'false') {
-            this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
-                console.log('🏢 Starting Enterprise Octoparse Automation Pipeline...');
-                await this.runEnterprisePipeline();
-            });
-            console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
-        }
+        this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
+            if (process.env.AUTOMATION_ENABLED === 'false') {
+                console.log('🏢 Enterprise Pipeline skipped (Automation is disabled)');
+                return;
+            }
+            console.log('🏢 Starting Enterprise Octoparse Automation Pipeline...');
+            await this.runEnterprisePipeline();
+        });
+        console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
 
         // 4. Octoparse Daily 1 PM Sync
         this.jobs.daily1PMSync = cron.schedule('0 13 * * *', async () => {
+            if (process.env.AUTOMATION_ENABLED === 'false') {
+                console.log('🕒 Daily 1 PM Sync skipped (Automation is disabled)');
+                return;
+            }
             console.log('🕒 Starting Daily 1 PM Octoparse Enterprise Pipeline...');
             await this.runEnterprisePipeline();
         });
@@ -58,8 +64,12 @@ class SchedulerService {
             console.log('🚀 Running initial Keepa sync on startup...');
             this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
             
-            console.log('🔄 Checking Octoparse tasks on startup...');
-            this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
+            if (process.env.AUTOMATION_ENABLED !== 'false') {
+                console.log('🔄 Checking Octoparse tasks on startup...');
+                this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
+            } else {
+                console.log('🔄 Skipping Octoparse recovery on startup (Automation disabled)');
+            }
         }, 30000); // 30 second delay
     }
 

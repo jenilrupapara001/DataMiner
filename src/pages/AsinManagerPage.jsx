@@ -1089,28 +1089,7 @@ const AsinManagerPage = () => {
     return <PageLoader message="Loading ASIN Manager..." />;
   }
 
-  if (loading && asins.length > 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#f9fafb' }}>
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-          <LoadingIndicator type="line-simple" size="sm" />
-        </div>
-        <div className="page-header" style={{ padding: '0.75rem 1.5rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h1 className="h6 mb-0 fw-bold">ASIN Manager</h1>
-            </div>
-          </div>
-        </div>
-        <div className="page-content py-5 d-flex flex-column align-items-center justify-content-center" style={{ flex: 1 }}>
-          <div className="d-flex flex-column justify-content-center align-items-center">
-            <RefreshCw className="text-primary spin mb-3" size={32} />
-            <p className="text-muted smallest fw-500">Synchronizing Operation Data...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
 
   const thStyle = {
@@ -1619,6 +1598,11 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', color: '#b91c1c' }}>A+ DAYS</th>
                 </tr>
                 <tr>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Bullet Points Score">BLT</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>
+                  <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>
                   {/* Price Trend Dates */}
                   {historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`p-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#eef2ff', color: '#6366f1' }}>
@@ -1643,11 +1627,6 @@ const AsinManagerPage = () => {
                       {date.label}
                     </th>
                   )))}
-                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>
-                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Bullet Points Score">BLT</th>
-                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>
-                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>
-                  <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
