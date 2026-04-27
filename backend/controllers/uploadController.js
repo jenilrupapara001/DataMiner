@@ -168,7 +168,7 @@ exports.uploadAdsData = async (req, res) => {
             if (existing.recordset.length > 0) {
               // Update
               await transaction.request()
-                .input('id', sql.VarChar, existing.recordset[0].Id)
+                .input('id', sql.Int, existing.recordset[0].Id)
                 .input('spend', sql.Decimal(18,2), spend)
                 .input('sales', sql.Decimal(18,2), sales)
                 .input('impressions', sql.Int, impressions)
@@ -176,9 +176,7 @@ exports.uploadAdsData = async (req, res) => {
                 .input('orders', sql.Int, orders)
                 .query(`UPDATE AdsPerformance SET AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders WHERE Id=@id`);
             } else {
-              const id = generateId();
               await transaction.request()
-                .input('id', sql.VarChar, id)
                 .input('asin', sql.VarChar, asin)
                 .input('date', sql.Date, parsedDate)
                 .input('reportType', sql.NVarChar, 'daily')
@@ -187,7 +185,7 @@ exports.uploadAdsData = async (req, res) => {
                 .input('impressions', sql.Int, impressions)
                 .input('clicks', sql.Int, clicks)
                 .input('orders', sql.Int, orders)
-                .query(`INSERT INTO AdsPerformance (Id, Asin, Date, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@id,@asin,@date,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
+                .query(`INSERT INTO AdsPerformance (Asin, Date, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@asin,@date,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
             }
           } else {
             // monthly similar, using Month field
@@ -198,7 +196,7 @@ exports.uploadAdsData = async (req, res) => {
               .query('SELECT Id FROM AdsPerformance WHERE Asin = @asin AND Month = @month AND ReportType = \'monthly\'');
             if (existing.recordset.length > 0) {
               await transaction.request()
-                .input('id', sql.VarChar, existing.recordset[0].Id)
+                .input('id', sql.Int, existing.recordset[0].Id)
                 .input('spend', sql.Decimal(18,2), spend)
                 .input('sales', sql.Decimal(18,2), sales)
                 .input('impressions', sql.Int, impressions)
@@ -206,9 +204,7 @@ exports.uploadAdsData = async (req, res) => {
                 .input('orders', sql.Int, orders)
                 .query(`UPDATE AdsPerformance SET AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders WHERE Id=@id`);
             } else {
-              const id = generateId();
               await transaction.request()
-                .input('id', sql.VarChar, id)
                 .input('asin', sql.VarChar, asin)
                 .input('month', sql.Date, monthDate)
                 .input('reportType', sql.NVarChar, 'monthly')
@@ -217,7 +213,7 @@ exports.uploadAdsData = async (req, res) => {
                 .input('impressions', sql.Int, impressions)
                 .input('clicks', sql.Int, clicks)
                 .input('orders', sql.Int, orders)
-                .query(`INSERT INTO AdsPerformance (Id, Asin, Month, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@id,@asin,@month,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
+                .query(`INSERT INTO AdsPerformance (Asin, Month, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@asin,@month,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
             }
           }
           processed++;
