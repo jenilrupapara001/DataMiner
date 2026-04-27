@@ -133,8 +133,7 @@ const AdsReport = () => {
         Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
       );
 
-      const query = new URLSearchParams(cleanParams).toString();
-      const res = await api.get(`/data/ads/report?${query}`);
+      const res = await api.get('/data/ads-report', cleanParams);
       setData(res.data || []);
       setDailyData(res.dailyData || []);
 
@@ -519,43 +518,6 @@ const efficiencyMetrics = useMemo(() => {
             <p className="text-muted small mb-0">Cross-channel Advertising Performance & Attribution</p>
           </div>
           <div className="d-flex align-items-center gap-2">
-            <div className="d-flex align-items-center gap-2 bg-white border border-zinc-200 p-1.5 rounded-3 shadow-sm">
-              <Calendar size={14} className="text-muted ms-2" />
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent"
-                style={{ width: '120px' }}
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
-              </select>
-              <select
-                className="form-select form-select-sm border-0 smallest fw-700 text-zinc-700 focus-none bg-transparent"
-                style={{ width: '80px' }}
-                value={selectedYear}
-                onChange={(e) => {
-                  setSelectedYear(parseInt(e.target.value));
-                  setDateRange('month');
-                }}
-              >
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <div className="vr bg-zinc-200 mx-1" style={{ height: '20px' }}></div>
-              <DateRangePicker
-                startDate={customStart}
-                endDate={customEnd}
-                onDateChange={(start, end) => {
-                  setCustomStart(start);
-                  setCustomEnd(end);
-                  if (start && end) setDateRange('custom');
-                }}
-                placeholder="Custom Range"
-              />
-            </div>
-
             <div className="d-flex gap-2">
               <button
                 className={`btn btn-sm rounded-pill px-3 py-1.5 fw-bold transition-all border shadow-sm ${compareMode ? 'btn-primary border-primary' : 'btn-white border-zinc-200 text-zinc-600'}`}
