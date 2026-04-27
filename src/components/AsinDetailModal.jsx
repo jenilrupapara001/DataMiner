@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image, AlertCircle, Trophy } from 'lucide-react';
+import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image, AlertCircle, Trophy, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import Chart from 'react-apexcharts';
 import { subDays, startOfDay, endOfDay, format } from 'date-fns';
@@ -25,6 +25,74 @@ const getLastValidData = (asin, field, defaultValue = 0) => {
   }
   
   return { value: defaultValue, source: 'none' };
+};
+
+const ScoreCard = ({ title, score, grade, issues = [], recommendations = [], color = '#6366f1' }) => {
+  const parsedIssues = typeof issues === 'string' ? (issues.startsWith('[') ? JSON.parse(issues) : issues.split(',').filter(Boolean)) : (issues || []);
+  const parsedRecs = typeof recommendations === 'string' ? (recommendations.startsWith('[') ? JSON.parse(recommendations) : recommendations.split(',').filter(Boolean)) : (recommendations || []);
+
+  return (
+    <div className="bg-white border rounded-2xl p-4 shadow-sm h-100 transition-all hover:shadow-md">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <div className="d-flex align-items-center gap-2">
+          <h6 className="mb-0 fw-bold text-slate-800">{title}</h6>
+        </div>
+        <div className="d-flex align-items-center gap-2">
+          <span className="badge rounded-pill px-2 py-1" style={{ backgroundColor: color + '15', color: color, fontWeight: 700, fontSize: '10px' }}>
+            Grade {grade || 'N/A'}
+          </span>
+          <span className="fw-bold text-slate-900" style={{ fontSize: '13px' }}>{score || 0}/100</span>
+        </div>
+      </div>
+      
+      <div className="mb-3">
+        <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+          <div style={{ width: `${score || 0}%`, height: '100%', background: color, borderRadius: '3px', transition: 'width 0.6s ease' }} />
+        </div>
+      </div>
+
+      <div className="d-flex flex-column gap-3">
+        {parsedIssues.length > 0 && (
+          <div>
+            <p className="smallest fw-bold text-slate-400 text-uppercase mb-2 tracking-wider d-flex align-items-center gap-1" style={{ fontSize: '9px' }}>
+              <AlertTriangle size={10} className="text-danger" /> Issues Found
+            </p>
+            <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+              {parsedIssues.slice(0, 3).map((issue, idx) => (
+                <li key={idx} className="d-flex align-items-start gap-2 text-slate-600" style={{ fontSize: '11px', lineHeight: 1.4 }}>
+                  <span className="text-danger mt-1" style={{ fontSize: '8px' }}>●</span>
+                  <span>{issue}</span>
+                </li>
+              ))}
+              {parsedIssues.length > 3 && <li className="smallest text-muted ps-3">+{parsedIssues.length - 3} more issues</li>}
+            </ul>
+          </div>
+        )}
+
+        {parsedRecs.length > 0 ? (
+          <div>
+            <p className="smallest fw-bold text-indigo-400 text-uppercase mb-2 tracking-wider d-flex align-items-center gap-1" style={{ fontSize: '9px' }}>
+              <Sparkles size={10} className="text-amber-500" /> Optimization Tasks
+            </p>
+            <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+              {parsedRecs.slice(0, 3).map((rec, idx) => (
+                <li key={idx} className="d-flex align-items-start gap-2 text-slate-700" style={{ fontSize: '11px', lineHeight: 1.4 }}>
+                  <CheckCircle2 size={11} className="text-emerald-500 mt-1 flex-shrink-0" />
+                  <span className="fw-medium">{rec}</span>
+                </li>
+              ))}
+              {parsedRecs.length > 3 && <li className="smallest text-muted ps-4">+{parsedRecs.length - 3} more suggestions</li>}
+            </ul>
+          </div>
+        ) : (
+          <div className="py-2 px-3 bg-emerald-50 rounded-xl border border-emerald-100 d-flex align-items-center gap-2">
+            <CheckCircle2 size={14} className="text-emerald-500" />
+            <span className="smallest text-emerald-700 fw-bold">Optimized Perfect!</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const AsinDetailModal = ({ asin, isOpen, onClose }) => {
@@ -646,54 +714,186 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
             </div>
           </div>
 
+          {/* LQS Detailed Analysis Row */}
+          <div className="mb-5">
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <div className="d-flex align-items-center gap-3">
+                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-sm"><Activity size={20} /></div>
+                <div>
+                  <h5 className="mb-0 fw-bold text-slate-900">LISTING QUALITY SCORE (LQS)</h5>
+                  <p className="small text-muted mb-0">Deep analysis based on Amazon's listing requirements</p>
+                </div>
+              </div>
+              <div className="d-flex align-items-center gap-4 bg-white px-4 py-2 border rounded-2xl shadow-sm">
+                 <div className="text-center">
+                   <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Overall LQS</div>
+                   <div className="h4 mb-0 fw-bold" style={{ color: (asin.lqs || 0) > 80 ? '#059669' : (asin.lqs || 0) > 60 ? '#d97706' : '#dc2626' }}>
+                     {asin.lqs || 0}%
+                   </div>
+                 </div>
+                 <div className="vr" style={{ height: '30px' }} />
+                 <div className="text-center">
+                   <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Status</div>
+                   <div className="badge rounded-pill px-3" style={{ 
+                     backgroundColor: (asin.lqs || 0) > 80 ? '#ecfdf5' : (asin.lqs || 0) > 60 ? '#fffbeb' : '#fef2f2',
+                     color: (asin.lqs || 0) > 80 ? '#059669' : (asin.lqs || 0) > 60 ? '#d97706' : '#dc2626',
+                     fontWeight: 700,
+                     fontSize: '11px'
+                   }}>
+                     {(asin.lqs || 0) > 80 ? 'EXCELLENT' : (asin.lqs || 0) > 60 ? 'GOOD' : 'CRITICAL'}
+                   </div>
+                 </div>
+              </div>
+            </div>
+            
+            <div className="row g-4">
+              <div className="col-md-3">
+                <ScoreCard 
+                  title="Product Title" 
+                  score={asin.titleScore} 
+                  grade={asin.titleGrade} 
+                  issues={asin.titleIssues} 
+                  recommendations={asin.titleRecommendations}
+                  color="#4f46e5"
+                />
+              </div>
+              <div className="col-md-3">
+                <ScoreCard 
+                  title="Bullet Points" 
+                  score={asin.bulletScore} 
+                  grade={asin.bulletGrade} 
+                  issues={asin.bulletIssues} 
+                  recommendations={asin.bulletRecommendations}
+                  color="#8b5cf6"
+                />
+              </div>
+              <div className="col-md-3">
+                <ScoreCard 
+                  title="Images & Video" 
+                  score={asin.imageScore} 
+                  grade={asin.imageGrade} 
+                  issues={asin.imageIssues} 
+                  recommendations={asin.imageRecommendations}
+                  color="#ec4899"
+                />
+              </div>
+              <div className="col-md-3">
+                <ScoreCard 
+                  title="Description / A+" 
+                  score={asin.descriptionScore} 
+                  grade={asin.descriptionGrade} 
+                  issues={asin.descriptionIssues} 
+                  recommendations={asin.descriptionRecommendations}
+                  color="#06b6d4"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Visualizations Stack (Full Width) */}
           <div className="d-flex flex-column gap-5">
             {/* Bullet Points Cards - Always show if there's data */}
             <div className="bg-white border p-4 rounded-3xl shadow-sm">
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><ListChecks size={20} /></div>
-                <h6 className="mb-0 fw-bold text-slate-800">PRODUCT FEATURES ({asin.bulletPoints || asin.bulletPointsText?.length || 0})</h6>
-              </div>
-              {(() => {
-                // Determine the best source for bullet points
-                const bullets = asin.bulletPointsText || asin.bulletPointsList || asin.bullets || [];
-                
-                if (bullets.length > 0) {
-                  return (
-                    <div className="row g-2">
-                      {bullets.map((bullet, idx) => (
-                        <div key={idx} className="col-md-6 mb-2">
-                          <div
-                            className="d-flex gap-2 p-2 bg-slate-50 rounded-xl border-start border-3 border-indigo-100"
-                            style={{ fontSize: '0.85rem', backgroundColor: '#f8fafc' }}
-                          >
-                            <div className="d-flex align-items-center justify-content-center flex-shrink-0" 
-                                 style={{ width: 18, height: 18, borderRadius: '50%', background: '#6366f1', color: '#fff', fontSize: '9px', fontWeight: 700 }}>
-                              {idx + 1}
-                            </div>
-                            <div className="text-slate-600 truncate-lines-2" style={{ lineHeight: '1.4' }}>{bullet}</div>
-                          </div>
-                        </div>
-                      ))}
+                <div className="d-flex align-items-center gap-2 mb-3">
+                    <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
+                        <ListChecks size={20} />
                     </div>
-                  );
-                }
-                
-                // Fallback for raw bullet_points HTML or single string
-                if (asin.bullet_points && typeof asin.bullet_points === 'string') {
-                  return (
-                    <div className="p-3 bg-slate-50 rounded-2xl border Leading-relaxed text-slate-700" style={{ fontSize: '0.9rem' }}>
-                      <div dangerouslySetInnerHTML={{ __html: asin.bullet_points }} />
-                    </div>
-                  );
-                }
+                    <h6 className="mb-0 fw-bold text-slate-800">
+                        PRODUCT FEATURES ({asin.bulletPoints || asin.bulletPointsText?.length || 0})
+                    </h6>
+                </div>
+                {(() => {
+                    // Determine best source for bullet points
+                    const bullets = (() => {
+                        // If bulletPointsText is an array with strings
+                        if (Array.isArray(asin.bulletPointsText) && asin.bulletPointsText.length > 0) {
+                            return asin.bulletPointsText.filter(b => typeof b === 'string' && b.trim().length > 0);
+                        }
+                        // If bulletPointsText is a string (HTML or single text)
+                        if (typeof asin.bulletPointsText === 'string' && asin.bulletPointsText.length > 10) {
+                            // Try to parse as JSON first
+                            try {
+                                const parsed = JSON.parse(asin.bulletPointsText);
+                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                    return parsed.filter(b => typeof b === 'string' && b.trim().length > 0);
+                                }
+                            } catch (e) {}
+                            
+                            // Check if it's HTML
+                            if (asin.bulletPointsText.includes('<li') || asin.bulletPointsText.includes('<span')) {
+                                // Extract text from HTML
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = asin.bulletPointsText;
+                                const items = Array.from(tempDiv.querySelectorAll('li, .a-list-item'))
+                                    .map(el => el.textContent.trim())
+                                    .filter(t => t.length > 3);
+                                if (items.length > 0) return items;
+                            }
+                            
+                            // Return as single item
+                            return [asin.bulletPointsText.replace(/<[^>]+>/g, '').trim()];
+                        }
+                        // Fallback: check legacy fields
+                        if (asin.bulletPointsList && Array.isArray(asin.bulletPointsList)) {
+                            return asin.bulletPointsList;
+                        }
+                        if (asin.bullets && Array.isArray(asin.bullets)) {
+                            return asin.bullets;
+                        }
+                        return [];
+                    })();
 
-                return (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-dashed text-center">
-                    <p className="text-muted small mb-0">No bullet points discovered for this listing yet.</p>
-                  </div>
-                );
-              })()}
+                    if (bullets.length > 0) {
+                        return (
+                            <div className="row g-3">
+                                {bullets.map((bullet, idx) => (
+                                    <div key={idx} className="col-md-6">
+                                        <div
+                                            className="d-flex gap-3 p-3 bg-slate-50 rounded-xl border-start border-4 border-indigo-400 hover:border-indigo-600 transition-all"
+                                            style={{ fontSize: '0.85rem', minHeight: '50px' }}
+                                        >
+                                            <div 
+                                                className="d-flex align-items-center justify-content-center flex-shrink-0 rounded-circle"
+                                                style={{ 
+                                                    width: '26px', 
+                                                    height: '26px', 
+                                                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)', 
+                                                    color: '#fff', 
+                                                    fontSize: '11px', 
+                                                    fontWeight: 700 
+                                                }}
+                                            >
+                                                {idx + 1}
+                                            </div>
+                                            <div className="text-slate-700" style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
+                                                {bullet}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    }
+
+                    // Fallback for raw HTML string
+                    if (typeof asin.bullet_points === 'string' && asin.bullet_points.length > 20) {
+                        return (
+                            <div 
+                                className="p-4 bg-slate-50 rounded-2xl border leading-relaxed text-slate-700" 
+                                style={{ fontSize: '0.9rem' }}
+                                dangerouslySetInnerHTML={{ __html: asin.bullet_points }} 
+                            />
+                        );
+                    }
+
+                    return (
+                        <div className="p-5 bg-slate-50 rounded-2xl border border-dashed text-center">
+                            <ListChecks size={32} className="text-slate-300 mb-2" />
+                            <p className="text-muted small mb-0">No bullet points discovered for this listing yet.</p>
+                            <p className="text-muted smallest mt-1">Scrape the ASIN to extract product features.</p>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Rating Breakdown - Uses fallback from history if current missing */}

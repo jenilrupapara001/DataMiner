@@ -84,6 +84,7 @@ const sellerAsinTrackerRoutes = require('./routes/sellerAsinTrackerRoutes');
 const revenueRoutes = require('./routes/revenueRoutes');
 const goalRoutes = require('./routes/goalRoutes');
 const asinTableRoutes = require('./routes/asinTableRoutes');
+const listingQualityRoutes = require('./routes/listingQualityRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -113,6 +114,7 @@ app.use('/api/seller-tracker', sellerAsinTrackerRoutes);
 app.use('/api/revenue-engine', revenueRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/asins-table', asinTableRoutes);
+app.use('/api/listing-quality', listingQualityRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {
@@ -147,6 +149,11 @@ const PORT = process.env.PORT || 3001;
 const http = require('http');
 console.log('📡 Creating HTTP server...');
 const server = http.createServer(app);
+
+// Increase timeouts for large data uploads (Octoparse ingestion)
+server.timeout = 600000; // 10 minutes
+server.keepAliveTimeout = 610000;
+server.headersTimeout = 620000;
 
 // --- Socket.io Integration ---
 console.log('📡 Initializing Socket.io...');

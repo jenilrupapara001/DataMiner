@@ -62,6 +62,8 @@ router.post('/import-csv', protect, requirePermission('sellers_manage_asins'), u
 router.post('/upload-raw', protect, requirePermission('sellers_manage_asins'), asinController.uploadRawAsins);
 router.post('/parse-test', protect, requirePermission('sellers_manage_asins'), asinController.testParseRaw);
 
+router.post('/export', protect, requirePermission('sellers_view'), asinController.exportData);
+
 router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);
 router.delete('/:id', protect, requirePermission('sellers_manage_asins'), asinController.deleteAsin);

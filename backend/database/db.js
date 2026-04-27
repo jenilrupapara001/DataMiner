@@ -10,12 +10,13 @@ const config = {
     database: process.env.DB_NAME,
     port: parseInt(process.env.DB_PORT),
     options: {
-        encrypt: false, // Set to true if using Azure SQL with strict TLS
+        encrypt: false,
         trustServerCertificate: true,
         enableArithAbort: true
     },
+    requestTimeout: 60000,
     pool: {
-        max: 10,
+        max: 25,
         min: 0,
         idleTimeoutMillis: 30000
     }

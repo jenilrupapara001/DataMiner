@@ -727,6 +727,30 @@ export const asinApi = {
     if (!res.ok) throw new Error('Failed to fetch repair status');
     return res.json();
   },
+
+  exportData: async (payload) => {
+    const res = await fetch(`${API_BASE}/asins/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!res.ok) {
+      let errorMessage = 'Export failed';
+      try {
+        const error = await res.json();
+        errorMessage = error.error || error.message || errorMessage;
+      } catch (e) {
+        // Not a JSON response
+        errorMessage = `Server error (${res.status})`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    return { success: true, downloadUrl: url };
+  },
 };
 
 

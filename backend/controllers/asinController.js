@@ -6,6 +6,17 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const AsinDataParser = require('../services/asinDataParser');
 
+// Helper to safely parse JSON
+const tryParse = (data, fallback = []) => {
+    if (!data) return fallback;
+    if (typeof data !== 'string') return data;
+    try {
+        return JSON.parse(data);
+    } catch (e) {
+        return fallback;
+    }
+};
+
 /**
  * Get all ASINs (SQL Version)
  */
@@ -160,119 +171,192 @@ exports.getAsins = async (req, res) => {
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
-      // Parse JSON fields from SQL strings
-      let allOffers = [];
-      try { allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : []; } catch (e) { allOffers = []; }
+        // Build weekHistory from AsinWeekHistory table
+        const weekHistory = (historyMap[a.Id] || []).map(h => ({
+            week: h.week || '',
+            date: h.date ? new Date(h.date).toISOString().split('T')[0] : '',
+            price: h.price || 0,
+            bsr: h.bsr || 0,
+            rating: h.rating || 0,
+            reviews: h.reviews || 0,
+            imageCount: h.imageCount || a.ImagesCount || 0,
+            videoCount: h.videoCount || a.VideoCount || 0,
+            lqs: h.lqs || a.LQS || 0
+        }));
 
-      let subBSRs = [];
-      try { subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : []; } catch (e) { subBSRs = []; }
+        // ---- PARSE ALL JSON FIELDS ----
+        let allOffers = [];
+        try { 
+            allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : []; 
+        } catch (e) { 
+            console.error('Error parsing AllOffers for', a.AsinCode, ':', e.message);
+            allOffers = []; 
+        }
 
-      let images = [];
-      try { images = a.Images ? (typeof a.Images === 'string' ? JSON.parse(a.Images) : a.Images) : []; } catch (e) { images = []; }
+        let subBSRs = [];
+        try { subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : []; } catch (e) { subBSRs = []; }
 
-      let bulletPointsText = [];
-      try { bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : []; } catch (e) { bulletPointsText = []; }
+        let images = [];
+        try { images = a.Images ? (typeof a.Images === 'string' ? JSON.parse(a.Images) : a.Images) : []; } catch (e) { images = []; }
 
-      let ratingBreakdown = {};
-      try { ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {}; } catch (e) { ratingBreakdown = {}; }
+        let bulletPointsText = [];
+        try { bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : []; } catch (e) { bulletPointsText = []; }
+        const bulletPointsCount = parseInt(a.BulletPoints) || bulletPointsText.length || 0;
 
-      let lqsDetails = [];
-      try { lqsDetails = a.LqsDetails ? (typeof a.LqsDetails === 'string' ? JSON.parse(a.LqsDetails) : a.LqsDetails) : []; } catch (e) { lqsDetails = []; }
+        let ratingBreakdown = {};
+        try { ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {}; } catch (e) { ratingBreakdown = {}; }
 
-      let cdqComponents = {};
-      try { cdqComponents = a.CdqComponents ? (typeof a.CdqComponents === 'string' ? JSON.parse(a.CdqComponents) : a.CdqComponents) : {}; } catch (e) { cdqComponents = {}; }
+        let lqsDetails = [];
+        try { lqsDetails = a.LqsDetails ? (typeof a.LqsDetails === 'string' ? JSON.parse(a.LqsDetails) : a.LqsDetails) : []; } catch (e) { lqsDetails = []; }
 
-      let feePreview = {};
-      try { feePreview = a.FeePreview ? (typeof a.FeePreview === 'string' ? JSON.parse(a.FeePreview) : a.FeePreview) : {}; } catch (e) { feePreview = {}; }
+        let cdqComponents = {};
+        try { cdqComponents = a.CdqComponents ? (typeof a.CdqComponents === 'string' ? JSON.parse(a.CdqComponents) : a.CdqComponents) : {}; } catch (e) { cdqComponents = {}; }
 
-      // Parse History (contains price, bsr, rating, imageCount, videoCount over time)
-      let historyParsed = [];
-      try { historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : []; } catch (e) { historyParsed = []; }
+        let feePreview = null;
+        try { feePreview = a.FeePreview ? (typeof a.FeePreview === 'string' ? JSON.parse(a.FeePreview) : a.FeePreview) : null; } catch (e) { feePreview = null; }
 
-      // Get weekHistory from AsinWeekHistory table
-      const weekHistory = (historyMap[a.Id] || []).map(h => ({
-        ...h,
-        imageCount: h.imageCount || a.ImagesCount || 0,
-        videoCount: h.videoCount || a.VideoCount || 0,
-        lqs: h.lqs || a.LQS || 0
-      }));
+        let historyParsed = [];
+        try { historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : []; } catch (e) { historyParsed = []; }
 
-      // Merge: prefer weekHistory from AsinWeekHistory table, fallback to History JSON
-      const finalHistory = weekHistory.length > 0 ? weekHistory : historyParsed;
+        // ---- ENSURE ALLOFFERS HAS CORRECT FORMAT ----
+        // If allOffers is empty, build it from legacy fields
+        if (allOffers.length === 0) {
+            const primaryOffer = {
+                seller: a.SoldBy || '',
+                price: parseFloat(a.CurrentPrice) || 0,
+                isBuyBoxWinner: true
+            };
+            const secondaryOffer = {
+                seller: a.SoldBySec || '',
+                price: parseFloat(a.SecondAsp) || 0,
+                isBuyBoxWinner: false
+            };
+            
+            allOffers = [];
+            if (primaryOffer.seller || primaryOffer.price > 0) allOffers.push(primaryOffer);
+            if (secondaryOffer.seller || secondaryOffer.price > 0) allOffers.push(secondaryOffer);
+        }
 
-      return {
-        ...a,
-        _id: a.Id,
-        asinCode: a.AsinCode,
-        sku: a.Sku,
-        status: a.Status,
-        scrapeStatus: a.ScrapeStatus,
-        category: a.Category,
-        brand: a.Brand,
-        title: a.Title,
-        imageUrl: a.ImageUrl,
-        
-        currentPrice: parseFloat(a.CurrentPrice) || 0,
-        mrp: parseFloat(a.Mrp) || 0,
-        bsr: parseInt(a.BSR) || 0,
-        rating: parseFloat(a.Rating) || 0,
-        reviewCount: parseInt(a.ReviewCount) || 0,
-        lqs: parseFloat(a.LQS) || 0,
-        
-        buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
-        hasAplus: a.HasAplus === 1 || a.HasAplus === true,
-        buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true,
-        
-        soldBy: a.SoldBy || '',
-        soldBySec: a.SoldBySec || '',
-        secondAsp: parseFloat(a.SecondAsp) || 0,
-        aspDifference: parseFloat(a.AspDifference) || 0,
-        dealBadge: a.DealBadge || 'No deal found',
-        priceType: a.PriceType || 'Standard Price',
-        discountPercentage: a.DiscountPercentage || 0,
-        
-        availabilityStatus: a.AvailabilityStatus || 'Available',
-        stockLevel: parseInt(a.StockLevel) || 0,
-        
-        aplusAbsentSince: a.AplusAbsentSince || null,
-        aplusPresentSince: a.AplusPresentSince || null,
-        
-        imagesCount: parseInt(a.ImagesCount) || 0,
-        videoCount: parseInt(a.VideoCount) || 0,
-        bulletPoints: parseInt(a.BulletPoints) || 0,
-        descLength: parseInt(a.DescLength) || 0,
-        
-        cdq: parseInt(a.Cdq) || 0,
-        cdqGrade: a.CdqGrade || 'N/A',
-        
-        weight: parseFloat(a.Weight) || 0,
-        stapleLevel: a.StapleLevel || 'Standard',
-        lossPerReturn: parseFloat(a.LossPerReturn) || 0,
-        
-        subBsr: a.SubBsr || '',
-        
-        allOffers,
-        subBSRs,
-        images,
-        bulletPointsText,
-        ratingBreakdown,
-        lqsDetails,
-        cdqComponents,
-        feePreview,
-        history: historyParsed,
-        weekHistory: finalHistory,
-        
-        seller: {
-          _id: a.SellerId,
-          name: a.sellerName || '',
-          marketplace: a.sellerMarketplace || ''
-        },
-        
-        lastScraped: a.LastScrapedAt,
-        lastScrapedAt: a.LastScrapedAt,
-        createdAt: a.CreatedAt,
-        updatedAt: a.UpdatedAt
-      };
+        // ---- BUILD FINAL RESPONSE OBJECT ----
+        return {
+            _id: a.Id,
+            asinCode: a.AsinCode,
+            sku: a.Sku || '',
+            status: a.Status || 'Active',
+            scrapeStatus: a.ScrapeStatus || 'PENDING',
+            category: a.Category || '',
+            brand: a.Brand || '',
+            title: a.Title || '',
+            imageUrl: a.ImageUrl || '',
+            
+            // Pricing
+            currentPrice: parseFloat(a.CurrentPrice) || 0,
+            mrp: parseFloat(a.Mrp) || 0,
+            uploadedPrice: parseFloat(a.CurrentPrice) || 0,
+            secondAsp: parseFloat(a.SecondAsp) || 0,
+            aspDifference: parseFloat(a.AspDifference) || 0,
+            dealBadge: a.DealBadge || 'No deal found',
+            priceType: a.PriceType || 'Standard Price',
+            discountPercentage: parseInt(a.DiscountPercentage) || 0,
+            
+            // BSR & Ratings
+            bsr: parseInt(a.BSR) || 0,
+            rating: parseFloat(a.Rating) || 0,
+            reviewCount: parseInt(a.ReviewCount) || 0,
+            ratingBreakdown: ratingBreakdown,
+            
+            // LQS & CDQ
+            lqs: parseFloat(a.LQS) || 0,
+            lqsGrade: a.LQSGrade || 'N/A',
+            lqsDetails: lqsDetails,
+            cdq: parseInt(a.Cdq) || 0,
+            cdqGrade: a.CdqGrade || 'N/A',
+            cdqComponents: cdqComponents,
+            
+            // Quality Component Scores
+            titleScore: parseFloat(a.TitleScore) || 0,
+            titleGrade: a.TitleGrade || 'N/A',
+            bulletScore: parseFloat(a.BulletScore) || 0,
+            bulletGrade: a.BulletGrade || 'N/A',
+            imageScore: parseFloat(a.ImageScore) || 0,
+            imageGrade: a.ImageGrade || 'N/A',
+            descriptionScore: parseFloat(a.DescriptionScore) || 0,
+            descriptionGrade: a.DescriptionGrade || 'N/A',
+            
+            // Quality Component Issues/Recs (Parsed if needed by UI)
+            titleIssues: tryParse(a.TitleIssues, []),
+            titleRecommendations: tryParse(a.TitleRecommendations, []),
+            bulletIssues: tryParse(a.BulletIssues, []),
+            bulletRecommendations: tryParse(a.BulletRecommendations, []),
+            imageIssues: tryParse(a.ImageIssues, []),
+            imageRecommendations: tryParse(a.ImageRecommendations, []),
+            descriptionIssues: tryParse(a.DescriptionIssues, []),
+            descriptionRecommendations: tryParse(a.DescriptionRecommendations, []),
+            
+            productDescription: a.ProductDescription || '',
+            
+            // Fee Preview
+            feePreview: feePreview,
+            
+            // BuyBox (BOOLEAN CONVERSION)
+            buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true || a.BuyBoxWin === 'true',
+            buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true || a.BuyBoxStatus === 'true',
+            buyBoxSellerId: a.BuyBoxSellerId || a.SoldBy || '',
+            
+            // Seller Info
+            soldBy: a.SoldBy || '',
+            soldBySec: a.SoldBySec || '',
+            
+            // A+ Content (BOOLEAN CONVERSION)
+            hasAplus: a.HasAplus === 1 || a.HasAplus === true || a.HasAplus === 'true',
+            aplusAbsentSince: a.AplusAbsentSince || null,
+            aplusPresentSince: a.AplusPresentSince || null,
+            
+            // Availability & Stock
+            availabilityStatus: a.AvailabilityStatus || 'Available',
+            stockLevel: parseInt(a.StockLevel) || 0,
+            
+            // Media
+            imagesCount: parseInt(a.ImagesCount) || 0,
+            videoCount: parseInt(a.VideoCount) || 0,
+            bulletPoints: bulletPointsCount,
+            descLength: parseInt(a.DescLength) || 0,
+            
+            // Sub BSR
+            subBsr: a.SubBsr || '',
+            
+            // Parsed JSON arrays/objects
+            allOffers: allOffers,
+            subBSRs: subBSRs,
+            images: images,
+            bulletPointsText: bulletPointsText,
+            
+            // History
+            history: historyParsed,
+            weekHistory: weekHistory.length > 0 ? weekHistory : historyParsed,
+            
+            // Weight / Staple
+            weight: parseFloat(a.Weight) || 0,
+            stapleLevel: a.StapleLevel || 'Standard',
+            lossPerReturn: parseFloat(a.LossPerReturn) || 0,
+            
+            // Seller object for display
+            seller: {
+                _id: a.SellerId,
+                name: a.sellerName || '',
+                marketplace: a.sellerMarketplace || ''
+            },
+            
+            // Timestamps
+            lastScraped: a.LastScrapedAt || null,
+            lastScrapedAt: a.LastScrapedAt || null,
+            createdAt: a.CreatedAt,
+            updatedAt: a.UpdatedAt,
+            
+            // Preserve original ID
+            Id: a.Id,
+            SellerId: a.SellerId
+        };
     });
 
     res.json({
@@ -395,6 +479,36 @@ exports.getAsin = async (req, res) => {
       
       cdq: parseInt(a.Cdq) || 0,
       cdqGrade: a.CdqGrade || 'N/A',
+      lqsGrade: a.LQSGrade || 'N/A',
+      
+      // Quality Component Scores
+      titleScore: parseFloat(a.TitleScore) || 0,
+      titleGrade: a.TitleGrade || 'N/A',
+      bulletScore: parseFloat(a.BulletScore) || 0,
+      bulletGrade: a.BulletGrade || 'N/A',
+      imageScore: parseFloat(a.ImageScore) || 0,
+      imageGrade: a.ImageGrade || 'N/A',
+      descriptionScore: parseFloat(a.DescriptionScore) || 0,
+      descriptionGrade: a.DescriptionGrade || 'N/A',
+      
+      // Quality Component Issues/Recs/Details
+      titleIssues: tryParse(a.TitleIssues, []),
+      titleRecommendations: tryParse(a.TitleRecommendations, []),
+      titleDetails: tryParse(a.TitleDetails, {}),
+      
+      bulletIssues: tryParse(a.BulletIssues, []),
+      bulletRecommendations: tryParse(a.BulletRecommendations, []),
+      bulletDetails: tryParse(a.BulletDetails, {}),
+      
+      imageIssues: tryParse(a.ImageIssues, []),
+      imageRecommendations: tryParse(a.ImageRecommendations, []),
+      imageDetails: tryParse(a.ImageDetails, {}),
+      
+      descriptionIssues: tryParse(a.DescriptionIssues, []),
+      descriptionRecommendations: tryParse(a.DescriptionRecommendations, []),
+      descriptionDetails: tryParse(a.DescriptionDetails, {}),
+      
+      productDescription: a.ProductDescription || '',
       
       allOffers,
       subBSRs,
@@ -1369,6 +1483,228 @@ exports.uploadRawText = async (req, res) => {
         console.error('Upload raw ASINs error:', error);
         res.status(500).json({ error: error.message });
     }
+};
+
+/**
+ * Export ASIN data to CSV or Excel
+ */
+exports.exportData = async (req, res) => {
+  try {
+    const { 
+      sellerIds = [], 
+      allSellers = false, 
+      fields = [], 
+      dateRange = 'all',
+      managerFilter = 'all',
+      format = 'csv'
+    } = req.body;
+
+    const roleName = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+
+    const pool = await getPool();
+    const request = pool.request();
+
+    // Build WHERE clause
+    let whereClause = 'WHERE 1=1';
+
+    // [1] User Scope / Permission check
+    if (!isGlobalUser) {
+      const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s.Id || s).toString());
+      if (allowedSellerIds.length === 0) {
+        return res.status(403).json({ success: false, error: 'No sellers assigned' });
+      }
+      
+      if (!allSellers && sellerIds.length > 0) {
+        const validIds = sellerIds.filter(id => allowedSellerIds.includes(id));
+        if (validIds.length === 0) {
+          whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        } else {
+          whereClause += ` AND a.SellerId IN (${validIds.map(id => `'${id}'`).join(',')})`;
+        }
+      } else {
+        whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+      }
+    } else {
+      // Admin/Global User
+      if (!allSellers && sellerIds.length > 0) {
+        whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+      }
+      
+      // Manager filter (Global only)
+      if (managerFilter === 'mine' && req.user) {
+        const userSellers = await pool.request()
+          .input('userId', sql.VarChar, (req.user._id || req.user.id).toString())
+          .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
+        const managedIds = userSellers.recordset.map(r => r.SellerId);
+        if (managedIds.length > 0) {
+          whereClause += ` AND a.SellerId IN (${managedIds.map(id => `'${id}'`).join(',')})`;
+        } else {
+          whereClause += ` AND 1=0`; // No sellers assigned to "mine"
+        }
+      } else if (managerFilter === 'unassigned') {
+        whereClause += ` AND a.SellerId NOT IN (SELECT DISTINCT SellerId FROM UserSellers)`;
+      } else if (managerFilter !== 'all') {
+        // Specific manager
+        const userSellers = await pool.request()
+          .input('userId', sql.VarChar, managerFilter)
+          .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
+        const managedIds = userSellers.recordset.map(r => r.SellerId);
+        if (managedIds.length > 0) {
+          whereClause += ` AND a.SellerId IN (${managedIds.map(id => `'${id}'`).join(',')})`;
+        } else {
+          whereClause += ` AND 1=0`;
+        }
+      }
+    }
+
+    // [2] Date filter (based on last scraped)
+    const isCustomDate = typeof dateRange === 'object' && dateRange !== null;
+    
+    if (dateRange !== 'all' && !isCustomDate) {
+      const daysMap = { today: 1, yesterday: 2, '7days': 7, '30days': 30, '90days': 90 };
+      const days = daysMap[dateRange] || 30;
+      whereClause += ` AND a.LastScrapedAt >= DATEADD(DAY, -${days}, GETDATE())`;
+    } else if (isCustomDate) {
+      const { start, end } = dateRange;
+      if (start) {
+        request.input('startDate', sql.VarChar, start);
+        whereClause += ` AND a.LastScrapedAt >= @startDate`;
+      }
+      if (end) {
+        request.input('endDate', sql.VarChar, end);
+        whereClause += ` AND a.LastScrapedAt <= @endDate`;
+      }
+    }
+
+    // Fetch ASINs
+    const query = `
+      SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace
+      FROM Asins a
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      ${whereClause}
+      ORDER BY a.AsinCode ASC
+    `;
+    
+    const result = await request.query(query);
+
+    // Map field keys to SQL column names
+    const fieldMapping = {
+      asinCode: 'AsinCode',
+      sku: 'Sku',
+      title: 'Title',
+      brand: 'Brand',
+      category: 'Category',
+      status: 'Status',
+      scrapeStatus: 'ScrapeStatus',
+      currentPrice: 'CurrentPrice',
+      mrp: 'Mrp',
+      dealBadge: 'DealBadge',
+      priceType: 'PriceType',
+      discountPercentage: 'DiscountPercentage',
+      secondAsp: 'SecondAsp',
+      aspDifference: 'AspDifference',
+      bsr: 'BSR',
+      subBsr: 'SubBsr',
+      subBSRs: 'SubBSRs',
+      rating: 'Rating',
+      reviewCount: 'ReviewCount',
+      ratingBreakdown: 'RatingBreakdown',
+      lqs: 'LQS',
+      cdq: 'Cdq',
+      cdqGrade: 'CdqGrade',
+      buyBoxWin: 'BuyBoxStatus',
+      soldBy: 'SoldBy',
+      soldBySec: 'SoldBySec',
+      allOffers: 'AllOffers',
+      hasAplus: 'HasAplus',
+      imagesCount: 'ImagesCount',
+      videoCount: 'VideoCount',
+      bulletPoints: 'BulletPoints',
+      bulletPointsText: 'BulletPointsText',
+      descLength: 'DescLength',
+      availabilityStatus: 'AvailabilityStatus',
+      stockLevel: 'StockLevel',
+      aplusAbsentSince: 'AplusAbsentSince',
+      aplusPresentSince: 'AplusPresentSince',
+      lastScraped: 'LastScrapedAt',
+      createdAt: 'CreatedAt',
+      updatedAt: 'UpdatedAt',
+    };
+
+    // Label mapping (for header)
+    const fieldLabels = {
+      asinCode: 'ASIN Code', sku: 'SKU', title: 'Product Title', brand: 'Brand',
+      category: 'Category', status: 'Status', scrapeStatus: 'Scrape Status',
+      currentPrice: 'Current Price', mrp: 'MRP', dealBadge: 'Deal Badge',
+      priceType: 'Price Type', discountPercentage: 'Discount %',
+      secondAsp: 'Second ASP', aspDifference: 'ASP Difference',
+      bsr: 'BSR', subBsr: 'Sub BSR', subBSRs: 'Sub BSRs',
+      rating: 'Rating', reviewCount: 'Review Count', ratingBreakdown: 'Rating Breakdown',
+      lqs: 'LQS Score', cdq: 'CDQ Score', cdqGrade: 'CDQ Grade',
+      buyBoxWin: 'BuyBox Winner', soldBy: 'Sold By (Primary)', soldBySec: 'Sold By (Secondary)',
+      allOffers: 'All Offers', hasAplus: 'Has A+', imagesCount: 'Image Count',
+      videoCount: 'Video Count', bulletPoints: 'Bullet Points',
+      bulletPointsText: 'Bullet Points Text', descLength: 'Desc Length',
+      availabilityStatus: 'Availability', stockLevel: 'Stock Level',
+      aplusAbsentSince: 'Aplus Absent Since', aplusPresentSince: 'Aplus Present Since',
+      lastScraped: 'Last Scraped', createdAt: 'Created At', updatedAt: 'Updated At'
+    };
+
+    // Format data
+    const exportData = result.recordset.map(row => {
+      const item = {};
+      fields.forEach(field => {
+        const col = fieldMapping[field];
+        if (col) {
+          let value = row[col];
+          // Convert booleans (SQL BIT)
+          if (field === 'buyBoxWin' || field === 'hasAplus') {
+            value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
+          }
+          // Parse JSON fields
+          if (['allOffers', 'subBSRs', 'bulletPointsText', 'ratingBreakdown'].includes(field)) {
+            try {
+                if (typeof value === 'string') {
+                    value = JSON.stringify(JSON.parse(value || '[]'), null, 0);
+                } else if (value) {
+                    value = JSON.stringify(value, null, 0);
+                } else {
+                    value = '';
+                }
+            } catch (e) {
+              value = value || '';
+            }
+          }
+          item[fieldLabels[field] || field] = value || '';
+        }
+      });
+      return item;
+    });
+
+    // Generate file
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ASINs');
+
+    const fileName = `asin_export_${new Date().toISOString().split('T')[0]}`;
+    
+    if (format === 'csv') {
+      const csvBuffer = XLSX.write(wb, { bookType: 'csv', type: 'buffer' });
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.csv"`);
+      res.setHeader('Content-Type', 'text/csv');
+      res.send(csvBuffer);
+    } else {
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}.xlsx"`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(excelBuffer);
+    }
+
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 };
 
 module.exports = exports;

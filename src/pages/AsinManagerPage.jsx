@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
 const TablePagination = lazy(() => import('@mui/material/TablePagination'));
 import KPICard from '../components/KPICard';
 import ProgressBar from '../components/common/ProgressBar';
@@ -53,6 +53,7 @@ const AsinTrendsModal = lazy(() => import('../components/AsinTrendsModal'));
 const PriceViewModal = lazy(() => import('../components/PriceViewModal'));
 const BSRViewModal = lazy(() => import('../components/BSRViewModal'));
 const RatingViewModal = lazy(() => import('../components/RatingViewModal'));
+const ExportAsinModal = lazy(() => import('../components/asins/ExportAsinModal'));
 import Popover from '../components/common/Popover';
 
 // Helper to generate tiered structure for history columns
@@ -316,6 +317,7 @@ const AsinManagerPage = () => {
   const [allAsins, setAllAsins] = useState([]);
   const [selectedSeller, setSelectedSeller] = useState('');
   const [repairStatus, setRepairStatus] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
@@ -503,8 +505,13 @@ const AsinManagerPage = () => {
     loadData();
   }, [loadData, refreshCount]);
 
+  // Track pending updates for debouncing
+  const pendingRefreshRef = useRef(null);
+  const updatedAsinIdsRef = useRef(new Set());
+
   useEffect(() => {
     if (!socket) return;
+    
     socket.on('scrape_progress', (data) => {
       setScrapeProgress(data);
       if (data.status === 'Complete') {
@@ -515,9 +522,28 @@ const AsinManagerPage = () => {
       }
     });
 
+    // BATCH UPDATES: Collect all updated ASIN IDs and refresh once
     socket.on('scrape_data_ingested', (data) => {
-      console.log('📬 Data ingested via socket, refreshing table...', data);
-      loadData(1);
+      // If we're already handling a batch complete event, we might want to skip individual ones
+      // But for real-time feel, we keep the debounce
+      updatedAsinIdsRef.current.add(data.asinCode);
+      
+      // Clear existing timeout
+      if (pendingRefreshRef.current) clearTimeout(pendingRefreshRef.current);
+      
+      // Wait 3 seconds for more updates, then refresh once
+      pendingRefreshRef.current = setTimeout(() => {
+        console.log(`📬 Batch refresh: Updating table after ${updatedAsinIdsRef.current.size} ASINs changed via socket`);
+        updatedAsinIdsRef.current.clear();
+        loadData(pagination.page);
+        pendingRefreshRef.current = null;
+      }, 3000); // Increased batch window to 3 seconds for stability
+    });
+
+    socket.on('scrape_batch_complete', (data) => {
+      console.log(`📬 Batch update: ${data.count} ASINs processed for seller ${data.sellerId}`);
+      // Refresh the table once for the entire batch
+      loadData(pagination.page);
     });
 
     socket.on('repair_job_progress', (data) => {
@@ -535,8 +561,10 @@ const AsinManagerPage = () => {
     return () => {
       socket.off('scrape_progress');
       socket.off('scrape_data_ingested');
+      socket.off('scrape_batch_complete');
       socket.off('repair_job_progress');
       socket.off('repair_job_finished');
+      if (pendingRefreshRef.current) clearTimeout(pendingRefreshRef.current);
     };
   }, [socket, loadData, pagination.page]);
 
@@ -1523,6 +1551,7 @@ const AsinManagerPage = () => {
                 Bulk Optimization
               </button>
               <button
+                onClick={() => setShowExportModal(true)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
                   fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
@@ -1551,6 +1580,9 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '90px' }}>SKU</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '220px' }}>PRODUCT TITLE</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '130px' }}>CATEGORY</th>
+                  <th colSpan={5} style={{ ...thStyle, background: '#f8fafc', color: '#1e293b', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>
+                    LISTING QUALITY (LQS)
+                  </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right' }}>PRICE</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', color: '#6b7280' }}>MRP</th>
                   <th colSpan={visibleHistoryCols}
@@ -1611,12 +1643,17 @@ const AsinManagerPage = () => {
                       {date.label}
                     </th>
                   )))}
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Bullet Points Score">BLT</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>
+                  <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>
+                  <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAsins.length === 0 ? (
                   <tr>
-                    <td colSpan={25} style={{ padding: '60px 0', background: '#fff' }}>
+                    <td colSpan={54} style={{ padding: '60px 0', background: '#fff' }}>
                       <EmptyState
                         icon={Package}
                         title="No ASINs Found"
@@ -1693,7 +1730,9 @@ const AsinManagerPage = () => {
                     <td style={tdStyle}>{asin.sku || '-'}</td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {asin.imageUrl && (
                         <img src={asin.imageUrl} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'cover' }} />
+                      )}
                         <span style={{
                           whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden',
                           fontSize: 11, cursor: 'pointer'
@@ -1714,6 +1753,55 @@ const AsinManagerPage = () => {
                         }} title={asin.category?.replace(/&amp;/g, '&')}>
                           {(asin.category || '').replace(/&amp;/g, '&').split(/[›>]/).pop()?.trim() || '-'}
                         </span>
+                      </div>
+                    </td>
+                    {/* ===== LISTING QUALITY SCORES ===== */}
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                      {asin.titleScore != null ? (
+                        <span className={`badge ${(asin.titleScore || 0) >= 80 ? 'bg-success' : (asin.titleScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
+                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                          {asin.titleScore || 0}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                      {asin.bulletScore != null ? (
+                        <span className={`badge ${(asin.bulletScore || 0) >= 80 ? 'bg-success' : (asin.bulletScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
+                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                          {asin.bulletScore || 0}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                      {asin.imageScore != null ? (
+                        <span className={`badge ${(asin.imageScore || 0) >= 80 ? 'bg-success' : (asin.imageScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
+                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                          {asin.imageScore || 0}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                      {asin.descriptionScore != null ? (
+                        <span className={`badge ${(asin.descriptionScore || 0) >= 80 ? 'bg-success' : (asin.descriptionScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
+                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                          {asin.descriptionScore || 0}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#f1f5f9' }}>
+                      <div className="fw-bold" style={{ 
+                        color: (asin.lqs || 0) >= 80 ? '#059669' : (asin.lqs || 0) >= 60 ? '#d97706' : '#dc2626',
+                        fontSize: '11px'
+                      }}>
+                        {asin.lqs != null ? `${asin.lqs}%` : '-'}
                       </div>
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}
@@ -1889,20 +1977,27 @@ const AsinManagerPage = () => {
                     {/* ===== OTHER BUYBOX ===== */}
                     <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
                       {(() => {
-                        // Get all offers and filter out the BuyBox winner
+                        // Get all offers array
                         const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
                           ? asin.allOffers
                           : [];
                         
-                        // Remove the winner from the list
-                        const otherOffers = allOffers.filter(o => !o.isBuyBoxWinner);
+                        // Filter out the BuyBox winner (isBuyBoxWinner = true)
+                        // Also filter out the current seller (same as soldBy)
+                        const otherOffers = allOffers.filter(o => {
+                          const isWinner = o.isBuyBoxWinner === true;
+                          const isSameSeller = o.seller && asin.soldBy && 
+                            o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim();
+                          return !isWinner && !isSameSeller;
+                        });
                         
-                        // Fallback: use legacy soldBySec/secondAsp if no allOffers data
+                        // If no other offers, try legacy fields
                         if (otherOffers.length === 0) {
-                          const secSeller = asin.soldBySec;
-                          const secPrice = asin.secondAsp;
+                          const secSeller = asin.soldBySec || '';
+                          const secPrice = parseFloat(asin.secondAsp) || 0;
                           
-                          if (secSeller && secPrice > 0) {
+                          // Only show if different from current soldBy
+                          if (secSeller && secSeller.toLowerCase().trim() !== (asin.soldBy || '').toLowerCase().trim() && secPrice > 0) {
                             return (
                               <div className="d-flex flex-column gap-1">
                                 <span 
@@ -1919,7 +2014,7 @@ const AsinManagerPage = () => {
                             );
                           }
                           
-                          if (secSeller && !secPrice) {
+                          if (secSeller && secSeller.toLowerCase().trim() !== (asin.soldBy || '').toLowerCase().trim() && !secPrice) {
                             return (
                               <div className="d-flex flex-column gap-1">
                                 <span 
@@ -1951,13 +2046,13 @@ const AsinManagerPage = () => {
                               {firstOther.seller || 'Unknown'}
                             </span>
                             <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                              ₹{firstOther.price?.toLocaleString() || 'N/A'}
+                              ₹{(firstOther.price || 0).toLocaleString()}
                             </span>
                             {remainingCount > 0 && (
                               <span 
                                 className="text-zinc-400" 
                                 style={{ fontSize: '8px' }}
-                                title={otherOffers.slice(1).map(o => `${o.seller || 'Unknown'}: ₹${o.price?.toLocaleString() || 'N/A'}`).join('\n')}
+                                title={otherOffers.slice(1).map(o => `${o.seller || 'Unknown'}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}
                               >
                                 +{remainingCount} more
                               </span>
@@ -1979,8 +2074,26 @@ const AsinManagerPage = () => {
                         </td>
                       );
                     }))}
-                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.bulletPoints || 0}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>{getAplusBadge(asin.hasAplus, asin.status)}</td>
+                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
+                        {asin.bulletPoints || asin.bulletPointsText?.length || 0}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      {asin.status === 'Scraping' ? (
+                        <span style={{ color: '#9ca3af' }}>-</span>
+                      ) : (
+                        <span
+                          className="badge"
+                          style={{ 
+                            backgroundColor: asin.hasAplus ? '#059669' : '#6b7280', 
+                            color: '#fff', 
+                            fontWeight: 600, 
+                            fontSize: '0.75rem' 
+                          }}
+                        >
+                          {asin.hasAplus ? 'Yes' : 'No'}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
                       {asin.aplusAbsentSince && !asin.hasAplus 
                         ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24)) 
@@ -2127,6 +2240,10 @@ const AsinManagerPage = () => {
           selectedAsin={selectedAsinForRating}
           isOpen={!!selectedAsinForRating || showAllRatingHistory}
           onClose={() => { setSelectedAsinForRating(null); setShowAllRatingHistory(false); }}
+        />
+        <ExportAsinModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
         />
       </Suspense>
     </div>

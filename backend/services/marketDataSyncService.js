@@ -8,6 +8,7 @@ const nvidiaAiService = require('./nvidiaAiService');
 const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
 const { calculateLQS, calculateCDQ, getGrade, getCDQBreakdown } = require('../utils/lqs');
+const listingQualityService = require('./listingQualityService');
 
 // Amazon India Top-Level Categories for BSR classification
 const AMAZON_TOP_LEVEL_CATEGORIES = [
@@ -1582,9 +1583,37 @@ class MarketDataSyncService {
             const hasBreakdown = Object.values(ratingBreakdown).some(v => v > 0);
             const finalRatingBreakdown = hasBreakdown ? ratingBreakdown : (asin.RatingBreakdown ? JSON.parse(asin.RatingBreakdown) : ratingBreakdown);
 
-            // 7. Bullet Points
-            const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
-            const bulletPoints = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
+            // 7. Bullet Points - Get exact text from Octoparse
+            let bulletPointsText = [];
+            let bulletPointsCount = 0;
+
+            // Try bullet_points or bullet_points_count HTML field
+            const bulletHtmlField = this._getFromRaw(rawData, ['bullet_points', 'bullet_points_count', 'Field8'], '');
+            if (bulletHtmlField && typeof bulletHtmlField === 'string' && bulletHtmlField.length > 50) {
+                bulletPointsText = this._parseBulletPoints(bulletHtmlField);
+                bulletPointsCount = bulletPointsText.length;
+            }
+
+            // Fallback: individual bp_ fields
+            if (bulletPointsCount === 0) {
+                for (let i = 1; i <= 10; i++) {
+                    const bpField = `bp_${i}`;
+                    if (rawData[bpField] && typeof rawData[bpField] === 'string' && rawData[bpField].trim().length > 3) {
+                        let text = rawData[bpField].trim()
+                            .replace(/<[^>]+>/g, '')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&nbsp;/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        if (text.length > 3 && !bulletPointsText.includes(text)) {
+                            bulletPointsText.push(text);
+                        }
+                    }
+                }
+                bulletPointsCount = bulletPointsText.length;
+            }
+
+            console.log(`📝 Extracted ${bulletPointsCount} bullet points:`, bulletPointsText.map(b => b.substring(0, 60)));
 
             // 8. Stock Level, A+ Content & Availability
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
@@ -1652,18 +1681,21 @@ class MarketDataSyncService {
                 }
             }
 
-            // 10. CDQ Calculation (Standardized)
-            const cdqBreakdown = getCDQBreakdown({
+            // 10. Listing Quality Analysis (LQS) - New Implementation
+            const productDescription = this._getFromRaw(rawData, ['Product_Description', 'product_description', 'Field9'], asin.ProductDescription || '');
+            
+            const lqsAnalysis = listingQualityService.analyzeRaw({
                 title,
-                category,
-                brand: rawData.brand || asin.Brand,
-                imagesCount,
-                hasAplus,
                 bulletPointsText,
-                lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
+                imagesCount,
+                images,
+                description: productDescription,
+                hasAplus,
+                category
             });
 
-            const lqsScore = cdqBreakdown.totalScore;
+            const lqsScore = lqsAnalysis.totalScore;
+            const lqsGrade = lqsAnalysis.totalGrade;
             
             // --- Price Trend History (Last 7 Days) ---
             let history = [];
@@ -1708,10 +1740,35 @@ class MarketDataSyncService {
                 ReviewCount: reviewCount,
                 RatingBreakdown: JSON.stringify(finalRatingBreakdown),
                 LQS: lqsScore,
-                LqsDetails: JSON.stringify(cdqBreakdown.issues),
-                Cdq: cdqBreakdown.totalScore,
-                CdqGrade: cdqBreakdown.grade,
-                CdqComponents: JSON.stringify(cdqBreakdown.components),
+                LQSGrade: lqsGrade,
+                LqsDetails: JSON.stringify(lqsAnalysis.components.title.issues), // Fallback for legacy
+                
+                // Detailed Quality Components
+                TitleScore: lqsAnalysis.components.title.score,
+                TitleGrade: lqsAnalysis.components.title.grade,
+                TitleIssues: JSON.stringify(lqsAnalysis.components.title.issues),
+                TitleRecommendations: JSON.stringify(lqsAnalysis.components.title.recommendations),
+                TitleDetails: JSON.stringify(lqsAnalysis.components.title.details),
+                
+                BulletScore: lqsAnalysis.components.bullets.score,
+                BulletGrade: lqsAnalysis.components.bullets.grade,
+                BulletIssues: JSON.stringify(lqsAnalysis.components.bullets.issues),
+                BulletRecommendations: JSON.stringify(lqsAnalysis.components.bullets.recommendations),
+                BulletDetails: JSON.stringify(lqsAnalysis.components.bullets.details),
+                
+                ImageScore: lqsAnalysis.components.images.score,
+                ImageGrade: lqsAnalysis.components.images.grade,
+                ImageIssues: JSON.stringify(lqsAnalysis.components.images.issues),
+                ImageRecommendations: JSON.stringify(lqsAnalysis.components.images.recommendations),
+                ImageDetails: JSON.stringify(lqsAnalysis.components.images.details),
+                
+                DescriptionScore: lqsAnalysis.components.description.score,
+                DescriptionGrade: lqsAnalysis.components.description.grade,
+                DescriptionIssues: JSON.stringify(lqsAnalysis.components.description.issues),
+                DescriptionRecommendations: JSON.stringify(lqsAnalysis.components.description.recommendations),
+                DescriptionDetails: JSON.stringify(lqsAnalysis.components.description.details),
+                
+                ProductDescription: productDescription,
                 BuyBoxStatus: buyBoxWin ? 1 : 0,
                 ImageUrl: mainImageUrl,
                 SubBsr: subBsr,
@@ -1719,7 +1776,7 @@ class MarketDataSyncService {
                 Images: JSON.stringify(images),
                 ImagesCount: imagesCount,
                 VideoCount: videoCount,
-                BulletPoints: bulletPoints,
+                BulletPoints: bulletPointsCount,
                 BulletPointsText: JSON.stringify(bulletPointsText),
                 StockLevel: stockLevel,
                 SoldBy: soldBy || asin.SoldBy || '',
@@ -1773,7 +1830,8 @@ class MarketDataSyncService {
                         VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
                 `);
 
-            // 12. Socket Notification
+            // 12. Socket Notification (REMOVED - Handled by batch in processBatchResults)
+            /*
             const io = SocketService.getIo();
             if (io) {
                 io.emit('scrape_data_ingested', {
@@ -1783,6 +1841,7 @@ class MarketDataSyncService {
                     timestamp: now
                 });
             }
+            */
 
             console.log(`✅ SQL Metrics updated for ASIN: ${asin.AsinCode}`);
             return true;
@@ -1825,8 +1884,8 @@ class MarketDataSyncService {
         let skippedNoMatch = 0;
         const now = new Date();
         const pool = await getPool();
+        const updatedAsinCodes = []; // Track updated ASINs for batch notification
 
-        // Process in smaller chunks to avoid memory issues
         const CHUNK_SIZE = 100;
 
         for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
@@ -1884,7 +1943,7 @@ class MarketDataSyncService {
                     skippedNoCode++;
                     continue;
                 }
- 
+
                 const normalizedCode = code.toUpperCase();
                 let asin = asinMap.get(normalizedCode);
                 
@@ -1912,13 +1971,28 @@ class MarketDataSyncService {
                         continue;
                     }
                 }
- 
+
                 try {
                     await this.updateAsinMetrics(asin.Id, rawData);
                     updatedCount++;
+                    updatedAsinCodes.push(asin.AsinCode); // Track for batch notification
                 } catch (err) {
                     console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);
                 }
+            }
+        }
+
+        // ---- BATCH SOCKET NOTIFICATION (instead of per-ASIN) ----
+        if (updatedAsinCodes.length > 0) {
+            const io = SocketService.getIo();
+            if (io) {
+                // Emit ONE event with all updated ASIN codes
+                io.emit('scrape_batch_complete', {
+                    sellerId: sellerId,
+                    count: updatedAsinCodes.length,
+                    asinCodes: updatedAsinCodes,
+                    timestamp: now
+                });
             }
         }
 
@@ -1961,51 +2035,62 @@ class MarketDataSyncService {
         let rawCat = '';
 
         for (const field of catFields) {
-            if (rawData[field]) {
+            if (rawData[field] && typeof rawData[field] === 'string' && rawData[field].trim().length > 0) {
                 rawCat = rawData[field];
                 break;
             }
         }
 
-        if (!rawCat || typeof rawCat !== 'string') return '';
+        if (!rawCat || typeof rawCat !== 'string' || rawCat.trim().length === 0) return '';
 
-        // If it's HTML breadcrumbs (e.g. from <li> tags)
-        if (rawCat.includes('<li') || rawCat.includes('<a')) {
+        // If it's HTML, parse it
+        if (rawCat.includes('<')) {
             try {
-                // Use regex for speed and simplicity if JSDOM is heavy, 
-                // but we have JSDOM required so let's use it for precision if needed.
-                // However, regex is often enough for this specific structure.
+                const dom = new JSDOM(rawCat);
+                const doc = dom.window.document;
+
+                // Find all breadcrumb links
+                const links = doc.querySelectorAll('a.a-link-normal');
                 const parts = [];
-                // Match content inside <a> tags first
-                const aMatches = rawCat.match(/<a[^>]*>([^<]+)<\/a>/g);
-                if (aMatches) {
-                    aMatches.forEach(m => {
-                        const text = m.replace(/<[^>]+>/g, '').trim();
-                        if (text && text !== '›') parts.push(text);
-                    });
-                } else {
-                    // Fallback: extract text from <li> or general tags
-                    const textParts = rawCat.replace(/<[^>]+>/g, '|').split('|')
-                        .map(p => p.trim())
-                        .filter(p => p && p !== '›');
-                    parts.push(...textParts);
+                const seen = new Set();
+
+                for (const link of links) {
+                    const text = link.textContent.trim();
+                    if (text && text !== '›' && !text.includes('dp_bc_') && !text.includes('ref=') && !seen.has(text)) {
+                        seen.add(text);
+                        parts.push(text);
+                    }
                 }
 
                 if (parts.length > 0) {
-                    // Unescape HTML entities (basic)
-                    return parts.join(' › ').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ');
+                    return parts.join(' › ')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&nbsp;/g, ' ')
+                        .trim();
                 }
             } catch (e) {
-                console.warn('Category HTML parsing failed:', e.message);
+                console.warn('JSDOM category parsing failed:', e.message);
             }
+
+            // Regex fallback
+            const aTagRegex = /<a[^>]*>([^<]+)<\/a>/gi;
+            const matches = [];
+            let m;
+            while ((m = aTagRegex.exec(rawCat)) !== null) {
+                const text = m[1].trim();
+                if (text && text !== '›' && !text.includes('dp_bc_') && !text.includes('ref=')) {
+                    matches.push(text);
+                }
+            }
+            if (matches.length > 0) {
+                return matches.join(' › ').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
+            }
+
+            // Remove all HTML tags
+            return rawCat.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         }
 
-        // Standard cleanup for text-only categories
-        return rawCat
-            .replace(/\s+/g, ' ')
-            .replace(/\s*>\s*/g, ' › ')
-            .replace(/\s*›\s*/g, ' › ')
-            .trim();
+        return rawCat.replace(/\s+/g, ' ').trim();
     }
 
     /**
@@ -2266,27 +2351,6 @@ class MarketDataSyncService {
     /**
      * Parse category from HTML breadcrumb
      */
-    _parseCategory(categoryHtml) {
-        if (!categoryHtml || typeof categoryHtml !== 'string') return '';
-
-        try {
-            const dom = new JSDOM(categoryHtml);
-            const liTags = Array.from(dom.window.document.querySelectorAll('li'));
-            if (liTags.length > 0) {
-                return liTags.map(li => li.textContent.trim()
-                    .replace(/^›\s*/, '')
-                    .replace(/\s*›$/, '')
-                    .trim()
-                ).filter(Boolean).join(' › ');
-            }
-        } catch (e) {
-            // Fall through to regex
-        }
-
-        // Regex fallback - remove HTML tags
-        const textContent = categoryHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        return textContent;
-    }
 
     /**
      * Parse rating breakdown from HTML or string
@@ -2319,21 +2383,52 @@ class MarketDataSyncService {
 
         const bulletPoints = [];
 
+        // Method 1: JSDOM - preserve exact text from <li> elements
         try {
             const dom = new JSDOM(bulletHtml);
-            const liTags = dom.window.document.querySelectorAll('li');
+            const doc = dom.window.document;
+
+            const liTags = doc.querySelectorAll('li');
             for (const li of liTags) {
-                const text = li.textContent.trim();
-                if (text) bulletPoints.push(text);
-            }
-        } catch (e) {
-            // Regex fallback
-            const matches = bulletHtml.match(/<li[^>]*>(?:<span[^>]*>)?([^<]+)(?:<\/span>)?<\/li>/gi);
-            if (matches) {
-                for (const match of matches) {
-                    const text = match.replace(/<[^>]+>/g, '').trim();
-                    if (text) bulletPoints.push(text);
+                let text = li.textContent
+                    .replace(/&amp;/g, '&')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                if (text && text.length > 3 && !bulletPoints.includes(text)) {
+                    bulletPoints.push(text);
                 }
+            }
+
+            if (bulletPoints.length > 0) return bulletPoints;
+        } catch (e) {
+            console.warn('JSDOM bullet parsing failed:', e.message);
+        }
+
+        // Method 2: Regex for <li> elements
+        const liRegex = /<li[^>]*>(.*?)<\/li>/gis;
+        let match;
+        while ((match = liRegex.exec(bulletHtml)) !== null) {
+            let text = match[1]
+                .replace(/<span[^>]*>/g, '')
+                .replace(/<\/span>/g, '')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&amp;/g, '&')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (text && text.length > 3 && !bulletPoints.includes(text)) {
+                bulletPoints.push(text);
             }
         }
 
