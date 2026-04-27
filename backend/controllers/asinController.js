@@ -37,7 +37,37 @@ exports.getAsins = async (req, res) => {
     const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
     const pool = await getPool();
-    const request = pool.request();
+    
+    // Helper to apply inputs to a request
+    const applyInputs = (reqObj) => {
+        if (seller) reqObj.input('seller', sql.VarChar, seller);
+        if (status) reqObj.input('status', sql.NVarChar, status);
+        if (category) reqObj.input('category', sql.NVarChar, category);
+        if (brand) reqObj.input('brand', sql.NVarChar, brand);
+        if (scrapeStatus) reqObj.input('scrapeStatus', sql.NVarChar, scrapeStatus);
+        if (hasAplus !== undefined && hasAplus !== '') reqObj.input('hasAplus', sql.Bit, hasAplus === 'true' ? 1 : 0);
+        if (buyBoxWin !== undefined && buyBoxWin !== '') reqObj.input('buyBoxStatus', sql.Bit, buyBoxWin === 'true' ? 1 : 0);
+        if (minPrice) reqObj.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
+        if (maxPrice) reqObj.input('maxPrice', sql.Decimal(18, 2), parseFloat(maxPrice));
+        if (minBSR) reqObj.input('minBSR', sql.Int, parseInt(minBSR));
+        if (maxBSR) reqObj.input('maxBSR', sql.Int, parseInt(maxBSR));
+        if (minLQS) reqObj.input('minLQS', sql.Decimal(5, 2), parseFloat(minLQS));
+        if (maxLQS) reqObj.input('maxLQS', sql.Decimal(5, 2), parseFloat(maxLQS));
+        if (req.query.parentAsin) reqObj.input('parentAsin', sql.NVarChar, req.query.parentAsin);
+        if (req.query.tag) reqObj.input('tag', sql.NVarChar, `%${req.query.tag}%`);
+        if (req.query.sku) reqObj.input('sku', sql.NVarChar, `%${req.query.sku}%`);
+        if (req.query.minRating) reqObj.input('minRating', sql.Decimal(3, 2), parseFloat(req.query.minRating));
+        if (req.query.maxRating) reqObj.input('maxRating', sql.Decimal(3, 2), parseFloat(req.query.maxRating));
+        if (req.query.minReviewCount) reqObj.input('minReviewCount', sql.Int, parseInt(req.query.minReviewCount));
+        if (req.query.maxReviewCount) reqObj.input('maxReviewCount', sql.Int, parseInt(req.query.maxReviewCount));
+        if (req.query.minImagesCount) reqObj.input('minImagesCount', sql.Int, parseInt(req.query.minImagesCount));
+        if (req.query.maxImagesCount) reqObj.input('maxImagesCount', sql.Int, parseInt(req.query.maxImagesCount));
+        if (req.query.minBulletPoints) reqObj.input('minBulletPoints', sql.Int, parseInt(req.query.minBulletPoints));
+        if (req.query.maxBulletPoints) reqObj.input('maxBulletPoints', sql.Int, parseInt(req.query.maxBulletPoints));
+        if (search) reqObj.input('search', sql.NVarChar, `%${search}%`);
+        return reqObj;
+    };
+
     let whereClause = 'WHERE 1=1';
 
     // [1] User Scope / Seller Filtering
@@ -49,116 +79,45 @@ exports.getAsins = async (req, res) => {
       
       if (seller && allowedSellerIds.includes(seller)) {
         whereClause += ' AND a.SellerId = @seller';
-        request.input('seller', sql.VarChar, seller);
       } else {
         whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
       }
     } else if (seller) {
       whereClause += ' AND a.SellerId = @seller';
-      request.input('seller', sql.VarChar, seller);
     }
 
     // [2] Filters
-    if (status) {
-      whereClause += ' AND Status = @status';
-      request.input('status', sql.NVarChar, status);
-    }
-    if (category) {
-      whereClause += ' AND Category = @category';
-      request.input('category', sql.NVarChar, category);
-    }
-    if (brand) {
-      whereClause += ' AND Brand = @brand';
-      request.input('brand', sql.NVarChar, brand);
-    }
-    if (scrapeStatus) {
-      whereClause += ' AND ScrapeStatus = @scrapeStatus';
-      request.input('scrapeStatus', sql.NVarChar, scrapeStatus);
-    }
-    if (hasAplus !== undefined && hasAplus !== '') {
-      whereClause += ' AND HasAplus = @hasAplus';
-      request.input('hasAplus', sql.Bit, hasAplus === 'true' ? 1 : 0);
-    }
-    if (buyBoxWin !== undefined && buyBoxWin !== '') {
-      whereClause += ' AND BuyBoxStatus = @buyBoxStatus';
-      request.input('buyBoxStatus', sql.Bit, buyBoxWin === 'true' ? 1 : 0);
-    }
+    if (status) whereClause += ' AND Status = @status';
+    if (category) whereClause += ' AND Category = @category';
+    if (brand) whereClause += ' AND Brand = @brand';
+    if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
+    if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
+    if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxStatus = @buyBoxStatus';
 
     // [3] Numeric Ranges
-    if (minPrice) {
-      whereClause += ' AND CurrentPrice >= @minPrice';
-      request.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
-    }
-    if (maxPrice) {
-      whereClause += ' AND CurrentPrice <= @maxPrice';
-      request.input('maxPrice', sql.Decimal(18, 2), parseFloat(maxPrice));
-    }
-    if (minBSR) {
-      whereClause += ' AND BSR >= @minBSR';
-      request.input('minBSR', sql.Int, parseInt(minBSR));
-    }
-    if (maxBSR) {
-      whereClause += ' AND BSR <= @maxBSR';
-      request.input('maxBSR', sql.Int, parseInt(maxBSR));
-    }
-    if (minLQS) {
-      whereClause += ' AND LQS >= @minLQS';
-      request.input('minLQS', sql.Decimal(5, 2), parseFloat(minLQS));
-    }
-    if (maxLQS) {
-      whereClause += ' AND LQS <= @maxLQS';
-      request.input('maxLQS', sql.Decimal(5, 2), parseFloat(maxLQS));
-    }
+    if (minPrice) whereClause += ' AND CurrentPrice >= @minPrice';
+    if (maxPrice) whereClause += ' AND CurrentPrice <= @maxPrice';
+    if (minBSR) whereClause += ' AND BSR >= @minBSR';
+    if (maxBSR) whereClause += ' AND BSR <= @maxBSR';
+    if (minLQS) whereClause += ' AND LQS >= @minLQS';
+    if (maxLQS) whereClause += ' AND LQS <= @maxLQS';
 
-    if (req.query.parentAsin) {
-      whereClause += ' AND ParentAsin = @parentAsin';
-      request.input('parentAsin', sql.NVarChar, req.query.parentAsin);
-    }
+    if (req.query.parentAsin) whereClause += ' AND ParentAsin = @parentAsin';
+    if (req.query.tag) whereClause += ' AND Tags LIKE @tag';
+    if (req.query.sku) whereClause += ' AND Sku LIKE @sku';
+    if (req.query.minRating) whereClause += ' AND Rating >= @minRating';
+    if (req.query.maxRating) whereClause += ' AND Rating <= @maxRating';
+    if (req.query.minReviewCount) whereClause += ' AND ReviewCount >= @minReviewCount';
+    if (req.query.maxReviewCount) whereClause += ' AND ReviewCount <= @maxReviewCount';
 
-    if (req.query.tag) {
-      whereClause += ' AND Tags LIKE @tag';
-      request.input('tag', sql.NVarChar, `%${req.query.tag}%`);
-    }
-
-    if (req.query.sku) {
-      whereClause += ' AND Sku LIKE @sku';
-      request.input('sku', sql.NVarChar, `%${req.query.sku}%`);
-    }
-
-    if (req.query.minRating) {
-      whereClause += ' AND Rating >= @minRating';
-      request.input('minRating', sql.Decimal(3, 2), parseFloat(req.query.minRating));
-    }
-    if (req.query.maxRating) {
-      whereClause += ' AND Rating <= @maxRating';
-      request.input('maxRating', sql.Decimal(3, 2), parseFloat(req.query.maxRating));
-    }
-
-    if (req.query.minReviewCount) {
-      whereClause += ' AND ReviewCount >= @minReviewCount';
-      request.input('minReviewCount', sql.Int, parseInt(req.query.minReviewCount));
-    }
-    if (req.query.maxReviewCount) {
-      whereClause += ' AND ReviewCount <= @maxReviewCount';
-      request.input('maxReviewCount', sql.Int, parseInt(req.query.maxReviewCount));
-    }
-
-    if (req.query.minImagesCount) {
-      whereClause += ' AND ImagesCount >= @minImagesCount';
-      request.input('minImagesCount', sql.Int, parseInt(req.query.minImagesCount));
-    }
-    if (req.query.maxImagesCount) {
       whereClause += ' AND ImagesCount <= @maxImagesCount';
-      request.input('maxImagesCount', sql.Int, parseInt(req.query.maxImagesCount));
     }
 
     if (req.query.minBulletPoints) {
       whereClause += ' AND BulletPoints >= @minBulletPoints';
-      request.input('minBulletPoints', sql.Int, parseInt(req.query.minBulletPoints));
     }
     if (req.query.maxBulletPoints) {
       whereClause += ' AND BulletPoints <= @maxBulletPoints';
-      request.input('maxBulletPoints', sql.Int, parseInt(req.query.maxBulletPoints));
     }
 
     if (req.query.hasVideo !== undefined && req.query.hasVideo !== '') {
@@ -180,7 +139,8 @@ exports.getAsins = async (req, res) => {
     }
 
     // [5] Count Total
-    const countResult = await request.query(`SELECT COUNT(*) as total FROM Asins a ${whereClause}`);
+    const countRequest = applyInputs(pool.request());
+    const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Asins a ${whereClause}`);
     const total = countResult.recordset[0].total;
 
     // [6] Fetch ASINs
@@ -191,7 +151,8 @@ exports.getAsins = async (req, res) => {
                       sortBy === 'lqs' ? 'LQS' : 
                       sortBy === 'status' ? 'Status' : 'CreatedAt';
     
-    const asinsResult = await request
+    const dataRequest = applyInputs(pool.request());
+    const asinsResult = await dataRequest
         .input('offset', sql.Int, offset)
         .input('limit', sql.Int, limitNum)
         .query(`

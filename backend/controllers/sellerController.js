@@ -73,7 +73,14 @@ exports.getSellers = async (req, res) => {
 
     const pool = await getPool();
     let whereClause = 'WHERE 1=1';
-    const request = pool.request();
+    
+    // Helper to apply inputs
+    const applyInputs = (reqObj) => {
+        if (status) reqObj.input('status', sql.Bit, status === 'Active' ? 1 : 0);
+        if (marketplace) reqObj.input('marketplace', sql.NVarChar, marketplace);
+        if (search) reqObj.input('search', sql.NVarChar, `%${search}%`);
+        return reqObj;
+    };
 
     if (!isGlobalUser) {
       const sellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
@@ -83,20 +90,12 @@ exports.getSellers = async (req, res) => {
       whereClause += ` AND Id IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
     }
 
-    if (status) {
-      whereClause += ' AND IsActive = @status';
-      request.input('status', sql.Bit, status === 'Active' ? 1 : 0);
-    }
-    if (marketplace) {
-      whereClause += ' AND Marketplace = @marketplace';
-      request.input('marketplace', sql.NVarChar, marketplace);
-    }
-    if (search) {
-      whereClause += ' AND (Name LIKE @search OR SellerId LIKE @search)';
-      request.input('search', sql.NVarChar, `%${search}%`);
-    }
+    if (status) whereClause += ' AND IsActive = @status';
+    if (marketplace) whereClause += ' AND Marketplace = @marketplace';
+    if (search) whereClause += ' AND (Name LIKE @search OR SellerId LIKE @search)';
 
-    const countResult = await request.query(`SELECT COUNT(*) as total FROM Sellers ${whereClause}`);
+    const countRequest = applyInputs(pool.request());
+    const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Sellers ${whereClause}`);
     const total = countResult.recordset[0].total;
 
     // Prepare paginated query with parameters
@@ -105,14 +104,15 @@ exports.getSellers = async (req, res) => {
              OctoparseId as octoparseId, IsActive as status, [Plan] as sellerPlan,
              ScrapeLimit as scrapeLimit, ScrapeUsed as scrapeUsed, LastScrapedAt as lastScraped,
              CreatedAt, UpdatedAt
-      FROM Sellers
-      ${whereClause}
-      ORDER BY Name ASC
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+       FROM Sellers
+       ${whereClause}
+       ORDER BY Name ASC
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
     let sellers;
     try {
-        const sellersResult = await request
+        const dataRequest = applyInputs(pool.request());
+        const sellersResult = await dataRequest
             .input('offset', sql.Int, offset)
             .input('limit', sql.Int, limitNum)
             .query(sqlQuery);

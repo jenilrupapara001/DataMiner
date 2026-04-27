@@ -1918,51 +1918,103 @@ const AsinManagerPage = () => {
                     {/* ===== LISTING QUALITY SCORES ===== */}
                     <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
                       {asin.titleScore != null ? (
-                        <span className={`badge ${(asin.titleScore || 0) >= 80 ? 'bg-success' : (asin.titleScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
-                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span 
+                          className="badge fw-bold"
+                          style={{ 
+                            fontSize: '10px',
+                            backgroundColor: (asin.titleScore || 0) >= 80 ? '#059669' : 
+                                             (asin.titleScore || 0) >= 60 ? '#d97706' : 
+                                             (asin.titleScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            color: '#fff',
+                            minWidth: '28px'
+                          }}
+                        >
                           {asin.titleScore || 0}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
                       )}
                     </td>
+
                     <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
                       {asin.bulletScore != null ? (
-                        <span className={`badge ${(asin.bulletScore || 0) >= 80 ? 'bg-success' : (asin.bulletScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
-                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span 
+                          className="badge fw-bold"
+                          style={{ 
+                            fontSize: '10px',
+                            backgroundColor: (asin.bulletScore || 0) >= 80 ? '#059669' : 
+                                             (asin.bulletScore || 0) >= 60 ? '#d97706' : 
+                                             (asin.bulletScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            color: '#fff',
+                            minWidth: '28px'
+                          }}
+                        >
                           {asin.bulletScore || 0}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
                       )}
                     </td>
+
                     <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
                       {asin.imageScore != null ? (
-                        <span className={`badge ${(asin.imageScore || 0) >= 80 ? 'bg-success' : (asin.imageScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
-                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span 
+                          className="badge fw-bold"
+                          style={{ 
+                            fontSize: '10px',
+                            backgroundColor: (asin.imageScore || 0) >= 80 ? '#059669' : 
+                                             (asin.imageScore || 0) >= 60 ? '#d97706' : 
+                                             (asin.imageScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            color: '#fff',
+                            minWidth: '28px'
+                          }}
+                        >
                           {asin.imageScore || 0}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
                       )}
                     </td>
+
                     <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
                       {asin.descriptionScore != null ? (
-                        <span className={`badge ${(asin.descriptionScore || 0) >= 80 ? 'bg-success' : (asin.descriptionScore || 0) >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
-                          style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span 
+                          className="badge fw-bold"
+                          style={{ 
+                            fontSize: '10px',
+                            backgroundColor: (asin.descriptionScore || 0) >= 80 ? '#059669' : 
+                                             (asin.descriptionScore || 0) >= 60 ? '#d97706' : 
+                                             (asin.descriptionScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            color: '#fff',
+                            minWidth: '28px'
+                          }}
+                        >
                           {asin.descriptionScore || 0}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
                       )}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'center', background: '#f1f5f9' }}>
-                      <div className="fw-bold" style={{ 
-                        color: (asin.lqs || 0) >= 80 ? '#059669' : (asin.lqs || 0) >= 60 ? '#d97706' : '#dc2626',
-                        fontSize: '11px'
-                      }}>
-                        {asin.lqs != null ? `${asin.lqs}%` : '-'}
-                      </div>
+
+                    <td style={{ ...tdStyle, textAlign: 'center', background: '#f1f5f9', fontWeight: 700 }}>
+                      {asin.lqs != null ? (
+                        <span 
+                          className="badge fw-bold"
+                          style={{ 
+                            fontSize: '11px',
+                            backgroundColor: (asin.lqs || 0) >= 80 ? '#059669' : 
+                                             (asin.lqs || 0) >= 60 ? '#d97706' : 
+                                             (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            color: '#fff',
+                            padding: '3px 8px',
+                            minWidth: '36px'
+                          }}
+                        >
+                          {asin.lqs}%
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}
                       onClick={(e) => handleViewPrice(asin, e)}>
