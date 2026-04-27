@@ -12,20 +12,28 @@ class AsinTableController {
    */
   async getAsinTable(req, res) {
     try {
-      const { sellerId, search, category } = req.query;
+      const { 
+        sellerId, search, category, 
+        page = 1, limit = 50,
+        sortBy = 'CreatedAt', sortOrder = 'DESC'
+      } = req.query;
 
       // 1. Delegate to service for orchestration
-      const data = await asinTableService.getAsinTableData({
+      const result = await asinTableService.getAsinTableData({
         sellerId,
         search,
-        category
+        category,
+        page,
+        limit,
+        sortBy,
+        sortOrder
       });
 
-      // 2. Return optimized response
+      // 2. Return response in format expected by frontend
       res.status(200).json({
         success: true,
-        count: data.length,
-        data
+        asins: result.data,
+        pagination: result.pagination
       });
 
     } catch (error) {

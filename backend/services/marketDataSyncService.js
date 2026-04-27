@@ -7,7 +7,7 @@ const SocketService = require('./socketService');
 const nvidiaAiService = require('./nvidiaAiService');
 const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
-const { calculateLQS, calculateCDQ, getGrade } = require('../utils/lqs');
+const { calculateLQS, calculateCDQ, getGrade, getCDQBreakdown } = require('../utils/lqs');
 
 // Amazon India Top-Level Categories for BSR classification
 const AMAZON_TOP_LEVEL_CATEGORIES = [
@@ -1653,25 +1653,33 @@ class MarketDataSyncService {
             }
 
             // 10. CDQ Calculation (Standardized)
-            // const cdqBreakdown = getCDQBreakdown({
-            //     title,
-            //     category,
-            //     brand: rawData.brand || asin.Brand,
-            //     imagesCount,
-            //     hasAplus,
-            //     bulletPointsText,
-            //     lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
-            // });
+            const cdqBreakdown = getCDQBreakdown({
+                title,
+                category,
+                brand: rawData.brand || asin.Brand,
+                imagesCount,
+                hasAplus,
+                bulletPointsText,
+                lqsDetails: asin.LqsDetails ? JSON.parse(asin.LqsDetails) : {}
+            });
+
+            const lqsScore = cdqBreakdown.totalScore;
 
             const updates = {
                 Title: title,
                 Category: category,
                 CurrentPrice: price > 0 ? price : asin.CurrentPrice,
+                Mrp: mrp > 0 ? mrp : asin.Mrp,
+                DealBadge: dealBadge,
+                PriceType: priceType,
                 BSR: bsr > 0 ? bsr : asin.BSR,
                 Rating: rating > 0 ? rating : asin.Rating,
                 ReviewCount: reviewCount,
+                RatingBreakdown: JSON.stringify(finalRatingBreakdown),
                 LQS: lqsScore,
                 LqsDetails: JSON.stringify(cdqBreakdown.issues), // Storing issues in Details for now
+                Cdq: cdqBreakdown.totalScore,
+                CdqGrade: cdqBreakdown.grade,
                 CdqComponents: JSON.stringify(cdqBreakdown.components),
                 BuyBoxStatus: buyBoxWin ? 1 : 0,
                 ImageUrl: mainImageUrl,
@@ -1849,71 +1857,7 @@ class MarketDataSyncService {
                 }
 
                 try {
-                    // Re-use logic from updateAsinMetrics or similar parsing
-                    const price = this._cleanPrice(this._getFromRaw(rawData, ['asp', 'price', 'Field2', 'currentPrice']));
-                    const mrp = this._cleanPrice(this._getFromRaw(rawData, ['mrp', 'listPrice', 'Field3']));
-                    const bsrData = this._parseBSR(rawData);
-                    const bsr = bsrData.main;
-                    const subBsr = bsrData.subBsrString || bsrData.sub;
-                    const subBSRs = bsrData.allRanks;
-                    const title = (rawData.Title || rawData.title || asin.Title || '').trim();
-                    const soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
-                    const buyBoxWin = this._isBuyBoxWinner(soldBy);
-                    const mediaData = this._countImagesAndVideos(rawData);
-                    const imagesCount = mediaData.imagesCount || asin.ImagesCount || 0;
-                    const videoCount = mediaData.videoCount;
-                    const bulletPointsText = this._parseBulletPoints(rawData.bullet_points || rawData.Field8 || rawData);
-                    const bulletCount = bulletPointsText.length || parseInt(rawData.bulletPoints || rawData.bullet_points_count) || 0;
-                    const hasAplus = this._detectAplusContent(rawData);
-                    const rating = parseFloat(rawData.avg_rating) || 0;
-                    const reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'ReviewCount', 'rating', 'Reviews', 'RT'], '')) || asin.ReviewCount;
-                    const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock', 'inventory', 'stock_level'], 0));
-
-
-                    // Use existing LQS from ASIN or calculate a simple score
-                    const lqsScore = asin.LQS || 0;
-
-                    // Update ASIN
-                    await pool.request()
-                        .input('id', sql.VarChar, asin.Id)
-                        .input('title', sql.NVarChar, title)
-                        .input('price', sql.Decimal(18, 2), price > 0 ? price : asin.CurrentPrice)
-                        .input('bsr', sql.Int, bsr > 0 ? bsr : asin.BSR)
-                        .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
-                        .input('reviewCount', sql.Int, reviewCount)
-                        .input('lqs', sql.Decimal(5, 2), lqsScore)
-                        .input('buyBoxWin', sql.Bit, buyBoxWin)
-                        .input('stockLevel', sql.Int, stockLevel)
-                        .input('lastScraped', sql.DateTime, now)
-                        .query(`
-                            UPDATE Asins SET 
-                                Title = @title, CurrentPrice = @price, BSR = @bsr, 
-                                Rating = @rating, ReviewCount = @reviewCount, LQS = @lqs, 
-                                BuyBoxWin = @buyBoxWin, StockLevel = @stockLevel, 
-                                LastScrapedAt = @lastScraped, UpdatedAt = @lastScraped
-                            WHERE Id = @id
-                        `);
-
-                    // Update History
-                    const today = now.toISOString().split('T')[0];
-                    await pool.request()
-                        .input('asinId', sql.VarChar, asin.Id)
-                        .input('date', sql.Date, today)
-                        .input('price', sql.Decimal(18, 2), price > 0 ? price : asin.CurrentPrice)
-                        .input('bsr', sql.Int, bsr > 0 ? bsr : asin.BSR)
-                        .input('rating', sql.Decimal(3, 2), rating > 0 ? rating : asin.Rating)
-                        .input('reviewCount', sql.Int, reviewCount)
-                        .input('stockLevel', sql.Int, stockLevel)
-                        .input('lqs', sql.Decimal(5, 2), lqsScore)
-                        .query(`
-                            IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
-                                UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, StockLevel = @stockLevel, LQS = @lqs
-                                WHERE AsinId = @asinId AND Date = @date
-                            ELSE
-                                INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, StockLevel, LQS)
-                                VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @stockLevel, @lqs)
-                        `);
-
+                    await this.updateAsinMetrics(asin.Id, rawData);
                     updatedCount++;
                 } catch (err) {
                     console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);

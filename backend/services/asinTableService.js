@@ -10,63 +10,118 @@ class AsinTableService {
    * Fetches and transforms ASIN data optimized for the Table UI
    */
   async getAsinTableData(filters = {}) {
-    const { sellerId, search, category } = filters;
+    const { 
+      sellerId, search, category,
+      page = 1, limit = 50, 
+      sortBy = 'CreatedAt', sortOrder = 'DESC' 
+    } = filters;
     
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+
     try {
       const pool = await getPool();
-      let query = "SELECT * FROM Asins WHERE 1=1";
+      let whereClause = "WHERE 1=1";
       const request = pool.request();
 
       if (sellerId) {
-        query += " AND SellerId = @sellerId";
+        whereClause += " AND SellerId = @sellerId";
         request.input('sellerId', sql.VarChar, sellerId);
       }
       if (category) {
-        query += " AND Category = @category";
+        whereClause += " AND Category = @category";
         request.input('category', sql.NVarChar, category);
       }
       if (search) {
-        query += " AND (AsinCode LIKE @search OR Sku LIKE @search OR Title LIKE @search)";
+        whereClause += " AND (AsinCode LIKE @search OR Sku LIKE @search OR Title LIKE @search)";
         request.input('search', sql.NVarChar, `%${search}%`);
       }
 
-      const result = await request.query(query);
-      const asins = result.recordset;
+      // 1. Get Total Count
+      const countResult = await request.query(`SELECT COUNT(*) as total FROM Asins ${whereClause}`);
+      const total = countResult.recordset[0].total;
 
-      // Transform for UI
+      // 2. Fetch Paginated ASINs
+      const sortField = ['AsinCode', 'CurrentPrice', 'BSR', 'LQS', 'CreatedAt'].includes(sortBy) ? sortBy : 'CreatedAt';
+      const order = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+      const asinsResult = await request
+        .input('offset', sql.Int, offset)
+        .input('limit', sql.Int, limitNum)
+        .query(`
+          SELECT * FROM Asins 
+          ${whereClause}
+          ORDER BY ${sortField} ${order}
+          OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+        `);
+      
+      const asins = asinsResult.recordset;
+
+      // 3. Fetch history for these ASINs from AsinHistory table
+      let historyMap = {};
+      if (asins.length > 0) {
+        const asinIds = asins.map(a => a.Id);
+        const historyRequest = pool.request();
+        asinIds.forEach((id, i) => historyRequest.input(`id${i}`, id));
+        const idParams = asinIds.map((_, i) => `@id${i}`).join(', ');
+        
+        const historyResult = await historyRequest.query(`
+          SELECT AsinId, Price, BSR, Rating, Date 
+          FROM AsinHistory 
+          WHERE AsinId IN (${idParams})
+          ORDER BY Date ASC
+        `);
+
+        historyMap = historyResult.recordset.reduce((acc, row) => {
+          if (!acc[row.AsinId]) acc[row.AsinId] = [];
+          acc[row.AsinId].push({
+            price: row.Price || 0,
+            bsr: row.BSR || 0,
+            rating: row.Rating || 0,
+            date: row.Date
+          });
+          return acc;
+        }, {});
+      }
+
+      // 4. Transform for UI
       const transformed = asins.map(asin => {
-        // Extract history
-        let history = [];
-        try {
-          history = JSON.parse(asin.AsinWeekHistory || asin.WeekHistory || '[]');
-        } catch (e) {
-          history = [];
-        }
-
+        const history = historyMap[asin.Id] || [];
+        
         const recentHistory = history.slice(-8).map(h => ({
-          price: h.price || 0,
-          bsr: h.bsr || 0,
-          subBSRs: h.subBSRs || [],
-          rating: h.rating || 0
+          price: h.price,
+          bsr: h.bsr,
+          rating: h.rating,
+          date: h.date
         }));
 
         // Map to UI-expected schema
         return {
+          id: asin.Id,
+          _id: asin.Id, // Alias for frontend
           asinCode: asin.AsinCode,
           sku: asin.Sku || 'N/A',
           title: asin.Title,
           imageUrl: asin.ImageUrl,
           currentPrice: asin.CurrentPrice || 0,
+          mrp: asin.Mrp || 0,
+          dealBadge: asin.DealBadge,
+          priceType: asin.PriceType,
           currentRank: asin.BSR || 0,
+          bsr: asin.BSR || 0, // Alias for frontend
           rating: asin.Rating || 0,
           reviewCount: asin.ReviewCount || 0,
           lqs: asin.LQS || 0,
-          buyBoxWin: asin.BuyBoxWin || isBuyBoxWinner(asin.SoldBy),
-          hasAPlus: asin.HasAplus || false,
+          cdq: asin.Cdq || 0,
+          cdqGrade: asin.CdqGrade || 'D',
+          buyBoxWin: asin.BuyBoxWin === 1 || asin.BuyBoxWin === true || isBuyBoxWinner(asin.SoldBy),
+          hasAPlus: asin.HasAplus === 1 || asin.HasAplus === true,
           imagesCount: asin.ImagesCount || 0,
+          videoCount: asin.VideoCount || 0,
           status: asin.Status || 'Active',
-          subBSRs: asin.SubBSRs ? JSON.parse(asin.SubBSRs) : [],
-          weekHistory: recentHistory,
+          subBSRs: asin.SubBSRs ? (typeof asin.SubBSRs === 'string' ? JSON.parse(asin.SubBSRs) : asin.SubBSRs) : [],
+          history: recentHistory, // Rename to match frontend expectations
           
           computedFields: {
             isHighlyRated: asin.Rating >= 4.5,
@@ -76,10 +131,18 @@ class AsinTableService {
         };
       });
 
-      return transformed;
+      return {
+        data: transformed,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      };
     } catch (error) {
       console.error('[AsinTableService] getAsinTableData error:', error);
-      return [];
+      return { data: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } };
     }
   }
 
