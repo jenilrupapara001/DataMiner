@@ -553,6 +553,88 @@ export const sellerApi = {
 
 // ASIN API
 export const asinApi = {
+  updateTags: async (asinId, tags) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/${asinId}/tags`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify({ tags })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.message || 'Failed to update tags');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to update tags:', error);
+      throw error;
+    }
+  },
+
+  bulkUploadTags: async (file, sellerId) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (sellerId) formData.append('sellerId', sellerId);
+      
+      const res = await fetch(`${API_BASE}/asins/tags/bulk`, {
+        method: 'POST',
+        headers: { ...getAuthHeader() },
+        body: formData
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.message || 'Failed to bulk upload tags');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to bulk upload tags:', error);
+      throw error;
+    }
+  },
+
+  downloadTagsTemplate: async (sellerId) => {
+    try {
+      const query = new URLSearchParams(sellerId ? { sellerId } : {}).toString();
+      const res = await fetch(`${API_BASE}/asins/tags/template${query ? `?${query}` : ''}`, {
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.message || 'Failed to download template');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `tags_template_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to download template:', error);
+      throw error;
+    }
+  },
+
+  getTags: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/tags`, {
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tags');
+      return res.json();
+    } catch (error) {
+      console.error('Failed to get tags:', error);
+      return { success: true, data: { default: [], used: [], all: [] } };
+    }
+  },
+
   getAll: async (params = {}) => {
     // Filter out null, undefined, or empty strings to keep URL clean
     const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
@@ -942,6 +1024,38 @@ export const settingsApi = {
     });
     if (!res.ok) throw new Error('Failed to toggle octoparse automation');
     return res.json();
+  },
+};
+
+// Bulk API
+export const bulkApi = {
+  catalogSync: async (file, sellerId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sellerId', sellerId);
+    return api.post('/bulk/catalog-sync', formData);
+  },
+  tagsImport: async (file, sellerId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (sellerId) formData.append('sellerId', sellerId);
+    return api.post('/bulk/tags-import', formData);
+  },
+  downloadCatalogTemplate: async () => {
+    const res = await fetch(`${API_BASE}/bulk/catalog-template`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to download template');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'catalog_template.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    return { success: true };
   },
 };
 

@@ -64,6 +64,12 @@ IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AN
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'AllOffers')
     ALTER TABLE Asins ADD AllOffers NVARCHAR(MAX);
 
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'Tags')
+    ALTER TABLE Asins ADD Tags NVARCHAR(MAX);
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'ParentAsin')
+    ALTER TABLE Asins ADD ParentAsin NVARCHAR(100);
+
 -- ============================================
 -- 2. Fix AsinHistory Table
 -- ============================================

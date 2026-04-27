@@ -110,6 +110,69 @@ exports.getAsins = async (req, res) => {
       request.input('maxLQS', sql.Decimal(5, 2), parseFloat(maxLQS));
     }
 
+    if (req.query.parentAsin) {
+      whereClause += ' AND ParentAsin = @parentAsin';
+      request.input('parentAsin', sql.NVarChar, req.query.parentAsin);
+    }
+
+    if (req.query.tag) {
+      whereClause += ' AND Tags LIKE @tag';
+      request.input('tag', sql.NVarChar, `%${req.query.tag}%`);
+    }
+
+    if (req.query.sku) {
+      whereClause += ' AND Sku LIKE @sku';
+      request.input('sku', sql.NVarChar, `%${req.query.sku}%`);
+    }
+
+    if (req.query.minRating) {
+      whereClause += ' AND Rating >= @minRating';
+      request.input('minRating', sql.Decimal(3, 2), parseFloat(req.query.minRating));
+    }
+    if (req.query.maxRating) {
+      whereClause += ' AND Rating <= @maxRating';
+      request.input('maxRating', sql.Decimal(3, 2), parseFloat(req.query.maxRating));
+    }
+
+    if (req.query.minReviewCount) {
+      whereClause += ' AND ReviewCount >= @minReviewCount';
+      request.input('minReviewCount', sql.Int, parseInt(req.query.minReviewCount));
+    }
+    if (req.query.maxReviewCount) {
+      whereClause += ' AND ReviewCount <= @maxReviewCount';
+      request.input('maxReviewCount', sql.Int, parseInt(req.query.maxReviewCount));
+    }
+
+    if (req.query.minImagesCount) {
+      whereClause += ' AND ImagesCount >= @minImagesCount';
+      request.input('minImagesCount', sql.Int, parseInt(req.query.minImagesCount));
+    }
+    if (req.query.maxImagesCount) {
+      whereClause += ' AND ImagesCount <= @maxImagesCount';
+      request.input('maxImagesCount', sql.Int, parseInt(req.query.maxImagesCount));
+    }
+
+    if (req.query.minBulletPoints) {
+      whereClause += ' AND BulletPoints >= @minBulletPoints';
+      request.input('minBulletPoints', sql.Int, parseInt(req.query.minBulletPoints));
+    }
+    if (req.query.maxBulletPoints) {
+      whereClause += ' AND BulletPoints <= @maxBulletPoints';
+      request.input('maxBulletPoints', sql.Int, parseInt(req.query.maxBulletPoints));
+    }
+
+    if (req.query.hasVideo !== undefined && req.query.hasVideo !== '') {
+      whereClause += ' AND VideoCount ' + (req.query.hasVideo === 'true' ? '> 0' : '= 0');
+    }
+
+    if (req.query.hasDeal !== undefined && req.query.hasDeal !== '') {
+      if (req.query.hasDeal === 'true') {
+        whereClause += " AND DealBadge IS NOT NULL AND DealBadge != '' AND DealBadge != 'No deal found'";
+      } else {
+        whereClause += " AND (DealBadge IS NULL OR DealBadge = '' OR DealBadge = 'No deal found')";
+      }
+    }
+
     // [4] Search
     if (search) {
       whereClause += ' AND (AsinCode LIKE @search OR Title LIKE @search OR Sku LIKE @search)';
@@ -248,6 +311,8 @@ exports.getAsins = async (req, res) => {
             brand: a.Brand || '',
             title: a.Title || '',
             imageUrl: a.ImageUrl || '',
+            tags: a.Tags || '[]',
+            parentAsin: a.ParentAsin || '',
             
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,
@@ -446,6 +511,8 @@ exports.getAsin = async (req, res) => {
       brand: a.Brand,
       title: a.Title,
       imageUrl: a.ImageUrl,
+      tags: a.Tags || '[]',
+      parentAsin: a.ParentAsin || '',
       
       currentPrice: parseFloat(a.CurrentPrice) || 0,
       mrp: parseFloat(a.Mrp) || 0,
@@ -1708,3 +1775,226 @@ exports.exportData = async (req, res) => {
 };
 
 module.exports = exports;
+
+// ─────────────────────────────────────────────
+// TAGS HANDLERS
+// ─────────────────────────────────────────────
+
+/**
+ * PUT /api/asins/:id/tags
+ * Update tags for a single ASIN
+ */
+exports.updateAsinTags = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tags } = req.body;
+
+    if (!Array.isArray(tags)) {
+      return res.status(400).json({ success: false, error: 'tags must be an array' });
+    }
+
+    const pool = await getPool();
+    const tagsJson = JSON.stringify(tags);
+
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .input('tags', sql.NVarChar, tagsJson)
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+
+    res.json({ success: true, data: { id, tags } });
+  } catch (error) {
+    console.error('[Tags] updateAsinTags error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/asins/tags
+ * Return the list of all distinct tags in use across ASINs
+ */
+exports.getAllTags = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query("SELECT Tags FROM Asins WHERE Tags IS NOT NULL AND Tags != '[]' AND Tags != ''");
+
+    const tagSet = new Set();
+    for (const row of result.recordset) {
+      try {
+        const parsed = JSON.parse(row.Tags);
+        if (Array.isArray(parsed)) parsed.forEach(t => tagSet.add(t));
+      } catch (_) {}
+    }
+
+    res.json({ success: true, data: Array.from(tagSet).sort() });
+  } catch (error) {
+    console.error('[Tags] getAllTags error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/asins/tags/template
+ * Download an Excel template pre-filled with all ASINs for bulk tag editing
+ */
+exports.downloadTagsTemplate = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { sellerId } = req.query;
+
+    let query = `
+      SELECT a.Id, a.AsinCode, a.ParentAsin, a.Title, a.Tags,
+             s.Name as SellerName
+      FROM Asins a
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      WHERE 1=1
+    `;
+    const request = pool.request();
+    if (sellerId) {
+      query += ' AND a.SellerId = @sellerId';
+      request.input('sellerId', sql.VarChar, sellerId);
+    }
+    query += ' ORDER BY s.Name, a.AsinCode';
+
+    const result = await request.query(query);
+
+    const templateData = result.recordset.map(row => {
+      let tags = '';
+      try { tags = JSON.parse(row.Tags || '[]').join(', '); } catch (_) {}
+      return {
+        'Parent ASIN': row.ParentAsin || '',
+        'Child ASIN': row.AsinCode || '',
+        'Seller Name': row.SellerName || '',
+        'Tags': tags,
+        'Title': row.Title || '',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    ws['!cols'] = [
+      { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 50 }, { wch: 60 }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tags Template');
+
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    const fileName = `tags_template_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (error) {
+    console.error('[Tags] downloadTagsTemplate error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * POST /api/asins/tags/bulk
+ * Upload an Excel file and update tags for all matched ASINs
+ */
+exports.bulkUploadTags = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const wb = XLSX.readFile(req.file.path);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws);
+
+    fs.unlinkSync(req.file.path); // clean up
+
+    if (!rows.length) {
+      return res.status(400).json({ success: false, error: 'File is empty' });
+    }
+
+    const pool = await getPool();
+    let updated = 0;
+    const errors = [];
+
+    for (const row of rows) {
+      const asinCode = (row['Child ASIN'] || row['ASIN'] || '').trim().toUpperCase();
+      const rawTags = (row['Tags'] || '').trim();
+      if (!asinCode) continue;
+
+      const tags = rawTags ? rawTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const tagsJson = JSON.stringify(tags);
+
+      try {
+        const result = await pool.request()
+          .input('asinCode', sql.NVarChar, asinCode)
+          .input('tags', sql.NVarChar, tagsJson)
+          .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE AsinCode = @asinCode');
+        if (result.rowsAffected[0] > 0) updated++;
+      } catch (err) {
+        errors.push({ asin: asinCode, error: err.message });
+      }
+    }
+
+    res.json({ success: true, updated, total: rows.length, errors });
+  } catch (error) {
+    console.error('[Tags] bulkUploadTags error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * PUT /api/asins/:id/tags
+ * Update tags for a specific ASIN
+ */
+exports.updateTags = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tags } = req.body; // Expects array of strings
+    
+    if (!Array.isArray(tags)) {
+      return res.status(400).json({ success: false, error: 'Tags must be an array' });
+    }
+
+    const pool = await getPool();
+    const tagsJson = JSON.stringify(tags);
+
+    const result = await pool.request()
+      .input('id', sql.VarChar, id)
+      .input('tags', sql.NVarChar, tagsJson)
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ success: false, error: 'ASIN not found' });
+    }
+
+    res.json({ success: true, message: 'Tags updated' });
+  } catch (error) {
+    console.error('[Tags] updateTags error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * GET /api/asins/tags
+ * Get all unique tags across all ASINs
+ */
+exports.getTags = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query('SELECT Tags FROM Asins WHERE Tags IS NOT NULL');
+    
+    const allTags = new Set();
+    result.recordset.forEach(row => {
+      try {
+        const tags = JSON.parse(row.Tags || '[]');
+        if (Array.isArray(tags)) {
+          tags.forEach(t => allTags.add(t));
+        }
+      } catch (e) {
+        // skip invalid json
+      }
+    });
+
+    res.json({ success: true, data: Array.from(allTags).sort() });
+  } catch (error) {
+    console.error('[Tags] getTags error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

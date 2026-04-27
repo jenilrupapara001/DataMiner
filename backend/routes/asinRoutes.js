@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const asinController = require('../controllers/asinController');
+const tagController = require('../controllers/tagController');
 const { authenticate: protect, requirePermission, checkSellerAccess } = require('../middleware/auth');
 
 // Configure multer for CSV uploads
@@ -63,6 +64,12 @@ router.post('/upload-raw', protect, requirePermission('sellers_manage_asins'), a
 router.post('/parse-test', protect, requirePermission('sellers_manage_asins'), asinController.testParseRaw);
 
 router.post('/export', protect, requirePermission('sellers_view'), asinController.exportData);
+
+// Tags routes — must be before /:id to avoid conflict
+router.get('/tags', protect, requirePermission('sellers_view'), tagController.getTags);
+router.get('/tags/template', protect, requirePermission('sellers_view'), tagController.downloadTagsTemplate);
+router.post('/tags/bulk', protect, requirePermission('sellers_manage_asins'), upload.single('file'), tagController.bulkUpdateTags);
+router.put('/:asinId/tags', protect, requirePermission('sellers_manage_asins'), tagController.updateAsinTags);
 
 router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);

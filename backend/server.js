@@ -103,6 +103,7 @@ const revenueRoutes = require('./routes/revenueRoutes');
 const goalRoutes = require('./routes/goalRoutes');
 const asinTableRoutes = require('./routes/asinTableRoutes');
 const listingQualityRoutes = require('./routes/listingQualityRoutes');
+const bulkRoutes = require('./routes/bulkRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -133,6 +134,7 @@ app.use('/api/revenue-engine', revenueRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/asins-table', asinTableRoutes);
 app.use('/api/listing-quality', listingQualityRoutes);
+app.use('/api/bulk', bulkRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {

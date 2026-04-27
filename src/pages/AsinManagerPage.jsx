@@ -54,6 +54,10 @@ const PriceViewModal = lazy(() => import('../components/PriceViewModal'));
 const BSRViewModal = lazy(() => import('../components/BSRViewModal'));
 const RatingViewModal = lazy(() => import('../components/RatingViewModal'));
 const ExportAsinModal = lazy(() => import('../components/asins/ExportAsinModal'));
+const EditTagsModal = lazy(() => import('../components/asins/EditTagsModal'));
+const BulkImportModal = lazy(() => import('../components/asins/BulkImportModal'));
+import TagsCell from '../components/asins/TagsCell';
+
 import Popover from '../components/common/Popover';
 
 // Helper to generate tiered structure for history columns
@@ -318,20 +322,37 @@ const AsinManagerPage = () => {
   const [selectedSeller, setSelectedSeller] = useState('');
   const [repairStatus, setRepairStatus] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [activeEditAsin, setActiveEditAsin] = useState(null);
+  const [importingTags, setImportingTags] = useState(false);
+  const tagsImportRef = useRef(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     category: '',
     brand: '',
     scrapeStatus: '',
+    parentAsin: '',
+    tag: '',
+    sku: '',
     buyBoxWin: '',
     hasAplus: '',
+    hasVideo: '',
+    hasDeal: '',
     minPrice: '',
     maxPrice: '',
     minBSR: '',
     maxBSR: '',
     minLQS: '',
-    maxLQS: ''
+    maxLQS: '',
+    minRating: '',
+    maxRating: '',
+    minReviewCount: '',
+    maxReviewCount: '',
+    minImagesCount: '',
+    maxImagesCount: '',
+    minBulletPoints: '',
+    maxBulletPoints: ''
   });
   
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -340,14 +361,27 @@ const AsinManagerPage = () => {
     category: '',
     brand: '',
     scrapeStatus: '',
+    parentAsin: '',
+    tag: '',
+    sku: '',
     buyBoxWin: '',
     hasAplus: '',
+    hasVideo: '',
+    hasDeal: '',
     minPrice: '',
     maxPrice: '',
     minBSR: '',
     maxBSR: '',
     minLQS: '',
-    maxLQS: ''
+    maxLQS: '',
+    minRating: '',
+    maxRating: '',
+    minReviewCount: '',
+    maxReviewCount: '',
+    minImagesCount: '',
+    maxImagesCount: '',
+    minBulletPoints: '',
+    maxBulletPoints: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -486,7 +520,31 @@ const AsinManagerPage = () => {
     }
   }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters]);
 
+  const handleImportTags = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    setImportingTags(true);
+    try {
+      const response = await asinApi.bulkUploadTags(file, selectedSeller);
+      if (response.success) {
+        alert(`Successfully updated tags for ${response.updated} ASINs`);
+        loadData(pagination.page, pagination.limit); // Refresh
+      } else {
+        alert('Failed to import tags: ' + (response.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Tags import error:', err);
+      alert('Error importing tags');
+    } finally {
+      setImportingTags(false);
+      if (e.target) e.target.value = ''; // reset
+    }
+  };
+
+  const handleDownloadTagsTemplate = () => {
+    asinApi.downloadTagsTemplate(selectedSeller);
+  };
 
   const handleChangePage = (event, newPage) => {
     // MUI uses 0-indexed pages, API uses 1-indexed
@@ -1376,6 +1434,39 @@ const AsinManagerPage = () => {
                   </select>
                 </div>
 
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">PARENT ASIN</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm smallest"
+                    placeholder="Search Parent ASIN..."
+                    value={filters.parentAsin}
+                    onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })}
+                  />
+                </div>
+
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">SKU</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm smallest"
+                    placeholder="Search SKU..."
+                    value={filters.sku}
+                    onChange={(e) => setFilters({ ...filters, sku: e.target.value })}
+                  />
+                </div>
+
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">TAG</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm smallest"
+                    placeholder="Search by Tag..."
+                    value={filters.tag}
+                    onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
+                  />
+                </div>
+
                 {/* 3. Numeric Ranges */}
                 <div className="d-flex flex-column gap-2">
                   <label className="smallest fw-bold text-zinc-500">PRICE RANGE (₹)</label>
@@ -1407,6 +1498,46 @@ const AsinManagerPage = () => {
                   </div>
                 </div>
 
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">RATING RANGE</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" step="0.1" placeholder="Min" className="form-control form-control-sm smallest"
+                      value={filters.minRating} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} />
+                    <input type="number" step="0.1" placeholder="Max" className="form-control form-control-sm smallest"
+                      value={filters.maxRating} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">REVIEWS COUNT</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
+                      value={filters.minReviewCount} onChange={(e) => setFilters({ ...filters, minReviewCount: e.target.value })} />
+                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
+                      value={filters.maxReviewCount} onChange={(e) => setFilters({ ...filters, maxReviewCount: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">IMAGES COUNT</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
+                      value={filters.minImagesCount} onChange={(e) => setFilters({ ...filters, minImagesCount: e.target.value })} />
+                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
+                      value={filters.maxImagesCount} onChange={(e) => setFilters({ ...filters, maxImagesCount: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column gap-2">
+                  <label className="smallest fw-bold text-zinc-500">BULLET POINTS</label>
+                  <div className="d-flex gap-2">
+                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
+                      value={filters.minBulletPoints} onChange={(e) => setFilters({ ...filters, minBulletPoints: e.target.value })} />
+                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
+                      value={filters.maxBulletPoints} onChange={(e) => setFilters({ ...filters, maxBulletPoints: e.target.value })} />
+                  </div>
+                </div>
+
                 {/* 4. Booleans */}
                 <div className="d-flex flex-column gap-2 mt-2 pt-2 border-top">
                   <div className="form-check form-switch d-flex justify-content-between align-items-center">
@@ -1415,11 +1546,23 @@ const AsinManagerPage = () => {
                       checked={filters.buyBoxWin === 'true'}
                       onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
                   </div>
-                  <div className="form-check form-switch d-flex justify-content-between align-items-center mt-2">
+                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
                     <label className="smallest fw-bold text-zinc-600 mb-0">Has A+ Content</label>
                     <input className="form-check-input" type="checkbox" role="switch"
                       checked={filters.hasAplus === 'true'}
                       onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
+                  </div>
+                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
+                    <label className="smallest fw-bold text-zinc-600 mb-0">Has Video</label>
+                    <input className="form-check-input" type="checkbox" role="switch"
+                      checked={filters.hasVideo === 'true'}
+                      onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
+                  </div>
+                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
+                    <label className="smallest fw-bold text-zinc-600 mb-0">Has Active Deal</label>
+                    <input className="form-check-input" type="checkbox" role="switch"
+                      checked={filters.hasDeal === 'true'}
+                      onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
                   </div>
                 </div>
 
@@ -1436,8 +1579,11 @@ const AsinManagerPage = () => {
                     onClick={() => {
                       const resetState = {
                         status: '', category: '', brand: '', scrapeStatus: '',
-                        buyBoxWin: '', hasAplus: '',
-                        minPrice: '', maxPrice: '', minBSR: '', maxBSR: '', minLQS: '', maxLQS: ''
+                        parentAsin: '', tag: '', sku: '',
+                        buyBoxWin: '', hasAplus: '', hasVideo: '', hasDeal: '',
+                        minPrice: '', maxPrice: '', minBSR: '', maxBSR: '', minLQS: '', maxLQS: '',
+                        minRating: '', maxRating: '', minReviewCount: '', maxReviewCount: '',
+                        minImagesCount: '', maxImagesCount: '', minBulletPoints: '', maxBulletPoints: ''
                       };
                       setFilters(resetState);
                       setAppliedFilters(resetState);
@@ -1538,6 +1684,18 @@ const AsinManagerPage = () => {
                 }}>
                 <Download size={10} color="#2563eb" /> Export
               </button>
+
+              <button
+                onClick={() => setShowBulkImportModal(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+                  fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
+                  background: '#fff', cursor: 'pointer'
+                }}
+              >
+                <FileUp size={10} color="#10b981" /> 
+                Bulk Import
+              </button>
             </div>
           </div>
 
@@ -1554,11 +1712,24 @@ const AsinManagerPage = () => {
                       style={{ cursor: 'pointer', width: '14px', height: '14px' }}
                     />
                   </th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '110px', left: '40px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>ASIN ID</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px', left: '40px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                      ASIN ID
+                    </div>
+                  </th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                      PARENT ASIN
+                    </div>
+                  </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SELLER / BRAND</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '90px' }}>SKU</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '220px' }}>PRODUCT TITLE</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '130px' }}>CATEGORY</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '130px' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                      CATEGORY
+                    </div>
+                  </th>
                   <th colSpan={5} style={{ ...thStyle, background: '#f8fafc', color: '#1e293b', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>
                     LISTING QUALITY (LQS)
                   </th>
@@ -1596,6 +1767,11 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>B</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center' }}>A+</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', color: '#b91c1c' }}>A+ DAYS</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '130px', textAlign: 'left', color: '#4338ca' }}>
+                    <div className="d-flex align-items-center justify-content-between">
+                      TAGS
+                    </div>
+                  </th>
                 </tr>
                 <tr>
                   <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>
@@ -1632,7 +1808,7 @@ const AsinManagerPage = () => {
               <tbody>
                 {filteredAsins.length === 0 ? (
                   <tr>
-                    <td colSpan={54} style={{ padding: '60px 0', background: '#fff' }}>
+                    <td colSpan={56} style={{ padding: '60px 0', background: '#fff' }}>
                       <EmptyState
                         icon={Package}
                         title="No ASINs Found"
@@ -1697,6 +1873,10 @@ const AsinManagerPage = () => {
                           <ExternalLink size={13} />
                         </a>
                       </div>
+                    </td>
+                    {/* ===== PARENT ASIN ===== */}
+                    <td style={{ ...tdStyle, fontSize: '10px', color: '#6366f1', fontWeight: 500 }}>
+                      {asin.parentAsin || asin.ParentAsin || '-'}
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -2078,6 +2258,17 @@ const AsinManagerPage = () => {
                         ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24)) 
                         : '-'}
                     </td>
+                    {/* ===== TAGS CELL ===== */}
+                    <td style={{ ...tdStyle, padding: '4px 6px' }}>
+                      <TagsCell
+                        asin={asin}
+                        onUpdate={(id, tags) => {
+                          setAsins(prev => prev.map(a => 
+                            (a._id === id || a.Id === id) ? { ...a, tags, Tags: JSON.stringify(tags) } : a
+                          ));
+                        }}
+                      />
+                    </td>
                   </tr>
                 )))}
               </tbody>
@@ -2117,6 +2308,28 @@ const AsinManagerPage = () => {
         </div>
 
         {/* [M] Modals Consolidated */}
+        <Suspense fallback={<div />}>
+          {showExportModal && (
+            <ExportAsinModal 
+              isOpen={showExportModal} 
+              onClose={() => setShowExportModal(false)} 
+            />
+          )}
+
+          {activeEditAsin && (
+            <EditTagsModal
+              isOpen={!!activeEditAsin}
+              asin={activeEditAsin}
+              onClose={() => setActiveEditAsin(null)}
+              onUpdate={(asinId, newTags) => {
+                setAsins(prev => prev.map(a => 
+                  a._id === asinId ? { ...a, tags: newTags } : a
+                ));
+              }}
+            />
+          )}
+        </Suspense>
+
         {showAddModal && (
           <div style={{
             position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
@@ -2223,6 +2436,11 @@ const AsinManagerPage = () => {
         <ExportAsinModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
+        />
+        <BulkImportModal
+          isOpen={showBulkImportModal}
+          onClose={() => setShowBulkImportModal(false)}
+          onComplete={loadData}
         />
       </Suspense>
     </div>
