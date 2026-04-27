@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
-import { 
-  Package, X, RefreshCw, FileJson, Plus, Database, 
+import {
+  Package, X, RefreshCw, FileJson, Plus, Database,
   CheckCircle2, PauseCircle, Eye, Edit3, Trash2,
   CheckSquare, Square, Trash, AlertCircle, Loader2,
   FileUp, FileSpreadsheet
@@ -106,10 +106,10 @@ const SellerAsinsModal = ({
     const isValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
 
     if (!isValidExtension) {
-      addToast({ 
-        title: 'Invalid File', 
-        message: 'Please upload a CSV or Excel file (.csv, .xlsx, .xls)', 
-        type: 'error' 
+      addToast({
+        title: 'Invalid File',
+        message: 'Please upload a CSV or Excel file (.csv, .xlsx, .xls)',
+        type: 'error'
       });
       return;
     }
@@ -152,10 +152,10 @@ const SellerAsinsModal = ({
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.json')) {
-      addToast({ 
-        title: 'Invalid File', 
-        message: 'Please upload a JSON file.', 
-        type: 'error' 
+      addToast({
+        title: 'Invalid File',
+        message: 'Please upload a JSON file.',
+        type: 'error'
       });
       return;
     }
@@ -365,7 +365,7 @@ const SellerAsinsModal = ({
                         title="Upload Octoparse JSON results (Price, Rank, etc.)"
                       >
                         <FileJson size={13} className="text-zinc-500" />
-                        <span className="fw-black uppercase tracking-wider">Octoparse Data Ingest</span>
+                        <span className="fw-black uppercase tracking-wider">Data Ingest</span>
                       </button>
                     </div>
 
