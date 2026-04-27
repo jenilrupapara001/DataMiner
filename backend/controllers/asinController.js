@@ -138,106 +138,140 @@ exports.getAsins = async (req, res) => {
     // [7] Fetch Week History for these ASINs
     const asinIds = asins.map(a => `'${a.Id}'`).join(',');
     const historyResult = await pool.request().query(`
-      SELECT * FROM AsinWeekHistory 
+      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr, 
+             AvgRating as rating, TotalReviews as reviews
+      FROM AsinWeekHistory 
       WHERE AsinId IN (${asinIds}) 
-      ORDER BY WeekStartDate DESC
+      ORDER BY WeekStartDate ASC
     `);
     
     const historyMap = {};
     historyResult.recordset.forEach(h => {
       if (!historyMap[h.AsinId]) historyMap[h.AsinId] = [];
-      if (historyMap[h.AsinId].length < 8) {
-        historyMap[h.AsinId].push({
-          week: h.WeekStartDate ? `W${Math.ceil(new Date(h.WeekStartDate).getDate() / 7)}` : '', // Placeholder week format
-          date: h.WeekStartDate ? h.WeekStartDate.toISOString().split('T')[0] : '',
-          price: h.AvgPrice || 0,
-          bsr: h.AvgBSR || 0,
-          rating: h.AvgRating || 0,
-          reviews: h.TotalReviews || 0
-        });
-      }
+      historyMap[h.AsinId].push({
+        week: h.WeekStartDate ? `W${Math.ceil(new Date(h.WeekStartDate).getDate() / 7)}` : '',
+        date: h.WeekStartDate ? h.WeekStartDate.toISOString().split('T')[0] : '',
+        price: h.price || 0,
+        bsr: h.bsr || 0,
+        rating: h.rating || 0,
+        reviews: h.reviews || 0
+      });
     });
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
-      const history = (historyMap[a.Id] || []).reverse(); 
-      
-      // Parse JSON strings back to objects/arrays
+      // Parse JSON fields from SQL strings
       let allOffers = [];
-      try {
-        allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : [];
-      } catch (e) {
-        allOffers = [];
-      }
-      
+      try { allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : []; } catch (e) { allOffers = []; }
+
       let subBSRs = [];
-      try {
-        subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : [];
-      } catch (e) {
-        subBSRs = [];
-      }
-      
+      try { subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : []; } catch (e) { subBSRs = []; }
+
+      let images = [];
+      try { images = a.Images ? (typeof a.Images === 'string' ? JSON.parse(a.Images) : a.Images) : []; } catch (e) { images = []; }
+
       let bulletPointsText = [];
-      try {
-        bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : [];
-      } catch (e) {
-        bulletPointsText = [];
-      }
-      
+      try { bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : []; } catch (e) { bulletPointsText = []; }
+
       let ratingBreakdown = {};
-      try {
-        ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {};
-      } catch (e) {
-        ratingBreakdown = {};
-      }
-      
+      try { ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {}; } catch (e) { ratingBreakdown = {}; }
+
+      let lqsDetails = [];
+      try { lqsDetails = a.LqsDetails ? (typeof a.LqsDetails === 'string' ? JSON.parse(a.LqsDetails) : a.LqsDetails) : []; } catch (e) { lqsDetails = []; }
+
+      let cdqComponents = {};
+      try { cdqComponents = a.CdqComponents ? (typeof a.CdqComponents === 'string' ? JSON.parse(a.CdqComponents) : a.CdqComponents) : {}; } catch (e) { cdqComponents = {}; }
+
+      let feePreview = {};
+      try { feePreview = a.FeePreview ? (typeof a.FeePreview === 'string' ? JSON.parse(a.FeePreview) : a.FeePreview) : {}; } catch (e) { feePreview = {}; }
+
+      // Parse History (contains price, bsr, rating, imageCount, videoCount over time)
       let historyParsed = [];
-      try {
-        historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : [];
-      } catch (e) {
-        historyParsed = [];
-      }
+      try { historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : []; } catch (e) { historyParsed = []; }
+
+      // Get weekHistory from AsinWeekHistory table
+      const weekHistory = (historyMap[a.Id] || []).map(h => ({
+        ...h,
+        imageCount: h.imageCount || a.ImagesCount || 0,
+        videoCount: h.videoCount || a.VideoCount || 0,
+        lqs: h.lqs || a.LQS || 0
+      }));
+
+      // Merge: prefer weekHistory from AsinWeekHistory table, fallback to History JSON
+      const finalHistory = weekHistory.length > 0 ? weekHistory : historyParsed;
 
       return {
         ...a,
         _id: a.Id,
         asinCode: a.AsinCode,
         sku: a.Sku,
-        currentPrice: a.CurrentPrice,
-        mrp: a.Mrp,
-        bsr: a.BSR,
-        rating: a.Rating,
-        reviewCount: a.ReviewCount,
-        lqs: a.LQS,
-        buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
-        soldBy: a.SoldBy || 'N/A',
-        secondAsp: a.SecondAsp || 0,
-        hasAplus: a.HasAplus === 1 || a.HasAplus === true,
-        dealBadge: a.DealBadge || 'No deal found',
-        availabilityStatus: a.AvailabilityStatus || 'Available',
-        imagesCount: a.ImagesCount || 0,
-        videoCount: a.VideoCount || 0,
-        bulletPoints: parseInt(a.BulletPoints) || 0,
-        descLength: a.DescLength || 0,
-        discountPercentage: a.DiscountPercentage || 0,
-        allOffers,
-        subBSRs,
-        bulletPointsText,
-        ratingBreakdown,
-        weekHistory: historyParsed,
-        history: historyParsed,
         status: a.Status,
+        scrapeStatus: a.ScrapeStatus,
         category: a.Category,
         brand: a.Brand,
         title: a.Title,
         imageUrl: a.ImageUrl,
-        lastScraped: a.LastScrapedAt,
-        scrapeStatus: a.ScrapeStatus,
+        
+        currentPrice: parseFloat(a.CurrentPrice) || 0,
+        mrp: parseFloat(a.Mrp) || 0,
+        bsr: parseInt(a.BSR) || 0,
+        rating: parseFloat(a.Rating) || 0,
+        reviewCount: parseInt(a.ReviewCount) || 0,
+        lqs: parseFloat(a.LQS) || 0,
+        
+        buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
+        hasAplus: a.HasAplus === 1 || a.HasAplus === true,
+        buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true,
+        
+        soldBy: a.SoldBy || '',
+        soldBySec: a.SoldBySec || '',
+        secondAsp: parseFloat(a.SecondAsp) || 0,
+        aspDifference: parseFloat(a.AspDifference) || 0,
+        dealBadge: a.DealBadge || 'No deal found',
+        priceType: a.PriceType || 'Standard Price',
+        discountPercentage: a.DiscountPercentage || 0,
+        
+        availabilityStatus: a.AvailabilityStatus || 'Available',
+        stockLevel: parseInt(a.StockLevel) || 0,
+        
+        aplusAbsentSince: a.AplusAbsentSince || null,
+        aplusPresentSince: a.AplusPresentSince || null,
+        
+        imagesCount: parseInt(a.ImagesCount) || 0,
+        videoCount: parseInt(a.VideoCount) || 0,
+        bulletPoints: parseInt(a.BulletPoints) || 0,
+        descLength: parseInt(a.DescLength) || 0,
+        
+        cdq: parseInt(a.Cdq) || 0,
+        cdqGrade: a.CdqGrade || 'N/A',
+        
+        weight: parseFloat(a.Weight) || 0,
+        stapleLevel: a.StapleLevel || 'Standard',
+        lossPerReturn: parseFloat(a.LossPerReturn) || 0,
+        
+        subBsr: a.SubBsr || '',
+        
+        allOffers,
+        subBSRs,
+        images,
+        bulletPointsText,
+        ratingBreakdown,
+        lqsDetails,
+        cdqComponents,
+        feePreview,
+        history: historyParsed,
+        weekHistory: finalHistory,
+        
         seller: {
           _id: a.SellerId,
-          name: a.sellerName,
-          marketplace: a.sellerMarketplace
-        }
+          name: a.sellerName || '',
+          marketplace: a.sellerMarketplace || ''
+        },
+        
+        lastScraped: a.LastScrapedAt,
+        lastScrapedAt: a.LastScrapedAt,
+        createdAt: a.CreatedAt,
+        updatedAt: a.UpdatedAt
       };
     });
 
@@ -291,66 +325,92 @@ exports.getAsin = async (req, res) => {
 
     // Map to Frontend Object
     let allOffers = [];
-    try {
-      allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : [];
-    } catch (e) {
-      allOffers = [];
-    }
-    
+    try { allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : []; } catch (e) { allOffers = []; }
+
     let subBSRs = [];
-    try {
-      subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : [];
-    } catch (e) {
-      subBSRs = [];
-    }
-    
+    try { subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : []; } catch (e) { subBSRs = []; }
+
+    let images = [];
+    try { images = a.Images ? (typeof a.Images === 'string' ? JSON.parse(a.Images) : a.Images) : []; } catch (e) { images = []; }
+
     let bulletPointsText = [];
-    try {
-      bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : [];
-    } catch (e) {
-      bulletPointsText = [];
-    }
-    
+    try { bulletPointsText = a.BulletPointsText ? (typeof a.BulletPointsText === 'string' ? JSON.parse(a.BulletPointsText) : a.BulletPointsText) : []; } catch (e) { bulletPointsText = []; }
+
     let ratingBreakdown = {};
-    try {
-      ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {};
-    } catch (e) {
-      ratingBreakdown = {};
-    }
+    try { ratingBreakdown = a.RatingBreakdown ? (typeof a.RatingBreakdown === 'string' ? JSON.parse(a.RatingBreakdown) : a.RatingBreakdown) : {}; } catch (e) { ratingBreakdown = {}; }
+
+    let lqsDetails = [];
+    try { lqsDetails = a.LqsDetails ? (typeof a.LqsDetails === 'string' ? JSON.parse(a.LqsDetails) : a.LqsDetails) : []; } catch (e) { lqsDetails = []; }
+
+    let cdqComponents = {};
+    try { cdqComponents = a.CdqComponents ? (typeof a.CdqComponents === 'string' ? JSON.parse(a.CdqComponents) : a.CdqComponents) : {}; } catch (e) { cdqComponents = {}; }
+
+    let feePreview = {};
+    try { feePreview = a.FeePreview ? (typeof a.FeePreview === 'string' ? JSON.parse(a.FeePreview) : a.FeePreview) : {}; } catch (e) { feePreview = {}; }
 
     let historyParsed = [];
-    try {
-      historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : [];
-    } catch (e) {
-      historyParsed = [];
-    }
+    try { historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : []; } catch (e) { historyParsed = []; }
 
     const asin = {
       ...a,
       _id: a.Id,
       asinCode: a.AsinCode,
-      currentPrice: a.CurrentPrice,
-      mrp: a.Mrp,
-      bsr: a.BSR,
-      rating: a.Rating,
-      reviewCount: a.ReviewCount,
-      lqs: a.LQS,
+      sku: a.Sku,
+      status: a.Status,
+      scrapeStatus: a.ScrapeStatus,
+      category: a.Category,
+      brand: a.Brand,
+      title: a.Title,
+      imageUrl: a.ImageUrl,
+      
+      currentPrice: parseFloat(a.CurrentPrice) || 0,
+      mrp: parseFloat(a.Mrp) || 0,
+      bsr: parseInt(a.BSR) || 0,
+      rating: parseFloat(a.Rating) || 0,
+      reviewCount: parseInt(a.ReviewCount) || 0,
+      lqs: parseFloat(a.LQS) || 0,
+      
       buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
-      soldBy: a.SoldBy || 'N/A',
-      secondAsp: a.SecondAsp || 0,
       hasAplus: a.HasAplus === 1 || a.HasAplus === true,
-      availabilityStatus: a.AvailabilityStatus || 'Available',
+      buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true,
+      
+      soldBy: a.SoldBy || '',
+      soldBySec: a.SoldBySec || '',
+      secondAsp: parseFloat(a.SecondAsp) || 0,
+      aspDifference: parseFloat(a.AspDifference) || 0,
+      dealBadge: a.DealBadge || 'No deal found',
+      priceType: a.PriceType || 'Standard Price',
       discountPercentage: a.DiscountPercentage || 0,
+      
+      availabilityStatus: a.AvailabilityStatus || 'Available',
+      stockLevel: parseInt(a.StockLevel) || 0,
+      
+      aplusAbsentSince: a.AplusAbsentSince || null,
+      aplusPresentSince: a.AplusPresentSince || null,
+      
+      imagesCount: parseInt(a.ImagesCount) || 0,
+      videoCount: parseInt(a.VideoCount) || 0,
+      bulletPoints: parseInt(a.BulletPoints) || 0,
+      descLength: parseInt(a.DescLength) || 0,
+      
+      cdq: parseInt(a.Cdq) || 0,
+      cdqGrade: a.CdqGrade || 'N/A',
+      
       allOffers,
       subBSRs,
+      images,
       bulletPointsText,
       ratingBreakdown,
+      lqsDetails,
+      cdqComponents,
+      feePreview,
       history: historyParsed,
       weekHistory: historyParsed,
+      
       seller: {
         _id: a.SellerId,
-        name: a.sellerName,
-        marketplace: a.sellerMarketplace,
+        name: a.sellerName || '',
+        marketplace: a.sellerMarketplace || '',
         sellerId: a.sellerExtId
       }
     };

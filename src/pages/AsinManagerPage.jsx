@@ -600,6 +600,18 @@ const AsinManagerPage = () => {
         },
         { label: 'AVG IMAGES', value: stats.avgImages || 0, color: '#ec4899', icon: <Image size={14} /> },
         { label: 'AVG BULLETS', value: stats.avgBullets || 0, color: '#8b5cf6', icon: <ListChecks size={14} /> },
+        { 
+          label: 'BUYBOX WINS', 
+          value: asins.filter(a => a.buyBoxWin).length, 
+          color: '#059669', 
+          icon: <Trophy size={14} /> 
+        },
+        { 
+          label: 'BUYBOX LOSSES', 
+          value: asins.filter(a => !a.buyBoxWin).length, 
+          color: '#ef4444', 
+          icon: <AlertCircle size={14} /> 
+        },
       ];
     }
 
@@ -1563,7 +1575,8 @@ const AsinManagerPage = () => {
                   </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center' }}>STATUS</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center' }}>DEAL</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '150px', textAlign: 'left' }}>BUY BOX DETAILS</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left' }}>CURRENT BUYBOX</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left' }}>OTHER BUYBOX</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>I</th>
                   <th colSpan={visibleHistoryCols}
                     style={{ ...thStyle, background: '#fdf2f8', color: '#be185d', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #fbcfe8' }}>
@@ -1603,7 +1616,7 @@ const AsinManagerPage = () => {
               <tbody>
                 {filteredAsins.length === 0 ? (
                   <tr>
-                    <td colSpan={24} style={{ padding: '60px 0', background: '#fff' }}>
+                    <td colSpan={25} style={{ padding: '60px 0', background: '#fff' }}>
                       <EmptyState
                         icon={Package}
                         title="No ASINs Found"
@@ -1847,61 +1860,111 @@ const AsinManagerPage = () => {
                         <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>
                       )}
                     </td>
-                    <td style={{ ...tdStyle, width: '150px', whiteSpace: 'normal', height: 'auto', padding: '4px' }}>
-                      <Popover
-                        trigger="click"
-                        placement="left"
-                        content={
-                          <div style={{ minWidth: '220px' }}>
-                            <div className="text-uppercase smallest fw-bold mb-3 pb-2 border-bottom" style={{ color: '#64748b', letterSpacing: '0.05em' }}>
-                              Seller Hierarchy
-                            </div>
-                            <div className="d-flex flex-column gap-2">
-                              {(asin.allOffers && asin.allOffers.length > 0 ? asin.allOffers : [
-                                { seller: asin.soldBy, price: asin.currentPrice, isBuyBoxWinner: asin.buyBoxWin },
-                                { seller: asin.soldBySec, price: asin.secondAsp, isBuyBoxWinner: false }
-                              ].filter(o => o.seller || o.price > 0)).map((offer, idx) => (
-                                <div key={idx} className="p-2 rounded-xl d-flex justify-content-between align-items-center hover:bg-slate-50" style={{ transition: 'background 0.2s' }}>
-                                  <div className="d-flex flex-column">
-                                    <span className="fw-bold small text-slate-800 d-flex align-items-center">
-                                      {offer.seller || 'Unknown'}
-                                      {offer.isBuyBoxWinner && <Trophy size={11} className="ms-1 text-amber-500" />}
-                                    </span>
-                                    <span className="smallest text-slate-400">{offer.isBuyBoxWinner ? 'Buy Box Winner' : 'Secondary Offer'}</span>
-                                  </div>
-                                  <span className="fw-bold text-indigo-600">₹{offer.price?.toLocaleString()}</span>
-                                </div>
-                              ))}
-                            </div>
+                    {/* ===== CURRENT BUYBOX ===== */}
+                    <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
+                      {(() => {
+                        // Current BuyBox winner info
+                        const seller = asin.soldBy || null;
+                        const price = asin.currentPrice || 0;
+                        
+                        if (!seller && !price) return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
+                        
+                        return (
+                          <div className="d-flex flex-column gap-1">
+                            <span 
+                              className="fw-bold text-zinc-800 text-truncate" 
+                              style={{ fontSize: '10px' }}
+                              title={seller || 'Unknown'}
+                            >
+                              {seller || 'Unknown'}
+                            </span>
+                            <span className="fw-bold text-indigo-600" style={{ fontSize: '11px' }}>
+                              ₹{price.toLocaleString()}
+                            </span>
                           </div>
-                        }
-                      >
-                        <div className="cursor-pointer d-flex flex-column gap-1">
-                          {(() => {
-                            const offers = (asin.allOffers && asin.allOffers.length > 0 ? asin.allOffers : [
-                              { seller: asin.soldBy, price: asin.currentPrice, isBuyBoxWinner: asin.buyBoxWin },
-                              { seller: asin.soldBySec, price: asin.secondAsp, isBuyBoxWinner: false }
-                            ].filter(o => o.seller || o.price > 0));
+                        );
+                      })()}
+                    </td>
 
-                            if (offers.length === 0) return <span style={{ color: '#9ca3af' }}>-</span>;
-
-                            return offers.slice(0, 3).map((offer, oIdx) => (
-                              <div key={oIdx} className="d-flex align-items-center justify-content-between" style={{ fontSize: '9px', lineHeight: '1.2' }}>
-                                <div className="d-flex align-items-center gap-1 overflow-hidden" style={{ maxWidth: '100px' }}>
-                                  {offer.isBuyBoxWinner && <Trophy size={8} className="text-amber-500" />}
-                                  <span className="truncate fw-bold text-zinc-700" title={offer.seller}>{offer.seller || 'Unknown'}</span>
-                                </div>
-                                <span className="fw-bold text-indigo-600">₹{offer.price?.toLocaleString()}</span>
+                    {/* ===== OTHER BUYBOX ===== */}
+                    <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
+                      {(() => {
+                        // Get all offers and filter out the BuyBox winner
+                        const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
+                          ? asin.allOffers
+                          : [];
+                        
+                        // Remove the winner from the list
+                        const otherOffers = allOffers.filter(o => !o.isBuyBoxWinner);
+                        
+                        // Fallback: use legacy soldBySec/secondAsp if no allOffers data
+                        if (otherOffers.length === 0) {
+                          const secSeller = asin.soldBySec;
+                          const secPrice = asin.secondAsp;
+                          
+                          if (secSeller && secPrice > 0) {
+                            return (
+                              <div className="d-flex flex-column gap-1">
+                                <span 
+                                  className="fw-medium text-zinc-600 text-truncate" 
+                                  style={{ fontSize: '10px' }}
+                                  title={secSeller}
+                                >
+                                  {secSeller}
+                                </span>
+                                <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
+                                  ₹{secPrice.toLocaleString()}
+                                </span>
                               </div>
-                            ));
-                          })()}
-                          {asin.allOffers && asin.allOffers.length > 3 && (
-                            <div className="text-center smallest text-zinc-400 fw-bold" style={{ fontSize: '8px' }}>
-                              +{asin.allOffers.length - 3} MORE SELLERS
-                            </div>
-                          )}
-                        </div>
-                      </Popover>
+                            );
+                          }
+                          
+                          if (secSeller && !secPrice) {
+                            return (
+                              <div className="d-flex flex-column gap-1">
+                                <span 
+                                  className="fw-medium text-zinc-600 text-truncate" 
+                                  style={{ fontSize: '10px' }}
+                                  title={secSeller}
+                                >
+                                  {secSeller}
+                                </span>
+                                <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
+                              </div>
+                            );
+                          }
+                          
+                          return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
+                        }
+                        
+                        // Show first other offer
+                        const firstOther = otherOffers[0];
+                        const remainingCount = otherOffers.length - 1;
+                        
+                        return (
+                          <div className="d-flex flex-column gap-1">
+                            <span 
+                              className="fw-medium text-zinc-600 text-truncate" 
+                              style={{ fontSize: '10px' }}
+                              title={firstOther.seller || 'Unknown'}
+                            >
+                              {firstOther.seller || 'Unknown'}
+                            </span>
+                            <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
+                              ₹{firstOther.price?.toLocaleString() || 'N/A'}
+                            </span>
+                            {remainingCount > 0 && (
+                              <span 
+                                className="text-zinc-400" 
+                                style={{ fontSize: '8px' }}
+                                title={otherOffers.slice(1).map(o => `${o.seller || 'Unknown'}: ₹${o.price?.toLocaleString() || 'N/A'}`).join('\n')}
+                              >
+                                +{remainingCount} more
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
