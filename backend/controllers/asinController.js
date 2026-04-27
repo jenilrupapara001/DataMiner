@@ -109,7 +109,10 @@ exports.getAsins = async (req, res) => {
     if (req.query.maxRating) whereClause += ' AND Rating <= @maxRating';
     if (req.query.minReviewCount) whereClause += ' AND ReviewCount >= @minReviewCount';
     if (req.query.maxReviewCount) whereClause += ' AND ReviewCount <= @maxReviewCount';
-
+    if (req.query.minImagesCount) {
+      whereClause += ' AND ImagesCount >= @minImagesCount';
+    }
+    if (req.query.maxImagesCount) {
       whereClause += ' AND ImagesCount <= @maxImagesCount';
     }
 
