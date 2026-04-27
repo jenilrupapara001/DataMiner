@@ -1664,6 +1664,33 @@ class MarketDataSyncService {
             });
 
             const lqsScore = cdqBreakdown.totalScore;
+            
+            // --- Price Trend History (Last 7 Days) ---
+            let history = [];
+            try {
+                history = asin.History ? JSON.parse(asin.History) : [];
+            } catch (e) {
+                history = [];
+            }
+            
+            // Add current point
+            history.push({
+                price: price > 0 ? price : (asin.CurrentPrice || 0),
+                bsr: bsr > 0 ? bsr : (asin.BSR || 0),
+                date: now.toISOString().split('T')[0]
+            });
+            
+            // Keep last 7 unique days
+            const uniqueHistory = [];
+            const seenDates = new Set();
+            for (let i = history.length - 1; i >= 0; i--) {
+                const item = history[i];
+                if (!seenDates.has(item.date)) {
+                    uniqueHistory.unshift(item);
+                    seenDates.add(item.date);
+                }
+                if (uniqueHistory.length >= 7) break;
+            }
 
             const updates = {
                 Title: title,
@@ -1677,7 +1704,7 @@ class MarketDataSyncService {
                 ReviewCount: reviewCount,
                 RatingBreakdown: JSON.stringify(finalRatingBreakdown),
                 LQS: lqsScore,
-                LqsDetails: JSON.stringify(cdqBreakdown.issues), // Storing issues in Details for now
+                LqsDetails: JSON.stringify(cdqBreakdown.issues),
                 Cdq: cdqBreakdown.totalScore,
                 CdqGrade: cdqBreakdown.grade,
                 CdqComponents: JSON.stringify(cdqBreakdown.components),
@@ -1691,9 +1718,9 @@ class MarketDataSyncService {
                 BulletPoints: bulletPoints,
                 BulletPointsText: JSON.stringify(bulletPointsText),
                 StockLevel: stockLevel,
-                SoldBy: soldBy,
+                SoldBy: soldBy || asin.SoldBy || '',
                 BuyBoxWin: buyBoxWin ? 1 : 0,
-                BuyBoxSellerId: soldBy, // Map to seller name if ID not available
+                BuyBoxSellerId: soldBy || asin.SoldBy || '', 
                 SecondAsp: secondAsp,
                 SoldBySec: soldBySec,
                 AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
@@ -1705,6 +1732,7 @@ class MarketDataSyncService {
                 Brand: (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim(),
                 ScrapeStatus: 'COMPLETED',
                 Status: asin.Status === 'Scraping' ? 'Active' : asin.Status,
+                History: JSON.stringify(uniqueHistory),
                 LastScrapedAt: now,
                 UpdatedAt: now
             };
@@ -2150,13 +2178,36 @@ class MarketDataSyncService {
      */
     _extractSellerFromRaw(rawData) {
         // Try direct fields first
-        const sellerFields = ['sold_by', 'Sold_by', 'seller', 'Seller', 'merchant', 'Merchant', 'Field11'];
+        const sellerFields = ['sold_by', 'Sold_by', 'seller', 'Seller', 'merchant', 'Merchant', 'Field11', 'SoldBy', 'Sold_By'];
         for (const field of sellerFields) {
             const value = rawData[field];
             if (value && typeof value === 'string' && value.trim().length > 0) {
-                return value.trim();
+                // If it looks like HTML, try to extract the text
+                if (value.includes('<') && value.includes('>')) {
+                    const extracted = this._extractSellerFromBuyboxHtml(value);
+                    if (extracted) return extracted;
+                    
+                    // Simple regex fallback if helper fails
+                    let clean = value.replace(/<[^>]+>/g, '').trim();
+                    clean = clean.replace(/^(Sold by|Ships from)\s*/i, '').trim();
+                    if (clean) return clean;
+                }
+                let clean = value.trim();
+                clean = clean.replace(/^(Sold by|Ships from)\s*/i, '').trim();
+                return clean;
             }
         }
+        
+        // Fallback: check secondary buybox or other fields that might contain HTML
+        const htmlFields = ['second_buybox', 'Alt_buyBox', 'Field25', 'buybox_html'];
+        for (const field of htmlFields) {
+            const val = rawData[field];
+            if (val && typeof val === 'string' && val.includes('<')) {
+                const extracted = this._extractSellerFromBuyboxHtml(val);
+                if (extracted) return extracted;
+            }
+        }
+        
         return '';
     }
 
