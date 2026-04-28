@@ -2,16 +2,10 @@ const { sql, getPool, generateId } = require('../database/db');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+const AutoTagService = require('../services/autoTagService');
 
 /**
- * Bulk Catalog Sync - Upload CSV with Parent ASIN, Child ASIN, SKU mapping
- * POST /api/bulk/catalog-sync
- * 
- * Expected CSV columns:
- * - Parent ASIN (or parent_asin, parentAsin)
- * - Child ASIN (or ASIN, asin, child_asin, childAsin)  
- * - SKU (optional)
- * - Seller ID / Seller Name (for mapping)
+ * Bulk Catalog Sync with Release Date support
  */
 exports.catalogSync = async (req, res) => {
     try {
@@ -28,11 +22,10 @@ exports.catalogSync = async (req, res) => {
         const filePath = req.file.path;
         const workbook = XLSX.readFile(filePath);
         
-        // Find first sheet with data
         let data = [];
         for (const sheetName of workbook.SheetNames) {
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
             if (jsonData.length > 0) {
                 data = jsonData;
                 break;
@@ -50,20 +43,19 @@ exports.catalogSync = async (req, res) => {
             updated: 0,
             created: 0,
             skipped: 0,
+            autoTagged: 0,
             errors: []
         };
 
-        // First, get all existing ASINs for this seller
         const existingResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query('SELECT Id, AsinCode FROM Asins WHERE SellerId = @sellerId');
+            .query('SELECT Id, AsinCode, Tags FROM Asins WHERE SellerId = @sellerId');
         
         const existingMap = new Map();
         existingResult.recordset.forEach(a => {
-            existingMap.set(a.AsinCode.toUpperCase(), a.Id);
+            existingMap.set(a.AsinCode.toUpperCase(), { id: a.Id, tags: a.Tags });
         });
 
-        // Helper to find value by multiple possible column names
         const getValue = (row, possibleKeys) => {
             const keys = Object.keys(row);
             const lowerKeys = keys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
@@ -82,46 +74,90 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['Child ASIN', 'ASIN', 'asin', 'child_asin', 'childAsin', 'asinCode']).toString().trim().toUpperCase();
-                const parentAsin = getValue(row, ['Parent ASIN', 'parent_asin', 'parentAsin', 'parent']).toString().trim().toUpperCase();
+                const childAsin = getValue(row, ['Child ASIN', 'ASIN', 'asin', 'child_asin', 'asinCode'])
+                    .toString().trim().toUpperCase();
+                const parentAsin = getValue(row, ['Parent ASIN', 'parent_asin', 'parentAsin'])
+                    .toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'sku']).toString().trim();
+                
+                // Get release date from multiple possible column names
+                let releaseDate = null;
+                const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
+                
+                if (dateStr) {
+                    // Try parsing various date formats
+                    const parsed = new Date(dateStr);
+                    if (!isNaN(parsed.getTime())) {
+                        releaseDate = parsed;
+                    } else {
+                        // Try Excel serial number
+                        const serial = parseFloat(dateStr);
+                        if (!isNaN(serial) && serial > 30000) {
+                            releaseDate = new Date((serial - 25569) * 86400 * 1000);
+                        }
+                    }
+                }
+
+                // If no release date provided, use current date
+                if (!releaseDate) {
+                    releaseDate = new Date();
+                }
+
+                // Calculate auto tags based on age
+                const autoTags = AutoTagService.calculateAgeTags(releaseDate);
 
                 if (!childAsin) {
                     results.skipped++;
-                    results.errors.push({ row: results.updated + results.skipped, reason: 'Missing Child ASIN' });
                     continue;
                 }
 
-                const existingId = existingMap.get(childAsin);
+                const existing = existingMap.get(childAsin);
 
-                if (existingId) {
-                    // Update existing ASIN
+                if (existing) {
+                    // Merge tags
+                    let existingTags = [];
+                    try {
+                        existingTags = JSON.parse(existing.tags || '[]');
+                    } catch (e) {
+                        existingTags = [];
+                    }
+                    const mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
+
                     await transaction.request()
-                        .input('id', sql.VarChar, existingId)
+                        .input('id', sql.VarChar, existing.id)
                         .input('parentAsin', sql.NVarChar, parentAsin || null)
                         .input('sku', sql.NVarChar, sku || null)
+                        .input('releaseDate', sql.DateTime2, releaseDate)
+                        .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
                         .query(`
                             UPDATE Asins SET 
                                 ParentAsin = CASE WHEN @parentAsin != '' THEN @parentAsin ELSE ParentAsin END,
                                 Sku = CASE WHEN @sku != '' THEN @sku ELSE Sku END,
+                                ReleaseDate = @releaseDate,
+                                Tags = @tags,
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
                     results.updated++;
+                    if (autoTags.length > 0) results.autoTagged++;
                 } else {
-                    // Create new ASIN
                     const newId = generateId();
+                    const allTags = [...autoTags];
+                    
                     await transaction.request()
                         .input('id', sql.VarChar, newId)
                         .input('asinCode', sql.VarChar, childAsin)
                         .input('sellerId', sql.VarChar, sellerId)
                         .input('parentAsin', sql.NVarChar, parentAsin || null)
                         .input('sku', sql.NVarChar, sku || null)
+                        .input('releaseDate', sql.DateTime2, releaseDate)
+                        .input('tags', sql.NVarChar, JSON.stringify(allTags))
                         .query(`
-                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, 'Active', 'PENDING', GETDATE(), GETDATE())
+                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, Tags, Status, ScrapeStatus, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @tags, 'Active', 'PENDING', GETDATE(), GETDATE())
                         `);
                     results.created++;
+                    if (autoTags.length > 0) results.autoTagged++;
                 }
             }
 
@@ -136,7 +172,7 @@ exports.catalogSync = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Updated ${results.updated} ASINs, Created ${results.created} new, ${results.skipped} skipped`,
+            message: `Updated ${results.updated} ASINs, Created ${results.created} new, ${results.autoTagged} auto-tagged`,
             ...results
         });
 
@@ -148,6 +184,7 @@ exports.catalogSync = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
 
 /**
  * Bulk Tags Import - Maps tags to ASINs by exact ASIN code match
@@ -282,13 +319,17 @@ exports.tagsImport = async (req, res) => {
  */
 exports.downloadCatalogTemplate = async (req, res) => {
     try {
-        const headers = ['Parent ASIN', 'Child ASIN', 'SKU'];
+        const headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date'];
         
-        const ws = XLSX.utils.aoa_to_sheet([headers]);
+        // Sample data row
+        const sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15'];
+        
+        const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
         ws['!cols'] = [
             { wch: 15 },
             { wch: 15 },
-            { wch: 30 }
+            { wch: 30 },
+            { wch: 15 }
         ];
         
         const wb = XLSX.utils.book_new();

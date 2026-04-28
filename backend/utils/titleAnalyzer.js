@@ -154,7 +154,9 @@ class TitleAnalyzer {
       'click here', 'shop now', 'order now', 'don\'t miss',
       'exclusive', 'premium quality', 'top rated', '#1',
       'best', 'amazing', 'excellent', 'wonderful', 'fantastic',
-      'must have', 'perfect', 'outstanding', 'incredible'
+      'must have', 'perfect', 'outstanding', 'incredible',
+      'new arrival', 'award winning', 'certified', 'authentic',
+      'high quality', 'super', 'mega', 'ultra', 'extra', 'bonus'
     ];
 
     const titleLower = title.toLowerCase();

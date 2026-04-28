@@ -27,13 +27,16 @@ const getLastValidData = (asin, field, defaultValue = 0) => {
   return { value: defaultValue, source: 'none' };
 };
 
-const ScoreCard = ({ title, score, grade, issues = [], recommendations = [] }) => {
+const ScoreCard = ({ title, score: rawScore, grade, issues = [], recommendations = [] }) => {
   const parsedIssues = typeof issues === 'string' ? (issues.startsWith('[') ? JSON.parse(issues) : issues.split(',').filter(Boolean)) : (issues || []);
   const parsedRecs = typeof recommendations === 'string' ? (recommendations.startsWith('[') ? JSON.parse(recommendations) : recommendations.split(',').filter(Boolean)) : (recommendations || []);
 
-  const color = score >= 80 ? '#059669' : 
-                score >= 60 ? '#d97706' : 
-                score >= 40 ? '#dc2626' : '#991b1b';
+  // Handle 0-100 scale legacy data
+  const score = rawScore > 10 ? parseFloat((rawScore / 10).toFixed(1)) : parseFloat((rawScore || 0).toFixed(1));
+
+  const color = score >= 8.5 ? '#059669' : 
+                score >= 7.0 ? '#d97706' : 
+                score >= 5.0 ? '#dc2626' : '#991b1b';
 
   return (
     <div className="bg-white border rounded-2xl p-4 shadow-sm h-100 transition-all hover:shadow-md">
@@ -45,16 +48,16 @@ const ScoreCard = ({ title, score, grade, issues = [], recommendations = [] }) =
           <span className="badge rounded-pill px-2 py-1" style={{ backgroundColor: color + '15', color: color, fontWeight: 700, fontSize: '10px' }}>
             Grade {grade || 'N/A'}
           </span>
-          <span className="fw-bold text-slate-900" style={{ fontSize: '13px' }}>{score || 0}/100</span>
+          <span className="fw-bold text-slate-900" style={{ fontSize: '13px' }}>{score.toFixed(1)}/10</span>
         </div>
       </div>
       
       <div className="mb-3">
         <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-          <div style={{ width: `${score || 0}%`, height: '100%', background: color, borderRadius: '3px', transition: 'width 0.6s ease' }} />
+          <div style={{ width: `${(score * 10) || 0}%`, height: '100%', background: color, borderRadius: '3px', transition: 'width 0.6s ease' }} />
         </div>
       </div>
-
+      
       <div className="d-flex flex-column gap-3">
         {parsedIssues.length > 0 && (
           <div>
@@ -744,29 +747,29 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                  <div className="text-center">
                    <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Overall LQS</div>
                    <div className="h4 mb-0 fw-bold" style={{ 
-                     color: (asin.lqs || 0) >= 80 ? '#059669' : 
-                            (asin.lqs || 0) >= 60 ? '#d97706' : 
-                            (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b' 
+                     color: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' : 
+                            (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' : 
+                            (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b' 
                    }}>
-                     {asin.lqs || 0}%
+                     {typeof asin.lqs === 'number' ? (asin.lqs > 10 ? (asin.lqs/10).toFixed(1) : asin.lqs.toFixed(1)) : (parseFloat(asin.lqs || 0) > 10 ? (parseFloat(asin.lqs || 0)/10).toFixed(1) : parseFloat(asin.lqs || 0).toFixed(1))}
                    </div>
                  </div>
-                 <div className="vr" style={{ height: '30px' }} />
+                 <div className="vertical-divider" style={{ width: '1px', height: '30px', backgroundColor: '#e2e8f0' }} />
                  <div className="text-center">
                    <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Status</div>
                    <div className="badge rounded-pill px-3" style={{ 
-                     backgroundColor: (asin.lqs || 0) >= 80 ? '#ecfdf5' : 
-                                     (asin.lqs || 0) >= 60 ? '#fffbeb' : 
-                                     (asin.lqs || 0) >= 40 ? '#fef2f2' : '#fef2f2',
-                     color: (asin.lqs || 0) >= 80 ? '#059669' : 
-                            (asin.lqs || 0) >= 60 ? '#d97706' : 
-                            (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b',
+                     backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#ecfdf5' : 
+                                     (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#fffbeb' : 
+                                     (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#fef2f2' : '#fef2f2',
+                     color: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' : 
+                            (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' : 
+                            (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
                      fontWeight: 700,
                      fontSize: '11px'
                    }}>
-                     {(asin.lqs || 0) >= 80 ? 'EXCELLENT' : 
-                      (asin.lqs || 0) >= 60 ? 'GOOD' : 
-                      (asin.lqs || 0) >= 40 ? 'POOR' : 'CRITICAL'}
+                     {(asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? 'EXCELLENT' : 
+                      (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? 'GOOD' : 
+                      (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? 'POOR' : 'CRITICAL'}
                    </div>
                  </div>
               </div>

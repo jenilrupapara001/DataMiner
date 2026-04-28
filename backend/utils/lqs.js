@@ -39,27 +39,31 @@ const calculateCDQ = (asin) => {
 
     // 5. Total LQS Calculation (Weighted average)
     // Title: 30%, Bullets: 25%, Images: 25%, Description: 20%
-    const totalScore = Math.round(
+    const rawScore = (
         (titleAnalysis.score * 0.30) + 
         (bulletAnalysis.score * 0.25) + 
         (imageAnalysis.score * 0.25) + 
         (descriptionAnalysis.score * 0.20)
     );
 
-    // Determine Grade
+    // Scale to 10 and keep 1 decimal place
+    const score = parseFloat((rawScore / 10).toFixed(1));
+
+    // Determine Grade based on 0-10 scale
     let grade = 'D';
-    if (totalScore >= 80) grade = 'A';
-    else if (totalScore >= 70) grade = 'B';
-    else if (totalScore >= 50) grade = 'C';
+    if (score >= 8.5) grade = 'A';
+    else if (score >= 7.0) grade = 'B';
+    else if (score >= 5.0) grade = 'C';
 
     return {
-        totalScore,
+        score,
+        totalScore: score, // Keep for compatibility
         grade,
         components: {
-            titleQuality: titleAnalysis.score,
-            bulletPoints: bulletAnalysis.score,
-            imageQuality: imageAnalysis.score,
-            descriptionQuality: descriptionAnalysis.score
+            titleQuality: parseFloat((titleAnalysis.score / 10).toFixed(1)),
+            bulletPoints: parseFloat((bulletAnalysis.score / 10).toFixed(1)),
+            imageQuality: parseFloat((imageAnalysis.score / 10).toFixed(1)),
+            descriptionQuality: parseFloat((descriptionAnalysis.score / 10).toFixed(1))
         },
         issues: [
             ...titleAnalysis.issues,
@@ -71,9 +75,11 @@ const calculateCDQ = (asin) => {
 };
 
 const getGrade = (score) => {
-    if (score >= 80) return 'A';
-    if (score >= 70) return 'B';
-    if (score >= 50) return 'C';
+    // Handle both 0-100 and 0-10 scales
+    const s = score > 10 ? score / 10 : score;
+    if (s >= 8.5) return 'A';
+    if (s >= 7.0) return 'B';
+    if (s >= 5.0) return 'C';
     return 'D';
 };
 
@@ -93,7 +99,7 @@ const getGradeColor = (grade) => {
  */
 const calculateLQS = (asin) => {
     const cdq = calculateCDQ(asin);
-    return cdq.totalScore;
+    return cdq.score;
 };
 
 const getLQSIssues = (asin) => {
@@ -104,27 +110,28 @@ const getLQSIssues = (asin) => {
 const getCDQBreakdown = (asin) => {
     const cdq = calculateCDQ(asin);
     return {
-        totalScore: Math.round(cdq.totalScore),
+        score: cdq.score,
+        totalScore: cdq.score,
         grade: cdq.grade,
         gradeColor: getGradeColor(cdq.grade),
         components: {
             titleQuality: {
-                score: Math.round(cdq.components.titleQuality),
+                score: cdq.components.titleQuality,
                 weight: '30%',
                 label: 'Title Quality'
             },
             bulletPoints: {
-                score: Math.round(cdq.components.bulletPoints),
+                score: cdq.components.bulletPoints,
                 weight: '25%',
                 label: 'Bullet Points'
             },
             imageQuality: {
-                score: Math.round(cdq.components.imageQuality),
+                score: cdq.components.imageQuality,
                 weight: '25%',
                 label: 'Image Quality'
             },
             descriptionQuality: {
-                score: Math.round(cdq.components.descriptionQuality),
+                score: cdq.components.descriptionQuality,
                 weight: '20%',
                 label: 'Description Quality'
             }

@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { sql, getPool } = require('../database/db');
 const MarketSyncService = require('./marketDataSyncService');
 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
+const AutoTagService = require('./autoTagService');
 
 /**
  * Scheduler Service
@@ -55,6 +56,12 @@ class SchedulerService {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
             // Logic for repair is currently being moved to MarketSyncService
             console.log('ℹ️ Repair task skipped (Refactoring in progress)');
+        });
+
+        // 7. Daily Age Tag Refresh (Every day at 2 AM)
+        this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {
+            console.log('🔄 [AutoTag] Starting daily age tag refresh...');
+            await this.refreshAgeTags();
         });
 
         console.log('✅ Background tasks scheduled');
@@ -128,6 +135,18 @@ class SchedulerService {
             console.log(`✅ [RECOVERY] Initial check completed: ${results.filter(r => r.success).length}/${sellers.length} sellers`);
         } catch (error) {
             console.error('❌ [RECOVERY] Critical error:', error.message);
+        }
+    }
+
+    async refreshAgeTags() {
+        try {
+            console.log('🔄 [AutoTag] Starting daily age tag refresh...');
+            const pool = await getPool();
+            const result = await AutoTagService.batchUpdateAgeTags(pool);
+            console.log(`✅ [AutoTag] Refresh complete: ${result.updated} updated, ${result.skipped} skipped`);
+            return result;
+        } catch (error) {
+            console.error('❌ [AutoTag] Refresh failed:', error.message);
         }
     }
 

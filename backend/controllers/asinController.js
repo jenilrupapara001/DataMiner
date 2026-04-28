@@ -5,6 +5,7 @@ const imageGenerationService = require('../services/imageGenerationService');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const AsinDataParser = require('../services/asinDataParser');
+const LQS = require('../utils/lqs');
 
 // Helper to safely parse JSON
 const tryParse = (data, fallback = []) => {
@@ -65,6 +66,12 @@ exports.getAsins = async (req, res) => {
         if (req.query.maxImagesCount) reqObj.input('maxImagesCount', sql.Int, parseInt(req.query.maxImagesCount));
         if (req.query.minBulletPoints) reqObj.input('minBulletPoints', sql.Int, parseInt(req.query.minBulletPoints));
         if (req.query.maxBulletPoints) reqObj.input('maxBulletPoints', sql.Int, parseInt(req.query.maxBulletPoints));
+        if (req.query.minReleaseDate) reqObj.input('minReleaseDate', sql.DateTime2, new Date(req.query.minReleaseDate));
+        if (req.query.maxReleaseDate) {
+            const maxD = new Date(req.query.maxReleaseDate);
+            maxD.setHours(23, 59, 59, 999);
+            reqObj.input('maxReleaseDate', sql.DateTime2, maxD);
+        }
         if (search) reqObj.input('search', sql.NVarChar, `%${search}%`);
         
         if (req.query.selectedTags) {
@@ -176,6 +183,18 @@ exports.getAsins = async (req, res) => {
     
     if (req.query.subBsrCategory) {
       whereClause += ' AND a.SubBsrCategories LIKE @subBsrCategory';
+    }
+
+    if (req.query.minReleaseDate) whereClause += ' AND ReleaseDate >= @minReleaseDate';
+    if (req.query.maxReleaseDate) whereClause += ' AND ReleaseDate <= @maxReleaseDate';
+
+    if (req.query.ageFilter) {
+      if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, GETDATE())';
+      else if (req.query.ageFilter === '60') whereClause += ' AND ReleaseDate < DATEADD(day, -30, GETDATE()) AND ReleaseDate >= DATEADD(day, -60, GETDATE())';
+      else if (req.query.ageFilter === '90') whereClause += ' AND ReleaseDate < DATEADD(day, -60, GETDATE()) AND ReleaseDate >= DATEADD(day, -90, GETDATE())';
+      else if (req.query.ageFilter === '180') whereClause += ' AND ReleaseDate < DATEADD(day, -90, GETDATE()) AND ReleaseDate >= DATEADD(day, -180, GETDATE())';
+      else if (req.query.ageFilter === '365') whereClause += ' AND ReleaseDate < DATEADD(day, -180, GETDATE()) AND ReleaseDate >= DATEADD(day, -365, GETDATE())';
+      else if (req.query.ageFilter === '365+') whereClause += ' AND ReleaseDate < DATEADD(day, -365, GETDATE())';
     }
 
     // [4] Search
@@ -320,6 +339,7 @@ exports.getAsins = async (req, res) => {
             imageUrl: a.ImageUrl || '',
             tags: a.Tags || '[]',
             parentAsin: a.ParentAsin || '',
+            releaseDate: a.ReleaseDate || null,
             
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,
@@ -1417,6 +1437,96 @@ exports.bulkUpdateAsins = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+};
+
+/**
+ * Recalculate LQS for selected ASINs or all ASINs in scope
+ */
+exports.recalculateLqs = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        const pool = await getPool();
+        
+        let query = `
+            SELECT Id, Title, BulletPoints, ImagesUrls, HasAplus, Category, SellerId
+            FROM Asins
+        `;
+        
+        const request = pool.request();
+        
+        if (ids && Array.isArray(ids) && ids.length > 0) {
+            const idList = ids.map((id, i) => {
+                request.input(`id${i}`, sql.VarChar, id);
+                return `@id${i}`;
+            }).join(',');
+            query += ` WHERE Id IN (${idList})`;
+        } else {
+            // If no IDs provided, recalculate for all ASINs within user's scope
+            const roleName = req.user?.role?.name || req.user?.role;
+            const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+            
+            if (!isGlobalUser) {
+                const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
+                if (allowedSellerIds.length === 0) {
+                    return res.json({ success: true, processedCount: 0 });
+                }
+                query += ` WHERE SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+            }
+        }
+        
+        const result = await request.query(query);
+        const asins = result.recordset;
+        
+        let successCount = 0;
+        
+        // Process in small chunks to avoid long transactions
+        for (const asin of asins) {
+            try {
+                const bulletPoints = tryParse(asin.BulletPoints, []);
+                const imageUrls = tryParse(asin.ImagesUrls, []);
+                
+                const analysis = LQS.calculateCDQ({
+                    Title: asin.Title || '',
+                    BulletPoints: bulletPoints,
+                    ImagesUrls: imageUrls,
+                    HasAplus: !!asin.HasAplus,
+                    Category: asin.Category || ''
+                });
+                
+                await pool.request()
+                    .input('id', sql.VarChar, asin.Id)
+                    .input('lqsScore', sql.Decimal(5, 2), analysis.score)
+                    .input('lqsGrade', sql.NVarChar(5), analysis.grade)
+                    .input('lqsIssues', sql.NVarChar(sql.MAX), JSON.stringify(analysis.issues))
+                    .input('titleScore', sql.Decimal(5, 2), analysis.components.titleQuality)
+                    .input('bulletScore', sql.Decimal(5, 2), analysis.components.bulletPoints)
+                    .input('imageScore', sql.Decimal(5, 2), analysis.components.imageQuality)
+                    .input('descriptionScore', sql.Decimal(5, 2), analysis.components.descriptionQuality)
+                    .query(`
+                        UPDATE Asins 
+                        SET LQS = @lqsScore,
+                            LqsScore = @lqsScore, 
+                            LQSGrade = @lqsGrade,
+                            LqsIssues = @lqsIssues,
+                            TitleScore = @titleScore,
+                            BulletScore = @bulletScore,
+                            ImageScore = @imageScore,
+                            DescriptionScore = @descriptionScore,
+                            UpdatedAt = GETDATE()
+                        WHERE Id = @id
+                    `);
+                
+                successCount++;
+            } catch (err) {
+                console.error(`Error recalculating LQS for ${asin.Id}:`, err.message);
+            }
+        }
+        
+        res.json({ success: true, processedCount: successCount });
+    } catch (error) {
+        console.error('Recalculate LQS Error:', error);
+        res.status(500).json({ error: error.message });
+    }
 };
 
 /**

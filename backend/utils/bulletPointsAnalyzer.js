@@ -66,6 +66,9 @@ class BulletPointsAnalyzer {
       numbering: this.checkNumbering(bulletArray),
       measurements: this.checkMeasurements(bulletArray),
       asinReferences: this.checkAsinReferences(bulletArray),
+      headerCapitalization: this.checkHeaderCapitalization(bulletArray),
+      benefitFocus: this.checkBenefitFocus(bulletArray),
+      activeVoice: this.checkActiveVoice(bulletArray),
     };
 
     // Calculate weighted score
@@ -86,6 +89,9 @@ class BulletPointsAnalyzer {
       numbering: 2,            // Best practice
       measurements: 2,         // Best practice
       asinReferences: 1,       // Best practice
+      headerCapitalization: 3, // Effectiveness - ALL CAPS headers
+      benefitFocus: 5,         // Effectiveness - Benefit-oriented
+      activeVoice: 4,          // Effectiveness - Active verbs
     };
 
     let totalScore = 0;
@@ -155,32 +161,32 @@ class BulletPointsAnalyzer {
       };
     }
 
-    if (count === 3) {
-      return {
-        score: 70,
-        count,
-        status: 'pass',
-        issues: [],
-        recommendations: ['Consider adding 2-3 more bullet points for better product communication']
-      };
-    }
-
-    if (count >= 5) {
+    if (count === 5) {
       return {
         score: 100,
         count,
         status: 'pass',
         issues: [],
-        recommendations: count > 7 ? ['Having many bullet points is good, but ensure each is unique and valuable'] : []
+        recommendations: []
+      };
+    }
+
+    if (count > 5) {
+      return {
+        score: 90,
+        count,
+        status: 'pass',
+        issues: [`${count} bullet points found - Amazon typically displays only the first 5 prominently`],
+        recommendations: ['Ensure your most important features are in the first 5 bullet points']
       };
     }
 
     return {
-      score: 85,
+      score: 60,
       count,
-      status: 'pass',
-      issues: [],
-      recommendations: ['Good number of bullet points']
+      status: 'warning',
+      issues: [`Only ${count} bullet point(s) found - 5 is the ideal count for Amazon`],
+      recommendations: [`Add ${5 - count} more bullet point(s) to reach the ideal count of 5`]
     };
   }
 
@@ -428,7 +434,9 @@ class BulletPointsAnalyzer {
       'contains bamboo', 'made from soy', 'contains soy',
       'hypoallergenic', 'non-toxic', 'chemical-free', 'chemical free',
       'organic', 'natural', 'sustainable', 'biodegradable',
-      'recyclable', 'recycled', 'renewable', 'compostable'
+      'recyclable', 'recycled', 'renewable', 'compostable',
+      'certified', 'verified', 'guaranteed', 'authentic', 'genuine',
+      '#1', 'best seller', 'top rated', 'award winning', 'quality assurance'
     ];
 
     const violations = [];
@@ -819,6 +827,122 @@ class BulletPointsAnalyzer {
       violations: [],
       issues: [],
       recommendations: []
+    };
+  }
+
+  // ==========================================
+  // 17. HEADER CAPITALIZATION (ALL CAPS Headers)
+  // ==========================================
+  static checkHeaderCapitalization(bulletArray) {
+    const issues = [];
+    let capitalizedCount = 0;
+
+    bulletArray.forEach((bullet, index) => {
+      const parts = bullet.split(/[:\-]/);
+      if (parts.length > 1) {
+        const header = parts[0].trim();
+        // Check if header is mostly uppercase (allow for numbers/small words)
+        const upperCount = (header.match(/[A-Z]/g) || []).length;
+        const alphaCount = (header.match(/[a-z]/gi) || []).length;
+        
+        if (alphaCount > 0 && upperCount / alphaCount > 0.8) {
+          capitalizedCount++;
+        } else {
+          issues.push({ index: index + 1, header, text: bullet.substring(0, 40) });
+        }
+      }
+    });
+
+    if (issues.length > 0) {
+      const ratio = capitalizedCount / bulletArray.length;
+      return {
+        score: Math.round(ratio * 100),
+        status: ratio > 0.5 ? 'pass' : 'warning',
+        issues: [`${issues.length} bullet point(s) do not have ALL CAPS headers`],
+        recommendations: ['Use ALL CAPS for the starting header of each bullet point to make them more scannable']
+      };
+    }
+
+    return {
+      score: 100,
+      status: 'pass',
+      issues: [],
+      recommendations: []
+    };
+  }
+
+  // ==========================================
+  // 18. BENEFIT FOCUS CHECK
+  // ==========================================
+  static checkBenefitFocus(bulletArray) {
+    const benefitKeywords = [
+      'enables', 'provides', 'ensures', 'helps', 'perfect for', 'ideal for',
+      'makes it easy', 'improves', 'enhances', 'allows you', 'protects',
+      'saves time', 'durable', 'versatile', 'reliable', 'effortless',
+      'experience', 'comfort', 'premium', 'solution', 'results'
+    ];
+
+    const benefitFocusedCount = bulletArray.filter(bullet => {
+      const lower = bullet.toLowerCase();
+      return benefitKeywords.some(kw => lower.includes(kw));
+    }).length;
+
+    const ratio = benefitFocusedCount / bulletArray.length;
+
+    if (ratio >= 0.6) {
+      return {
+        score: 100,
+        status: 'pass',
+        issues: [],
+        recommendations: []
+      };
+    }
+
+    return {
+      score: Math.round(ratio * 100),
+      status: ratio >= 0.3 ? 'warning' : 'fail',
+      issues: ['Bullet points could be more benefit-oriented'],
+      recommendations: ['Use benefit-oriented language: instead of just what it IS, explain what it DOES for the customer']
+    };
+  }
+
+  // ==========================================
+  // 19. ACTIVE VOICE CHECK (Start with Verb)
+  // ==========================================
+  static checkActiveVoice(bulletArray) {
+    // List of common active verbs used in bullet points
+    const activeVerbs = [
+      'Protect', 'Improve', 'Enhance', 'Enjoy', 'Keep', 'Organize', 'Maximize',
+      'Create', 'Discover', 'Experience', 'Save', 'Simplify', 'Boost', 'Deliver',
+      'Reduce', 'Prevent', 'Design', 'Construct', 'Featuring', 'Includes', 'Crafted'
+    ];
+
+    const activeCount = bulletArray.filter(bullet => {
+      const trimmed = bullet.trim();
+      // If it has a header, check the text after the header
+      const content = trimmed.includes(':') ? trimmed.split(':')[1].trim() : trimmed;
+      if (content.length === 0) return false;
+      
+      const firstWord = content.split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
+      return activeVerbs.some(v => v.toLowerCase() === firstWord.toLowerCase());
+    }).length;
+
+    const ratio = activeCount / bulletArray.length;
+
+    if (ratio >= 0.5) {
+      return {
+        score: 100,
+        status: 'pass',
+        issues: [],
+        recommendations: []
+      };
+    }
+
+    return {
+      score: Math.round(ratio * 100),
+      status: 'warning',
+      issues: ['Some bullet points lack active verbs'],
+      recommendations: ['Start the descriptive part of your bullet points with strong active verbs']
     };
   }
 

@@ -1,80 +1,152 @@
 const { sql, getPool, generateId } = require('../database/db');
 const bcrypt = require('bcryptjs');
-const hierarchyService = require('../services/hierarchyService');
 
 /**
- * Get Users (SQL Version)
+ * Get all users with filters, pagination, and role/seller info
+ * GET /api/users
  */
 exports.getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, role, isActive, sortBy = 'CreatedAt', sortOrder = 'desc' } = req.query;
-    const pool = await getPool();
+    const { 
+      page = 1, limit = 25, search, role, isActive, 
+      sortBy = 'CreatedAt', sortOrder = 'DESC',
+      sellerId
+    } = req.query;
 
-    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
-    
-    let subordinateIds = [];
-    if (!isGlobalUser) {
-      subordinateIds = await hierarchyService.getSubordinateIds(req.user.Id || req.user._id);
-      subordinateIds.push(req.user.Id || req.user._id); // Include self
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 100);
+    const offset = (pageNum - 1) * limitNum;
+
+    const pool = await getPool();
+    const request = pool.request();
+    let whereClause = 'WHERE 1=1';
+
+    // RBAC: Non-admin users can only see their subordinates
+    const currentUserRole = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
+    const isAdmin = currentUserRole === 'admin';
+
+    if (!isAdmin) {
+      const userId = (req.user?.Id || req.user?.id || req.user?._id || '').toString();
+      const subordinates = await getSubordinateIds(pool, userId);
+      subordinates.push(userId);
+      if (subordinates.length === 0) {
+        return res.json({ success: true, data: { users: [], pagination: { page: 1, limit: limitNum, total: 0, totalPages: 0 } } });
+      }
+      whereClause += ` AND U.Id IN (${subordinates.map(id => `'${id}'`).join(',')})`;
     }
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    let whereClauses = [];
-    const request = pool.request();
-
+    // Filters
     if (search) {
-      whereClauses.push('(FirstName LIKE @search OR LastName LIKE @search OR Email LIKE @search)');
+      whereClause += ' AND (U.FirstName LIKE @search OR U.LastName LIKE @search OR U.Email LIKE @search)';
       request.input('search', sql.NVarChar, `%${search}%`);
     }
-    if (role) {
-      whereClauses.push('RoleId = @roleId');
+    if (role && role !== 'all') {
+      whereClause += ' AND (R.Name = @roleName OR R.Id = @roleId)';
+      request.input('roleName', sql.VarChar, role);
       request.input('roleId', sql.VarChar, role);
     }
-    if (isActive !== undefined) {
-      whereClauses.push('IsActive = @isActive');
-      request.input('isActive', sql.Bit, isActive === 'true' ? 1 : 0);
+    if (isActive !== undefined && isActive !== '' && isActive !== 'all') {
+      whereClause += ' AND U.IsActive = @isActive';
+      request.input('isActive', sql.Bit, isActive === 'true' || isActive === '1' ? 1 : 0);
     }
-    if (!isGlobalUser) {
-      whereClauses.push('Id IN (' + subordinateIds.map(id => `'${id}'`).join(',') + ')');
+    if (sellerId) {
+      whereClause += ' AND EXISTS (SELECT 1 FROM UserSellers US WHERE US.UserId = U.Id AND US.SellerId = @sellerId)';
+      request.input('sellerId', sql.VarChar, sellerId);
     }
 
-    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
-    const orderSql = `ORDER BY ${sortBy} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+    // Count
+    const countResult = await request.query(`
+      SELECT COUNT(*) as total FROM Users U 
+      LEFT JOIN Roles R ON U.RoleId = R.Id
+      ${whereClause}
+    `);
+    const total = countResult.recordset[0].total;
 
+    // Fetch users with role info
+    const sortField = sortBy === 'name' ? 'U.FirstName' : 
+                      sortBy === 'email' ? 'U.Email' : 
+                      sortBy === 'role' ? 'R.Name' : 'U.CreatedAt';
+    
     const usersResult = await request
       .input('offset', sql.Int, offset)
-      .input('limit', sql.Int, parseInt(limit))
+      .input('limit', sql.Int, limitNum)
       .query(`
-        SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName, R.Color as RoleColor, R.Level as RoleLevel
+        SELECT 
+          U.Id, U.Email, U.FirstName, U.LastName, U.Phone,
+          U.IsActive, U.LoginAttempts, U.LastSeen, U.CreatedAt, U.UpdatedAt,
+          U.RoleId, U.Preferences,
+          R.Name as RoleName, R.DisplayName as RoleDisplayName, 
+          R.Color as RoleColor, R.Level as RoleLevel
         FROM Users U
         LEFT JOIN Roles R ON U.RoleId = R.Id
-        ${whereSql}
-        ${orderSql}
+        ${whereClause}
+        ORDER BY ${sortField} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
-    const totalResult = await pool.request().query(`SELECT COUNT(*) as Total FROM Users ${whereSql}`);
-    const total = totalResult.recordset[0].Total;
-
-    // Fetch associated data for each user (assigned sellers, supervisors)
-    // For performance, we could do this in separate queries or joins, but since limit is small (20), we can do it here.
-    const users = await Promise.all(usersResult.recordset.map(async (u) => {
-      const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
-      const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id as _id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
+    // Fetch assigned sellers for each user
+    const userIds = usersResult.recordset.map(u => `'${u.Id}'`).join(',');
+    let sellerMap = {};
+    
+    if (userIds.length > 0) {
+      const sellersResult = await pool.request().query(`
+        SELECT US.UserId, S.Id as SellerId, S.Name as SellerName, S.Marketplace
+        FROM UserSellers US
+        JOIN Sellers S ON US.SellerId = S.Id
+        WHERE US.UserId IN (${userIds})
+      `);
       
-      return {
-        _id: u.Id,
-        id: u.Id,
-        firstName: u.FirstName,
-        lastName: u.LastName,
-        email: u.Email,
-        phone: u.Phone,
-        isActive: u.IsActive,
-        role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, color: u.RoleColor, level: u.RoleLevel },
-        assignedSellers: sellers.recordset.map(s => ({ _id: s.Id, id: s.Id, name: s.Name, marketplace: s.Marketplace })),
-        supervisors: supervisors.recordset.map(s => ({ _id: s._id, id: s._id, firstName: s.FirstName, lastName: s.LastName, email: s.Email }))
-      };
+      sellersResult.recordset.forEach(s => {
+        if (!sellerMap[s.UserId]) sellerMap[s.UserId] = [];
+        sellerMap[s.UserId].push({
+          _id: s.SellerId,
+          name: s.SellerName,
+          marketplace: s.Marketplace
+        });
+      });
+    }
+
+    // Fetch permissions for each user's role
+    const roleIds = [...new Set(usersResult.recordset.map(u => u.RoleId).filter(Boolean))];
+    let permissionMap = {};
+    
+    if (roleIds.length > 0) {
+      const permResult = await pool.request().query(`
+        SELECT RP.RoleId, P.Name as PermissionName
+        FROM RolePermissions RP
+        JOIN Permissions P ON RP.PermissionId = P.Id
+        WHERE RP.RoleId IN (${roleIds.map(id => `'${id}'`).join(',')})
+      `);
+      
+      permResult.recordset.forEach(p => {
+        if (!permissionMap[p.RoleId]) permissionMap[p.RoleId] = [];
+        permissionMap[p.RoleId].push(p.PermissionName);
+      });
+    }
+
+    // Build response
+    const users = usersResult.recordset.map(u => ({
+      _id: u.Id,
+      id: u.Id,
+      email: u.Email,
+      firstName: u.FirstName || '',
+      lastName: u.LastName || '',
+      phone: u.Phone || '',
+      isActive: u.IsActive === 1 || u.IsActive === true,
+      loginAttempts: u.LoginAttempts || 0,
+      lastSeen: u.LastSeen,
+      createdAt: u.CreatedAt,
+      updatedAt: u.UpdatedAt,
+      role: {
+        _id: u.RoleId,
+        name: u.RoleName || 'viewer',
+        displayName: u.RoleDisplayName || 'Viewer',
+        color: u.RoleColor || '#6B7280',
+        level: u.RoleLevel || 0,
+        permissions: permissionMap[u.RoleId] || []
+      },
+      assignedSellers: sellerMap[u.Id] || [],
+      preferences: u.Preferences ? (typeof u.Preferences === 'string' ? JSON.parse(u.Preferences) : u.Preferences) : {}
     }));
 
     res.json({
@@ -82,12 +154,88 @@ exports.getUsers = async (req, res) => {
       data: {
         users,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / parseInt(limit)),
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get Users Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get single user
+ * GET /api/users/:id
+ */
+exports.getUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getPool();
+
+    const userResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query(`
+        SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName, 
+               R.Color as RoleColor, R.Level as RoleLevel
+        FROM Users U
+        LEFT JOIN Roles R ON U.RoleId = R.Id
+        WHERE U.Id = @id
+      `);
+
+    if (userResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const u = userResult.recordset[0];
+
+    // Fetch assigned sellers
+    const sellersResult = await pool.request()
+      .input('uid', sql.VarChar, id)
+      .query(`
+        SELECT S.Id as _id, S.Name as name, S.Marketplace as marketplace
+        FROM Sellers S 
+        JOIN UserSellers US ON S.Id = US.SellerId 
+        WHERE US.UserId = @uid
+      `);
+
+    // Fetch role permissions
+    const permsResult = await pool.request()
+      .input('roleId', sql.VarChar, u.RoleId)
+      .query(`
+        SELECT P.Name FROM Permissions P 
+        JOIN RolePermissions RP ON P.Id = RP.PermissionId 
+        WHERE RP.RoleId = @roleId
+      `);
+
+    res.json({
+      success: true,
+      data: {
+        _id: u.Id,
+        id: u.Id,
+        email: u.Email,
+        firstName: u.FirstName || '',
+        lastName: u.LastName || '',
+        phone: u.Phone || '',
+        isActive: u.IsActive === 1 || u.IsActive === true,
+        loginAttempts: u.LoginAttempts || 0,
+        lastSeen: u.LastSeen,
+        createdAt: u.CreatedAt,
+        updatedAt: u.UpdatedAt,
+        role: {
+          _id: u.RoleId,
+          name: u.RoleName || 'viewer',
+          displayName: u.RoleDisplayName || 'Viewer',
+          color: u.RoleColor || '#6B7280',
+          level: u.RoleLevel || 0,
+          permissions: permsResult.recordset.map(p => p.Name)
         },
-      },
+        assignedSellers: sellersResult.recordset,
+        preferences: u.Preferences ? JSON.parse(typeof u.Preferences === 'string' ? u.Preferences : '{}') : {}
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -95,7 +243,286 @@ exports.getUsers = async (req, res) => {
 };
 
 /**
- * Get Managers (SQL Version)
+ * Create user
+ * POST /api/users
+ */
+exports.createUser = async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, phone, roleId, assignedSellerIds } = req.body;
+    const pool = await getPool();
+
+    // Check if email exists
+    const existing = await pool.request()
+      .input('email', sql.NVarChar, email)
+      .query('SELECT Id FROM Users WHERE Email = @email');
+    
+    if (existing.recordset.length > 0) {
+      return res.status(400).json({ success: false, message: 'Email already registered' });
+    }
+
+    // Validate role
+    if (roleId) {
+      const roleResult = await pool.request()
+        .input('rid', sql.VarChar, roleId)
+        .query('SELECT Id FROM Roles WHERE Id = @rid');
+      if (roleResult.recordset.length === 0) {
+        return res.status(400).json({ success: false, message: 'Invalid role' });
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(password || 'Welcome@123', 12);
+    const userId = generateId();
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await transaction.request()
+        .input('id', sql.VarChar, userId)
+        .input('email', sql.NVarChar, email)
+        .input('password', sql.NVarChar, hashedPassword)
+        .input('fn', sql.NVarChar, firstName || null)
+        .input('ln', sql.NVarChar, lastName || null)
+        .input('ph', sql.NVarChar, phone || null)
+        .input('rid', sql.VarChar, roleId || null)
+        .query(`
+          INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt)
+          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, GETDATE(), GETDATE())
+        `);
+
+      // Assign sellers
+      if (assignedSellerIds && Array.isArray(assignedSellerIds)) {
+        for (const sellerId of assignedSellerIds) {
+          await transaction.request()
+            .input('uid', sql.VarChar, userId)
+            .input('sid', sql.VarChar, sellerId)
+            .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+        }
+      }
+
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+
+    res.status(201).json({ success: true, data: { _id: userId, email } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Update user
+ * PUT /api/users/:id
+ */
+exports.updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { firstName, lastName, phone, email, roleId, isActive, assignedSellerIds } = req.body;
+    const pool = await getPool();
+
+    // Check user exists
+    const userCheck = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT Id FROM Users WHERE Id = @id');
+    
+    if (userCheck.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // Update user details
+      const updateRequest = transaction.request()
+        .input('id', sql.VarChar, id)
+        .input('fn', sql.NVarChar, firstName || null)
+        .input('ln', sql.NVarChar, lastName || null)
+        .input('ph', sql.NVarChar, phone || null)
+        .input('email', sql.NVarChar, email || null);
+
+      let setClauses = ['UpdatedAt = GETDATE()'];
+      
+      if (firstName !== undefined) { setClauses.push('FirstName = @fn'); }
+      if (lastName !== undefined) { setClauses.push('LastName = @ln'); }
+      if (phone !== undefined) { setClauses.push('Phone = @ph'); }
+      if (email !== undefined) { setClauses.push('Email = @email'); }
+      if (roleId !== undefined) { 
+        setClauses.push('RoleId = @rid');
+        updateRequest.input('rid', sql.VarChar, roleId);
+      }
+      if (isActive !== undefined) {
+        setClauses.push('IsActive = @isActive');
+        updateRequest.input('isActive', sql.Bit, isActive ? 1 : 0);
+      }
+
+      await updateRequest.query(`UPDATE Users SET ${setClauses.join(', ')} WHERE Id = @id`);
+
+      // Update seller assignments
+      if (assignedSellerIds !== undefined) {
+        await transaction.request()
+          .input('uid', sql.VarChar, id)
+          .query('DELETE FROM UserSellers WHERE UserId = @uid');
+
+        if (Array.isArray(assignedSellerIds) && assignedSellerIds.length > 0) {
+          for (const sellerId of assignedSellerIds) {
+            await transaction.request()
+              .input('uid', sql.VarChar, id)
+              .input('sid', sql.VarChar, sellerId)
+              .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+          }
+        }
+      }
+
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Delete user
+ * DELETE /api/users/:id
+ */
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUserId = (req.user?.Id || req.user?.id || req.user?._id || '').toString();
+
+    if (id === currentUserId) {
+      return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
+    }
+
+    const pool = await getPool();
+    
+    // Clean up related records
+    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE UserId = @id');
+    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSupervisors WHERE UserId = @id');
+    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Users WHERE Id = @id');
+
+    res.json({ success: true, message: 'User deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Toggle user status
+ * PUT /api/users/:id/toggle-status
+ */
+exports.toggleUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUserId = (req.user?.Id || req.user?.id || req.user?._id || '').toString();
+
+    if (id === currentUserId) {
+      return res.status(400).json({ success: false, message: 'Cannot deactivate your own account' });
+    }
+
+    const pool = await getPool();
+    const userResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT IsActive FROM Users WHERE Id = @id');
+
+    if (userResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const newStatus = userResult.recordset[0].IsActive ? 0 : 1;
+    
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .input('isActive', sql.Bit, newStatus)
+      .query('UPDATE Users SET IsActive = @isActive, LockUntil = NULL WHERE Id = @id');
+
+    res.json({ 
+      success: true, 
+      data: { isActive: newStatus === 1 },
+      message: newStatus ? 'User activated' : 'User deactivated' 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Reset user password
+ * PUT /api/users/:id/reset-password
+ */
+exports.resetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    const pool = await getPool();
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .input('pw', sql.NVarChar, hashed)
+      .query('UPDATE Users SET Password = @pw, LoginAttempts = 0, LockUntil = NULL WHERE Id = @id');
+
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get available roles for dropdown
+ * GET /api/users/roles
+ */
+exports.getAvailableRoles = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query('SELECT Id, Name, DisplayName, Color, Level FROM Roles WHERE IsActive = 1 ORDER BY Level DESC');
+    
+    res.json({ success: true, data: result.recordset.map(r => ({ ...r, _id: r.Id })) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get all sellers for assignment dropdown
+ * GET /api/users/sellers
+ */
+exports.getSellersForAssignment = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query('SELECT Id, Name, Marketplace, SellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name');
+    
+    res.json({ success: true, data: result.recordset.map(s => ({ ...s, _id: s.Id })) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Helper: Get subordinate user IDs (for RBAC)
+async function getSubordinateIds(pool, userId) {
+  try {
+    const result = await pool.request()
+      .input('uid', sql.VarChar, userId)
+      .query('SELECT SupervisorId FROM UserSupervisors WHERE UserId = @uid');
+    return result.recordset.map(r => r.SupervisorId);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get available managers
+ * GET /api/users/managers
  */
 exports.getManagers = async (req, res) => {
   try {
@@ -120,221 +547,5 @@ exports.getManagers = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * Get User (SQL Version)
- */
-exports.getUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const pool = await getPool();
-    const userResult = await pool.request().input('id', sql.VarChar, id).query(`
-      SELECT U.*, R.Name as RoleName, R.DisplayName as RoleDisplayName, R.Level as RoleLevel
-      FROM Users U
-      LEFT JOIN Roles R ON U.RoleId = R.Id
-      WHERE U.Id = @id
-    `);
-
-    if (userResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
-    const u = userResult.recordset[0];
-
-    const sellers = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT S.Id, S.Name, S.Marketplace FROM Sellers S JOIN UserSellers US ON S.Id = US.SellerId WHERE US.UserId = @uid');
-    const supervisors = await pool.request().input('uid', sql.VarChar, u.Id).query('SELECT U.Id as _id, U.FirstName, U.LastName, U.Email FROM Users U JOIN UserSupervisors USV ON U.Id = USV.SupervisorId WHERE USV.UserId = @uid');
-    
-    // Fetch role permissions
-    const perms = await pool.request().input('roleId', sql.VarChar, u.RoleId).query('SELECT P.Name FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
-
-    const user = {
-      _id: u.Id,
-      id: u.Id,
-      firstName: u.FirstName,
-      lastName: u.LastName,
-      email: u.Email,
-      phone: u.Phone,
-      isActive: u.IsActive,
-      lastLogin: u.LastSeen,
-      role: { _id: u.RoleId, name: u.RoleName, displayName: u.RoleDisplayName, level: u.RoleLevel, permissions: perms.recordset.map(p => p.Name) },
-      assignedSellers: sellers.recordset.map(s => ({ _id: s.Id, id: s.Id, name: s.Name, marketplace: s.Marketplace })),
-      supervisors: supervisors.recordset.map(s => ({ _id: s._id, id: s._id, firstName: s.FirstName, lastName: s.LastName, email: s.Email }))
-    };
-
-    res.json({ success: true, data: user });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * Create User (SQL Version)
- */
-exports.createUser = async (req, res) => {
-  try {
-    const { email, password, firstName, lastName, phone, role: roleId, assignedSellers, supervisors } = req.body;
-    const pool = await getPool();
-
-    const existing = await pool.request().input('email', sql.NVarChar, email).query('SELECT Id FROM Users WHERE Email = @email');
-    if (existing.recordset.length > 0) return res.status(400).json({ success: false, message: 'Email registered' });
-
-    const roleResult = await pool.request().input('rid', sql.VarChar, roleId).query('SELECT * FROM Roles WHERE Id = @rid');
-    if (roleResult.recordset.length === 0) return res.status(400).json({ success: false, message: 'Invalid role' });
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const userId = generateId();
-
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-    try {
-      await transaction.request()
-        .input('id', sql.VarChar, userId)
-        .input('email', sql.NVarChar, email)
-        .input('password', sql.NVarChar, hashedPassword)
-        .input('fn', sql.NVarChar, firstName)
-        .input('ln', sql.NVarChar, lastName)
-        .input('ph', sql.NVarChar, phone)
-        .input('rid', sql.VarChar, roleId)
-        .query(`
-          INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt)
-          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, GETDATE(), GETDATE())
-        `);
-
-      if (assignedSellers && Array.isArray(assignedSellers)) {
-        for (const sId of assignedSellers) {
-          await transaction.request().input('uid', sql.VarChar, userId).input('sid', sql.VarChar, sId).query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
-        }
-      }
-
-      if (supervisors && Array.isArray(supervisors)) {
-        for (const supId of supervisors) {
-          await transaction.request().input('uid', sql.VarChar, userId).input('supid', sql.VarChar, supId).query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supid)');
-        }
-      }
-      await transaction.commit();
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
-    }
-
-    res.status(201).json({ success: true, data: { Id: userId, _id: userId, Email: email } });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * Update User (SQL Version)
- */
-exports.updateUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { firstName, lastName, phone, role: roleId, isActive, assignedSellers, supervisors } = req.body;
-    const pool = await getPool();
-
-    const userResult = await pool.request().input('id', sql.VarChar, id).query('SELECT U.*, R.Level as RoleLevel FROM Users U LEFT JOIN Roles R ON U.RoleId = R.Id WHERE U.Id = @id');
-    if (userResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
-    const userToUpdate = userResult.recordset[0];
-
-    const currentUserRoleLevel = req.user.role?.level || req.user.role?.Level || 0;
-    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
-    const isAdmin = roleName === 'admin';
-
-    if (!isAdmin && userToUpdate.RoleLevel >= currentUserRoleLevel && (req.user.Id || req.user._id) !== id) {
-      return res.status(403).json({ success: false, message: 'Permission denied' });
-    }
-
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-    try {
-      await transaction.request()
-        .input('id', sql.VarChar, id)
-        .input('fn', sql.NVarChar, firstName)
-        .input('ln', sql.NVarChar, lastName)
-        .input('ph', sql.NVarChar, phone)
-        .input('rid', sql.VarChar, roleId || userToUpdate.RoleId)
-        .input('active', sql.Bit, isActive !== undefined ? (isActive ? 1 : 0) : userToUpdate.IsActive)
-        .query(`
-          UPDATE Users SET 
-            FirstName = @fn, LastName = @ln, Phone = @ph, RoleId = @rid, IsActive = @active, UpdatedAt = GETDATE()
-          WHERE Id = @id
-        `);
-
-      if (assignedSellers) {
-        await transaction.request().input('uid', sql.VarChar, id).query('DELETE FROM UserSellers WHERE UserId = @uid');
-        for (const sId of assignedSellers) {
-          await transaction.request().input('uid', sql.VarChar, id).input('sid', sql.VarChar, sId).query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
-        }
-      }
-
-      if (supervisors) {
-        await transaction.request().input('uid', sql.VarChar, id).query('DELETE FROM UserSupervisors WHERE UserId = @uid');
-        for (const supId of supervisors) {
-          await transaction.request().input('uid', sql.VarChar, id).input('supid', sql.VarChar, supId).query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supid)');
-        }
-      }
-      await transaction.commit();
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * Delete User (SQL Version)
- */
-exports.deleteUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const pool = await getPool();
-
-    const roleName = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
-    if (roleName !== 'admin') return res.status(403).json({ success: false, message: 'Admin only' });
-
-    if ((req.user.Id || req.user._id) === id) return res.status(400).json({ success: false, message: 'Cannot delete self' });
-
-    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Users WHERE Id = @id');
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * Toggle Status (SQL Version)
- */
-exports.toggleUserStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const pool = await getPool();
-    const userResult = await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM Users WHERE Id = @id');
-    if (userResult.recordset.length === 0) return res.status(404).json({ success: false });
-    
-    const user = userResult.recordset[0];
-    await pool.request().input('id', sql.VarChar, id).input('active', sql.Bit, user.IsActive ? 0 : 1).query('UPDATE Users SET IsActive = @active WHERE Id = @id');
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false });
-  }
-};
-
-/**
- * Reset Password (SQL Version)
- */
-exports.resetUserPassword = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
-    const pool = await getPool();
-
-    const hashed = await bcrypt.hash(newPassword, 12);
-    await pool.request().input('id', sql.VarChar, id).input('pw', sql.NVarChar, hashed).query('UPDATE Users SET Password = @pw WHERE Id = @id');
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false });
   }
 };

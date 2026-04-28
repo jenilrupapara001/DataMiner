@@ -561,6 +561,29 @@ const AsinManagerPage = () => {
     }
   };
 
+  const handleRecalculateLQS = async () => {
+    const msg = selectedRows.length > 0 
+      ? `Recalculate LQS for ${selectedRows.length} selected ASINs?`
+      : 'Recalculate LQS for all ASINs in your current view/scope?';
+      
+    if (!window.confirm(msg)) return;
+    
+    setLoading(true);
+    try {
+      const response = await asinApi.recalculateLQS(selectedRows);
+      if (response.success) {
+        alert(`Successfully recalculated LQS for ${response.processedCount} ASINs`);
+        loadData(pagination.page, pagination.limit);
+        setSelectedRows([]); // Clear selection after processing
+      }
+    } catch (err) {
+      console.error('Recalculate LQS error:', err);
+      alert('Error recalculating LQS: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadTagsTemplate = () => {
     asinApi.downloadTagsTemplate(selectedSeller);
   };
@@ -673,7 +696,7 @@ const AsinManagerPage = () => {
 
       return [
         { label: 'ALL ASINS', value: stats.total || 0, color: '#6366f1', icon: <Package size={14} /> },
-        { label: 'AVG LQS', value: (stats.avgLQS || 0) + '%', color: '#10b981', icon: <Activity size={14} /> },
+        { label: 'AVG LQS', value: (stats.avgLQS > 10 ? (stats.avgLQS / 10).toFixed(1) : (stats.avgLQS || 0).toFixed(1)), color: '#10b981', icon: <Activity size={14} /> },
         {
           label: 'BEST SELLER',
           value: bestSeller ? `#${bestSeller.bsr?.toLocaleString()}` : '-',
@@ -722,7 +745,11 @@ const AsinManagerPage = () => {
 
     // Fallback KPIs when stats are not available
     const total = asins?.length || 0;
-    const avgLqs = total > 0 ? Math.round(asins.reduce((sum, a) => sum + (a.lqs || 0), 0) / total) : 0;
+    const avgLqsRaw = total > 0 ? asins.reduce((sum, a) => {
+      const s = a.lqs || 0;
+      return sum + (s > 10 ? s / 10 : s);
+    }, 0) / total : 0;
+    const avgLqs = avgLqsRaw.toFixed(1);
     const avgPrice = total > 0 ? Math.round(asins.reduce((sum, a) => sum + (a.currentPrice || 0), 0) / total) : 0;
 
     return [
@@ -1360,6 +1387,14 @@ const AsinManagerPage = () => {
             <span className="smallest text-muted fw-medium border-end pe-2">Page {pagination.page}/{pagination.totalPages}</span>
             <button
               className="btn btn-white btn-xs border border-zinc-200 rounded-2 p-1"
+              onClick={handleRecalculateLQS}
+              title="Recalculate LQS"
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={`text-zinc-500 ${loading ? 'spin' : ''}`} />
+            </button>
+            <button
+              className="btn btn-white btn-xs border border-zinc-200 rounded-2 p-1"
               onClick={() => setShowUploadModal(true)}
               title="Upload CSV"
             >
@@ -1560,6 +1595,53 @@ const AsinManagerPage = () => {
                           ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* Release Date Range */}
+                  <div className="filter-group">
+                    <label className="filter-label">RELEASE DATE RANGE</label>
+                    <div className="d-flex gap-2">
+                      <input 
+                        type="date" 
+                        className="form-control form-control-sm rounded-2" 
+                        value={filters.minReleaseDate || ''} 
+                        onChange={(e) => setFilters({ ...filters, minReleaseDate: e.target.value })} 
+                        style={{ fontSize: '11px', height: '36px' }} 
+                        placeholder="From"
+                      />
+                      <input 
+                        type="date" 
+                        className="form-control form-control-sm rounded-2" 
+                        value={filters.maxReleaseDate || ''} 
+                        onChange={(e) => setFilters({ ...filters, maxReleaseDate: e.target.value })} 
+                        style={{ fontSize: '11px', height: '36px' }} 
+                        placeholder="To"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Age Filters */}
+                  <div className="filter-group">
+                    <label className="filter-label">QUICK AGE FILTERS</label>
+                    <div className="d-flex flex-wrap gap-1">
+                      {[
+                        { label: 'New 30D', value: '30' },
+                        { label: '30-60D', value: '60' },
+                        { label: '60-90D', value: '90' },
+                        { label: '90-180D', value: '180' },
+                        { label: '180-365D', value: '365' },
+                        { label: '365+ Days', value: '365+' }
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          className={`btn btn-sm rounded-pill px-2 py-0 ${filters.ageFilter === opt.value ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+                          onClick={() => setFilters({ ...filters, ageFilter: filters.ageFilter === opt.value ? '' : opt.value })}
+                          style={{ fontSize: '9px' }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* 13. BOOLEAN FLAGS */}
@@ -1778,6 +1860,7 @@ const AsinManagerPage = () => {
                       ASIN ID
                     </div>
                   </th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center' }}>RELEASED</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>
                     <div className="d-flex align-items-center justify-content-between">
                       PARENT ASIN
@@ -1930,6 +2013,27 @@ const AsinManagerPage = () => {
                         </a>
                       </div>
                     </td>
+                    {/* ===== RELEASE DATE ===== */}
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      {asin.releaseDate ? (
+                        <div className="d-flex flex-column align-items-center">
+                          <span style={{ fontSize: '10px', fontWeight: 600 }}>
+                            {new Date(asin.releaseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          </span>
+                          <span className="badge bg-zinc-100 text-zinc-500 mt-1" style={{ fontSize: '8px' }}>
+                            {(() => {
+                              const days = Math.floor((Date.now() - new Date(asin.releaseDate)) / (1000 * 60 * 60 * 24));
+                              if (days <= 30) return `${days}d`;
+                              if (days <= 60) return `${days}d ⚡`;
+                              if (days <= 90) return `${days}d 📈`;
+                              return `${Math.floor(days/30)}m`;
+                            })()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                      )}
+                    </td>
                     {/* ===== PARENT ASIN ===== */}
                     <td style={{ ...tdStyle, fontSize: '10px', color: '#6366f1', fontWeight: 500 }}>
                       {asin.parentAsin || asin.ParentAsin || '-'}
@@ -1977,14 +2081,14 @@ const AsinManagerPage = () => {
                           className="badge fw-bold"
                           style={{ 
                             fontSize: '10px',
-                            backgroundColor: (asin.titleScore || 0) >= 80 ? '#059669' : 
-                                             (asin.titleScore || 0) >= 60 ? '#d97706' : 
-                                             (asin.titleScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            backgroundColor: (asin.titleScore || 0) >= 8.5 ? '#059669' : 
+                                             (asin.titleScore || 0) >= 7.0 ? '#d97706' : 
+                                             (asin.titleScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
                             color: '#fff',
                             minWidth: '28px'
                           }}
                         >
-                          {asin.titleScore || 0}
+                          {typeof asin.titleScore === 'number' ? (asin.titleScore > 10 ? (asin.titleScore/10).toFixed(1) : asin.titleScore.toFixed(1)) : (parseFloat(asin.titleScore || 0) > 10 ? (parseFloat(asin.titleScore || 0)/10).toFixed(1) : parseFloat(asin.titleScore || 0).toFixed(1))}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
@@ -1997,14 +2101,14 @@ const AsinManagerPage = () => {
                           className="badge fw-bold"
                           style={{ 
                             fontSize: '10px',
-                            backgroundColor: (asin.bulletScore || 0) >= 80 ? '#059669' : 
-                                             (asin.bulletScore || 0) >= 60 ? '#d97706' : 
-                                             (asin.bulletScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            backgroundColor: (asin.bulletScore || 0) >= 8.5 ? '#059669' : 
+                                             (asin.bulletScore || 0) >= 7.0 ? '#d97706' : 
+                                             (asin.bulletScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
                             color: '#fff',
                             minWidth: '28px'
                           }}
                         >
-                          {asin.bulletScore || 0}
+                          {typeof asin.bulletScore === 'number' ? (asin.bulletScore > 10 ? (asin.bulletScore/10).toFixed(1) : asin.bulletScore.toFixed(1)) : (parseFloat(asin.bulletScore || 0) > 10 ? (parseFloat(asin.bulletScore || 0)/10).toFixed(1) : parseFloat(asin.bulletScore || 0).toFixed(1))}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
@@ -2017,14 +2121,14 @@ const AsinManagerPage = () => {
                           className="badge fw-bold"
                           style={{ 
                             fontSize: '10px',
-                            backgroundColor: (asin.imageScore || 0) >= 80 ? '#059669' : 
-                                             (asin.imageScore || 0) >= 60 ? '#d97706' : 
-                                             (asin.imageScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            backgroundColor: (asin.imageScore || 0) >= 8.5 ? '#059669' : 
+                                             (asin.imageScore || 0) >= 7.0 ? '#d97706' : 
+                                             (asin.imageScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
                             color: '#fff',
                             minWidth: '28px'
                           }}
                         >
-                          {asin.imageScore || 0}
+                          {typeof asin.imageScore === 'number' ? (asin.imageScore > 10 ? (asin.imageScore/10).toFixed(1) : asin.imageScore.toFixed(1)) : (parseFloat(asin.imageScore || 0) > 10 ? (parseFloat(asin.imageScore || 0)/10).toFixed(1) : parseFloat(asin.imageScore || 0).toFixed(1))}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
@@ -2037,14 +2141,14 @@ const AsinManagerPage = () => {
                           className="badge fw-bold"
                           style={{ 
                             fontSize: '10px',
-                            backgroundColor: (asin.descriptionScore || 0) >= 80 ? '#059669' : 
-                                             (asin.descriptionScore || 0) >= 60 ? '#d97706' : 
-                                             (asin.descriptionScore || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            backgroundColor: (asin.descriptionScore || 0) >= 8.5 ? '#059669' : 
+                                             (asin.descriptionScore || 0) >= 7.0 ? '#d97706' : 
+                                             (asin.descriptionScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
                             color: '#fff',
                             minWidth: '28px'
                           }}
                         >
-                          {asin.descriptionScore || 0}
+                          {typeof asin.descriptionScore === 'number' ? (asin.descriptionScore > 10 ? (asin.descriptionScore/10).toFixed(1) : asin.descriptionScore.toFixed(1)) : (parseFloat(asin.descriptionScore || 0) > 10 ? (parseFloat(asin.descriptionScore || 0)/10).toFixed(1) : parseFloat(asin.descriptionScore || 0).toFixed(1))}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
@@ -2057,15 +2161,15 @@ const AsinManagerPage = () => {
                           className="badge fw-bold"
                           style={{ 
                             fontSize: '11px',
-                            backgroundColor: (asin.lqs || 0) >= 80 ? '#059669' : 
-                                             (asin.lqs || 0) >= 60 ? '#d97706' : 
-                                             (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b',
+                            backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' : 
+                                             (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' : 
+                                             (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
                             color: '#fff',
                             padding: '3px 8px',
                             minWidth: '36px'
                           }}
                         >
-                          {asin.lqs}%
+                          {typeof asin.lqs === 'number' ? (asin.lqs > 10 ? (asin.lqs/10).toFixed(1) : asin.lqs.toFixed(1)) : (parseFloat(asin.lqs || 0) > 10 ? (parseFloat(asin.lqs || 0)/10).toFixed(1) : parseFloat(asin.lqs || 0).toFixed(1))}
                         </span>
                       ) : (
                         <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>

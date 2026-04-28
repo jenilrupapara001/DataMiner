@@ -334,82 +334,36 @@ export const marketSyncApi = {
 
 // User API
 export const userApi = {
-  getAll: async (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/users?${query}`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch users');
-    return res.json();
+  getAll: async (params) => {
+    return api.get('/users', params);
   },
-
   getById: async (id) => {
-    const res = await fetch(`${API_BASE}/users/${id}`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch user');
-    return res.json();
+    return api.get(`/users/${id}`);
   },
-
   create: async (data) => {
-    const res = await fetch(`${API_BASE}/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create user');
-    }
-    return res.json();
+    return api.post('/users', data);
   },
-
   update: async (id, data) => {
-    const res = await fetch(`${API_BASE}/users/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to update user');
-    return res.json();
+    return api.put(`/users/${id}`, data);
   },
-
   delete: async (id) => {
-    const res = await fetch(`${API_BASE}/users/${id}`, {
-      method: 'DELETE',
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to delete user');
-    return res.json();
+    return api.delete(`/users/${id}`);
   },
-
   toggleStatus: async (id) => {
-    const res = await fetch(`${API_BASE}/users/${id}/toggle-status`, {
-      method: 'POST',
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to toggle user status');
-    return res.json();
+    return api.put(`/users/${id}/toggle-status`);
   },
-
   resetPassword: async (id, newPassword) => {
-    const res = await fetch(`${API_BASE}/users/${id}/reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify({ newPassword }),
-    });
-    if (!res.ok) throw new Error('Failed to reset password');
-    return res.json();
+    return api.put(`/users/${id}/reset-password`, { newPassword });
   },
-
+  getRoles: async () => {
+    return api.get('/users/roles');
+  },
+  getSellers: async () => {
+    return api.get('/users/sellers');
+  },
   getManagers: async () => {
-    const res = await fetch(`${API_BASE}/users/managers`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch managers');
-    const data = await res.json();
-    return data.data || [];
-  },
+    return api.get('/users/managers');
+  }
 };
 
 // Role API
@@ -618,6 +572,27 @@ export const asinApi = {
       return { success: true };
     } catch (error) {
       console.error('Failed to download template:', error);
+      throw error;
+    }
+  },
+
+  recalculateLQS: async (ids = []) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/recalculate-lqs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify({ ids })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || error.message || 'Failed to recalculate LQS');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to recalculate LQS:', error);
       throw error;
     }
   },

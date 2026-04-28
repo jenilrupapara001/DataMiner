@@ -80,10 +80,14 @@ class DescriptionAnalyzer {
       { term: '.com', label: 'URLs' },
       { term: 'phone', label: 'Contact Info' },
       { term: 'call', label: 'Contact Info' },
+      { term: 'email', label: 'Contact Info' },
+      { term: 'contact us', label: 'Contact Info' },
       { term: 'guarantee', label: 'Promotional Claims' },
       { term: 'warranty', label: 'Promotional Claims' },
       { term: 'best seller', label: 'Subjective Claims' },
-      { term: 'free shipping', label: 'Shipping Info' }
+      { term: 'top rated', label: 'Subjective Claims' },
+      { term: 'free shipping', label: 'Shipping Info' },
+      { term: 'lowest price', label: 'Pricing Info' }
     ];
 
     const foundProhibited = prohibitedTerms

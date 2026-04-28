@@ -137,22 +137,32 @@ class ImageAnalyzer {
       };
     }
 
-    if (count >= 6 && count < 8) {
+    if (count >= 6 && count < 7) {
       return {
         score: 85,
         count,
         status: 'pass',
         issues: [],
-        recommendations: ['Good image count. Consider adding lifestyle and detail shots for completeness']
+        recommendations: ['Good image count. Amazon recommends at least 7 images for a complete listing experience.']
+      };
+    }
+
+    if (count >= 7) {
+      return {
+        score: 100,
+        count,
+        status: 'pass',
+        issues: [],
+        recommendations: count > 9 ? ['Amazon shows a maximum of 9 images. Ensure the first 7 are your strongest.'] : []
       };
     }
 
     return {
-      score: 100,
+      score: 50,
       count,
-      status: 'pass',
-      issues: [],
-      recommendations: count > 10 ? ['Ensure all images are unique and add value - avoid redundancy'] : []
+      status: 'warning',
+      issues: [`Only ${count} images - at least 7 are recommended for high-quality listings`],
+      recommendations: [`Add ${7 - count}+ more images to reach the recommended count of 7`]
     };
   }
 
