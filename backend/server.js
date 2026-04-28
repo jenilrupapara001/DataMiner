@@ -109,7 +109,7 @@ const taskRoutes = require('./routes/taskRoutes');
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api', alertsRoutes);
-app.use('/api', exportRoutes);
+app.use('/api/export', exportRoutes);
 app.use('/api', rulesetRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/asins', asinRoutes);

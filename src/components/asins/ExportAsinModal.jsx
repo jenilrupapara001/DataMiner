@@ -5,7 +5,7 @@ import {
   Store, ListChecks, Filter, Check, ChevronDown, Search,
   Users, Tag, FileDown, Database, RefreshCw
 } from 'lucide-react';
-import { sellerApi, asinApi } from '../../services/api';
+import { sellerApi, asinApi, exportApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Available ASIN fields for export
@@ -199,18 +199,15 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
         format: exportFormat,
       };
       
-      const progressInterval = setInterval(() => {
-        setExportProgress(prev => Math.min(prev + Math.random() * 20, 90));
-      }, 400);
+      const response = await exportApi.startExport(payload);
       
-      const response = await asinApi.exportData(payload);
-      
-      clearInterval(progressInterval);
       setExportProgress(100);
       
       if (response.success) {
         setExportComplete(true);
         setStep(3);
+        // Dispatch event to open downloads drawer if we implemented a global state, or just let user check it
+        window.dispatchEvent(new CustomEvent('export-started'));
         setTimeout(() => onClose(), 2000);
       } else {
         throw new Error(response.error || 'Export failed');

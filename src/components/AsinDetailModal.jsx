@@ -282,59 +282,71 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     markers: { size: 4, strokeWidth: 2, strokeColors: '#fff', colors: ['#6366f1'] }
   };
 
-  // BSR Trend Chart Config - Forward fill with last valid BSR
-  const processedBsrHistory = useMemo(() => {
-    if (!asin || !history) return [];
-    let lastValidBsr = null;
+  // Sub-BSR Category Performance Chart Config
+  const subBsrDataParsed = useMemo(() => {
+    if (!asin) return [];
+    let subBsrList = [];
     
-    if (history.length > 0) {
-      const fullHistory = asin.history || asin.weekHistory || [];
-      const firstDate = new Date(history[0].date || history[0].week);
-      const beforeHistory = fullHistory
-        .filter(h => new Date(h.date || h.week) < firstDate)
-        .sort((a, b) => new Date(b.date || b.week) - new Date(a.date || a.week));
-      
-      if (beforeHistory.length > 0) {
-        for (const h of beforeHistory) {
-          if (h.bsr && h.bsr > 0) {
-            lastValidBsr = h.bsr;
-            break;
-          }
-        }
-      }
-      if (lastValidBsr === null) lastValidBsr = bsrData.value;
+    const rawSubBsr = asin.subBsr || asin.SubBsr || '';
+    if (Array.isArray(asin.subBSRs) && asin.subBSRs.length > 0) {
+      subBsrList = asin.subBSRs;
+    } else if (rawSubBsr) {
+      // Split by "#" to handle multiple ranks in one string
+      subBsrList = rawSubBsr.split(/(?=#\d)/).map(s => s.trim()).filter(Boolean);
     }
-
-    return history.map(h => {
-      if (h.bsr && h.bsr > 0) {
-        lastValidBsr = h.bsr;
-        return h.bsr;
+    
+    return subBsrList.map(str => {
+      // e.g., "#123 in Category Name"
+      const match = str.match(/#([\d,]+)\s+in\s+(.+)/i);
+      if (match) {
+        return {
+          rank: parseInt(match[1].replace(/,/g, ''), 10),
+          category: match[2].trim()
+        };
       }
-      return lastValidBsr;
-    });
-  }, [history, asin, bsrData]);
+      return null;
+    }).filter(Boolean).sort((a, b) => a.rank - b.rank); // Sort by best rank
+  }, [asin]);
 
-  const bsrSeries = [{
-    name: 'Main BSR',
-    data: processedBsrHistory
+  const subBsrSeries = [{
+    name: 'Category Rank',
+    data: subBsrDataParsed.map(d => d.rank)
   }];
 
-  const bsrOptions = {
-    ...commonOptions,
-    chart: { ...commonOptions.chart, type: 'line', height: 250 },
+  const subBsrOptions = {
+    chart: { type: 'bar', height: Math.max(250, subBsrDataParsed.length * 40), toolbar: { show: false } },
+    plotOptions: {
+      bar: {
+        horizontal: true,
+        borderRadius: 4,
+        dataLabels: { position: 'top' },
+        barHeight: '50%'
+      }
+    },
     dataLabels: {
-      enabled: history.length <= 15,
-      formatter: (val) => val ? `#${Number(val).toLocaleString()}` : '',
-      offsetY: -10,
-      style: { fontSize: '10px', colors: ['#10b981'] },
-      background: { enabled: true, borderWidth: 0, borderRadius: 4, padding: 4, opacity: 0.9 }
+      enabled: true,
+      textAnchor: 'start',
+      style: { colors: ['#fff'] },
+      formatter: function (val) {
+        return "#" + val.toLocaleString();
+      },
+      offsetX: -8,
+      dropShadow: { enabled: true, top: 1, left: 1, blur: 1, color: '#000', opacity: 0.45 }
     },
-    stroke: { curve: 'smooth', width: 3, colors: ['#10b981'] },
+    colors: ['#10b981'],
+    xaxis: {
+      categories: subBsrDataParsed.map(d => d.category.length > 35 ? d.category.substring(0, 35) + '...' : d.category),
+      labels: { style: { fontSize: '10px', colors: '#64748b' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false }
+    },
     yaxis: {
-      reversed: true, // Lower BSR is better
-      labels: { style: { fontSize: '10px', colors: '#64748b' }, formatter: (val) => val ? `#${Number(val).toLocaleString()}` : '' }
+      labels: { style: { fontSize: '11px', fontWeight: 600, colors: '#334155' } }
     },
-    markers: { size: 4, strokeWidth: 2, strokeColors: '#fff', colors: ['#10b981'] }
+    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+    tooltip: {
+      y: { formatter: (val) => `#${val.toLocaleString()}` }
+    }
   };
 
   // Rating History Chart Config - Forward fill with last valid rating and star breakdown
@@ -968,22 +980,29 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <Chart options={priceOptions} series={priceSeries} type="line" height={280} />
               </div>
             </div>
-            {/* BSR Trend Chart */}
+            {/* Sub-BSR Category Performance Chart */}
             <div className="bg-white border rounded-4 p-4 shadow-sm">
               <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                 <div className="d-flex align-items-center gap-3">
                   <div className="p-2 bg-emerald-50 rounded-lg">
                     <BarChart3 size={18} className="text-emerald-600" />
                   </div>
-                  <h6 className="mb-0 fw-semibold text-slate-800">BEST SELLERS RANK TREND</h6>
+                  <h6 className="mb-0 fw-semibold text-slate-800">CATEGORY PERFORMANCE RANKING</h6>
                 </div>
                 <div className="d-flex align-items-center gap-1 text-slate-500 small fw-medium">
-                  <Eye size={14} />
-                  <span>Interactive View</span>
+                  <Trophy size={14} className="text-amber-500" />
+                  <span>Sub-BSR Ranks</span>
                 </div>
               </div>
               <div style={{ minHeight: '280px' }}>
-                <Chart options={bsrOptions} series={bsrSeries} type="line" height={280} />
+                {subBsrDataParsed.length > 0 ? (
+                  <Chart options={subBsrOptions} series={subBsrSeries} type="bar" height={Math.max(250, subBsrDataParsed.length * 40)} />
+                ) : (
+                  <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style={{ minHeight: '250px' }}>
+                    <BarChart3 size={32} className="mb-2 opacity-50" />
+                    <span className="small fw-medium">No Sub-BSR Category Data Available</span>
+                  </div>
+                )}
               </div>
             </div>
 

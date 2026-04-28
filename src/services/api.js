@@ -652,8 +652,9 @@ export const asinApi = {
     return res.json();
   },
 
-  getFilters: async () => {
-    const res = await fetch(`${API_BASE}/asins/filters`, {
+  getFilters: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/asins/filters${query ? `?${query}` : ''}`, {
       headers: { ...getAuthHeader() }
     });
     if (!res.ok) throw new Error('Failed to fetch filter options');
@@ -1387,4 +1388,33 @@ export const taskApi = {
     delete: async (taskId) => {
         return api.delete(`/tasks/${taskId}`);
     }
+};
+
+export const exportApi = {
+    startExport: async (params) => {
+        const res = await fetch(`${API_BASE}/export/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(params),
+        });
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.error || error.message || 'Export failed');
+        }
+        return res.json();
+    },
+    getDownloads: async () => {
+        const res = await fetch(`${API_BASE}/export/downloads`, {
+            headers: { ...getAuthHeader() }
+        });
+        if (!res.ok) throw new Error('Failed to fetch downloads');
+        return res.json();
+    },
+    getFields: async () => {
+        const res = await fetch(`${API_BASE}/export/fields`, {
+            headers: { ...getAuthHeader() }
+        });
+        if (!res.ok) throw new Error('Failed to fetch export fields');
+        return res.json();
+    },
 };

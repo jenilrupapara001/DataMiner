@@ -42,7 +42,8 @@ import {
   Clock,
   ExternalLink,
   Video,
-  PlayCircle
+  PlayCircle,
+  Filter
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -360,7 +361,8 @@ const AsinManagerPage = () => {
     minImageScore: '',
     maxImageScore: '',
     minDescriptionScore: '',
-    maxDescriptionScore: ''
+    maxDescriptionScore: '',
+    subBsrCategory: ''
   });
   
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -397,7 +399,8 @@ const AsinManagerPage = () => {
     minImageScore: '',
     maxImageScore: '',
     minDescriptionScore: '',
-    maxDescriptionScore: ''
+    maxDescriptionScore: '',
+    subBsrCategory: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -421,18 +424,18 @@ const AsinManagerPage = () => {
   // Removed client-side filteredAsins useMemo as we now use server-side search
   const filteredAsins = asins;
 
-  // Fetch filter options once
+  // Fetch filter options when seller changes
   useEffect(() => {
     const fetchFilters = async () => {
       try {
-        const res = await asinApi.getFilters();
+        const res = await asinApi.getFilters(selectedSeller ? { seller: selectedSeller } : {});
         if (res.success) setFilterOptions(res.data);
       } catch (err) {
         console.error('Error fetching filter options:', err);
       }
     };
     fetchFilters();
-  }, []);
+  }, [selectedSeller]);
 
   // CSV Upload handler
   const handleCsvUpload = async (e) => {
@@ -1392,211 +1395,267 @@ const AsinManagerPage = () => {
         {/* [E] High-Density Table Area */}
         <div className="bg-white border border-zinc-200 rounded-4 shadow-sm overflow-hidden flex-grow-1 d-flex flex-column position-relative">
 
-          {/* [Filter Sidebar/Drawer Overlay] */}
+          {/* [Filter Sidebar/Drawer Overlay] — COMPLETE REDESIGN */}
           {filterPanelOpen && (
             <div
-              className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-              style={{ zIndex: 1050, backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(4px)' }}
-              onClick={(e) => e.target === e.currentTarget && setFilterPanelOpen(false)}
+              className="position-absolute top-0 end-0 h-100 bg-white border-start shadow-lg d-flex flex-column"
+              style={{ width: '320px', zIndex: 100, animation: 'slideIn 0.2s ease-out' }}
             >
-              <div 
-                className="bg-white border rounded-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
-                style={{ width: '800px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
-              >
-                <div className="p-4 border-bottom d-flex align-items-center justify-content-between bg-zinc-50 rounded-top-4">
-                  <div className="d-flex align-items-center gap-3">
-                    <div className="p-2 bg-zinc-900 text-white rounded-3">
-                      <ListChecks size={20} />
-                    </div>
-                    <div>
-                      <h5 className="mb-0 fw-bold text-zinc-900">Advanced Inventory Filters</h5>
-                      <p className="smallest text-zinc-500 mb-0 uppercase tracking-widest fw-bold">Refine your ledger view with granular parameters</p>
-                    </div>
-                  </div>
-                  <button className="btn btn-ghost p-2 rounded-circle" onClick={() => setFilterPanelOpen(false)}>
-                    <X size={20} className="text-zinc-400" />
-                  </button>
+              {/* Header */}
+              <div className="p-3 border-bottom d-flex align-items-center justify-content-between bg-zinc-900 text-white">
+                <div className="d-flex align-items-center gap-2">
+                  <Filter size={16} />
+                  <span className="fw-bold" style={{ fontSize: '13px', letterSpacing: '0.05em' }}>ADVANCED FILTERS</span>
                 </div>
-  
-                <div className="p-4 overflow-auto" style={{ flex: 1 }}>
-                  <div className="row g-4">
-                    {/* Column 1: Primary Filters */}
-                    <div className="col-md-4">
-                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Primary Parameters</h6>
-                      <div className="d-flex flex-column gap-3">
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">LISTING STATUS</label>
-                          <select className="form-select form-select-sm border-zinc-200" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-                            <option value="">All Statuses</option>
-                            {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">SCRAPE STATUS</label>
-                          <select className="form-select form-select-sm border-zinc-200" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })}>
-                            <option value="">All Scrape Statuses</option>
-                            {filterOptions.scrapeStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">BRAND</label>
-                          <select className="form-select form-select-sm border-zinc-200" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })}>
-                            <option value="">All Brands</option>
-                            {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-                          </select>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">CATEGORY</label>
-                          <select className="form-select form-select-sm border-zinc-200" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
-                            <option value="">All Categories</option>
-                            {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-  
-                    {/* Column 2: Identifiers & Ranges */}
-                    <div className="col-md-4">
-                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Identifiers & Metrics</h6>
-                      <div className="d-flex flex-column gap-3">
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">PARENT ASIN / SKU</label>
-                          <div className="d-flex gap-2">
-                            <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="Parent" value={filters.parentAsin} onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })} />
-                            <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="SKU" value={filters.sku} onChange={(e) => setFilters({ ...filters, sku: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">PRICE RANGE (₹)</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">BSR RANGE</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">RATING RANGE</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" step="0.1" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minRating} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} />
-                            <input type="number" step="0.1" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxRating} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-  
-                    {/* Column 3: Quality Scores (New!) */}
-                    <div className="col-md-4">
-                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">LQS Component Scores</h6>
-                      <div className="d-flex flex-column gap-3">
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">TOTAL LQS (%)</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200 bg-zinc-50" value={filters.minLQS} onChange={(e) => setFilters({ ...filters, minLQS: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200 bg-zinc-50" value={filters.maxLQS} onChange={(e) => setFilters({ ...filters, maxLQS: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">TITLE SCORE (TTL)</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minTitleScore} onChange={(e) => setFilters({ ...filters, minTitleScore: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxTitleScore} onChange={(e) => setFilters({ ...filters, maxTitleScore: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">BULLET SCORE (BLT)</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minBulletScore} onChange={(e) => setFilters({ ...filters, minBulletScore: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxBulletScore} onChange={(e) => setFilters({ ...filters, maxBulletScore: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">IMAGE SCORE (IMG)</label>
-                          <div className="d-flex gap-2">
-                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minImageScore} onChange={(e) => setFilters({ ...filters, minImageScore: e.target.value })} />
-                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxImageScore} onChange={(e) => setFilters({ ...filters, maxImageScore: e.target.value })} />
-                          </div>
-                        </div>
-                      </div>
+                <button className="btn btn-ghost p-1 text-white opacity-75 hover-opacity-100" onClick={() => setFilterPanelOpen(false)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-grow-1 overflow-auto p-3">
+                <div className="d-flex flex-column gap-3">
+                  
+                  {/* 1. LISTING STATUS */}
+                  <div className="filter-group">
+                    <label className="filter-label">LISTING STATUS</label>
+                    <select className="form-select form-select-sm rounded-2" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
+                      <option value="">All Statuses</option>
+                      {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  {/* 2. SCRAPE STATUS */}
+                  <div className="filter-group">
+                    <label className="filter-label">SCRAPE STATUS</label>
+                    <select className="form-select form-select-sm rounded-2" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
+                      <option value="">All Scrape Statuses</option>
+                      {filterOptions.scrapeStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  {/* 3. SUB BSR CATEGORY */}
+                  <div className="filter-group">
+                    <label className="filter-label">SUB BSR CATEGORY</label>
+                    <select className="form-select form-select-sm rounded-2" value={filters.subBsrCategory || ''} onChange={(e) => setFilters({ ...filters, subBsrCategory: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
+                      <option value="">All Sub BSR Categories</option>
+                      {filterOptions.subBsrCategories?.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4. BRAND */}
+                  <div className="filter-group">
+                    <label className="filter-label">BRAND</label>
+                    <select className="form-select form-select-sm rounded-2" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
+                      <option value="">All Brands</option>
+                      {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+
+                  {/* 5. CATEGORY */}
+                  <div className="filter-group">
+                    <label className="filter-label">CATEGORY</label>
+                    <select className="form-select form-select-sm rounded-2" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
+                      <option value="">All Categories</option>
+                      {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* 6. PARENT ASIN */}
+                  <div className="filter-group">
+                    <label className="filter-label">PARENT ASIN</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm rounded-2"
+                      placeholder="Filter by Parent ASIN..."
+                      value={filters.parentAsin || ''}
+                      onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })}
+                      style={{ fontSize: '12px', height: '36px' }}
+                    />
+                  </div>
+
+                  {/* 7. SKU */}
+                  <div className="filter-group">
+                    <label className="filter-label">SKU</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm rounded-2"
+                      placeholder="Filter by SKU..."
+                      value={filters.sku || ''}
+                      onChange={(e) => setFilters({ ...filters, sku: e.target.value })}
+                      style={{ fontSize: '12px', height: '36px' }}
+                    />
+                  </div>
+
+                  {/* 8. PRICE RANGE */}
+                  <div className="filter-group">
+                    <label className="filter-label">PRICE RANGE (₹)</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
                     </div>
                   </div>
-  
-                  <div className="row g-4 mt-2 pt-4 border-top">
-                    <div className="col-md-8">
-                       <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Boolean Optimization Flags</h6>
-                       <div className="row g-3">
-                         <div className="col-6 col-md-3">
-                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
-                             <label className="smallest fw-bold text-zinc-600 mb-0">BuyBox Winner</label>
-                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.buyBoxWin === 'true'} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
-                           </div>
-                         </div>
-                         <div className="col-6 col-md-3">
-                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
-                             <label className="smallest fw-bold text-zinc-600 mb-0">Has A+ Content</label>
-                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasAplus === 'true'} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
-                           </div>
-                         </div>
-                         <div className="col-6 col-md-3">
-                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
-                             <label className="smallest fw-bold text-zinc-600 mb-0">Has Video</label>
-                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasVideo === 'true'} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
-                           </div>
-                         </div>
-                         <div className="col-6 col-md-3">
-                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
-                             <label className="smallest fw-bold text-zinc-600 mb-0">Has Active Deal</label>
-                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasDeal === 'true'} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
-                           </div>
-                         </div>
-                       </div>
+
+                  {/* 9. BSR RANGE */}
+                  <div className="filter-group">
+                    <label className="filter-label">BSR RANGE</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
                     </div>
-                    <div className="col-md-4 border-start">
-                       <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Other Attributes</h6>
-                       <div className="d-flex flex-column gap-1">
-                          <label className="smallest fw-bold text-zinc-700">TAGS</label>
-                          <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="Search by Tag..." value={filters.tag} onChange={(e) => setFilters({ ...filters, tag: e.target.value })} />
-                       </div>
+                  </div>
+
+                  {/* 10. LQS RANGE */}
+                  <div className="filter-group">
+                    <label className="filter-label">LQS RANGE (%)</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minLQS} onChange={(e) => setFilters({ ...filters, minLQS: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxLQS} onChange={(e) => setFilters({ ...filters, maxLQS: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                    </div>
+                  </div>
+
+                  {/* 11. RATING RANGE */}
+                  <div className="filter-group">
+                    <label className="filter-label">RATING RANGE</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" step="0.1" className="form-control form-control-sm rounded-2" value={filters.minRating || ''} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                      <input type="number" placeholder="Max" step="0.1" className="form-control form-control-sm rounded-2" value={filters.maxRating || ''} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
+                    </div>
+                  </div>
+
+                  {/* 12. TAGS */}
+                  <div className="filter-group">
+                    <label className="filter-label">TAGS</label>
+                    <div className="position-relative">
+                      <Search size={12} className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" />
+                      <input
+                        type="text"
+                        className="form-control form-control-sm rounded-2 ps-4"
+                        placeholder="Search tags..."
+                        value={filters.tagSearch || ''}
+                        onChange={(e) => setFilters({ ...filters, tagSearch: e.target.value })}
+                        style={{ fontSize: '12px', height: '36px' }}
+                      />
+                    </div>
+                    {filterOptions.tags && filterOptions.tags.length > 0 && (
+                      <div className="mt-2 d-flex flex-wrap gap-1" style={{ maxHeight: '100px', overflow: 'auto' }}>
+                        {filterOptions.tags
+                          .filter(t => !filters.tagSearch || t.toLowerCase().includes((filters.tagSearch || '').toLowerCase()))
+                          .slice(0, 20)
+                          .map(tag => (
+                            <span
+                              key={tag}
+                              className={`badge rounded-pill cursor-pointer ${(filters.selectedTags || []).includes(tag) ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+                              style={{ fontSize: '10px', padding: '4px 10px', cursor: 'pointer' }}
+                              onClick={() => {
+                                const current = filters.selectedTags || [];
+                                const updated = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag];
+                                setFilters({ ...filters, selectedTags: updated });
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 13. BOOLEAN FLAGS */}
+                  <div className="filter-group pt-2 border-top">
+                    <label className="filter-label mb-3">BOOLEAN FLAGS</label>
+                    
+                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
+                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>BuyBox Winner</label>
+                      <input className="form-check-input" type="checkbox" role="switch"
+                        checked={filters.buyBoxWin === 'true'}
+                        onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
+                    </div>
+                    
+                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
+                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has A+ Content</label>
+                      <input className="form-check-input" type="checkbox" role="switch"
+                        checked={filters.hasAplus === 'true'}
+                        onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
+                    </div>
+                    
+                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
+                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has Video</label>
+                      <input className="form-check-input" type="checkbox" role="switch"
+                        checked={filters.hasVideo === 'true'}
+                        onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
+                    </div>
+                    
+                    <div className="form-check form-switch d-flex justify-content-between align-items-center">
+                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has Active Deal</label>
+                      <input className="form-check-input" type="checkbox" role="switch"
+                        checked={filters.hasDeal === 'true'}
+                        onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
                     </div>
                   </div>
                 </div>
-  
-                <div className="p-4 border-top bg-zinc-50 d-flex justify-content-between rounded-bottom-4">
+
+                {/* CSS for filter panel */}
+                <style>{`
+                  .filter-group {
+                    margin-bottom: 2px;
+                  }
+                  .filter-label {
+                    display: block;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #71717a;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    margin-bottom: 6px;
+                  }
+                  @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                  }
+                `}</style>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="p-3 border-top bg-white d-flex flex-column gap-2">
+                <button
+                  className="btn btn-dark fw-bold w-100 rounded-2 py-2"
+                  onClick={handleApplyFilters}
+                  style={{ fontSize: '11px', background: '#18181b' }}
+                >
+                  APPLY FILTERS
+                </button>
+                <div className="d-flex gap-2">
                   <button
-                    className="btn btn-zinc-outline fw-bold smallest px-4"
+                    className="btn btn-outline-secondary fw-bold flex-grow-1 rounded-2 py-2"
                     onClick={() => {
                       const resetState = {
                         status: '', category: '', brand: '', scrapeStatus: '',
-                        parentAsin: '', tag: '', sku: '',
                         buyBoxWin: '', hasAplus: '', hasVideo: '', hasDeal: '',
-                        minPrice: '', maxPrice: '', minBSR: '', maxBSR: '', minLQS: '', maxLQS: '',
-                        minRating: '', maxRating: '', minReviewCount: '', maxReviewCount: '',
-                        minImagesCount: '', maxImagesCount: '', minBulletPoints: '', maxBulletPoints: '',
-                        minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
-                        minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: ''
+                        parentAsin: '', sku: '', subBsrCategory: '',
+                        minPrice: '', maxPrice: '', minBSR: '', maxBSR: '',
+                        minLQS: '', maxLQS: '', minRating: '', maxRating: '',
+                        tagSearch: '', selectedTags: []
                       };
                       setFilters(resetState);
                       setAppliedFilters(resetState);
                       setSearchQuery('');
                       setAppliedSearchQuery('');
+                      setSelectedSeller('');
                       setFilterPanelOpen(false);
                     }}
+                    style={{ fontSize: '11px' }}
                   >
-                    RESET ALL FILTERS
+                    RESET
                   </button>
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-white border-zinc-200 fw-bold smallest px-4" onClick={() => setFilterPanelOpen(false)}>
-                      CANCEL
-                    </button>
-                    <button className="btn btn-dark fw-bold smallest px-5 shadow-sm" onClick={handleApplyFilters}>
-                      APPLY FILTERS
-                    </button>
-                  </div>
+                  <button
+                    className="btn btn-outline-secondary fw-bold flex-grow-1 rounded-2 py-2"
+                    onClick={() => setFilterPanelOpen(false)}
+                    style={{ fontSize: '11px' }}
+                  >
+                    CANCEL
+                  </button>
                 </div>
               </div>
             </div>
@@ -2040,27 +2099,48 @@ const AsinManagerPage = () => {
                       {(() => {
                         const subBsrValue = asin.subBsr || (Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '';
                         const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
+                        let rank = subBsrValue;
+                        let category = '';
+                        if (subBsrValue.includes(' in ')) {
+                          const parts = subBsrValue.split(' in ');
+                          rank = parts[0];
+                          category = parts.slice(1).join(' in ');
+                        }
                         
                         return subBsrValue ? (
-                          <div className="d-flex align-items-center gap-1">
-                            <span style={{ 
-                              fontSize: '10px', 
-                              color: '#4b5563', 
-                              fontWeight: 500,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: hasMultiple ? '85px' : '110px'
-                            }} title={subBsrValue}>
-                              {subBsrValue}
-                            </span>
-                            {hasMultiple && (
-                              <span 
-                                className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200" 
-                                style={{ fontSize: '8px', padding: '1px 4px' }}
-                                title={asin.subBSRs.slice(1).join('\n')}
-                              >
-                                +{asin.subBSRs.length - 1}
+                          <div className="d-flex flex-column gap-1">
+                            <div className="d-flex align-items-center gap-1">
+                              <span style={{ 
+                                fontSize: '10px', 
+                                color: '#4b5563', 
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: hasMultiple ? '85px' : '110px'
+                              }} title={rank}>
+                                {rank}
+                              </span>
+                              {hasMultiple && (
+                                <span 
+                                  className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200" 
+                                  style={{ fontSize: '8px', padding: '1px 4px' }}
+                                  title={asin.subBSRs.slice(1).join('\n')}
+                                >
+                                  +{asin.subBSRs.length - 1}
+                                </span>
+                              )}
+                            </div>
+                            {category && (
+                              <span style={{
+                                fontSize: '9px',
+                                color: '#6b7280',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '110px'
+                              }} title={category}>
+                                {category}
                               </span>
                             )}
                           </div>

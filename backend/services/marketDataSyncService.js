@@ -1773,6 +1773,10 @@ class MarketDataSyncService {
                 ImageUrl: mainImageUrl,
                 SubBsr: subBsr,
                 SubBSRs: JSON.stringify(subBSRs),
+                SubBsrCategories: JSON.stringify(subBSRs.map(rankStr => {
+                    const match = rankStr.match(/in\s+([^\(#]+)/i);
+                    return match ? match[1].trim() : '';
+                }).filter(Boolean)),
                 Images: JSON.stringify(images),
                 ImagesCount: imagesCount,
                 VideoCount: videoCount,

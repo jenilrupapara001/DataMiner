@@ -56,6 +56,7 @@ exports.getAsins = async (req, res) => {
         if (req.query.parentAsin) reqObj.input('parentAsin', sql.NVarChar, req.query.parentAsin);
         if (req.query.tag) reqObj.input('tag', sql.NVarChar, `%${req.query.tag}%`);
         if (req.query.sku) reqObj.input('sku', sql.NVarChar, `%${req.query.sku}%`);
+        if (req.query.subBsrCategory) reqObj.input('subBsrCategory', sql.NVarChar, `%"${req.query.subBsrCategory}"%`);
         if (req.query.minRating) reqObj.input('minRating', sql.Decimal(3, 2), parseFloat(req.query.minRating));
         if (req.query.maxRating) reqObj.input('maxRating', sql.Decimal(3, 2), parseFloat(req.query.maxRating));
         if (req.query.minReviewCount) reqObj.input('minReviewCount', sql.Int, parseInt(req.query.minReviewCount));
@@ -65,6 +66,13 @@ exports.getAsins = async (req, res) => {
         if (req.query.minBulletPoints) reqObj.input('minBulletPoints', sql.Int, parseInt(req.query.minBulletPoints));
         if (req.query.maxBulletPoints) reqObj.input('maxBulletPoints', sql.Int, parseInt(req.query.maxBulletPoints));
         if (search) reqObj.input('search', sql.NVarChar, `%${search}%`);
+        
+        if (req.query.selectedTags) {
+            const tags = Array.isArray(req.query.selectedTags) ? req.query.selectedTags : req.query.selectedTags.split(',');
+            tags.forEach((tag, i) => {
+                reqObj.input(`selectedTag${i}`, sql.NVarChar, `%${tag.trim()}%`);
+            });
+        }
         return reqObj;
     };
 
@@ -89,7 +97,7 @@ exports.getAsins = async (req, res) => {
     // [2] Filters
     if (status) whereClause += ' AND Status = @status';
     if (category) whereClause += ' AND Category = @category';
-    if (brand) whereClause += ' AND Brand = @brand';
+    if (brand) whereClause += ' AND s.Name = @brand';
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
     if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxStatus = @buyBoxStatus';
@@ -104,6 +112,12 @@ exports.getAsins = async (req, res) => {
 
     if (req.query.parentAsin) whereClause += ' AND ParentAsin = @parentAsin';
     if (req.query.tag) whereClause += ' AND Tags LIKE @tag';
+    if (req.query.selectedTags) {
+        const tags = Array.isArray(req.query.selectedTags) ? req.query.selectedTags : req.query.selectedTags.split(',');
+        tags.forEach((tag, i) => {
+            whereClause += ` AND Tags LIKE @selectedTag${i}`;
+        });
+    }
     if (req.query.sku) whereClause += ' AND Sku LIKE @sku';
     if (req.query.minRating) whereClause += ' AND Rating >= @minRating';
     if (req.query.maxRating) whereClause += ' AND Rating <= @maxRating';
@@ -159,6 +173,10 @@ exports.getAsins = async (req, res) => {
         whereClause += " AND (DealBadge IS NULL OR DealBadge = '' OR DealBadge = 'No deal found')";
       }
     }
+    
+    if (req.query.subBsrCategory) {
+      whereClause += ' AND a.SubBsrCategories LIKE @subBsrCategory';
+    }
 
     // [4] Search
     if (search) {
@@ -167,7 +185,7 @@ exports.getAsins = async (req, res) => {
 
     // [5] Count Total
     const countRequest = applyInputs(pool.request());
-    const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Asins a ${whereClause}`);
+    const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Asins a JOIN Sellers s ON a.SellerId = s.Id ${whereClause}`);
     const total = countResult.recordset[0].total;
 
     // [6] Fetch ASINs
@@ -1027,28 +1045,50 @@ exports.getAsinFilterOptions = async (req, res) => {
     const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
     if (!isGlobalUser) {
-      const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
+      const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
       if (allowedSellerIds.length === 0) {
-        return res.json({ success: true, data: { categories: [], brands: [], scrapeStatuses: [], statuses: [] } });
+        return res.json({ 
+          success: true, 
+          data: { categories: [], brands: [], scrapeStatuses: [], statuses: [], subBsrCategories: [], tags: [] } 
+        });
       }
-      whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+      whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
     }
 
-    const [categoriesResult, brandsResult] = await Promise.all([
-      pool.request().query(`SELECT DISTINCT Category FROM Asins ${whereClause} AND Category IS NOT NULL AND Category != '' ORDER BY Category ASC`),
-      pool.request().query(`SELECT DISTINCT Brand FROM Asins ${whereClause} AND Brand IS NOT NULL AND Brand != '' ORDER BY Brand ASC`)
+    if (req.query.seller) {
+      // Safe to interpolate seller ID as it's an ObjectId/UUID format
+      whereClause += ` AND a.SellerId = '${req.query.seller.replace(/'/g, "''")}'`; 
+    }
+
+    const [categoriesResult, brandsResult, subBsrResult, tagsResult] = await Promise.all([
+      pool.request().query(`SELECT DISTINCT Category FROM Asins a ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
+      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a JOIN Sellers s ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
+      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins a CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
+      pool.request().query(`SELECT Tags FROM Asins a ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
     ]);
+
+    // Extract unique tags
+    const allTags = new Set();
+    tagsResult.recordset.forEach(row => {
+      try {
+        const parsed = JSON.parse(row.Tags || '[]');
+        if (Array.isArray(parsed)) parsed.forEach(t => allTags.add(t));
+      } catch (e) {}
+    });
 
     res.json({
       success: true,
       data: {
-        categories: categoriesResult.recordset.map(r => r.Category),
-        brands: brandsResult.recordset.map(r => r.Brand),
+        categories: categoriesResult.recordset.map(r => r.Category).filter(Boolean),
+        brands: brandsResult.recordset.map(r => r.Brand).filter(Boolean),
+        subBsrCategories: subBsrResult.recordset.map(r => r.SubBsr).filter(Boolean),
+        tags: [...allTags].sort(),
         scrapeStatuses: ['PENDING', 'SCRAPING', 'COMPLETED', 'FAILED'],
-        statuses: ['Active', 'Pending', 'Scraping', 'Error', 'Paused']
+        statuses: ['Active', 'Paused', 'Error', 'Pending']
       }
     });
   } catch (error) {
+    console.error('getAsinFilterOptions Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

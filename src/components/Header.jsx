@@ -5,13 +5,15 @@ import {
     Bell,
     Search,
     ChevronDown,
-    Menu
+    Menu,
+    Download
 } from 'lucide-react';
 import { useSidebar } from '../contexts/SidebarContext';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import { useDateRange } from '../contexts/DateRangeContext';
 import DateRangePicker from './common/DateRangePicker';
 import { Dropdown } from './base/dropdown/dropdown';
+import DownloadsDrawer from './common/DownloadsDrawer';
 import './Header.css';
 
 const Header = () => {
@@ -23,6 +25,7 @@ const Header = () => {
     const { startDate, endDate, updateDateRange } = useDateRange();
     
     const [searchQuery, setSearchQuery] = useState('');
+    const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
     const searchInputRef = useRef(null);
 
     const getInitials = (name) => {
@@ -30,7 +33,7 @@ const Header = () => {
         return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     };
 
-    // Shortcut for search
+    // Shortcut for search and export event listener
     useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -38,8 +41,17 @@ const Header = () => {
                 searchInputRef.current?.focus();
             }
         };
+        const handleExportStart = () => {
+            setIsDownloadsOpen(true);
+        };
+        
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener('export-started', handleExportStart);
+        
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('export-started', handleExportStart);
+        };
     }, []);
 
     return (
@@ -75,7 +87,10 @@ const Header = () => {
                     onDateChange={(type, s, e) => updateDateRange({ startDate: s, endDate: e, rangeType: type })}
                 />
 
-                <div className="notification-wrapper">
+                <div className="notification-wrapper d-flex align-items-center gap-2">
+                    <button className="icon-button" onClick={() => setIsDownloadsOpen(true)} title="Downloads">
+                        <Download size={16} />
+                    </button>
                     <button className="icon-button">
                         <Bell size={16} />
                         <div className="notification-dot" />
@@ -86,6 +101,8 @@ const Header = () => {
                     {getInitials(user?.fullName)}
                 </div>
             </div>
+            
+            <DownloadsDrawer isOpen={isDownloadsOpen} onClose={() => setIsDownloadsOpen(false)} />
         </header>
     );
 };

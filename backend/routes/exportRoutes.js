@@ -1,8 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const exportController = require('../controllers/exportController');
+const { auth } = require('../middleware/auth');
+const {
+    startExport,
+    getDownloads,
+    downloadFile,
+    getExportFields
+} = require('../controllers/exportController');
 
-router.post('/export/xlsx', exportController.exportToExcel);
-router.post('/export/csv', exportController.exportToCSV);
+router.post('/start', auth, startExport);
+router.get('/downloads', auth, getDownloads);
+router.get('/download/:id', auth, downloadFile);
+router.get('/fields', auth, getExportFields);
 
 module.exports = router;
