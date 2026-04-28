@@ -106,7 +106,7 @@ exports.startExport = async (req, res) => {
         });
 
         // Process export in background
-        processExportJob(downloadId, req.body, userId).catch(err => {
+        processExportJob(downloadId, req.body, req.user).catch(err => {
             console.error(`Export job ${downloadId} failed:`, err.message);
         });
 
@@ -119,7 +119,8 @@ exports.startExport = async (req, res) => {
 /**
  * Background export processing function
  */
-async function processExportJob(downloadId, params, userId) {
+async function processExportJob(downloadId, params, user) {
+    const userId = (user?._id || user?.id || '').toString();
     const pool = await getPool();
 
     try {
@@ -142,11 +143,11 @@ async function processExportJob(downloadId, params, userId) {
         let whereClause = 'WHERE 1=1';
 
         // RBAC
-        const roleName = params._userRole || '';
+        const roleName = user?.role?.name || user?.role || '';
         const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
         if (!isGlobalUser) {
-            const assignedIds = (params._assignedSellers || []).map(s => s.toString());
+            const assignedIds = (user?.assignedSellers || []).map(s => (s._id || s).toString());
             if (assignedIds.length === 0) {
                 whereClause += ' AND 1=0'; // No access
             } else {
@@ -213,8 +214,13 @@ async function processExportJob(downloadId, params, userId) {
 
         await updateDownloadStatus(pool, downloadId, 'processing', 80);
 
+        const resultDownloads = await pool.request()
+            .input('id', sql.VarChar, downloadId)
+            .query('SELECT FileName FROM Downloads WHERE Id = @id');
+        const fileName = resultDownloads.recordset[0]?.FileName || `asin_export_${downloadId}.${format}`;
+        
         // Generate file
-        const filePath = path.join(EXPORTS_DIR, `asin_export_${downloadId}.${format}`);
+        const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'ASINs');
@@ -252,7 +258,7 @@ async function processExportJob(downloadId, params, userId) {
         if (io) {
             io.to(`user_${userId}`).emit('export_completed', {
                 downloadId,
-                fileName: `asin_export_${downloadId}.${format}`,
+                fileName: fileName,
                 rowCount: exportData.length,
                 fileSize: stats.size
             });

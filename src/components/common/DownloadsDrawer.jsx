@@ -34,13 +34,15 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
 
     const handleDownload = async (download) => {
         try {
-            const url = `${import.meta.env.VITE_API_URL}/export/download/${download.Id}`;
+            const blob = await exportApi.downloadFile(download.Id);
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = download.FileName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Download failed:', err);
         }
