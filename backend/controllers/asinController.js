@@ -1842,6 +1842,7 @@ exports.exportData = async (req, res) => {
       lastScraped: 'LastScrapedAt',
       createdAt: 'CreatedAt',
       updatedAt: 'UpdatedAt',
+      tags: 'Tags'
     };
 
     // Label mapping (for header)
@@ -1858,9 +1859,8 @@ exports.exportData = async (req, res) => {
       allOffers: 'All Offers', hasAplus: 'Has A+', imagesCount: 'Image Count',
       videoCount: 'Video Count', bulletPoints: 'Bullet Points',
       bulletPointsText: 'Bullet Points Text', descLength: 'Desc Length',
-      availabilityStatus: 'Availability', stockLevel: 'Stock Level',
-      aplusAbsentSince: 'Aplus Absent Since', aplusPresentSince: 'Aplus Present Since',
-      lastScraped: 'Last Scraped', createdAt: 'Created At', updatedAt: 'Updated At'
+      lastScraped: 'Last Scraped', createdAt: 'Created At', updatedAt: 'Updated At',
+      tags: 'Tags'
     };
 
     // Format data
@@ -1875,19 +1875,32 @@ exports.exportData = async (req, res) => {
             value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
           }
           // Parse JSON fields
-          if (['allOffers', 'subBSRs', 'bulletPointsText', 'ratingBreakdown'].includes(field)) {
+          if (['allOffers', 'subBSRs', 'bulletPointsText', 'ratingBreakdown', 'tags'].includes(field)) {
             try {
-                if (typeof value === 'string') {
-                    value = JSON.stringify(JSON.parse(value || '[]'), null, 0);
-                } else if (value) {
-                    value = JSON.stringify(value, null, 0);
+                const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                if (field === 'tags' || field === 'bulletPointsText') {
+                    value = Array.isArray(parsed) ? parsed.join(' | ') : value;
                 } else {
-                    value = '';
+                    value = JSON.stringify(parsed, null, 0);
                 }
             } catch (e) {
               value = value || '';
             }
           }
+
+          // --- CLEANING & DECODING ---
+          if (typeof value === 'string') {
+              value = value
+                  .replace(/&amp;/g, '&')
+                  .replace(/&nbsp;/g, ' ')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'")
+                  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+                  .trim();
+          }
+
           item[fieldLabels[field] || field] = value || '';
         }
       });
@@ -1902,9 +1915,16 @@ exports.exportData = async (req, res) => {
     const fileName = `asin_export_${new Date().toISOString().split('T')[0]}`;
     
     if (format === 'csv') {
-      const csvBuffer = XLSX.write(wb, { bookType: 'csv', type: 'buffer' });
+      const csvOutput = XLSX.utils.sheet_to_csv(ws, { 
+          forceQuotes: true,
+          RS: '\r\n'
+      });
+      // Add BOM (Byte Order Mark) for Excel UTF-8 recognition
+      const BOM = '\uFEFF';
+      const csvBuffer = Buffer.from(BOM + csvOutput, 'utf-8');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}.csv"`);
-      res.setHeader('Content-Type', 'text/csv');
       res.send(csvBuffer);
     } else {
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });

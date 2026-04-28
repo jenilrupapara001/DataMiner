@@ -59,7 +59,7 @@ const ALL_ASIN_FIELDS = [
 
 const FIELD_CATEGORIES = [...new Set(ALL_ASIN_FIELDS.map(f => f.category))];
 
-const ExportAsinModal = ({ isOpen, onClose }) => {
+const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '' }) => {
   const { user, isGlobalUser } = useAuth();
   
   // ---- State ----
@@ -162,7 +162,7 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
   };
   
   const toggleAllSellers = () => {
-    isAllSellersSelected ? setSelectedSellerIds([]) : setSelectedSellerIds(sellers.map(s => s._id));
+    isAllSellersSelected ? setSelectedSellerIds([]) : setSelectedSellerIds(sellers.map(s => s._id || s.Id));
   };
   
   const toggleField = (fieldKey) => {
@@ -188,7 +188,10 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
     setExportProgress(0);
     
     try {
+      // Merge current filters from table with export-specific overrides
       const payload = {
+        ...currentFilters,
+        search: searchQuery,
         sellerIds: selectedSellerIds,
         allSellers: isAllSellersSelected,
         fields: selectedFields,

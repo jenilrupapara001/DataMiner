@@ -334,8 +334,11 @@ export const marketSyncApi = {
 
 // User API
 export const userApi = {
-  getAll: async (params) => {
-    return api.get('/users', params);
+  getAll: async (params = {}) => {
+    const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    );
+    return api.get('/users', cleanParams);
   },
   getById: async (id) => {
     return api.get(`/users/${id}`);
@@ -386,11 +389,7 @@ export const roleApi = {
   },
 
   getPermissions: async () => {
-    const res = await fetch(`${API_BASE}/roles/permissions`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch permissions');
-    return res.json();
+    return api.get('/users/permissions');
   },
 
   create: async (data) => {

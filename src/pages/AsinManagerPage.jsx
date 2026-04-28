@@ -2658,6 +2658,8 @@ const AsinManagerPage = () => {
         <ExportAsinModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
+          currentFilters={appliedFilters}
+          searchQuery={appliedSearchQuery}
         />
         <BulkImportModal
           isOpen={showBulkImportModal}

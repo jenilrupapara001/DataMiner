@@ -3,15 +3,16 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticate, requirePermission } = require('../middleware/auth');
 
-// New helper routes for dropdowns
-router.get('/managers', authenticate, userController.getManagers);
+// Role & Seller endpoints (must be BEFORE /:id routes)
 router.get('/roles', authenticate, userController.getAvailableRoles);
 router.get('/sellers', authenticate, userController.getSellersForAssignment);
+router.get('/managers', authenticate, userController.getManagers);
+router.get('/permissions', authenticate, userController.getGroupedPermissions);
 
-// Main user CRUD
+// User CRUD
 router.get('/', authenticate, requirePermission('users_view'), userController.getUsers);
-router.get('/:id', authenticate, userController.getUser);
 router.post('/', authenticate, requirePermission('users_create'), userController.createUser);
+router.get('/:id', authenticate, userController.getUser);
 router.put('/:id', authenticate, requirePermission('users_edit'), userController.updateUser);
 router.delete('/:id', authenticate, requirePermission('users_delete'), userController.deleteUser);
 

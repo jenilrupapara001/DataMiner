@@ -106,6 +106,28 @@ exports.getUsers = async (req, res) => {
       });
     }
 
+    // Fetch supervisors for each user
+    let supervisorMap = {};
+    if (userIds.length > 0) {
+      const supervisorsResult = await pool.request().query(`
+        SELECT US.UserId, S.Id as SupervisorId, S.FirstName, S.LastName, S.Email
+        FROM UserSupervisors US
+        JOIN Users S ON US.SupervisorId = S.Id
+        WHERE US.UserId IN (${userIds})
+      `);
+      
+      supervisorsResult.recordset.forEach(s => {
+        if (!supervisorMap[s.UserId]) supervisorMap[s.UserId] = [];
+        supervisorMap[s.UserId].push({
+          id: s.SupervisorId,
+          _id: s.SupervisorId,
+          firstName: s.FirstName,
+          lastName: s.LastName,
+          email: s.Email
+        });
+      });
+    }
+
     // Fetch permissions for each user's role
     const roleIds = [...new Set(usersResult.recordset.map(u => u.RoleId).filter(Boolean))];
     let permissionMap = {};
@@ -137,6 +159,8 @@ exports.getUsers = async (req, res) => {
       lastSeen: u.LastSeen,
       createdAt: u.CreatedAt,
       updatedAt: u.UpdatedAt,
+      assignedSellers: sellerMap[u.Id] || [],
+      supervisors: supervisorMap[u.Id] || [],
       role: {
         _id: u.RoleId,
         name: u.RoleName || 'viewer',
@@ -234,6 +258,10 @@ exports.getUser = async (req, res) => {
           permissions: permsResult.recordset.map(p => p.Name)
         },
         assignedSellers: sellersResult.recordset,
+        supervisors: (await pool.request()
+          .input('uid', sql.VarChar, id)
+          .query('SELECT SupervisorId FROM UserSupervisors WHERE UserId = @uid')
+        ).recordset.map(s => s.SupervisorId),
         preferences: u.Preferences ? JSON.parse(typeof u.Preferences === 'string' ? u.Preferences : '{}') : {}
       }
     });
@@ -297,6 +325,17 @@ exports.createUser = async (req, res) => {
             .input('uid', sql.VarChar, userId)
             .input('sid', sql.VarChar, sellerId)
             .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+        }
+      }
+
+      // Assign supervisors
+      const { supervisors } = req.body;
+      if (supervisors && Array.isArray(supervisors)) {
+        for (const supervisorId of supervisors) {
+          await transaction.request()
+            .input('uid', sql.VarChar, userId)
+            .input('supId', sql.VarChar, supervisorId)
+            .query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supId)');
         }
       }
 
@@ -372,6 +411,23 @@ exports.updateUser = async (req, res) => {
               .input('uid', sql.VarChar, id)
               .input('sid', sql.VarChar, sellerId)
               .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@uid, @sid)');
+          }
+        }
+      }
+
+      // Update supervisor assignments
+      const { supervisors } = req.body;
+      if (supervisors !== undefined) {
+        await transaction.request()
+          .input('uid', sql.VarChar, id)
+          .query('DELETE FROM UserSupervisors WHERE UserId = @uid');
+
+        if (Array.isArray(supervisors) && supervisors.length > 0) {
+          for (const supervisorId of supervisors) {
+            await transaction.request()
+              .input('uid', sql.VarChar, id)
+              .input('supId', sql.VarChar, supervisorId)
+              .query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supId)');
           }
         }
       }
@@ -484,10 +540,43 @@ exports.getAvailableRoles = async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request()
-      .query('SELECT Id, Name, DisplayName, Color, Level FROM Roles WHERE IsActive = 1 ORDER BY Level DESC');
+      .query(`
+        SELECT R.Id, R.Name, R.DisplayName, R.Color, R.Level,
+               (SELECT STRING_AGG(P.Name, ',') FROM RolePermissions RP JOIN Permissions P ON RP.PermissionId = P.Id WHERE RP.RoleId = R.Id) as PermissionNames
+        FROM Roles R 
+        WHERE R.IsActive = 1 
+        ORDER BY R.Level DESC
+      `);
     
-    res.json({ success: true, data: result.recordset.map(r => ({ ...r, _id: r.Id })) });
+    // Also fetch permissions grouped for each role
+    const allPerms = await pool.request()
+      .query('SELECT RP.RoleId, P.Id, P.Name, P.DisplayName, P.Category FROM RolePermissions RP JOIN Permissions P ON RP.PermissionId = P.Id');
+    
+    const permMap = {};
+    allPerms.recordset.forEach(p => {
+      if (!permMap[p.RoleId]) permMap[p.RoleId] = [];
+      permMap[p.RoleId].push({
+        _id: p.Id,
+        id: p.Id,
+        name: p.Name,
+        displayName: p.DisplayName,
+        category: p.Category
+      });
+    });
+
+    const roles = result.recordset.map(r => ({
+      _id: r.Id,
+      id: r.Id,
+      name: r.Name,
+      displayName: r.DisplayName,
+      color: r.Color || '#6B7280',
+      level: r.Level || 0,
+      permissions: permMap[r.Id] || []
+    }));
+
+    res.json({ success: true, data: { roles } });
   } catch (error) {
+    console.error('getAvailableRoles Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -502,8 +591,61 @@ exports.getSellersForAssignment = async (req, res) => {
     const result = await pool.request()
       .query('SELECT Id, Name, Marketplace, SellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name');
     
-    res.json({ success: true, data: result.recordset.map(s => ({ ...s, _id: s.Id })) });
+    res.json({ 
+      success: true, 
+      data: { 
+        sellers: result.recordset.map(s => ({ 
+          _id: s.Id, 
+          id: s.Id, 
+          name: s.Name, 
+          marketplace: s.Marketplace, 
+          sellerId: s.SellerId 
+        })) 
+      } 
+    });
   } catch (error) {
+    console.error('getSellersForAssignment Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get permissions grouped by category
+ * GET /api/users/permissions
+ */
+exports.getGroupedPermissions = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query('SELECT Id, Name, DisplayName, Description, Category, Action FROM Permissions ORDER BY Category, Action');
+    
+    const grouped = {};
+    result.recordset.forEach(p => {
+      const cat = p.Category || 'Other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push({
+        _id: p.Id,
+        id: p.Id,
+        name: p.Name,
+        displayName: p.DisplayName,
+        description: p.Description,
+        action: p.Action
+      });
+    });
+
+    const flat = result.recordset.map(p => ({
+      _id: p.Id,
+      id: p.Id,
+      name: p.Name,
+      displayName: p.DisplayName,
+      description: p.Description,
+      category: p.Category,
+      action: p.Action
+    }));
+
+    res.json({ success: true, data: { permissions: flat, groupedPermissions: grouped } });
+  } catch (error) {
+    console.error('getGroupedPermissions Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

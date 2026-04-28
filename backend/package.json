@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node --max-old-space-size=4096 server.js",
+    "dev": "nodemon --max-old-space-size=4096 server.js",
     "force-sync": "node scripts/force_sync_all.js"
   },
   "dependencies": {
@@ -36,5 +37,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "GMS Report Dashboard Backend Service"
+  "description": "GMS Report Dashboard Backend Service",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
 }
