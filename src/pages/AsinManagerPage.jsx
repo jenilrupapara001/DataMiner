@@ -352,7 +352,15 @@ const AsinManagerPage = () => {
     minImagesCount: '',
     maxImagesCount: '',
     minBulletPoints: '',
-    maxBulletPoints: ''
+    maxBulletPoints: '',
+    minTitleScore: '',
+    maxTitleScore: '',
+    minBulletScore: '',
+    maxBulletScore: '',
+    minImageScore: '',
+    maxImageScore: '',
+    minDescriptionScore: '',
+    maxDescriptionScore: ''
   });
   
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -381,7 +389,15 @@ const AsinManagerPage = () => {
     minImagesCount: '',
     maxImagesCount: '',
     minBulletPoints: '',
-    maxBulletPoints: ''
+    maxBulletPoints: '',
+    minTitleScore: '',
+    maxTitleScore: '',
+    minBulletScore: '',
+    maxBulletScore: '',
+    minImageScore: '',
+    maxImageScore: '',
+    minDescriptionScore: '',
+    maxDescriptionScore: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -1379,209 +1395,180 @@ const AsinManagerPage = () => {
           {/* [Filter Sidebar/Drawer Overlay] */}
           {filterPanelOpen && (
             <div
-              className="position-absolute top-0 end-0 h-100 bg-white border-start shadow-lg"
-              style={{ width: '280px', zIndex: 100, overflowY: 'auto', animation: 'slideIn 0.2s ease-out' }}
+              className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+              style={{ zIndex: 1050, backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(4px)' }}
+              onClick={(e) => e.target === e.currentTarget && setFilterPanelOpen(false)}
             >
-              <div className="p-3 border-bottom d-flex align-items-center justify-content-between bg-zinc-50">
-                <span className="fw-bold smallest text-zinc-500 uppercase tracking-wider">Advanced Filters</span>
-                <button className="btn btn-ghost btn-xs p-1" onClick={() => setFilterPanelOpen(false)}>
-                  <X size={14} className="text-zinc-400" />
-                </button>
-              </div>
-
-              <div className="p-3 d-flex flex-column gap-4">
-                {/* 1. Status & Scrape Status */}
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">LISTING STATUS</label>
-                  <select
-                    className="form-select form-select-sm smallest"
-                    value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  >
-                    <option value="">All Statuses</option>
-                    {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">SCRAPE STATUS</label>
-                  <select
-                    className="form-select form-select-sm smallest"
-                    value={filters.scrapeStatus}
-                    onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })}
-                  >
-                    <option value="">All Scrape Statuses</option>
-                    {filterOptions.scrapeStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                {/* 2. Brand & Category */}
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">BRAND</label>
-                  <select
-                    className="form-select form-select-sm smallest"
-                    value={filters.brand}
-                    onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
-                  >
-                    <option value="">All Brands</option>
-                    {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">CATEGORY</label>
-                  <select
-                    className="form-select form-select-sm smallest"
-                    value={filters.category}
-                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                  >
-                    <option value="">All Categories</option>
-                    {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">PARENT ASIN</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm smallest"
-                    placeholder="Search Parent ASIN..."
-                    value={filters.parentAsin}
-                    onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })}
-                  />
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">SKU</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm smallest"
-                    placeholder="Search SKU..."
-                    value={filters.sku}
-                    onChange={(e) => setFilters({ ...filters, sku: e.target.value })}
-                  />
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">TAG</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm smallest"
-                    placeholder="Search by Tag..."
-                    value={filters.tag}
-                    onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
-                  />
-                </div>
-
-                {/* 3. Numeric Ranges */}
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">PRICE RANGE (₹)</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
+              <div 
+                className="bg-white border rounded-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+                style={{ width: '800px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+              >
+                <div className="p-4 border-bottom d-flex align-items-center justify-content-between bg-zinc-50 rounded-top-4">
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="p-2 bg-zinc-900 text-white rounded-3">
+                      <ListChecks size={20} />
+                    </div>
+                    <div>
+                      <h5 className="mb-0 fw-bold text-zinc-900">Advanced Inventory Filters</h5>
+                      <p className="smallest text-zinc-500 mb-0 uppercase tracking-widest fw-bold">Refine your ledger view with granular parameters</p>
+                    </div>
                   </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">BSR RANGE</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">LQS RANGE (%)</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minLQS} onChange={(e) => setFilters({ ...filters, minLQS: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxLQS} onChange={(e) => setFilters({ ...filters, maxLQS: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">RATING RANGE</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" step="0.1" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minRating} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} />
-                    <input type="number" step="0.1" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxRating} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">REVIEWS COUNT</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minReviewCount} onChange={(e) => setFilters({ ...filters, minReviewCount: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxReviewCount} onChange={(e) => setFilters({ ...filters, maxReviewCount: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">IMAGES COUNT</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minImagesCount} onChange={(e) => setFilters({ ...filters, minImagesCount: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxImagesCount} onChange={(e) => setFilters({ ...filters, maxImagesCount: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="d-flex flex-column gap-2">
-                  <label className="smallest fw-bold text-zinc-500">BULLET POINTS</label>
-                  <div className="d-flex gap-2">
-                    <input type="number" placeholder="Min" className="form-control form-control-sm smallest"
-                      value={filters.minBulletPoints} onChange={(e) => setFilters({ ...filters, minBulletPoints: e.target.value })} />
-                    <input type="number" placeholder="Max" className="form-control form-control-sm smallest"
-                      value={filters.maxBulletPoints} onChange={(e) => setFilters({ ...filters, maxBulletPoints: e.target.value })} />
-                  </div>
-                </div>
-
-                {/* 4. Booleans */}
-                <div className="d-flex flex-column gap-2 mt-2 pt-2 border-top">
-                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
-                    <label className="smallest fw-bold text-zinc-600 mb-0">BuyBox Winner</label>
-                    <input className="form-check-input" type="checkbox" role="switch"
-                      checked={filters.buyBoxWin === 'true'}
-                      onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
-                  </div>
-                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
-                    <label className="smallest fw-bold text-zinc-600 mb-0">Has A+ Content</label>
-                    <input className="form-check-input" type="checkbox" role="switch"
-                      checked={filters.hasAplus === 'true'}
-                      onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
-                  </div>
-                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
-                    <label className="smallest fw-bold text-zinc-600 mb-0">Has Video</label>
-                    <input className="form-check-input" type="checkbox" role="switch"
-                      checked={filters.hasVideo === 'true'}
-                      onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
-                  </div>
-                  <div className="form-check form-switch d-flex justify-content-between align-items-center">
-                    <label className="smallest fw-bold text-zinc-600 mb-0">Has Active Deal</label>
-                    <input className="form-check-input" type="checkbox" role="switch"
-                      checked={filters.hasDeal === 'true'}
-                      onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="d-flex flex-column gap-2 mt-3">
-                  <button
-                    className="btn btn-dark fw-bold smallest w-100"
-                    onClick={handleApplyFilters}
-                  >
-                    APPLY FILTERS
+                  <button className="btn btn-ghost p-2 rounded-circle" onClick={() => setFilterPanelOpen(false)}>
+                    <X size={20} className="text-zinc-400" />
                   </button>
+                </div>
+  
+                <div className="p-4 overflow-auto" style={{ flex: 1 }}>
+                  <div className="row g-4">
+                    {/* Column 1: Primary Filters */}
+                    <div className="col-md-4">
+                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Primary Parameters</h6>
+                      <div className="d-flex flex-column gap-3">
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">LISTING STATUS</label>
+                          <select className="form-select form-select-sm border-zinc-200" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+                            <option value="">All Statuses</option>
+                            {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">SCRAPE STATUS</label>
+                          <select className="form-select form-select-sm border-zinc-200" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })}>
+                            <option value="">All Scrape Statuses</option>
+                            {filterOptions.scrapeStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">BRAND</label>
+                          <select className="form-select form-select-sm border-zinc-200" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })}>
+                            <option value="">All Brands</option>
+                            {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">CATEGORY</label>
+                          <select className="form-select form-select-sm border-zinc-200" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
+                            <option value="">All Categories</option>
+                            {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+  
+                    {/* Column 2: Identifiers & Ranges */}
+                    <div className="col-md-4">
+                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Identifiers & Metrics</h6>
+                      <div className="d-flex flex-column gap-3">
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">PARENT ASIN / SKU</label>
+                          <div className="d-flex gap-2">
+                            <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="Parent" value={filters.parentAsin} onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })} />
+                            <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="SKU" value={filters.sku} onChange={(e) => setFilters({ ...filters, sku: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">PRICE RANGE (₹)</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">BSR RANGE</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">RATING RANGE</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" step="0.1" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minRating} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} />
+                            <input type="number" step="0.1" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxRating} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+  
+                    {/* Column 3: Quality Scores (New!) */}
+                    <div className="col-md-4">
+                      <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">LQS Component Scores</h6>
+                      <div className="d-flex flex-column gap-3">
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">TOTAL LQS (%)</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200 bg-zinc-50" value={filters.minLQS} onChange={(e) => setFilters({ ...filters, minLQS: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200 bg-zinc-50" value={filters.maxLQS} onChange={(e) => setFilters({ ...filters, maxLQS: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">TITLE SCORE (TTL)</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minTitleScore} onChange={(e) => setFilters({ ...filters, minTitleScore: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxTitleScore} onChange={(e) => setFilters({ ...filters, maxTitleScore: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">BULLET SCORE (BLT)</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minBulletScore} onChange={(e) => setFilters({ ...filters, minBulletScore: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxBulletScore} onChange={(e) => setFilters({ ...filters, maxBulletScore: e.target.value })} />
+                          </div>
+                        </div>
+                        <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">IMAGE SCORE (IMG)</label>
+                          <div className="d-flex gap-2">
+                            <input type="number" placeholder="Min" className="form-control form-control-sm border-zinc-200" value={filters.minImageScore} onChange={(e) => setFilters({ ...filters, minImageScore: e.target.value })} />
+                            <input type="number" placeholder="Max" className="form-control form-control-sm border-zinc-200" value={filters.maxImageScore} onChange={(e) => setFilters({ ...filters, maxImageScore: e.target.value })} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+  
+                  <div className="row g-4 mt-2 pt-4 border-top">
+                    <div className="col-md-8">
+                       <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Boolean Optimization Flags</h6>
+                       <div className="row g-3">
+                         <div className="col-6 col-md-3">
+                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
+                             <label className="smallest fw-bold text-zinc-600 mb-0">BuyBox Winner</label>
+                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.buyBoxWin === 'true'} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
+                           </div>
+                         </div>
+                         <div className="col-6 col-md-3">
+                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
+                             <label className="smallest fw-bold text-zinc-600 mb-0">Has A+ Content</label>
+                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasAplus === 'true'} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
+                           </div>
+                         </div>
+                         <div className="col-6 col-md-3">
+                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
+                             <label className="smallest fw-bold text-zinc-600 mb-0">Has Video</label>
+                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasVideo === 'true'} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
+                           </div>
+                         </div>
+                         <div className="col-6 col-md-3">
+                           <div className="form-check form-switch p-0 d-flex flex-column gap-2 align-items-start">
+                             <label className="smallest fw-bold text-zinc-600 mb-0">Has Active Deal</label>
+                             <input className="form-check-input ms-0" type="checkbox" role="switch" checked={filters.hasDeal === 'true'} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
+                           </div>
+                         </div>
+                       </div>
+                    </div>
+                    <div className="col-md-4 border-start">
+                       <h6 className="smallest fw-bold text-zinc-400 uppercase tracking-widest mb-3">Other Attributes</h6>
+                       <div className="d-flex flex-column gap-1">
+                          <label className="smallest fw-bold text-zinc-700">TAGS</label>
+                          <input type="text" className="form-control form-control-sm border-zinc-200" placeholder="Search by Tag..." value={filters.tag} onChange={(e) => setFilters({ ...filters, tag: e.target.value })} />
+                       </div>
+                    </div>
+                  </div>
+                </div>
+  
+                <div className="p-4 border-top bg-zinc-50 d-flex justify-content-between rounded-bottom-4">
                   <button
-                    className="btn btn-zinc-outline fw-bold smallest w-100"
+                    className="btn btn-zinc-outline fw-bold smallest px-4"
                     onClick={() => {
                       const resetState = {
                         status: '', category: '', brand: '', scrapeStatus: '',
@@ -1589,18 +1576,27 @@ const AsinManagerPage = () => {
                         buyBoxWin: '', hasAplus: '', hasVideo: '', hasDeal: '',
                         minPrice: '', maxPrice: '', minBSR: '', maxBSR: '', minLQS: '', maxLQS: '',
                         minRating: '', maxRating: '', minReviewCount: '', maxReviewCount: '',
-                        minImagesCount: '', maxImagesCount: '', minBulletPoints: '', maxBulletPoints: ''
+                        minImagesCount: '', maxImagesCount: '', minBulletPoints: '', maxBulletPoints: '',
+                        minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
+                        minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: ''
                       };
                       setFilters(resetState);
                       setAppliedFilters(resetState);
                       setSearchQuery('');
                       setAppliedSearchQuery('');
-                      setSelectedSeller(''); // clear seller selection
-                      setFilterPanelOpen(false); // Close panel on reset
+                      setFilterPanelOpen(false);
                     }}
                   >
                     RESET ALL FILTERS
                   </button>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-white border-zinc-200 fw-bold smallest px-4" onClick={() => setFilterPanelOpen(false)}>
+                      CANCEL
+                    </button>
+                    <button className="btn btn-dark fw-bold smallest px-5 shadow-sm" onClick={handleApplyFilters}>
+                      APPLY FILTERS
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

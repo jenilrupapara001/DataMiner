@@ -27,9 +27,13 @@ const getLastValidData = (asin, field, defaultValue = 0) => {
   return { value: defaultValue, source: 'none' };
 };
 
-const ScoreCard = ({ title, score, grade, issues = [], recommendations = [], color = '#6366f1' }) => {
+const ScoreCard = ({ title, score, grade, issues = [], recommendations = [] }) => {
   const parsedIssues = typeof issues === 'string' ? (issues.startsWith('[') ? JSON.parse(issues) : issues.split(',').filter(Boolean)) : (issues || []);
   const parsedRecs = typeof recommendations === 'string' ? (recommendations.startsWith('[') ? JSON.parse(recommendations) : recommendations.split(',').filter(Boolean)) : (recommendations || []);
+
+  const color = score >= 80 ? '#059669' : 
+                score >= 60 ? '#d97706' : 
+                score >= 40 ? '#dc2626' : '#991b1b';
 
   return (
     <div className="bg-white border rounded-2xl p-4 shadow-sm h-100 transition-all hover:shadow-md">
@@ -727,7 +731,11 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
               <div className="d-flex align-items-center gap-4 bg-white px-4 py-2 border rounded-2xl shadow-sm">
                  <div className="text-center">
                    <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Overall LQS</div>
-                   <div className="h4 mb-0 fw-bold" style={{ color: (asin.lqs || 0) > 80 ? '#059669' : (asin.lqs || 0) > 60 ? '#d97706' : '#dc2626' }}>
+                   <div className="h4 mb-0 fw-bold" style={{ 
+                     color: (asin.lqs || 0) >= 80 ? '#059669' : 
+                            (asin.lqs || 0) >= 60 ? '#d97706' : 
+                            (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b' 
+                   }}>
                      {asin.lqs || 0}%
                    </div>
                  </div>
@@ -735,12 +743,18 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                  <div className="text-center">
                    <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Status</div>
                    <div className="badge rounded-pill px-3" style={{ 
-                     backgroundColor: (asin.lqs || 0) > 80 ? '#ecfdf5' : (asin.lqs || 0) > 60 ? '#fffbeb' : '#fef2f2',
-                     color: (asin.lqs || 0) > 80 ? '#059669' : (asin.lqs || 0) > 60 ? '#d97706' : '#dc2626',
+                     backgroundColor: (asin.lqs || 0) >= 80 ? '#ecfdf5' : 
+                                     (asin.lqs || 0) >= 60 ? '#fffbeb' : 
+                                     (asin.lqs || 0) >= 40 ? '#fef2f2' : '#fef2f2',
+                     color: (asin.lqs || 0) >= 80 ? '#059669' : 
+                            (asin.lqs || 0) >= 60 ? '#d97706' : 
+                            (asin.lqs || 0) >= 40 ? '#dc2626' : '#991b1b',
                      fontWeight: 700,
                      fontSize: '11px'
                    }}>
-                     {(asin.lqs || 0) > 80 ? 'EXCELLENT' : (asin.lqs || 0) > 60 ? 'GOOD' : 'CRITICAL'}
+                     {(asin.lqs || 0) >= 80 ? 'EXCELLENT' : 
+                      (asin.lqs || 0) >= 60 ? 'GOOD' : 
+                      (asin.lqs || 0) >= 40 ? 'POOR' : 'CRITICAL'}
                    </div>
                  </div>
               </div>
@@ -754,7 +768,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   grade={asin.titleGrade} 
                   issues={asin.titleIssues} 
                   recommendations={asin.titleRecommendations}
-                  color="#4f46e5"
                 />
               </div>
               <div className="col-md-3">
@@ -764,7 +777,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   grade={asin.bulletGrade} 
                   issues={asin.bulletIssues} 
                   recommendations={asin.bulletRecommendations}
-                  color="#8b5cf6"
                 />
               </div>
               <div className="col-md-3">
@@ -774,7 +786,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   grade={asin.imageGrade} 
                   issues={asin.imageIssues} 
                   recommendations={asin.imageRecommendations}
-                  color="#ec4899"
                 />
               </div>
               <div className="col-md-3">
@@ -784,7 +795,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   grade={asin.descriptionGrade} 
                   issues={asin.descriptionIssues} 
                   recommendations={asin.descriptionRecommendations}
-                  color="#06b6d4"
                 />
               </div>
             </div>

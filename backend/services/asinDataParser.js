@@ -268,32 +268,33 @@ class AsinDataParser {
         const pool = await getPool();
         const row = this.transformToAsinRow(rawData, sellerId);
 
-        // Build dynamic insert/update
+        const request = pool.request();
         const columns = [];
         const updates = [];
         const values = [];
         let idx = 0;
 
         for (const [key, val] of Object.entries(row)) {
-            if (val === undefined || val === null || val === '') {
-                // Skip empty nullable fields for simplicity
-                continue;
-            }
+            if (val === undefined || val === null || val === '') continue;
             
             const paramName = `p_${idx++}`;
             columns.push(`[${key}]`);
             values.push(`@${paramName}`);
 
+            // Special handling for AsinCode and SellerId for the MERGE ON clause
+            if (key === 'AsinCode') request.input('targetAsinCode', sql.VarChar, val);
+            if (key === 'SellerId') request.input('targetSellerId', sql.VarChar, val);
+
             if (val instanceof Date) {
-                await pool.request().input(paramName, sql.DateTime2, val);
+                request.input(paramName, sql.DateTime2, val);
             } else if (typeof val === 'number') {
                 if (Number.isInteger(val)) {
-                    await pool.request().input(paramName, sql.Int, val);
+                    request.input(paramName, sql.Int, val);
                 } else {
-                    await pool.request().input(paramName, sql.Decimal(18, 4), val);
+                    request.input(paramName, sql.Decimal(18, 4), val);
                 }
             } else {
-                await pool.request().input(paramName, sql.NVarChar, val.toString());
+                request.input(paramName, sql.NVarChar, val.toString());
             }
 
             if (key !== 'Id') {
@@ -301,10 +302,9 @@ class AsinDataParser {
             }
         }
 
-        const request = pool.request();
         const query = `
             MERGE INTO Asins AS target
-            USING (SELECT @p_AsinCode AS AsinCode, @p_SellerId AS SellerId) AS source
+            USING (SELECT @targetAsinCode AS AsinCode, @targetSellerId AS SellerId) AS source
             ON target.AsinCode = source.AsinCode AND target.SellerId = source.SellerId
             WHEN MATCHED THEN
                 UPDATE SET ${updates.join(', ')}

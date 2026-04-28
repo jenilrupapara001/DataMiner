@@ -127,6 +127,31 @@ exports.getAsins = async (req, res) => {
       whereClause += ' AND VideoCount ' + (req.query.hasVideo === 'true' ? '> 0' : '= 0');
     }
 
+    if (req.query.minTitleScore) {
+      whereClause += ' AND TitleScore >= ' + parseFloat(req.query.minTitleScore);
+    }
+    if (req.query.maxTitleScore) {
+      whereClause += ' AND TitleScore <= ' + parseFloat(req.query.maxTitleScore);
+    }
+    if (req.query.minBulletScore) {
+      whereClause += ' AND BulletScore >= ' + parseFloat(req.query.minBulletScore);
+    }
+    if (req.query.maxBulletScore) {
+      whereClause += ' AND BulletScore <= ' + parseFloat(req.query.maxBulletScore);
+    }
+    if (req.query.minImageScore) {
+      whereClause += ' AND ImageScore >= ' + parseFloat(req.query.minImageScore);
+    }
+    if (req.query.maxImageScore) {
+      whereClause += ' AND ImageScore <= ' + parseFloat(req.query.maxImageScore);
+    }
+    if (req.query.minDescriptionScore) {
+      whereClause += ' AND DescriptionScore >= ' + parseFloat(req.query.minDescriptionScore);
+    }
+    if (req.query.maxDescriptionScore) {
+      whereClause += ' AND DescriptionScore <= ' + parseFloat(req.query.maxDescriptionScore);
+    }
+
     if (req.query.hasDeal !== undefined && req.query.hasDeal !== '') {
       if (req.query.hasDeal === 'true') {
         whereClause += " AND DealBadge IS NOT NULL AND DealBadge != '' AND DealBadge != 'No deal found'";
@@ -138,7 +163,6 @@ exports.getAsins = async (req, res) => {
     // [4] Search
     if (search) {
       whereClause += ' AND (AsinCode LIKE @search OR Title LIKE @search OR Sku LIKE @search)';
-      request.input('search', sql.NVarChar, `%${search}%`);
     }
 
     // [5] Count Total
@@ -152,7 +176,8 @@ exports.getAsins = async (req, res) => {
                       sortBy === 'currentPrice' ? 'CurrentPrice' : 
                       sortBy === 'bsr' ? 'BSR' : 
                       sortBy === 'lqs' ? 'LQS' : 
-                      sortBy === 'status' ? 'Status' : 'CreatedAt';
+                      sortBy === 'status' ? 'Status' : 
+                      sortBy === 'lastScraped' ? 'LastScrapedAt' : 'CreatedAt';
     
     const dataRequest = applyInputs(pool.request());
     const asinsResult = await dataRequest
@@ -383,6 +408,7 @@ exports.getAsins = async (req, res) => {
             updatedAt: a.UpdatedAt,
             
             // Preserve original ID
+            _id: a.Id,
             Id: a.Id,
             SellerId: a.SellerId
         };
@@ -1098,12 +1124,16 @@ exports.importFromCsv = async (req, res) => {
     )];
 
     const pool = await getPool();
-    const idInClause = identifiers.map(id => `'${id}'`).join(',');
-    const existingAsinsResult = await pool.request()
-      .input('sellerId', sql.VarChar, sellerId)
-      .query(`SELECT Id, AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${idInClause})`);
-    
-    const existingCodes = new Map(existingAsinsResult.recordset.map(a => [a.AsinCode, a.Id]));
+    const existingCodes = new Map();
+
+    if (identifiers.length > 0) {
+      const idInClause = identifiers.map(id => `'${id}'`).join(',');
+      const existingAsinsResult = await pool.request()
+        .input('sellerId', sql.VarChar, sellerId)
+        .query(`SELECT Id, AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${idInClause})`);
+      
+      existingAsinsResult.recordset.forEach(a => existingCodes.set(a.AsinCode, a.Id));
+    }
 
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -1127,7 +1157,7 @@ exports.importFromCsv = async (req, res) => {
             .query('UPDATE Asins SET Sku = @sku, UpdatedAt = GETDATE() WHERE Id = @id');
           updatedCount++;
         } else {
-           const id = generateId();
+          const id = generateId();
           await transaction.request()
             .input('id', sql.VarChar, id)
             .input('asin', sql.VarChar, identifier)
@@ -1138,6 +1168,7 @@ exports.importFromCsv = async (req, res) => {
               VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', GETDATE(), GETDATE())
             `);
           insertedCount++;
+          existingCodes.set(identifier, id); // Add to map to prevent duplicate inserts in this batch
         }
       }
       await transaction.commit();

@@ -29,10 +29,10 @@ const MARKETPLACE_FLAGS = { 'amazon.in': '🇮🇳' };
 /* ── Badge Helpers ─────────────────────────────────────── */
 const getGradeColor = (grade) => {
   const colors = {
-    'A': { bg: '#ecfdf5', text: '#059669', border: '#d1fae5' },
-    'B': { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe' },
-    'C': { bg: '#fffbeb', text: '#d97706', border: '#fef3c7' },
-    'D': { bg: '#fef2f2', text: '#dc2626', border: '#fee2e2' }
+    'A': { bg: '#ecfdf5', text: '#059669', border: '#d1fae5' }, // Excellent
+    'B': { bg: '#fffbeb', text: '#d97706', border: '#fef3c7' }, // Good
+    'C': { bg: '#fef2f2', text: '#dc2626', border: '#fee2e2' }, // Poor
+    'D': { bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' }  // Critical
   };
   return colors[grade] || { bg: Z[100], text: Z[500], border: Z[200] };
 };
@@ -41,7 +41,7 @@ const getLqsBadge = (lqs, cdqGrade) => {
   if (lqs == null && cdqGrade == null) return <span style={{ color: Z[400] }}>—</span>;
   
   // Use CDQ grade if available, otherwise fallback to LQS-based grade
-  const grade = cdqGrade || (lqs >= 80 ? 'A' : lqs >= 70 ? 'B' : lqs >= 50 ? 'C' : 'D');
+  const grade = cdqGrade || (lqs >= 80 ? 'A' : lqs >= 60 ? 'B' : lqs >= 40 ? 'C' : 'D');
   const colors = getGradeColor(grade);
 
   return (
@@ -126,15 +126,15 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
     if (lqsFilter) {
       // Use CDQ grade for filtering
       if (lqsFilter === 'high') {
-        result = result.filter(a => (a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 70 ? 'B' : a.lqs >= 50 ? 'C' : 'D')) === 'A');
+        result = result.filter(a => (a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D')) === 'A');
       } else if (lqsFilter === 'medium') {
         result = result.filter(a => {
-          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 70 ? 'B' : a.lqs >= 50 ? 'C' : 'D');
+          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D');
           return grade === 'B';
         });
       } else if (lqsFilter === 'low') {
         result = result.filter(a => {
-          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 70 ? 'B' : a.lqs >= 50 ? 'C' : 'D');
+          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D');
           return grade === 'C' || grade === 'D';
         });
       }
@@ -235,8 +235,8 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
               >
                 <option value="">All Quality</option>
                 <option value="high">Grade A (80-100%)</option>
-                <option value="medium">Grade B (70-79%)</option>
-                <option value="low">Grade C/D (&lt;70%)</option>
+                <option value="medium">Grade B (60-79%)</option>
+                <option value="low">Grade C/D (&lt;60%)</option>
               </select>
             </div>
             <span style={{ fontSize: 12, color: Z[500], fontWeight: 500 }}>{filtered.length} ASINs found</span>
