@@ -1583,6 +1583,7 @@ class MarketDataSyncService {
             // 4. BSR Parsing
             const bsrData = this._parseBSR(rawData);
             const bsr = bsrData.main;
+            const sub = bsrData.sub;
             const subBsr = bsrData.subBsrString || bsrData.sub;
             const subBSRs = bsrData.allRanks;
 
