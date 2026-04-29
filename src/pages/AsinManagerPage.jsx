@@ -344,6 +344,51 @@ const AsinManagerPage = () => {
 
   const [showColumnPanel, setShowColumnPanel] = useState(false);
 
+  const historyStructure = useMemo(() => {
+    if (asins.length > 0) {
+      const dateMap = new Map();
+
+      const asinsWithHistory = asins.filter(a => (a.weekHistory && a.weekHistory.length > 0) || (a.history && a.history.length > 0));
+
+      if (asinsWithHistory.length > 0) {
+        asinsWithHistory.forEach(asin => {
+          const allHistory = [
+            ...(asin.weekHistory || []),
+            ...(asin.history || [])
+          ];
+
+          allHistory.forEach(h => {
+            if (h.date) {
+              const dateObj = new Date(h.date);
+              const dateKey = dateObj.toISOString().split('T')[0];
+
+              const existing = dateMap.get(dateKey);
+              if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
+                dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
+              }
+            }
+          });
+        });
+
+        // Lexical sort on YYYY-MM-DD gives chronological order (Oldest -> Newest)
+        const sortedDates = Array.from(dateMap.keys()).sort();
+        return generateHistoryStructureFromDates(sortedDates);
+      }
+    }
+    return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
+  }, [asins]);
+
+  const totalHistoryCols = useMemo(() => {
+    if (!historyStructure) return 0;
+    return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
+  }, [historyStructure]);
+
+  const visibleHistoryCols = useMemo(() => {
+    if (!historyStructure) return 0;
+    // Since we now always show exactly the entries in historyStructure (7 days)
+    return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
+  }, [historyStructure]);
+
   const visibleLQSCount = useMemo(() => ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore', 'lqs'].filter(isVisible).length, [isVisible]);
   const visiblePriceTrendCount = useMemo(() => isVisible('priceTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleBsrTrendCount = useMemo(() => isVisible('bsrTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
@@ -801,50 +846,6 @@ const AsinManagerPage = () => {
     ];
   }, [asins, stats]);
 
-  const historyStructure = useMemo(() => {
-    if (asins.length > 0) {
-      const dateMap = new Map();
-
-      const asinsWithHistory = asins.filter(a => (a.weekHistory && a.weekHistory.length > 0) || (a.history && a.history.length > 0));
-
-      if (asinsWithHistory.length > 0) {
-        asinsWithHistory.forEach(asin => {
-          const allHistory = [
-            ...(asin.weekHistory || []),
-            ...(asin.history || [])
-          ];
-
-          allHistory.forEach(h => {
-            if (h.date) {
-              const dateObj = new Date(h.date);
-              const dateKey = dateObj.toISOString().split('T')[0];
-
-              const existing = dateMap.get(dateKey);
-              if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
-                dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
-              }
-            }
-          });
-        });
-
-        // Lexical sort on YYYY-MM-DD gives chronological order (Oldest -> Newest)
-        const sortedDates = Array.from(dateMap.keys()).sort();
-        return generateHistoryStructureFromDates(sortedDates);
-      }
-    }
-    return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
-  }, [asins]);
-
-  const totalHistoryCols = useMemo(() => {
-    if (!historyStructure) return 0;
-    return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
-  }, [historyStructure]);
-
-  const visibleHistoryCols = useMemo(() => {
-    if (!historyStructure) return 0;
-    // Since we now always show exactly the entries in historyStructure (7 days)
-    return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
-  }, [historyStructure]);
 
   const handleSync = useCallback(async () => {
     if (!newAsin.trim()) {
@@ -1868,17 +1869,48 @@ const AsinManagerPage = () => {
                 </span>
               </span>
             </div>
+
             <div className="d-flex align-items-center gap-2">
+              {/* FILTERS Button */}
               <button
                 onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'}`}
+                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${
+                  filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                }`}
                 style={{ fontSize: '10px', height: '24px' }}
               >
                 <ListChecks size={12} />
                 FILTERS {Object.values(filters).filter(v => v !== '').length > 0 && `(${Object.values(filters).filter(v => v !== '').length})`}
               </button>
 
+              {/* ✅ COLUMNS Button - NEW */}
+              <div className="position-relative">
+                <button
+                  onClick={() => setShowColumnPanel(!showColumnPanel)}
+                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${
+                    showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                  }`}
+                  style={{ fontSize: '10px', height: '24px' }}
+                >
+                  <LayoutGrid size={12} />
+                  COLUMNS
+                </button>
+                
+                {/* Column Visibility Panel */}
+                <ColumnVisibilityPanel
+                  isOpen={showColumnPanel}
+                  onClose={() => setShowColumnPanel(false)}
+                  visibleColumns={visibleColumns}
+                  onToggle={toggleColumn}
+                  onToggleCategory={toggleCategory}
+                  onReset={resetToDefaults}
+                  onSelectAll={selectAll}
+                  visibleCount={visibleCount}
+                  totalCount={totalCount}
+                />
+              </div>
 
+              {/* Selected Actions */}
               {selectedIds.size > 0 && (
                 <div className="d-flex align-items-center gap-2 pe-3 me-2 border-end border-zinc-200 animate-in fade-in slide-in-from-right-4">
                   <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200">
@@ -1891,7 +1923,7 @@ const AsinManagerPage = () => {
                     disabled={syncing}
                   >
                     <RefreshCw size={10} className={`text-blue-600 ${syncing ? 'spin' : ''}`} />
-                    <span className="fw-bold">Sync Selected</span>
+                    <span className="fw-bold">Sync</span>
                   </button>
                   <button
                     className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
@@ -1900,7 +1932,7 @@ const AsinManagerPage = () => {
                     disabled={syncing}
                   >
                     <Zap size={10} className="text-amber-500 fill-amber-500" />
-                    <span className="fw-bold">Tasks for Selected</span>
+                    <span className="fw-bold">Tasks</span>
                   </button>
                   <button
                     className="btn btn-ghost-danger btn-xs d-flex align-items-center gap-1 rounded-2 px-2 py-1"
@@ -1913,8 +1945,9 @@ const AsinManagerPage = () => {
                 </div>
               )}
 
-              <button
-                onClick={handleBulkCreateActions}
+              {/* Bulk Optimization Button */}
+              <button 
+                onClick={handleBulkCreateActions} 
                 disabled={asins.length === 0 || syncing}
                 className="btn-premium d-flex align-items-center gap-2 px-3 py-1 border rounded-2 transition-all"
                 style={{
@@ -1926,29 +1959,26 @@ const AsinManagerPage = () => {
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}
               >
-                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} />
+                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} /> 
                 Bulk Optimization
               </button>
+
+              {/* Export Button */}
               <button
                 onClick={() => setShowExportModal(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
-                  fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
-                  background: '#fff', cursor: 'pointer'
-                }}>
+                className="btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50"
+                style={{ fontSize: '10px', height: '24px' }}
+              >
                 <Download size={10} color="#2563eb" /> Export
               </button>
 
+              {/* Bulk Import Button */}
               <button
                 onClick={() => setShowBulkImportModal(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
-                  fontSize: 10, fontWeight: 600, borderRadius: 4, border: '1px solid #e5e7eb',
-                  background: '#fff', cursor: 'pointer'
-                }}
+                className="btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50"
+                style={{ fontSize: '10px', height: '24px' }}
               >
-                <FileUp size={10} color="#10b981" />
-                Bulk Import
+                <FileUp size={10} color="#10b981" /> Import
               </button>
             </div>
           </div>
