@@ -1731,6 +1731,7 @@ class MarketDataSyncService {
             history.push({
                 price: price > 0 ? price : (asin.CurrentPrice || 0),
                 bsr: sub > 0 ? sub : (bsr > 0 ? bsr : (asin.BSR || 0)),
+                subBsr: sub > 0 ? sub : (bsr > 0 ? bsr : (asin.BSR || 0)),
                 rating: rating > 0 ? rating : (asin.Rating || 0),
                 reviews: reviewCount || asin.ReviewCount || 0,
                 imageCount: imagesCount || asin.ImagesCount || 0,
@@ -1855,6 +1856,32 @@ class MarketDataSyncService {
                         INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
                         VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
                 `);
+
+            // ✅ NEW: Save Detailed Sub BSR History
+            if (subBSRs && subBSRs.length > 0) {
+                for (const rankStr of subBSRs) {
+                    const match = String(rankStr).match(/#([\d,]+)\s+in\s+(.+)/);
+                    if (match) {
+                        const rank = parseInt(match[1].replace(/,/g, ''));
+                        const category = match[2].trim();
+                        
+                        try {
+                            await pool.request()
+                                .input('id', sql.VarChar, generateId())
+                                .input('asinId', sql.VarChar, asinId)
+                                .input('date', sql.Date, today)
+                                .input('category', sql.NVarChar, category)
+                                .input('rank', sql.Int, rank)
+                                .query(`
+                                    INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                    VALUES (@id, @asinId, @date, @category, @rank, GETDATE())
+                                `);
+                        } catch (e) {
+                            console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
+                        }
+                    }
+                }
+            }
 
             // 12. Socket Notification (REMOVED - Handled by batch in processBatchResults)
             /*

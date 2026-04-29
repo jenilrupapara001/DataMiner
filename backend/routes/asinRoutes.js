@@ -49,6 +49,7 @@ router.post('/repair/:sellerId', protect, requirePermission('sellers_manage_asin
 
 // Trends and week history
 router.get('/:id/trends', protect, requirePermission('sellers_view'), asinController.getAsinTrends);
+router.get('/:id/subbsr-trend', protect, requirePermission('sellers_view'), asinController.getSubBsrTrend);
 router.put('/:id/week-history', protect, requirePermission('sellers_manage_asins'), asinController.updateWeekHistory);
 
 // CRUD operations

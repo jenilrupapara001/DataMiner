@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image, AlertCircle, Trophy, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image, AlertCircle, Trophy, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCcw } from 'lucide-react';
+import { asinApi } from '../services/api';
 import { createPortal } from 'react-dom';
 import Chart from 'react-apexcharts';
 import { subDays, startOfDay, endOfDay, format } from 'date-fns';
@@ -109,6 +110,28 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     start: subDays(endOfDay(new Date()), 7),
     end: endOfDay(new Date())
   });
+  const [subBsrTrend, setSubBsrTrend] = useState(null);
+  const [isLoadingSubTrend, setIsLoadingSubTrend] = useState(false);
+
+  // Fetch Sub BSR trend data
+  useEffect(() => {
+    if (isOpen && asin?.id) {
+      const fetchSubTrend = async () => {
+        setIsLoadingSubTrend(true);
+        try {
+          const res = await asinApi.getSubBsrTrend(asin.id, 30);
+          if (res.success) {
+            setSubBsrTrend(res.data);
+          }
+        } catch (error) {
+          console.error('Failed to fetch Sub BSR trend:', error);
+        } finally {
+          setIsLoadingSubTrend(false);
+        }
+      };
+      fetchSubTrend();
+    }
+  }, [isOpen, asin?.id]);
 
   const handleClose = () => {
     setIsClosing(true);
@@ -285,72 +308,47 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     markers: { size: 4, strokeWidth: 2, strokeColors: '#fff', colors: ['#6366f1'] }
   };
 
-  // Sub-BSR Category Performance Chart Config
-  const subBsrDataParsed = useMemo(() => {
-    if (!asin) return [];
-    let subBsrList = [];
-    
-    const rawSubBsr = asin.subBsr || asin.SubBsr || '';
-    if (Array.isArray(asin.subBSRs) && asin.subBSRs.length > 0) {
-      subBsrList = asin.subBSRs;
-    } else if (rawSubBsr) {
-      // Split by "#" to handle multiple ranks in one string
-      subBsrList = rawSubBsr.split(/(?=#\d)/).map(s => s.trim()).filter(Boolean);
+  // Multi-Category Sub-BSR Trend Chart Config
+  const { subBsrSeries, subBsrOptions } = useMemo(() => {
+    if (!subBsrTrend || !subBsrTrend.trends || subBsrTrend.trends.length === 0) {
+      return { subBsrSeries: [], subBsrOptions: {} };
     }
-    
-    return subBsrList.map(str => {
-      // e.g., "#123 in Category Name"
-      const match = str.match(/#([\d,]+)\s+in\s+(.+)/i);
-      if (match) {
-        return {
-          rank: parseInt(match[1].replace(/,/g, ''), 10),
-          category: match[2].trim()
-        };
-      }
-      return null;
-    }).filter(Boolean).sort((a, b) => a.rank - b.rank); // Sort by best rank
-  }, [asin]);
 
-  const subBsrSeries = [{
-    name: 'Category Rank',
-    data: subBsrDataParsed.map(d => d.rank)
-  }];
+    const series = subBsrTrend.trends.map(t => ({
+      name: t.category.length > 30 ? t.category.substring(0, 30) + '...' : t.category,
+      data: t.data.map(d => d.rank),
+      fullName: t.category
+    }));
 
-  const subBsrOptions = {
-    chart: { type: 'bar', height: Math.max(250, subBsrDataParsed.length * 40), toolbar: { show: false } },
-    plotOptions: {
-      bar: {
-        horizontal: true,
-        borderRadius: 4,
-        dataLabels: { position: 'top' },
-        barHeight: '50%'
-      }
-    },
-    dataLabels: {
-      enabled: true,
-      textAnchor: 'start',
-      style: { colors: ['#fff'] },
-      formatter: function (val) {
-        return "#" + val.toLocaleString();
+    const options = {
+      ...commonOptions,
+      chart: { ...commonOptions.chart, type: 'line', height: 350 },
+      xaxis: {
+        categories: subBsrTrend.dates.map(d => format(new Date(d), 'MMM dd')),
+        labels: { style: { fontSize: '10px', colors: '#64748b' } }
       },
-      offsetX: -8,
-      dropShadow: { enabled: true, top: 1, left: 1, blur: 1, color: '#000', opacity: 0.45 }
-    },
-    colors: ['#10b981'],
-    xaxis: {
-      categories: subBsrDataParsed.map(d => d.category.length > 35 ? d.category.substring(0, 35) + '...' : d.category),
-      labels: { style: { fontSize: '10px', colors: '#64748b' } },
-      axisBorder: { show: false },
-      axisTicks: { show: false }
-    },
-    yaxis: {
-      labels: { style: { fontSize: '11px', fontWeight: 600, colors: '#334155' } }
-    },
-    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
-    tooltip: {
-      y: { formatter: (val) => `#${val.toLocaleString()}` }
-    }
-  };
+      yaxis: {
+        reversed: true, // Lower rank is better
+        labels: { 
+          style: { fontSize: '10px', colors: '#64748b' },
+          formatter: (val) => val ? `#${Number(val).toLocaleString()}` : ''
+        }
+      },
+      stroke: { curve: 'smooth', width: 3 },
+      markers: { size: 4 },
+      legend: {
+        show: true,
+        position: 'bottom',
+        fontSize: '11px',
+        offsetY: 10
+      },
+      tooltip: {
+        y: { formatter: (val) => val ? `#${val.toLocaleString()}` : 'N/A' }
+      }
+    };
+
+    return { subBsrSeries: series, subBsrOptions: options };
+  }, [subBsrTrend, commonOptions]);
 
   // Rating History Chart Config - Forward fill with last valid rating and star breakdown
   const { ratingSeries, hasBreakdownHistory } = useMemo(() => {
@@ -983,27 +981,52 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <Chart options={priceOptions} series={priceSeries} type="line" height={280} />
               </div>
             </div>
-            {/* Sub-BSR Category Performance Chart */}
+            {/* Detailed Sub-BSR Historical Trends */}
             <div className="bg-white border rounded-4 p-4 shadow-sm">
               <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                 <div className="d-flex align-items-center gap-3">
-                  <div className="p-2 bg-emerald-50 rounded-lg">
-                    <BarChart3 size={18} className="text-emerald-600" />
+                  <div className="p-2 bg-indigo-50 rounded-lg">
+                    <TrendingUp size={18} className="text-indigo-600" />
                   </div>
-                  <h6 className="mb-0 fw-semibold text-slate-800">CATEGORY PERFORMANCE RANKING</h6>
+                  <h6 className="mb-0 fw-semibold text-slate-800">SUB-BSR CATEGORY TRENDS (30 DAYS)</h6>
                 </div>
-                <div className="d-flex align-items-center gap-1 text-slate-500 small fw-medium">
-                  <Trophy size={14} className="text-amber-500" />
-                  <span>Sub-BSR Ranks</span>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg" style={{ fontSize: '10px' }}>
+                    <Activity size={10} className="me-1" /> NICHE TRACKING
+                  </span>
                 </div>
               </div>
-              <div style={{ minHeight: '280px' }}>
-                {subBsrDataParsed.length > 0 ? (
-                  <Chart options={subBsrOptions} series={subBsrSeries} type="bar" height={Math.max(250, subBsrDataParsed.length * 40)} />
+              
+              <div style={{ minHeight: '350px', position: 'relative' }}>
+                {isLoadingSubTrend ? (
+                  <div className="d-flex flex-column align-items-center justify-content-center h-100 py-5">
+                    <Loader2 size={32} className="text-indigo-600 animate-spin mb-3" />
+                    <span className="text-slate-500 fw-medium">Analyzing niche trends...</span>
+                  </div>
+                ) : subBsrSeries.length > 0 ? (
+                  <>
+                    <div className="row g-3 mb-4">
+                      {subBsrTrend.trends.map((t, i) => (
+                        <div key={i} className="col-md-4">
+                          <div className="p-3 bg-slate-50 rounded-2xl border d-flex justify-content-between align-items-center">
+                            <div className="overflow-hidden">
+                              <div className="smallest fw-bold text-slate-400 text-uppercase mb-1 truncate">{t.category}</div>
+                              <div className="h6 mb-0 fw-bold text-slate-800">#{t.latestRank?.toLocaleString() || '-'}</div>
+                            </div>
+                            <div className="p-2 bg-white rounded-xl shadow-xs">
+                              <Trophy size={16} className={i === 0 ? 'text-amber-500' : 'text-slate-300'} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Chart options={subBsrOptions} series={subBsrSeries} type="line" height={350} />
+                  </>
                 ) : (
-                  <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style={{ minHeight: '250px' }}>
-                    <BarChart3 size={32} className="mb-2 opacity-50" />
-                    <span className="small fw-medium">No Sub-BSR Category Data Available</span>
+                  <div className="d-flex flex-column align-items-center justify-content-center h-100 py-5 text-muted">
+                    <RefreshCcw size={32} className="mb-2 opacity-50" />
+                    <span className="small fw-medium">No historical sub-BSR data recorded yet</span>
+                    <span className="smallest mt-1">Data will appear after the next daily sync</span>
                   </div>
                 )}
               </div>

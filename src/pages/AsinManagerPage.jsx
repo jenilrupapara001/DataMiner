@@ -122,6 +122,8 @@ const getWeekHistoryBadge = (value, type) => {
     return <span style={{ fontWeight: 500, color: '#2563eb' }}>#{value.toLocaleString()}</span>;
   } else if (type === 'rating') {
     return <span style={{ fontWeight: 500, color: '#d97706' }}>{value.toFixed(1)}</span>;
+  } else if (type === 'subBsr') {
+    return <span style={{ fontWeight: 600, color: '#7c3aed', fontSize: '10px' }}>#{value.toLocaleString()}</span>;
   }
   return value;
 };
@@ -1889,7 +1891,7 @@ const AsinManagerPage = () => {
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>
                   <th colSpan={visibleHistoryCols}
                     onClick={async () => { setShowAllBsrHistory(true); }}
-                    style={{ ...thStyle, background: '#f0fdf4', color: '#166534', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #dcfce7' }}>
+                    style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #ddd6fe' }}>
                     SUB-BSR TREND (7D)
                   </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center' }}>RT</th>
@@ -1926,7 +1928,7 @@ const AsinManagerPage = () => {
                   )))}
                   {/* BSR Trend Dates */}
                   {historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f0fdf4', color: '#16a34a' }}>
+                    <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f5f3ff', color: '#7c3aed' }}>
                       {date.label}
                     </th>
                   )))}
@@ -2195,7 +2197,7 @@ const AsinManagerPage = () => {
                       }))}
                       <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                         onClick={(e) => handleViewBsr(asin, e)}>
-                        <div style={{ fontWeight: 600, color: '#2563eb' }}>
+                        <div style={{ fontWeight: 600, color: '#7c3aed' }}>
                           {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                         </div>
                       </td>
@@ -2268,8 +2270,8 @@ const AsinManagerPage = () => {
                         return (
                           <td key={`b-${week.label}-${dIdx}`}
                             onClick={(e) => handleViewBsr(asin, e)}
-                            style={{ ...tdStyle, textAlign: 'center', background: '#f0fdf433', width: 40, cursor: 'pointer' }}>
-                            {wData?.bsr ? getWeekHistoryBadge(wData.bsr, 'number') : '-'}
+                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
+                            {wData?.subBsr ? getWeekHistoryBadge(wData.subBsr, 'subBsr') : (wData?.bsr ? getWeekHistoryBadge(wData.bsr, 'subBsr') : '-')}
                           </td>
                         );
                       }))}

@@ -651,6 +651,14 @@ export const asinApi = {
     if (!res.ok) throw new Error('Failed to fetch ASIN stats');
     return res.json();
   },
+
+  getSubBsrTrend: async (asinId, days = 30) => {
+    const res = await fetch(`${API_BASE}/asins/${asinId}/subbsr-trend?days=${days}`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch Sub BSR trend');
+    return res.json();
+  },
   
   getBrands: async () => {
     const res = await fetch(`${API_BASE}/asins/brands`, {

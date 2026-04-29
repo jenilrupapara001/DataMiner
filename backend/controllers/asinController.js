@@ -2163,3 +2163,93 @@ exports.getTags = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * Get Sub BSR trend data for an ASIN
+ * GET /api/asins/:id/subbsr-trend
+ */
+exports.getSubBsrTrend = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { days = 30 } = req.query;
+    const pool = await getPool();
+
+    // Verify ASIN exists
+    const asinResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT Id, AsinCode, SubBSRs FROM Asins WHERE Id = @id');
+
+    if (asinResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'ASIN not found' });
+    }
+
+    const asin = asinResult.recordset[0];
+
+    // Get Sub BSR history for the last N days
+    const historyResult = await pool.request()
+      .input('asinId', sql.VarChar, id)
+      .input('days', sql.Int, parseInt(days))
+      .query(`
+        SELECT 
+          Date,
+          SubBsrCategory,
+          SubBsrRank
+        FROM SubBsrHistory
+        WHERE AsinId = @asinId
+          AND Date >= DATEADD(DAY, -@days, GETDATE())
+        ORDER BY Date ASC, SubBsrRank ASC
+      `);
+
+    // Group by date and category
+    const categories = new Set();
+    const dateMap = {};
+
+    historyResult.recordset.forEach(row => {
+      const dateStr = new Date(row.Date).toISOString().split('T')[0];
+      if (!dateMap[dateStr]) {
+        dateMap[dateStr] = {};
+      }
+      dateMap[dateStr][row.SubBsrCategory] = row.SubBsrRank;
+      categories.add(row.SubBsrCategory);
+    });
+
+    // Build trend data for each category
+    const dates = Object.keys(dateMap).sort();
+    const trends = [];
+
+    for (const category of categories) {
+      const data = dates.map(date => ({
+        date,
+        rank: dateMap[date]?.[category] || null
+      }));
+      
+      trends.push({
+        category,
+        data,
+        latestRank: data.filter(d => d.rank !== null).pop()?.rank || null
+      });
+    }
+
+    // Also get the current Sub BSRs from the ASIN record
+    let currentSubBsrs = [];
+    try {
+      currentSubBsrs = asin.SubBSRs ? JSON.parse(asin.SubBSRs) : [];
+    } catch (e) {
+      currentSubBsrs = [];
+    }
+
+    res.json({
+      success: true,
+      data: {
+        asinCode: asin.AsinCode,
+        currentSubBsrs,
+        trends,
+        dates,
+        categories: [...categories]
+      }
+    });
+  } catch (error) {
+    console.error('getSubBsrTrend Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
