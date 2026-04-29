@@ -2258,11 +2258,15 @@ const AsinManagerPage = () => {
                         })()}
                       </td>
                       <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
-                        <span style={{
-                          color: asin.videoCount > 0 ? '#059669' : '#9ca3af',
-                          fontWeight: asin.videoCount > 0 ? '600' : '400',
-                          fontSize: '11px'
-                        }}>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
+                            color: '#fff',
+                            fontWeight: 600,
+                            fontSize: '0.75rem'
+                          }}
+                        >
                           {asin.videoCount > 0 ? 'Yes' : 'No'}
                         </span>
                       </td>
