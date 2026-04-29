@@ -1448,7 +1448,7 @@ const AsinManagerPage = () => {
                 style={{ fontSize: '10px', height: '26px' }}
                 title="Show/Hide Columns"
               >
-                <Columns size={12} />
+                <LayoutGrid size={12} />
                 COLUMNS ({visibleCount}/{totalCount})
               </button>
               
