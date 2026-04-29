@@ -479,10 +479,39 @@ exports.uploadTaskPool = async (req, res) => {
  */
 exports.getPoolStatus = async (req, res) => {
     try {
-        const stats = await marketDataSyncService.getPoolStats();
-        res.json({ success: true, stats });
+        const result = await marketDataSyncService.runBackgroundDatabaseRepair();
+        res.json({ success: true, message: 'Database repair completed', result });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Trigger concurrent recovery for ASINs with missing critical data.
+ */
+exports.recoverMissingData = async (req, res) => {
+    try {
+        const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
+        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        if (!isGlobalUser) {
+            return res.status(403).json({ success: false, error: 'Unauthorized to trigger missing data recovery' });
+        }
+
+        console.log('🔍 Manual trigger: Missing Data Recovery...');
+        const SchedulerService = require('../services/schedulerService');
+        
+        // Fire and forget background process
+        setTimeout(async () => {
+            await SchedulerService.runMissingDataRecovery();
+        }, 0);
+
+        res.json({
+            success: true,
+            message: 'Concurrent missing data recovery initiated in the background'
+        });
+    } catch (error) {
+        console.error('Missing Data Recovery Trigger Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to initiate recovery' });
     }
 };
 

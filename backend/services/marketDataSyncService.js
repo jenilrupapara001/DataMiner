@@ -1429,20 +1429,28 @@ class MarketDataSyncService {
                 await this.ensureTaskStopped(taskId);
             }
 
-            // 3. Get All Active ASINs for this seller from database
-            console.log(`📊 Fetching all active ASINs from database for seller ${sellerId}...`);
+            // 3. Get ASINs for this seller from database
+            console.log(`📊 Fetching ASINs from database for seller ${sellerId}...`);
+            let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
+            
+            if (options.onlyMissing) {
+                console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);
+                asinQuery += " AND (Title IS NULL OR Title = '' OR CurrentPrice IS NULL OR CurrentPrice = 0 OR ImageUrl IS NULL OR ImageUrl = '')";
+            }
+
             const asinsResult = await pool.request()
                 .input('sellerId', sql.VarChar, sellerId)
-                .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                .query(asinQuery);
 
             const asins = asinsResult.recordset;
 
             if (asins.length === 0) {
-                console.log(`⚠️ No active ASINs to sync for seller: ${sellerId}`);
+                console.log(`⚠️ No ${options.onlyMissing ? 'missing-data ' : ''}active ASINs to sync for seller: ${sellerId}`);
+                this.syncLocks.delete(sellerId.toString());
                 return false;
             }
 
-            console.log(`✅ Found ${asins.length} active ASINs in database`);
+            console.log(`✅ Found ${asins.length} ${options.onlyMissing ? 'incomplete ' : ''}ASINs in database`);
 
             // Create URLs from ASINs
             const asinCodes = asins.map(a => a.AsinCode);

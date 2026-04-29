@@ -56,6 +56,12 @@ class SchedulerService {
             await this.refreshAgeTags();
         });
 
+        // 8. Missing Data Recovery (Every 4 hours)
+        this.jobs.missingDataRecovery = cron.schedule('0 */4 * * *', async () => {
+            console.log('🕒 Starting Concurrent Missing Data Recovery...');
+            await this.runMissingDataRecovery();
+        });
+
         console.log('✅ Background tasks scheduled');
 
         // Optional: Run once on startup
@@ -65,6 +71,9 @@ class SchedulerService {
             
             console.log('🔄 Checking Octoparse tasks on startup...');
             this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
+
+            console.log('🔍 Running initial Missing Data Recovery on startup...');
+            this.runMissingDataRecovery().catch(err => console.error('Startup Missing Data Recovery failed:', err.message));
         }, 30000); // 30 second delay
     }
 
@@ -139,31 +148,42 @@ class SchedulerService {
     }
 
     async runEnterprisePipeline() {
-        console.log('🏢 [ENTERPRISE] Starting full automation pipeline...');
+        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Concurrent)...');
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
                 .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for sync.`);
+            if (sellers.length === 0) return { success: true, totalSellers: 0 };
+
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for concurrent sync.`);
             
+            const CONCURRENCY_LIMIT = 5;
             let successful = 0;
             const startTime = Date.now();
 
-            for (const seller of sellers) {
-                try {
-                    await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
-                        triggerScrape: true,
-                        fullSync: true 
-                    });
-                    successful++;
-                    console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
-                } catch (err) {
-                    console.error(`❌ [ENTERPRISE] Failed to trigger sync for ${seller.Name}:`, err.message);
+            for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
+                const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
+                
+                await Promise.all(batch.map(async (seller) => {
+                    try {
+                        await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                            triggerScrape: true,
+                            fullSync: true,
+                            forceReRun: true // Ensure fresh start at midnight
+                        });
+                        successful++;
+                        console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
+                    } catch (err) {
+                        console.error(`❌ [ENTERPRISE] Failed to trigger sync for ${seller.Name}:`, err.message);
+                    }
+                }));
+
+                // Short delay between batches
+                if (i + CONCURRENCY_LIMIT < sellers.length) {
+                    await new Promise(r => setTimeout(r, 5000));
                 }
-                // Throttling to avoid provider rate limits
-                await new Promise(r => setTimeout(r, 2000));
             }
 
             const duration = Math.round((Date.now() - startTime) / 1000);
@@ -197,6 +217,54 @@ class SchedulerService {
             return result;
         } catch (error) {
             console.error('🏢 [ENTERPRISE] Pipeline failed:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Identifies ASINs with missing critical data (Title, Price, Image)
+     * across all active sellers and triggers concurrent scrapes.
+     */
+    async runMissingDataRecovery() {
+        try {
+            console.log('🔍 [MISSING DATA] Starting concurrent recovery for incomplete ASINs...');
+            const pool = await getPool();
+            const sellersResult = await pool.request().query("SELECT Id, Name FROM Sellers WHERE IsActive = 1");
+            const sellers = sellersResult.recordset;
+
+            if (sellers.length === 0) return { success: true, count: 0 };
+
+            const CONCURRENCY_LIMIT = 5;
+            let totalTriggered = 0;
+            const startTime = Date.now();
+
+            for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
+                const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
+                
+                await Promise.all(batch.map(async (seller) => {
+                    try {
+                        const result = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                            onlyMissing: true,
+                            triggerScrape: true 
+                        });
+                        if (result) totalTriggered++;
+                    } catch (err) {
+                        console.error(`❌ [MISSING DATA] Failed for ${seller.Name}:`, err.message);
+                    }
+                }));
+
+                // Short delay between batches to respect Octoparse API limits
+                if (i + CONCURRENCY_LIMIT < sellers.length) {
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+            }
+
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            console.log(`✅ [MISSING DATA] Recovery cycle completed. Triggered ${totalTriggered} sellers in ${duration}s`);
+            
+            return { success: true, triggered: totalTriggered, duration };
+        } catch (error) {
+            console.error('❌ [MISSING DATA] Critical failure:', error.message);
             return { success: false, error: error.message };
         }
     }
