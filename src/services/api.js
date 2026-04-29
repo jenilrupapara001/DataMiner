@@ -1438,6 +1438,13 @@ export const exportApi = {
         if (!res.ok) throw new Error('Failed to fetch export fields');
         return res.json();
     },
+    getExportStatus: async (id) => {
+        const res = await fetch(`${API_BASE}/export/status/${id}`, {
+            headers: { ...getAuthHeader() }
+        });
+        if (!res.ok) throw new Error('Failed to fetch export status');
+        return res.json();
+    },
     downloadFile: async (id) => {
         const res = await fetch(`${API_BASE}/export/download/${id}`, {
             headers: { ...getAuthHeader() }

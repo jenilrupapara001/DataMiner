@@ -598,6 +598,31 @@ exports.getDownloads = async (req, res) => {
 };
 
 /**
+ * Get status of a specific download
+ * GET /api/export/status/:id
+ */
+exports.getExportStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = (req.user?._id || req.user?.id || '').toString();
+        const pool = await getPool();
+
+        const result = await pool.request()
+            .input('id', sql.VarChar, id)
+            .input('userId', sql.VarChar, userId)
+            .query('SELECT Status, Progress, FileName, ErrorMessage FROM Downloads WHERE Id = @id AND UserId = @userId');
+
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ success: false, error: 'Download not found' });
+        }
+
+        res.json({ success: true, data: result.recordset[0] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
  * Download a completed export file
  * GET /api/export/download/:id
  */

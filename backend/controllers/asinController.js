@@ -281,11 +281,32 @@ exports.getAsins = async (req, res) => {
       });
     });
 
+    // [7.6] Fetch Sub BSR History for detailed category trends
+    const subBsrHistoryResult = await pool.request().query(`
+      SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
+      FROM SubBsrHistory
+      WHERE AsinId IN (${asinIds})
+      AND Date >= DATEADD(day, -14, GETDATE())
+      ORDER BY Date ASC, SubBsrRank ASC
+    `);
+
+    const subBsrHistoryMap = {};
+    subBsrHistoryResult.recordset.forEach(h => {
+      if (!subBsrHistoryMap[h.AsinId]) subBsrHistoryMap[h.AsinId] = [];
+      const dateStr = h.Date ? new Date(h.Date).toISOString().split('T')[0] : '';
+      subBsrHistoryMap[h.AsinId].push({
+        date: dateStr,
+        rank: h.rank || 0,
+        category: h.category || ''
+      });
+    });
+
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
         // Build history and weekHistory
         const dailyHistory = (historyMap[a.Id] || []);
         const weekHistory = (weekHistoryMap[a.Id] || []);
+        const subBsrHistory = (subBsrHistoryMap[a.Id] || []);
 
         // ---- PARSE ALL JSON FIELDS ----
         let allOffers = [];
@@ -454,6 +475,7 @@ exports.getAsins = async (req, res) => {
             // History
             history: dailyHistory.length > 0 ? dailyHistory : historyParsed,
             weekHistory: weekHistory,
+            subBsrHistory: subBsrHistory,
             
             // Weight / Staple
             weight: parseFloat(a.Weight) || 0,
