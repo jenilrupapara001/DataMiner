@@ -1727,10 +1727,10 @@ class MarketDataSyncService {
                 history = [];
             }
 
-            // Add current point
+            // Add current point (Prioritize Sub-BSR for Trend as requested)
             history.push({
                 price: price > 0 ? price : (asin.CurrentPrice || 0),
-                bsr: bsr > 0 ? bsr : (asin.BSR || 0),
+                bsr: sub > 0 ? sub : (bsr > 0 ? bsr : (asin.BSR || 0)),
                 rating: rating > 0 ? rating : (asin.Rating || 0),
                 reviews: reviewCount || asin.ReviewCount || 0,
                 imageCount: imagesCount || asin.ImagesCount || 0,
@@ -1757,7 +1757,7 @@ class MarketDataSyncService {
                 Mrp: mrp > 0 ? mrp : asin.Mrp,
                 DealBadge: dealBadge,
                 PriceType: priceType,
-                BSR: bsr > 0 ? bsr : asin.BSR,
+                BSR: sub > 0 ? sub : (bsr > 0 ? bsr : asin.BSR),
                 Rating: rating > 0 ? rating : asin.Rating,
                 ReviewCount: reviewCount,
                 RatingBreakdown: JSON.stringify(finalRatingBreakdown),
