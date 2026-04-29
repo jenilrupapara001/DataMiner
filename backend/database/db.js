@@ -14,7 +14,7 @@ const config = {
         trustServerCertificate: true,
         enableArithAbort: true
     },
-    requestTimeout: 60000,
+    requestTimeout: 120000,
     pool: {
         max: 25,
         min: 0,

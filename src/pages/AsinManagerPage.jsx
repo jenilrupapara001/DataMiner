@@ -43,7 +43,9 @@ import {
   ExternalLink,
   Video,
   PlayCircle,
-  Filter
+  Award,
+  Filter,
+  Tag
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -58,6 +60,7 @@ const ExportAsinModal = lazy(() => import('../components/asins/ExportAsinModal')
 const EditTagsModal = lazy(() => import('../components/asins/EditTagsModal'));
 const BulkImportModal = lazy(() => import('../components/asins/BulkImportModal'));
 import TagsCell from '../components/asins/TagsCell';
+import BulkTagsModal from '../components/asins/BulkTagsModal';
 import { useColumnVisibility, ALL_COLUMNS, COLUMN_CATEGORIES } from '../hooks/useColumnVisibility';
 import ColumnVisibilityPanel from '../components/asins/ColumnVisibilityPanel';
 
@@ -343,6 +346,7 @@ const AsinManagerPage = () => {
   } = useColumnVisibility();
 
   const [showColumnPanel, setShowColumnPanel] = useState(false);
+  const [showBulkTagsModal, setShowBulkTagsModal] = useState(false);
 
   const historyStructure = useMemo(() => {
     if (asins.length > 0) {
@@ -404,10 +408,6 @@ const AsinManagerPage = () => {
     parentAsin: '',
     tag: '',
     sku: '',
-    buyBoxWin: '',
-    hasAplus: '',
-    hasVideo: '',
-    hasDeal: '',
     minPrice: '',
     maxPrice: '',
     minBSR: '',
@@ -442,10 +442,6 @@ const AsinManagerPage = () => {
     parentAsin: '',
     tag: '',
     sku: '',
-    buyBoxWin: '',
-    hasAplus: '',
-    hasVideo: '',
-    hasDeal: '',
     minPrice: '',
     maxPrice: '',
     minBSR: '',
@@ -768,81 +764,71 @@ const AsinManagerPage = () => {
 
   const kpis = useMemo(() => {
     if (stats) {
-      // Review analysis for display
       const reviewChange = stats.reviewAnalysis?.currentVsPreviousChange || 0;
       const reviewTrend = reviewChange >= 0 ? '↑' : '↓';
       const reviewColor = reviewChange >= 0 ? '#10b981' : '#ef4444';
-
-      // Best selling ASIN (lowest BSR)
       const bestSeller = stats.bestSellingAsins?.[0];
 
       return [
-        { label: 'ALL ASINS', value: stats.total || 0, color: '#6366f1', icon: <Package size={14} /> },
-        { label: 'AVG LQS', value: (stats.avgLQS > 10 ? (stats.avgLQS / 10).toFixed(1) : (stats.avgLQS || 0).toFixed(1)), color: '#10b981', icon: <Activity size={14} /> },
         {
-          label: 'BEST SELLER',
-          value: bestSeller ? `#${bestSeller.bsr?.toLocaleString()}` : '-',
-          sub: bestSeller?.asinCode || '',
-          color: '#f59e0b',
-          icon: <Trophy size={14} />,
-          onClick: () => { setShowAllBsrHistory(true); }
+          label: 'ALL ASINS', value: (stats.total || 0).toLocaleString(), color: '#6366f1', icon: <Package size={14} />,
+          sub: `${stats.uniqueParents || 0} parent groups`
+        },
+        {
+          label: 'ACTIVE ASINS', value: (stats.active || 0).toLocaleString(), color: '#10b981', icon: <Activity size={14} />,
+          sub: `${stats.standaloneAsins || 0} standalone`
         },
         {
           label: 'TOTAL REVIEWS',
           value: (stats.totalReviews || 0).toLocaleString(),
           color: '#8b5cf6',
           icon: <Star size={14} />,
+          sub: `Avg ${stats.avgReviewsPerParent || 0}/parent`,
           onClick: () => { setShowAllRatingHistory(true); }
         },
         {
-          label: 'REVIEWS (7 DAYS)',
-          value: `${reviewTrend} ${Math.abs(reviewChange)}%`,
-          color: reviewColor,
-          icon: <TrendingUp size={14} />,
-          sub: `Current: ${stats.reviewAnalysis?.currentWeek || 0} vs Previous: ${stats.reviewAnalysis?.previousWeek || 0}`
+          label: 'AVG RATING',
+          value: `${stats.avgRating || '0.00'} ★`,
+          color: '#f59e0b',
+          icon: <Trophy size={14} />,
+          sub: `${stats.above4Star || 0} above 4★`
+        },
+        {
+          label: 'BEST SELLER',
+          value: bestSeller ? `#${bestSeller.bsr?.toLocaleString()}` : '-',
+          sub: bestSeller?.asinCode || '',
+          color: '#06b6d4',
+          icon: <Award size={14} />,
+          onClick: () => { setShowAllBsrHistory(true); }
         },
         {
           label: 'AVG PRICE',
           value: '₹' + (stats.avgPrice || 0).toLocaleString(),
-          color: '#06b6d4',
+          color: '#ec4899',
           icon: <IndianRupee size={14} />,
           onClick: () => { setShowAllPriceHistory(true); }
         },
-        { label: 'AVG IMAGES', value: stats.avgImages || 0, color: '#ec4899', icon: <Image size={14} /> },
-        { label: 'AVG BULLETS', value: stats.avgBullets || 0, color: '#8b5cf6', icon: <ListChecks size={14} /> },
         {
-          label: 'BUYBOX WINS',
-          value: asins.filter(a => a.buyBoxWin).length,
-          color: '#059669',
-          icon: <Trophy size={14} />
+          label: 'AVG LQS',
+          value: (stats.avgLQS || 0) + '%',
+          color: '#8b5cf6',
+          icon: <Sparkles size={14} />
         },
         {
-          label: 'BUYBOX LOSSES',
-          value: asins.filter(a => !a.buyBoxWin).length,
-          color: '#ef4444',
-          icon: <AlertCircle size={14} />
+          label: 'REVIEWS (7D)',
+          value: `${reviewTrend} ${Math.abs(reviewChange)}%`,
+          color: reviewColor,
+          icon: <TrendingUp size={14} />,
+          sub: `${stats.reviewAnalysis?.currentWeek || 0} vs ${stats.reviewAnalysis?.previousWeek || 0}`
         },
       ];
     }
 
-    // Fallback KPIs when stats are not available
+    // Fallback when stats not available
     const total = asins?.length || 0;
-    const avgLqsRaw = total > 0 ? asins.reduce((sum, a) => {
-      const s = a.lqs || 0;
-      return sum + (s > 10 ? s / 10 : s);
-    }, 0) / total : 0;
-    const avgLqs = avgLqsRaw.toFixed(1);
-    const avgPrice = total > 0 ? Math.round(asins.reduce((sum, a) => sum + (a.currentPrice || 0), 0) / total) : 0;
-
     return [
-      { label: 'ALL ASINS', value: total, color: '#6366f1', icon: <Package size={14} /> },
-      { label: 'AVG LQS', value: avgLqs + '%', color: '#10b981', icon: <Activity size={14} /> },
-      { label: 'AVG PRICE', value: '₹' + avgPrice.toLocaleString(), color: '#06b6d4', icon: <IndianRupee size={14} /> },
-      { label: 'SYNC POOL', value: asins.filter(a => a.scrapeStatus === 'Pending').length, color: '#f59e0b', icon: <RefreshCw size={14} /> },
-      { label: 'SCRAPING', value: asins.filter(a => a.scrapeStatus === 'Scraping').length, color: '#3b82f6', icon: <Activity size={14} /> },
-      { label: 'ALERTS', value: asins.filter(a => (a.lqs || 0) < 70).length, color: '#ef4444', icon: <AlertTriangle size={14} /> },
-      { label: 'AVG IMAGES', value: total > 0 ? Math.round(asins.reduce((sum, a) => sum + (a.imagesCount || 0), 0) / total) : 0, color: '#ec4899', icon: <Image size={14} /> },
-      { label: 'AVG BULLETS', value: total > 0 ? Math.round(asins.reduce((sum, a) => sum + (a.bulletPoints || 0), 0) / total) : 0, color: '#8b5cf6', icon: <ListChecks size={14} /> },
+      { label: 'ALL ASINS', value: total.toLocaleString(), color: '#6366f1', icon: <Package size={14} /> },
+      { label: 'ACTIVE', value: asins.filter(a => a.status === 'Active').length, color: '#10b981', icon: <Activity size={14} /> },
     ];
   }, [asins, stats]);
 
@@ -1732,38 +1718,7 @@ const AsinManagerPage = () => {
                     </div>
                   </div>
 
-                  {/* 13. BOOLEAN FLAGS */}
-                  <div className="filter-group pt-2 border-top">
-                    <label className="filter-label mb-3">BOOLEAN FLAGS</label>
 
-                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
-                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>BuyBox Winner</label>
-                      <input className="form-check-input" type="checkbox" role="switch"
-                        checked={filters.buyBoxWin === 'true'}
-                        onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.checked ? 'true' : '' })} />
-                    </div>
-
-                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
-                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has A+ Content</label>
-                      <input className="form-check-input" type="checkbox" role="switch"
-                        checked={filters.hasAplus === 'true'}
-                        onChange={(e) => setFilters({ ...filters, hasAplus: e.target.checked ? 'true' : '' })} />
-                    </div>
-
-                    <div className="form-check form-switch d-flex justify-content-between align-items-center mb-3">
-                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has Video</label>
-                      <input className="form-check-input" type="checkbox" role="switch"
-                        checked={filters.hasVideo === 'true'}
-                        onChange={(e) => setFilters({ ...filters, hasVideo: e.target.checked ? 'true' : '' })} />
-                    </div>
-
-                    <div className="form-check form-switch d-flex justify-content-between align-items-center">
-                      <label className="form-check-label" style={{ fontSize: '12px', fontWeight: 500, color: '#52525b' }}>Has Active Deal</label>
-                      <input className="form-check-input" type="checkbox" role="switch"
-                        checked={filters.hasDeal === 'true'}
-                        onChange={(e) => setFilters({ ...filters, hasDeal: e.target.checked ? 'true' : '' })} />
-                    </div>
-                  </div>
                 </div>
 
                 {/* CSS for filter panel */}
@@ -1802,7 +1757,6 @@ const AsinManagerPage = () => {
                     onClick={() => {
                       const resetState = {
                         status: '', category: '', brand: '', scrapeStatus: '',
-                        buyBoxWin: '', hasAplus: '', hasVideo: '', hasDeal: '',
                         parentAsin: '', sku: '', subBsrCategory: '',
                         minPrice: '', maxPrice: '', minBSR: '', maxBSR: '',
                         minLQS: '', maxLQS: '', minRating: '', maxRating: '',
@@ -1850,9 +1804,8 @@ const AsinManagerPage = () => {
               {/* FILTERS Button */}
               <button
                 onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${
-                  filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
-                }`}
+                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                  }`}
                 style={{ fontSize: '10px', height: '24px' }}
               >
                 <ListChecks size={12} />
@@ -1863,15 +1816,14 @@ const AsinManagerPage = () => {
               <div className="position-relative">
                 <button
                   onClick={() => setShowColumnPanel(!showColumnPanel)}
-                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${
-                    showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
-                  }`}
+                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                    }`}
                   style={{ fontSize: '10px', height: '24px' }}
                 >
                   <LayoutGrid size={12} />
                   COLUMNS
                 </button>
-                
+
                 {/* Column Visibility Panel */}
                 <ColumnVisibilityPanel
                   isOpen={showColumnPanel}
@@ -1892,6 +1844,16 @@ const AsinManagerPage = () => {
                   <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200">
                     {selectedIds.size} SELECTED
                   </span>
+
+                  <button
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
+                    onClick={() => setShowBulkTagsModal(true)}
+                    style={{ fontSize: '10px' }}
+                  >
+                    <Tag size={10} className="text-indigo-500" />
+                    <span className="fw-bold">Tags</span>
+                  </button>
+
                   <button
                     className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
                     onClick={handleBulkSyncSelected}
@@ -1922,8 +1884,8 @@ const AsinManagerPage = () => {
               )}
 
               {/* Bulk Optimization Button */}
-              <button 
-                onClick={handleBulkCreateActions} 
+              <button
+                onClick={handleBulkCreateActions}
                 disabled={asins.length === 0 || syncing}
                 className="btn-premium d-flex align-items-center gap-2 px-3 py-1 border rounded-2 transition-all"
                 style={{
@@ -1935,7 +1897,7 @@ const AsinManagerPage = () => {
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}
               >
-                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} /> 
+                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} />
                 Bulk Optimization
               </button>
 
@@ -2064,28 +2026,28 @@ const AsinManagerPage = () => {
                   {isVisible('imageScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>}
                   {isVisible('descriptionScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>}
                   {isVisible('lqs') && <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>}
-                  
+
                   {/* Price Trend Dates */}
                   {isVisible('priceTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`p-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#eef2ff', color: '#6366f1' }}>
                       {date.label}
                     </th>
                   )))}
-                  
+
                   {/* BSR Trend Dates */}
                   {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f5f3ff', color: '#7c3aed' }}>
                       {date.label}
                     </th>
                   )))}
-                  
+
                   {/* Rating Trend Dates */}
                   {isVisible('ratingTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
                       {date.label}
                     </th>
                   )))}
-                  
+
                   {/* Image Trend Dates */}
                   {isVisible('imageTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`i-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fdf2f8', color: '#db2777' }}>
@@ -2581,14 +2543,14 @@ const AsinManagerPage = () => {
                             const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
                               ? asin.allOffers
                               : [];
-                            
+
                             // Filter out the BuyBox winner
                             const otherOffers = allOffers.filter(o => {
                               // Skip the winner
                               if (o.isBuyBoxWinner === true) return false;
                               // Skip if same as current seller
-                              if (o.seller && asin.soldBy && 
-                                  o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
+                              if (o.seller && asin.soldBy &&
+                                o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
                               // Must have a seller name
                               if (!o.seller || o.seller.trim() === '') return false;
                               const sellerLower = o.seller.toLowerCase().trim();
@@ -2600,11 +2562,11 @@ const AsinManagerPage = () => {
                             if (otherOffers.length > 0) {
                               const firstOther = otherOffers[0];
                               const remainingCount = otherOffers.length - 1;
-                              
+
                               return (
                                 <div className="d-flex flex-column gap-1">
-                                  <span 
-                                    className="fw-medium text-zinc-600 text-truncate" 
+                                  <span
+                                    className="fw-medium text-zinc-600 text-truncate"
                                     style={{ fontSize: '10px', maxWidth: '100px' }}
                                     title={firstOther.seller}
                                   >
@@ -2631,17 +2593,17 @@ const AsinManagerPage = () => {
                             const secSeller = (asin.soldBySec || '').trim();
                             const secPrice = parseFloat(asin.secondAsp) || 0;
                             const secSellerLower = secSeller.toLowerCase();
-                            
+
                             // Check if it's different from the current seller
                             if (secSeller && secSellerLower !== 'unknown' && secSellerLower !== 'details' && secSellerLower !== 'view details' && secSeller.length > 0) {
-                              const isSameAsCurrent = asin.soldBy && 
+                              const isSameAsCurrent = asin.soldBy &&
                                 secSellerLower === (asin.soldBy || '').toLowerCase();
-                              
+
                               if (!isSameAsCurrent) {
                                 return (
                                   <div className="d-flex flex-column gap-1">
-                                    <span 
-                                      className="fw-medium text-zinc-600 text-truncate" 
+                                    <span
+                                      className="fw-medium text-zinc-600 text-truncate"
                                       style={{ fontSize: '10px', maxWidth: '100px' }}
                                       title={secSeller}
                                     >
@@ -2664,9 +2626,9 @@ const AsinManagerPage = () => {
                           })()}
                         </td>
                       )}
-                      
+
                       {isVisible('imagesCount') && <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>}
-                      
+
                       {isVisible('imageTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
                         const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
                           || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
@@ -2679,13 +2641,13 @@ const AsinManagerPage = () => {
                           </td>
                         );
                       }))}
-                      
+
                       {isVisible('bulletPoints') && (
                         <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
                           {asin.bulletPoints || asin.bulletPointsText?.length || 0}
                         </td>
                       )}
-                      
+
                       {isVisible('hasAplus') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           {asin.status === 'Scraping' ? (
@@ -2705,7 +2667,7 @@ const AsinManagerPage = () => {
                           )}
                         </td>
                       )}
-                      
+
                       {isVisible('aplusDays') && (
                         <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
                           {asin.aplusAbsentSince && !asin.hasAplus
@@ -2890,6 +2852,19 @@ const AsinManagerPage = () => {
           onComplete={loadData}
         />
       </Suspense>
+      {/* Bulk Tags Modal */}
+      {showBulkTagsModal && (
+        <BulkTagsModal
+          isOpen={showBulkTagsModal}
+          onClose={() => setShowBulkTagsModal(false)}
+          selectedAsins={asins.filter(a => selectedIds.has(a._id))}
+          onComplete={() => {
+            setShowBulkTagsModal(false);
+            clearSelection();
+            loadData(pagination.page, pagination.limit);
+          }}
+        />
+      )}
     </div>
   );
 };

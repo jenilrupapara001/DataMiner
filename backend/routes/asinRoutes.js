@@ -76,7 +76,8 @@ router.post('/export', protect, requirePermission('sellers_view'), asinControlle
 // Tags routes — must be before /:id to avoid conflict
 router.get('/tags', protect, requirePermission('sellers_view'), tagController.getTags);
 router.get('/tags/template', protect, requirePermission('sellers_view'), tagController.downloadTagsTemplate);
-router.post('/tags/bulk', protect, requirePermission('sellers_manage_asins'), upload.single('file'), tagController.bulkUpdateTags);
+router.post('/bulk-tags', protect, requirePermission('sellers_manage_asins'), tagController.bulkUpdateTags);
+router.post('/tags/bulk', protect, requirePermission('sellers_manage_asins'), upload.single('file'), tagController.bulkUpdateTagsCSV);
 router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);
 router.delete('/:id', protect, requirePermission('sellers_manage_asins'), asinController.deleteAsin);

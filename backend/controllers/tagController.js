@@ -1,6 +1,7 @@
-const { sql, getPool } = require('../database/db');
+const { sql, getPool, generateId } = require('../database/db');
 const XLSX = require('xlsx');
 const fs = require('fs');
+const { logTagChange } = require('./tagsHistoryController');
 
 // Default tags
 const DEFAULT_TAGS = [
@@ -96,7 +97,6 @@ exports.updateAsinTags = async (req, res) => {
                 .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
 
             // Log the change
-            const { logTagChange } = require('./tagsHistoryController');
             await logTagChange(asinId, currentTags, newTags, userId, userName, 'manual');
         }
 
@@ -116,7 +116,7 @@ exports.updateAsinTags = async (req, res) => {
  * Bulk update tags via CSV with audit logging
  * POST /api/asins/tags/bulk-upload
  */
-exports.bulkUpdateTags = async (req, res) => {
+exports.bulkUpdateTagsCSV = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -139,7 +139,6 @@ exports.bulkUpdateTags = async (req, res) => {
         }
         
         const pool = await getPool();
-        const { logTagChange } = require('./tagsHistoryController');
         let updated = 0;
         let skipped = 0;
         const errors = [];
@@ -294,4 +293,134 @@ exports.downloadTagsTemplate = async (req, res) => {
         console.error('downloadTagsTemplate error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
+};
+/**
+ * Bulk update tags for multiple ASINs
+ * POST /api/asins/bulk-tags
+ * 
+ * Body: {
+ *   asinIds: ["id1", "id2", ...],
+ *   tags: ["tag1", "tag2", ...],
+ *   action: "add" | "remove" | "replace"  // default: "replace"
+ * }
+ */
+exports.bulkUpdateTags = async (req, res) => {
+  try {
+    const { asinIds, tags, action = 'replace' } = req.body;
+    const userId = (req.user?._id || req.user?.id || '').toString();
+    const userName = req.user?.firstName 
+      ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
+      : (req.user?.email || 'Unknown User');
+
+    if (!asinIds || !Array.isArray(asinIds) || asinIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No ASINs selected' });
+    }
+
+    if (!tags || !Array.isArray(tags)) {
+      return res.status(400).json({ success: false, error: 'No tags provided' });
+    }
+
+    const pool = await getPool();
+    
+    const asinResult = await pool.request()
+      .query(`SELECT Id, AsinCode, Tags FROM Asins WHERE Id IN (${asinIds.map(id => `'${id}'`).join(',')})`);
+
+    if (asinResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, error: 'No ASINs found' });
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    const summary = {
+      total: asinResult.recordset.length,
+      updated: 0,
+      skipped: 0
+    };
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const records = asinResult.recordset;
+      for (let i = 0; i < records.length; i++) {
+        const asin = records[i];
+        let currentTags = [];
+        try {
+          currentTags = JSON.parse(asin.Tags || '[]');
+          if (!Array.isArray(currentTags)) currentTags = [];
+        } catch (e) {
+          currentTags = [];
+        }
+
+        let newTags = [...currentTags];
+        if (action === 'add') {
+          tags.forEach(t => {
+            if (!newTags.includes(t)) newTags.push(t);
+          });
+        } else if (action === 'remove') {
+          newTags = newTags.filter(t => !tags.includes(t));
+        } else {
+          newTags = [...tags];
+        }
+
+        // Only update if changed
+        if (JSON.stringify([...currentTags].sort()) !== JSON.stringify([...newTags].sort())) {
+          updated++;
+          summary.updated++;
+
+          // 1. Update Asins
+          await transaction.request()
+            .input('id', sql.VarChar, asin.Id)
+            .input('tags', sql.NVarChar, JSON.stringify(newTags))
+            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+
+          // 2. Log to TagsHistory
+          const historyId = generateId();
+          const addedTags = newTags.filter(t => !currentTags.includes(t));
+          const removedTags = currentTags.filter(t => !newTags.includes(t));
+
+          await transaction.request()
+            .input('id', sql.VarChar, historyId)
+            .input('asinId', sql.VarChar, asin.Id)
+            .input('userId', sql.VarChar, userId || null)
+            .input('userName', sql.NVarChar, userName || 'System')
+            .input('previousTags', sql.NVarChar, JSON.stringify(currentTags))
+            .input('newTags', sql.NVarChar, JSON.stringify(newTags))
+            .input('addedTags', sql.NVarChar, JSON.stringify(addedTags))
+            .input('removedTags', sql.NVarChar, JSON.stringify(removedTags))
+            .input('action', sql.NVarChar, action === 'replace' ? 'bulk_update' : action)
+            .input('source', sql.NVarChar, 'bulk_manager')
+            .input('notes', sql.NVarChar, `Bulk ${action} tags on ${asinIds.length} ASINs`)
+            .query(`
+              INSERT INTO TagsHistory (Id, AsinId, UserId, UserName, PreviousTags, NewTags, AddedTags, RemovedTags, Action, Source, Notes, CreatedAt)
+              VALUES (@id, @asinId, @userId, @userName, @previousTags, @newTags, @addedTags, @removedTags, @action, @source, @notes, GETDATE())
+            `);
+        } else {
+          skipped++;
+          summary.skipped++;
+        }
+      }
+
+      if (updated > 0) {
+        await transaction.commit();
+      } else {
+        await transaction.rollback();
+      }
+
+      res.json({
+        success: true,
+        message: `Updated ${updated} ASINs (${skipped} unchanged)`,
+        updated,
+        skipped,
+        total: asinResult.recordset.length,
+        summary
+      });
+    } catch (err) {
+      if (transaction) await transaction.rollback().catch(() => {});
+      throw err;
+    }
+  } catch (error) {
+    console.error('bulkUpdateTags Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 };

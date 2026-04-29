@@ -527,6 +527,19 @@ export const asinApi = {
     }
   },
 
+  bulkUpdateTags: async (asinIds, tags, action = 'replace') => {
+    const res = await fetch(`${API_BASE}/asins/bulk-tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ asinIds, tags, action })
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to bulk update tags');
+    }
+    return res.json();
+  },
+
   bulkUploadTags: async (file, sellerId) => {
     try {
       const formData = new FormData();

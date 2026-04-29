@@ -737,7 +737,7 @@ exports.getAsinStats = async (req, res) => {
     const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
     if (!isGlobalUser) {
-      const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
+      const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
       if (seller && allowedSellerIds.includes(seller)) {
         whereClause += ' AND SellerId = @seller';
         request.input('seller', sql.VarChar, seller);
@@ -749,60 +749,123 @@ exports.getAsinStats = async (req, res) => {
       request.input('seller', sql.VarChar, seller);
     }
 
-    // Status Breakdown
+    // 1. Basic Counts
+    const basicCounts = await request.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN Status = 'Active' THEN 1 ELSE 0 END) as active,
+        COUNT(DISTINCT Brand) as brandCount
+      FROM Asins ${whereClause}
+    `);
+    const { total, active, brandCount } = basicCounts.recordset[0];
+
+    // 2. CTE for Parent Aggregation (The Heavy Lifter)
+    const combinedResult = await request.query(`
+      WITH ParentAgg AS (
+        SELECT 
+          CASE WHEN ParentAsin IS NOT NULL AND ParentAsin != '' THEN ParentAsin ELSE AsinCode END as ParentGroup,
+          MAX(Rating) as ParentRating,
+          MAX(LQS) as ParentLQS,
+          MIN(CASE WHEN BSR > 0 THEN BSR END) as ParentBSR,
+          MIN(CASE WHEN CurrentPrice > 0 THEN CurrentPrice END) as ParentPrice,
+          MAX(CASE WHEN BuyBoxWin = 1 THEN 1 ELSE 0 END) as BuyBoxWinStatus,
+          MAX(CASE WHEN HasAplus = 1 THEN 1 ELSE 0 END) as HasAplusStatus,
+          MAX(CASE WHEN ImagesCount > 0 THEN ImagesCount ELSE 0 END) as ParentImages,
+          MAX(CASE WHEN BulletPoints > 0 THEN BulletPoints ELSE 0 END) as ParentBullets,
+          MAX(ReviewCount) as ParentReviewCount
+        FROM Asins
+        ${whereClause}
+        GROUP BY CASE WHEN ParentAsin IS NOT NULL AND ParentAsin != '' THEN ParentAsin ELSE AsinCode END
+      )
+      SELECT 
+        COUNT(*) as totalParents,
+        AVG(CAST(ParentLQS AS FLOAT)) as avgLQS,
+        AVG(CAST(ParentRating AS FLOAT)) as avgRating,
+        AVG(CAST(ParentPrice AS FLOAT)) as avgPrice,
+        AVG(CAST(ParentBSR AS FLOAT)) as avgBSR,
+        MIN(ParentBSR) as bestBSR,
+        SUM(BuyBoxWinStatus) as buyBoxWins,
+        SUM(HasAplusStatus) as withAplus,
+        AVG(CAST(ParentImages AS FLOAT)) as avgImages,
+        AVG(CAST(ParentBullets AS FLOAT)) as avgBullets,
+        SUM(ParentReviewCount) as totalReviews,
+        MAX(ParentReviewCount) as maxReviews,
+        COUNT(CASE WHEN ParentRating >= 4.0 THEN 1 END) as above4Star,
+        COUNT(CASE WHEN ParentRating >= 3.5 AND ParentRating < 4.0 THEN 1 END) as above35Star,
+        COUNT(CASE WHEN ParentRating < 3.5 AND ParentRating > 0 THEN 1 END) as below35Star
+      FROM ParentAgg
+    `);
+
+    const stats = combinedResult.recordset[0];
+    const totalParents = stats.totalParents || 1;
+
+    // 3. Status Breakdown
     const statusResult = await request.query(`SELECT Status, COUNT(*) as count FROM Asins ${whereClause} GROUP BY Status`);
     const statusBreakdown = {};
     statusResult.recordset.forEach(r => { statusBreakdown[r.Status] = r.count; });
 
-    // Aggregates
-    const aggResult = await request.query(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN Status = 'Active' THEN 1 ELSE 0 END) as active,
-        AVG(CASE WHEN BSR > 0 THEN CAST(BSR AS FLOAT) END) as avgBSR,
-        SUM(CAST(ReviewCount AS BIGINT)) as totalReviews,
-        AVG(CAST(LQS AS FLOAT)) as avgLQS,
-        AVG(CASE WHEN CurrentPrice > 0 THEN CAST(CurrentPrice AS FLOAT) END) as avgPrice
-      FROM Asins
-      ${whereClause}
-    `);
-
-    const aggs = aggResult.recordset[0];
-
-    // Buy Box wins
-    const buyBoxResult = await request.query(`SELECT COUNT(*) as count FROM Asins ${whereClause} AND BuyBoxStatus = 1`);
-    const buyBoxWins = buyBoxResult.recordset[0].count;
-
-    // Best Selling ASINs
+    // 4. Best Selling ASINs
     const bestSellingResult = await request.query(`
-      SELECT TOP 5 AsinCode as asinCode, BSR as bsr, Title as title, CurrentPrice as currentPrice
-      FROM Asins
-      ${whereClause} AND BSR > 0 AND Status = 'Active'
+      SELECT TOP 5 AsinCode, Title, CurrentPrice, BSR
+      FROM Asins ${whereClause} AND BSR > 0 AND Status = 'Active'
       ORDER BY BSR ASC
     `);
 
+    // 5. Review Trend (Last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    
+    request.input('sevenDaysAgo', sql.DateTime, sevenDaysAgo);
+    request.input('fourteenDaysAgo', sql.DateTime, fourteenDaysAgo);
+
+    const reviewTrendResult = await request.query(`
+      SELECT 
+        SUM(CASE WHEN Date >= @sevenDaysAgo THEN ReviewCount ELSE 0 END) as currentWeek,
+        SUM(CASE WHEN Date >= @fourteenDaysAgo AND Date < @sevenDaysAgo THEN ReviewCount ELSE 0 END) as previousWeek
+      FROM AsinHistory
+      WHERE AsinId IN (SELECT Id FROM Asins ${whereClause})
+        AND Date >= @fourteenDaysAgo
+    `);
+
+    const currentWeekReviews = reviewTrendResult.recordset[0].currentWeek || 0;
+    const previousWeekReviews = reviewTrendResult.recordset[0].previousWeek || 0;
+    const reviewChange = previousWeekReviews > 0 
+      ? (((currentWeekReviews - previousWeekReviews) / previousWeekReviews) * 100).toFixed(1)
+      : 0;
+
     res.json({
-      total: aggs.total || 0,
-      active: aggs.active || 0,
+      success: true,
+      total,
+      active,
+      uniqueParents: totalParents,
+      brandCount,
       statusBreakdown,
-      avgLQS: aggs.avgLQS?.toFixed(2) || 0,
-      avgPrice: aggs.avgPrice?.toFixed(2) || 0,
-      avgBSR: aggs.avgBSR?.toFixed(0) || 0,
-      totalReviews: aggs.totalReviews || 0,
-      buyBoxRate: aggs.total > 0 ? ((buyBoxWins / aggs.total) * 100).toFixed(0) : 0,
+      avgLQS: stats.avgLQS?.toFixed(1) || '0.0',
+      avgPrice: stats.avgPrice?.toFixed(0) || '0',
+      avgBSR: Math.round(stats.avgBSR || 0),
+      bestBSR: stats.bestBSR || 0,
+      avgImages: stats.avgImages?.toFixed(1) || '0.0',
+      avgBullets: stats.avgBullets?.toFixed(1) || '0.0',
+      totalReviews: stats.totalReviews || 0,
+      maxReviews: stats.maxReviews || 0,
+      avgRating: stats.avgRating?.toFixed(2) || '0.00',
+      above4Star: stats.above4Star || 0,
+      above35Star: stats.above35Star || 0,
+      below35Star: stats.below35Star || 0,
+      buyBoxWins: stats.buyBoxWins || 0,
+      buyBoxRate: ((stats.buyBoxWins || 0) / totalParents * 100).toFixed(0),
+      withAplus: stats.withAplus || 0,
+      aplusRate: ((stats.withAplus || 0) / totalParents * 100).toFixed(0),
       bestSellingAsins: bestSellingResult.recordset,
-      // Review analysis (Simplified for now, can be expanded with AsinHistory table if needed)
       reviewAnalysis: {
-        currentWeek: 0, 
-        previousWeek: 0,
-        twoWeeksAgo: 0,
-        currentVsPreviousChange: 0,
-        previousVsTwoWeeksChange: 0,
+        currentWeek: currentWeekReviews,
+        previousWeek: previousWeekReviews,
+        currentVsPreviousChange: parseFloat(reviewChange),
       }
     });
   } catch (error) {
     console.error('getAsinStats Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
