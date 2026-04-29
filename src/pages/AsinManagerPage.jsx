@@ -528,6 +528,20 @@ const AsinManagerPage = () => {
 
       const statsRes = await asinApi.getStats({ seller });
 
+      // 🔍 DEBUG: Log the first ASIN to check allOffers
+      if (asinRes?.asins?.length > 0) {
+        const sample = asinRes.asins[0];
+        console.log('🔍 DEBUG First ASIN:', {
+          asinCode: sample.asinCode,
+          soldBy: sample.soldBy,
+          soldBySec: sample.soldBySec,
+          secondAsp: sample.secondAsp,
+          allOffers: sample.allOffers,
+          allOffersType: typeof sample.allOffers,
+          isArray: Array.isArray(sample.allOffers)
+        });
+      }
+
       setAsins(asinRes?.asins || []);
       setPagination(asinRes?.pagination || { page: 1, limit: limit, total: 0, totalPages: 0 });
       setStats(statsRes);
@@ -2379,88 +2393,87 @@ const AsinManagerPage = () => {
                       {/* ===== OTHER BUYBOX ===== */}
                       <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
                         {(() => {
-                          // Get all offers array
+                          // Get all offers and find the non-winner
                           const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
                             ? asin.allOffers
                             : [];
-
-                          // Filter out the BuyBox winner (isBuyBoxWinner = true)
-                          // Also filter out the current seller (same as soldBy)
+                          
+                          // Filter out the BuyBox winner
                           const otherOffers = allOffers.filter(o => {
-                            const isWinner = o.isBuyBoxWinner === true;
-                            const isSameSeller = o.seller && asin.soldBy &&
-                              o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim();
-                            return !isWinner && !isSameSeller;
+                            // Skip the winner
+                            if (o.isBuyBoxWinner === true) return false;
+                            // Skip if same as current seller
+                            if (o.seller && asin.soldBy && 
+                                o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
+                            // Must have a seller name
+                            if (!o.seller || o.seller.trim() === '' || o.seller.toLowerCase() === 'unknown') return false;
+                            return true;
                           });
 
-                          // If no other offers, try legacy fields
-                          if (otherOffers.length === 0) {
-                            const secSeller = asin.soldBySec || '';
-                            const secPrice = parseFloat(asin.secondAsp) || 0;
-
-                            // Only show if different from current soldBy
-                            if (secSeller && secSeller.toLowerCase().trim() !== (asin.soldBy || '').toLowerCase().trim() && secPrice > 0) {
-                              return (
-                                <div className="d-flex flex-column gap-1">
-                                  <span
-                                    className="fw-medium text-zinc-600 text-truncate"
-                                    style={{ fontSize: '10px' }}
-                                    title={secSeller}
-                                  >
-                                    {secSeller}
-                                  </span>
+                          // ✅ If otherOffers has data, show it
+                          if (otherOffers.length > 0) {
+                            const firstOther = otherOffers[0];
+                            const remainingCount = otherOffers.length - 1;
+                            
+                            return (
+                              <div className="d-flex flex-column gap-1">
+                                <span 
+                                  className="fw-medium text-zinc-600 text-truncate" 
+                                  style={{ fontSize: '10px', maxWidth: '100px' }}
+                                  title={firstOther.seller}
+                                >
+                                  {firstOther.seller}
+                                </span>
+                                {firstOther.price > 0 ? (
                                   <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                    ₹{secPrice.toLocaleString()}
+                                    ₹{firstOther.price.toLocaleString()}
                                   </span>
-                                </div>
-                              );
-                            }
-
-                            if (secSeller && secSeller.toLowerCase().trim() !== (asin.soldBy || '').toLowerCase().trim() && !secPrice) {
-                              return (
-                                <div className="d-flex flex-column gap-1">
-                                  <span
-                                    className="fw-medium text-zinc-600 text-truncate"
-                                    style={{ fontSize: '10px' }}
-                                    title={secSeller}
-                                  >
-                                    {secSeller}
+                                ) : (
+                                  <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
+                                )}
+                                {remainingCount > 0 && (
+                                  <span className="text-zinc-400" style={{ fontSize: '8px' }}
+                                    title={otherOffers.slice(1).map(o => `${o.seller}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
+                                    +{remainingCount} more
                                   </span>
-                                  <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
-                                </div>
-                              );
-                            }
-
-                            return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
+                                )}
+                              </div>
+                            );
                           }
 
-                          // Show first other offer
-                          const firstOther = otherOffers[0];
-                          const remainingCount = otherOffers.length - 1;
+                          // ✅ FALLBACK: Use legacy soldBySec/secondAsp
+                          const secSeller = (asin.soldBySec || '').trim();
+                          const secPrice = parseFloat(asin.secondAsp) || 0;
+                          
+                          // Check if it's different from the current seller
+                          if (secSeller && secSeller.toLowerCase() !== 'unknown' && secSeller.length > 0) {
+                            const isSameAsCurrent = asin.soldBy && 
+                              secSeller.toLowerCase() === (asin.soldBy || '').toLowerCase();
+                            
+                            if (!isSameAsCurrent) {
+                              return (
+                                <div className="d-flex flex-column gap-1">
+                                  <span 
+                                    className="fw-medium text-zinc-600 text-truncate" 
+                                    style={{ fontSize: '10px', maxWidth: '100px' }}
+                                    title={secSeller}
+                                  >
+                                    {secSeller}
+                                  </span>
+                                  {secPrice > 0 ? (
+                                    <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
+                                      ₹{secPrice.toLocaleString()}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
+                                  )}
+                                </div>
+                              );
+                            }
+                          }
 
-                          return (
-                            <div className="d-flex flex-column gap-1">
-                              <span
-                                className="fw-medium text-zinc-600 text-truncate"
-                                style={{ fontSize: '10px' }}
-                                title={firstOther.seller || 'Unknown'}
-                              >
-                                {firstOther.seller || 'Unknown'}
-                              </span>
-                              <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                ₹{(firstOther.price || 0).toLocaleString()}
-                              </span>
-                              {remainingCount > 0 && (
-                                <span
-                                  className="text-zinc-400"
-                                  style={{ fontSize: '8px' }}
-                                  title={otherOffers.slice(1).map(o => `${o.seller || 'Unknown'}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}
-                                >
-                                  +{remainingCount} more
-                                </span>
-                              )}
-                            </div>
-                          );
+                          // ✅ Nothing found
+                          return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
                         })()}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>

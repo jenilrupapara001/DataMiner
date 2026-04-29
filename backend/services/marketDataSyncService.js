@@ -1664,44 +1664,69 @@ class MarketDataSyncService {
             let allOffers = [];
 
             // Add primary buy box as the first offer
-            if (soldBy) {
+            if (soldBy && soldBy.trim() !== '') {
                 allOffers.push({
-                    seller: soldBy,
+                    seller: soldBy.trim(),
                     price: price || asin.CurrentPrice || 0,
                     isBuyBoxWinner: true
                 });
             }
 
-            const secondBuyboxData = this._parseSecondaryBuybox(rawData.second_buybox || rawData.Alt_buyBox || rawData.Field25 || '');
-            if (secondBuyboxData.offers.length > 0) {
-                // Find first non-primary seller for legacy secondAsp/soldBySec fields
-                const alternateOffer = secondBuyboxData.offers.find(o => o.seller !== soldBy) || secondBuyboxData.offers[0];
-                if (alternateOffer) {
-                    secondAsp = alternateOffer.price || secondAsp;
-                    soldBySec = alternateOffer.seller || soldBySec;
-                }
+            // Parse secondary buybox data
+            const secondBuyboxData = this._parseSecondaryBuybox(
+                rawData.second_buybox || rawData.Alt_buyBox || rawData.Field25 || ''
+            );
 
-                // Add all secondary offers to allOffers
-                secondBuyboxData.offers.forEach(offer => {
-                    if (offer.seller !== soldBy || allOffers.length === 0) {
+            if (secondBuyboxData.offers.length > 0) {
+                // Find first non-primary seller
+                let foundSecondary = false;
+                
+                for (const offer of secondBuyboxData.offers) {
+                    const offerSeller = (offer.seller || '').trim();
+                    const isSameAsPrimary = offerSeller.toLowerCase() === soldBy.toLowerCase();
+                    
+                    if (!isSameAsPrimary && offerSeller.length > 0) {
+                        if (!foundSecondary) {
+                            // Set legacy fields
+                            secondAsp = offer.price || secondAsp;
+                            soldBySec = offerSeller;
+                            foundSecondary = true;
+                        }
+                        
+                        // Add all non-primary offers to allOffers
                         allOffers.push({
-                            seller: offer.seller,
-                            price: offer.price,
+                            seller: offerSeller,
+                            price: offer.price || 0,
                             isBuyBoxWinner: false
                         });
                     }
-                });
-            } else {
-                secondAsp = this._cleanPrice(rawData.second_asp || '') || secondAsp;
-                soldBySec = (rawData.Sold_by_sec || soldBySec || '').trim();
-
-                if (soldBySec && soldBySec !== soldBy) {
-                    allOffers.push({
-                        seller: soldBySec,
-                        price: secondAsp,
-                        isBuyBoxWinner: false
-                    });
                 }
+            } else {
+                // Fallback: check for simple second_asp field
+                const rawSecondAsp = this._cleanPrice(rawData.second_asp || '');
+                const rawSoldBySec = (rawData.Sold_by_sec || rawData.soldBySec || '').trim();
+                
+                if (rawSecondAsp > 0 || rawSoldBySec.length > 0) {
+                    secondAsp = rawSecondAsp || secondAsp;
+                    
+                    if (rawSoldBySec && rawSoldBySec.toLowerCase() !== soldBy.toLowerCase()) {
+                        soldBySec = rawSoldBySec;
+                        allOffers.push({
+                            seller: rawSoldBySec,
+                            price: rawSecondAsp || 0,
+                            isBuyBoxWinner: false
+                        });
+                    }
+                }
+            }
+
+            // ✅ Ensure allOffers has valid data
+            if (allOffers.length === 0 && soldBy) {
+                allOffers.push({
+                    seller: soldBy,
+                    price: price || asin.CurrentPrice || 0,
+                    isBuyBoxWinner: true
+                });
             }
 
             // 10. Listing Quality Analysis (LQS) - New Implementation
@@ -1810,8 +1835,8 @@ class MarketDataSyncService {
                 SoldBy: soldBy || asin.SoldBy || '',
                 BuyBoxWin: buyBoxWin ? 1 : 0,
                 BuyBoxSellerId: soldBy || asin.SoldBy || '',
-                SecondAsp: secondAsp,
-                SoldBySec: soldBySec,
+                SecondAsp: secondAsp || 0,
+                SoldBySec: soldBySec || '',
                 AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
                 DiscountPercentage: this._parseDiscount(rawData, price, mrp),
                 HasAplus: hasAplus ? 1 : 0,

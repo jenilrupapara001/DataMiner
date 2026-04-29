@@ -290,9 +290,16 @@ exports.getAsins = async (req, res) => {
         // ---- PARSE ALL JSON FIELDS ----
         let allOffers = [];
         try { 
-            allOffers = a.AllOffers ? (typeof a.AllOffers === 'string' ? JSON.parse(a.AllOffers) : a.AllOffers) : []; 
+            if (a.AllOffers) {
+                if (typeof a.AllOffers === 'string') {
+                    const parsed = JSON.parse(a.AllOffers);
+                    allOffers = Array.isArray(parsed) ? parsed : [];
+                } else if (Array.isArray(a.AllOffers)) {
+                    allOffers = a.AllOffers;
+                }
+            }
         } catch (e) { 
-            console.error('Error parsing AllOffers for', a.AsinCode, ':', e.message);
+            console.warn(`Failed to parse AllOffers for ${a.AsinCode}:`, e.message);
             allOffers = []; 
         }
 
@@ -321,23 +328,30 @@ exports.getAsins = async (req, res) => {
         let historyParsed = [];
         try { historyParsed = a.History ? (typeof a.History === 'string' ? JSON.parse(a.History) : a.History) : []; } catch (e) { historyParsed = []; }
 
-        // ---- ENSURE ALLOFFERS HAS CORRECT FORMAT ----
-        // If allOffers is empty, build it from legacy fields
+        // ✅ FIX: If allOffers is empty, build it from legacy fields
         if (allOffers.length === 0) {
-            const primaryOffer = {
-                seller: a.SoldBy || '',
-                price: parseFloat(a.CurrentPrice) || 0,
-                isBuyBoxWinner: true
-            };
-            const secondaryOffer = {
-                seller: a.SoldBySec || '',
-                price: parseFloat(a.SecondAsp) || 0,
-                isBuyBoxWinner: false
-            };
+            // Primary offer (BuyBox winner)
+            if (a.SoldBy || a.CurrentPrice > 0) {
+                allOffers.push({
+                    seller: a.SoldBy || 'Amazon',
+                    price: parseFloat(a.CurrentPrice) || 0,
+                    isBuyBoxWinner: true
+                });
+            }
             
-            allOffers = [];
-            if (primaryOffer.seller || primaryOffer.price > 0) allOffers.push(primaryOffer);
-            if (secondaryOffer.seller || secondaryOffer.price > 0) allOffers.push(secondaryOffer);
+            // Secondary offer (Other seller)
+            if (a.SoldBySec && a.SoldBySec.trim() !== '') {
+                const secPrice = parseFloat(a.SecondAsp) || 0;
+                // Only add if different from primary seller
+                const isSameAsPrimary = a.SoldBy && a.SoldBySec.toLowerCase().trim() === a.SoldBy.toLowerCase().trim();
+                if (!isSameAsPrimary) {
+                    allOffers.push({
+                        seller: a.SoldBySec.trim(),
+                        price: secPrice > 0 ? secPrice : 0,
+                        isBuyBoxWinner: false
+                    });
+                }
+            }
         }
 
         // ---- BUILD FINAL RESPONSE OBJECT ----
