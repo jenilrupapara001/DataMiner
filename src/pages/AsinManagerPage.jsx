@@ -1884,13 +1884,13 @@ const AsinManagerPage = () => {
                     style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', cursor: 'pointer' }}>
                     Price Trend (7 Days) <Eye size={10} />
                   </th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>BSR</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SUB-BSR</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>SUB-BSR</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>CATEGORY RANK</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>
                   <th colSpan={visibleHistoryCols}
                     onClick={async () => { setShowAllBsrHistory(true); }}
                     style={{ ...thStyle, background: '#f0fdf4', color: '#166534', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #dcfce7' }}>
-                    BSR TREND (7D)
+                    SUB-BSR TREND (7D)
                   </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center' }}>RT</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center' }}>CNT</th>
