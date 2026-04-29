@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
-import OctoparseAutomationToggle from '../components/settings/OctoparseAutomationToggle';
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState({
@@ -94,9 +93,6 @@ const SettingsPage = () => {
         <div className="row">
           <div className="col-lg-8">
             <div className="settings-section">
-              <h5 className="fw-bold mb-3">Automation Controls</h5>
-              <OctoparseAutomationToggle />
-            </div>
 
             {/* Octoparse API Settings */}
             <div className="card mb-4">

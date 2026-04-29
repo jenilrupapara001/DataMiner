@@ -50,18 +50,8 @@ async function verifySqlConnection() {
 verifySqlConnection();
 
 async function loadAutomationSetting() {
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .query("SELECT Value FROM SystemSettings WHERE [Key] = 'octoparse_automation_enabled'");
-    
-    if (result.recordset.length > 0) {
-      process.env.AUTOMATION_ENABLED = result.recordset[0].Value;
-      console.log(`🔧 Loaded automation setting: ${process.env.AUTOMATION_ENABLED}`);
-    }
-  } catch (err) {
-    console.warn('⚠️ Could not load automation setting:', err.message);
-  }
+  process.env.AUTOMATION_ENABLED = 'true';
+  console.log(`🔧 Automation is enabled globally`);
 }
 
 // Call after DB connection

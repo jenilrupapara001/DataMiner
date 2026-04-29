@@ -36,6 +36,11 @@ exports.getSettings = async (req, res) => {
 exports.getSettingByKey = async (req, res) => {
     try {
         const { key } = req.params;
+        
+        if (key === 'AUTOMATION_ENABLED') {
+            return res.json({ success: true, data: { Key: 'AUTOMATION_ENABLED', Value: 'true' } });
+        }
+
         const pool = await getPool();
         const result = await pool.request()
             .input('key', sql.NVarChar, key)
@@ -98,21 +103,10 @@ exports.testEmail = async (req, res) => {
  * GET /api/settings/octoparse-automation
  */
 exports.getOctoparseAutomation = async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .input('key', sql.NVarChar, 'octoparse_automation_enabled')
-      .query('SELECT Value FROM SystemSettings WHERE [Key] = @key');
-    
-    const enabled = result.recordset[0]?.Value === 'true' || result.recordset[0]?.Value === true;
-    
-    res.json({
-      success: true,
-      data: { enabled }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  res.json({
+    success: true,
+    data: { enabled: true }
+  });
 };
 
 /**
@@ -120,32 +114,9 @@ exports.getOctoparseAutomation = async (req, res) => {
  * POST /api/settings/octoparse-automation
  */
 exports.toggleOctoparseAutomation = async (req, res) => {
-  try {
-    const { enabled } = req.body;
-    const pool = await getPool();
-    
-    // Upsert the setting
-    await pool.request()
-      .input('key', sql.NVarChar, 'octoparse_automation_enabled')
-      .input('value', sql.NVarChar, String(enabled === true))
-      .query(`
-        IF EXISTS (SELECT 1 FROM SystemSettings WHERE [Key] = @key)
-          UPDATE SystemSettings SET Value = @value, UpdatedAt = GETDATE() WHERE [Key] = @key
-        ELSE
-          INSERT INTO SystemSettings ([Key], Value, CreatedAt, UpdatedAt) VALUES (@key, @value, GETDATE(), GETDATE())
-      `);
-    
-    // Also update environment variable in memory
-    process.env.AUTOMATION_ENABLED = String(enabled === true);
-    
-    console.log(`🔧 Octoparse Automation ${enabled ? 'ENABLED' : 'DISABLED'}`);
-    
-    res.json({
-      success: true,
-      data: { enabled: enabled === true },
-      message: `Octoparse automation ${enabled ? 'enabled' : 'disabled'} successfully`
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  res.json({
+    success: true,
+    data: { enabled: true },
+    message: `Octoparse automation is forced to enabled globally`
+  });
 };
