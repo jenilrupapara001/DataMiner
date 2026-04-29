@@ -1,558 +1,113 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { X, TrendingUp, TrendingDown, Filter, ArrowRight, Award, ChevronLeft, ChevronRight, Calendar, ArrowUpDown, Search, Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import api, { asinApi } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import { X, BarChart3, Search, Download, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Maximize2, Minimize2, ArrowUpDown, Trophy, Medal, FileSpreadsheet, FileText } from 'lucide-react';
 
-const BSRViewModal = ({ selectedAsin, isOpen, onClose }) => {
-  const { isAdmin, user } = useAuth();
-  const [dateFilter, setDateFilter] = useState('30days');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [sellers, setSellers] = useState([]);
-  const [expandedWeeks, setExpandedWeeks] = useState({});
-  const [showComparison, setShowComparison] = useState(true);
-  
-  // Infinite Scroll State
-  const [items, setItems] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
-  
-  const [selectedBrand, setSelectedBrand] = useState('all');
-  const [sortField, setSortField] = useState('asinCode');
+const BSRViewModal = ({ isOpen, onClose, asins = [] }) => {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('mainBsr');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [globalMinDate, setGlobalMinDate] = useState(null);
-  
-  const scrollContainerRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const fetchSellers = useCallback(async () => {
-    try {
-      const res = await api.get('/sellers');
-      const sellerList = res?.data?.sellers || res?.data || [];
-      setSellers(Array.isArray(sellerList) ? sellerList : []);
-    } catch (err) {
-      console.error('Error fetching sellers:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) fetchSellers();
-  }, [isOpen, fetchSellers]);
-
-  const loadData = useCallback(async (pageNum = 1, append = false) => {
-    if (!isOpen) return;
-    
-    try {
-      if (pageNum === 1) setIsLoading(true);
-      else setIsFetchingMore(true);
-
-      const params = {
-        page: pageNum,
-        limit: 50,
-        seller: selectedBrand === 'all' ? undefined : selectedBrand,
-        search: searchQuery || undefined,
-        sortBy: sortField.startsWith('day-') ? 'lastScraped' : sortField,
-        sortOrder: sortOrder
-      };
-
-      const res = await asinApi.getAll(params);
-      const newAsins = res?.asins || [];
-      
-      if (res?.minDate) setGlobalMinDate(new Date(res.minDate));
-      
-      setItems(prev => append ? [...prev, ...newAsins] : newAsins);
-      setTotalCount(res?.pagination?.total || 0);
-      setHasMore(newAsins.length === 50);
-      setPage(pageNum);
-      
-    } catch (err) {
-      console.error('Error loading ASINs for BSR modal:', err);
-    } finally {
-      setIsLoading(false);
-      setIsFetchingMore(false);
-    }
-  }, [isOpen, selectedBrand, searchQuery, sortField, sortOrder]);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadData(1, false);
-    } else {
-      setItems([]);
-      setPage(1);
-      setHasMore(true);
-    }
-  }, [isOpen, selectedBrand, searchQuery, sortField, sortOrder, loadData]);
-
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    if (scrollHeight - scrollTop <= clientHeight + 100 && hasMore && !isFetchingMore && !isLoading) {
-      loadData(page + 1, true);
-    }
-  };
-
-  const getFilteredDates = () => {
-    const now = new Date();
-    let startDate = null;
-    let endDate = now;
-
-    if (dateFilter === 'custom' && customStartDate && customEndDate) {
-      startDate = new Date(customStartDate);
-      endDate = new Date(customEndDate);
-    } else if (dateFilter === '7days') {
-      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (dateFilter === '14days') {
-      startDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    } else if (dateFilter === '30days') {
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    } else {
-      // All time - use global min date if available, otherwise fallback to 90 days
-      startDate = globalMinDate || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    }
-
-    // Clamp to the absolute minimum date in the database to avoid showing empty leading columns
-    if (globalMinDate && startDate < globalMinDate) {
-      startDate = new Date(globalMinDate);
-    }
-
-    return { startDate, endDate };
-  };
-
-  // Generate Data-Driven Columns based on actual database entries
-  const dateColumns = useMemo(() => {
-    const { startDate, endDate } = getFilteredDates();
-    
-    // Collect all unique dates from all loaded items' histories
-    const uniqueDateStrs = new Set();
-    items.forEach(asin => {
-      const history = asin.history || asin.weekHistory || [];
-      history.forEach(h => {
-        const d = h.date || h.week;
-        if (d) {
-          try {
-            uniqueDateStrs.add(new Date(d).toISOString().split('T')[0]);
-          } catch (e) { /* ignore malformed dates */ }
-        }
-      });
-    });
-
-    // Handle case where we have no history yet - show at least today
-    if (uniqueDateStrs.size === 0) {
-      uniqueDateStrs.add(new Date().toISOString().split('T')[0]);
-    }
-
-    // Filter and Sort the dates based on requested range
-    const sortedDates = Array.from(uniqueDateStrs)
-      .map(ds => new Date(ds))
-      .filter(d => d >= startDate && d <= endDate)
-      .sort((a, b) => b - a); // Newest first
-
-    // Group into weeks for headers
-    const weekMap = new Map();
-    sortedDates.forEach(date => {
-      const dateKey = date.toISOString().split('T')[0];
-      const weekNum = getWeekNumber(date);
-      const year = date.getFullYear();
-      const weekKey = `${year}-W${weekNum}`;
-
-      if (!weekMap.has(weekKey)) {
-        weekMap.set(weekKey, {
-          weekKey,
-          shortKey: `W${weekNum}`,
-          year,
-          dates: []
-        });
+  // Process ALL data
+  const bsrData = useMemo(() => {
+    if (!asins?.length) return [];
+    return asins.map(asin => {
+      let subBsrRank = 0, subBsrCategory = '';
+      if (asin.subBsr) {
+        const m = String(asin.subBsr).match(/#([\d,]+)\s+in\s+(.+)/);
+        if (m) { subBsrRank = parseInt(m[1].replace(/,/g, '')); subBsrCategory = m[2].trim(); }
       }
-      weekMap.get(weekKey).dates.push({ dateKey, date });
-    });
-
-    return Array.from(weekMap.values());
-  }, [items, dateFilter, customStartDate, customEndDate, globalMinDate]);
-
-  function getWeekNumber(date) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  }
-
-  const processedItems = useMemo(() => {
-    return items.map(asin => {
-      const history = asin.history || asin.weekHistory || [];
-      const historyMap = new Map();
-      
-      const sortedHistory = [...history].sort((a, b) => new Date(a.date || a.week) - new Date(b.date || b.week));
-      let lastBsr = asin.bsr || 0;
-      
-      if (sortedHistory.length > 0) {
-        const latest = sortedHistory[sortedHistory.length - 1];
-        lastBsr = latest.bsr || lastBsr;
+      if (!subBsrRank && asin.subBSRs) {
+        try { const p = typeof asin.subBSRs === 'string' ? JSON.parse(asin.subBSRs) : asin.subBSRs; if (Array.isArray(p) && p.length > 0) { const m = String(p[0]).match(/#([\d,]+)\s+in\s+(.+)/); if (m) { subBsrRank = parseInt(m[1].replace(/,/g, '')); subBsrCategory = m[2].trim(); } } } catch {}
       }
-
-      sortedHistory.forEach(h => {
-        const dateVal = h.date || h.week || h.timestamp;
-        if (!dateVal) return;
-        const dateKey = new Date(dateVal).toISOString().split('T')[0];
-        if (h.bsr && h.bsr > 0) historyMap.set(dateKey, h.bsr);
-      });
-
-      const weekData = {};
-      dateColumns.forEach(week => {
-        weekData[week.weekKey] = {};
-        week.dates.forEach(d => {
-          weekData[week.weekKey][d.dateKey] = historyMap.get(d.dateKey) || null;
-        });
-      });
-
-      return {
-        ...asin,
-        id: asin._id || asin.id,
-        processedWeekData: weekData,
-        sellerName: sellers.find(s => s._id === asin.sellerId)?.name || 'Unknown'
-      };
+      return { ...asin, asinCode: asin.asinCode || '', sku: asin.sku || '', title: asin.title || '', mainBsr: asin.bsr || 0, subBsrRank, subBsrCategory };
     });
-  }, [items, dateColumns, sellers]);
+  }, [asins]);
 
-  const displayItems = useMemo(() => {
-    if (!sortField.startsWith('day-')) return processedItems;
-    
-    const dayKey = sortField.replace('day-', '');
-    return [...processedItems].sort((a, b) => {
-      let valA = 99999999; 
-      let valB = 99999999;
-      
-      Object.values(a.processedWeekData).forEach(w => { if (w[dayKey]) valA = w[dayKey]; });
-      Object.values(b.processedWeekData).forEach(w => { if (w[dayKey]) valB = w[dayKey]; });
-
-      return sortOrder === 'asc' ? valA - valB : valB - valA;
+  const filteredData = useMemo(() => {
+    let data = [...bsrData];
+    if (search.trim()) { const q = search.toLowerCase(); data = data.filter(d => d.asinCode.toLowerCase().includes(q) || (d.sku || '').toLowerCase().includes(q) || d.subBsrCategory.toLowerCase().includes(q)); }
+    data.sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'mainBsr') { va = a.mainBsr; vb = b.mainBsr; } else if (sortBy === 'subBsrRank') { va = a.subBsrRank; vb = b.subBsrRank; } else return sortOrder === 'asc' ? a.asinCode.localeCompare(b.asinCode) : b.asinCode.localeCompare(a.asinCode);
+      if ((!va || va === 0) && (!vb || vb === 0)) return 0;
+      if (!va || va === 0) return 1;
+      if (!vb || vb === 0) return -1;
+      return sortOrder === 'asc' ? va - vb : vb - va;
     });
-  }, [processedItems, sortField, sortOrder]);
+    return data;
+  }, [bsrData, search, sortBy, sortOrder]);
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc'); // Default BSR sort to ASC (lower rank first)
-    }
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const paginatedData = useMemo(() => filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredData, currentPage, pageSize]);
+
+  const handleSort = (f) => { if (sortBy === f) setSortOrder(p => p === 'asc' ? 'desc' : 'asc'); else { setSortBy(f); setSortOrder('asc'); } };
+  const Si = ({ f }) => sortBy !== f ? <ArrowUpDown size={10} className="text-zinc-300" /> : sortOrder === 'asc' ? <ArrowUp size={10} className="text-zinc-700" /> : <ArrowDown size={10} className="text-zinc-700" />;
+
+  const badge = (v, unit = '') => {
+    if (!v || v === 0) return <span className="text-zinc-300">—</span>;
+    const c = v <= 100 ? { bg: '#ecfdf5', t: '#059669', i: <Trophy size={10} /> } : v <= 1000 ? { bg: '#f0fdf4', t: '#16a34a', i: <Medal size={10} /> } : v <= 5000 ? { bg: '#fffbeb', t: '#d97706' } : { bg: '#f8fafc', t: '#64748b' };
+    return <span className="badge fw-bold d-inline-flex align-items-center gap-1" style={{ background: c.bg, color: c.t, border: `1px solid ${c.t}30`, fontSize: '10px' }}>{c.i}{unit}{v.toLocaleString()}</span>;
   };
 
-  const toggleWeek = (weekKey) => {
-    setExpandedWeeks(prev => ({
-      ...prev,
-      [weekKey]: !prev[weekKey]
-    }));
-  };
-
-  const handleExportCSV = (data, weeks) => {
-    const headers = ['#', 'ASIN', 'Title', 'Brand', 'Live BSR'];
-    const dateHeaders = [];
-    weeks.forEach(w => w.dates.forEach(d => dateHeaders.push(d.dateKey)));
-
-    const csvRows = [
-      [...headers, ...dateHeaders].join(','),
-      ...data.map((item, idx) => [
-        idx + 1,
-        item.asinCode,
-        `"${item.title.replace(/"/g, '""')}"`,
-        `"${item.sellerName}"`,
-        item.bsr || 0,
-        ...dateHeaders.map(dKey => {
-            let p = null;
-            Object.values(item.processedWeekData).forEach(w => { if(w[dKey]) p = w[dKey]; });
-            return p || '';
-        })
-      ].join(','))
-    ];
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `bsr_history_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportData = () => {
+    const data = filteredData.map(d => ({ ASIN: d.asinCode, SKU: d.sku, Title: d.title, 'Main BSR': d.mainBsr || '', 'Sub BSR Rank': d.subBsrRank || '', 'Sub BSR Category': d.subBsrCategory || '' }));
+    const csv = Object.keys(data[0]).join(',') + '\n' + data.map(r => Object.values(r).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `bsr_matrix_${new Date().toISOString().split('T')[0]}.csv`; a.click(); setShowExportMenu(false);
   };
 
   if (!isOpen) return null;
+  const css = `.mt { width:100%; border-collapse:collapse; } .mt th { background:#fafafa; position:sticky; top:0; z-index:10; padding:8px 10px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#71717a; border-bottom:2px solid #e5e7eb; cursor:pointer; white-space:nowrap; } .mt th:hover { background:#f4f4f5; } .mt td { padding:6px 10px; border-bottom:1px solid #f1f5f9; font-size:11px; } .mt tr:hover td { background:#fafafa; } .pg { width:28px; height:28px; border:1.5px solid #e5e7eb; background:#fff; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#52525b; } .pg:hover { border-color:#18181b; } .pg.ac { background:#18181b; color:#fff; border-color:#18181b; } .pg:disabled { opacity:.3; cursor:not-allowed; } .chp { padding:3px 10px; border-radius:20px; font-size:10px; font-weight:600; cursor:pointer; border:1.5px solid #e5e7eb; background:#fff; color:#71717a; white-space:nowrap; } .chp:hover { border-color:#18181b; color:#18181b; }`;
 
   return createPortal(
-    <div
-      className="position-fixed top-0 bottom-0 start-0 end-0 d-flex align-items-center justify-content-center p-2"
-      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <style>{`
-        .bsr-modal-fade { animation: bsrModalFade 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes bsrModalFade { from { opacity: 0; transform: scale(0.98) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        .week-toggle { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; }
-        .week-toggle:hover { background-color: #f0fdf4 !important; }
-        .day-cell { font-size: 0.75rem; border-left: 1.5px solid #f1f5f9; color: #475569; }
-        .week-header { background: #f0fdf4; border-bottom: 2px solid #bbf7d0; font-weight: 700; color: #166534; }
-        .day-header { background: #ffffff; color: #64748b; font-weight: 600; cursor: pointer; }
-        .day-header:hover { background: #f0fdf4; color: #166534; }
+    <div className={`position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center ${isFullscreen ? 'p-0' : 'p-3'}`}
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999 }}>
+      <style>{css}</style>
+      <div className={`bg-white shadow-2xl d-flex flex-column ${isFullscreen ? 'w-100 h-100 rounded-0' : ''}`}
+        style={{ width: isFullscreen ? '100%' : '95%', maxWidth: isFullscreen ? 'none' : '1300px', height: isFullscreen ? '100%' : '92vh', borderRadius: isFullscreen ? '0' : '16px', overflow: 'hidden' }}>
         
-        .sticky-col-idx { position: sticky; left: 0; z-index: 11; background: white; width: 40px; min-width: 40px; text-align: center; border-right: 1px solid #f1f5f9; }
-        .sticky-col-1 { position: sticky; left: 40px; z-index: 10; background: white; width: 140px; min-width: 140px; border-right: 2px solid #f1f5f9; }
-        .sticky-col-2 { position: sticky; left: 180px; z-index: 10; background: white; width: 100px; min-width: 100px; border-right: 2px solid #f1f5f9; }
-        
-        thead th { position: sticky; top: 0; z-index: 5; background: #f0fdf4; }
-        thead tr:first-child th.sticky-col-idx,
-        thead tr:first-child th.sticky-col-1,
-        thead tr:first-child th.sticky-col-2 { z-index: 21; background: #f0fdf4; }
-        
-        .skeleton-row { height: 20px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s infinite; border-radius: 4px; }
-        @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        
-        tbody tr:hover td { background-color: #f0fdf4 !important; }
-        
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}</style>
-
-      <div
-        className="bg-white rounded-4 shadow-2xl overflow-hidden bsr-modal-fade"
-        style={{
-          width: '98vw',
-          height: '95vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white">
-          <div className="d-flex align-items-center gap-3">
-            <div className="p-2.5 bg-emerald-600 text-white rounded-3 shadow-sm">
-              <Award size={22} />
-            </div>
-            <div>
-              <h5 className="mb-0 fw-bold text-slate-900">BSR Rank Matrix</h5>
-              <div className="d-flex align-items-center gap-2">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {totalCount} total units
-                </span>
-                {/* <span className="text-slate-400 small">•</span>
-                <span className="text-slate-500 small">Infinite Scroll Enabled</span> */}
-              </div>
-            </div>
-          </div>
-
-          <div className="d-flex align-items-center gap-3">
-            <div className="d-flex gap-2 bg-slate-100 p-1 rounded-3">
-              {['7days', '14days', '30days', 'all'].map(period => (
-                <button
-                  key={period}
-                  onClick={() => setDateFilter(period)}
-                  className={`px-3 py-1.5 rounded-2 border-0 small fw-semibold transition-all ${
-                    dateFilter === period ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {period === '7days' ? '1W' : period === '14days' ? '2W' : period === '30days' ? '1M' : 'ALL'}
-                </button>
-              ))}
-            </div>
-
-            <div className="vr mx-1 my-2 text-slate-300"></div>
-
-            <div className="input-group input-group-sm" style={{ width: '220px' }}>
-              <span className="input-group-text bg-transparent border-end-0 text-slate-400">
-                <Search size={14} />
-              </span>
-              <input
-                type="text"
-                className="form-control border-start-0 ps-0 text-slate-600"
-                placeholder="Search ASIN or SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            <select
-              className="form-select form-select-sm text-slate-600 fw-medium"
-              style={{ width: '150px' }}
-              value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
-            >
-              <option value="all">Everywhere</option>
-              {sellers.map(s => <option key={s._id} value={s._id}>{s.name.substring(0, 15)}...</option>)}
-            </select>
-
-            <button
-              className="btn btn-sm btn-outline-slate-200 text-slate-600 d-flex align-items-center gap-2 px-3"
-              onClick={() => handleExportCSV(processedItems, dateColumns)}
-            >
-              <ArrowRight size={14} className="rotate-90" />
-              Export CSV
-            </button>
-
-            <button onClick={onClose} className="btn btn-ghost-slate rounded-circle p-1.5 hover:bg-slate-100">
-              <X size={22} className="text-slate-500" />
-            </button>
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0">
+          <div className="d-flex align-items-center gap-3"><div className="p-2 rounded-2" style={{ background: '#ecfdf5', color: '#059669' }}><BarChart3 size={20} /></div><div><h5 className="mb-0 fw-bold text-zinc-900" style={{ fontSize: '14px' }}>BSR & Sub BSR Matrix</h5><span className="text-zinc-500" style={{ fontSize: '11px' }}>{filteredData.length.toLocaleString()} of {bsrData.length.toLocaleString()} ASINs</span></div></div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="position-relative"><button className="chp d-flex align-items-center gap-1" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#059669', color: '#059669' }}><Download size={12} /> Export</button>{showExportMenu && <div className="position-absolute bg-white border rounded-2 shadow-lg p-1" style={{ top: '100%', right: 0, zIndex: 10, marginTop: '4px', minWidth: '140px' }}><button className="btn btn-sm btn-ghost d-flex align-items-center gap-2 w-100 text-start rounded-1" onClick={exportData} style={{ fontSize: '11px' }}><FileText size={14} className="text-blue-600" /> Export CSV</button></div>}</div>
+            <button className="btn btn-ghost p-2 rounded-circle" onClick={() => setIsFullscreen(!isFullscreen)}>{isFullscreen ? <Minimize2 size={16} className="text-zinc-400" /> : <Maximize2 size={16} className="text-zinc-400" />}</button>
+            <button className="btn btn-ghost p-2 rounded-circle" onClick={onClose}><X size={18} /></button>
           </div>
         </div>
 
-        {/* Matrix Table */}
-        <div 
-          className="overflow-auto flex-grow-1 position-relative" 
-          onScroll={handleScroll}
-          ref={scrollContainerRef}
-        >
-          <table className="table table-borderless mb-0 w-100" style={{ minWidth: '1500px', tableLayout: 'fixed' }}>
-            <thead>
-              <tr>
-                <th rowSpan={2} className="sticky-col-idx py-3">#</th>
-                <th rowSpan={2} className="sticky-col-1 py-3" onClick={() => handleSort('asinCode')} style={{ cursor: 'pointer' }}>
-                  <div className="d-flex align-items-center justify-content-between px-2">
-                    IDENTIFIER {sortField === 'asinCode' && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </div>
-                </th>
-                <th rowSpan={2} className="sticky-col-2 py-3 text-center" onClick={() => handleSort('bsr')} style={{ cursor: 'pointer' }}>
-                  LIVE BSR {sortField === 'bsr' && (sortOrder === 'asc' ? '↑' : '↓')}
-                </th>
-                {dateColumns.map(week => {
-                  const isExpanded = expandedWeeks[week.weekKey] !== false;
-                  return (
-                    <th
-                      key={week.weekKey}
-                      colSpan={isExpanded ? (week.dates.length + (showComparison ? 1 : 0)) : 1}
-                      className="week-header text-center py-2 px-3 border-bottom border-start border-emerald-100 week-toggle"
-                      onClick={() => toggleWeek(week.weekKey)}
-                    >
-                      <div className="d-flex align-items-center justify-content-center gap-2">
-                         <span className="text-emerald-700/40 fw-medium small">{week.year}</span>
-                         <span>{week.shortKey}</span>
-                         <span className="text-emerald-300">{isExpanded ? '▼' : '▶'}</span>
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-              <tr>
-                {dateColumns.map((week, wIdx) => {
-                  const isExpanded = expandedWeeks[week.weekKey] !== false;
-                  if (!isExpanded) return null;
-                  return (
-                    <React.Fragment key={`${week.weekKey}-days`}>
-                      {week.dates.map(d => (
-                        <th
-                          key={d.dateKey}
-                          className="day-header text-center py-2 border-start border-slate-100"
-                          onClick={() => handleSort(`day-${d.dateKey}`)}
-                        >
-                          <div className="small">{d.date.toLocaleDateString('en-IN', { day: '2-digit' })}</div>
-                          <div style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase' }}>
-                            {d.date.toLocaleDateString('en-IN', { month: 'short' })}
-                          </div>
-                        </th>
-                      ))}
-                      {showComparison && wIdx < dateColumns.length - 1 && (
-                        <th className="text-center py-2 bg-amber-50 text-amber-700" style={{ fontSize: '0.65rem', fontWeight: 700 }}>
-                          VS NEXT
-                        </th>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody style={{ backgroundColor: '#fff' }}>
-              {isLoading && items.length === 0 ? (
-                Array.from({ length: 15 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`}>
-                    <td className="sticky-col-idx"><div className="skeleton-row mx-auto" style={{ width: '20px' }}></div></td>
-                    <td className="sticky-col-1"><div className="skeleton-row w-75"></div></td>
-                    <td className="sticky-col-2"><div className="skeleton-row w-50 mx-auto"></div></td>
-                    <td colSpan={100}><div className="skeleton-row w-100"></div></td>
-                  </tr>
-                ))
-              ) : displayItems.map((item, idx) => (
-                <tr key={item.id} className="border-bottom border-slate-50">
-                  <td className="sticky-col-idx text-slate-400 small fw-medium">{idx + 1}</td>
-                  <td className="sticky-col-1 px-3 py-2">
-                     <div className="d-flex flex-column" style={{ maxWidth: '120px' }}>
-                        <span className="fw-bold text-slate-800 font-monospace small">{item.asinCode}</span>
-                        <span className="text-slate-400 text-truncate" style={{ fontSize: '0.65rem' }}>{item.title}</span>
-                     </div>
-                  </td>
-                  <td className="sticky-col-2 text-center text-emerald-700 fw-bold small">#{item.bsr?.toLocaleString()}</td>
-                  {dateColumns.map((week, wIdx) => {
-                    const isExpanded = expandedWeeks[week.weekKey] !== false;
-                    
-                    if (!isExpanded) {
-                      const prices = Object.values(item.processedWeekData[week.weekKey] || {}).filter(v => v !== null);
-                      const avg = prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length) : null;
-                      return (
-                        <td key={`${week.weekKey}-col`} className="text-center py-2 border-start border-slate-100 bg-emerald-50/20">
-                           {avg ? <span className="small text-emerald-600 fw-semibold">#{Math.round(avg).toLocaleString()}</span> : <span className="text-slate-300">-</span>}
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <React.Fragment key={week.weekKey}>
-                         {week.dates.map(d => {
-                            const bsr = item.processedWeekData[week.weekKey][d.dateKey];
-                            return (
-                               <td key={d.dateKey} className="text-center day-cell py-2">
-                                  {bsr ? (
-                                    <span className="fw-medium text-slate-700">#{bsr.toLocaleString()}</span>
-                                  ) : (
-                                    <span className="text-slate-300">-</span>
-                                  )}
-                               </td>
-                            );
-                         })}
-                         {showComparison && wIdx < dateColumns.length - 1 && (
-                           <td className="text-center bg-amber-50/20 border-start border-slate-100">
-                             <span className="text-slate-300 small">-</span>
-                           </td>
-                         )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          
-          {(isFetchingMore || hasMore) && (
-            <div className="p-4 d-flex justify-content-center align-items-center gap-3">
-              <Loader2 className="animate-spin text-emerald-600" size={24} />
-              <span className="text-slate-500 fw-medium">Loading more BSR rankings...</span>
-            </div>
-          )}
+        <div className="px-4 py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-shrink-0">
+          <div className="position-relative" style={{ width: '250px' }}><Search size={12} className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" /><input className="form-control form-control-sm ps-4 rounded-2" placeholder="Search ASIN, SKU, Sub BSR..." value={search} onChange={e => setSearch(e.target.value)} style={{ fontSize: '11px', height: '28px', border: '1.5px solid #e5e7eb' }} /></div>
+          <div className="d-flex gap-1">{[{ v: 'mainBsr', l: 'Main BSR' }, { v: 'subBsrRank', l: 'Sub BSR Rank' }].map(f => <button key={f.v} className={`chp ${sortBy === f.v ? 'act' : ''}`} onClick={() => handleSort(f.v)}>{f.l} {sortBy === f.v ? (sortOrder === 'asc' ? '↑' : '↓') : ''}</button>)}</div>
         </div>
 
-        {/* Footer info */}
-        <div className="px-4 py-2 bg-slate-50 border-top d-flex justify-content-between align-items-center">
-           <div className="d-flex gap-4">
-              <div className="d-flex align-items-center gap-2">
-                 <div className="p-1.5 bg-green-100 rounded-circle"><TrendingDown size={12} className="text-green-700" /></div>
-                 <span className="small text-slate-600">Lower BSR (Better)</span>
-              </div>
-              <div className="d-flex align-items-center gap-2">
-                 <div className="p-1.5 bg-red-100 rounded-circle"><TrendingUp size={12} className="text-red-700" /></div>
-                 <span className="small text-slate-600">Higher BSR (Worse)</span>
-              </div>
-           </div>
-           
-           <div className="text-slate-400 small">
-              Metric: Category Best Sellers Rank • BuildRO v2.4
-           </div>
-           
-           <button onClick={onClose} className="btn btn-dark btn-sm px-4 py-1.5 rounded-2 fw-bold">
-              Dismiss Modal
-           </button>
+        <div className="flex-grow-1 overflow-auto">
+          <table className="mt"><thead><tr><th style={{ width: '40px' }}>#</th><th style={{ minWidth: '120px' }} onClick={() => handleSort('asinCode')}><div className="d-flex align-items-center gap-1">ASIN <Si f="asinCode" /></div></th><th style={{ minWidth: '70px' }}>SKU</th><th style={{ minWidth: '160px' }}>PRODUCT</th><th style={{ width: '90px', textAlign: 'center' }} onClick={() => handleSort('mainBsr')}><div className="d-flex align-items-center justify-content-center gap-1">MAIN BSR <Si f="mainBsr" /></div></th><th style={{ width: '100px', textAlign: 'center' }} onClick={() => handleSort('subBsrRank')}><div className="d-flex align-items-center justify-content-center gap-1">SUB BSR <Si f="subBsrRank" /></div></th><th style={{ minWidth: '200px' }}>SUB BSR CATEGORY</th></tr></thead>
+          <tbody>
+            {paginatedData.map((d, i) => (
+              <tr key={d._id || d.asinCode}>
+                <td className="text-zinc-400 text-center">{(currentPage - 1) * pageSize + i + 1}</td>
+                <td><span className="fw-bold text-primary" style={{ fontSize: '11px' }}>{d.asinCode}</span></td>
+                <td className="text-zinc-500" style={{ fontSize: '10px' }}>{d.sku || '—'}</td>
+                <td className="text-zinc-600 text-truncate" style={{ maxWidth: '160px', fontSize: '10px' }} title={d.title}>{d.title || '—'}</td>
+                <td className="text-center">{badge(d.mainBsr, '#')}</td>
+                <td className="text-center">{badge(d.subBsrRank, '#')}</td>
+                <td className="text-zinc-600" style={{ fontSize: '11px' }}>{d.subBsrCategory || <span className="text-zinc-300">—</span>}</td>
+              </tr>
+            ))}
+          </tbody></table>
+          {filteredData.length === 0 && <div className="text-center py-5"><BarChart3 size={40} className="text-zinc-300 mb-2" /><p className="text-zinc-500">No results</p></div>}
+        </div>
+
+        <div className="px-4 py-2 bg-white border-top d-flex justify-content-between align-items-center flex-shrink-0">
+          <div className="d-flex align-items-center gap-2"><span className="text-zinc-500" style={{ fontSize: '11px' }}>{filteredData.length > 0 ? `${((currentPage - 1) * pageSize) + 1}–${Math.min(currentPage * pageSize, filteredData.length)} of ${filteredData.length.toLocaleString()}` : 'No results'}</span><select className="form-select form-select-sm" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} style={{ width: '70px', fontSize: '10px', height: '26px' }}>{[25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+          <div className="d-flex gap-1"><button className="pg" disabled={currentPage <= 1} onClick={() => setCurrentPage(1)}>«</button><button className="pg" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}><ChevronLeft size={14} /></button>{Array.from({ length: Math.min(5, totalPages) }, (_, i) => { const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4)); const page = start + i; if (page > totalPages) return null; return <button key={page} className={`pg ${currentPage === page ? 'ac' : ''}`} onClick={() => setCurrentPage(page)}>{page}</button>; })}<button className="pg" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}><ChevronRight size={14} /></button><button className="pg" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(totalPages)}>»</button></div>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>, document.body
   );
 };
 

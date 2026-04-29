@@ -791,7 +791,8 @@ const AsinManagerPage = () => {
           value: `${stats.avgRating || '0.00'} ★`,
           color: '#f59e0b',
           icon: <Trophy size={14} />,
-          sub: `${stats.above4Star || 0} above 4★`
+          sub: `${stats.above4Star || 0} above 4★`,
+          onClick: () => { setShowAllRatingHistory(true); }
         },
         {
           label: 'BEST SELLER',
@@ -2826,17 +2827,16 @@ const AsinManagerPage = () => {
         />
         <PriceViewModal
           asins={filteredAsins}
-          selectedAsin={selectedAsinForPrice}
           isOpen={!!selectedAsinForPrice || showAllPriceHistory}
           onClose={() => { setSelectedAsinForPrice(null); setShowAllPriceHistory(false); }}
         />
         <BSRViewModal
-          selectedAsin={selectedAsinForBsr}
+          asins={filteredAsins}
           isOpen={!!selectedAsinForBsr || showAllBsrHistory}
           onClose={() => { setSelectedAsinForBsr(null); setShowAllBsrHistory(false); }}
         />
         <RatingViewModal
-          selectedAsin={selectedAsinForRating}
+          asins={filteredAsins}
           isOpen={!!selectedAsinForRating || showAllRatingHistory}
           onClose={() => { setSelectedAsinForRating(null); setShowAllRatingHistory(false); }}
         />

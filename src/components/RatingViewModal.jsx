@@ -1,581 +1,109 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { X, TrendingUp, TrendingDown, Filter, ArrowRight, Star, ChevronLeft, ChevronRight, Calendar, ArrowUpDown, Search, Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import api, { asinApi } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import { X, Star, Search, Download, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Maximize2, Minimize2, ArrowUpDown, MessageSquare, FileSpreadsheet, FileText } from 'lucide-react';
 
-const RatingViewModal = ({ selectedAsin, isOpen, onClose }) => {
-  const { isAdmin, user } = useAuth();
-  const [dateFilter, setDateFilter] = useState('30days');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [sellers, setSellers] = useState([]);
-  const [expandedWeeks, setExpandedWeeks] = useState({});
-  const [showComparison, setShowComparison] = useState(true);
-  
-  // Infinite Scroll State
-  const [items, setItems] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
-  
-  const [selectedBrand, setSelectedBrand] = useState('all');
-  const [sortField, setSortField] = useState('asinCode');
-  const [sortOrder, setSortOrder] = useState('asc');
-  const [globalMinDate, setGlobalMinDate] = useState(null);
-  
-  const scrollContainerRef = useRef(null);
+const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('rating');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [filterLevel, setFilterLevel] = useState('all');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const fetchSellers = useCallback(async () => {
-    try {
-      const res = await api.get('/sellers');
-      const sellerList = res?.data?.sellers || res?.data || [];
-      setSellers(Array.isArray(sellerList) ? sellerList : []);
-    } catch (err) {
-      console.error('Error fetching sellers:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) fetchSellers();
-  }, [isOpen, fetchSellers]);
-
-  const loadData = useCallback(async (pageNum = 1, append = false) => {
-    if (!isOpen) return;
-    
-    try {
-      if (pageNum === 1) setIsLoading(true);
-      else setIsFetchingMore(true);
-
-      const params = {
-        page: pageNum,
-        limit: 50,
-        seller: selectedBrand === 'all' ? undefined : selectedBrand,
-        search: searchQuery || undefined,
-        sortBy: sortField.startsWith('day-') ? 'lastScraped' : sortField,
-        sortOrder: sortOrder
-      };
-
-      const res = await asinApi.getAll(params);
-      const newAsins = res?.asins || [];
-      
-      if (res?.minDate) setGlobalMinDate(new Date(res.minDate));
-      
-      setItems(prev => append ? [...prev, ...newAsins] : newAsins);
-      setTotalCount(res?.pagination?.total || 0);
-      setHasMore(newAsins.length === 50);
-      setPage(pageNum);
-      
-    } catch (err) {
-      console.error('Error loading ASINs for Rating modal:', err);
-    } finally {
-      setIsLoading(false);
-      setIsFetchingMore(false);
-    }
-  }, [isOpen, selectedBrand, searchQuery, sortField, sortOrder]);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadData(1, false);
-    } else {
-      setItems([]);
-      setPage(1);
-      setHasMore(true);
-    }
-  }, [isOpen, selectedBrand, searchQuery, sortField, sortOrder, loadData]);
-
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    if (scrollHeight - scrollTop <= clientHeight + 100 && hasMore && !isFetchingMore && !isLoading) {
-      loadData(page + 1, true);
-    }
-  };
-
-  const getFilteredDates = () => {
-    const now = new Date();
-    let startDate = null;
-    let endDate = now;
-
-    if (dateFilter === 'custom' && customStartDate && customEndDate) {
-      startDate = new Date(customStartDate);
-      endDate = new Date(customEndDate);
-    } else if (dateFilter === '7days') {
-      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (dateFilter === '14days') {
-      startDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    } else if (dateFilter === '30days') {
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    } else {
-      // All time - use global min date if available, otherwise fallback to 90 days
-      startDate = globalMinDate || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    }
-
-    // Clamp to the absolute minimum date in the database to avoid showing empty leading columns
-    if (globalMinDate && startDate < globalMinDate) {
-      startDate = new Date(globalMinDate);
-    }
-
-    return { startDate, endDate };
-  };
-
-  // Generate Data-Driven Columns based on actual database entries
-  const dateColumns = useMemo(() => {
-    const { startDate, endDate } = getFilteredDates();
-    
-    // Collect all unique dates from all loaded items' histories
-    const uniqueDateStrs = new Set();
-    items.forEach(asin => {
-      const history = asin.history || asin.weekHistory || [];
-      history.forEach(h => {
-        const d = h.date || h.week;
-        if (d) {
-          try {
-            uniqueDateStrs.add(new Date(d).toISOString().split('T')[0]);
-          } catch (e) { /* ignore malformed dates */ }
-        }
-      });
-    });
-
-    // Handle case where we have no history yet - show at least today
-    if (uniqueDateStrs.size === 0) {
-      uniqueDateStrs.add(new Date().toISOString().split('T')[0]);
-    }
-
-    // Filter and Sort the dates based on requested range
-    const sortedDates = Array.from(uniqueDateStrs)
-      .map(ds => new Date(ds))
-      .filter(d => d >= startDate && d <= endDate)
-      .sort((a, b) => b - a); // Newest first
-
-    // Group into weeks for headers
-    const weekMap = new Map();
-    sortedDates.forEach(date => {
-      const dateKey = date.toISOString().split('T')[0];
-      const weekNum = getWeekNumber(date);
-      const year = date.getFullYear();
-      const weekKey = `${year}-W${weekNum}`;
-
-      if (!weekMap.has(weekKey)) {
-        weekMap.set(weekKey, {
-          weekKey,
-          shortKey: `W${weekNum}`,
-          year,
-          dates: []
-        });
-      }
-      weekMap.get(weekKey).dates.push({ dateKey, date });
-    });
-
-    return Array.from(weekMap.values());
-  }, [items, dateFilter, customStartDate, customEndDate, globalMinDate]);
-
-  function getWeekNumber(date) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  }
-
-  const processedItems = useMemo(() => {
-    return items.map(asin => {
-      const history = asin.history || asin.weekHistory || [];
-      const historyMap = new Map();
-      
-      const sortedHistory = [...history].sort((a, b) => new Date(a.date || a.week) - new Date(b.date || b.week));
-      let lastRating = asin.rating || 0;
-      let lastReviews = asin.reviewCount || asin.reviews || 0;
-      
-      if (sortedHistory.length > 0) {
-        const latest = sortedHistory[sortedHistory.length - 1];
-        lastRating = latest.rating || lastRating;
-        lastReviews = latest.reviewCount || latest.reviews || lastReviews;
-      }
-
-      sortedHistory.forEach(h => {
-        const dateVal = h.date || h.week || h.timestamp;
-        if (!dateVal) return;
-        const dateKey = new Date(dateVal).toISOString().split('T')[0];
-        if (h.rating) historyMap.set(dateKey, { rating: h.rating, reviews: h.reviewCount || h.reviews || lastReviews });
-      });
-
-      const weekData = {};
-      dateColumns.forEach(week => {
-        weekData[week.weekKey] = {};
-        week.dates.forEach(d => {
-          weekData[week.weekKey][d.dateKey] = historyMap.get(d.dateKey) || null;
-        });
-      });
-
-      return {
-        ...asin,
-        id: asin._id || asin.id,
-        processedWeekData: weekData,
-        sellerName: sellers.find(s => s._id === asin.sellerId)?.name || 'Unknown'
-      };
-    });
-  }, [items, dateColumns, sellers]);
-
-  const displayItems = useMemo(() => {
-    if (!sortField.startsWith('day-')) return processedItems;
-    
-    const dayKey = sortField.replace('day-', '');
-    return [...processedItems].sort((a, b) => {
-      let valA = 0; 
-      let valB = 0;
-      
-      Object.values(a.processedWeekData).forEach(w => { if (w[dayKey]) valA = w[dayKey].rating; });
-      Object.values(b.processedWeekData).forEach(w => { if (w[dayKey]) valB = w[dayKey].rating; });
-
-      return sortOrder === 'asc' ? valA - valB : valB - valA;
-    });
-  }, [processedItems, sortField, sortOrder]);
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
-  };
-
-  const toggleWeek = (weekKey) => {
-    setExpandedWeeks(prev => ({
-      ...prev,
-      [weekKey]: !prev[weekKey]
+  const ratingData = useMemo(() => {
+    if (!asins?.length) return [];
+    return asins.map(a => ({
+      ...a, asinCode: a.asinCode || '', sku: a.sku || '', title: a.title || '',
+      rating: parseFloat(a.rating) || 0, reviewCount: parseInt(a.reviewCount) || 0,
+      stars: (parseFloat(a.rating) || 0) > 0 ? '★'.repeat(Math.round(parseFloat(a.rating) || 0)) + '☆'.repeat(5 - Math.round(parseFloat(a.rating) || 0)) : '☆☆☆☆☆'
     }));
+  }, [asins]);
+
+  const filteredData = useMemo(() => {
+    let data = [...ratingData];
+    if (search.trim()) { const q = search.toLowerCase(); data = data.filter(d => d.asinCode.toLowerCase().includes(q) || (d.sku || '').toLowerCase().includes(q)); }
+    if (filterLevel === 'excellent') data = data.filter(d => d.rating >= 4.0);
+    else if (filterLevel === 'good') data = data.filter(d => d.rating >= 3.5 && d.rating < 4.0);
+    else if (filterLevel === 'poor') data = data.filter(d => d.rating > 0 && d.rating < 3.5);
+    else if (filterLevel === 'noRating') data = data.filter(d => d.rating === 0);
+    data.sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'rating') { va = a.rating; vb = b.rating; } else if (sortBy === 'reviewCount') { va = a.reviewCount; vb = b.reviewCount; } else return sortOrder === 'asc' ? a.asinCode.localeCompare(b.asinCode) : b.asinCode.localeCompare(a.asinCode);
+      if ((!va || va === 0) && (!vb || vb === 0)) return 0; if (!va || va === 0) return 1; if (!vb || vb === 0) return -1;
+      return sortOrder === 'asc' ? va - vb : vb - va;
+    });
+    return data;
+  }, [ratingData, search, filterLevel, sortBy, sortOrder]);
+
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const paginatedData = useMemo(() => filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredData, currentPage, pageSize]);
+
+  const handleSort = (f) => { if (sortBy === f) setSortOrder(p => p === 'asc' ? 'desc' : 'asc'); else { setSortBy(f); setSortOrder('desc'); } };
+  const Si = ({ f }) => sortBy !== f ? <ArrowUpDown size={10} className="text-zinc-300" /> : sortOrder === 'asc' ? <ArrowUp size={10} className="text-zinc-700" /> : <ArrowDown size={10} className="text-zinc-700" />;
+
+  const rBadge = (v) => {
+    if (!v || v === 0) return <span className="text-zinc-300">—</span>;
+    const c = v >= 4.0 ? { bg: '#ecfdf5', t: '#059669' } : v >= 3.5 ? { bg: '#fffbeb', t: '#d97706' } : { bg: '#fef2f2', t: '#dc2626' };
+    return <span className="badge fw-bold d-inline-flex align-items-center gap-1" style={{ background: c.bg, color: c.t, border: `1px solid ${c.t}30`, fontSize: '10px' }}><Star size={10} fill={c.t} /> {v.toFixed(1)}</span>;
   };
 
-  const handleExportCSV = (data, weeks) => {
-    const headers = ['#', 'ASIN', 'Title', 'Brand', 'Live Rating', 'Live Reviews'];
-    const dateHeaders = [];
-    weeks.forEach(w => w.dates.forEach(d => dateHeaders.push(d.dateKey)));
-
-    const csvRows = [
-      [...headers, ...dateHeaders].join(','),
-      ...data.map((item, idx) => [
-        idx + 1,
-        item.asinCode,
-        `"${item.title.replace(/"/g, '""')}"`,
-        `"${item.sellerName}"`,
-        item.rating || 0,
-        item.reviewCount || 0,
-        ...dateHeaders.map(dKey => {
-            let p = null;
-            Object.values(item.processedWeekData).forEach(w => { if(w[dKey]) p = w[dKey].rating; });
-            return p || '';
-        })
-      ].join(','))
-    ];
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `rating_history_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportData = () => {
+    const data = filteredData.map(d => ({ ASIN: d.asinCode, SKU: d.sku, Title: d.title, Rating: d.rating || '', Reviews: d.reviewCount || '' }));
+    const csv = Object.keys(data[0]).join(',') + '\n' + data.map(r => Object.values(r).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `rating_matrix_${new Date().toISOString().split('T')[0]}.csv`; a.click(); setShowExportMenu(false);
   };
 
   if (!isOpen) return null;
+  const css = `.mt2 { width:100%; border-collapse:collapse; } .mt2 th { background:#fafafa; position:sticky; top:0; z-index:10; padding:8px 10px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#71717a; border-bottom:2px solid #e5e7eb; cursor:pointer; white-space:nowrap; } .mt2 th:hover { background:#f4f4f5; } .mt2 td { padding:6px 10px; border-bottom:1px solid #f1f5f9; font-size:11px; } .mt2 tr:hover td { background:#fafafa; } .pg { width:28px; height:28px; border:1.5px solid #e5e7eb; background:#fff; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#52525b; } .pg:hover { border-color:#18181b; } .pg.ac { background:#18181b; color:#fff; border-color:#18181b; } .pg:disabled { opacity:.3; cursor:not-allowed; } .chp { padding:3px 10px; border-radius:20px; font-size:10px; font-weight:600; cursor:pointer; border:1.5px solid #e5e7eb; background:#fff; color:#71717a; white-space:nowrap; } .chp:hover { border-color:#18181b; color:#18181b; } .chp.act { background:#18181b; color:#fff; border-color:#18181b; }`;
 
   return createPortal(
-    <div
-      className="position-fixed top-0 bottom-0 start-0 end-0 d-flex align-items-center justify-content-center p-2"
-      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <style>{`
-        .rating-modal-fade { animation: ratingModalFade 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes ratingModalFade { from { opacity: 0; transform: scale(0.98) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        .week-toggle { cursor: pointer; user-select: none; transition: all 0.2s; position: relative; }
-        .week-toggle:hover { background-color: #fffbeb !important; }
-        .day-cell { font-size: 0.75rem; border-left: 1.5px solid #f1f5f9; color: #475569; }
-        .week-header { background: #fffbeb; border-bottom: 2px solid #fef3c7; font-weight: 700; color: #92400e; }
-        .day-header { background: #ffffff; color: #64748b; font-weight: 600; cursor: pointer; }
-        .day-header:hover { background: #fffbeb; color: #92400e; }
-        
-        .sticky-col-idx { position: sticky; left: 0; z-index: 11; background: white; width: 40px; min-width: 40px; text-align: center; border-right: 1px solid #f1f5f9; }
-        .sticky-col-1 { position: sticky; left: 40px; z-index: 10; background: white; width: 140px; min-width: 140px; border-right: 2px solid #f1f5f9; }
-        .sticky-col-2 { position: sticky; left: 180px; z-index: 10; background: white; width: 90px; min-width: 90px; }
-        .sticky-col-3 { position: sticky; left: 270px; z-index: 10; background: white; width: 90px; min-width: 90px; border-right: 2px solid #f1f5f9; }
-        
-        thead th { position: sticky; top: 0; z-index: 5; background: #fffbeb; }
-        thead tr:first-child th.sticky-col-idx,
-        thead tr:first-child th.sticky-col-1,
-        thead tr:first-child th.sticky-col-2,
-        thead tr:first-child th.sticky-col-3 { z-index: 21; background: #fffbeb; }
-        
-        .skeleton-row { height: 20px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s infinite; border-radius: 4px; }
-        @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        
-        tbody tr:hover td { background-color: #fffbeb !important; }
-        
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      `}</style>
+    <div className={`position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center ${isFullscreen ? 'p-0' : 'p-3'}`}
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999 }}>
+      <style>{css}</style>
+      <div className={`bg-white shadow-2xl d-flex flex-column ${isFullscreen ? 'w-100 h-100 rounded-0' : ''}`}
+        style={{ width: isFullscreen ? '100%' : '95%', maxWidth: isFullscreen ? 'none' : '1200px', height: isFullscreen ? '100%' : '92vh', borderRadius: isFullscreen ? '0' : '16px', overflow: 'hidden' }}>
 
-      <div
-        className="bg-white rounded-4 shadow-2xl overflow-hidden rating-modal-fade"
-        style={{
-          width: '98vw',
-          height: '95vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white">
-          <div className="d-flex align-items-center gap-3">
-            <div className="p-2.5 bg-amber-500 text-white rounded-3 shadow-sm">
-              <Star size={22} fill="currentColor" />
-            </div>
-            <div>
-              <h5 className="mb-0 fw-bold text-slate-900">Rating Analysis Matrix</h5>
-              <div className="d-flex align-items-center gap-2">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {totalCount} total units
-                </span>
-                {/* <span className="text-slate-400 small">•</span>
-                <span className="text-slate-500 small">Infinite Scroll Enabled</span> */}
-              </div>
-            </div>
-          </div>
-
-          <div className="d-flex align-items-center gap-3">
-            <div className="d-flex gap-2 bg-slate-100 p-1 rounded-3">
-              {['7days', '14days', '30days', 'all'].map(period => (
-                <button
-                  key={period}
-                  onClick={() => setDateFilter(period)}
-                  className={`px-3 py-1.5 rounded-2 border-0 small fw-semibold transition-all ${
-                    dateFilter === period ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {period === '7days' ? '1W' : period === '14days' ? '2W' : period === '30days' ? '1M' : 'ALL'}
-                </button>
-              ))}
-            </div>
-
-            <div className="vr mx-1 my-2 text-slate-300"></div>
-
-            <div className="input-group input-group-sm" style={{ width: '220px' }}>
-              <span className="input-group-text bg-transparent border-end-0 text-slate-400">
-                <Search size={14} />
-              </span>
-              <input
-                type="text"
-                className="form-control border-start-0 ps-0 text-slate-600"
-                placeholder="Search ASIN or SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            <select
-              className="form-select form-select-sm text-slate-600 fw-medium"
-              style={{ width: '150px' }}
-              value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
-            >
-              <option value="all">Everywhere</option>
-              {sellers.map(s => <option key={s._id} value={s._id}>{s.name.substring(0, 15)}...</option>)}
-            </select>
-
-            <button
-              className="btn btn-sm btn-outline-slate-200 text-slate-600 d-flex align-items-center gap-2 px-3"
-              onClick={() => handleExportCSV(processedItems, dateColumns)}
-            >
-              <ArrowRight size={14} className="rotate-90" />
-              Export CSV
-            </button>
-
-            <button onClick={onClose} className="btn btn-ghost-slate rounded-circle p-1.5 hover:bg-slate-100">
-              <X size={22} className="text-slate-500" />
-            </button>
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0">
+          <div className="d-flex align-items-center gap-3"><div className="p-2 rounded-2" style={{ background: '#fffbeb', color: '#d97706' }}><Star size={20} /></div><div><h5 className="mb-0 fw-bold text-zinc-900" style={{ fontSize: '14px' }}>Rating & Review Matrix</h5><span className="text-zinc-500" style={{ fontSize: '11px' }}>{filteredData.length.toLocaleString()} of {ratingData.length.toLocaleString()} ASINs</span></div></div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="position-relative"><button className="chp d-flex align-items-center gap-1" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#d97706', color: '#d97706' }}><Download size={12} /> Export</button>{showExportMenu && <div className="position-absolute bg-white border rounded-2 shadow-lg p-1" style={{ top: '100%', right: 0, zIndex: 10, marginTop: '4px', minWidth: '140px' }}><button className="btn btn-sm btn-ghost d-flex align-items-center gap-2 w-100 text-start rounded-1" onClick={exportData} style={{ fontSize: '11px' }}><FileText size={14} className="text-blue-600" /> Export CSV</button></div>}</div>
+            <button className="btn btn-ghost p-2 rounded-circle" onClick={() => setIsFullscreen(!isFullscreen)}>{isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
+            <button className="btn btn-ghost p-2 rounded-circle" onClick={onClose}><X size={18} /></button>
           </div>
         </div>
 
-        {/* Matrix Table */}
-        <div 
-          className="overflow-auto flex-grow-1 position-relative" 
-          onScroll={handleScroll}
-          ref={scrollContainerRef}
-        >
-          <table className="table table-borderless mb-0 w-100" style={{ minWidth: '1500px', tableLayout: 'fixed' }}>
-            <thead>
-              <tr>
-                <th rowSpan={2} className="sticky-col-idx py-3">#</th>
-                <th rowSpan={2} className="sticky-col-1 py-3" onClick={() => handleSort('asinCode')} style={{ cursor: 'pointer' }}>
-                  <div className="d-flex align-items-center justify-content-between px-2">
-                    IDENTIFIER {sortField === 'asinCode' && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </div>
-                </th>
-                <th rowSpan={2} className="sticky-col-2 py-3 text-center" onClick={() => handleSort('rating')} style={{ cursor: 'pointer' }}>
-                   RATING {sortField === 'rating' && (sortOrder === 'asc' ? '↑' : '↓')}
-                </th>
-                <th rowSpan={2} className="sticky-col-3 py-3 text-center" onClick={() => handleSort('reviewCount')} style={{ cursor: 'pointer' }}>
-                   REVIEWS {sortField === 'reviewCount' && (sortOrder === 'asc' ? '↑' : '↓')}
-                </th>
-                {dateColumns.map(week => {
-                  const isExpanded = expandedWeeks[week.weekKey] !== false;
-                  return (
-                    <th
-                      key={week.weekKey}
-                      colSpan={isExpanded ? (week.dates.length + (showComparison ? 1 : 0)) : 1}
-                      className="week-header text-center py-2 px-3 border-bottom border-start border-amber-100 week-toggle"
-                      onClick={() => toggleWeek(week.weekKey)}
-                    >
-                      <div className="d-flex align-items-center justify-content-center gap-2">
-                         <span className="text-amber-700/40 fw-medium small">{week.year}</span>
-                         <span>{week.shortKey}</span>
-                         <span className="text-amber-300">{isExpanded ? '▼' : '▶'}</span>
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-              <tr>
-                {dateColumns.map((week, wIdx) => {
-                  const isExpanded = expandedWeeks[week.weekKey] !== false;
-                  if (!isExpanded) return null;
-                  return (
-                    <React.Fragment key={`${week.weekKey}-days`}>
-                      {week.dates.map(d => (
-                        <th
-                          key={d.dateKey}
-                          className="day-header text-center py-2 border-start border-slate-100"
-                          onClick={() => handleSort(`day-${d.dateKey}`)}
-                        >
-                          <div className="small">{d.date.toLocaleDateString('en-IN', { day: '2-digit' })}</div>
-                          <div style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase' }}>
-                            {d.date.toLocaleDateString('en-IN', { month: 'short' })}
-                          </div>
-                        </th>
-                      ))}
-                      {showComparison && wIdx < dateColumns.length - 1 && (
-                        <th className="text-center py-2 bg-amber-50 text-amber-700" style={{ fontSize: '0.65rem', fontWeight: 700 }}>
-                          DIFF
-                        </th>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody style={{ backgroundColor: '#fff' }}>
-              {isLoading && items.length === 0 ? (
-                Array.from({ length: 15 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`}>
-                    <td className="sticky-col-idx"><div className="skeleton-row mx-auto" style={{ width: '20px' }}></div></td>
-                    <td className="sticky-col-1"><div className="skeleton-row w-75"></div></td>
-                    <td className="sticky-col-2"><div className="skeleton-row w-50 mx-auto"></div></td>
-                    <td className="sticky-col-3"><div className="skeleton-row w-50 mx-auto"></div></td>
-                    <td colSpan={100}><div className="skeleton-row w-100"></div></td>
-                  </tr>
-                ))
-              ) : displayItems.map((item, idx) => (
-                <tr key={item.id} className="border-bottom border-slate-50">
-                  <td className="sticky-col-idx text-slate-400 small fw-medium">{idx + 1}</td>
-                  <td className="sticky-col-1 px-3 py-2">
-                     <div className="d-flex flex-column" style={{ maxWidth: '120px' }}>
-                        <span className="fw-bold text-slate-800 font-monospace small">{item.asinCode}</span>
-                        <span className="text-slate-400 text-truncate" style={{ fontSize: '0.65rem' }}>{item.title}</span>
-                     </div>
-                  </td>
-                  <td className="sticky-col-2 text-center text-amber-600 fw-bold small">
-                     <div className="d-flex align-items-center justify-content-center gap-1">
-                        <Star size={10} fill="currentColor" />
-                        <span>{item.rating?.toFixed(1)}</span>
-                     </div>
-                  </td>
-                  <td className="sticky-col-3 text-center text-slate-600 fw-medium small">{item.reviewCount?.toLocaleString()}</td>
-                  {dateColumns.map((week, wIdx) => {
-                    const isExpanded = expandedWeeks[week.weekKey] !== false;
-                    
-                    if (!isExpanded) {
-                      const data = Object.values(item.processedWeekData[week.weekKey] || {}).filter(v => v !== null);
-                      const avg = data.length > 0 ? (data.reduce((a, b) => a + b.rating, 0) / data.length) : null;
-                      return (
-                        <td key={`${week.weekKey}-col`} className="text-center py-2 border-start border-slate-100 bg-amber-50/10">
-                           {avg ? (
-                             <div className="d-flex align-items-center justify-content-center gap-1 text-amber-700 fw-semibold extra-small">
-                               <Star size={8} fill="currentColor" />
-                               <span>{avg.toFixed(1)}</span>
-                             </div>
-                           ) : <span className="text-slate-300">-</span>}
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <React.Fragment key={week.weekKey}>
-                         {week.dates.map(d => {
-                            const data = item.processedWeekData[week.weekKey][d.dateKey];
-                            return (
-                               <td key={d.dateKey} className="text-center day-cell py-2">
-                                  {data ? (
-                                    <div className="d-flex flex-column align-items-center">
-                                       <span className="fw-medium text-slate-700">{data.rating.toFixed(1)}</span>
-                                       <span className="text-slate-400" style={{ fontSize: '0.55rem' }}>{data.reviews}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-300">-</span>
-                                  )}
-                               </td>
-                            );
-                         })}
-                         {showComparison && wIdx < dateColumns.length - 1 && (
-                           <td className="text-center bg-amber-50/10 border-start border-slate-100">
-                             <span className="text-slate-300 small">-</span>
-                           </td>
-                         )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          
-          {(isFetchingMore || hasMore) && (
-            <div className="p-4 d-flex justify-content-center align-items-center gap-3">
-              <Loader2 className="animate-spin text-amber-600" size={24} />
-              <span className="text-slate-500 fw-medium">Loading more review analytics...</span>
-            </div>
-          )}
+        <div className="px-4 py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-shrink-0">
+          <div className="position-relative" style={{ width: '200px' }}><Search size={12} className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" /><input className="form-control form-control-sm ps-4 rounded-2" placeholder="Search ASIN, SKU..." value={search} onChange={e => setSearch(e.target.value)} style={{ fontSize: '11px', height: '28px', border: '1.5px solid #e5e7eb' }} /></div>
+          <div className="d-flex gap-1">{[{ v: 'all', l: 'All' }, { v: 'excellent', l: '★4+' }, { v: 'good', l: '★3.5-4' }, { v: 'poor', l: '<★3.5' }, { v: 'noRating', l: 'No Rating' }].map(f => <button key={f.v} className={`chp ${filterLevel === f.v ? 'act' : ''}`} onClick={() => setFilterLevel(f.v)}>{f.l}</button>)}</div>
+          <div className="d-flex gap-1">{[{ v: 'rating', l: 'Rating' }, { v: 'reviewCount', l: 'Reviews' }].map(f => <button key={f.v} className={`chp ${sortBy === f.v ? 'act' : ''}`} onClick={() => handleSort(f.v)}>{f.l} {sortBy === f.v ? (sortOrder === 'asc' ? '↑' : '↓') : ''}</button>)}</div>
         </div>
 
-        {/* Footer info */}
-        <div className="px-4 py-2 bg-slate-50 border-top d-flex justify-content-between align-items-center">
-           <div className="d-flex gap-4">
-              <div className="d-flex align-items-center gap-2">
-                 <div className="p-1.5 bg-amber-100 rounded-circle text-amber-700 small fw-bold">4.5+</div>
-                 <span className="small text-slate-600">Healthy Rating</span>
-              </div>
-              <div className="d-flex align-items-center gap-2">
-                 <div className="p-1.5 bg-red-100 rounded-circle text-red-700 small fw-bold">&lt;3.5</div>
-                 <span className="small text-slate-600">Critical Attention</span>
-              </div>
-           </div>
-           
-           <div className="text-slate-400 small">
-              Sentiment: Star Rating & Review Velocity • BuildRO v2.4
-           </div>
-           
-           <button onClick={onClose} className="btn btn-dark btn-sm px-4 py-1.5 rounded-2 fw-bold">
-              Dismiss Modal
-           </button>
+        <div className="flex-grow-1 overflow-auto">
+          <table className="mt2"><thead><tr><th style={{ width: '40px' }}>#</th><th style={{ minWidth: '120px' }} onClick={() => handleSort('asinCode')}><div className="d-flex align-items-center gap-1">ASIN <Si f="asinCode" /></div></th><th style={{ minWidth: '70px' }}>SKU</th><th style={{ minWidth: '160px' }}>PRODUCT</th><th style={{ width: '90px', textAlign: 'center' }} onClick={() => handleSort('rating')}><div className="d-flex align-items-center justify-content-center gap-1">RATING <Si f="rating" /></div></th><th style={{ width: '110px', textAlign: 'center' }}>STARS</th><th style={{ width: '100px', textAlign: 'center' }} onClick={() => handleSort('reviewCount')}><div className="d-flex align-items-center justify-content-center gap-1">REVIEWS <Si f="reviewCount" /></div></th></tr></thead>
+          <tbody>
+            {paginatedData.map((d, i) => (
+              <tr key={d._id || d.asinCode}>
+                <td className="text-zinc-400 text-center">{(currentPage - 1) * pageSize + i + 1}</td>
+                <td><span className="fw-bold text-primary" style={{ fontSize: '11px' }}>{d.asinCode}</span></td>
+                <td className="text-zinc-500" style={{ fontSize: '10px' }}>{d.sku || '—'}</td>
+                <td className="text-zinc-600 text-truncate" style={{ maxWidth: '160px', fontSize: '10px' }} title={d.title}>{d.title || '—'}</td>
+                <td className="text-center">{rBadge(d.rating)}</td>
+                <td className="text-center" style={{ color: d.rating > 0 ? '#f59e0b' : '#d1d5db', fontSize: '13px', letterSpacing: '2px' }}>{d.stars}</td>
+                <td className="text-center">{d.reviewCount > 0 ? <span className="d-flex align-items-center justify-content-center gap-1 fw-bold text-zinc-700"><MessageSquare size={12} /> {d.reviewCount.toLocaleString()}</span> : <span className="text-zinc-300">—</span>}</td>
+              </tr>
+            ))}
+          </tbody></table>
+          {filteredData.length === 0 && <div className="text-center py-5"><Star size={40} className="text-zinc-300 mb-2" /><p className="text-zinc-500">No results</p></div>}
+        </div>
+
+        <div className="px-4 py-2 bg-white border-top d-flex justify-content-between align-items-center flex-shrink-0">
+          <div className="d-flex align-items-center gap-2"><span className="text-zinc-500" style={{ fontSize: '11px' }}>{filteredData.length > 0 ? `${((currentPage - 1) * pageSize) + 1}–${Math.min(currentPage * pageSize, filteredData.length)} of ${filteredData.length.toLocaleString()}` : 'No results'}</span><select className="form-select form-select-sm" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} style={{ width: '70px', fontSize: '10px', height: '26px' }}>{[25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+          <div className="d-flex gap-1"><button className="pg" disabled={currentPage <= 1} onClick={() => setCurrentPage(1)}>«</button><button className="pg" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}><ChevronLeft size={14} /></button>{Array.from({ length: Math.min(5, totalPages) }, (_, i) => { const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4)); const page = start + i; if (page > totalPages) return null; return <button key={page} className={`pg ${currentPage === page ? 'ac' : ''}`} onClick={() => setCurrentPage(page)}>{page}</button>; })}<button className="pg" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}><ChevronRight size={14} /></button><button className="pg" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(totalPages)}>»</button></div>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>, document.body
   );
 };
 
