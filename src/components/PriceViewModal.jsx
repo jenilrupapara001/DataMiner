@@ -129,6 +129,18 @@ const PriceViewModal = ({ isOpen, onClose, asins = [], selectedAsin = null }) =>
     });
   }, [asins, timeRange]);
 
+  // Computed dates for history columns
+  const historyDates = useMemo(() => {
+    const dates = new Set();
+    priceData.forEach(item => {
+      (item.history || []).forEach(h => {
+        if (h.date) dates.add(h.date);
+      });
+    });
+    // Sort descending (newest first) and take last 7 unique days found
+    return Array.from(dates).sort((a, b) => new Date(b) - new Date(a)).slice(0, 7);
+  }, [priceData]);
+
   // Filter and sort
   const filteredData = useMemo(() => {
     let data = [...priceData];
@@ -410,6 +422,17 @@ const PriceViewModal = ({ isOpen, onClose, asins = [], selectedAsin = null }) =>
                 <th style={{ width: '90px', textAlign: 'right' }}>UPLOADED</th>
                 <th style={{ width: '90px', textAlign: 'right' }}>LIVE</th>
                 <th style={{ width: '80px', textAlign: 'right' }}>MRP</th>
+                {historyDates.map((date, i) => (
+                  <th key={date} style={{ 
+                    width: '75px', 
+                    textAlign: 'center', 
+                    background: i % 2 === 0 ? '#f8fafc' : '#f1f5f9', 
+                    fontSize: '9px',
+                    borderLeft: i === 0 ? '2px solid #e2e8f0' : 'none'
+                  }}>
+                    {new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </th>
+                ))}
                 <th style={{ width: '55px', textAlign: 'center' }}>DISC%</th>
                 <th style={{ width: '130px', textAlign: 'center' }}>{timeRange} CHANGE</th>
                 <th style={{ width: '110px', textAlign: 'center', background: '#fefce8' }}>WoW (Wk vs Wk)</th>
@@ -433,6 +456,21 @@ const PriceViewModal = ({ isOpen, onClose, asins = [], selectedAsin = null }) =>
                   <td className="text-end text-zinc-400">{formatPrice(item.uploadedPrice)}</td>
                   <td className="text-end fw-bold text-zinc-800">{formatPrice(item.currentPrice)}</td>
                   <td className="text-end text-zinc-500">{formatPrice(item.mrp)}</td>
+                  {historyDates.map((date, i) => {
+                    const historyPoint = (item.history || []).find(h => h.date === date);
+                    const price = historyPoint?.price;
+                    return (
+                      <td key={date} className="text-center" style={{ 
+                        fontSize: '10px', 
+                        background: i % 2 === 0 ? '#f8fafc' : '#f1f5f9',
+                        borderLeft: i === 0 ? '2px solid #e2e8f0' : 'none'
+                      }}>
+                        {price ? (
+                          <span className="fw-bold text-zinc-600">₹{Math.round(price).toLocaleString()}</span>
+                        ) : <span className="text-zinc-300">—</span>}
+                      </td>
+                    );
+                  })}
                   <td className="text-center">
                     {item.discountPercent > 0 ? (
                       <span className="badge bg-rose-100 text-rose-700 fw-bold" style={{ fontSize: '10px' }}>-{item.discountPercent}%</span>

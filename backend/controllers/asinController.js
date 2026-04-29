@@ -235,43 +235,56 @@ exports.getAsins = async (req, res) => {
       return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } });
     }
 
-    // [7] Fetch Week History for these ASINs
-    const asinIds = asins.map(a => `'${a.Id}'`).join(',');
-    const historyResult = await pool.request().query(`
-      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr, 
-             AvgRating as rating, TotalReviews as reviews
+    // [7] Fetch Daily History for these ASINs (Last 14 days)
+    const dailyHistoryResult = await pool.request().query(`
+      SELECT AsinId, Date, Price as price, BSR as bsr, 
+             Rating as rating, ReviewCount as reviews, 
+             StockLevel as stockLevel, LQS as lqs
+      FROM AsinHistory 
+      WHERE AsinId IN (${asinIds}) 
+      AND Date >= DATEADD(day, -14, GETDATE())
+      ORDER BY Date ASC
+    `);
+    
+    const historyMap = {};
+    dailyHistoryResult.recordset.forEach(h => {
+      if (!historyMap[h.AsinId]) historyMap[h.AsinId] = [];
+      const dateStr = h.Date ? new Date(h.Date).toISOString().split('T')[0] : '';
+      historyMap[h.AsinId].push({
+        date: dateStr,
+        price: h.price || 0,
+        bsr: h.bsr || 0,
+        rating: h.rating || 0,
+        reviews: h.reviews || 0,
+        stockLevel: h.stockLevel || 0,
+        lqs: h.lqs || 0
+      });
+    });
+
+    // [7.5] Fetch Week History for long-term trends
+    const weekHistoryResult = await pool.request().query(`
+      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr
       FROM AsinWeekHistory 
       WHERE AsinId IN (${asinIds}) 
       ORDER BY WeekStartDate ASC
     `);
     
-    const historyMap = {};
-    historyResult.recordset.forEach(h => {
-      if (!historyMap[h.AsinId]) historyMap[h.AsinId] = [];
-      historyMap[h.AsinId].push({
+    const weekHistoryMap = {};
+    weekHistoryResult.recordset.forEach(h => {
+      if (!weekHistoryMap[h.AsinId]) weekHistoryMap[h.AsinId] = [];
+      weekHistoryMap[h.AsinId].push({
         week: h.WeekStartDate ? `W${Math.ceil(new Date(h.WeekStartDate).getDate() / 7)}` : '',
         date: h.WeekStartDate ? h.WeekStartDate.toISOString().split('T')[0] : '',
         price: h.price || 0,
-        bsr: h.bsr || 0,
-        rating: h.rating || 0,
-        reviews: h.reviews || 0
+        bsr: h.bsr || 0
       });
     });
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
-        // Build weekHistory from AsinWeekHistory table
-        const weekHistory = (historyMap[a.Id] || []).map(h => ({
-            week: h.week || '',
-            date: h.date ? new Date(h.date).toISOString().split('T')[0] : '',
-            price: h.price || 0,
-            bsr: h.bsr || 0,
-            rating: h.rating || 0,
-            reviews: h.reviews || 0,
-            imageCount: h.imageCount || a.ImagesCount || 0,
-            videoCount: h.videoCount || a.VideoCount || 0,
-            lqs: h.lqs || a.LQS || 0
-        }));
+        // Build history and weekHistory
+        const dailyHistory = (historyMap[a.Id] || []);
+        const weekHistory = (weekHistoryMap[a.Id] || []);
 
         // ---- PARSE ALL JSON FIELDS ----
         let allOffers = [];
@@ -424,8 +437,8 @@ exports.getAsins = async (req, res) => {
             bulletPointsText: bulletPointsText,
             
             // History
-            history: historyParsed,
-            weekHistory: weekHistory.length > 0 ? weekHistory : historyParsed,
+            history: dailyHistory.length > 0 ? dailyHistory : historyParsed,
+            weekHistory: weekHistory,
             
             // Weight / Staple
             weight: parseFloat(a.Weight) || 0,
