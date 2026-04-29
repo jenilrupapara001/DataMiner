@@ -1440,30 +1440,6 @@ const AsinManagerPage = () => {
               <span className="fw-bold" style={{ fontSize: '10px' }}>FILTERS</span>
             </button>
 
-            {/* ✅ NEW: Columns Visibility Button */}
-            <div className="position-relative">
-              <button
-                onClick={() => setShowColumnPanel(!showColumnPanel)}
-                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'}`}
-                style={{ fontSize: '10px', height: '26px' }}
-                title="Show/Hide Columns"
-              >
-                <LayoutGrid size={12} />
-                COLUMNS ({visibleCount}/{totalCount})
-              </button>
-              
-              <ColumnVisibilityPanel
-                isOpen={showColumnPanel}
-                onClose={() => setShowColumnPanel(false)}
-                visibleColumns={visibleColumns}
-                onToggle={toggleColumn}
-                onToggleCategory={toggleCategory}
-                onReset={resetToDefaults}
-                onSelectAll={selectAll}
-                visibleCount={visibleCount}
-                totalCount={totalCount}
-              />
-            </div>
 
             <button
               className="btn btn-white btn-xs border border-zinc-200 rounded-2 p-1"
@@ -2264,7 +2240,7 @@ const AsinManagerPage = () => {
                       )}
                       {isVisible('tags') && (
                         <td style={tdStyle}>
-                          <TagsCell asin={asin} onRefresh={fetchAsins} />
+                          <TagsCell asin={asin} onRefresh={loadData} />
                         </td>
                       )}
                       {/* ===== LISTING QUALITY SCORES ===== */}
