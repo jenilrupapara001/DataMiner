@@ -106,7 +106,7 @@ exports.startExport = async (req, res) => {
         });
 
         // Process export in background
-        processExportJob(downloadId, req.body, req.user).catch(err => {
+        processExportJob(downloadId, req.body, userId).catch(err => {
             console.error(`Export job ${downloadId} failed:`, err.message);
         });
 
