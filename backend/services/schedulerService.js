@@ -157,9 +157,9 @@ class SchedulerService {
 
             if (sellers.length === 0) return { success: true, totalSellers: 0 };
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for concurrent sync.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for sequential sync.`);
             
-            const CONCURRENCY_LIMIT = 5;
+            const CONCURRENCY_LIMIT = 1; // Sequential to strictly avoid 429s
             let successful = 0;
             const startTime = Date.now();
 
@@ -180,9 +180,9 @@ class SchedulerService {
                     }
                 }));
 
-                // Short delay between batches
+                // Delay between sellers (Increased for stability)
                 if (i + CONCURRENCY_LIMIT < sellers.length) {
-                    await new Promise(r => setTimeout(r, 5000));
+                    await new Promise(r => setTimeout(r, 10000));
                 }
             }
 
@@ -234,7 +234,7 @@ class SchedulerService {
 
             if (sellers.length === 0) return { success: true, count: 0 };
 
-            const CONCURRENCY_LIMIT = 5;
+            const CONCURRENCY_LIMIT = 2; // Low concurrency for recovery
             let totalTriggered = 0;
             const startTime = Date.now();
 
@@ -253,9 +253,9 @@ class SchedulerService {
                     }
                 }));
 
-                // Short delay between batches to respect Octoparse API limits
+                // Delay between batches
                 if (i + CONCURRENCY_LIMIT < sellers.length) {
-                    await new Promise(r => setTimeout(r, 3000));
+                    await new Promise(r => setTimeout(r, 8000));
                 }
             }
 

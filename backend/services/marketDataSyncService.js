@@ -64,6 +64,7 @@ class MarketDataSyncService {
         this.tokenType = 'Bearer';
         this.syncLocks = new Map(); // Concurrency control per sellerId
         this.statusCache = new Map(); // Simple status cache to prevent 429s (TTL: 10s)
+        this.taskIdCache = new Map(); // UUID to Integer ID mapping cache
 
         // Throttling for setup operations
         this._executingSetups = 0;
@@ -2761,36 +2762,47 @@ class MarketDataSyncService {
      * Resolves a UUID taskId to its legacy integer ID by searching the group task list.
      */
     async resolveTaskIdToInteger(uuid, groupId = null) {
-        try {
-            console.log(`🔍 Resolving UUID ${uuid} to integer ID...`);
+        if (!uuid) return null;
+        
+        // 0. Check Cache First
+        if (this.taskIdCache.has(uuid)) {
+            return this.taskIdCache.get(uuid);
+        }
 
-            // 1. If groupId is provided, check that group first (with pagination)
+        try {
+            console.log(`🔍 Resolving UUID ${uuid} to integer ID (Octoparse API)...`);
+
+            // 1. If groupId is provided, check that group first
             if (groupId) {
                 for (let offset = 0; offset <= 200; offset += 50) {
+                    // Small delay to prevent burst
+                    await this.wait(500);
+                    
                     const response = await axios.get(`${this.baseUrl}/task/search`, {
                         params: { taskGroupId: groupId, size: 50, offset },
                         headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
                     });
                     const tasks = response.data?.data || [];
-                    console.log(`🔍 Task search response (group ${groupId}, offset ${offset}):`, JSON.stringify(tasks.slice(0, 2)));
                     const task = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (task) {
-                        console.log(`🎯 Found task in single group:`, JSON.stringify(task));
-                        return task.id || task.taskId || task.TaskID || task.intId;
+                        const id = task.id || task.taskId || task.TaskID || task.intId;
+                        this.taskIdCache.set(uuid, id);
+                        return id;
                     }
                     if (tasks.length < 50) break;
                 }
             }
 
-            // 2. SEARCH ALL GROUPS (Fallback for when we only have a UUID)
+            // 2. SEARCH ALL GROUPS
             console.log(`🌐 Searching all task groups for UUID: ${uuid}...`);
             const groups = await this.getTaskGroupList();
             for (const group of groups) {
                 const id = group.categoryId || group.id || group.taskGroupId;
                 if (!id) continue;
 
-                // Search each group with pagination
                 for (let offset = 0; offset <= 200; offset += 50) {
+                    await this.wait(800); // More aggressive delay for global search
+                    
                     const tasksResponse = await axios.get(`${this.baseUrl}/task/search`, {
                         params: { taskGroupId: id, size: 50, offset },
                         headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
@@ -2798,9 +2810,9 @@ class MarketDataSyncService {
                     const tasks = tasksResponse.data?.data || [];
                     const found = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (found) {
-                        console.log(`🎯 Found task ${uuid} in group ${id}. Task object:`, JSON.stringify(found));
-                        console.log(`🎯 Found task ${uuid} in group ${id}. Integer ID: ${found.id || found.taskId || found.TaskID || 'NOT_FOUND'}`);
-                        return found.id || found.taskId || found.TaskID;
+                        const integerId = found.id || found.taskId || found.TaskID;
+                        this.taskIdCache.set(uuid, integerId);
+                        return integerId;
                     }
                     if (tasks.length < 50) break;
                 }
@@ -2808,6 +2820,10 @@ class MarketDataSyncService {
 
             return null;
         } catch (error) {
+            if (error.response?.status === 429) {
+                console.warn('⚠️ Octoparse Rate Limit (429) hit during ID resolution. Waiting 10s...');
+                await this.wait(10000);
+            }
             console.error('❌ Resolve Task ID Error:', error.message);
             return null;
         }
