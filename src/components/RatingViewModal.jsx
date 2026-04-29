@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  X, Star, Search, Download, Maximize2, Minimize2, 
-  ArrowUpDown, ArrowUp, ArrowDown, FileText, MessageSquare, 
+import {
+  X, Star, Search, Download, Maximize2, Minimize2,
+  ArrowUpDown, ArrowUp, ArrowDown, FileText, MessageSquare,
   Minus, TrendingUp, TrendingDown, SlidersHorizontal
 } from 'lucide-react';
 
@@ -14,11 +14,11 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRatingRange, setFilterRatingRange] = useState({ min: '', max: '' });
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // ===== INFINITE SCROLL STATE =====
   const [visibleCount, setVisibleCount] = useState(50);
   const loaderRef = useRef(null);
-  
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -60,7 +60,7 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
       const currentRating = asin.rating || 0;
       const reviewCount = asin.reviewCount || 0;
       const history = asin.history || [];
-      
+
       const ratingByDate = {};
       history.forEach(h => {
         if (h.date && h.rating) {
@@ -80,7 +80,7 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
       const currentWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       let currentWeekRating = null, lastWeekRating = null;
       const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
-      
+
       for (const h of sortedHistory) {
         const hDate = new Date(h.date);
         if (hDate >= currentWeekStart && h.rating > 0 && !currentWeekRating) currentWeekRating = h.rating;
@@ -117,9 +117,9 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      data = data.filter(d => 
-        d.asinCode.toLowerCase().includes(q) || 
-        (d.sku || '').toLowerCase().includes(q) || 
+      data = data.filter(d =>
+        d.asinCode.toLowerCase().includes(q) ||
+        (d.sku || '').toLowerCase().includes(q) ||
         (d.title || '').toLowerCase().includes(q)
       );
     }
@@ -142,12 +142,12 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
         case 'asinCode': return sortOrder === 'asc' ? a.asinCode.localeCompare(b.asinCode) : b.asinCode.localeCompare(a.asinCode);
         default: va = a.currentRating; vb = b.currentRating;
       }
-      
+
       const aE = !va || va === 0, bE = !vb || vb === 0;
       if (aE && bE) return 0;
       if (aE) return 1;
       if (bE) return -1;
-      
+
       return sortOrder === 'asc' ? va - vb : vb - va;
     });
 
@@ -225,10 +225,10 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
       style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <style>{css}</style>
-      
+
       <div className={`bg-white shadow-2xl d-flex flex-column ${isFullscreen ? 'w-100 h-100 rounded-0' : ''}`}
         style={{ width: isFullscreen ? '100%' : '98%', maxWidth: isFullscreen ? 'none' : '1600px', height: isFullscreen ? '100%' : '95vh', borderRadius: isFullscreen ? '0' : '12px', overflow: 'hidden' }}>
-        
+
         {/* HEADER */}
         <div className="px-3 py-2.5 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white">
           <div className="d-flex align-items-center gap-2">
@@ -264,12 +264,12 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
         <div className="px-3 py-1.5 bg-white border-bottom d-flex align-items-center gap-2 flex-shrink-0 flex-wrap">
           <div className="position-relative" style={{ width: '180px' }}>
             <Search size={11} className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" />
-            <input className="form-control form-control-sm ps-4 rounded-2" placeholder="Search ASIN, SKU..." value={search} 
+            <input className="form-control form-control-sm ps-4 rounded-2" placeholder="Search ASIN, SKU..." value={search}
               onChange={e => setSearch(e.target.value)} style={{ fontSize: '10px', height: '26px', border: '1.5px solid #e5e7eb' }} />
           </div>
 
           <div className="d-flex gap-1 flex-wrap">
-            {[{v:'all',l:'All'},{v:'4starPlus',l:'4★+'},{v:'lowRating',l:'< 3.5★'},{v:'ratingUp',l:'Rating ↑'},{v:'ratingDown',l:'Rating ↓'},{v:'hasReviews',l:'Reviews'}].map(f => (
+            {[{ v: 'all', l: 'All' }, { v: '4starPlus', l: '4★+' }, { v: 'lowRating', l: '< 3.5★' }, { v: 'ratingUp', l: 'Rating ↑' }, { v: 'ratingDown', l: 'Rating ↓' }, { v: 'hasReviews', l: 'Reviews' }].map(f => (
               <button key={f.v} className={`chp ${filterStatus === f.v ? 'act' : ''}`} onClick={() => setFilterStatus(f.v === filterStatus ? 'all' : f.v)}>{f.l}</button>
             ))}
           </div>
@@ -279,7 +279,7 @@ const RatingViewModal = ({ isOpen, onClose, asins = [] }) => {
           </button>
 
           <div className="d-flex gap-1">
-            {[{f:'rating',l:'Rating'},{f:'reviews',l:'Reviews'},{f:'wowPercent',l:'WoW'},{f:'asinCode',l:'ASIN'}].map(s => (
+            {[{ f: 'rating', l: 'Rating' }, { f: 'reviews', l: 'Reviews' }, { f: 'wowPercent', l: 'WoW' }, { f: 'asinCode', l: 'ASIN' }].map(s => (
               <button key={s.f} className={`chp ${sortBy === s.f ? 'act' : ''}`} onClick={() => handleSort(s.f)}>
                 {s.l} {sortBy === s.f ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
               </button>
