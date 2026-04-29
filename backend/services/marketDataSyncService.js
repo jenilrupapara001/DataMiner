@@ -2589,6 +2589,15 @@ class MarketDataSyncService {
         return parseInt(cleaned) || 0;
     }
 
+    _isValidSellerName(name) {
+        if (!name || typeof name !== 'string') return false;
+        const n = name.trim().toLowerCase();
+        // Filter out common noise/placeholder text from scrapers
+        if (n === '' || n === 'unknown' || n === 'details' || n === 'details.' || n === 'view details' || n === 'ships from' || n === 'sold by') return false;
+        if (n.length < 2) return false;
+        return true;
+    }
+
     _parseSecondaryBuybox(htmlContent) {
         if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.length < 50) {
             return { offers: [], hasMultipleSellers: false };
@@ -2606,7 +2615,10 @@ class MarketDataSyncService {
 
                 const sellerLink = container.querySelector('a[href*="seller="], [aria-label*="Seller"], #aod-offer-shipsFrom-soldBy');
                 if (sellerLink) {
-                    offer.seller = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
+                    const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
+                    if (this._isValidSellerName(rawName)) {
+                        offer.seller = rawName;
+                    }
                 }
 
                 const priceWhole = container.querySelector('.a-price-whole');
@@ -2629,7 +2641,9 @@ class MarketDataSyncService {
                     const offer = {};
                     if (sellers && sellers[i]) {
                         const m = sellers[i].match(/>([^<]+)</);
-                        if (m) offer.seller = m[1].trim();
+                        if (m && this._isValidSellerName(m[1])) {
+                            offer.seller = m[1].trim();
+                        }
                     }
                     if (prices && prices[i]) {
                         offer.price = parseFloat(prices[i].replace(/[₹,\s]/g, ''));
@@ -2652,18 +2666,24 @@ class MarketDataSyncService {
     _extractSellerFromBuyboxHtml(htmlContent) {
         if (!htmlContent || typeof htmlContent !== 'string') return null;
 
+        let name = null;
         // Pattern 1: Sold by section with link text
         const soldByMatch = htmlContent.match(/Sold by\s*<\/span>\s*<[^>]+>\s*<a[^>]*>([^<]+)</i);
-        if (soldByMatch) return soldByMatch[1].trim();
+        if (soldByMatch) name = soldByMatch[1].trim();
 
         // Pattern 2: aria-label with seller info
-        const ariaMatch = htmlContent.match(/aria-label="[^"]*Seller[^"]*:\s*([^"]+)/i);
-        if (ariaMatch) return ariaMatch[1].trim();
+        if (!name) {
+            const ariaMatch = htmlContent.match(/aria-label="[^"]*Seller[^"]*:\s*([^"]+)/i);
+            if (ariaMatch) name = ariaMatch[1].trim();
+        }
 
         // Pattern 3: Direct seller name in text
-        const textMatch = htmlContent.match(/sold by\s*[:;]?\s*([^<>{}\n]+)/i);
-        if (textMatch) return textMatch[1].trim();
+        if (!name) {
+            const textMatch = htmlContent.match(/sold by\s*[:;]?\s*([^<>{}\n]+)/i);
+            if (textMatch) name = textMatch[1].trim();
+        }
 
+        if (name && this._isValidSellerName(name)) return name;
         return null;
     }
 
