@@ -2178,7 +2178,8 @@ const AsinManagerPage = () => {
                         )}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}
-                        onClick={(e) => handleViewPrice(asin, e)}>
+                        onClick={(e) => handleViewPrice(asin, e)}
+                        title="View Price Trend Matrix">
                         ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
@@ -2190,6 +2191,7 @@ const AsinManagerPage = () => {
                         return (
                           <td key={`p-${week.label}-${dIdx}`}
                             onClick={(e) => handleViewPrice(asin, e)}
+                            title="View Price Trend Matrix"
                             style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
                             {wData?.price ? getWeekHistoryBadge(wData.price, 'price') : '-'}
                           </td>
@@ -2645,6 +2647,7 @@ const AsinManagerPage = () => {
           onClose={() => setShowDetailModal(false)}
         />
         <PriceViewModal
+          asins={filteredAsins}
           selectedAsin={selectedAsinForPrice}
           isOpen={!!selectedAsinForPrice || showAllPriceHistory}
           onClose={() => { setSelectedAsinForPrice(null); setShowAllPriceHistory(false); }}
