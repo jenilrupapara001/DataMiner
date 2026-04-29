@@ -236,6 +236,7 @@ exports.getAsins = async (req, res) => {
     }
 
     // [7] Fetch Daily History for these ASINs (Last 14 days)
+    const asinIds = asins.map(a => `'${a.Id}'`).join(',');
     const dailyHistoryResult = await pool.request().query(`
       SELECT AsinId, Date, Price as price, BSR as bsr, 
              Rating as rating, ReviewCount as reviews, 
