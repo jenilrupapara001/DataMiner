@@ -270,9 +270,16 @@ class MarketDataSyncService {
             if ((provError.code === 'TaskExecuting' ||
                 provError.code === 'FileProcessing' ||
                 errorData?.message === 'TaskExecuting' ||
-                errorData?.message === 'FileProcessing') && retryCount < maxRetries) {
-                console.warn(`⏳ Task is in transition state (${provError.code || errorData?.message}). Retrying injection in 15s... (Attempt ${retryCount + 1}/${maxRetries})`);
-                await this.wait(15000);
+                errorData?.message === 'FileProcessing' ||
+                errorData?.code === 'TaskExecuting' ||
+                error.message.includes('400')) && retryCount < 4) {
+                
+                console.warn(`⏳ Task ${taskId} is active or busy (${provError.code || errorData?.message}). Forcing STOP and retrying in 20s... (Attempt ${retryCount + 1}/4)`);
+                
+                // Force stop again just in case ensureTaskStopped failed to catch a transition
+                await this.stopSync(taskId).catch(() => {});
+                await this.wait(20000);
+                
                 return this.updateTaskUrlsWithFile(taskId, items, retryCount + 1); // Retry with count
             }
 
@@ -1175,13 +1182,15 @@ class MarketDataSyncService {
         }
 
         const paths = [
-            '/data/all',                       // OpenAPI V3 - get all by offset (PRIMARY - gets ALL data)
-            '/data/notexported',              // OpenAPI V3 spec (only unexported data)
-            '/task/data/notexporteddata',     // OpenAPI V1.0
+            '/data/all',                       // OpenAPI V3 - get all by offset
+            '/data/notexported',              // OpenAPI V3 spec
+            '/api/alldata/getnotexporteddata', // Professional/Enterprise spec
             '/api/notexporteddata/get',       // Legacy V1 (Common)
+            '/task/data/notexporteddata',     // OpenAPI V1.0
             '/api/alldata/GetDataOfTaskByOffset', // Legacy API
             '/api/notexporteddata',           // V1 Extension
-            '/data/notexportdata'             // Legacy V1 (Alt)
+            '/data/notexportdata',            // Legacy V1 (Alt)
+            '/api/alldata/getalldata'         // Fallback total
         ];
 
         let lastErr = null;
@@ -1430,6 +1439,10 @@ class MarketDataSyncService {
                 await this.ensureTaskStopped(taskId);
             }
 
+            // 2.5 Settling Delay: Give Octoparse a moment to stabilize after a stop command
+            // This prevents "TaskExecuting" errors during immediate injection
+            await this.wait(5000);
+
             // 3. Get ASINs for this seller from database
             console.log(`📊 Fetching ASINs from database for seller ${sellerId}...`);
             let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
@@ -1522,8 +1535,8 @@ class MarketDataSyncService {
 
             if (isRunning) {
                 console.log(`⏳ Task ${taskId} is active (Status: ${status}). Forcing STOP... (Attempt ${attempts + 1}/${maxAttempts})`);
-                await this.stopSync(taskId);
-                await this.wait(3000); // Wait for cloud coordinator to process stop
+                await this.stopSync(taskId).catch(err => console.warn(`⚠️ Stop call failed: ${err.message}`));
+                await this.wait(5000); // Increased wait for cloud coordinator
             } else {
                 console.log(`✅ Task ${taskId} is already stopped/idle (Status: ${status}).`);
                 isRunning = false;

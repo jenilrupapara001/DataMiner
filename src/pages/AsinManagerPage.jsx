@@ -1886,7 +1886,7 @@ const AsinManagerPage = () => {
                   </th>
                   <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>BSR</th>
                   <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SUB-BSR</th>
-                  <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }} title="Video Present">V</th>
+                  <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>
                   <th colSpan={visibleHistoryCols}
                     onClick={async () => { setShowAllBsrHistory(true); }}
                     style={{ ...thStyle, background: '#f0fdf4', color: '#166534', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #dcfce7' }}>
@@ -2253,13 +2253,15 @@ const AsinManagerPage = () => {
                         );
                       })()}
                     </td>
-                    <td style={{ ...tdStyle, width: '35px', textAlign: 'center' }}>
-                      {asin.videoCount > 0 ? (
-                        <PlayCircle size={14} color="#059669" fill="#ecfdf5" title={`${asin.videoCount} video(s) found`} />
-                      ) : (
-                        <Video size={14} color="#9ca3af" style={{ opacity: 0.4 }} title="No video found" />
-                      )}
-                    </td>
+                    <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
+                       <span style={{ 
+                         color: asin.videoCount > 0 ? '#059669' : '#9ca3af',
+                         fontWeight: asin.videoCount > 0 ? '600' : '400',
+                         fontSize: '11px'
+                       }}>
+                         {asin.videoCount > 0 ? 'Yes' : 'No'}
+                       </span>
+                     </td>
                     {historyStructure.map(week => week.dates.map((date, dIdx) => {
                       const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
                         || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
