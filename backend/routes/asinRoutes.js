@@ -5,6 +5,7 @@ const path = require('path');
 const asinController = require('../controllers/asinController');
 const tagController = require('../controllers/tagController');
 const { authenticate: protect, requirePermission, checkSellerAccess } = require('../middleware/auth');
+const { getTagsHistory, getTagsSummary } = require('../controllers/tagsHistoryController');
 
 // Configure multer for CSV uploads
 const storage = multer.diskStorage({
@@ -30,6 +31,11 @@ const upload = multer({
 });
 
 // Priority Actions
+router.get('/health-check/tags', (req, res) => res.json({ success: true, message: 'Tags routes are definitely active' }));
+router.get('/:asinId/tags-history', protect, requirePermission('sellers_view'), getTagsHistory);
+router.get('/:asinId/tags-summary', protect, requirePermission('sellers_view'), getTagsSummary);
+router.put('/:asinId/tags', protect, requirePermission('sellers_manage_asins'), tagController.updateAsinTags);
+
 router.post('/:id/generate-images', protect, requirePermission('sellers_manage_asins'), asinController.generateImages);
 
 // Search and stats
@@ -71,8 +77,6 @@ router.post('/export', protect, requirePermission('sellers_view'), asinControlle
 router.get('/tags', protect, requirePermission('sellers_view'), tagController.getTags);
 router.get('/tags/template', protect, requirePermission('sellers_view'), tagController.downloadTagsTemplate);
 router.post('/tags/bulk', protect, requirePermission('sellers_manage_asins'), upload.single('file'), tagController.bulkUpdateTags);
-router.put('/:asinId/tags', protect, requirePermission('sellers_manage_asins'), tagController.updateAsinTags);
-
 router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);
 router.delete('/:id', protect, requirePermission('sellers_manage_asins'), asinController.deleteAsin);

@@ -48,38 +48,72 @@ exports.getTags = async (req, res) => {
 };
 
 /**
- * Update tags for a single ASIN
+ * Update tags for a single ASIN with audit logging
  * PUT /api/asins/:asinId/tags
  */
 exports.updateAsinTags = async (req, res) => {
     try {
         const { asinId } = req.params;
         const { tags } = req.body;
+        const userId = (req.user?._id || req.user?.id || '').toString();
+        const userName = req.user?.firstName 
+            ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
+            : (req.user?.email || 'Unknown User');
         
         if (!asinId) {
             return res.status(400).json({ success: false, error: 'ASIN ID required' });
         }
-        
+
         const pool = await getPool();
-        
-        const result = await pool.request()
+
+        // Get current tags BEFORE update
+        const currentResult = await pool.request()
             .input('id', sql.VarChar, asinId)
-            .input('tags', sql.NVarChar, JSON.stringify(tags || []))
-            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
-        
-        if (result.rowsAffected?.[0] === 0) {
+            .query('SELECT Tags FROM Asins WHERE Id = @id');
+
+        if (currentResult.recordset.length === 0) {
             return res.status(404).json({ success: false, error: 'ASIN not found' });
         }
+
+        let currentTags = [];
+        try { 
+            currentTags = JSON.parse(currentResult.recordset[0].Tags || '[]'); 
+        } catch { 
+            currentTags = []; 
+        }
+
+        const newTags = Array.isArray(tags) ? tags : [];
+
+        // Only log if tags actually changed
+        const currentSorted = [...currentTags].sort().join(',');
+        const newSorted = [...newTags].sort().join(',');
         
-        res.json({ success: true, message: 'Tags updated', tags });
+        if (currentSorted !== newSorted) {
+            // Save new tags
+            await pool.request()
+                .input('id', sql.VarChar, asinId)
+                .input('tags', sql.NVarChar, JSON.stringify(newTags))
+                .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+
+            // Log the change
+            const { logTagChange } = require('./tagsHistoryController');
+            await logTagChange(asinId, currentTags, newTags, userId, userName, 'manual');
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Tags updated', 
+            tags: newTags,
+            changed: currentSorted !== newSorted
+        });
     } catch (error) {
-        console.error('updateAsinTags error:', error);
+        console.error('updateAsinTags Error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 };
 
 /**
- * Bulk update tags via CSV
+ * Bulk update tags via CSV with audit logging
  * POST /api/asins/tags/bulk-upload
  */
 exports.bulkUpdateTags = async (req, res) => {
@@ -89,8 +123,12 @@ exports.bulkUpdateTags = async (req, res) => {
         }
         
         const sellerId = req.body.sellerId || '';
-        const filePath = req.file.path;
+        const userId = (req.user?._id || req.user?.id || '').toString();
+        const userName = req.user?.firstName 
+            ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
+            : (req.user?.email || 'Unknown User');
         
+        const filePath = req.file.path;
         const workbook = XLSX.readFile(filePath);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(sheet);
@@ -101,12 +139,12 @@ exports.bulkUpdateTags = async (req, res) => {
         }
         
         const pool = await getPool();
+        const { logTagChange } = require('./tagsHistoryController');
         let updated = 0;
         let skipped = 0;
         const errors = [];
         
         for (const row of data) {
-            // Flexible column matching
             const asinCode = (row['Child ASIN'] || row['ASIN'] || row['asinCode'] || row['asin'] || '').toString().trim();
             const tagsStr = (row['Tags'] || row['tags'] || '').toString().trim();
             
@@ -115,26 +153,39 @@ exports.bulkUpdateTags = async (req, res) => {
                 continue;
             }
             
-            // Parse tags (comma, pipe, or semicolon separated)
-            const tags = tagsStr
-                ? tagsStr.split(/[,|;]/).map(t => t.trim()).filter(Boolean)
-                : [];
+            const newTags = tagsStr ? tagsStr.split(/[,|;]/).map(t => t.trim()).filter(Boolean) : [];
             
             try {
-                let query = 'UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE AsinCode = @asinCode';
-                const request = pool.request()
-                    .input('asinCode', sql.VarChar, asinCode)
-                    .input('tags', sql.NVarChar, JSON.stringify(tags));
+                // Fetch current ASIN and tags to log diff
+                let selectQuery = 'SELECT Id, Tags FROM Asins WHERE AsinCode = @asinCode';
+                const selectRequest = pool.request().input('asinCode', sql.VarChar, asinCode);
                 
                 if (sellerId) {
-                    query += ' AND SellerId = @sellerId';
-                    request.input('sellerId', sql.VarChar, sellerId);
+                    selectQuery += ' AND SellerId = @sellerId';
+                    selectRequest.input('sellerId', sql.VarChar, sellerId);
                 }
                 
-                const result = await request.query(query);
+                const currentResult = await selectRequest.query(selectQuery);
                 
-                if (result.rowsAffected?.[0] > 0) {
-                    updated++;
+                if (currentResult.recordset.length > 0) {
+                    const asin = currentResult.recordset[0];
+                    let currentTags = [];
+                    try { currentTags = JSON.parse(asin.Tags || '[]'); } catch { currentTags = []; }
+                    
+                    const currentSorted = [...currentTags].sort().join(',');
+                    const newSorted = [...newTags].sort().join(',');
+                    
+                    if (currentSorted !== newSorted) {
+                        await pool.request()
+                            .input('id', sql.VarChar, asin.Id)
+                            .input('tags', sql.NVarChar, JSON.stringify(newTags))
+                            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+                        
+                        await logTagChange(asin.Id, currentTags, newTags, userId, userName, 'bulk_upload');
+                        updated++;
+                    } else {
+                        skipped++;
+                    }
                 } else {
                     skipped++;
                     errors.push({ asin: asinCode, reason: 'Not found' });
@@ -149,7 +200,7 @@ exports.bulkUpdateTags = async (req, res) => {
         
         res.json({
             success: true,
-            message: `Updated ${updated} ASINs, ${skipped} skipped`,
+            message: `Processed ${data.length} ASINs: ${updated} updated, ${skipped} skipped`,
             updated,
             skipped,
             errors: errors.slice(0, 10)

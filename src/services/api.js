@@ -609,6 +609,32 @@ export const asinApi = {
     }
   },
 
+  getTagsHistory: async (asinId, page = 1, limit = 20) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/${asinId}/tags-history?page=${page}&limit=${limit}`, {
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tags history');
+      return res.json();
+    } catch (error) {
+      console.error('Failed to get tags history:', error);
+      throw error;
+    }
+  },
+
+  getTagsSummary: async (asinId) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/${asinId}/tags-summary`, {
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tags summary');
+      return res.json();
+    } catch (error) {
+      console.error('Failed to get tags summary:', error);
+      throw error;
+    }
+  },
+
   getAll: async (params = {}) => {
     // Filter out null, undefined, or empty strings to keep URL clean
     const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {

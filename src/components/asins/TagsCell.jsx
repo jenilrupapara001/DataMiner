@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Plus, Check, Search } from 'lucide-react';
+import { X, Plus, Check, Search, Eye, Tag as TagIcon } from 'lucide-react';
 import { asinApi } from '../../services/api';
+import TagsHistoryModal from '../TagsHistoryModal';
+import EditTagsModal from './EditTagsModal';
 
 const DEFAULT_TAGS = [
     'Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization',
@@ -12,6 +14,8 @@ const DEFAULT_TAGS = [
 
 const TagsCell = ({ asin, onUpdate }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [historyVisible, setHistoryVisible] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [tags, setTags] = useState([]);
     const [search, setSearch] = useState('');
     const [saving, setSaving] = useState(false);
@@ -135,7 +139,10 @@ const TagsCell = ({ asin, onUpdate }) => {
             {/* TAGS DISPLAY - Click to open */}
             <div
                 className="d-flex align-items-center gap-1 flex-wrap cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+                onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setShowEditModal(true); 
+                }}
                 style={{ 
                     minHeight: '26px', 
                     padding: '2px 4px',
@@ -194,111 +201,31 @@ const TagsCell = ({ asin, onUpdate }) => {
                         )}
                     </>
                 )}
+
+                {/* History Button - Only show if tags exist or on hover potentially, but let's keep it visible for easy audit */}
+                <button
+                    className="btn btn-ghost p-0 border-0 ms-auto text-zinc-300 hover-text-zinc-500 transition-colors"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setHistoryVisible(true);
+                    }}
+                    title="View Tags History"
+                    style={{ opacity: tags.length > 0 ? 1 : 0, transition: 'opacity 0.2s' }}
+                >
+                    <Eye size={12} />
+                </button>
             </div>
 
-            {/* DROPDOWN */}
-            {isOpen && (
-                <div
-                    className="position-absolute bg-white border rounded-3 shadow-xl"
-                    style={{
-                        zIndex: 1050,
-                        minWidth: '220px',
-                        maxWidth: '280px',
-                        top: '100%',
-                        left: 0,
-                        marginTop: '4px',
-                        overflow: 'hidden'
+            {showEditModal && (
+                <EditTagsModal
+                    isOpen={showEditModal}
+                    onClose={() => setShowEditModal(false)}
+                    asin={asin}
+                    onTagsUpdated={(asinId, newTags) => {
+                        setTags(newTags);
+                        onUpdate?.(asinId, newTags);
                     }}
-                    onClick={e => e.stopPropagation()}
-                >
-                    {/* Search Input */}
-                    <div className="p-2 border-bottom bg-white">
-                        <div className="d-flex align-items-center gap-2 bg-zinc-50 rounded-2 px-2" style={{ border: '1px solid #e5e7eb' }}>
-                            <Search size={12} className="text-zinc-400 flex-shrink-0" />
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                className="form-control border-0 bg-transparent p-0 shadow-none"
-                                placeholder="Search or add tag..."
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                style={{ fontSize: '11px', height: '28px' }}
-                            />
-                            {search && (
-                                <button 
-                                    className="btn btn-ghost p-0 border-0" 
-                                    onClick={(e) => { e.stopPropagation(); setSearch(''); }}
-                                    style={{ cursor: 'pointer' }}
-                                >
-                                    <X size={12} className="text-zinc-400" />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Custom Tag Add Button */}
-                    {search.trim() && !DEFAULT_TAGS.some(t => t.toLowerCase() === search.toLowerCase()) && !tags.includes(search.trim()) && (
-                        <div
-                            className="d-flex align-items-center gap-2 px-3 py-2 cursor-pointer hover-bg-indigo-50 border-bottom"
-                            onClick={(e) => { e.stopPropagation(); addCustomTag(); }}
-                            style={{ fontSize: '11px', color: '#4f46e5', fontWeight: 600 }}
-                        >
-                            <Plus size={12} />
-                            <span>Add "{search.trim()}"</span>
-                        </div>
-                    )}
-
-                    {/* Tags List */}
-                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                        {filteredTags.map(tag => {
-                            const isSelected = tags.includes(tag);
-                            const color = getTagColor(tag);
-                            return (
-                                <div
-                                    key={tag}
-                                    className={`d-flex align-items-center justify-content-between px-3 py-2 cursor-pointer ${
-                                        isSelected ? 'bg-zinc-50' : 'hover:bg-zinc-50'
-                                    }`}
-                                    onClick={(e) => { e.stopPropagation(); toggleTag(tag); }}
-                                    style={{ fontSize: '11px', transition: 'background 0.1s' }}
-                                >
-                                    <div className="d-flex align-items-center gap-2">
-                                        <span 
-                                            style={{ 
-                                                width: '8px', 
-                                                height: '8px', 
-                                                borderRadius: '2px', 
-                                                backgroundColor: color.text,
-                                                flexShrink: 0
-                                            }} 
-                                        />
-                                        <span className={`${isSelected ? 'fw-bold' : ''}`} style={{ color: isSelected ? '#18181b' : '#52525b' }}>
-                                            {tag}
-                                        </span>
-                                    </div>
-                                    {isSelected && <Check size={12} className="text-indigo-500" />}
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* Footer */}
-                    {tags.length > 0 && (
-                        <div className="border-top px-3 py-2 bg-zinc-50 d-flex justify-content-between align-items-center">
-                            <span className="text-zinc-400" style={{ fontSize: '10px' }}>
-                                {tags.length} tag{tags.length !== 1 ? 's' : ''} selected
-                            </span>
-                            <button
-                                className="btn btn-ghost p-0 border-0 text-zinc-400 hover-text-danger"
-                                onClick={(e) => { e.stopPropagation(); setTags([]); }}
-                                style={{ fontSize: '10px', fontWeight: 600 }}
-                            >
-                                Clear all
-                            </button>
-                        </div>
-                    )}
-                </div>
+                />
             )}
         </div>
     );
