@@ -29,7 +29,7 @@ const DEFAULT_TAGS = [
   'High Potential', 'Trending Up', 'Trending Down'
 ];
 
-const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
+const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   const [tags, setTags] = useState([]);
   const [originalTags, setOriginalTags] = useState([]);
   const [search, setSearch] = useState('');
@@ -99,22 +99,29 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
     return pool;
   })();
 
-  // Get tag color
+  // Get tag color (SOLID COLORS)
   const getTagColor = (tag) => {
     const t = tag.toLowerCase();
+    // Green
     if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
-      return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
+      return { bg: '#10b981', text: '#ffffff' };
+    // Red
     if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
-      return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+      return { bg: '#ef4444', text: '#ffffff' };
+    // Amber/Orange
     if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
-      return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
+      return { bg: '#f59e0b', text: '#ffffff' };
+    // Blue
     if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
-      return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
+      return { bg: '#3b82f6', text: '#ffffff' };
+    // Indigo/Purple
     if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
-      return { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' };
+      return { bg: '#6366f1', text: '#ffffff' };
+    // Orange-Red
     if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
-      return { bg: '#fff7ed', text: '#ea580c', border: '#fed7aa' };
-    return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+      return { bg: '#f97316', text: '#ffffff' };
+    // Default Gray
+    return { bg: '#71717a', text: '#ffffff' };
   };
 
   // Toggle a tag
@@ -179,9 +186,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
         setSuccessMessage('Tags saved successfully!');
         
         // Update parent component
-        if (onTagsUpdated) {
-          onTagsUpdated(asin._id || asin.id, tags);
-        }
+        if (onUpdate) onUpdate(asin._id || asin.id, tags);
         
         // Auto-close after 1.5 seconds
         setTimeout(() => {
@@ -223,7 +228,8 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
           box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
         .tag-item.selected {
-          border-color: currentColor;
+          border-color: #18181b;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .cat-pill {
           padding: 5px 12px;
@@ -318,24 +324,26 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
                 return (
                   <span
                     key={idx}
-                    className="badge d-flex align-items-center gap-2"
+                    className="badge d-flex align-items-center gap-2 shadow-sm transition-all hover-translate-y-px"
                     style={{
                       backgroundColor: color.bg,
                       color: color.text,
-                      border: `1.5px solid ${color.border}`,
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      padding: '7px 14px',
-                      borderRadius: '8px',
+                      border: 'none',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '8px 14px',
+                      borderRadius: '10px',
                       cursor: 'default'
                     }}
                   >
+                    <Tag size={10} className="opacity-70" />
                     {tag}
                     <X 
                       size={14} 
-                      style={{ cursor: 'pointer', opacity: 0.6, transition: 'opacity 0.15s' }}
+                      className="ms-1"
+                      style={{ cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.15s' }}
                       onMouseOver={e => e.currentTarget.style.opacity = '1'}
-                      onMouseOut={e => e.currentTarget.style.opacity = '0.6'}
+                      onMouseOut={e => e.currentTarget.style.opacity = '0.7'}
                       onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
                     />
                   </span>
@@ -396,13 +404,14 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
                       key={idx}
                       className={`tag-item ${isSelected ? 'selected' : ''}`}
                       style={{
-                        backgroundColor: isSelected ? color.bg : 'white',
-                        color: color.text,
-                        borderColor: isSelected ? color.text : '#e5e7eb'
+                        backgroundColor: isSelected ? color.bg : '#f8fafc',
+                        color: isSelected ? color.text : '#475569',
+                        borderColor: isSelected ? 'transparent' : '#e2e8f0',
+                        boxShadow: isSelected ? `0 4px 12px ${color.bg}33` : 'none'
                       }}
                       onClick={() => toggleTag(tag)}
                     >
-                      {isSelected && <Check size={13} />}
+                      {isSelected ? <Check size={13} /> : <Plus size={13} className="opacity-40" />}
                       {tag}
                     </button>
                   );
@@ -455,13 +464,14 @@ const EditTagsModal = ({ isOpen, onClose, asin, onTagsUpdated }) => {
                     key={idx}
                     className={`tag-item ${isSelected ? 'selected' : ''}`}
                     style={{
-                      backgroundColor: isSelected ? color.bg : 'white',
-                      color: color.text,
-                      borderColor: isSelected ? color.text : '#e5e7eb'
+                      backgroundColor: isSelected ? color.bg : '#f8fafc',
+                      color: isSelected ? color.text : '#475569',
+                      borderColor: isSelected ? 'transparent' : '#e2e8f0',
+                      boxShadow: isSelected ? `0 4px 12px ${color.bg}33` : 'none'
                     }}
                     onClick={() => toggleTag(tag)}
                   >
-                    {isSelected && <Check size={13} />}
+                    {isSelected ? <Check size={13} /> : <Plus size={13} className="opacity-40" />}
                     {tag}
                   </button>
                 );

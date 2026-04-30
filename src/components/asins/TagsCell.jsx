@@ -126,12 +126,26 @@ const TagsCell = ({ asin, onUpdate }) => {
     // Determine display colors based on tag type
     const getTagColor = (tag) => {
         const t = tag.toLowerCase();
-        if (t.includes('best') || t.includes('high margin')) return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
-        if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker')) return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
-        if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory')) return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
-        if (t.includes('new') || t.includes('ad active') || t.includes('seasonal')) return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
-        if (t.includes('clearance') || t.includes('replenishment') || t.includes('no ads')) return { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' };
-        return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+        // Green
+        if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
+            return { bg: '#10b981', text: '#ffffff' };
+        // Red
+        if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
+            return { bg: '#ef4444', text: '#ffffff' };
+        // Amber/Orange
+        if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
+            return { bg: '#f59e0b', text: '#ffffff' };
+        // Blue
+        if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
+            return { bg: '#3b82f6', text: '#ffffff' };
+        // Indigo/Purple
+        if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
+            return { bg: '#6366f1', text: '#ffffff' };
+        // Orange-Red
+        if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
+            return { bg: '#f97316', text: '#ffffff' };
+        // Default Gray
+        return { bg: '#71717a', text: '#ffffff' };
     };
 
     return (
@@ -165,15 +179,15 @@ const TagsCell = ({ asin, onUpdate }) => {
                             return (
                                 <span
                                     key={idx}
-                                    className="badge d-flex align-items-center gap-1"
+                                    className="badge d-flex align-items-center gap-1 shadow-sm"
                                     style={{
                                         backgroundColor: color.bg,
                                         color: color.text,
-                                        border: `1px solid ${color.border}`,
+                                        border: 'none',
                                         fontSize: '9px',
-                                        fontWeight: 600,
-                                        padding: '2px 7px',
-                                        borderRadius: '4px',
+                                        fontWeight: 700,
+                                        padding: '3px 8px',
+                                        borderRadius: '5px',
                                         whiteSpace: 'nowrap',
                                         cursor: 'pointer'
                                     }}
@@ -183,7 +197,7 @@ const TagsCell = ({ asin, onUpdate }) => {
                                     }}
                                 >
                                     {tag.length > 14 ? tag.substring(0, 13) + '…' : tag}
-                                    <X size={9} style={{ cursor: 'pointer', opacity: 0.6 }} />
+                                    <X size={10} style={{ cursor: 'pointer', opacity: 0.8 }} />
                                 </span>
                             );
                         })}
@@ -221,7 +235,7 @@ const TagsCell = ({ asin, onUpdate }) => {
                     isOpen={showEditModal}
                     onClose={() => setShowEditModal(false)}
                     asin={asin}
-                    onTagsUpdated={(asinId, newTags) => {
+                    onUpdate={(asinId, newTags) => {
                         setTags(newTags);
                         onUpdate?.(asinId, newTags);
                     }}

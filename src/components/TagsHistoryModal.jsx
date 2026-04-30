@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, User, Clock, Info, PlusCircle, MinusCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { X, History, User, Clock, Info, PlusCircle, MinusCircle, AlertCircle, Loader2, Tag } from 'lucide-react';
 import { format } from 'date-fns';
 import { asinApi } from '../services/api';
 
@@ -88,14 +88,34 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
         .tag-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          padding: 2px 8px;
-          border-radius: 4px;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 6px;
           font-size: 10px;
-          font-weight: 600;
+          font-weight: 700;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .tag-added { background-color: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-        .tag-removed { background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; text-decoration: line-through; opacity: 0.8; }
+        .tag-added { 
+          background-color: #10b981; 
+          color: #ffffff; 
+          border: none; 
+        }
+        .tag-removed { 
+          background-color: #ef4444; 
+          color: #ffffff; 
+          border: none; 
+          text-decoration: line-through; 
+          opacity: 0.9; 
+        }
+        .current-tag-badge {
+          background-color: #6366f1;
+          color: #ffffff;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+        }
       `}</style>
 
       <div
@@ -131,7 +151,10 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
                   <div className="mt-2 d-flex flex-wrap gap-2">
                     {summary.currentTags?.length > 0 ? (
                       summary.currentTags.map(t => (
-                        <span key={t} className="badge bg-indigo-100 text-indigo-600 border border-indigo-200 px-2 py-1" style={{ fontSize: '11px' }}>{t}</span>
+                        <span key={t} className="current-tag-badge d-flex align-items-center gap-1.5">
+                          <Tag size={10} className="opacity-70" />
+                          {t}
+                        </span>
                       ))
                     ) : (
                       <span className="text-slate-400 italic small">No tags assigned</span>

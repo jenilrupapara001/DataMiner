@@ -83,16 +83,26 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
 
   const getTagColor = (tag) => {
     const t = tag.toLowerCase();
-    if (t.includes('best') || t.includes('high margin')) return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
+    // Green
+    if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
+      return { bg: '#10b981', text: '#ffffff' };
+    // Red
     if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
-      return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
-    if (t.includes('optim') || t.includes('drop') || t.includes('inventory') || t.includes('out of stock'))
-      return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
-    if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth'))
-      return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
-    if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy'))
-      return { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' };
-    return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+      return { bg: '#ef4444', text: '#ffffff' };
+    // Amber/Orange
+    if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
+      return { bg: '#f59e0b', text: '#ffffff' };
+    // Blue
+    if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
+      return { bg: '#3b82f6', text: '#ffffff' };
+    // Indigo/Purple
+    if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
+      return { bg: '#6366f1', text: '#ffffff' };
+    // Orange-Red
+    if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
+      return { bg: '#f97316', text: '#ffffff' };
+    // Default Gray
+    return { bg: '#71717a', text: '#ffffff' };
   };
 
   if (!isOpen) return null;
@@ -255,10 +265,11 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                     {selectedTags.map((tag, idx) => {
                       const color = getTagColor(tag);
                       return (
-                        <span key={idx} className="badge d-flex align-items-center gap-1"
-                          style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}`, fontSize: '10px', padding: '4px 10px', borderRadius: '6px' }}>
+                        <span key={idx} className="badge d-flex align-items-center gap-1.5 shadow-sm"
+                          style={{ backgroundColor: color.bg, color: color.text, border: 'none', fontSize: '10px', padding: '5px 12px', borderRadius: '8px', fontWeight: 700 }}>
+                          <Tag size={10} className="opacity-70" />
                           {tag}
-                          <X size={11} style={{ cursor: 'pointer' }} onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))} />
+                          <X size={12} className="ms-1" style={{ cursor: 'pointer', opacity: 0.7 }} onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))} />
                         </span>
                       );
                     })}
@@ -273,9 +284,14 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                   const isSelected = selectedTags.includes(tag);
                   return (
                     <button key={idx} className={`bulk-tag-item ${isSelected ? 'selected' : ''}`}
-                      style={{ backgroundColor: isSelected ? color.bg : 'white', color: color.text, borderColor: isSelected ? color.text : '#e5e7eb' }}
+                      style={{ 
+                        backgroundColor: isSelected ? color.bg : '#f8fafc', 
+                        color: isSelected ? color.text : '#475569', 
+                        borderColor: isSelected ? 'transparent' : '#e2e8f0',
+                        boxShadow: isSelected ? `0 4px 12px ${color.bg}33` : 'none'
+                      }}
                       onClick={() => toggleTag(tag)}>
-                      {isSelected && <Check size={12} className="me-1" />}
+                      {isSelected ? <Check size={12} className="me-1" /> : <Plus size={12} className="me-1 opacity-40" />}
                       {tag}
                     </button>
                   );
@@ -298,7 +314,7 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                 {selectedTags.map((tag, idx) => {
                   const color = getTagColor(tag);
                   return (
-                    <span key={idx} className="badge" style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}`, fontSize: '12px', padding: '6px 14px', borderRadius: '8px' }}>
+                    <span key={idx} className="badge shadow-sm" style={{ backgroundColor: color.bg, color: color.text, border: 'none', fontSize: '12px', padding: '8px 16px', borderRadius: '10px', fontWeight: 700 }}>
                       {tag}
                     </span>
                   );

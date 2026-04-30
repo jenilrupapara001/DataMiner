@@ -45,7 +45,8 @@ import {
   PlayCircle,
   Award,
   Filter,
-  Tag
+  Tag,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -398,7 +399,8 @@ const AsinManagerPage = () => {
   const visibleBsrTrendCount = useMemo(() => isVisible('bsrTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleRatingTrendCount = useMemo(() => isVisible('ratingTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleImageTrendCount = useMemo(() => isVisible('imageTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-
+  
+  const [tagSearch, setTagSearch] = useState('');
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
@@ -430,7 +432,15 @@ const AsinManagerPage = () => {
     maxImageScore: '',
     minDescriptionScore: '',
     maxDescriptionScore: '',
-    subBsrCategory: ''
+    subBsrCategory: '',
+    buyBoxWin: '',
+    hasAplus: '',
+    hasVideo: '',
+    hasDeal: '',
+    ageFilter: '',
+    selectedTags: [],
+    minReleaseDate: '',
+    maxReleaseDate: ''
   });
 
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -464,13 +474,22 @@ const AsinManagerPage = () => {
     maxImageScore: '',
     minDescriptionScore: '',
     maxDescriptionScore: '',
-    subBsrCategory: ''
+    subBsrCategory: '',
+    buyBoxWin: '',
+    hasAplus: '',
+    hasVideo: '',
+    hasDeal: '',
+    ageFilter: '',
+    selectedTags: [],
+    minReleaseDate: '',
+    maxReleaseDate: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
     brands: [],
     scrapeStatuses: [],
-    statuses: []
+    statuses: [],
+    tags: []
   });
 
   // Explicit Apply Handlers
@@ -478,6 +497,129 @@ const AsinManagerPage = () => {
     setSelectedIds(new Set()); // Reset selection on new search
     setAppliedSearchQuery(searchQuery);
   };
+
+  const resetAllFilters = useCallback(() => {
+    const resetState = {
+      status: '', category: '', brand: '', scrapeStatus: '',
+      parentAsin: '', sku: '', subBsrCategory: '',
+      minPrice: '', maxPrice: '', minBSR: '', maxBSR: '',
+      minLQS: '', maxLQS: '', minRating: '', maxRating: '',
+      selectedTags: [],
+      buyBoxWin: '', hasAplus: '', hasVideo: '', hasDeal: '',
+      ageFilter: '', minReleaseDate: '', maxReleaseDate: '',
+      minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
+      minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: '',
+      minReviewCount: '', maxReviewCount: '', minImagesCount: '', maxImagesCount: '',
+      minBulletPoints: '', maxBulletPoints: ''
+    };
+    setFilters(resetState);
+    setAppliedFilters(resetState);
+    setSearchQuery('');
+    setAppliedSearchQuery('');
+    setFilterPanelOpen(false);
+  }, []);
+
+  const removeAppliedFilter = useCallback((key, value = null) => {
+    setAppliedFilters(prev => {
+      const next = { ...prev };
+      if (key === 'selectedTags') {
+        next.selectedTags = (next.selectedTags || []).filter(t => t !== value);
+      } else {
+        next[key] = '';
+      }
+      return next;
+    });
+    // Also sync the drawer filters state
+    setFilters(prev => {
+      const next = { ...prev };
+      if (key === 'selectedTags') {
+        next.selectedTags = (next.selectedTags || []).filter(t => t !== value);
+      } else {
+        next[key] = '';
+      }
+      return next;
+    });
+  }, []);
+
+  const getAppliedFiltersBadges = useCallback(() => {
+    const badges = [];
+    const mapping = {
+      sku: 'SKU',
+      parentAsin: 'Parent ASIN',
+      scrapeStatus: 'Scrape Status',
+      brand: 'Brand',
+      category: 'Category',
+      subBsrCategory: 'Sub BSR',
+      buyBoxWin: 'BuyBox Winner',
+      hasAplus: 'A+ Content',
+      hasVideo: 'Video',
+      hasDeal: 'Deal',
+      minPrice: 'Min Price',
+      maxPrice: 'Max Price',
+      minBSR: 'Min BSR',
+      maxBSR: 'Max BSR',
+      minRating: 'Min Rating',
+      maxRating: 'Max Rating',
+      ageFilter: 'Age',
+      minReleaseDate: 'From',
+      maxReleaseDate: 'To'
+    };
+
+    Object.entries(appliedFilters).forEach(([key, value]) => {
+      if (value && mapping[key]) {
+        let label = value;
+        if (value === 'true') label = 'Yes';
+        if (value === 'false') label = 'No';
+
+        badges.push(
+          <div key={key} className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+            <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>{mapping[key]}:</span>
+            <span className="fw-bold">{label}</span>
+            <button 
+              className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" 
+              onClick={() => removeAppliedFilter(key)}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        );
+      }
+    });
+
+    if (appliedFilters.selectedTags?.length > 0) {
+      appliedFilters.selectedTags.forEach(tag => {
+        badges.push(
+          <div key={`tag-${tag}`} className="badge bg-indigo-50 text-indigo-700 border border-indigo-100 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+            <Tag size={10} className="opacity-60" />
+            <span className="fw-bold">{tag}</span>
+            <button 
+              className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" 
+              onClick={() => removeAppliedFilter('selectedTags', tag)}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        );
+      });
+    }
+
+    if (appliedSearchQuery) {
+        badges.unshift(
+            <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+              <Search size={10} className="opacity-60" />
+              <span className="fw-bold italic">"{appliedSearchQuery}"</span>
+              <button 
+                className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors" 
+                onClick={() => { setAppliedSearchQuery(''); setSearchQuery(''); }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+        );
+    }
+
+    return badges;
+  }, [appliedFilters, appliedSearchQuery, removeAppliedFilter]);
 
   const handleApplyFilters = () => {
     setSelectedIds(new Set()); // Reset selection on new filter
@@ -1273,6 +1415,286 @@ const AsinManagerPage = () => {
         </div>
       )}
 
+      {/* [Filter Sidebar/Drawer Overlay] — PREMIUM FULL-HEIGHT DRAWER */}
+      {filterPanelOpen && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="position-fixed top-0 start-0 w-100 h-100" 
+            style={{ 
+              zIndex: 2000, 
+              backgroundColor: 'rgba(0, 0, 0, 0.45)',
+              backdropFilter: 'blur(4px)',
+              animation: 'fadeIn 0.25s ease-out'
+            }}
+            onClick={() => setFilterPanelOpen(false)}
+          />
+          
+          <div
+            className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
+            style={{ 
+              width: '420px', 
+              zIndex: 2010, 
+              animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: '-10px 0 50px rgba(0,0,0,0.25)'
+            }}
+          >
+            {/* Header */}
+            <div className="p-4 border-bottom d-flex align-items-center justify-content-between bg-zinc-900 text-white">
+              <div className="d-flex align-items-center gap-3">
+                <div className="p-2 bg-zinc-800 rounded-3">
+                  <SlidersHorizontal size={20} className="text-white" />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: '15px', letterSpacing: '0.02em' }}>ADVANCED FILTERS</h5>
+                  <p className="mb-0 text-zinc-400" style={{ fontSize: '11px' }}>Refine your catalog search</p>
+                </div>
+              </div>
+              <button 
+                className="btn btn-ghost p-2 rounded-circle hover-bg-zinc-800 text-white opacity-70 hover-opacity-100" 
+                onClick={() => setFilterPanelOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-grow-1 overflow-auto p-4 custom-scrollbar">
+              
+              {/* SEARCH & BASIC */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Identity & Search</h6>
+                <div className="d-flex flex-column gap-3">
+                  <div className="filter-group">
+                    <label className="filter-label">SKU</label>
+                    <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.sku} onChange={(e) => setFilters({ ...filters, sku: e.target.value })} placeholder="Enter SKU..." style={{ fontSize: '12px', height: '38px' }} />
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">PARENT ASIN</label>
+                    <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.parentAsin} onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })} placeholder="Enter Parent ASIN..." style={{ fontSize: '12px', height: '38px' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* ATTRIBUTES */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Product Attributes</h6>
+                <div className="d-flex flex-column gap-3">
+                  <div className="filter-group">
+                    <label className="filter-label">SCRAPE STATUS</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Statuses</option>
+                      <option value="Success">Success</option>
+                      <option value="Failed">Failed</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">BRAND</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Brands</option>
+                      {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">CATEGORY</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Categories</option>
+                      {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">SUB BSR CATEGORY</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.subBsrCategory || ''} onChange={(e) => setFilters({ ...filters, subBsrCategory: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Sub BSR Categories</option>
+                      {filterOptions.subBsrCategories?.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* QUICK FLAGS */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Quick Flags</h6>
+                <div className="row g-2">
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">BUYBOX WINNER</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.buyBoxWin} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">A+ CONTENT</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasAplus} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">VIDEO PRESENCE</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasVideo} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">ACTIVE DEAL</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasDeal} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RANGES */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Metrics & Ranges</h6>
+                <div className="d-flex flex-column gap-3">
+                  <div className="filter-group">
+                    <label className="filter-label">PRICE RANGE (₹)</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                    </div>
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">BSR RANGE</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                    </div>
+                  </div>
+                  <div className="filter-group">
+                    <label className="filter-label">RATING RANGE</label>
+                    <div className="d-flex gap-2">
+                      <input type="number" placeholder="Min" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minRating || ''} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                      <input type="number" placeholder="Max" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxRating || ''} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* TAGS */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Tags</h6>
+                <div className="filter-group">
+                  <div className="position-relative">
+                    <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      className="form-control form-control-sm rounded-2 ps-5 border-zinc-200"
+                      placeholder="Search tags..."
+                      value={tagSearch}
+                      onChange={(e) => setTagSearch(e.target.value)}
+                      style={{ fontSize: '12px', height: '38px' }}
+                    />
+                  </div>
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    {filterOptions.tags
+                      .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
+                      .map(tag => (
+                        <button
+                          key={tag}
+                          className={`btn btn-xs rounded-pill px-3 py-1.5 transition-all d-flex align-items-center gap-1 ${filters.selectedTags.includes(tag) ? 'bg-zinc-900 text-white shadow-md' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                          onClick={() => {
+                            const newTags = filters.selectedTags.includes(tag)
+                              ? filters.selectedTags.filter(t => t !== tag)
+                              : [...filters.selectedTags, tag];
+                            setFilters({ ...filters, selectedTags: newTags });
+                          }}
+                          style={{ fontSize: '11px', fontWeight: 600 }}
+                        >
+                          {tag}
+                          {filters.selectedTags.includes(tag) && <X size={10} />}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* AGE FILTER */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Listing Age</h6>
+                <div className="filter-group">
+                  <div className="d-flex flex-wrap gap-2">
+                    {[
+                      { label: 'New (<30D)', value: '30' },
+                      { label: '30-60D', value: '60' },
+                      { label: '60-90D', value: '90' },
+                      { label: '90-180D', value: '180' },
+                      { label: '180-365D', value: '365' },
+                      { label: '365+ Days', value: '365+' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        className={`btn btn-sm rounded-pill px-3 py-1 transition-all ${filters.ageFilter === opt.value ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                        onClick={() => setFilters({ ...filters, ageFilter: filters.ageFilter === opt.value ? '' : opt.value })}
+                        style={{ fontSize: '10px', fontWeight: 600 }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-group mt-4">
+                  <label className="filter-label">RELEASE DATE RANGE</label>
+                  <div className="d-flex gap-2">
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-2 border-zinc-200"
+                      value={filters.minReleaseDate}
+                      onChange={(e) => setFilters({ ...filters, minReleaseDate: e.target.value })}
+                      style={{ fontSize: '12px', height: '38px' }}
+                    />
+                    <input
+                      type="date"
+                      className="form-control form-control-sm rounded-2 border-zinc-200"
+                      value={filters.maxReleaseDate}
+                      onChange={(e) => setFilters({ ...filters, maxReleaseDate: e.target.value })}
+                      style={{ fontSize: '12px', height: '38px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-top bg-zinc-50 d-flex gap-3">
+              <button 
+                className="btn btn-white flex-grow-1 border-zinc-200 fw-bold rounded-3 py-2.5 shadow-sm hover-bg-zinc-100" 
+                onClick={resetAllFilters}
+                style={{ fontSize: '13px' }}
+              >
+                Reset All
+              </button>
+              <button 
+                className="btn btn-zinc-900 flex-grow-1 fw-bold rounded-3 py-2.5 shadow-md hover-bg-zinc-800" 
+                onClick={handleApplyFilters}
+                style={{ fontSize: '13px', backgroundColor: '#18181B', color: '#fff' }}
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="page-header" style={{ padding: '0.5rem 1.25rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div className="d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-3">
@@ -1464,268 +1886,19 @@ const AsinManagerPage = () => {
 
         {/* [E] High-Density Table Area */}
         <div className="bg-white border border-zinc-200 rounded-4 shadow-sm overflow-hidden flex-grow-1 d-flex flex-column position-relative">
-
-          {/* [Filter Sidebar/Drawer Overlay] — COMPLETE REDESIGN */}
-          {filterPanelOpen && (
-            <div
-              className="position-absolute top-0 end-0 h-100 bg-white border-start shadow-lg d-flex flex-column"
-              style={{ width: '320px', zIndex: 100, animation: 'slideIn 0.2s ease-out' }}
-            >
-              {/* Header */}
-              <div className="p-3 border-bottom d-flex align-items-center justify-content-between bg-zinc-900 text-white">
-                <div className="d-flex align-items-center gap-2">
-                  <Filter size={16} />
-                  <span className="fw-bold" style={{ fontSize: '13px', letterSpacing: '0.05em' }}>ADVANCED FILTERS</span>
-                </div>
-                <button className="btn btn-ghost p-1 text-white opacity-75 hover-opacity-100" onClick={() => setFilterPanelOpen(false)}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="flex-grow-1 overflow-auto p-3">
-                <div className="d-flex flex-column gap-3">
-
-                  {/* 1. LISTING STATUS */}
-                  <div className="filter-group">
-                    <label className="filter-label">LISTING STATUS</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All Statuses</option>
-                      {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-
-                  {/* 2. SCRAPE STATUS */}
-                  <div className="filter-group">
-                    <label className="filter-label">SCRAPE STATUS</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All Scrape Statuses</option>
-                      {filterOptions.scrapeStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-
-                  {/* 3. SUB BSR CATEGORY */}
-                  <div className="filter-group">
-                    <label className="filter-label">SUB BSR CATEGORY</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.subBsrCategory || ''} onChange={(e) => setFilters({ ...filters, subBsrCategory: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All Sub BSR Categories</option>
-                      {filterOptions.subBsrCategories?.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 4. BRAND */}
-                  <div className="filter-group">
-                    <label className="filter-label">BRAND</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All Brands</option>
-                      {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                  </div>
-
-                  {/* 5. CATEGORY */}
-                  <div className="filter-group">
-                    <label className="filter-label">CATEGORY</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All Categories</option>
-                      {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  {/* 5a. A+ CONTENT */}
-                  <div className="filter-group">
-                    <label className="filter-label">A+ CONTENT</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.hasAplus} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  </div>
-
-                  {/* 5b. VIDEO PRESENCE */}
-                  <div className="filter-group">
-                    <label className="filter-label">VIDEO PRESENCE</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.hasVideo} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  </div>
-
-                  {/* 5c. BUYBOX WINNER */}
-                  <div className="filter-group">
-                    <label className="filter-label">BUYBOX WINNER</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.buyBoxWin} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  </div>
-
-                  {/* 5d. ACTIVE DEAL */}
-                  <div className="filter-group">
-                    <label className="filter-label">ACTIVE DEAL</label>
-                    <select className="form-select form-select-sm rounded-2" value={filters.hasDeal} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.value })} style={{ fontSize: '12px', height: '36px' }}>
-                      <option value="">All</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  </div>
-
-                  {/* 6. PARENT ASIN */}
-                  <div className="filter-group">
-                    <label className="filter-label">PARENT ASIN</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm rounded-2"
-                      placeholder="Filter by Parent ASIN..."
-                      value={filters.parentAsin || ''}
-                      onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })}
-                      style={{ fontSize: '12px', height: '36px' }}
-                    />
-                  </div>
-
-                  {/* 7. SKU */}
-                  <div className="filter-group">
-                    <label className="filter-label">SKU</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm rounded-2"
-                      placeholder="Filter by SKU..."
-                      value={filters.sku || ''}
-                      onChange={(e) => setFilters({ ...filters, sku: e.target.value })}
-                      style={{ fontSize: '12px', height: '36px' }}
-                    />
-                  </div>
-
-                  {/* 8. PRICE RANGE */}
-                  <div className="filter-group">
-                    <label className="filter-label">PRICE RANGE (₹)</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                    </div>
-                  </div>
-
-                  {/* 9. BSR RANGE */}
-                  <div className="filter-group">
-                    <label className="filter-label">BSR RANGE</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                    </div>
-                  </div>
-
-                  {/* 10. LQS RANGE */}
-                  <div className="filter-group">
-                    <label className="filter-label">LQS RANGE (%)</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2" value={filters.minLQS} onChange={(e) => setFilters({ ...filters, minLQS: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2" value={filters.maxLQS} onChange={(e) => setFilters({ ...filters, maxLQS: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                    </div>
-                  </div>
-
-                  {/* 11. RATING RANGE */}
-                  <div className="filter-group">
-                    <label className="filter-label">RATING RANGE</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" step="0.1" className="form-control form-control-sm rounded-2" value={filters.minRating || ''} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                      <input type="number" placeholder="Max" step="0.1" className="form-control form-control-sm rounded-2" value={filters.maxRating || ''} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} style={{ fontSize: '12px', height: '36px' }} />
-                    </div>
-                  </div>
-
-                  {/* 12. TAGS */}
-                  <div className="filter-group">
-                    <label className="filter-label">TAGS</label>
-                    <div className="position-relative">
-                      <Search size={12} className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" />
-                      <input
-                        type="text"
-                        className="form-control form-control-sm rounded-2 ps-4"
-                        placeholder="Search tags..."
-                        value={filters.tagSearch || ''}
-                        onChange={(e) => setFilters({ ...filters, tagSearch: e.target.value })}
-                        style={{ fontSize: '12px', height: '36px' }}
-                      />
-                    </div>
-                    {filterOptions.tags && filterOptions.tags.length > 0 && (
-                      <div className="mt-2 d-flex flex-wrap gap-1" style={{ maxHeight: '100px', overflow: 'auto' }}>
-                        {filterOptions.tags
-                          .filter(t => !filters.tagSearch || t.toLowerCase().includes((filters.tagSearch || '').toLowerCase()))
-                          .slice(0, 20)
-                          .map(tag => (
-                            <span
-                              key={tag}
-                              className={`badge rounded-pill cursor-pointer ${(filters.selectedTags || []).includes(tag) ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
-                              style={{ fontSize: '10px', padding: '4px 10px', cursor: 'pointer' }}
-                              onClick={() => {
-                                const current = filters.selectedTags || [];
-                                const updated = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag];
-                                setFilters({ ...filters, selectedTags: updated });
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Release Date Range */}
-                  <div className="filter-group">
-                    <label className="filter-label">RELEASE DATE RANGE</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="date"
-                        className="form-control form-control-sm rounded-2"
-                        value={filters.minReleaseDate || ''}
-                        onChange={(e) => setFilters({ ...filters, minReleaseDate: e.target.value })}
-                        style={{ fontSize: '11px', height: '36px' }}
-                        placeholder="From"
-                      />
-                      <input
-                        type="date"
-                        className="form-control form-control-sm rounded-2"
-                        value={filters.maxReleaseDate || ''}
-                        onChange={(e) => setFilters({ ...filters, maxReleaseDate: e.target.value })}
-                        style={{ fontSize: '11px', height: '36px' }}
-                        placeholder="To"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Quick Age Filters */}
-                  <div className="filter-group">
-                    <label className="filter-label">QUICK AGE FILTERS</label>
-                    <div className="d-flex flex-wrap gap-1">
-                      {[
-                        { label: 'New 30D', value: '30' },
-                        { label: '30-60D', value: '60' },
-                        { label: '60-90D', value: '90' },
-                        { label: '90-180D', value: '180' },
-                        { label: '180-365D', value: '365' },
-                        { label: '365+ Days', value: '365+' }
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          className={`btn btn-sm rounded-pill px-2 py-0 ${filters.ageFilter === opt.value ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}
-                          onClick={() => setFilters({ ...filters, ageFilter: filters.ageFilter === opt.value ? '' : opt.value })}
-                          style={{ fontSize: '9px' }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-
-                </div>
-
-                {/* CSS for filter panel */}
-                <style>{`
+          <style>{`
+                  .filter-section-title {
+                    font-size: 11px;
+                    font-weight: 800;
+                    color: #18181b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.1em;
+                    margin-bottom: 16px;
+                    padding-bottom: 8px;
+                    border-bottom: 1.5px solid #f4f4f5;
+                  }
                   .filter-group {
-                    margin-bottom: 2px;
+                    margin-bottom: 4px;
                   }
                   .filter-label {
                     display: block;
@@ -1733,58 +1906,37 @@ const AsinManagerPage = () => {
                     font-weight: 700;
                     color: #71717a;
                     text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    margin-bottom: 6px;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 8px;
                   }
-                  @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
+                  @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
                   }
-                `}</style>
-              </div>
-
-              {/* Footer Buttons */}
-              <div className="p-3 border-top bg-white d-flex flex-column gap-2">
-                <button
-                  className="btn btn-dark fw-bold w-100 rounded-2 py-2"
-                  onClick={handleApplyFilters}
-                  style={{ fontSize: '11px', background: '#18181b' }}
-                >
-                  APPLY FILTERS
-                </button>
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-outline-secondary fw-bold flex-grow-1 rounded-2 py-2"
-                    onClick={() => {
-                      const resetState = {
-                        status: '', category: '', brand: '', scrapeStatus: '',
-                        parentAsin: '', sku: '', subBsrCategory: '',
-                        minPrice: '', maxPrice: '', minBSR: '', maxBSR: '',
-                        minLQS: '', maxLQS: '', minRating: '', maxRating: '',
-                        tagSearch: '', selectedTags: []
-                      };
-                      setFilters(resetState);
-                      setAppliedFilters(resetState);
-                      setSearchQuery('');
-                      setAppliedSearchQuery('');
-                      setSelectedSeller('');
-                      setFilterPanelOpen(false);
-                    }}
-                    style={{ fontSize: '11px' }}
-                  >
-                    RESET
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary fw-bold flex-grow-1 rounded-2 py-2"
-                    onClick={() => setFilterPanelOpen(false)}
-                    style={{ fontSize: '11px' }}
-                  >
-                    CANCEL
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+                  @keyframes slideInRight {
+                    from { transform: translateX(100%); }
+                    to { transform: translateX(0); }
+                  }
+                  .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                  }
+                  .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                  }
+                  .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #e4e4e7;
+                    border-radius: 10px;
+                  }
+                  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #d4d4d8;
+                  }
+                  .hover-translate-y-px:hover {
+                    transform: translateY(-1px);
+                  }
+                  .shadow-2xl {
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                  }
+          `}</style>
 
           {/* Table Toolbar */}
           <div style={{
@@ -1921,6 +2073,25 @@ const AsinManagerPage = () => {
               </button>
             </div>
           </div>
+          
+          {/* APPLIED FILTERS BADGES */}
+          {(Object.values(appliedFilters).some(v => v !== '' && (!Array.isArray(v) || v.length > 0)) || appliedSearchQuery) && (
+            <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+              <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Applied Filters
+              </span>
+              <div className="d-flex flex-wrap gap-2">
+                {getAppliedFiltersBadges()}
+              </div>
+              <button 
+                className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
+                style={{ fontSize: '10px' }}
+                onClick={resetAllFilters}
+              >
+                CLEAR ALL
+              </button>
+            </div>
+          )}
 
           {/* Scrollable Table Container */}
           <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>

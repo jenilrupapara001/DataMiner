@@ -107,7 +107,7 @@ exports.getAsins = async (req, res) => {
     if (brand) whereClause += ' AND s.Name = @brand';
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
-    if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxStatus = @buyBoxStatus';
+    if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxWin = @buyBoxStatus';
 
     // [3] Numeric Ranges
     if (minPrice) whereClause += ' AND CurrentPrice >= @minPrice';
