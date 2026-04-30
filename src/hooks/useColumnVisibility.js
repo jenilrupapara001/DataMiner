@@ -28,6 +28,7 @@ export const ALL_COLUMNS = [
   { key: 'discountPercentage', label: 'Discount %', defaultVisible: false, category: 'Pricing' },
   
   { key: 'priceTrend', label: 'Price Trend (7D)', defaultVisible: true, category: 'Trends' },
+  { key: 'mainBsr', label: 'Main BSR', defaultVisible: true, category: 'Rankings' },
   { key: 'bsr', label: 'BSR', defaultVisible: true, category: 'Rankings' },
   { key: 'subBsr', label: 'Sub BSR', defaultVisible: true, category: 'Rankings' },
   { key: 'video', label: 'Video', defaultVisible: false, category: 'Rankings' },

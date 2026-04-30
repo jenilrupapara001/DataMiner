@@ -1981,6 +1981,7 @@ const AsinManagerPage = () => {
                     </th>
                   )}
 
+                  {isVisible('mainBsr') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f5f3ff' }}>MAIN BSR</th>}
                   {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>SUB-BSR</th>}
                   {isVisible('bsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>CATEGORY RANK</th>}
                   {isVisible('video') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>}
@@ -2341,11 +2342,26 @@ const AsinManagerPage = () => {
                           </td>
                         );
                       }))}
+                      {isVisible('mainBsr') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
+                          onClick={(e) => handleViewBsr(asin, e)}>
+                          <div className="d-flex flex-column align-items-center">
+                            <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
+                              {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
+                            </div>
+                            {asin.category && (
+                              <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
+                                in {asin.category}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       {isVisible('subBsr') && (
                         <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                           onClick={(e) => handleViewBsr(asin, e)}>
-                          <div style={{ fontWeight: 600, color: '#7c3aed' }}>
-                            {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
+                          <div style={{ fontWeight: 600, color: '#6b7280' }}>
+                            {asin.subBsr && asin.subBsr !== '0' ? (asin.subBsr.includes(' in ') ? asin.subBsr.split(' in ')[0] : asin.subBsr) : '-'}
                           </div>
                         </td>
                       )}
@@ -2826,19 +2842,25 @@ const AsinManagerPage = () => {
           onClose={() => setShowDetailModal(false)}
         />
         <PriceViewModal
-          asins={filteredAsins}
           isOpen={!!selectedAsinForPrice || showAllPriceHistory}
           onClose={() => { setSelectedAsinForPrice(null); setShowAllPriceHistory(false); }}
+          filters={appliedFilters}
+          searchQuery={appliedSearchQuery}
+          sellerId={selectedSeller}
         />
         <BSRViewModal
-          asins={filteredAsins}
           isOpen={!!selectedAsinForBsr || showAllBsrHistory}
           onClose={() => { setSelectedAsinForBsr(null); setShowAllBsrHistory(false); }}
+          filters={appliedFilters}
+          searchQuery={appliedSearchQuery}
+          sellerId={selectedSeller}
         />
         <RatingViewModal
-          asins={filteredAsins}
           isOpen={!!selectedAsinForRating || showAllRatingHistory}
           onClose={() => { setSelectedAsinForRating(null); setShowAllRatingHistory(false); }}
+          filters={appliedFilters}
+          searchQuery={appliedSearchQuery}
+          sellerId={selectedSeller}
         />
         <ExportAsinModal
           isOpen={showExportModal}
