@@ -16,6 +16,27 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [currentSellerId, setCurrentSellerId] = useState(initialSellerId);
+  const [sellers, setSellers] = useState([]);
+
+  // Fetch all sellers once for badge labels
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const res = await sellerApi.getAll({ page: 1, limit: 1000 });
+        if (res.success) setSellers(res.data.sellers || []);
+      } catch (err) {
+        console.error('Error fetching sellers for labels:', err);
+      }
+    };
+    fetchSellers();
+  }, []);
+
+  // Sync with prop if it changes (e.g. parent updates seller)
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentSellerId(initialSellerId);
+    }
+  }, [isOpen, initialSellerId]);
 
   // ===== LOCAL UI STATE =====
   const [localSearch, setLocalSearch] = useState('');
@@ -245,6 +266,55 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     setFilterPriceRange({ min: '', max: '' });
     setSortBy('currentPrice');
     setSortOrder('desc');
+    // Keep currentSellerId as requested for persistent seller filtering
+  };
+
+  const getAppliedFiltersBadges = () => {
+    const badges = [];
+
+    if (currentSellerId) {
+      const seller = sellers.find(s => s._id === currentSellerId);
+      badges.push(
+        <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Store size={10} className="opacity-60" />
+          <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
+          <button className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" onClick={() => setCurrentSellerId('')}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    if (localSearch) {
+      badges.push(
+        <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Search size={10} className="opacity-60" />
+          <span className="fw-bold italic">"{localSearch}"</span>
+          <button className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors" onClick={() => setLocalSearch('')}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    if (filterStatus !== 'all') {
+      badges.push(
+        <div key="status" className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>Status:</span>
+          <span className="fw-bold">{filterStatus}</span>
+          <button className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" onClick={() => setFilterStatus('all')}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    if (filterPriceRange.min || filterPriceRange.max) {
+      const label = `${filterPriceRange.min || 0} - ${filterPriceRange.max || '∞'}`;
+      badges.push(
+        <div key="price" className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>Price:</span>
+          <span className="fw-bold">₹{label}</span>
+          <button className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" onClick={() => setFilterPriceRange({ min: '', max: '' })}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    return badges;
   };
 
   const exportData = () => {
@@ -365,12 +435,31 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
             ))}
           </div>
 
-          {(filterStatus !== 'all' || localSearch || currentSellerId || filterPriceRange.min || filterPriceRange.max) && (
-            <button className="chp text-red-500 border-red-100 bg-red-50" onClick={() => { resetAllFilters(); setCurrentSellerId(''); }} style={{ fontSize: '10px' }}><X size={12} className="me-1" /> Reset</button>
+          {(filterStatus !== 'all' || localSearch || filterPriceRange.min || filterPriceRange.max) && (
+            <button className="chp text-red-500 border-red-100 bg-red-50" onClick={resetAllFilters} style={{ fontSize: '10px' }}><X size={12} className="me-1" /> Reset</button>
           )}
 
           {loading && <div className="ms-auto d-flex align-items-center gap-2 text-zinc-400" style={{ fontSize: '11px' }}><Loader2 size={14} className="animate-spin" /> Updating...</div>}
         </div>
+
+        {/* APPLIED FILTERS BADGES */}
+        {(currentSellerId || localSearch || filterStatus !== 'all' || filterPriceRange.min || filterPriceRange.max) && (
+          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+            <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Context Filters
+            </span>
+            <div className="d-flex flex-wrap gap-2">
+              {getAppliedFiltersBadges()}
+            </div>
+            <button 
+              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
+              style={{ fontSize: '10px' }}
+              onClick={resetAllFilters}
+            >
+              CLEAR ALL
+            </button>
+          </div>
+        )}
 
         {showFilters && (
           <div className="px-4 py-3 bg-zinc-50 border-bottom d-flex gap-4 flex-shrink-0 align-items-center">

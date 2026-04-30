@@ -40,10 +40,13 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   const [recentlyUsed, setRecentlyUsed] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
-  // Load current tags
+  // Load current tags and summary
   useEffect(() => {
     if (asin) {
+      // 1. Set tags from asin object
       let currentTags = [];
       try {
         if (asin.tags && Array.isArray(asin.tags)) {
@@ -58,6 +61,26 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
       }
       setTags(currentTags);
       setOriginalTags([...currentTags]);
+
+      // 2. Fetch summary for audit info
+      const fetchSummary = async () => {
+        setLoadingSummary(true);
+        try {
+          const res = await asinApi.getTagsSummary(asin._id || asin.id);
+          if (res.success) {
+            setSummary(res.data);
+            // Sync tags if backend has more recent info
+            if (res.data.currentTags && JSON.stringify([...res.data.currentTags].sort()) !== JSON.stringify([...currentTags].sort())) {
+              setTags(res.data.currentTags);
+              setOriginalTags([...res.data.currentTags]);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch tags summary:', err);
+        }
+        setLoadingSummary(false);
+      };
+      fetchSummary();
     }
   }, [asin]);
 
@@ -277,9 +300,21 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             </div>
             <div>
               <h5 className="mb-0 fw-bold text-zinc-900">Edit Tags</h5>
-              <span className="text-zinc-500" style={{ fontSize: '12px' }}>
-                {asin.asinCode} · {tags.length} tag{tags.length !== 1 ? 's' : ''} selected
-              </span>
+              <div className="d-flex align-items-center gap-2 mt-0.5">
+                <span className="text-zinc-500" style={{ fontSize: '11px', fontWeight: 600 }}>
+                  {asin.asinCode}
+                </span>
+                <span className="text-zinc-300">|</span>
+                {loadingSummary ? (
+                   <span className="text-zinc-400" style={{ fontSize: '10px' }}>Loading summary...</span>
+                ) : summary?.recentChanges?.[0] ? (
+                  <span className="text-zinc-400 d-flex align-items-center gap-1" style={{ fontSize: '10px' }}>
+                    <Clock size={10} /> Last modified by <span className="text-zinc-600 fw-bold">{summary.recentChanges[0].userName}</span> {new Date(summary.recentChanges[0].createdAt).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="text-zinc-400" style={{ fontSize: '10px' }}>No modification history</span>
+                )}
+              </div>
             </div>
           </div>
           <div className="d-flex align-items-center gap-2">

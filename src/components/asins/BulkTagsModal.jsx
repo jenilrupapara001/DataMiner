@@ -25,6 +25,8 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
   const [error, setError] = useState(null);
   const [step, setStep] = useState(1); // 1=select, 2=review, 3=result
 
+  const [existingTags, setExistingTags] = useState([]);
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -35,8 +37,21 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
       setError(null);
       setStep(1);
       setAction('replace');
+
+      // Calculate existing tags across all selected ASINs
+      const allTags = new Set();
+      selectedAsins.forEach(asin => {
+        let tags = [];
+        try {
+          if (asin.tags && Array.isArray(asin.tags)) tags = asin.tags;
+          else if (asin.Tags && typeof asin.Tags === 'string') tags = JSON.parse(asin.Tags);
+          else if (asin.Tags && Array.isArray(asin.Tags)) tags = asin.Tags;
+        } catch (e) {}
+        tags.forEach(t => allTags.add(t));
+      });
+      setExistingTags([...allTags].sort());
     }
-  }, [isOpen]);
+  }, [isOpen, selectedAsins]);
 
   const filteredTags = search.trim()
     ? DEFAULT_TAGS.filter(t => t.toLowerCase().includes(search.toLowerCase()))
@@ -215,6 +230,25 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                   </button>
                 ))}
               </div>
+
+              {/* Existing Tags Summary */}
+              {existingTags.length > 0 && (
+                <div className="mb-4">
+                  <label className="fw-bold text-zinc-500 mb-2 d-block" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Currently Present Tags ({existingTags.length})
+                  </label>
+                  <div className="d-flex flex-wrap gap-1 p-2 bg-zinc-50 rounded-3 border border-dashed" style={{ maxHeight: '80px', overflowY: 'auto' }}>
+                    {existingTags.map((tag, idx) => (
+                      <span key={idx} className="badge bg-white text-zinc-500 border" style={{ fontSize: '9px', padding: '4px 8px', borderRadius: '6px' }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-1" style={{ fontSize: '10px', color: '#94a3b8' }}>
+                    These tags are already present on one or more selected ASINs.
+                  </div>
+                </div>
+              )}
 
               {/* Custom Tag Input */}
               <label className="fw-bold text-zinc-800 mb-2 d-block" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

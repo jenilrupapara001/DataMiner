@@ -328,7 +328,12 @@ const AsinManagerPage = () => {
   const [showAllBsrHistory, setShowAllBsrHistory] = useState(false);
   const [showAllRatingHistory, setShowAllRatingHistory] = useState(false);
   const [allAsins, setAllAsins] = useState([]);
-  const [selectedSeller, setSelectedSeller] = useState('');
+  const [selectedSeller, setSelectedSeller] = useState(() => localStorage.getItem('selectedSeller') || '');
+  // Persist seller selection
+  useEffect(() => {
+    localStorage.setItem('selectedSeller', selectedSeller);
+  }, [selectedSeller]);
+
   const [repairStatus, setRepairStatus] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeEditAsin, setActiveEditAsin] = useState(null);
@@ -603,6 +608,22 @@ const AsinManagerPage = () => {
       });
     }
 
+    if (selectedSeller) {
+        const seller = sellers.find(s => s._id === selectedSeller);
+        badges.unshift(
+            <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+              <Store size={10} className="opacity-60" />
+              <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
+              <button 
+                className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" 
+                onClick={() => setSelectedSeller('')}
+              >
+                <X size={12} />
+              </button>
+            </div>
+        );
+    }
+
     if (appliedSearchQuery) {
         badges.unshift(
             <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
@@ -619,7 +640,7 @@ const AsinManagerPage = () => {
     }
 
     return badges;
-  }, [appliedFilters, appliedSearchQuery, removeAppliedFilter]);
+  }, [appliedFilters, appliedSearchQuery, removeAppliedFilter, selectedSeller, sellers]);
 
   const handleApplyFilters = () => {
     setSelectedIds(new Set()); // Reset selection on new filter
@@ -642,6 +663,19 @@ const AsinManagerPage = () => {
     };
     fetchFilters();
   }, [selectedSeller]);
+
+  // Fetch all sellers once for badge labels
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const res = await sellerApi.getAll({ page: 1, limit: 1000 });
+        if (res.success) setSellers(res.data.sellers || []);
+      } catch (err) {
+        console.error('Error fetching sellers for labels:', err);
+      }
+    };
+    fetchSellers();
+  }, []);
 
   // CSV Upload handler
   const handleCsvUpload = async (e) => {
@@ -1695,40 +1729,22 @@ const AsinManagerPage = () => {
         </>
       )}
 
-      <div className="page-header" style={{ padding: '0.5rem 1.25rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <div className="page-header" style={{ padding: '0.6rem 1.25rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div className="d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-3">
             <h1 className="h6 mb-0 fw-bold text-zinc-900 d-flex align-items-center gap-2">
-              <Package size={16} className="text-zinc-400" />
+              <Package size={18} className="text-zinc-900" />
               ASIN Manager
             </h1>
             <div className="vr mx-1" style={{ height: '16px', color: '#e5e7eb' }} />
-            <span className="smallest text-muted fw-medium d-none d-md-inline">Operational Metrics</span>
+            <span className="smallest text-zinc-500 fw-medium d-none d-md-inline">Operational Metrics</span>
           </div>
 
           <div className="d-flex align-items-center gap-2">
             <button
-              className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-3 py-1"
-              onClick={handleBulkScrape}
-              disabled={syncing}
-              style={{ fontSize: '10.5px' }}
-            >
-              <RefreshCw size={12} className={`text-zinc-500 ${syncing ? 'spin' : ''}`} />
-              <span className="fw-bold text-zinc-700">Sync All</span>
-            </button>
-            <button
-              className={`btn btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-3 py-1 ${repairStatus ? 'bg-amber-50 border-amber-200 text-amber-700' : 'btn-white text-zinc-700'}`}
-              onClick={handleRepairData}
-              disabled={syncing || (repairStatus && repairStatus.running)}
-              style={{ fontSize: '10.5px' }}
-            >
-              <Zap size={12} className={repairStatus ? 'text-amber-500 spin' : 'text-zinc-500'} />
-              <span className="fw-bold">{repairStatus ? `Repairing (${repairStatus.percentage}%)` : 'Repair Data'}</span>
-            </button>
-            <button
-              className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1 rounded-2 shadow-sm"
+              className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm"
               onClick={() => setShowAddModal(true)}
-              style={{ backgroundColor: '#18181B', color: '#fff', fontSize: '10.5px' }}
+              style={{ backgroundColor: '#18181B', color: '#fff', fontSize: '11px' }}
             >
               <Plus size={12} />
               <span className="fw-bold">Add ASIN</span>
@@ -1775,90 +1791,9 @@ const AsinManagerPage = () => {
             </div>
           ))}
         </div>
-
-        {/* Toolbar: Filters & Progress */}
-        <div className="mt-2 d-flex align-items-center justify-content-between gap-3">
-          <div className="d-flex align-items-center gap-2 flex-grow-1">
-            <div className="position-relative d-flex" style={{ width: '240px' }}>
-              <Search className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" size={13} />
-              <input
-                type="text"
-                className="form-control form-control-xs ps-4 bg-white border border-zinc-200 shadow-none rounded-start-2 rounded-end-0 smallest fw-medium"
-                placeholder="Search ASIN, SKU..."
-                style={{ height: '28px', fontSize: '11px' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
-              />
-              <button
-                className="btn btn-dark pb-0 pt-0 px-3 rounded-start-0 rounded-end-2 smallest fw-bold"
-                style={{ height: '28px', fontSize: '11px' }}
-                onClick={handleApplySearch}
-              >
-                Find
-              </button>
-            </div>
-            <div style={{ width: '160px' }}>
-              <InfiniteScrollSelect
-                fetchData={fetchSellerDropdownData}
-                value={selectedSeller}
-                onSelect={(val) => {
-                  setSelectedSeller(val);
-                  loadData(1, pagination.limit, val);
-                }}
-                placeholder="All Sellers"
-              />
-            </div>
-
-            {/* Scrape Progress integrated into toolbar */}
-            {scrapeProgress && (
-              <div className="bg-blue-50 border border-blue-100 rounded-2 px-2 py-0 d-flex align-items-center gap-2 flex-grow-1" style={{ height: '28px' }}>
-                <RefreshCw size={11} className="text-blue-600 spin" />
-                <span className="fw-bold text-blue-700 font-monospace" style={{ fontSize: '10px' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
-                <div style={{ flex: 1, maxWidth: '100px' }}>
-                  <div style={{ height: '4px', background: '#dbeafe', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%',
-                      background: '#2563eb',
-                      width: `${(scrapeProgress.processed / scrapeProgress.total) * 100}%`,
-                      transition: 'width 0.4s ease'
-                    }} />
-                  </div>
-                </div>
-                <span className="text-blue-600 fw-medium" style={{ fontSize: '9px' }}>{scrapeProgress.status}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="d-flex align-items-center gap-2">
-            <span className="smallest text-muted fw-medium border-end pe-2">Page {pagination.page}/{pagination.totalPages}</span>
-            <button
-              className="btn btn-white btn-xs border border-zinc-200 rounded-2 p-1"
-              onClick={handleRecalculateLQS}
-              title="Recalculate LQS"
-              disabled={loading}
-            >
-              <RefreshCw size={14} className={`text-zinc-500 ${loading ? 'spin' : ''}`} />
-            </button>
-            <button
-              className={`btn btn-white btn-xs border border-zinc-200 rounded-2 p-1 d-flex align-items-center gap-1 px-2 ${filterPanelOpen ? 'bg-zinc-900 text-white' : ''}`}
-              onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-              title="Advanced Filters"
-            >
-              <Filter size={14} className={filterPanelOpen ? 'text-white' : 'text-zinc-500'} />
-              <span className="fw-bold" style={{ fontSize: '10px' }}>FILTERS</span>
-            </button>
+      </div>
 
 
-            <button
-              className="btn btn-white btn-xs border border-zinc-200 rounded-2 p-1"
-              onClick={() => setShowUploadModal(true)}
-              title="Upload CSV"
-            >
-              <FileUp size={14} className="text-zinc-500" />
-            </button>
-          </div>
-        </div>
 
         {/* Repair Progress simplified */}
         {repairStatus && (
@@ -1871,7 +1806,6 @@ const AsinManagerPage = () => {
             <span className="smallest text-amber-600 fw-bold" style={{ fontSize: '9px' }}>{repairStatus.processed}/{repairStatus.total}</span>
           </div>
         )}
-      </div>
 
       <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0.75rem 1.25rem' }}>
         {/* Alerts & Errors row */}
@@ -1941,19 +1875,73 @@ const AsinManagerPage = () => {
           {/* Table Toolbar */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '8px 20px', background: '#fff', borderBottom: '1px solid #e5e7eb',
-            flexShrink: 0
+            padding: '8px 16px', background: '#fff', borderBottom: '1px solid #e5e7eb',
+            flexShrink: 0, gap: 16
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#18181b', letterSpacing: '0.02em' }}>
-                INVENTORY MASTER LEDGER
-                <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 2, background: '#f4f4f5', color: '#71717a', fontSize: 9 }}>
-                  {pagination.total} ENTRIES
+              <span style={{ fontSize: 9, fontWeight: 800, color: '#18181b', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                INVENTORY MASTER
+                <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 2, background: '#f4f4f5', color: '#71717a', fontSize: 8 }}>
+                  {pagination.total} ASINs
                 </span>
               </span>
             </div>
 
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-2 flex-grow-1">
+              <div className="position-relative d-flex" style={{ width: '220px' }}>
+                <Search className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" size={12} />
+                <input
+                  type="text"
+                  className="form-control form-control-xs ps-4.5 bg-zinc-50 border-zinc-200 shadow-none rounded-start-2 rounded-end-0 smallest"
+                  placeholder="Search ASIN, SKU..."
+                  style={{ height: '26px', fontSize: '11px' }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
+                />
+                <button
+                  className="btn btn-zinc-900 pb-0 pt-0 px-2.5 rounded-start-0 rounded-end-2 smallest fw-bold text-white"
+                  style={{ height: '26px', fontSize: '10px', backgroundColor: '#18181B' }}
+                  onClick={handleApplySearch}
+                >
+                  Find
+                </button>
+              </div>
+              <div style={{ width: '150px' }}>
+                <InfiniteScrollSelect
+                  fetchData={fetchSellerDropdownData}
+                  value={selectedSeller}
+                  onSelect={(val) => {
+                    setSelectedSeller(val);
+                    loadData(1, pagination.limit, val);
+                  }}
+                  placeholder="All Sellers"
+                />
+              </div>
+
+              {/* Scrape Progress */}
+              {scrapeProgress && (
+                <div className="bg-blue-50 border border-blue-100 rounded-2 px-2 py-0 d-flex align-items-center gap-2" style={{ height: '26px' }}>
+                  <RefreshCw size={10} className="text-blue-600 spin" />
+                  <span className="fw-bold text-blue-700 font-monospace" style={{ fontSize: '9px' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="d-flex align-items-center gap-1.5">
+              <button
+                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2 py-1"
+                onClick={handleBulkScrape}
+                disabled={syncing}
+                style={{ fontSize: '10px', height: '26px' }}
+              >
+                <RefreshCw size={11} className={`text-zinc-500 ${syncing ? 'spin' : ''}`} />
+                <span className="fw-bold text-zinc-700">SYNC</span>
+              </button>
+              
+
+
+
               {/* FILTERS Button */}
               <button
                 onClick={() => setFilterPanelOpen(!filterPanelOpen)}
@@ -1962,7 +1950,12 @@ const AsinManagerPage = () => {
                 style={{ fontSize: '10px', height: '24px' }}
               >
                 <ListChecks size={12} />
-                FILTERS {Object.values(filters).filter(v => v !== '').length > 0 && `(${Object.values(filters).filter(v => v !== '').length})`}
+                {(() => {
+                  const count = Object.values(appliedFilters).filter(v => 
+                    v !== '' && (!Array.isArray(v) || v.length > 0)
+                  ).length;
+                  return <>FILTERS {count > 0 && `(${count})`}</>;
+                })()}
               </button>
 
               {/* ✅ COLUMNS Button - NEW */}
@@ -2036,46 +2029,40 @@ const AsinManagerPage = () => {
                 </div>
               )}
 
-              {/* Bulk Optimization Button */}
               <button
                 onClick={handleBulkCreateActions}
                 disabled={asins.length === 0 || syncing}
-                className="btn-premium d-flex align-items-center gap-2 px-3 py-1 border rounded-2 transition-all"
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f4f4f5 100%)',
-                  border: '1px solid #e4e4e7',
-                  color: '#18181b',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}
+                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
+                style={{ fontSize: '10px', height: '26px' }}
               >
-                <Zap size={11} className={syncing ? 'animate-pulse' : 'text-amber-500 fill-amber-500'} />
-                Bulk Optimization
+                <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
+                <span className="fw-bold">BULK OPTIMIZATION</span>
               </button>
 
               {/* Export Button */}
               <button
                 onClick={() => setShowExportModal(true)}
-                className="btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50"
-                style={{ fontSize: '10px', height: '24px' }}
+                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                style={{ fontSize: '10px', height: '26px' }}
               >
-                <Download size={10} color="#2563eb" /> Export
+                <Download size={11} className="text-blue-600" />
+                <span className="fw-bold">EXPORT</span>
               </button>
 
               {/* Bulk Import Button */}
               <button
                 onClick={() => setShowBulkImportModal(true)}
-                className="btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50"
-                style={{ fontSize: '10px', height: '24px' }}
+                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                style={{ fontSize: '10px', height: '26px' }}
               >
-                <FileUp size={10} color="#10b981" /> Import
+                <FileUp size={11} className="text-emerald-600" />
+                <span className="fw-bold">IMPORT</span>
               </button>
             </div>
           </div>
           
           {/* APPLIED FILTERS BADGES */}
-          {(Object.values(appliedFilters).some(v => v !== '' && (!Array.isArray(v) || v.length > 0)) || appliedSearchQuery) && (
+          {(Object.values(appliedFilters).some(v => v !== '' && (!Array.isArray(v) || v.length > 0)) || appliedSearchQuery || selectedSeller) && (
             <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
               <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Applied Filters
