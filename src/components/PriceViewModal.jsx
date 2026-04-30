@@ -19,7 +19,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
 
   // ===== LOCAL UI STATE =====
   const [localSearch, setLocalSearch] = useState('');
-  const [sortBy, setSortBy] = useState('currentPrice');
+  const [sortBy, setSortBy] = useState('uploadedPrice');
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriceRange, setFilterPriceRange] = useState({ min: '', max: '' });
@@ -86,7 +86,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
 
   const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
     try {
-      const response = await sellerApi.getAll({ page, limit: 20, search });
+      const response = await sellerApi.getAll({ page, limit: 1000, search });
       if (response.success && response.data) {
         return {
           data: response.data.sellers || [],
@@ -358,7 +358,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
           </button>
 
           <div className="d-flex gap-1.5">
-            {[{ f: 'currentPrice', l: 'Price' }, { f: 'discountPercent', l: 'Disc%' }, { f: 'asinCode', l: 'ASIN' }].map(s => (
+            {[{ f: 'uploadedPrice', l: 'Price' }, { f: 'discountPercent', l: 'Disc%' }, { f: 'asinCode', l: 'ASIN' }].map(s => (
               <button key={s.f} className={`chp ${sortBy === s.f ? 'act' : ''}`} onClick={() => handleSort(s.f)}>
                 {s.l} {sortBy === s.f ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
               </button>
@@ -398,8 +398,8 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                   <div className="d-flex align-items-center gap-2">ASIN <Si f="asinCode" /></div>
                 </th>
                 <th style={{ width: '120px' }}>SKU</th>
-                <th style={{ width: '100px', textAlign: 'right' }} onClick={() => handleSort('currentPrice')}>
-                  <div className="d-flex align-items-center justify-content-end gap-2">LIVE PRICE <Si f="currentPrice" /></div>
+                <th style={{ width: '100px', textAlign: 'right' }} onClick={() => handleSort('uploadedPrice')}>
+                  <div className="d-flex align-items-center justify-content-end gap-2">PRICE <Si f="uploadedPrice" /></div>
                 </th>
                 <th style={{ width: '65px', textAlign: 'center' }} onClick={() => handleSort('discountPercent')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">D% <Si f="discountPercent" /></div>
@@ -426,7 +426,18 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                     <span className="fw-bold text-primary" style={{ fontSize: '11px' }}>{item.asinCode}</span>
                   </td>
                   <td className="text-zinc-500" style={{ width: '120px', fontSize: '10px' }}>{item.sku || '—'}</td>
-                  <td className="text-end fw-bold" style={{ fontSize: '11px' }}>{item.currentPrice > 0 ? '₹' + item.currentPrice.toLocaleString() : '₹0'}</td>
+                  <td className="text-end fw-bold" style={{ fontSize: '11px' }}>
+                    <div className="d-flex flex-column align-items-end">
+                      <span style={{ color: '#16a34a' }}>
+                        ₹{(item.uploadedPrice || item.currentPrice || 0).toLocaleString()}
+                      </span>
+                      {item.uploadedPrice > 0 && item.currentPrice > 0 && Math.abs(item.uploadedPrice - item.currentPrice) > 0.01 && (
+                        <span className="badge bg-danger text-white mt-1" style={{ fontSize: '8px', padding: '1px 4px', fontWeight: 800 }}>
+                          PRICE DISPUTE
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="text-center">
                     {item.discountPercent > 0 ? (
                       <span className="badge" style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span>

@@ -85,7 +85,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
 
   const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
     try {
-      const response = await sellerApi.getAll({ page, limit: 20, search });
+      const response = await sellerApi.getAll({ page, limit: 1000, search });
       if (response.success && response.data) {
         return {
           data: response.data.sellers || [],

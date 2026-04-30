@@ -40,11 +40,12 @@ const InfiniteScrollSelect = ({
             const result = await fetchData(pageNum, searchQuery);
             const newOptions = result?.data || [];
             setOptions(prev => append ? [...prev, ...newOptions] : newOptions);
-            setHasMore(result?.hasMore);
+            setHasMore(result?.hasMore || false);
             
-            // Sync selected label if it exists in current options
+            // Sync selected label if it exists
             if (value) {
-                const selected = [...(append ? options : []), ...newOptions].find(opt => opt[valueKey] === value);
+                const combined = append ? [...options, ...newOptions] : newOptions;
+                const selected = combined.find(opt => opt[valueKey] === value);
                 if (selected) setSelectedLabel(selected[labelKey]);
             }
         } catch (err) {
@@ -53,6 +54,13 @@ const InfiniteScrollSelect = ({
             setLoading(false);
         }
     }, [fetchData, value, valueKey, labelKey, options, loading]);
+
+    // Handle Page changes
+    useEffect(() => {
+        if (page > 1 && isOpen) {
+            loadOptions(page, search, true);
+        }
+    }, [page, isOpen, loadOptions]);
 
     // Handle initial selection sync if options aren't loaded yet
     useEffect(() => {
@@ -75,24 +83,24 @@ const InfiniteScrollSelect = ({
         if (!isOpen || !hasMore || loading) return;
 
         const observer = new IntersectionObserver(
-            entries => {
-                if (entries[0].isIntersecting) {
-                    setPage(prev => {
-                        const next = prev + 1;
-                        loadOptions(next, search, true);
-                        return next;
-                    });
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !loading) {
+                    setPage(prev => prev + 1);
                 }
             },
-            { threshold: 1.0 }
+            { threshold: 0.1 }
         );
 
-        if (observerTarget.current) {
-            observer.observe(observerTarget.current);
+        const target = observerTarget.current;
+        if (target) {
+            observer.observe(target);
         }
 
-        return () => observer.disconnect();
-    }, [isOpen, hasMore, loading, search, loadOptions]);
+        return () => {
+            if (target) observer.unobserve(target);
+            observer.disconnect();
+        };
+    }, [isOpen, hasMore, loading]);
 
     // Handle Search Debounce
     useEffect(() => {
@@ -103,7 +111,7 @@ const InfiniteScrollSelect = ({
         searchTimeout.current = setTimeout(() => {
             setPage(1);
             loadOptions(1, search, false);
-        }, 300);
+        }, 400);
 
         return () => clearTimeout(searchTimeout.current);
     }, [search, isOpen, loadOptions]);
@@ -182,32 +190,42 @@ const InfiniteScrollSelect = ({
 
                     {/* Options List */}
                     <div className="options-list">
-                        {options.map((item, index) => (
-                            <div 
-                                key={`${item[valueKey]}-${index}`}
-                                className={`option-item ${value === item[valueKey] ? 'selected' : ''}`}
-                                onClick={() => handleItemClick(item)}
-                            >
-                                <span className="option-label">{item[labelKey]}</span>
-                                {value === item[valueKey] && <Check size={12} className="check-icon" />}
+                        {loading && options.length === 0 ? (
+                            <div className="initial-loader" style={{ padding: '30px', textAlign: 'center' }}>
+                                <Loader2 size={20} className="spin text-zinc-400 mx-auto" />
+                                <div style={{ fontSize: '11px', color: '#a1a1aa', marginTop: '8px' }}>Fetching sellers...</div>
                             </div>
-                        ))}
-                        
-                        {/* Loading State / Sentinel */}
-                        <div ref={observerTarget} className="sentinel">
-                            {loading && (
-                                <div className="loading-spinner-small">
-                                    <Loader2 size={14} className="spin" />
-                                    <span>Loading...</span>
-                                </div>
-                            )}
-                            {!hasMore && options.length > 0 && (
-                                <div className="no-more">End of list</div>
-                            )}
-                            {!loading && options.length === 0 && (
-                                <div className="no-results">No results found</div>
-                            )}
-                        </div>
+                        ) : (
+                            <>
+                                {options.map((item, index) => (
+                                    <div 
+                                        key={`${item[valueKey]}-${index}`}
+                                        className={`option-item ${value === item[valueKey] ? 'selected' : ''}`}
+                                        onClick={() => handleItemClick(item)}
+                                    >
+                                        <span className="option-label">{item[labelKey]}</span>
+                                        {value === item[valueKey] && <Check size={12} className="check-icon" />}
+                                    </div>
+                                ))}
+                                
+                                {/* Scroll Sentinel for Load More */}
+                                {hasMore && (
+                                    <div ref={observerTarget} className="sentinel" style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {loading ? (
+                                            <Loader2 size={12} className="spin text-zinc-400" />
+                                        ) : (
+                                            <div style={{ height: '1px' }} />
+                                        )}
+                                    </div>
+                                )}
+
+                                {!loading && options.length === 0 && (
+                                    <div className="no-results" style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: '#a1a1aa' }}>
+                                        No results found
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             )}

@@ -79,6 +79,7 @@ exports.catalogSync = async (req, res) => {
                 const parentAsin = getValue(row, ['Parent ASIN', 'parent_asin', 'parentAsin'])
                     .toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'sku']).toString().trim();
+                const uploadedPrice = parseFloat(getValue(row, ['Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
                 
                 // Get release date from multiple possible column names
                 let releaseDate = null;
@@ -129,11 +130,13 @@ exports.catalogSync = async (req, res) => {
                         .input('sku', sql.NVarChar, sku || null)
                         .input('releaseDate', sql.DateTime2, releaseDate)
                         .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
+                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .query(`
                             UPDATE Asins SET 
                                 ParentAsin = CASE WHEN @parentAsin != '' THEN @parentAsin ELSE ParentAsin END,
                                 Sku = CASE WHEN @sku != '' THEN @sku ELSE Sku END,
                                 ReleaseDate = @releaseDate,
+                                UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
@@ -152,9 +155,10 @@ exports.catalogSync = async (req, res) => {
                         .input('sku', sql.NVarChar, sku || null)
                         .input('releaseDate', sql.DateTime2, releaseDate)
                         .input('tags', sql.NVarChar, JSON.stringify(allTags))
+                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .query(`
-                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, Tags, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @tags, 'Active', 'PENDING', GETDATE(), GETDATE())
+                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', GETDATE(), GETDATE())
                         `);
                     results.created++;
                     if (autoTags.length > 0) results.autoTagged++;
@@ -319,17 +323,18 @@ exports.tagsImport = async (req, res) => {
  */
 exports.downloadCatalogTemplate = async (req, res) => {
     try {
-        const headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date'];
+        const headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date', 'Price'];
         
         // Sample data row
-        const sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15'];
+        const sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15', '499.00'];
         
         const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
         ws['!cols'] = [
             { wch: 15 },
             { wch: 15 },
             { wch: 30 },
-            { wch: 15 }
+            { wch: 15 },
+            { wch: 12 }
         ];
         
         const wb = XLSX.utils.book_new();

@@ -211,6 +211,7 @@ exports.getAsins = async (req, res) => {
     // Map sortBy from frontend names to SQL column names if necessary
     const sortField = sortBy === 'asinCode' ? 'AsinCode' : 
                       sortBy === 'currentPrice' ? 'CurrentPrice' : 
+                      sortBy === 'uploadedPrice' ? 'UploadedPrice' : 
                       sortBy === 'bsr' ? 'BSR' : 
                       sortBy === 'lqs' ? 'LQS' : 
                       sortBy === 'status' ? 'Status' : 
@@ -393,7 +394,7 @@ exports.getAsins = async (req, res) => {
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,
             mrp: parseFloat(a.Mrp) || 0,
-            uploadedPrice: parseFloat(a.CurrentPrice) || 0,
+            uploadedPrice: parseFloat(a.UploadedPrice) || 0,
             secondAsp: parseFloat(a.SecondAsp) || 0,
             aspDifference: parseFloat(a.AspDifference) || 0,
             dealBadge: a.DealBadge || 'No deal found',
@@ -593,6 +594,7 @@ exports.getAsin = async (req, res) => {
       parentAsin: a.ParentAsin || '',
       
       currentPrice: parseFloat(a.CurrentPrice) || 0,
+      uploadedPrice: parseFloat(a.UploadedPrice) || 0,
       mrp: parseFloat(a.Mrp) || 0,
       bsr: parseInt(a.BSR) || 0,
       rating: parseFloat(a.Rating) || 0,

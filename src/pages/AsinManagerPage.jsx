@@ -748,7 +748,7 @@ const AsinManagerPage = () => {
 
   const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
     try {
-      const response = await sellerApi.getAll({ page, limit: 20, search });
+      const response = await sellerApi.getAll({ page, limit: 1000, search });
       if (response.success) {
         return {
           data: response.data.sellers || [],
@@ -2319,10 +2319,19 @@ const AsinManagerPage = () => {
                         </td>
                       )}
                       {isVisible('price') && (
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#16a34a', cursor: 'pointer' }}
+                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, cursor: 'pointer' }}
                           onClick={(e) => handleViewPrice(asin, e)}
                           title="View Price Trend Matrix">
-                          ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
+                          <div className="d-flex flex-column align-items-end">
+                            <span style={{ color: '#16a34a' }}>
+                              ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
+                            </span>
+                            {asin.uploadedPrice > 0 && asin.currentPrice > 0 && Math.abs(asin.uploadedPrice - asin.currentPrice) > 0.01 && (
+                              <span className="badge bg-danger text-white mt-1" style={{ fontSize: '8px', padding: '1px 4px', fontWeight: 800 }}>
+                                PRICE DISPUTE
+                              </span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isVisible('mrp') && (

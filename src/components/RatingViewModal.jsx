@@ -119,7 +119,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
   // ===== PROCESS DATA FOR DISPLAY (Trends, WoW) =====
   const processedData = useMemo(() => {
     const now = new Date();
-    
+
     return asins.map(asin => {
       const currentRating = asin.rating || 0;
       const reviewCount = asin.reviewCount || 0;
@@ -200,7 +200,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         case 'rating': va = a.currentRating; vb = b.currentRating; break;
         case 'reviews': va = a.reviewCount; vb = b.reviewCount; break;
         case 'wowPercent': va = Math.abs(a.woWPercent); vb = Math.abs(b.woWPercent); break;
-        case 'asinCode': return sortOrder === 'asc' ? (a.asinCode||'').localeCompare(b.asinCode||'') : (b.asinCode||'').localeCompare(a.asinCode||'');
+        case 'asinCode': return sortOrder === 'asc' ? (a.asinCode || '').localeCompare(b.asinCode || '') : (b.asinCode || '').localeCompare(a.asinCode || '');
         default: va = a.currentRating; vb = b.currentRating;
       }
 
