@@ -43,6 +43,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
   const [sortBy, setSortBy] = useState('mainBsr');
   const [sortOrder, setSortOrder] = useState('asc');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterBsrRange, setFilterBsrRange] = useState({ min: '', max: '' });
   const [showFilters, setShowFilters] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -223,6 +224,10 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     else if (filterStatus === 'bsrUp') data = data.filter(d => d.trend === 'up');
     else if (filterStatus === 'bsrDown') data = data.filter(d => d.trend === 'down');
 
+    // Range filtering
+    if (filterBsrRange.min) data = data.filter(d => d.mainBsr >= parseInt(filterBsrRange.min));
+    if (filterBsrRange.max) data = data.filter(d => d.mainBsr > 0 && d.mainBsr <= parseInt(filterBsrRange.max));
+
     data.sort((a, b) => {
       let va, vb;
       switch (sortBy) {
@@ -241,7 +246,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     });
 
     return data;
-  }, [processedData, localSearch, sortBy, sortOrder, filterStatus]);
+  }, [processedData, localSearch, sortBy, sortOrder, filterStatus, filterBsrRange]);
 
   // ===== HANDLERS =====
   const handleSort = (field) => {
@@ -265,6 +270,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
   const resetAllFilters = () => {
     setLocalSearch('');
     setFilterStatus('all');
+    setFilterBsrRange({ min: '', max: '' });
     setSortBy('mainBsr');
     setSortOrder('asc');
     // Keep currentSellerId as requested for persistent seller filtering
