@@ -424,7 +424,9 @@ async function processExportJob(downloadId, params, userId) {
                 }
                 
                 // Special field handling
-                if (field === 'buyBoxWin' || field === 'hasAplus') {
+                if (field === 'brand' || field === 'Brand') {
+                    value = row.sellerName || row.brand || row.Brand || '';
+                } else if (field === 'buyBoxWin' || field === 'hasAplus') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
                 } else if (field === 'tags' || field === 'Tags') {
                     try { 
