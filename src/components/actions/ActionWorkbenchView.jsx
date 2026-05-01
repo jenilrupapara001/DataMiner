@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Zap, CheckCircle2, Clock, AlertCircle, 
   TrendingUp, Search, Filter, Plus, 
@@ -15,6 +16,7 @@ import { db } from '../../services/db';
  * AI-driven prioritization and impact.
  */
 const ActionWorkbenchView = ({ isEmbed = false, tasks: initialTasks = null }) => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState(initialTasks || []);
   const [loading, setLoading] = useState(!initialTasks);
   const [filter, setFilter] = useState('ALL');
@@ -177,11 +179,9 @@ const ActionWorkbenchView = ({ isEmbed = false, tasks: initialTasks = null }) =>
                       </div>
 
                       <div className="flex -space-x-2 mr-4">
-                        {[1, 2].map(p => (
-                          <div key={p} className="w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500">
-                            JR
-                          </div>
-                        ))}
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-indigo-600 shadow-sm">
+                          {user?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??'}
+                        </div>
                       </div>
 
                       <button className="p-2 text-slate-400 opacity-0 group-hover:opacity-100 transition-all">

@@ -41,12 +41,20 @@ const ProfilePage = () => {
 
                 const response = await api.userApi.getById(targetId);
                 if (response.success) {
-                    setUser(response.data);
+                    const userData = response.data;
+                    const normalizedUser = {
+                        ...userData,
+                        firstName: userData.firstName || userData.FirstName || '',
+                        lastName: userData.lastName || userData.LastName || '',
+                        email: userData.email || userData.Email || '',
+                        phone: userData.phone || userData.Phone || ''
+                    };
+                    setUser(normalizedUser);
                     setFormData({
-                        firstName: response.data.firstName || '',
-                        lastName: response.data.lastName || '',
-                        email: response.data.email || '',
-                        phone: response.data.phone || ''
+                        firstName: normalizedUser.firstName,
+                        lastName: normalizedUser.lastName,
+                        email: normalizedUser.email,
+                        phone: normalizedUser.phone
                     });
                 } else {
                     setError('Failed to fetch user data');

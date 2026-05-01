@@ -53,7 +53,7 @@ const ALL_ASIN_FIELDS = [
 
 const FIELD_CATEGORIES = [...new Set(ALL_ASIN_FIELDS.map(f => f.category))];
 
-const ExportAsinModal = ({ isOpen, onClose }) => {
+const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '', selectedSeller = null, selectedIds = [] }) => {
   // ===== STATE =====
   const [activeTab, setActiveTab] = useState('export');
   const [step, setStep] = useState(1);
@@ -81,6 +81,7 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [exportType, setExportType] = useState(selectedIds.length > 0 ? 'selected' : 'filtered');
   
   // ===== EFFECTS =====
   useEffect(() => {
@@ -145,10 +146,52 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
     setExporting(true); setStep(2); setError(null); setExportProgress(0);
 
     try {
-      const res = await exportApi.startExport({
-        sellerIds: selectedSellerIds, allSellers: isAllSellersSelected,
-        fields: selectedFields, dateRange: dateOption, format: exportFormat,
-      });
+      // Merge all parameters
+      const exportParams = {
+        fields: selectedFields,
+        format: exportFormat,
+        dateRange: dateOption,
+      };
+
+      if (exportType === 'selected' && selectedIds.length > 0) {
+        exportParams.asinIds = selectedIds;
+      } else {
+        // Map currentFilters to match backend expectation
+        exportParams.sellerIds = selectedSellerIds;
+        exportParams.allSellers = isAllSellersSelected;
+        exportParams.search = searchQuery;
+        
+        // Flatten filters
+        if (currentFilters) {
+          if (currentFilters.status) exportParams.status = currentFilters.status;
+          if (currentFilters.category) exportParams.category = currentFilters.category;
+          if (currentFilters.brand) exportParams.brand = currentFilters.brand;
+          if (currentFilters.minPrice) exportParams.minPrice = currentFilters.minPrice;
+          if (currentFilters.maxPrice) exportParams.maxPrice = currentFilters.maxPrice;
+          if (currentFilters.minBSR) exportParams.minBSR = currentFilters.minBSR;
+          if (currentFilters.maxBSR) exportParams.maxBSR = currentFilters.maxBSR;
+          if (currentFilters.minLQS) exportParams.minLQS = currentFilters.minLQS;
+          if (currentFilters.maxLQS) exportParams.maxLQS = currentFilters.maxLQS;
+          if (currentFilters.scrapeStatus) exportParams.scrapeStatus = currentFilters.scrapeStatus;
+          if (currentFilters.buyBoxWin) exportParams.buyBoxWin = currentFilters.buyBoxWin;
+          if (currentFilters.hasAplus) exportParams.hasAplus = currentFilters.hasAplus;
+          if (currentFilters.parentAsin) exportParams.parentAsin = currentFilters.parentAsin;
+          if (currentFilters.subBsrCategory) exportParams.subBsrCategory = currentFilters.subBsrCategory;
+          if (currentFilters.selectedTags) exportParams.tags = currentFilters.selectedTags;
+          if (currentFilters.sku) exportParams.sku = currentFilters.sku;
+          if (currentFilters.minRating) exportParams.minRating = currentFilters.minRating;
+          if (currentFilters.maxRating) exportParams.maxRating = currentFilters.maxRating;
+          if (currentFilters.minReviewCount) exportParams.minReviewCount = currentFilters.minReviewCount;
+          if (currentFilters.maxReviewCount) exportParams.maxReviewCount = currentFilters.maxReviewCount;
+        }
+
+        // If a specific seller was selected in the main page and none selected in modal, use that
+        if (selectedSeller && selectedSellerIds.length === 0) {
+          exportParams.sellerIds = [selectedSeller];
+        }
+      }
+
+      const res = await exportApi.startExport(exportParams);
 
       if (res.success) {
         const downloadId = res.downloadId;
@@ -287,7 +330,38 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
               {step === 1 ? (
                 <div className="p-5 d-flex flex-column gap-4">
                   
-                  {/* 1. SELLER SELECTION */}
+                  {/* EXPORT MODE SELECTION */}
+                  <div className="bg-white rounded-3 border p-4">
+                    <div className="d-flex align-items-center gap-2 mb-3">
+                      <Layers size={16} className="text-zinc-500" />
+                      <span className="fw-bold text-zinc-800" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Export Mode
+                      </span>
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button 
+                        className={`btn-o flex-grow-1 d-flex flex-column align-items-center gap-2 py-3 ${exportType === 'filtered' ? 'border-zinc-900 text-zinc-900 bg-zinc-50' : 'opacity-60'}`}
+                        onClick={() => setExportType('filtered')}>
+                        <ListChecks size={18} />
+                        <div className="d-flex flex-column">
+                          <span style={{ fontSize: '12px', fontWeight: 700 }}>Filtered Dataset</span>
+                          <span style={{ fontSize: '10px', fontWeight: 500 }} className="text-zinc-500">Respects all active filters</span>
+                        </div>
+                      </button>
+                      <button 
+                        className={`btn-o flex-grow-1 d-flex flex-column align-items-center gap-2 py-3 ${exportType === 'selected' ? 'border-zinc-900 text-zinc-900 bg-zinc-50' : 'opacity-60'} ${selectedIds.length === 0 ? 'disabled' : ''}`}
+                        onClick={() => selectedIds.length > 0 && setExportType('selected')}
+                        disabled={selectedIds.length === 0}>
+                        <CheckSquare size={18} />
+                        <div className="d-flex flex-column">
+                          <span style={{ fontSize: '12px', fontWeight: 700 }}>Selected Only</span>
+                          <span style={{ fontSize: '10px', fontWeight: 500 }} className="text-zinc-500">{selectedIds.length} ASINs checked</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {exportType === 'filtered' && (
                   <div className="bg-white rounded-3 border p-4">
                     <div className="d-flex align-items-center gap-2 mb-3">
                       <Store size={16} className="text-zinc-500" />
@@ -371,6 +445,7 @@ const ExportAsinModal = ({ isOpen, onClose }) => {
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* 2. FIELD SELECTION */}
                   <div className="bg-white rounded-3 border p-4">

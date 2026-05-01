@@ -191,7 +191,8 @@ async function processExportJob(downloadId, params, userId) {
             minImageScore,
             maxImageScore,
             minDescriptionScore,
-            maxDescriptionScore
+            maxDescriptionScore,
+            asinIds = []
         } = params;
 
         const request = pool.request();
@@ -210,6 +211,10 @@ async function processExportJob(downloadId, params, userId) {
             }
         } else if (!allSellers && sellerIds.length > 0) {
             whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+        }
+        
+        if (asinIds.length > 0) {
+            whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
         }
 
         // Apply advanced filters (Matching asinController.js logic)
@@ -305,14 +310,13 @@ async function processExportJob(downloadId, params, userId) {
         if (maxDescriptionScore) whereClause += ' AND a.DescriptionScore <= ' + parseFloat(maxDescriptionScore);
 
         // Tags filter
-        if (tags && tags.length > 0) {
+        if (tags && (Array.isArray(tags) ? tags.length > 0 : tags)) {
             const tagList = Array.isArray(tags) ? tags : [tags];
-            const tagConditions = tagList.map((t, i) => {
+            tagList.forEach((t, i) => {
                 const paramName = `tag_${i}`;
-                request.input(paramName, sql.NVarChar, `%${t}%`);
-                return `a.Tags LIKE @${paramName}`;
+                request.input(paramName, sql.NVarChar, `%${t.trim()}%`);
+                whereClause += ` AND a.Tags LIKE @${paramName}`;
             });
-            whereClause += ` AND (${tagConditions.join(' OR ')})`;
         }
 
         // Date Range (CreatedAt or LastScrapedAt based on context)
@@ -425,7 +429,7 @@ async function processExportJob(downloadId, params, userId) {
                 
                 // Special field handling
                 if (field === 'brand' || field === 'Brand') {
-                    value = row.sellerName || row.brand || row.Brand || '';
+                    value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
                 } else if (field === 'buyBoxWin' || field === 'hasAplus') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
                 } else if (field === 'tags' || field === 'Tags') {
@@ -445,8 +449,8 @@ async function processExportJob(downloadId, params, userId) {
                     } catch { value = ''; }
                 } else if (['createdAt', 'updatedAt', 'lastScraped', 'CreatedAt', 'UpdatedAt', 'LastScrapedAt', 'ReleaseDate'].includes(field)) {
                     if (value) value = new Date(value).toLocaleString('en-IN');
-                } else if (field === 'sellerName') {
-                    value = row.sellerName || '';
+                } else if (field === 'sellerName' || field === 'SellerName') {
+                    value = row.sellerName || row.SellerName || '';
                 } else if (field === 'bulletPointsText' || field === 'BulletPointsText') {
                     try {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);

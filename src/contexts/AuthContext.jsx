@@ -140,8 +140,14 @@ export const AuthProvider = ({ children }) => {
     };
 
     const refreshUser = (updatedUser) => {
-        setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        const normalizedUser = {
+            ...updatedUser,
+            firstName: updatedUser.firstName || updatedUser.FirstName,
+            lastName: updatedUser.lastName || updatedUser.LastName,
+            fullName: updatedUser.fullName || `${updatedUser.firstName || updatedUser.FirstName || ''} ${updatedUser.lastName || updatedUser.LastName || ''}`.trim()
+        };
+        setUser(normalizedUser);
+        localStorage.setItem('user', JSON.stringify(normalizedUser));
     };
 
     const hasPermission = (permissionName) => {

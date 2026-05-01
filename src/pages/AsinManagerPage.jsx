@@ -3039,6 +3039,8 @@ const AsinManagerPage = () => {
           onClose={() => setShowExportModal(false)}
           currentFilters={appliedFilters}
           searchQuery={appliedSearchQuery}
+          selectedSeller={selectedSeller}
+          selectedIds={Array.from(selectedIds)}
         />
         <BulkImportModal
           isOpen={showBulkImportModal}
