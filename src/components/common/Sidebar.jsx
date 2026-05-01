@@ -144,7 +144,7 @@ const Sidebar = () => {
 
     const initials = (
         (user?.firstName?.[0] || '') + (user?.lastName?.[0] || user?.firstName?.[1] || '')
-    ).toUpperCase() || 'JR';
+    ).toUpperCase() || (user?.email?.[0] || 'U').toUpperCase();
 
     const pipelineActive = false; // Mock state
 
@@ -209,15 +209,15 @@ const Sidebar = () => {
                     {!collapsed && (
                         <>
                             <div className="user-info">
-                                <div className="user-name">{user?.fullName || 'Jenil Rupapara'}</div>
+                                <div className="user-name">{user?.fullName || 'User'}</div>
                                 <div className="user-role">{user?.role?.title || 'admin'}</div>
                             </div>
                             <ChevronRight size={14} className="user-arrow" />
                         </>
                     )}
                 </div>
-                <button 
-                    className="logout-btn" 
+                <button
+                    className="logout-btn"
                     onClick={logout}
                     title="Logout"
                 >

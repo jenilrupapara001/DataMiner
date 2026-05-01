@@ -30,8 +30,14 @@ export const AuthProvider = ({ children }) => {
                     if (response.ok) {
                         const result = await response.json();
                         if (result.success && result.data) {
-                            setUser(result.data);
-                            localStorage.setItem('user', JSON.stringify(result.data));
+                            const normalizedUser = {
+                                ...result.data,
+                                firstName: result.data.firstName || result.data.FirstName,
+                                lastName: result.data.lastName || result.data.LastName,
+                                fullName: result.data.fullName || `${result.data.firstName || result.data.FirstName || ''} ${result.data.lastName || result.data.LastName || ''}`.trim()
+                            };
+                            setUser(normalizedUser);
+                            localStorage.setItem('user', JSON.stringify(normalizedUser));
                         } else {
                             throw new Error('Invalid user data');
                         }
@@ -72,9 +78,15 @@ export const AuthProvider = ({ children }) => {
             }
 
             const { user, accessToken } = result.data;
+            const normalizedUser = {
+                ...user,
+                firstName: user.firstName || user.FirstName,
+                lastName: user.lastName || user.LastName,
+                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim()
+            };
             localStorage.setItem('authToken', accessToken);
-            localStorage.setItem('user', JSON.stringify(user));
-            setUser(user);
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+            setUser(normalizedUser);
             return { success: true };
         } catch (err) {
             setError(err.message);
@@ -100,9 +112,15 @@ export const AuthProvider = ({ children }) => {
             }
 
             const { user, accessToken } = result.data;
+            const normalizedUser = {
+                ...user,
+                firstName: user.firstName || user.FirstName,
+                lastName: user.lastName || user.LastName,
+                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim()
+            };
             localStorage.setItem('authToken', accessToken);
-            localStorage.setItem('user', JSON.stringify(user));
-            setUser(user);
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+            setUser(normalizedUser);
             return { success: true };
         } catch (err) {
             setError(err.message);

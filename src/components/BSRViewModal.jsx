@@ -369,7 +369,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
         style={{ width: isFullscreen ? '100%' : '98%', maxWidth: isFullscreen ? 'none' : '1650px', height: isFullscreen ? '100%' : '94vh', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
 
         {/* HEADER */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white">
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white flex-wrap gap-3">
           <div className="d-flex align-items-center gap-3">
             <div className="p-2 rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', color: '#059669', border: '1px solid #a7f3d0' }}>
               <BarChart3 size={20} />
@@ -385,7 +385,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
               </div>
             </div>
           </div>
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
               <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#059669', color: '#059669' }}>
                 <Download size={13} /> Export BSR
@@ -398,7 +398,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
                 </div>
               )}
             </div>
-            <div className="vr mx-1 opacity-10" style={{ height: '24px' }}></div>
+            <div className="vr mx-1 opacity-10 d-none d-sm-block" style={{ height: '24px' }}></div>
             <button className="btn btn-ghost p-2 rounded-circle transition-all" onClick={() => setIsFullscreen(!isFullscreen)}>
               {isFullscreen ? <Minimize2 size={17} className="text-zinc-500" /> : <Maximize2 size={17} className="text-zinc-500" />}
             </button>

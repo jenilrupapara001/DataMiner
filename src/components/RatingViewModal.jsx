@@ -363,7 +363,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         style={{ width: isFullscreen ? '100%' : '98%', maxWidth: isFullscreen ? 'none' : '1650px', height: isFullscreen ? '100%' : '94vh', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
 
         {/* HEADER */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white">
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white flex-wrap gap-3">
           <div className="d-flex align-items-center gap-3">
             <div className="p-2 rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', color: '#d97706', border: '1px solid #fde68a' }}>
               <Star size={20} className="fill-current" />
@@ -381,7 +381,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
               </div>
             </div>
           </div>
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
               <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#d97706', color: '#d97706' }}>
                 <Download size={13} /> Export Insights

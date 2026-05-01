@@ -363,7 +363,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         style={{ width: isFullscreen ? '100%' : '98%', maxWidth: isFullscreen ? 'none' : '1650px', height: isFullscreen ? '100%' : '94vh', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
 
         {/* HEADER */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white">
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white flex-wrap gap-3">
           <div className="d-flex align-items-center gap-3">
             <div className="p-2 rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)', color: '#4f46e5', border: '1px solid #c7d2fe' }}>
               <IndianRupee size={20} />
@@ -379,7 +379,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
               </div>
             </div>
           </div>
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
               <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#2563eb', color: '#2563eb' }}>
                 <Download size={13} /> Export Price Data

@@ -28,9 +28,11 @@ const Header = () => {
     const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
     const searchInputRef = useRef(null);
 
-    const getInitials = (name) => {
-        if (!name) return 'JR';
-        return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    const getInitials = (user) => {
+        if (!user) return '??';
+        if (user.fullName) return user.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        const fallback = (user.firstName?.[0] || '') + (user.lastName?.[0] || user.firstName?.[1] || '');
+        return fallback.toUpperCase() || (user.email?.[0] || 'U').toUpperCase();
     };
 
     // Shortcut for search and export event listener
@@ -98,7 +100,7 @@ const Header = () => {
                 </div>
 
                 <div className="user-avatar-top" onClick={() => navigate('/profile')}>
-                    {getInitials(user?.fullName)}
+                    {getInitials(user)}
                 </div>
             </div>
             

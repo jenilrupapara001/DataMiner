@@ -1730,13 +1730,13 @@ const AsinManagerPage = () => {
       )}
 
       <div className="page-header" style={{ padding: '0.6rem 1.25rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div className="d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div className="d-flex align-items-center gap-3">
             <h1 className="h6 mb-0 fw-bold text-zinc-900 d-flex align-items-center gap-2">
               <Package size={18} className="text-zinc-900" />
               ASIN Manager
             </h1>
-            <div className="vr mx-1" style={{ height: '16px', color: '#e5e7eb' }} />
+            <div className="vr mx-1 d-none d-sm-block" style={{ height: '16px', color: '#e5e7eb' }} />
             <span className="smallest text-zinc-500 fw-medium d-none d-md-inline">Operational Metrics</span>
           </div>
 
@@ -1752,10 +1752,10 @@ const AsinManagerPage = () => {
           </div>
         </div>
 
-        {/* Compressed KPI Strip */}
+        {/* Compressed KPI Strip - Responsive Grid */}
         <div className="mt-2" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(8, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
           background: '#f8fafc',
           borderRadius: '8px',
           border: '1px solid #f1f5f9',
@@ -1766,9 +1766,11 @@ const AsinManagerPage = () => {
               onClick={kpi.onClick}
               className="p-2 transition-all d-flex align-items-center gap-3"
               style={{
-                borderRight: idx < 7 ? '1px solid #f1f5f9' : 'none',
+                borderRight: '1px solid #f1f5f9',
+                borderBottom: '1px solid #f1f5f9',
                 cursor: kpi.onClick ? 'pointer' : 'default',
-                background: kpi.onClick ? '#fff' : 'transparent'
+                background: kpi.onClick ? '#fff' : 'transparent',
+                minWidth: '130px'
               }}
             >
               <div className="d-flex align-items-center justify-content-center rounded-2" style={{
@@ -1876,118 +1878,119 @@ const AsinManagerPage = () => {
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '8px 16px', background: '#fff', borderBottom: '1px solid #e5e7eb',
-            flexShrink: 0, gap: 16
+            flexShrink: 0, gap: '12px 16px', flexWrap: 'wrap'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: '#18181b', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                INVENTORY MASTER
-                <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 2, background: '#f4f4f5', color: '#71717a', fontSize: 8 }}>
-                  {pagination.total} ASINs
+            <div className="d-flex align-items-center gap-3 flex-wrap flex-grow-1">
+              <div className="d-flex align-items-center gap-2">
+                <span style={{ fontSize: 9, fontWeight: 800, color: '#18181b', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                  INVENTORY MASTER
+                  <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 2, background: '#f4f4f5', color: '#71717a', fontSize: 8 }}>
+                    {pagination.total} ASINs
+                  </span>
                 </span>
-              </span>
-            </div>
-
-            <div className="d-flex align-items-center gap-2 flex-grow-1">
-              <div className="position-relative d-flex" style={{ width: '220px' }}>
-                <Search className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" size={12} />
-                <input
-                  type="text"
-                  className="form-control form-control-xs ps-4.5 bg-zinc-50 border-zinc-200 shadow-none rounded-start-2 rounded-end-0 smallest"
-                  placeholder="Search ASIN, SKU..."
-                  style={{ height: '26px', fontSize: '11px' }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
-                />
-                <button
-                  className="btn btn-zinc-900 pb-0 pt-0 px-2.5 rounded-start-0 rounded-end-2 smallest fw-bold text-white"
-                  style={{ height: '26px', fontSize: '10px', backgroundColor: '#18181B' }}
-                  onClick={handleApplySearch}
-                >
-                  Find
-                </button>
-              </div>
-              <div style={{ width: '150px' }}>
-                <InfiniteScrollSelect
-                  fetchData={fetchSellerDropdownData}
-                  value={selectedSeller}
-                  onSelect={(val) => {
-                    setSelectedSeller(val);
-                    loadData(1, pagination.limit, val);
-                  }}
-                  placeholder="All Sellers"
-                />
               </div>
 
-              {/* Scrape Progress */}
-              {scrapeProgress && (
-                <div className="bg-blue-50 border border-blue-100 rounded-2 px-2 py-0 d-flex align-items-center gap-2" style={{ height: '26px' }}>
-                  <RefreshCw size={10} className="text-blue-600 spin" />
-                  <span className="fw-bold text-blue-700 font-monospace" style={{ fontSize: '9px' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <div className="position-relative d-flex" style={{ width: '200px' }}>
+                  <Search className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" size={12} />
+                  <input
+                    type="text"
+                    className="form-control form-control-xs ps-4.5 bg-zinc-50 border-zinc-200 shadow-none rounded-start-2 rounded-end-0 smallest"
+                    placeholder="Search ASIN, SKU..."
+                    style={{ height: '26px', fontSize: '11px' }}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
+                  />
+                  <button
+                    className="btn btn-zinc-900 pb-0 pt-0 px-2.5 rounded-start-0 rounded-end-2 smallest fw-bold text-white"
+                    style={{ height: '26px', fontSize: '10px', backgroundColor: '#18181B' }}
+                    onClick={handleApplySearch}
+                  >
+                    Find
+                  </button>
                 </div>
-              )}
+                <div style={{ width: '140px' }}>
+                  <InfiniteScrollSelect
+                    fetchData={fetchSellerDropdownData}
+                    value={selectedSeller}
+                    onSelect={(val) => {
+                      setSelectedSeller(val);
+                      loadData(1, pagination.limit, val);
+                    }}
+                    placeholder="All Sellers"
+                  />
+                </div>
+
+                {/* Scrape Progress */}
+                {scrapeProgress && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-2 px-2 py-0 d-flex align-items-center gap-2" style={{ height: '26px' }}>
+                    <RefreshCw size={10} className="text-blue-600 spin" />
+                    <span className="fw-bold text-blue-700 font-monospace" style={{ fontSize: '9px' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="d-flex align-items-center gap-1.5">
-              <button
-                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2 py-1"
-                onClick={handleBulkScrape}
-                disabled={syncing}
-                style={{ fontSize: '10px', height: '26px' }}
-              >
-                <RefreshCw size={11} className={`text-zinc-500 ${syncing ? 'spin' : ''}`} />
-                <span className="fw-bold text-zinc-700">SYNC</span>
-              </button>
-              
-
-
-
-              {/* FILTERS Button */}
-              <button
-                onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
-                  }`}
-                style={{ fontSize: '10px', height: '24px' }}
-              >
-                <ListChecks size={12} />
-                {(() => {
-                  const count = Object.values(appliedFilters).filter(v => 
-                    v !== '' && (!Array.isArray(v) || v.length > 0)
-                  ).length;
-                  return <>FILTERS {count > 0 && `(${count})`}</>;
-                })()}
-              </button>
-
-              {/* ✅ COLUMNS Button - NEW */}
-              <div className="position-relative">
+            <div className="d-flex align-items-center gap-1.5 flex-wrap justify-content-end">
+              <div className="d-flex align-items-center gap-1.5 flex-wrap">
                 <button
-                  onClick={() => setShowColumnPanel(!showColumnPanel)}
-                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2 py-1"
+                  onClick={handleBulkScrape}
+                  disabled={syncing}
+                  style={{ fontSize: '10px', height: '26px' }}
+                >
+                  <RefreshCw size={11} className={`text-zinc-500 ${syncing ? 'spin' : ''}`} />
+                  <span className="fw-bold text-zinc-700">SYNC</span>
+                </button>
+
+                {/* FILTERS Button */}
+                <button
+                  onClick={() => setFilterPanelOpen(!filterPanelOpen)}
+                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
                     }`}
                   style={{ fontSize: '10px', height: '24px' }}
                 >
-                  <LayoutGrid size={12} />
-                  COLUMNS
+                  <ListChecks size={12} />
+                  {(() => {
+                    const count = Object.values(appliedFilters).filter(v => 
+                      v !== '' && (!Array.isArray(v) || v.length > 0)
+                    ).length;
+                    return <>FILTERS {count > 0 && `(${count})`}</>;
+                  })()}
                 </button>
 
-                {/* Column Visibility Panel */}
-                <ColumnVisibilityPanel
-                  isOpen={showColumnPanel}
-                  onClose={() => setShowColumnPanel(false)}
-                  visibleColumns={visibleColumns}
-                  onToggle={toggleColumn}
-                  onToggleCategory={toggleCategory}
-                  onReset={resetToDefaults}
-                  onSelectAll={selectAll}
-                  visibleCount={visibleCount}
-                  totalCount={totalCount}
-                />
+                {/* ✅ COLUMNS Button - NEW */}
+                <div className="position-relative">
+                  <button
+                    onClick={() => setShowColumnPanel(!showColumnPanel)}
+                    className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
+                      }`}
+                    style={{ fontSize: '10px', height: '24px' }}
+                  >
+                    <LayoutGrid size={12} />
+                    COLUMNS
+                  </button>
+
+                  {/* Column Visibility Panel */}
+                  <ColumnVisibilityPanel
+                    isOpen={showColumnPanel}
+                    onClose={() => setShowColumnPanel(false)}
+                    visibleColumns={visibleColumns}
+                    onToggle={toggleColumn}
+                    onToggleCategory={toggleCategory}
+                    onReset={resetToDefaults}
+                    onSelectAll={selectAll}
+                    visibleCount={visibleCount}
+                    totalCount={totalCount}
+                  />
+                </div>
               </div>
 
               {/* Selected Actions */}
               {selectedIds.size > 0 && (
-                <div className="d-flex align-items-center gap-2 pe-3 me-2 border-end border-zinc-200 animate-in fade-in slide-in-from-right-4">
-                  <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200">
+                <div className="d-flex align-items-center gap-1.5 pe-3 ms-2 border-end border-zinc-200 flex-wrap animate-in fade-in slide-in-from-right-4">
+                  <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200" style={{ fontSize: '9px' }}>
                     {selectedIds.size} SELECTED
                   </span>
 
@@ -2029,35 +2032,37 @@ const AsinManagerPage = () => {
                 </div>
               )}
 
-              <button
-                onClick={handleBulkCreateActions}
-                disabled={asins.length === 0 || syncing}
-                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
-                style={{ fontSize: '10px', height: '26px' }}
-              >
-                <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
-                <span className="fw-bold">BULK OPTIMIZATION</span>
-              </button>
+              <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={handleBulkCreateActions}
+                  disabled={asins.length === 0 || syncing}
+                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
+                  style={{ fontSize: '10px', height: '26px' }}
+                >
+                  <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
+                  <span className="fw-bold">BULK OPTIMIZATION</span>
+                </button>
 
-              {/* Export Button */}
-              <button
-                onClick={() => setShowExportModal(true)}
-                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                style={{ fontSize: '10px', height: '26px' }}
-              >
-                <Download size={11} className="text-blue-600" />
-                <span className="fw-bold">EXPORT</span>
-              </button>
+                {/* Export Button */}
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                  style={{ fontSize: '10px', height: '26px' }}
+                >
+                  <Download size={11} className="text-blue-600" />
+                  <span className="fw-bold">EXPORT</span>
+                </button>
 
-              {/* Bulk Import Button */}
-              <button
-                onClick={() => setShowBulkImportModal(true)}
-                className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                style={{ fontSize: '10px', height: '26px' }}
-              >
-                <FileUp size={11} className="text-emerald-600" />
-                <span className="fw-bold">IMPORT</span>
-              </button>
+                {/* Bulk Import Button */}
+                <button
+                  onClick={() => setShowBulkImportModal(true)}
+                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                  style={{ fontSize: '10px', height: '26px' }}
+                >
+                  <FileUp size={11} className="text-emerald-600" />
+                  <span className="fw-bold">IMPORT</span>
+                </button>
+              </div>
             </div>
           </div>
           
