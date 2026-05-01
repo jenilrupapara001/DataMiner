@@ -912,14 +912,10 @@ async function updateSellerAsinCount(sellerId, io) {
     
     const { total, active } = statsResult.recordset[0];
 
-    await pool.request()
-      .input('sellerId', sql.VarChar, sellerId)
-      .input('total', sql.Int, total || 0)
-      .input('active', sql.Int, active || 0)
-      .query('UPDATE Sellers SET TotalAsins = @total, ActiveAsins = @active WHERE Id = @sellerId');
-
+    // We no longer persist counts to the Sellers table because they are calculated dynamically
+    // in the seller controller. We just emit the event to trigger a refresh.
     if (io) {
-      io.emit('SELLERS_UPDATED', { sellerId });
+      io.emit('SELLERS_UPDATED', { sellerId, total, active });
     }
   } catch (error) {
     console.error('Error updating seller ASIN count:', error);
@@ -1452,8 +1448,19 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     const price = parseFloat(priceRaw) || 0;
                     let releaseDate = null;
                     if (releaseDateRaw) {
-                        const d = new Date(releaseDateRaw);
-                        if (!isNaN(d.getTime())) releaseDate = d;
+                        const dateStr = releaseDateRaw.toString().trim();
+                        // Format: dd-mm-yyyy hh:mm:ss
+                        const dateMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+                        if (dateMatch) {
+                            const day = parseInt(dateMatch[1]);
+                            const month = parseInt(dateMatch[2]) - 1; // 0-indexed
+                            const year = parseInt(dateMatch[3]);
+                            const d = new Date(year, month, day);
+                            if (!isNaN(d.getTime())) releaseDate = d;
+                        } else {
+                            const d = new Date(dateStr);
+                            if (!isNaN(d.getTime())) releaseDate = d;
+                        }
                     }
 
                     // Check if exists
