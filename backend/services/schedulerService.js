@@ -368,36 +368,6 @@ class SchedulerService {
         }
     }
 
-    /**
-     * Finds ASINs that were missed in the main sync and triggers a targeted recovery.
-     */
-    async runMissingDataRecovery() {
-        try {
-            console.log('🔄 [Recovery] Starting missing data check...');
-            const pool = await getPool();
-            
-            // Find ASINs that were NOT scraped in the last 6 hours (meaning they failed or were missed)
-            const result = await pool.request().query(`
-                SELECT DISTINCT a.AsinCode 
-                FROM Asins a
-                LEFT JOIN ProductData pd ON a.AsinCode = pd.AsinCode 
-                  AND pd.ScrapedAt > DATEADD(HOUR, -6, GETDATE())
-                WHERE pd.Id IS NULL AND a.Status = 'Active'
-            `);
-            
-            const missingAsins = result.recordset.map(r => r.AsinCode);
-            
-            if (missingAsins.length > 0) {
-                console.log(`⚠️ [Recovery] Found ${missingAsins.length} ASINs with missing data. Triggering smart scrape...`);
-                // Trigger sync only for these specific ASINs
-                await MarketSyncService.syncMarketData(missingAsins, { triggerScrape: true });
-            } else {
-                console.log('✅ [Recovery] No missing data found. All ASINs up to date.');
-            }
-        } catch (error) {
-            console.error('❌ [Recovery] Error during missing data recovery:', error);
-        }
-    }
 }
 
 module.exports = new SchedulerService();
