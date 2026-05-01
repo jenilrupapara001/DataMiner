@@ -1432,13 +1432,14 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     const asin = getValue(row, ['ASIN', 'Asin Code'])?.toString().trim().toUpperCase();
                     const sku = getValue(row, ['SKU'])?.toString().trim();
                     const parentAsin = getValue(row, ['Parent ASIN', 'Parent'])?.toString().trim().toUpperCase();
-                    const releaseDateRaw = getValue(row, ['Release Date', 'Date']);
-                    const priceRaw = getValue(row, ['Price', 'Uploaded Price']);
+                    const releaseDateRaw = getValue(row, ['Release Date', 'Released Date', 'Date', 'First Available']);
+                    const priceRaw = getValue(row, ['Price', 'Uploaded Price', 'Sale Price']);
 
                     if (!asin || !sellerName) continue;
 
-                    const sellerId = sellerMap[sellerName.toLowerCase()];
+                    const sellerId = sellerMap[sellerName.toLowerCase().trim()];
                     if (!sellerId) {
+                        if (i === 0) console.log(`Seller not found mapping: "${sellerName.toLowerCase().trim()}" against keys:`, Object.keys(sellerMap).slice(0, 5));
                         errors.push(`Seller not found: "${sellerName}" for ASIN: ${asin}`);
                         continue;
                     }
@@ -1449,18 +1450,29 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     let releaseDate = null;
                     if (releaseDateRaw) {
                         const dateStr = releaseDateRaw.toString().trim();
+                        // Format: yyyy-mm-dd hh:mm:ss (Sample: 2021-04-15 00:00:00)
+                        const dateMatchYMD = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
                         // Format: dd-mm-yyyy hh:mm:ss
-                        const dateMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-                        if (dateMatch) {
-                            const day = parseInt(dateMatch[1]);
-                            const month = parseInt(dateMatch[2]) - 1; // 0-indexed
-                            const year = parseInt(dateMatch[3]);
+                        const dateMatchDMY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+
+                        if (dateMatchYMD) {
+                            const year = parseInt(dateMatchYMD[1]);
+                            const month = parseInt(dateMatchYMD[2]) - 1;
+                            const day = parseInt(dateMatchYMD[3]);
+                            const d = new Date(year, month, day);
+                            if (!isNaN(d.getTime())) releaseDate = d;
+                        } else if (dateMatchDMY) {
+                            const day = parseInt(dateMatchDMY[1]);
+                            const month = parseInt(dateMatchDMY[2]) - 1;
+                            const year = parseInt(dateMatchDMY[3]);
                             const d = new Date(year, month, day);
                             if (!isNaN(d.getTime())) releaseDate = d;
                         } else {
                             const d = new Date(dateStr);
                             if (!isNaN(d.getTime())) releaseDate = d;
                         }
+                        
+                        if (i === 0 && !releaseDate) console.log(`Failed to parse date: "${dateStr}"`);
                     }
 
                     // Check if exists
