@@ -779,7 +779,7 @@ exports.getAsinStats = async (req, res) => {
         COUNT(*) as total,
         SUM(CASE WHEN Status = 'Active' THEN 1 ELSE 0 END) as active,
         COUNT(DISTINCT Brand) as brandCount
-      FROM Asins WITH (NOLOCK) ${whereClause}
+      FROM Asins ${whereClause}
     `);
     const { total, active, brandCount } = basicCounts.recordset[0];
 
@@ -797,7 +797,7 @@ exports.getAsinStats = async (req, res) => {
           MAX(CASE WHEN ImagesCount > 0 THEN ImagesCount ELSE 0 END) as ParentImages,
           MAX(CASE WHEN BulletPoints > 0 THEN BulletPoints ELSE 0 END) as ParentBullets,
           MAX(ReviewCount) as ParentReviewCount
-        FROM Asins WITH (NOLOCK)
+        FROM Asins
         ${whereClause}
         GROUP BY CASE WHEN ParentAsin IS NOT NULL AND ParentAsin != '' THEN ParentAsin ELSE AsinCode END
       )
@@ -824,14 +824,14 @@ exports.getAsinStats = async (req, res) => {
     const totalParents = stats.totalParents || 1;
 
     // 3. Status Breakdown
-    const statusResult = await request.query(`SELECT Status, COUNT(*) as count FROM Asins WITH (NOLOCK) ${whereClause} GROUP BY Status`);
+    const statusResult = await request.query(`SELECT Status, COUNT(*) as count FROM Asins ${whereClause} GROUP BY Status`);
     const statusBreakdown = {};
     statusResult.recordset.forEach(r => { statusBreakdown[r.Status] = r.count; });
 
     // 4. Best Selling ASINs
     const bestSellingResult = await request.query(`
       SELECT TOP 5 AsinCode, Title, CurrentPrice, BSR
-      FROM Asins WITH (NOLOCK) ${whereClause} AND BSR > 0 AND Status = 'Active'
+      FROM Asins ${whereClause} AND BSR > 0 AND Status = 'Active'
       ORDER BY BSR ASC
     `);
 
@@ -846,8 +846,8 @@ exports.getAsinStats = async (req, res) => {
       SELECT 
         SUM(CASE WHEN Date >= @sevenDaysAgo THEN ReviewCount ELSE 0 END) as currentWeek,
         SUM(CASE WHEN Date >= @fourteenDaysAgo AND Date < @sevenDaysAgo THEN ReviewCount ELSE 0 END) as previousWeek
-      FROM AsinHistory WITH (NOLOCK)
-      WHERE AsinId IN (SELECT Id FROM Asins WITH (NOLOCK) ${whereClause})
+      FROM AsinHistory
+      WHERE AsinId IN (SELECT Id FROM Asins ${whereClause})
         AND Date >= @fourteenDaysAgo
     `);
 
@@ -1192,10 +1192,10 @@ exports.getAsinFilterOptions = async (req, res) => {
     }
 
     const [categoriesResult, brandsResult, subBsrResult, tagsResult] = await Promise.all([
-      pool.request().query(`SELECT DISTINCT Category FROM Asins WITH (NOLOCK) ${whereClause} AND Category IS NOT NULL AND Category != '' ORDER BY Category ASC`),
-      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a WITH (NOLOCK) JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
-      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins WITH (NOLOCK) CROSS APPLY OPENJSON(SubBsrCategories) ${whereClause} AND SubBsrCategories IS NOT NULL AND ISJSON(SubBsrCategories) > 0 ORDER BY value ASC`),
-      pool.request().query(`SELECT Tags FROM Asins WITH (NOLOCK) ${whereClause} AND Tags IS NOT NULL AND Tags != '[]' AND Tags != ''`)
+      pool.request().query(`SELECT DISTINCT Category FROM Asins a ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
+      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a JOIN Sellers s ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
+      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins a CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
+      pool.request().query(`SELECT Tags FROM Asins a ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
     ]);
 
     // Extract unique tags
@@ -1404,7 +1404,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
         }
 
         // 3. Process in chunks
-        const batchSize = 500; // Smaller batch size to reduce lock duration
+        const batchSize = 1000;
         let created = 0;
         let updated = 0;
         let errors = [];
@@ -1527,8 +1527,6 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     }
                 }
                 await transaction.commit();
-                // Small delay to let other queries through
-                await new Promise(r => setTimeout(r, 50));
             } catch (err) {
                 await transaction.rollback();
                 console.error(`Batch error at chunk starting with ${i}:`, err);

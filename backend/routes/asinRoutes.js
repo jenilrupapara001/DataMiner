@@ -27,7 +27,7 @@ const upload = multer({
       cb(new Error('Only CSV, TXT, and XLSX files are allowed'));
     }
   },
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit for bulk uploads (150k+ rows)
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
 // Priority Actions
