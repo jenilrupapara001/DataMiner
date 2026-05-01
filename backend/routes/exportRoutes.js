@@ -9,7 +9,7 @@ const {
     getExportFields
 } = require('../controllers/exportController');
 
-router.post('/start', auth, requirePermission('asins_export'), startExport);
+router.post('/start', auth, startExport);
 router.get('/downloads', auth, getDownloads);
 router.get('/status/:id', auth, getExportStatus);
 router.get('/download/:id', auth, downloadFile);

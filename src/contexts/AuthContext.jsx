@@ -154,10 +154,11 @@ export const AuthProvider = ({ children }) => {
         if (!user) return false;
         
         // 1. Super Admin always has full access
-        if (user.role?.name === 'admin' || user.role === 'admin') return true;
+        const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
+        if (roleName === 'admin') return true;
 
         // 2. Operational Manager has global access EXCEPT delete
-        if (user.role?.name === 'operational_manager' || user.role === 'operational_manager') {
+        if (roleName === 'operational_manager') {
             if (permissionName.toLowerCase().includes('delete')) return false;
             return true;
         }
@@ -191,9 +192,9 @@ export const AuthProvider = ({ children }) => {
         hasPermission,
         hasAnyPermission,
         isAuthenticated: !!user,
-        isAdmin: user?.role?.name === 'admin',
-        isOperationalManager: user?.role?.name === 'operational_manager',
-        isGlobalUser: user?.role?.name === 'admin' || user?.role?.name === 'operational_manager'
+        isAdmin: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'admin',
+        isOperationalManager: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'operational_manager',
+        isGlobalUser: ['admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase())
     };
 
     return (

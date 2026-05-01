@@ -2044,7 +2044,7 @@ const AsinManagerPage = () => {
                 </button>
 
                 {/* Export Button */}
-                {hasPermission('asins_export') && (
+                {true && (
                   <button
                     onClick={() => setShowExportModal(true)}
                     className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
