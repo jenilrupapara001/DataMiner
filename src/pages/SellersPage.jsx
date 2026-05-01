@@ -760,12 +760,10 @@ const SellersPage = () => {
                 </button>
               </>
             )}
-            {(isAdmin || isGlobalUser) && (
-              <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 rounded-pill px-4" onClick={() => setShowBulkImportModal(true)}>
-                <Upload size={16} />
-                <span className="fw-bold">Bulk Upload Catalog</span>
-              </button>
-            )}
+            <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 rounded-pill px-4" onClick={() => setShowBulkImportModal(true)}>
+              <Upload size={16} />
+              <span className="fw-bold">Bulk Upload Catalog</span>
+            </button>
             <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
               <FileUp size={16} className="text-zinc-500" />
               <span className="fw-bold text-zinc-700">Import CSV</span>

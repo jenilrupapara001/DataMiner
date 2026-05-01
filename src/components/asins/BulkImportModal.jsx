@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileDown, FileUp, Store, Check, AlertCircle, RefreshCw, Globe, CheckCircle, Loader2 } from 'lucide-react';
 import { sellerApi, bulkApi, asinApi } from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
 
 const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
-    const { isAdmin, isGlobalUser } = useAuth();
     const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'tags' | 'global'
     const [sellers, setSellers] = useState([]);
     const [selectedSellerId, setSelectedSellerId] = useState('');
@@ -121,16 +119,14 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         <FileUp size={14} className="me-1" />
                         Tags Import
                     </button>
-                    {(isAdmin || isGlobalUser) && (
-                        <button
-                            className={`flex-grow-1 py-2 border-0 bg-transparent fw-bold ${activeTab === 'global' ? 'text-zinc-900 border-bottom border-2 border-zinc-900' : 'text-zinc-400'}`}
-                            onClick={() => { setActiveTab('global'); setFile(null); setResult(null); setError(null); }}
-                            style={{ fontSize: '13px' }}
-                        >
-                            <Globe size={14} className="me-1" />
-                            Global Upload
-                        </button>
-                    )}
+                    <button
+                        className={`flex-grow-1 py-2 border-0 bg-transparent fw-bold ${activeTab === 'global' ? 'text-zinc-900 border-bottom border-2 border-zinc-900' : 'text-zinc-400'}`}
+                        onClick={() => { setActiveTab('global'); setFile(null); setResult(null); setError(null); }}
+                        style={{ fontSize: '13px' }}
+                    >
+                        <Globe size={14} className="me-1" />
+                        Global Upload
+                    </button>
                 </div>
 
                 <div className="p-4">
