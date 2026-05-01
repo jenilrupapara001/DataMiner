@@ -1391,7 +1391,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
         let data = [];
         for (const name of workbook.SheetNames) {
           const sheet = workbook.Sheets[name];
-          const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "", cellDates: true });
           if (jsonData && jsonData.length > 0) {
             data = jsonData;
             break;
@@ -1449,30 +1449,42 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     const price = parseFloat(priceRaw) || 0;
                     let releaseDate = null;
                     if (releaseDateRaw) {
-                        const dateStr = releaseDateRaw.toString().trim();
-                        // Format: yyyy-mm-dd hh:mm:ss (Sample: 2021-04-15 00:00:00)
-                        const dateMatchYMD = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-                        // Format: dd-mm-yyyy hh:mm:ss
-                        const dateMatchDMY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-
-                        if (dateMatchYMD) {
-                            const year = parseInt(dateMatchYMD[1]);
-                            const month = parseInt(dateMatchYMD[2]) - 1;
-                            const day = parseInt(dateMatchYMD[3]);
-                            const d = new Date(year, month, day);
-                            if (!isNaN(d.getTime())) releaseDate = d;
-                        } else if (dateMatchDMY) {
-                            const day = parseInt(dateMatchDMY[1]);
-                            const month = parseInt(dateMatchDMY[2]) - 1;
-                            const year = parseInt(dateMatchDMY[3]);
-                            const d = new Date(year, month, day);
+                        if (typeof releaseDateRaw === 'number') {
+                            // Handle Excel serial date (e.g., 44301.0001)
+                            // XLSX epoch is 1899-12-30
+                            const d = new Date(Date.UTC(1899, 11, 30));
+                            d.setDate(d.getDate() + Math.floor(releaseDateRaw));
+                            // Add fractional day (time)
+                            const fractionalDay = releaseDateRaw - Math.floor(releaseDateRaw);
+                            const millisecondsInDay = 24 * 60 * 60 * 1000;
+                            d.setMilliseconds(d.getMilliseconds() + Math.round(fractionalDay * millisecondsInDay));
                             if (!isNaN(d.getTime())) releaseDate = d;
                         } else {
-                            const d = new Date(dateStr);
-                            if (!isNaN(d.getTime())) releaseDate = d;
+                            const dateStr = releaseDateRaw.toString().trim();
+                            // Format: yyyy-mm-dd hh:mm:ss (Sample: 2021-04-15 00:00:00)
+                            const dateMatchYMD = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+                            // Format: dd-mm-yyyy hh:mm:ss
+                            const dateMatchDMY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+
+                            if (dateMatchYMD) {
+                                const year = parseInt(dateMatchYMD[1]);
+                                const month = parseInt(dateMatchYMD[2]) - 1;
+                                const day = parseInt(dateMatchYMD[3]);
+                                const d = new Date(year, month, day);
+                                if (!isNaN(d.getTime())) releaseDate = d;
+                            } else if (dateMatchDMY) {
+                                const day = parseInt(dateMatchDMY[1]);
+                                const month = parseInt(dateMatchDMY[2]) - 1;
+                                const year = parseInt(dateMatchDMY[3]);
+                                const d = new Date(year, month, day);
+                                if (!isNaN(d.getTime())) releaseDate = d;
+                            } else {
+                                const d = new Date(dateStr);
+                                if (!isNaN(d.getTime())) releaseDate = d;
+                            }
                         }
                         
-                        if (i === 0 && !releaseDate) console.log(`Failed to parse date: "${dateStr}"`);
+                        if (i === 0 && !releaseDate) console.log(`Failed to parse date: "${releaseDateRaw}" (Type: ${typeof releaseDateRaw})`);
                     }
 
                     // Check if exists

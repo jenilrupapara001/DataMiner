@@ -2321,8 +2321,29 @@ const AsinManagerPage = () => {
                       )}
                       {/* ===== PARENT ASIN ===== */}
                       {isVisible('parentAsin') && (
-                        <td style={{ ...tdStyle, fontSize: '10px', color: '#6366f1', fontWeight: 500 }}>
-                          {asin.parentAsin || asin.ParentAsin || '-'}
+                        <td style={tdStyle}>
+                          <div className="d-flex align-items-center">
+                            {asin.parentAsin || asin.ParentAsin ? (
+                              <span 
+                                className="badge font-monospace shadow-sm" 
+                                style={{ 
+                                  backgroundColor: '#eef2ff', 
+                                  color: '#4338ca', 
+                                  border: '1px solid #c7d2fe',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  letterSpacing: '0.025em'
+                                }}
+                                title="Parent ASIN"
+                              >
+                                {asin.parentAsin || asin.ParentAsin}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#d1d5db' }}>-</span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isVisible('sellerBrand') && (
