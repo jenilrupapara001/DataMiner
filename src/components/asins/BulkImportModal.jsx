@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, FileDown, FileUp, Store, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Upload, FileDown, FileUp, Store, Check, AlertCircle, RefreshCw, Globe, CheckCircle, Loader2 } from 'lucide-react';
 import { sellerApi, bulkApi, asinApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
-    const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'tags'
+    const { isAdmin, isGlobalUser } = useAuth();
+    const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'tags' | 'global'
     const [sellers, setSellers] = useState([]);
     const [selectedSellerId, setSelectedSellerId] = useState('');
     const [file, setFile] = useState(null);
@@ -49,9 +51,14 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
         setResult(null);
 
         try {
-            const response = activeTab === 'catalog'
-                ? await bulkApi.catalogSync(file, selectedSellerId)
-                : await bulkApi.tagsImport(file, selectedSellerId);
+            let response;
+            if (activeTab === 'catalog') {
+                response = await bulkApi.catalogSync(file, selectedSellerId);
+            } else if (activeTab === 'tags') {
+                response = await bulkApi.tagsImport(file, selectedSellerId);
+            } else if (activeTab === 'global') {
+                response = await asinApi.bulkUploadAllSellers(file);
+            }
 
             if (response.success) {
                 setResult(response);
@@ -114,6 +121,16 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         <FileUp size={14} className="me-1" />
                         Tags Import
                     </button>
+                    {(isAdmin || isGlobalUser) && (
+                        <button
+                            className={`flex-grow-1 py-2 border-0 bg-transparent fw-bold ${activeTab === 'global' ? 'text-zinc-900 border-bottom border-2 border-zinc-900' : 'text-zinc-400'}`}
+                            onClick={() => { setActiveTab('global'); setFile(null); setResult(null); setError(null); }}
+                            style={{ fontSize: '13px' }}
+                        >
+                            <Globe size={14} className="me-1" />
+                            Global Upload
+                        </button>
+                    )}
                 </div>
 
                 <div className="p-4">
@@ -124,39 +141,46 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                                 <strong>Catalog Sync</strong> — Upload Parent ASIN, Child ASIN, and SKU mapping.
                                 <br />New ASINs will be created automatically under the selected seller.
                             </>
-                        ) : (
+                        ) : activeTab === 'tags' ? (
                             <>
                                 <strong>Tags Import</strong> — Upload ASIN codes with tags. Tags are matched by <strong>exact ASIN code</strong>.
                                 <br />Only existing ASINs in the database will be updated.
+                            </>
+                        ) : (
+                            <>
+                                <strong>Global Bulk Upload</strong> — Direct upload with Seller Name mapping.
+                                <br />Required Columns: <strong>Seller Name, ASIN, SKU, Parent ASIN, Release Date, Price</strong>.
                             </>
                         )}
                     </div>
 
                     {/* Seller Selection */}
-                    <div className="mb-3">
-                        <label className="fw-bold mb-1" style={{ fontSize: '12px' }}>
-                            <Store size={14} className="me-1" />
-                            {activeTab === 'catalog' ? 'Target Seller *' : 'Filter by Seller (optional)'}
-                        </label>
-                        <select
-                            className="form-select"
-                            value={selectedSellerId}
-                            onChange={(e) => setSelectedSellerId(e.target.value)}
-                            style={{ fontSize: '13px', borderRadius: '8px' }}
-                        >
-                            <option value="">
-                                {activeTab === 'catalog' ? 'Select seller...' : 'All Sellers'}
-                            </option>
-                            {sellers.map(s => (
-                                <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
-                            ))}
-                        </select>
-                    </div>
+                    {activeTab !== 'global' && (
+                        <div className="mb-3">
+                            <label className="fw-bold mb-1" style={{ fontSize: '12px' }}>
+                                <Store size={14} className="me-1" />
+                                {activeTab === 'catalog' ? 'Target Seller *' : 'Filter by Seller (optional)'}
+                            </label>
+                            <select
+                                className="form-select"
+                                value={selectedSellerId}
+                                onChange={(e) => setSelectedSellerId(e.target.value)}
+                                style={{ fontSize: '13px', borderRadius: '8px' }}
+                            >
+                                <option value="">
+                                    {activeTab === 'catalog' ? 'Select seller...' : 'All Sellers'}
+                                </option>
+                                {sellers.map(s => (
+                                    <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* File Upload */}
                     <div className="mb-3">
                         <label className="fw-bold mb-1" style={{ fontSize: '12px' }}>
-                            {activeTab === 'catalog' ? 'Catalog CSV File' : 'Tags CSV File'}
+                            {activeTab === 'catalog' ? 'Catalog CSV File' : activeTab === 'tags' ? 'Tags CSV File' : 'Inventory Manifest CSV'}
                         </label>
                         <div className="border border-dashed rounded-3 p-4 text-center bg-zinc-50"
                             onDragOver={(e) => e.preventDefault()}

@@ -1560,7 +1560,12 @@ class MarketDataSyncService {
             const pool = await getPool();
             const asinResult = await pool.request()
                 .input('asinId', sql.VarChar, asinId)
-                .query('SELECT * FROM Asins WHERE Id = @asinId');
+                .query(`
+                    SELECT a.*, s.Name as sellerName 
+                    FROM Asins a 
+                    JOIN Sellers s ON a.SellerId = s.Id 
+                    WHERE a.Id = @asinId
+                `);
 
             const asin = asinResult.recordset[0];
             if (!asin) throw new Error('ASIN not found');
@@ -1657,7 +1662,7 @@ class MarketDataSyncService {
 
             // 9. Sold By & Second Buy Box
             const soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
-            const buyBoxWin = this._isBuyBoxWinner(soldBy);
+            const buyBoxWin = this._isBuyBoxWinner(soldBy, asin.sellerName);
 
             let secondAsp = asin.SecondAsp;
             let soldBySec = asin.SoldBySec;
@@ -2416,15 +2421,14 @@ class MarketDataSyncService {
     /**
      * Check if seller is a buy box winner (trusted seller)
      */
-    _isBuyBoxWinner(sellerName) {
+    _isBuyBoxWinner(sellerName, extraTrustedSellers = []) {
         if (!sellerName) return false;
-
-        // Get trusted sellers from environment
-        const trustedSellersStr = process.env.TRUSTED_SELLER_NAMES || 'Amazon,RetailEZ Pvt Ltd,Cloudtail,Appario';
-        const trustedSellers = trustedSellersStr.split(',').map(s => s.trim().toLowerCase());
-
-        const sellerLower = sellerName.toLowerCase();
-        return trustedSellers.some(trusted => sellerLower.includes(trusted));
+        
+        // Convert extraTrustedSellers to array if it's a string
+        const extra = Array.isArray(extraTrustedSellers) ? extraTrustedSellers : [extraTrustedSellers].filter(Boolean);
+        
+        // Use the centralized buyBoxUtils helper which includes the full list of variations
+        return isBuyBoxWinner(sellerName, extra);
     }
 
     /**
@@ -2577,6 +2581,14 @@ class MarketDataSyncService {
 
         const cleaned = str.trim().replace(/\s+/g, ' ').split(/NO_OF/)[0].trim();
         return cleaned.length > 30 ? cleaned.substring(0, 27) + '...' : (cleaned || 'No deal found');
+    }
+
+    _isValidSellerName(name) {
+        if (!name || typeof name !== 'string') return false;
+        const lower = name.toLowerCase().trim();
+        // Allow 'Details' as it often contains the price we want to show
+        const invalid = ['view details', 'details.', 'unknown'];
+        return !invalid.includes(lower) && lower.length > 0;
     }
 
     /**

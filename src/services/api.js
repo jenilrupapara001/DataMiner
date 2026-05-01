@@ -768,6 +768,22 @@ export const asinApi = {
     return res.json();
   },
 
+  bulkUploadAllSellers: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const res = await fetch(`${API_BASE}/asins/bulk-upload-all-sellers`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to bulk upload ASINs');
+    }
+    return res.json();
+  },
+
   bulkDelete: async (ids) => {
     const res = await fetch(`${API_BASE}/asins/bulk-delete`, {
       method: 'POST',

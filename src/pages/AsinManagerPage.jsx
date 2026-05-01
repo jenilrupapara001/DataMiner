@@ -2745,7 +2745,7 @@ const AsinManagerPage = () => {
                               // Must have a seller name
                               if (!o.seller || o.seller.trim() === '') return false;
                               const sellerLower = o.seller.toLowerCase().trim();
-                              if (sellerLower === 'unknown' || sellerLower === 'details' || sellerLower === 'details.' || sellerLower === 'view details') return false;
+                              if (sellerLower === 'unknown' || sellerLower === 'view details') return false;
                               return true;
                             });
 

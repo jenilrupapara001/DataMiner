@@ -5,6 +5,7 @@ import ListView from '../components/common/ListView';
 import ProgressBar from '../components/common/ProgressBar';
 import KPICard from '../components/KPICard';
 import EmptyState from '../components/common/EmptyState';
+import BulkImportModal from '../components/asins/BulkImportModal';
 import { sellerApi, asinApi, authApi, userApi, marketSyncApi } from '../services/api';
 import {
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Search,
   Plus,
   FileUp,
+  Upload,
   MoreHorizontal,
   ExternalLink,
   ShieldCheck,
@@ -61,6 +63,7 @@ const SellersPage = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [showAsinModal, setShowAsinModal] = useState(false);
   const [selectedSeller, setSelectedSeller] = useState(null);
   const [sellerAsins, setSellerAsins] = useState([]);
@@ -757,6 +760,12 @@ const SellersPage = () => {
                 </button>
               </>
             )}
+            {(isAdmin || isGlobalUser) && (
+              <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 rounded-pill px-4" onClick={() => setShowBulkImportModal(true)}>
+                <Upload size={16} />
+                <span className="fw-bold">Bulk Upload Catalog</span>
+              </button>
+            )}
             <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
               <FileUp size={16} className="text-zinc-500" />
               <span className="fw-bold text-zinc-700">Import CSV</span>
@@ -930,6 +939,12 @@ const SellersPage = () => {
             onRefresh={fetchPoolStats}
           />
         )}
+
+        <BulkImportModal
+          isOpen={showBulkImportModal}
+          onClose={() => setShowBulkImportModal(false)}
+          onComplete={() => loadSellers(true)}
+        />
       </Suspense>
     </>
   );

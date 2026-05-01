@@ -1374,6 +1374,163 @@ exports.importFromCsv = async (req, res) => {
 
 
 /**
+ * Direct Bulk Upload across all sellers with name mapping
+ * Handles ASIN, SKU, Parent ASIN, release date, price
+ */
+exports.bulkUploadAllSellers = async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+        const pool = await getPool();
+        
+        // 1. Fetch all sellers for mapping
+        const sellersResult = await pool.request().query('SELECT Id, Name FROM Sellers');
+        const sellerMap = {}; // Name -> Id
+        sellersResult.recordset.forEach(s => {
+            if (s.Name) sellerMap[s.Name.toLowerCase().trim()] = s.Id;
+        });
+
+        // 2. Read file
+        const workbook = XLSX.readFile(req.file.path);
+        let data = [];
+        for (const name of workbook.SheetNames) {
+          const sheet = workbook.Sheets[name];
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+          if (jsonData && jsonData.length > 0) {
+            data = jsonData;
+            break;
+          }
+        }
+
+        if (data.length === 0) {
+            if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'File is empty or has no valid headers' });
+        }
+
+        // 3. Process in chunks
+        const batchSize = 1000;
+        let created = 0;
+        let updated = 0;
+        let errors = [];
+        const affectedSellerIds = new Set();
+
+        // Helper to flexibly find values from columns
+        const getValue = (r, keys) => {
+            const rowKeys = Object.keys(r);
+            for (const k of keys) {
+                const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanK);
+                if (match) return r[match];
+            }
+            return null;
+        };
+
+        for (let i = 0; i < data.length; i += batchSize) {
+            const batch = data.slice(i, i + batchSize);
+            const transaction = new sql.Transaction(pool);
+            await transaction.begin();
+
+            try {
+                for (const row of batch) {
+                    const sellerName = getValue(row, ['Seller Name', 'Seller', 'Store Name'])?.toString().trim();
+                    const asin = getValue(row, ['ASIN', 'Asin Code'])?.toString().trim().toUpperCase();
+                    const sku = getValue(row, ['SKU'])?.toString().trim();
+                    const parentAsin = getValue(row, ['Parent ASIN', 'Parent'])?.toString().trim().toUpperCase();
+                    const releaseDateRaw = getValue(row, ['Release Date', 'Date']);
+                    const priceRaw = getValue(row, ['Price', 'Uploaded Price']);
+
+                    if (!asin || !sellerName) continue;
+
+                    const sellerId = sellerMap[sellerName.toLowerCase()];
+                    if (!sellerId) {
+                        errors.push(`Seller not found: "${sellerName}" for ASIN: ${asin}`);
+                        continue;
+                    }
+
+                    affectedSellerIds.add(sellerId);
+
+                    const price = parseFloat(priceRaw) || 0;
+                    let releaseDate = null;
+                    if (releaseDateRaw) {
+                        const d = new Date(releaseDateRaw);
+                        if (!isNaN(d.getTime())) releaseDate = d;
+                    }
+
+                    // Check if exists
+                    const checkResult = await transaction.request()
+                        .input('asin', sql.VarChar, asin)
+                        .input('sellerId', sql.VarChar, sellerId)
+                        .query('SELECT Id FROM Asins WHERE AsinCode = @asin AND SellerId = @sellerId');
+
+                    if (checkResult.recordset.length > 0) {
+                        // Update
+                        const existingId = checkResult.recordset[0].Id;
+                        await transaction.request()
+                            .input('id', sql.VarChar, existingId)
+                            .input('sku', sql.NVarChar, sku)
+                            .input('parentAsin', sql.NVarChar, parentAsin)
+                            .input('releaseDate', sql.DateTime2, releaseDate)
+                            .input('price', sql.Decimal(18, 2), price)
+                            .query(`
+                                UPDATE Asins 
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, UpdatedAt = GETDATE()
+                                WHERE Id = @id
+                            `);
+                        updated++;
+                    } else {
+                        // Insert
+                        const id = generateId();
+                        await transaction.request()
+                            .input('id', sql.VarChar, id)
+                            .input('asin', sql.VarChar, asin)
+                            .input('sellerId', sql.VarChar, sellerId)
+                            .input('sku', sql.NVarChar, sku)
+                            .input('parentAsin', sql.NVarChar, parentAsin)
+                            .input('releaseDate', sql.DateTime2, releaseDate)
+                            .input('price', sql.Decimal(18, 2), price)
+                            .query(`
+                                INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Status, ScrapeStatus, CreatedAt, UpdatedAt)
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, 'Active', 'PENDING', GETDATE(), GETDATE())
+                            `);
+                        created++;
+                    }
+                }
+                await transaction.commit();
+            } catch (err) {
+                await transaction.rollback();
+                console.error(`Batch error at chunk starting with ${i}:`, err);
+                errors.push(`Chunk starting at row ${i} failed: ${err.message}`);
+            }
+        }
+
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+        // Update counts for all affected sellers
+        const io = req.app.get('io');
+        if (typeof updateSellerAsinCount === 'function') {
+            for (const sellerId of affectedSellerIds) {
+                await updateSellerAsinCount(sellerId, io).catch(console.error);
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Processed ${data.length} records.`,
+            created,
+            updated,
+            errorCount: errors.length,
+            errors: errors.slice(0, 20)
+        });
+
+    } catch (error) {
+        console.error('bulkUploadAllSellers Error:', error);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+
+/**
  * Get ASINs by LQS (SQL Version)
  */
 exports.getAsinsByLQS = async (req, res) => {
