@@ -194,6 +194,14 @@ class SchedulerService {
             };
 
             console.log('🏢 [ENTERPRISE] Pipeline completed:', result);
+            
+            // --- SMART SCRAPING (DELTA SYNC) ---
+            // After the main sync, find ASINs that STILL have no found data in the last 12 hours
+            // and trigger a targeted recovery scrape for them.
+            setTimeout(async () => {
+                console.log('🔍 [ENTERPRISE] Starting follow-up Smart Scraping for missing data...');
+                await this.runMissingDataRecovery();
+            }, 3600000); // Wait 1 hour after triggering the main pipeline to allow initial cloud jobs to settle
 
             // Create notification for admin
             try {
@@ -207,7 +215,7 @@ class SchedulerService {
                         'SYSTEM',
                         'System',
                         admin.Id,
-                        `🏢 Enterprise Pipeline: ${result.successful}/${result.totalSellers} sellers synced in ${result.duration}`
+                        `🏢 Enterprise Pipeline: ${result.successful}/${result.totalSellers} sellers synced in ${result.duration}. Smart Scraping follow-up scheduled.`
                     );
                 }
             } catch (notifErr) {
@@ -357,6 +365,37 @@ class SchedulerService {
             }
         } catch (error) {
             console.error('[Scheduler] Critical Octoparse Fetch error:', error.message);
+        }
+    }
+
+    /**
+     * Finds ASINs that were missed in the main sync and triggers a targeted recovery.
+     */
+    async runMissingDataRecovery() {
+        try {
+            console.log('🔄 [Recovery] Starting missing data check...');
+            const pool = await getPool();
+            
+            // Find ASINs that were NOT scraped in the last 6 hours (meaning they failed or were missed)
+            const result = await pool.request().query(`
+                SELECT DISTINCT a.AsinCode 
+                FROM Asins a
+                LEFT JOIN ProductData pd ON a.AsinCode = pd.AsinCode 
+                  AND pd.ScrapedAt > DATEADD(HOUR, -6, GETDATE())
+                WHERE pd.Id IS NULL AND a.Status = 'Active'
+            `);
+            
+            const missingAsins = result.recordset.map(r => r.AsinCode);
+            
+            if (missingAsins.length > 0) {
+                console.log(`⚠️ [Recovery] Found ${missingAsins.length} ASINs with missing data. Triggering smart scrape...`);
+                // Trigger sync only for these specific ASINs
+                await MarketSyncService.syncMarketData(missingAsins, { triggerScrape: true });
+            } else {
+                console.log('✅ [Recovery] No missing data found. All ASINs up to date.');
+            }
+        } catch (error) {
+            console.error('❌ [Recovery] Error during missing data recovery:', error);
         }
     }
 }

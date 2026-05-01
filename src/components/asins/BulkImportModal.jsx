@@ -39,10 +39,6 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
             setError('Please select a file');
             return;
         }
-        if (!selectedSellerId && activeTab === 'catalog') {
-            setError('Please select a seller');
-            return;
-        }
 
         setUploading(true);
         setError(null);
@@ -134,8 +130,9 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                     <div className="bg-zinc-50 rounded-3 p-3 mb-3" style={{ fontSize: '12px' }}>
                         {activeTab === 'catalog' ? (
                             <>
-                                <strong>Catalog Sync</strong> — Upload Parent ASIN, Child ASIN, and SKU mapping.
-                                <br />New ASINs will be created automatically under the selected seller.
+                                <strong>Catalog Sync</strong> — Bulk update or create ASINs.
+                                <br />Required Columns: <strong>ASIN, Price, SKU, Parent ASIN, Release Date</strong>.
+                                <br />Optional: <strong>Brand</strong> column will automatically map ASINs to sellers.
                             </>
                         ) : activeTab === 'tags' ? (
                             <>
@@ -155,7 +152,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         <div className="mb-3">
                             <label className="fw-bold mb-1" style={{ fontSize: '12px' }}>
                                 <Store size={14} className="me-1" />
-                                {activeTab === 'catalog' ? 'Target Seller *' : 'Filter by Seller (optional)'}
+                                {activeTab === 'catalog' ? 'Target Seller (Optional if file has Brand)' : 'Filter by Seller (optional)'}
                             </label>
                             <select
                                 className="form-select"
@@ -164,7 +161,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                                 style={{ fontSize: '13px', borderRadius: '8px' }}
                             >
                                 <option value="">
-                                    {activeTab === 'catalog' ? 'Select seller...' : 'All Sellers'}
+                                    {activeTab === 'catalog' ? 'Automatic (Mapping from file)' : 'All Sellers'}
                                 </option>
                                 {sellers.map(s => (
                                     <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
@@ -176,7 +173,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                     {/* File Upload */}
                     <div className="mb-3">
                         <label className="fw-bold mb-1" style={{ fontSize: '12px' }}>
-                            {activeTab === 'catalog' ? 'Catalog CSV File' : activeTab === 'tags' ? 'Tags CSV File' : 'Inventory Manifest CSV'}
+                            {activeTab === 'catalog' ? 'Inventory Catalog File' : activeTab === 'tags' ? 'Tags CSV File' : 'Inventory Manifest CSV'}
                         </label>
                         <div className="border border-dashed rounded-3 p-4 text-center bg-zinc-50"
                             onDragOver={(e) => e.preventDefault()}
@@ -219,10 +216,23 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         <div className="bg-success-subtle text-success rounded-3 p-3 mb-3" style={{ fontSize: '12px' }}>
                             <Check size={14} className="me-1" />
                             {result.message}
-                            {result.updated > 0 && <div>✅ Updated: {result.updated}</div>}
-                            {result.created > 0 && <div>🆕 Created: {result.created}</div>}
-                            {result.notFound > 0 && <div>⚠️ Not Found: {result.notFound}</div>}
-                            {result.skipped > 0 && <div>⏭️ Skipped: {result.skipped}</div>}
+                            <div className="mt-1 d-flex flex-wrap gap-x-3">
+                                {result.updated > 0 && <span>✅ Updated: {result.updated}</span>}
+                                {result.created > 0 && <span>🆕 Created: {result.created}</span>}
+                                {result.skipped > 0 && <span>⏭️ Skipped: {result.skipped}</span>}
+                            </div>
+                            
+                            {result.errors && result.errors.length > 0 && (
+                                <div className="mt-2 pt-2 border-top border-success-subtle text-danger" style={{ fontSize: '11px' }}>
+                                    <div className="fw-bold mb-1">Row Errors (first 5):</div>
+                                    <ul className="ps-3 mb-0">
+                                        {result.errors.slice(0, 5).map((err, idx) => (
+                                            <li key={idx}>{err.asin || 'Row'}: {err.reason || err}</li>
+                                        ))}
+                                        {result.errors.length > 5 && <li>... and {result.errors.length - 5} more</li>}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     )}
 

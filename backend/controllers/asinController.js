@@ -26,7 +26,7 @@ exports.getAsins = async (req, res) => {
     const {
       seller, status, category, brand, search,
       minPrice, maxPrice, minBSR, maxBSR, minLQS, maxLQS,
-      scrapeStatus, buyBoxWin, hasAplus,
+      scrapeStatus, buyBoxWin, hasAplus, priceDispute,
       page = 1, limit = 50, sortBy = 'CreatedAt', sortOrder = 'DESC'
     } = req.query;
 
@@ -80,6 +80,7 @@ exports.getAsins = async (req, res) => {
                 reqObj.input(`selectedTag${i}`, sql.NVarChar, `%${tag.trim()}%`);
             });
         }
+        if (priceDispute !== undefined && priceDispute !== '') reqObj.input('priceDispute', sql.Bit, priceDispute === 'true' ? 1 : 0);
         return reqObj;
     };
 
@@ -108,6 +109,7 @@ exports.getAsins = async (req, res) => {
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
     if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxWin = @buyBoxStatus';
+    if (priceDispute !== undefined && priceDispute !== '') whereClause += ' AND PriceDispute = @priceDispute';
 
     // [3] Numeric Ranges
     if (minPrice) whereClause += ' AND CurrentPrice >= @minPrice';
@@ -215,6 +217,7 @@ exports.getAsins = async (req, res) => {
                       sortBy === 'bsr' ? 'BSR' : 
                       sortBy === 'lqs' ? 'LQS' : 
                       sortBy === 'status' ? 'Status' : 
+                      sortBy === 'priceDispute' ? 'PriceDispute' :
                       sortBy === 'lastScraped' ? 'LastScrapedAt' : 'CreatedAt';
     
     const dataRequest = applyInputs(pool.request());
@@ -976,7 +979,7 @@ exports.createAsin = async (req, res) => {
 exports.updateAsin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, category, brand, title, imageUrl, sku, currentPrice, bsr, rating, reviewCount } = req.body;
+    const { status, category, brand, title, imageUrl, sku, currentPrice, bsr, rating, reviewCount, priceDispute } = req.body;
     const pool = await getPool();
 
     // Fetch existing for auth check
@@ -1003,7 +1006,9 @@ exports.updateAsin = async (req, res) => {
       .input('bsr', sql.Int, bsr || null)
       .input('rating', sql.Decimal(3, 2), rating || null)
       .input('reviews', sql.Int, reviewCount || null)
+      .input('priceDispute', sql.Bit, priceDispute !== undefined ? (priceDispute === true || priceDispute === 1 || priceDispute === 'true' ? 1 : 0) : null)
       .query(`
+        -- 1. Update the ASIN record
         UPDATE Asins SET 
           Sku = COALESCE(@sku, Sku),
           Status = COALESCE(@status, Status),
@@ -1015,8 +1020,38 @@ exports.updateAsin = async (req, res) => {
           BSR = COALESCE(@bsr, BSR),
           Rating = COALESCE(@rating, Rating),
           ReviewCount = COALESCE(@reviews, ReviewCount),
+          PriceDispute = COALESCE(@priceDispute, PriceDispute),
           UpdatedAt = GETDATE()
-        WHERE Id = @id
+        WHERE Id = @id;
+
+        -- 2. Handle Tags based on PriceDispute status
+        IF @priceDispute IS NOT NULL
+        BEGIN
+            DECLARE @existingTags NVARCHAR(MAX);
+            SELECT @existingTags = Tags FROM Asins WHERE Id = @id;
+
+            IF @priceDispute = 1
+            BEGIN
+                -- Add 'Price Dispute' tag if it doesn't exist
+                IF @existingTags IS NULL OR @existingTags = '' OR @existingTags = '[]'
+                    UPDATE Asins SET Tags = '["Price Dispute"]' WHERE Id = @id;
+                ELSE IF CHARINDEX('"Price Dispute"', @existingTags) = 0
+                    UPDATE Asins SET Tags = JSON_MODIFY(@existingTags, 'append $', 'Price Dispute') WHERE Id = @id;
+            END
+            ELSE
+            BEGIN
+                -- Remove 'Price Dispute' tag if it exists
+                IF CHARINDEX('"Price Dispute"', @existingTags) > 0
+                BEGIN
+                    -- SQL Server 2016+ JSON handling
+                    UPDATE Asins SET Tags = (
+                        SELECT JSON_QUERY('[' + STRING_AGG('"' + value + '"', ',') + ']')
+                        FROM OPENJSON(@existingTags)
+                        WHERE value <> 'Price Dispute'
+                    ) WHERE Id = @id;
+                END
+            END
+        END
       `);
 
     if (status && status !== existing.Status) {
@@ -1720,10 +1755,47 @@ exports.bulkUpdateAsins = async (req, res) => {
       if (updates.status) { setParts.push('Status = @status'); request.input('status', sql.NVarChar, updates.status); }
       if (updates.category) { setParts.push('Category = @category'); request.input('category', sql.NVarChar, updates.category); }
       if (updates.brand) { setParts.push('Brand = @brand'); request.input('brand', sql.NVarChar, updates.brand); }
+      if (updates.priceDispute !== undefined) { 
+        setParts.push('PriceDispute = @priceDispute'); 
+        request.input('priceDispute', sql.Bit, updates.priceDispute ? 1 : 0); 
+      }
       
       if (setParts.length > 0) {
         setParts.push('UpdatedAt = GETDATE()');
         await request.query(`UPDATE Asins SET ${setParts.join(', ')} WHERE Id IN (${idList})`);
+
+        // Handle tags for Price Dispute bulk update
+        if (updates.priceDispute !== undefined) {
+          const isDispute = updates.priceDispute ? 1 : 0;
+          if (isDispute === 1) {
+            // Add tag if not exists
+            await transaction.request().query(`
+              UPDATE Asins 
+              SET Tags = CASE 
+                WHEN Tags IS NULL OR Tags = '' OR Tags = '[]' THEN '["Price Dispute"]'
+                WHEN CHARINDEX('"Price Dispute"', Tags) = 0 THEN JSON_MODIFY(Tags, 'append $', 'Price Dispute')
+                ELSE Tags
+              END
+              WHERE Id IN (${idList})
+            `);
+          } else {
+            // Remove tag if exists
+            // Since STRING_AGG is tricky with bulk update per-row, we do it in a small cursor-like logic or per-row
+            // For simplicity in bulk, we'll use a slightly more complex set-based removal if possible, 
+            // but SQL Server doesn't have a great "remove from JSON array" for multiple rows at once easily without a subquery
+            // We'll use the same logic as single update but in a cross apply or similar
+            await transaction.request().query(`
+              UPDATE a
+              SET Tags = (
+                  SELECT JSON_QUERY('[' + STRING_AGG('"' + value + '"', ',') + ']')
+                  FROM OPENJSON(a.Tags)
+                  WHERE value <> 'Price Dispute'
+              )
+              FROM Asins a
+              WHERE a.Id IN (${idList}) AND CHARINDEX('"Price Dispute"', a.Tags) > 0
+            `);
+          }
+        }
       }
 
       await transaction.commit();

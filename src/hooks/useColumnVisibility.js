@@ -23,6 +23,7 @@ export const ALL_COLUMNS = [
   { key: 'cdqGrade', label: 'CDQ Grade', defaultVisible: false, category: 'LQS' },
   
   { key: 'price', label: 'Price', defaultVisible: true, category: 'Pricing' },
+  { key: 'priceDispute', label: 'Price Dispute', defaultVisible: true, category: 'Pricing' },
   { key: 'mrp', label: 'MRP', defaultVisible: true, category: 'Pricing' },
   { key: 'dealBadge', label: 'Deal', defaultVisible: true, category: 'Pricing' },
   { key: 'discountPercentage', label: 'Discount %', defaultVisible: false, category: 'Pricing' },

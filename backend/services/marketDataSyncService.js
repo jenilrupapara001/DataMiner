@@ -1439,24 +1439,45 @@ class MarketDataSyncService {
                 await this.ensureTaskStopped(taskId);
             }
 
+            // 2.1 PRE-SYNC CLEANUP: Fetch pending data and clear it to prevent duplication
+            try {
+                console.log(`🧹 [Pre-Sync] Checking for pending data in task ${taskId}...`);
+                const pendingData = await this.retrieveResults(taskId);
+                if (pendingData && pendingData.length > 0) {
+                    console.log(`📦 Found ${pendingData.length} pending items. Processing before clearing...`);
+                    await this.processBatchResults(sellerId, pendingData);
+                }
+                await this.markDataAsExported(taskId);
+                console.log(`✅ [Pre-Sync] Cleanup complete for task ${taskId}.`);
+            } catch (cleanupErr) {
+                console.warn(`⚠️ [Pre-Sync] Cleanup warning (continuing sync): ${cleanupErr.message}`);
+            }
+
             // 2.5 Settling Delay: Give Octoparse a moment to stabilize after a stop command
             // This prevents "TaskExecuting" errors during immediate injection
             await this.wait(5000);
 
             // 3. Get ASINs for this seller from database
             console.log(`📊 Fetching ASINs from database for seller ${sellerId}...`);
-            let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
+            let asins;
             
-            if (options.onlyMissing) {
-                console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);
-                asinQuery += " AND (Title IS NULL OR Title = '' OR CurrentPrice IS NULL OR CurrentPrice = 0 OR ImageUrl IS NULL OR ImageUrl = '')";
+            if (options.targetAsins && Array.isArray(options.targetAsins)) {
+                console.log(`🎯 [TargetedSync] Using ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
+                asins = options.targetAsins.map(a => ({ AsinCode: a }));
+            } else {
+                let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
+                
+                if (options.onlyMissing) {
+                    console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);
+                    asinQuery += " AND (Title IS NULL OR Title = '' OR CurrentPrice IS NULL OR CurrentPrice = 0 OR ImageUrl IS NULL OR ImageUrl = '')";
+                }
+
+                const asinsResult = await pool.request()
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .query(asinQuery);
+
+                asins = asinsResult.recordset;
             }
-
-            const asinsResult = await pool.request()
-                .input('sellerId', sql.VarChar, sellerId)
-                .query(asinQuery);
-
-            const asins = asinsResult.recordset;
 
             if (asins.length === 0) {
                 console.log(`⚠️ No ${options.onlyMissing ? 'missing-data ' : ''}active ASINs to sync for seller: ${sellerId}`);
@@ -1782,10 +1803,34 @@ class MarketDataSyncService {
                 if (uniqueHistory.length >= 7) break;
             }
 
+            // --- Price Dispute Detection & Tagging ---
+            const currentPrice = price > 0 ? price : (asin.CurrentPrice || 0);
+            const uploadedPrice = asin.UploadedPrice || 0;
+            // Simple match logic: if uploaded price is set and doesn't match current price, it's a dispute
+            const isDisputed = uploadedPrice > 0 && Math.abs(uploadedPrice - currentPrice) > 0.01;
+            
+            // Handle Tags
+            let currentTags = [];
+            try {
+                currentTags = asin.Tags ? JSON.parse(asin.Tags) : [];
+                if (!Array.isArray(currentTags)) currentTags = [];
+            } catch (e) {
+                currentTags = [];
+            }
+
+            const DISPUTE_TAG = 'Price Dispute';
+            if (isDisputed) {
+                if (!currentTags.includes(DISPUTE_TAG)) {
+                    currentTags.push(DISPUTE_TAG);
+                }
+            } else {
+                currentTags = currentTags.filter(t => t !== DISPUTE_TAG);
+            }
+
             const updates = {
                 Title: title,
                 Category: category,
-                CurrentPrice: price > 0 ? price : asin.CurrentPrice,
+                CurrentPrice: currentPrice,
                 Mrp: mrp > 0 ? mrp : asin.Mrp,
                 DealBadge: dealBadge,
                 PriceType: priceType,
@@ -1842,8 +1887,8 @@ class MarketDataSyncService {
                 BuyBoxSellerId: soldBy || asin.SoldBy || '',
                 SecondAsp: secondAsp || 0,
                 SoldBySec: soldBySec || '',
-                AspDifference: price && secondAsp ? Math.abs(price - secondAsp) : 0,
-                DiscountPercentage: this._parseDiscount(rawData, price, mrp),
+                AspDifference: currentPrice && secondAsp ? Math.abs(currentPrice - secondAsp) : 0,
+                DiscountPercentage: this._parseDiscount(rawData, currentPrice, mrp),
                 HasAplus: hasAplus ? 1 : 0,
                 AvailabilityStatus: availabilityStatus,
                 AplusAbsentSince: aplusAbsentSince,
@@ -1854,6 +1899,8 @@ class MarketDataSyncService {
                 Status: asin.Status === 'Scraping' ? 'Active' : asin.Status,
                 History: JSON.stringify(uniqueHistory),
                 LastScrapedAt: now,
+                PriceDispute: isDisputed ? 1 : 0,
+                Tags: JSON.stringify(currentTags),
                 UpdatedAt: now
             };
 
@@ -2953,6 +3000,35 @@ class MarketDataSyncService {
         } catch (error) {
             console.error('❌ Manual JSON Sync Error:', error.message);
             throw new Error('Failed to process Octoparse JSON data: ' + error.message);
+        }
+    }
+
+    /**
+     * Helper to sync a specific list of ASINs by grouping them by seller.
+     */
+    async syncMarketData(asinCodes, options = {}) {
+        if (!asinCodes || asinCodes.length === 0) return;
+        
+        try {
+            const pool = await getPool();
+            const result = await pool.request().query(`
+                SELECT DISTINCT SellerId 
+                FROM Asins 
+                WHERE AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})
+            `);
+            
+            const sellerIds = result.recordset.map(r => r.SellerId);
+            
+            for (const sellerId of sellerIds) {
+                const sellerAsins = (await pool.request()
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})`))
+                    .recordset.map(r => r.AsinCode);
+                
+                await this.syncSellerAsinsToOctoparse(sellerId, { ...options, targetAsins: sellerAsins });
+            }
+        } catch (error) {
+            console.error('❌ [MarketSync] Error in syncMarketData:', error);
         }
     }
 }

@@ -47,14 +47,18 @@ exports.catalogSync = async (req, res) => {
             errors: []
         };
 
-        const existingResult = await pool.request()
-            .input('sellerId', sql.VarChar, sellerId)
-            .query('SELECT Id, AsinCode, Tags FROM Asins WHERE SellerId = @sellerId');
+        // Cache for brand-to-seller mapping to avoid redundant queries
+        const sellerMapByBrand = new Map();
         
-        const existingMap = new Map();
-        existingResult.recordset.forEach(a => {
-            existingMap.set(a.AsinCode.toUpperCase(), { id: a.Id, tags: a.Tags });
-        });
+        // If a default sellerId was provided, seed the map
+        if (sellerId && sellerId !== 'all') {
+            const defaultSeller = await pool.request()
+                .input('id', sql.VarChar, sellerId)
+                .query('SELECT Id, Name FROM Sellers WHERE Id = @id');
+            if (defaultSeller.recordset.length > 0) {
+                sellerMapByBrand.set(defaultSeller.recordset[0].Name.toLowerCase(), sellerId);
+            }
+        }
 
         const getValue = (row, possibleKeys) => {
             const keys = Object.keys(row);
@@ -80,52 +84,74 @@ exports.catalogSync = async (req, res) => {
                     .toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'sku']).toString().trim();
                 const uploadedPrice = parseFloat(getValue(row, ['Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
+                const brandName = getValue(row, ['Brand', 'Seller', 'brand', 'seller_name']).toString().trim();
                 
-                // Get release date from multiple possible column names
-                let releaseDate = null;
-                const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
-                
-                if (dateStr) {
-                    // Try parsing various date formats
-                    const parsed = new Date(dateStr);
-                    if (!isNaN(parsed.getTime())) {
-                        releaseDate = parsed;
+                // 1. Resolve Seller ID
+                let rowSellerId = sellerId;
+                if (brandName) {
+                    const brandLower = brandName.toLowerCase();
+                    if (sellerMapByBrand.has(brandLower)) {
+                        rowSellerId = sellerMapByBrand.get(brandLower);
                     } else {
-                        // Try Excel serial number
-                        const serial = parseFloat(dateStr);
-                        if (!isNaN(serial) && serial > 30000) {
-                            releaseDate = new Date((serial - 25569) * 86400 * 1000);
+                        // Look up seller by name
+                        const sellerLookup = await pool.request()
+                            .input('name', sql.NVarChar, brandName)
+                            .query('SELECT Id FROM Sellers WHERE Name = @name');
+                        
+                        if (sellerLookup.recordset.length > 0) {
+                            rowSellerId = sellerLookup.recordset[0].Id;
+                            sellerMapByBrand.set(brandLower, rowSellerId);
+                        } else if (!rowSellerId || rowSellerId === 'all') {
+                            // If no seller found and no default provided, skip this row
+                            results.skipped++;
+                            results.errors.push({ asin: childAsin, reason: `Seller/Brand "${brandName}" not found in database.` });
+                            continue;
                         }
                     }
                 }
 
-                // If no release date provided, use current date
-                if (!releaseDate) {
-                    releaseDate = new Date();
-                }
-
-                // Calculate auto tags based on age
-                const autoTags = AutoTagService.calculateAgeTags(releaseDate);
-
-                if (!childAsin) {
+                if (!childAsin || !rowSellerId || rowSellerId === 'all') {
                     results.skipped++;
                     continue;
                 }
 
-                const existing = existingMap.get(childAsin);
+                // 2. Handle Dates (Support DD/MM/YY)
+                let releaseDate = null;
+                const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
+                
+                if (dateStr) {
+                    const parsed = new Date(dateStr);
+                    if (!isNaN(parsed.getTime())) {
+                        releaseDate = parsed;
+                    } else {
+                        // Check for DD/MM/YY or DD/MM/YYYY
+                        const dmyMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+                        if (dmyMatch) {
+                            const [_, day, month, year] = dmyMatch;
+                            const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
+                            releaseDate = new Date(`${fullYear}-${month}-${day}`);
+                        }
+                    }
+                }
+                if (!releaseDate || isNaN(releaseDate.getTime())) releaseDate = new Date();
+
+                const autoTags = AutoTagService.calculateAgeTags(releaseDate);
+
+                // 3. Update or Insert
+                const existingResult = await transaction.request()
+                    .input('asin', sql.VarChar, childAsin)
+                    .input('sellerId', sql.VarChar, rowSellerId)
+                    .query('SELECT Id, Tags FROM Asins WHERE AsinCode = @asin AND SellerId = @sellerId');
+                
+                const existing = existingResult.recordset[0];
 
                 if (existing) {
-                    // Merge tags
                     let existingTags = [];
-                    try {
-                        existingTags = JSON.parse(existing.tags || '[]');
-                    } catch (e) {
-                        existingTags = [];
-                    }
+                    try { existingTags = JSON.parse(existing.tags || '[]'); } catch (e) {}
                     const mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
 
                     await transaction.request()
-                        .input('id', sql.VarChar, existing.id)
+                        .input('id', sql.VarChar, existing.Id)
                         .input('parentAsin', sql.NVarChar, parentAsin || null)
                         .input('sku', sql.NVarChar, sku || null)
                         .input('releaseDate', sql.DateTime2, releaseDate)
@@ -133,8 +159,8 @@ exports.catalogSync = async (req, res) => {
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .query(`
                             UPDATE Asins SET 
-                                ParentAsin = CASE WHEN @parentAsin != '' THEN @parentAsin ELSE ParentAsin END,
-                                Sku = CASE WHEN @sku != '' THEN @sku ELSE Sku END,
+                                ParentAsin = CASE WHEN @parentAsin != '' AND @parentAsin IS NOT NULL THEN @parentAsin ELSE ParentAsin END,
+                                Sku = CASE WHEN @sku != '' AND @sku IS NOT NULL THEN @sku ELSE Sku END,
                                 ReleaseDate = @releaseDate,
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
@@ -142,27 +168,24 @@ exports.catalogSync = async (req, res) => {
                             WHERE Id = @id
                         `);
                     results.updated++;
-                    if (autoTags.length > 0) results.autoTagged++;
                 } else {
                     const newId = generateId();
-                    const allTags = [...autoTags];
-                    
                     await transaction.request()
                         .input('id', sql.VarChar, newId)
                         .input('asinCode', sql.VarChar, childAsin)
-                        .input('sellerId', sql.VarChar, sellerId)
+                        .input('sellerId', sql.VarChar, rowSellerId)
                         .input('parentAsin', sql.NVarChar, parentAsin || null)
                         .input('sku', sql.NVarChar, sku || null)
                         .input('releaseDate', sql.DateTime2, releaseDate)
-                        .input('tags', sql.NVarChar, JSON.stringify(allTags))
+                        .input('tags', sql.NVarChar, JSON.stringify(autoTags))
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .query(`
                             INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, CreatedAt, UpdatedAt)
                             VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', GETDATE(), GETDATE())
                         `);
                     results.created++;
-                    if (autoTags.length > 0) results.autoTagged++;
                 }
+                if (autoTags.length > 0) results.autoTagged++;
             }
 
             await transaction.commit();
@@ -176,7 +199,7 @@ exports.catalogSync = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Updated ${results.updated} ASINs, Created ${results.created} new, ${results.autoTagged} auto-tagged`,
+            message: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created, ${results.skipped} skipped.`,
             ...results
         });
 

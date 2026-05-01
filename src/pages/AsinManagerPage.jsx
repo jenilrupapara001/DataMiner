@@ -119,15 +119,26 @@ const getWeekNumber = (date) => {
 };
 
 // Helper function for week history badges
-const getWeekHistoryBadge = (value, type) => {
+const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
   if (!value) return <span style={{ color: '#9ca3af' }}>-</span>;
 
   if (type === 'price') {
-    return <span style={{ fontWeight: 500, color: '#059669' }}>₹{value.toLocaleString()}</span>;
+    return (
+      <div className="d-flex flex-column align-items-center justify-content-center">
+        <span style={{ 
+          fontWeight: 700, 
+          color: '#059669', 
+          fontSize: '10.5px',
+          lineHeight: 1
+        }}>
+          ₹{value.toLocaleString()}
+        </span>
+      </div>
+    );
   } else if (type === 'number') {
-    return <span style={{ fontWeight: 500, color: '#2563eb' }}>#{value.toLocaleString()}</span>;
+    return <span style={{ fontWeight: 600, color: '#2563eb', fontSize: '10.5px' }}>#{value.toLocaleString()}</span>;
   } else if (type === 'rating') {
-    return <span style={{ fontWeight: 500, color: '#d97706' }}>{value.toFixed(1)}</span>;
+    return <span style={{ fontWeight: 600, color: '#d97706', fontSize: '10.5px' }}>{value.toFixed(1)}</span>;
   } else if (type === 'subBsr') {
     return <span style={{ fontWeight: 600, color: '#7c3aed', fontSize: '10px' }}>#{value.toLocaleString()}</span>;
   }
@@ -353,6 +364,8 @@ const AsinManagerPage = () => {
 
   const [showColumnPanel, setShowColumnPanel] = useState(false);
   const [showBulkTagsModal, setShowBulkTagsModal] = useState(false);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const actionsRef = useRef(null);
 
   const historyStructure = useMemo(() => {
     if (asins.length > 0) {
@@ -399,12 +412,22 @@ const AsinManagerPage = () => {
     return historyStructure.reduce((sum, w) => sum + w.dates.length, 0);
   }, [historyStructure]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
+        setShowActionsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const visibleLQSCount = useMemo(() => ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore', 'lqs'].filter(isVisible).length, [isVisible]);
   const visiblePriceTrendCount = useMemo(() => isVisible('priceTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleBsrTrendCount = useMemo(() => isVisible('bsrTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleRatingTrendCount = useMemo(() => isVisible('ratingTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleImageTrendCount = useMemo(() => isVisible('imageTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-  
+
   const [tagSearch, setTagSearch] = useState('');
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [filters, setFilters] = useState({
@@ -445,7 +468,8 @@ const AsinManagerPage = () => {
     ageFilter: '',
     selectedTags: [],
     minReleaseDate: '',
-    maxReleaseDate: ''
+    maxReleaseDate: '',
+    priceDispute: ''
   });
 
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -487,7 +511,8 @@ const AsinManagerPage = () => {
     ageFilter: '',
     selectedTags: [],
     minReleaseDate: '',
-    maxReleaseDate: ''
+    maxReleaseDate: '',
+    priceDispute: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -515,7 +540,7 @@ const AsinManagerPage = () => {
       minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
       minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: '',
       minReviewCount: '', maxReviewCount: '', minImagesCount: '', maxImagesCount: '',
-      minBulletPoints: '', maxBulletPoints: ''
+      minBulletPoints: '', maxBulletPoints: '', priceDispute: ''
     };
     setFilters(resetState);
     setAppliedFilters(resetState);
@@ -567,7 +592,8 @@ const AsinManagerPage = () => {
       maxRating: 'Max Rating',
       ageFilter: 'Age',
       minReleaseDate: 'From',
-      maxReleaseDate: 'To'
+      maxReleaseDate: 'To',
+      priceDispute: 'Price Dispute'
     };
 
     Object.entries(appliedFilters).forEach(([key, value]) => {
@@ -580,8 +606,8 @@ const AsinManagerPage = () => {
           <div key={key} className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
             <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>{mapping[key]}:</span>
             <span className="fw-bold">{label}</span>
-            <button 
-              className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" 
+            <button
+              className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors"
               onClick={() => removeAppliedFilter(key)}
             >
               <X size={12} />
@@ -597,8 +623,8 @@ const AsinManagerPage = () => {
           <div key={`tag-${tag}`} className="badge bg-indigo-50 text-indigo-700 border border-indigo-100 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
             <Tag size={10} className="opacity-60" />
             <span className="fw-bold">{tag}</span>
-            <button 
-              className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" 
+            <button
+              className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors"
               onClick={() => removeAppliedFilter('selectedTags', tag)}
             >
               <X size={12} />
@@ -609,34 +635,34 @@ const AsinManagerPage = () => {
     }
 
     if (selectedSeller) {
-        const seller = sellers.find(s => s._id === selectedSeller);
-        badges.unshift(
-            <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-              <Store size={10} className="opacity-60" />
-              <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
-              <button 
-                className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" 
-                onClick={() => setSelectedSeller('')}
-              >
-                <X size={12} />
-              </button>
-            </div>
-        );
+      const seller = sellers.find(s => s._id === selectedSeller);
+      badges.unshift(
+        <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Store size={10} className="opacity-60" />
+          <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
+          <button
+            className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors"
+            onClick={() => setSelectedSeller('')}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      );
     }
 
     if (appliedSearchQuery) {
-        badges.unshift(
-            <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-              <Search size={10} className="opacity-60" />
-              <span className="fw-bold italic">"{appliedSearchQuery}"</span>
-              <button 
-                className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors" 
-                onClick={() => { setAppliedSearchQuery(''); setSearchQuery(''); }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-        );
+      badges.unshift(
+        <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Search size={10} className="opacity-60" />
+          <span className="fw-bold italic">"{appliedSearchQuery}"</span>
+          <button
+            className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors"
+            onClick={() => { setAppliedSearchQuery(''); setSearchQuery(''); }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      );
     }
 
     return badges;
@@ -747,6 +773,30 @@ const AsinManagerPage = () => {
   const handleViewRating = (asin, e) => {
     e.stopPropagation();
     setSelectedAsinForRating(asin);
+  };
+
+  const handleBulkPriceDispute = async (isDispute) => {
+    if (selectedIds.size === 0) {
+      alert('Please select at least one ASIN');
+      return;
+    }
+
+    if (!window.confirm(`Mark ${selectedIds.size} ASINs as ${isDispute ? 'Disputed' : 'Resolved'}?`)) return;
+
+    setLoading(true);
+    try {
+      const res = await asinApi.bulkUpdate(Array.from(selectedIds), { priceDispute: isDispute });
+      if (res.success) {
+        // toast or notification here
+        loadData(pagination.page);
+        setSelectedIds(new Set());
+      }
+    } catch (err) {
+      alert('Bulk update failed: ' + err.message);
+    } finally {
+      setLoading(false);
+      setShowActionsDropdown(false);
+    }
   };
 
   const loadData = useCallback(async (page = 1, limit = pagination.limit, seller = selectedSeller) => {
@@ -1453,22 +1503,22 @@ const AsinManagerPage = () => {
       {filterPanelOpen && (
         <>
           {/* Backdrop */}
-          <div 
-            className="position-fixed top-0 start-0 w-100 h-100" 
-            style={{ 
-              zIndex: 2000, 
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100"
+            style={{
+              zIndex: 2000,
               backgroundColor: 'rgba(0, 0, 0, 0.45)',
               backdropFilter: 'blur(4px)',
               animation: 'fadeIn 0.25s ease-out'
             }}
             onClick={() => setFilterPanelOpen(false)}
           />
-          
+
           <div
             className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
-            style={{ 
-              width: '420px', 
-              zIndex: 2010, 
+            style={{
+              width: '420px',
+              zIndex: 2010,
               animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
               boxShadow: '-10px 0 50px rgba(0,0,0,0.25)'
             }}
@@ -1484,8 +1534,8 @@ const AsinManagerPage = () => {
                   <p className="mb-0 text-zinc-400" style={{ fontSize: '11px' }}>Refine your catalog search</p>
                 </div>
               </div>
-              <button 
-                className="btn btn-ghost p-2 rounded-circle hover-bg-zinc-800 text-white opacity-70 hover-opacity-100" 
+              <button
+                className="btn btn-ghost p-2 rounded-circle hover-bg-zinc-800 text-white opacity-70 hover-opacity-100"
                 onClick={() => setFilterPanelOpen(false)}
               >
                 <X size={20} />
@@ -1494,7 +1544,7 @@ const AsinManagerPage = () => {
 
             {/* Content - Scrollable */}
             <div className="flex-grow-1 overflow-auto p-4 custom-scrollbar">
-              
+
               {/* SEARCH & BASIC */}
               <div className="mb-5">
                 <h6 className="filter-section-title">Identity & Search</h6>
@@ -1590,6 +1640,16 @@ const AsinManagerPage = () => {
                         <option value="">All</option>
                         <option value="true">Yes</option>
                         <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-12">
+                    <div className="filter-group">
+                      <label className="filter-label">PRICE DISPUTE</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.priceDispute} onChange={(e) => setFilters({ ...filters, priceDispute: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All ASINs</option>
+                        <option value="true">Disputed Only</option>
+                        <option value="false">Non-Disputed</option>
                       </select>
                     </div>
                   </div>
@@ -1710,15 +1770,15 @@ const AsinManagerPage = () => {
 
             {/* Footer */}
             <div className="p-4 border-top bg-zinc-50 d-flex gap-3">
-              <button 
-                className="btn btn-white flex-grow-1 border-zinc-200 fw-bold rounded-3 py-2.5 shadow-sm hover-bg-zinc-100" 
+              <button
+                className="btn btn-white flex-grow-1 border-zinc-200 fw-bold rounded-3 py-2.5 shadow-sm hover-bg-zinc-100"
                 onClick={resetAllFilters}
                 style={{ fontSize: '13px' }}
               >
                 Reset All
               </button>
-              <button 
-                className="btn btn-zinc-900 flex-grow-1 fw-bold rounded-3 py-2.5 shadow-md hover-bg-zinc-800" 
+              <button
+                className="btn btn-zinc-900 flex-grow-1 fw-bold rounded-3 py-2.5 shadow-md hover-bg-zinc-800"
                 onClick={handleApplyFilters}
                 style={{ fontSize: '13px', backgroundColor: '#18181B', color: '#fff' }}
               >
@@ -1741,6 +1801,43 @@ const AsinManagerPage = () => {
           </div>
 
           <div className="d-flex align-items-center gap-2">
+            <div className="position-relative" ref={actionsRef}>
+              <button
+                className={`btn btn-xs d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm transition-all ${selectedIds.size > 0 ? 'btn-amber-50 text-amber-900 border-amber-200' : 'btn-zinc-100 text-zinc-500 border-zinc-200'}`}
+                onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                disabled={selectedIds.size === 0}
+                style={{ fontSize: '11px', fontWeight: 700 }}
+              >
+                <SlidersHorizontal size={12} />
+                <span>Actions ({selectedIds.size})</span>
+                <ChevronDown size={12} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showActionsDropdown && (
+                <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '200px' }}>
+                  <div className="px-3 py-2 border-bottom mb-1">
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Dispute Management</span>
+                  </div>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
+                    onClick={() => handleBulkPriceDispute(true)}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <AlertTriangle size={14} className="text-amber-500" />
+                    Mark as Price Dispute
+                  </button>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
+                    onClick={() => handleBulkPriceDispute(false)}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <RefreshCw size={14} className="text-emerald-500" />
+                    Resolve Dispute
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm"
               onClick={() => setShowAddModal(true)}
@@ -1797,17 +1894,17 @@ const AsinManagerPage = () => {
 
 
 
-        {/* Repair Progress simplified */}
-        {repairStatus && (
-          <div className="mt-2 py-1 px-3 bg-amber-50 border border-amber-100 rounded-2 d-flex align-items-center gap-3">
-            <div className="spin text-amber-500"><Zap size={12} /></div>
-            <span className="smallest text-amber-900 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Data Repair</span>
-            <div className="flex-grow-1" style={{ height: '4px', background: '#fef3c7', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: '#f59e0b', width: `${repairStatus.percentage}%`, transition: 'width 0.4s ease' }} />
-            </div>
-            <span className="smallest text-amber-600 fw-bold" style={{ fontSize: '9px' }}>{repairStatus.processed}/{repairStatus.total}</span>
+      {/* Repair Progress simplified */}
+      {repairStatus && (
+        <div className="mt-2 py-1 px-3 bg-amber-50 border border-amber-100 rounded-2 d-flex align-items-center gap-3">
+          <div className="spin text-amber-500"><Zap size={12} /></div>
+          <span className="smallest text-amber-900 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Data Repair</span>
+          <div className="flex-grow-1" style={{ height: '4px', background: '#fef3c7', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#f59e0b', width: `${repairStatus.percentage}%`, transition: 'width 0.4s ease' }} />
           </div>
-        )}
+          <span className="smallest text-amber-600 fw-bold" style={{ fontSize: '9px' }}>{repairStatus.processed}/{repairStatus.total}</span>
+        </div>
+      )}
 
       <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0.75rem 1.25rem' }}>
         {/* Alerts & Errors row */}
@@ -1953,7 +2050,7 @@ const AsinManagerPage = () => {
                 >
                   <ListChecks size={12} />
                   {(() => {
-                    const count = Object.values(appliedFilters).filter(v => 
+                    const count = Object.values(appliedFilters).filter(v =>
                       v !== '' && (!Array.isArray(v) || v.length > 0)
                     ).length;
                     return <>FILTERS {count > 0 && `(${count})`}</>;
@@ -2067,7 +2164,7 @@ const AsinManagerPage = () => {
               </div>
             </div>
           </div>
-          
+
           {/* APPLIED FILTERS BADGES */}
           {(Object.values(appliedFilters).some(v => v !== '' && (!Array.isArray(v) || v.length > 0)) || appliedSearchQuery || selectedSeller) && (
             <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
@@ -2077,8 +2174,8 @@ const AsinManagerPage = () => {
               <div className="d-flex flex-wrap gap-2">
                 {getAppliedFiltersBadges()}
               </div>
-              <button 
-                className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
+              <button
+                className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none"
                 style={{ fontSize: '10px' }}
                 onClick={resetAllFilters}
               >
@@ -2136,6 +2233,7 @@ const AsinManagerPage = () => {
                   )}
 
                   {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right' }}>PRICE</th>}
+                  {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center' }}>DISPUTE</th>}
                   {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', color: '#6b7280' }}>MRP</th>}
 
                   {visiblePriceTrendCount > 0 && (
@@ -2324,17 +2422,18 @@ const AsinManagerPage = () => {
                         <td style={tdStyle}>
                           <div className="d-flex align-items-center">
                             {asin.parentAsin || asin.ParentAsin ? (
-                              <span 
-                                className="badge font-monospace shadow-sm" 
-                                style={{ 
-                                  backgroundColor: '#eef2ff', 
-                                  color: '#4338ca', 
-                                  border: '1px solid #c7d2fe',
+                              <span
+                                className="badge font-monospace shadow-sm"
+                                style={{
+                                  backgroundColor: '#1e1b4b',
+                                  color: '#ffffff',
+                                  border: '1px solid #1e1b4b',
                                   fontSize: '11px',
-                                  fontWeight: 600,
-                                  padding: '4px 8px',
+                                  fontWeight: 700,
+                                  padding: '5px 10px',
                                   borderRadius: '6px',
-                                  letterSpacing: '0.025em'
+                                  letterSpacing: '0.05em',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                 }}
                                 title="Parent ASIN"
                               >
@@ -2509,12 +2608,52 @@ const AsinManagerPage = () => {
                           onClick={(e) => handleViewPrice(asin, e)}
                           title="View Price Trend Matrix">
                           <div className="d-flex flex-column align-items-end">
-                            <span style={{ color: '#16a34a' }}>
-                              ₹{(asin.uploadedPrice || asin.currentPrice || 0).toLocaleString()}
+                            <span style={{ color: (asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01) ? '#dc2626' : '#16a34a' }}>
+                              ₹{(asin.uploadedPrice || 0).toLocaleString()}
                             </span>
-                            {asin.uploadedPrice > 0 && asin.currentPrice > 0 && Math.abs(asin.uploadedPrice - asin.currentPrice) > 0.01 && (
-                              <span className="badge bg-danger text-white mt-1" style={{ fontSize: '8px', padding: '1px 4px', fontWeight: 800 }}>
+                            {(asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01) && (
+                              <span className="badge mt-1 shadow-sm" style={{
+                                fontSize: '8px',
+                                padding: '2px 6px',
+                                fontWeight: 800,
+                                backgroundColor: '#dc2626',
+                                color: '#fff',
+                                borderRadius: '4px',
+                                textTransform: 'uppercase'
+                              }}>
                                 PRICE DISPUTE
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isVisible('priceDispute') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <div className="d-flex justify-content-center">
+                            {asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01 ? (
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{ 
+                                backgroundColor: '#dc2626', 
+                                color: '#fff', 
+                                fontSize: '10px', 
+                                fontWeight: 800,
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                minWidth: '55px'
+                              }}>
+                                <AlertTriangle size={10} />
+                                YES
+                              </span>
+                            ) : (
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{ 
+                                backgroundColor: '#16a34a', 
+                                color: '#fff', 
+                                fontSize: '10px', 
+                                fontWeight: 800,
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                minWidth: '55px'
+                              }}>
+                                NO
                               </span>
                             )}
                           </div>
@@ -2532,8 +2671,8 @@ const AsinManagerPage = () => {
                           <td key={`p-${week.label}-${dIdx}`}
                             onClick={(e) => handleViewPrice(asin, e)}
                             title="View Price Trend Matrix"
-                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
-                            {wData?.price ? getWeekHistoryBadge(wData.price, 'price') : '-'}
+                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 45, cursor: 'pointer' }}>
+                            {wData?.price ? getWeekHistoryBadge(wData.price, 'price', asin.uploadedPrice) : '-'}
                           </td>
                         );
                       }))}
