@@ -209,13 +209,27 @@ async function processExportJob(downloadId, params, userId) {
             } else {
                 whereClause += ` AND a.SellerId IN (${assignedIds.map(id => `'${id}'`).join(',')})`;
             }
+            
+            // Further restrict by requested sellers if provided (intersection)
+            if (sellerIds.length > 0) {
+                const allowedSellerIds = sellerIds.filter(id => assignedIds.includes(id));
+                if (allowedSellerIds.length > 0) {
+                    whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+                } else {
+                    whereClause += ' AND 1=0'; // Requested sellers not in assigned list
+                }
+            }
         } else if (!allSellers && sellerIds.length > 0) {
+            // Admins filtering by specific sellers
             whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
         }
         
         if (asinIds.length > 0) {
             whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
         }
+
+        console.log(`🔍 [Export] Generated Where Clause: ${whereClause}`);
+        if (asinIds.length > 0) console.log(`🔍 [Export] Specific ASINs requested: ${asinIds.length}`);
 
         // Apply advanced filters (Matching asinController.js logic)
         if (search) {
@@ -388,8 +402,12 @@ async function processExportJob(downloadId, params, userId) {
             'sellerName': 's.Name'
         };
 
-        // Build SELECT columns
-        const selectColumns = fields.map(f => sqlFieldMapping[f] || `a.${f}`).join(', ');
+        // Build SELECT columns with aliases to match frontend camelCase keys
+        const selectColumns = fields.map(f => {
+            const sqlField = sqlFieldMapping[f] || `a.${f}`;
+            return `${sqlField} AS [${f}]`;
+        }).join(', ');
+
         const selectQuery = `
             SELECT ${selectColumns}, s.Name as sellerName
             FROM Asins a
@@ -397,6 +415,8 @@ async function processExportJob(downloadId, params, userId) {
             ${whereClause}
             ORDER BY a.AsinCode ASC
         `;
+
+        console.log(`📊 [Export] Running query: ${selectQuery.substring(0, 500)}${selectQuery.length > 500 ? '...' : ''}`);
 
         console.log(`📊 [Export] Running query for ${fields.length} fields`);
         const result = await request.query(selectQuery);

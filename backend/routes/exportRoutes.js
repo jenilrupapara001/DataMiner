@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { auth, requirePermission } = require('../middleware/auth');
 const {
     startExport,
     getDownloads,
@@ -9,7 +9,7 @@ const {
     getExportFields
 } = require('../controllers/exportController');
 
-router.post('/start', auth, startExport);
+router.post('/start', auth, requirePermission('asins_export'), startExport);
 router.get('/downloads', auth, getDownloads);
 router.get('/status/:id', auth, getExportStatus);
 router.get('/download/:id', auth, downloadFile);

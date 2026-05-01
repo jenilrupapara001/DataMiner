@@ -299,7 +299,7 @@ const demoAsins = [
 ];
 
 const AsinManagerPage = () => {
-  const { isAdmin, isGlobalUser } = useAuth();
+  const { isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [asins, setAsins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDashboard, setShowDashboard] = useState(true);
@@ -2044,14 +2044,16 @@ const AsinManagerPage = () => {
                 </button>
 
                 {/* Export Button */}
-                <button
-                  onClick={() => setShowExportModal(true)}
-                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                  style={{ fontSize: '10px', height: '26px' }}
-                >
-                  <Download size={11} className="text-blue-600" />
-                  <span className="fw-bold">EXPORT</span>
-                </button>
+                {hasPermission('asins_export') && (
+                  <button
+                    onClick={() => setShowExportModal(true)}
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                    style={{ fontSize: '10px', height: '26px' }}
+                  >
+                    <Download size={11} className="text-blue-600" />
+                    <span className="fw-bold">EXPORT</span>
+                  </button>
+                )}
 
                 {/* Bulk Import Button */}
                 <button

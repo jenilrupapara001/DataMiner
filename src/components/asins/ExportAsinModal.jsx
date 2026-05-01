@@ -140,7 +140,17 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
 
   // ===== EXPORT =====
   const handleExport = async () => {
-    if (selectedSellerIds.length === 0) { setError('Please select at least one seller'); return; }
+    // Only require seller selection if we're not exporting specific selected IDs
+    if (exportType === 'filtered' && selectedSellerIds.length === 0) {
+      setError('Please select at least one seller for filtered export');
+      return;
+    }
+    
+    if (exportType === 'selected' && selectedIds.length === 0) {
+      setError('No items selected to export');
+      return;
+    }
+
     if (selectedFields.length === 0) { setError('Please select at least one field'); return; }
 
     setExporting(true); setStep(2); setError(null); setExportProgress(0);
@@ -151,14 +161,14 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
         fields: selectedFields,
         format: exportFormat,
         dateRange: dateOption,
+        sellerIds: selectedSellerIds,
+        allSellers: isAllSellersSelected,
       };
 
       if (exportType === 'selected' && selectedIds.length > 0) {
         exportParams.asinIds = selectedIds;
       } else {
         // Map currentFilters to match backend expectation
-        exportParams.sellerIds = selectedSellerIds;
-        exportParams.allSellers = isAllSellersSelected;
         exportParams.search = searchQuery;
         
         // Flatten filters
