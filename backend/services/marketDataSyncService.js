@@ -99,8 +99,13 @@ class MarketDataSyncService {
     }
 
     log(level, message, data = {}) {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, Object.keys(data).length ? JSON.stringify(data) : '');
+        // Only log errors or important info in production-like mode
+        const timestamp = new Date().toLocaleTimeString();
+        if (level === 'error' || level === 'warn') {
+            console.error(`[${timestamp}] 🚨 ${message}`, Object.keys(data).length ? data : '');
+        } else {
+            console.log(`[${timestamp}] ℹ️  ${message}`);
+        }
     }
 
     async validateMasterTask() {
@@ -1662,7 +1667,7 @@ class MarketDataSyncService {
                 bulletPointsCount = bulletPointsText.length;
             }
 
-            console.log(`📝 Extracted ${bulletPointsCount} bullet points:`, bulletPointsText.map(b => b.substring(0, 60)));
+            // console.log(`📝 Extracted ${bulletPointsCount} bullet points:`, bulletPointsText.map(b => b.substring(0, 60)));
 
             // 8. Stock Level, A+ Content & Availability
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
@@ -2021,7 +2026,7 @@ class MarketDataSyncService {
 
         for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
             const chunk = rawResults.slice(chunkStart, chunkStart + CHUNK_SIZE);
-            console.log(`📦 Processing chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (${chunk.length} items)...`);
+            // console.log(`📦 Processing chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (${chunk.length} items)...`);
 
             // Extract ASIN codes for this chunk - normalize to uppercase
             const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r))
@@ -2029,16 +2034,7 @@ class MarketDataSyncService {
                 .map(code => code.toUpperCase()); // Normalize to uppercase
 
             if (chunkStart === 0 && chunk.length > 0) {
-                console.log(`[DEBUG] First record raw data keys:`, Object.keys(chunk[0]));
-                const firstCode = this._extractAsinFromData(chunk[0]);
-                console.log(`[DEBUG] Extracted ASIN from first record:`, firstCode);
-                if (firstCode) {
-                    console.log(`[DEBUG] Normalized ASIN (uppercase):`, firstCode.toUpperCase());
-                }
-            }
-
-            if (asinCodesToFind.length === 0) {
-                console.log(`[DEBUG] No ASIN codes found in chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1}`);
+                // console.log(`[DEBUG] No ASIN codes found in chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1}`);
                 skippedNoCode += chunk.length;
                 continue;
             }
@@ -2054,12 +2050,13 @@ class MarketDataSyncService {
                 `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
             );
 
-            console.log(`[DEBUG] Found ${asinResult.recordset.length} ASINs in DB for chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (Seller: ${sellerId})`);
+            // console.log(`[DEBUG] Found ${asinResult.recordset.length} ASINs in DB for chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (Seller: ${sellerId})`);
 
             // Create lookup map with uppercase keys for case-insensitive matching
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
             // Log which ASIN codes were found vs not found
+            /* 
             const notFoundCodes = asinCodesToFind.filter(code => !asinMap.has(code));
             if (notFoundCodes.length > 0) {
                 console.log(`[DEBUG] ASIN codes NOT found in DB:`, notFoundCodes.slice(0, 10));
@@ -2067,6 +2064,7 @@ class MarketDataSyncService {
                     console.log(`[DEBUG] ... and ${notFoundCodes.length - 10} more`);
                 }
             }
+            */
 
             for (const rawData of chunk) {
                 const code = this._extractAsinFromData(rawData);

@@ -3,20 +3,21 @@ const express = require('express');
 const cors = require('cors');
 const { getPool, sql } = require('./database/db');
 
-// Memory monitoring
+// Memory monitoring - reduced frequency to every 30 minutes
 setInterval(() => {
   const mem = process.memoryUsage();
   const heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
   const heapTotal = Math.round(mem.heapTotal / 1024 / 1024);
   const percent = Math.round((heapUsed / heapTotal) * 100);
   
-  console.log(`📊 Memory: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
-  
-  if (percent > 80 && global.gc) {
-    console.log('🧹 Running garbage collection...');
-    global.gc();
+  if (percent > 85) {
+    console.log(`📊 High Memory Warning: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
+    if (global.gc) {
+      console.log('🧹 Running emergency garbage collection...');
+      global.gc();
+    }
   }
-}, 5 * 60 * 1000);
+}, 30 * 60 * 1000);
 
 const app = express();
 app.use(cors({
@@ -57,9 +58,16 @@ async function loadAutomationSetting() {
 // Call after DB connection
 loadAutomationSetting();
 
-// Request Logging Middleware
+// ENHANCED Request Logging Middleware
 app.use((req, res, next) => {
-  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.url}`);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const status = res.statusCode;
+    const color = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : status >= 300 ? '\x1b[36m' : '\x1b[32m';
+    const reset = '\x1b[0m';
+    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.url} ${color}${status}${reset} - ${duration}ms`);
+  });
   next();
 });
 

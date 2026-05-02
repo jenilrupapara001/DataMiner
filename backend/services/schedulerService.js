@@ -17,8 +17,7 @@ class SchedulerService {
      * Initialize all scheduled jobs
      */
     init() {
-        const now = new Date();
-        console.log(`🗓️ Initializing Background Scheduler at ${now.toISOString()} (${now.toString()})...`);
+        // console.log(`🗓️ Initializing Background Scheduler...`);
 
         // 1. Keepa ASIN Sync (Every 12 hours)
         this.jobs.keepaSync = cron.schedule('0 */12 * * *', async () => {
@@ -66,15 +65,10 @@ class SchedulerService {
 
         // Optional: Run once on startup
         setTimeout(() => {
-            console.log('🚀 Running initial Keepa sync on startup...');
             this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
-            
-            console.log('🔄 Checking Octoparse tasks on startup...');
             this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
-
-            console.log('🔍 Running initial Missing Data Recovery on startup...');
             this.runMissingDataRecovery().catch(err => console.error('Startup Missing Data Recovery failed:', err.message));
-        }, 30000); // 30 second delay
+        }, 30000); 
     }
 
     async runOctoparseTaskRecovery() {
@@ -97,7 +91,7 @@ class SchedulerService {
                 const batchResults = await Promise.all(batch.map(async (seller) => {
                     try {
                         const taskId = seller.OctoparseId;
-                        console.log(`🔄 [RECOVERY] Checking task ${taskId} for seller ${seller.Name}...`);
+                        // console.log(`🔄 [RECOVERY] Checking task ${taskId} for seller ${seller.Name}...`);
                         
                         const status = await MarketSyncService.getStatus(taskId);
                     

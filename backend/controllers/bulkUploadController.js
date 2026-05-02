@@ -47,6 +47,8 @@ exports.catalogSync = async (req, res) => {
             errors: []
         };
 
+        console.log(`📦 [BulkUpload] Processing Catalog Sync: ${req.file.originalname} (${data.length} rows)`);
+
         // Cache for brand-to-seller mapping to avoid redundant queries
         const sellerMapByBrand = new Map();
         
@@ -195,7 +197,7 @@ exports.catalogSync = async (req, res) => {
             throw err;
         }
 
-        try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`✅ [BulkUpload] Catalog Sync Complete: ${results.updated} updated, ${results.created} created, ${results.skipped} skipped.`);
 
         res.json({
             success: true,
@@ -255,6 +257,8 @@ exports.tagsImport = async (req, res) => {
             notFound: 0,
             errors: []
         };
+
+        console.log(`📦 [BulkUpload] Processing Tags Import: ${req.file.originalname} (${data.length} rows)`);
 
         // Helper for flexible column matching
         const getValue = (row, possibleKeys) => {
@@ -323,7 +327,7 @@ exports.tagsImport = async (req, res) => {
             }
         }
 
-        try { fs.unlinkSync(filePath); } catch (e) {}
+        console.log(`✅ [BulkUpload] Tags Import Complete: ${results.updated} updated, ${results.notFound} not found, ${results.skipped} skipped.`);
 
         res.json({
             success: true,
