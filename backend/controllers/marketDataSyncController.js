@@ -50,12 +50,12 @@ exports.syncAsin = async (req, res) => {
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
         let useDirect = (!taskId || !isConfigured) && !automationEnabled;
 
-        console.log(`[SyncAsin] Decision for ${asin.AsinCode}: taskId=${taskId}, isConfigured=${isConfigured}, automationEnabled=${automationEnabled} => useDirect=${useDirect}`);
+        // Silent decision log
 
         if (!useDirect) {
             try {
                 // Option A: Use Octoparse (Managed Task)
-                console.log(`🤖 Using Octoparse for ASIN: ${asin.AsinCode}`);
+                // Silent sync start
                 
                 // Trigger batch sync logic (which handles URL injection and scrape start)
                 const syncStarted = await marketDataSyncService.syncSellerAsinsToOctoparse(asin.SellerId, { triggerScrape: true });
@@ -153,11 +153,11 @@ exports.syncSellerAsins = async (req, res) => {
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
         let useDirect = (!seller.OctoparseId || !isConfigured) && !automationEnabled;
 
-        console.log(`[SellerSync] Decision for ${seller.Name}: taskId=${seller.OctoparseId}, isConfigured=${isConfigured}, automationEnabled=${automationEnabled} => useDirect=${useDirect}`);
+        // Silent decision log
 
         if (!useDirect) {
             try {
-                console.log(`🤖 Using Automated Octoparse Sync for Seller: ${seller.Name}`);
+                // Silent sync start
                 const fullSync = req.body.fullSync === true || req.query.fullSync === 'true';
 
                 const syncStarted = await marketDataSyncService.syncSellerAsinsToOctoparse(sellerId, { 
@@ -203,7 +203,7 @@ exports.syncSellerAsins = async (req, res) => {
  * Trigger batch sync for all active ASINs across all sellers assigned to the user.
  */
 exports.syncAllAsins = async (req, res) => {
-    console.log('📨 Entering syncAllAsins handler');
+    // Silent entry
     try {
         const pool = await getPool();
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
@@ -237,7 +237,7 @@ exports.syncAllAsins = async (req, res) => {
         // Force-Clear any stale locks for these specific sellers
         sellerIds.forEach(id => marketDataSyncService.syncLocks.delete(id.toString()));
         console.log(`🧹 Cleared status locks for ${sellerIds.length} sellers to allow fresh sync.`);
-        console.log(`🚀 Starting Global Sync for ${sellerIds.length} Sellers (${asins.length} ASINs)...`);
+        // Silent global sync
 
         // Fire and forget background process
         setTimeout(async () => {
@@ -260,7 +260,7 @@ exports.syncAllAsins = async (req, res) => {
             });
 
             await Promise.all(triggerPromises);
-            console.log(`🎉 All ${sellerIds.length} task triggers fired.`);
+            // Silent trigger completion
         }, 0);
 
         res.json({
@@ -350,7 +350,7 @@ exports.ingestTaskResults = async (req, res) => {
         // 2. Resolve Execution ID
         let targetExecutionId = executionId;
         if (!targetExecutionId && (taskId || seller.OctoparseId)) {
-            console.log(`🔍 Finding latest execution for taskId: ${taskId || seller.OctoparseId}`);
+            // Silent execution lookup
             targetExecutionId = await marketDataSyncService.getLatestExecutionId(taskId || seller.OctoparseId);
         }
 
@@ -359,7 +359,7 @@ exports.ingestTaskResults = async (req, res) => {
         }
 
         // 3. Fetch Data
-        console.log(`📥 Ingesting results from Execution: ${targetExecutionId}`);
+        // Silent ingestion
         const data = await marketDataSyncService.retrieveResults(taskId || seller.OctoparseId, targetExecutionId);
 
         if (!data || data.length === 0) {

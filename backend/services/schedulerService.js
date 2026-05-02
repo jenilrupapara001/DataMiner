@@ -21,7 +21,7 @@ class SchedulerService {
 
         // 1. Keepa ASIN Sync (Every 12 hours)
         this.jobs.keepaSync = cron.schedule('0 */12 * * *', async () => {
-            console.log('🕒 Starting Scheduled Keepa ASIN Sync...');
+            // console.log('🕒 Starting Scheduled Keepa ASIN Sync...');
             await this.runKeepaSync();
         });
 
@@ -31,14 +31,14 @@ class SchedulerService {
         const cronExpr = `${scheduleMinute || 0} ${scheduleHour || 0} * * *`;
         
         this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
-            console.log('🏢 Starting Enterprise Octoparse Automation Pipeline...');
+            // console.log('🏢 Starting Enterprise Octoparse Automation Pipeline...');
             await this.runEnterprisePipeline();
         });
         console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
 
         // 4. Octoparse Daily 1 PM Sync
         this.jobs.daily1PMSync = cron.schedule('0 13 * * *', async () => {
-            console.log('🕒 Starting Daily 1 PM Octoparse Enterprise Pipeline...');
+            // console.log('🕒 Starting Daily 1 PM Octoparse Enterprise Pipeline...');
             await this.runEnterprisePipeline();
         });
 
@@ -51,7 +51,7 @@ class SchedulerService {
 
         // 7. Daily Age Tag Refresh (Every day at 2 AM)
         this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {
-            console.log('🔄 [AutoTag] Starting daily age tag refresh...');
+            // console.log('🔄 [AutoTag] Starting daily age tag refresh...');
             await this.refreshAgeTags();
         });
 
@@ -131,7 +131,7 @@ class SchedulerService {
 
     async refreshAgeTags() {
         try {
-            console.log('🔄 [AutoTag] Starting daily age tag refresh...');
+            // console.log('🔄 [AutoTag] Starting daily age tag refresh...');
             const pool = await getPool();
             const result = await AutoTagService.batchUpdateAgeTags(pool);
             console.log(`✅ [AutoTag] Refresh complete: ${result.updated} updated, ${result.skipped} skipped`);

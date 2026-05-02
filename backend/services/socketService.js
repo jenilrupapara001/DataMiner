@@ -3,7 +3,7 @@ let io;
 module.exports = {
     init: (socketIoInstance) => {
         io = socketIoInstance;
-        console.log('🔌 SocketService initialized');
+        // console.log('🔌 SocketService initialized');
         return io;
     },
     getIo: () => {

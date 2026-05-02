@@ -185,7 +185,7 @@ class MarketDataSyncService {
         }
 
         try {
-            console.log(`🔄 Authenticating with Octoparse for ${username}... (Cache miss/expiry)`);
+            // Silent authentication
             const response = await axios.post(`${this.baseUrl}/token`, {
                 username: username,
                 password: password,
@@ -204,7 +204,7 @@ class MarketDataSyncService {
 
             // Update internal state - default 1 hour if not provided
             this.tokenExpiry = now + ((data.expires_in || 3600) * 1000);
-            console.log(`✅ Authentication successful. Token secured (Expires in ${Math.round((data.expires_in || 3600) / 60)}m).`);
+            // Silent success
 
             return this.token;
         } catch (error) {
@@ -369,7 +369,7 @@ class MarketDataSyncService {
                 groupId = await this.findTaskGroupIdForTask(masterTaskId);
             }
 
-            console.log(`📋 Duplicating Octoparse Master Template: ${masterTaskId} ... (Group: ${groupId || 'Root'})`);
+            // Silent duplication
 
             // Resolve UUID to Integer ID (Required for some body-based Octoparse v2 endpoints)
             let masterTaskIntId = masterTaskId;
@@ -423,7 +423,7 @@ class MarketDataSyncService {
 
                     if (response.data?.data?.taskId || response.data?.taskId) {
                         const newTaskId = response.data?.data?.taskId || response.data?.taskId;
-                        console.log(`✅ Successfully created new task: ${taskName} (ID: ${newTaskId})`);
+                        // Silent success
                         return newTaskId;
                     }
 
@@ -922,7 +922,7 @@ class MarketDataSyncService {
         const token = await this.authenticate();
 
         try {
-            console.log(`📥 Fetching ${size} rows from Octoparse (Offset: ${offset}) for Task: ${taskId}...`);
+            // Silent data fetch
 
             // Try Modern V2 Data API first (Usually accepts UUIDs)
             try {
@@ -1082,7 +1082,7 @@ class MarketDataSyncService {
                 const isFailed = (statusNum === 2 || statusNum === 4 || status === 'Failed' || status === 'Stopped' || status === '2' || status === '4');
 
                 if (isCompleted) {
-                    console.log(`✅ [AUTO] Task ${taskId} FINISHED. Starting results ingestion...`);
+                    // Silent completion
 
                     try {
                         // Use our ROBUST multi-path retrieval method
@@ -1100,7 +1100,7 @@ class MarketDataSyncService {
                                 .input('scrapeUsed', sql.Int, count)
                                 .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = GETDATE() WHERE Id = @sellerId');
 
-                            console.log(`🎉 [AUTO] Successfully ingested ${count} metrics for seller ${sellerId}.`);
+                            // Silent ingestion completion
 
                             // Cleanup: Mark as exported to keep Octoparse queue clean
                             await this.markDataAsExported(taskId).catch(() => { });
@@ -1181,7 +1181,7 @@ class MarketDataSyncService {
         if (taskId.includes('-')) {
             const resolved = await this.resolveTaskIdToInteger(taskId);
             if (resolved) {
-                console.log(`📥 Retrieval: Resolved UUID ${taskId} to Integer ${resolved} for data fetching.`);
+                // Silent resolution
                 currentId = resolved;
             }
         }
@@ -1296,7 +1296,7 @@ class MarketDataSyncService {
         let useServerOffset = false; // For /data/all which returns next offset from server
 
         try {
-            console.log(`📥 Multi-Path Retrieval triggered for Task: ${taskId}`);
+            // Silent multi-path retrieval
             while (hasMore) {
                 const batchResult = await this._fetchDataBatch(taskId, size, offset, executionId);
 
@@ -1307,7 +1307,7 @@ class MarketDataSyncService {
                     if (batchResult.nextOffset !== undefined) {
                         offset = batchResult.nextOffset;
                         useServerOffset = true;
-                        console.log(`📍 Using server-provided offset: ${offset}`);
+                        // Silent offset usage
                     }
                 }
 
@@ -1322,7 +1322,7 @@ class MarketDataSyncService {
                     }
                 }
 
-                console.log(`📦 Fetched ${dataList.length} items, added ${newCount} new (Total unique: ${allResults.length})`);
+                // Silent count update
 
                 // Check for empty data - if ALL items have empty Title/asp, stop early
                 const allEmpty = dataList.every(item => !item.Title && !item.asp && !item.mrp);
@@ -1345,7 +1345,7 @@ class MarketDataSyncService {
 
             // Log sample of what we got
             if (allResults.length > 0) {
-                console.log(`📊 Sample of retrieved data (first item):`, JSON.stringify(allResults[0], null, 2));
+                // Silent sample log
             }
 
             return allResults;

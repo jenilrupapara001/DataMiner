@@ -29,7 +29,7 @@ function getPool() {
         poolPromise = new sql.ConnectionPool(config)
             .connect()
             .then(pool => {
-                console.log('✅ Connected to SQL Server Pool');
+                // console.log('✅ Connected to SQL Server Pool');
                 return pool;
             })
             .catch(err => {

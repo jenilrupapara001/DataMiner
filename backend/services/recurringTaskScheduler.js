@@ -9,14 +9,14 @@ class RecurringTaskScheduler {
     start() {
         // Run every hour to check for recurring tasks
         this.job = cron.schedule('0 * * * *', async () => {
-            console.log('Running recurring task scheduler...');
+            // Silent execution
             await this.processRecurringTasks();
             await this.checkAndNotifyOverdueTasks();
         });
 
         // Run CometChat full sync every 6 hours
         cron.schedule('0 */6 * * *', async () => {
-            console.log('Running background CometChat sync...');
+            // Silent background sync
             try {
                 const { syncAllToCometChat } = require('./cometChatService');
                 await syncAllToCometChat();
@@ -85,7 +85,7 @@ class RecurringTaskScheduler {
                 }
             });
 
-            console.log(`Found ${actions.length} recurring tasks due for creation`);
+            // Silent creation check
 
             for (const action of actions) {
                 try {

@@ -167,7 +167,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001;
 const http = require('http');
-console.log('📡 Creating HTTP server...');
+// Server Initialization
 const server = http.createServer(app);
 
 // Increase timeouts for large data uploads (Octoparse ingestion)
@@ -176,7 +176,6 @@ server.keepAliveTimeout = 610000;
 server.headersTimeout = 620000;
 
 // --- Socket.io Integration ---
-console.log('📡 Initializing Socket.io...');
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
@@ -198,15 +197,14 @@ const io = new Server(server, {
 const SocketService = require('./services/socketService');
 SocketService.init(io);
 
-if (io) console.log('✅ Socket.io initialized successfully');
-else console.error('❌ Socket.io failed to initialize');
+if (!io) console.error('❌ Socket.io failed to initialize');
 
 app.set('io', io);
 
 const onlineUsers = new Map();
 
 io.on('connection', async (socket) => {
-  console.log('🔌 New client connected:', socket.id);
+    // Silent connection logs
 
   socket.on('join', async (userId) => {
     try {
@@ -232,7 +230,7 @@ io.on('connection', async (socket) => {
         socket.join(`seller:${row.SellerId}`);
       });
 
-      console.log(`👤 User ${userId} joined their rooms`);
+      // Silent join logs
       io.emit('user_status_change', { userId, status: 'online' });
     } catch (err) {
       console.error('Socket join error:', err);
@@ -471,7 +469,7 @@ global.getPool = getPool;
 global.sql = require('./database/db').sql;
 
 server.listen(PORT, () => {
-  console.log(`🚀 Backend server running at http://localhost:${PORT}`);
+  console.log(`🚀 Backend running: http://localhost:${PORT}`);
 
   const recurringTaskScheduler = require('./services/recurringTaskScheduler');
   recurringTaskScheduler.start();
