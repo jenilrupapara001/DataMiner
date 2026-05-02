@@ -160,6 +160,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
       const dateValues = dateColumns.map(d => ({
         date: d,
         rating: ratingByDate[d]?.rating || null,
+        reviews: ratingByDate[d]?.reviews || null,
       }));
 
       const currentWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -534,8 +535,15 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                     ) : <span className="text-zinc-300">—</span>}
                   </td>
                   {item.dateValues.map((dv, di) => (
-                    <td key={di} className={`dd text-center ${dv.rating ? 'dd-has' : 'dd-no'}`}>
-                      {dv.rating ? dv.rating.toFixed(1) : '·'}
+                    <td key={di} className="text-center" style={{ padding: '4px 2px', background: di % 2 === 0 ? '#fafafa' : '#fff' }}>
+                      <div className="d-flex flex-column align-items-center gap-0.5">
+                        {dv.rating ? (
+                          <span className="fw-bold text-amber-600" style={{ fontSize: '10px' }}>{dv.rating.toFixed(1)}</span>
+                        ) : <span className="text-zinc-300">·</span>}
+                        {dv.reviews !== null ? (
+                          <span className="text-zinc-500" style={{ fontSize: '9px', fontWeight: 500 }}>{dv.reviews.toLocaleString()}</span>
+                        ) : <span className="text-zinc-200" style={{ fontSize: '8px' }}>—</span>}
+                      </div>
                     </td>
                   ))}
                   <td className="text-center" style={{ background: '#fffbeb' }}>

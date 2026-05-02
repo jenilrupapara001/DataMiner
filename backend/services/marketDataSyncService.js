@@ -1832,6 +1832,42 @@ class MarketDataSyncService {
                 currentTags = currentTags.filter(t => t !== DISPUTE_TAG);
             }
 
+            // --- Trend Calculations (Last 7 Days Average Comparison) ---
+            const calculateTrend = (current, history, field, threshold = 0.05, isAbsolute = false) => {
+                // history here is uniqueHistory which includes current point at the end
+                if (!history || history.length < 2) return 'Stable';
+                
+                // Filter out zero values for average calculation to avoid skewing
+                const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
+                if (prevPoints.length === 0) return 'Stable';
+                
+                const sum = prevPoints.reduce((acc, item) => acc + (item[field] || 0), 0);
+                const avg = sum / prevPoints.length;
+                
+                if (avg === 0) return 'Stable';
+                
+                if (isAbsolute) {
+                    if (current < avg - threshold) return 'Down';
+                    if (current > avg + threshold) return 'Grow';
+                    return 'Stable';
+                } else {
+                    const diffPercent = (current - avg) / avg;
+                    // For BSR, a DECREASE in value is actually GROWTH in rank
+                    // But user specifically asked: "if it decreased more then 5% of average then have to show down ... and if it going up then show Grow"
+                    // We will follow the literal instruction for BSR
+                    if (diffPercent < -threshold) return 'Down';
+                    if (diffPercent > threshold) return 'Grow';
+                    return 'Stable';
+                }
+            };
+
+            const currentBSR = sub > 0 ? sub : (bsr > 0 ? bsr : asin.BSR);
+            const currentRating = rating > 0 ? rating : asin.Rating;
+            const currentReviews = reviewCount || asin.ReviewCount || 0;
+
+            const bsrTrend = calculateTrend(currentBSR, uniqueHistory, 'bsr', 0.05);
+            const ratingTrend = calculateTrend(currentRating, uniqueHistory, 'rating', 0.1, true);
+
             const updates = {
                 Title: title,
                 Category: category,
@@ -1839,9 +1875,11 @@ class MarketDataSyncService {
                 Mrp: mrp > 0 ? mrp : asin.Mrp,
                 DealBadge: dealBadge,
                 PriceType: priceType,
-                BSR: sub > 0 ? sub : (bsr > 0 ? bsr : asin.BSR),
-                Rating: rating > 0 ? rating : asin.Rating,
-                ReviewCount: reviewCount,
+                BSR: currentBSR,
+                BsrTrend: bsrTrend,
+                Rating: currentRating,
+                RatingTrend: ratingTrend,
+                ReviewCount: currentReviews,
                 RatingBreakdown: JSON.stringify(finalRatingBreakdown),
                 LQS: lqsScore,
                 LQSGrade: lqsGrade,

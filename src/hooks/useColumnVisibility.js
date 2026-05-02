@@ -33,11 +33,14 @@ export const ALL_COLUMNS = [
   { key: 'bsr', label: 'BSR', defaultVisible: true, category: 'Rankings' },
   { key: 'subBsr', label: 'Sub BSR', defaultVisible: true, category: 'Rankings' },
   { key: 'video', label: 'Video', defaultVisible: false, category: 'Rankings' },
-  { key: 'bsrTrend', label: 'BSR Trend (7D)', defaultVisible: false, category: 'Trends' },
+  { key: 'bsrTrendStatus', label: 'BSR Trend', defaultVisible: true, category: 'Trends' },
+  { key: 'bsrTrend', label: 'BSR History (7D)', defaultVisible: false, category: 'Trends' },
   
   { key: 'rating', label: 'Rating', defaultVisible: true, category: 'Reviews' },
   { key: 'reviewCount', label: 'Reviews Count', defaultVisible: true, category: 'Reviews' },
-  { key: 'ratingTrend', label: 'Rating Trend (7D)', defaultVisible: false, category: 'Trends' },
+  { key: 'ratingTrendStatus', label: 'Rating Trend', defaultVisible: true, category: 'Trends' },
+  { key: 'ratingTrend', label: 'Rating History (7D)', defaultVisible: false, category: 'Trends' },
+  { key: 'reviewTrend', label: 'Review History (7D)', defaultVisible: false, category: 'Trends' },
   
   { key: 'status', label: 'Status', defaultVisible: true, category: 'Info' },
   { key: 'availability', label: 'Availability', defaultVisible: false, category: 'Info' },

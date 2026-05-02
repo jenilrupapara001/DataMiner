@@ -145,6 +145,36 @@ const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
   return value;
 };
 
+// Trend Badge Component
+const TrendBadge = ({ status }) => {
+  if (!status || status === 'Stable') return (
+    <div className="d-flex align-items-center gap-1 text-zinc-400" style={{ fontSize: '10px', fontWeight: 600 }}>
+      <Activity size={10} />
+      <span>Stable</span>
+    </div>
+  );
+
+  if (status === 'Grow') {
+    return (
+      <div className="d-flex align-items-center gap-1 text-emerald-600" style={{ fontSize: '10px', fontWeight: 700 }}>
+        <TrendingUp size={10} />
+        <span>GROW</span>
+      </div>
+    );
+  }
+
+  if (status === 'Down') {
+    return (
+      <div className="d-flex align-items-center gap-1 text-red-500" style={{ fontSize: '10px', fontWeight: 700 }}>
+        <TrendingDown size={10} />
+        <span>DOWN</span>
+      </div>
+    );
+  }
+
+  return <span style={{ fontSize: '10px' }}>{status}</span>;
+};
+
 // Extended demo ASIN data with date stamps and 8 weeks of history
 const demoAsins = [
   {
@@ -426,6 +456,7 @@ const AsinManagerPage = () => {
   const visiblePriceTrendCount = useMemo(() => isVisible('priceTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleBsrTrendCount = useMemo(() => isVisible('bsrTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleRatingTrendCount = useMemo(() => isVisible('ratingTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
+  const visibleReviewTrendCount = useMemo(() => isVisible('reviewTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
   const visibleImageTrendCount = useMemo(() => isVisible('imageTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
 
   const [tagSearch, setTagSearch] = useState('');
@@ -2248,6 +2279,7 @@ const AsinManagerPage = () => {
                   {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>SUB-BSR</th>}
                   {isVisible('bsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>CATEGORY RANK</th>}
                   {isVisible('video') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>}
+                  {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff' }}>BSR TR</th>}
 
                   {visibleBsrTrendCount > 0 && (
                     <th colSpan={visibleBsrTrendCount}
@@ -2259,12 +2291,21 @@ const AsinManagerPage = () => {
 
                   {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center' }}>RT</th>}
                   {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center' }}>CNT</th>}
+                  {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center' }}>RATING TR</th>}
 
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
                       onClick={async () => { setShowAllRatingHistory(true); }}
                       style={{ ...thStyle, background: '#fffbeb', color: '#92400e', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #fef3c7' }}>
                       RATING TREND
+                    </th>
+                  )}
+
+                  {visibleReviewTrendCount > 0 && (
+                    <th colSpan={visibleReviewTrendCount}
+                      onClick={async () => { setShowAllRatingHistory(true); }}
+                      style={{ ...thStyle, background: '#e0e7ff', color: '#3730a3', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #c7d2fe' }}>
+                      REVIEWS TREND
                     </th>
                   )}
 
@@ -2309,6 +2350,13 @@ const AsinManagerPage = () => {
                   {/* Rating Trend Dates */}
                   {isVisible('ratingTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
                     <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
+                      {date.label}
+                    </th>
+                  )))}
+
+                  {/* Review Trend Dates */}
+                  {isVisible('reviewTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
+                    <th key={`rev-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#e0e7ff', color: '#4338ca' }}>
                       {date.label}
                     </th>
                   )))}
@@ -2770,6 +2818,11 @@ const AsinManagerPage = () => {
                           </span>
                         </td>
                       )}
+                      {isVisible('bsrTrendStatus') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a' }}>
+                          <TrendBadge status={asin.bsrTrend} />
+                        </td>
+                      )}
                       {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
                         const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
                           || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
@@ -2797,6 +2850,11 @@ const AsinManagerPage = () => {
                           {(asin.reviewCount || 0).toLocaleString()}
                         </td>
                       )}
+                      {isVisible('ratingTrendStatus') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <TrendBadge status={asin.ratingTrend} />
+                        </td>
+                      )}
                       {isVisible('ratingTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
                         const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
                           || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
@@ -2805,6 +2863,18 @@ const AsinManagerPage = () => {
                             onClick={(e) => handleViewRating(asin, e)}
                             style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
                             {wData?.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
+                          </td>
+                        );
+                      }))}
+
+                      {isVisible('reviewTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
+                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                        return (
+                          <td key={`rev-${week.label}-${dIdx}`}
+                            onClick={(e) => handleViewRating(asin, e)}
+                            style={{ ...tdStyle, textAlign: 'center', background: '#e0e7ff33', width: 40, cursor: 'pointer' }}>
+                            {(wData?.reviews || wData?.reviewCount) ? <span style={{ fontSize: '10px', color: '#4338ca', fontWeight: 600 }}>{(wData.reviews || wData.reviewCount).toLocaleString()}</span> : '-'}
                           </td>
                         );
                       }))}
