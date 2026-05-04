@@ -303,6 +303,8 @@ const defaultPermissions = [
   { name: 'rules_manage', displayName: 'Ruleset: Manage', description: 'Create and edit automated business rules', category: 'Automation', action: 'manage' },
   
   { name: 'templates_manage', displayName: 'Templates: Manage', description: 'Manage scraping and data templates', category: 'Automation', action: 'manage' },
+  { name: 'calculator_view', displayName: 'Revenue Calculator: View', description: 'Access the revenue and fee calculator', category: 'Marketplace', action: 'view' },
+  { name: 'calculator_manage', displayName: 'Revenue Calculator: Manage', description: 'Configure fee structures and cost variables', category: 'Marketplace', action: 'manage' },
 
   // Operations (Page-wise)
   { name: 'actions_view', displayName: 'Action Center: View', description: 'View assigned operational tasks', category: 'Operations', action: 'view' },

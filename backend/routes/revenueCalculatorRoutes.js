@@ -35,7 +35,7 @@ router.get('/fees/:type', authenticate, requirePermission('calculator_view'), as
 });
 
 // Create or update fee
-router.post('/fees/:type', authenticate, requirePermission('calculator_config'), async (req, res) => {
+router.post('/fees/:type', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const type = req.params.type;
         const pool = await getPool();
@@ -92,7 +92,7 @@ router.post('/fees/:type', authenticate, requirePermission('calculator_config'),
 });
 
 // Delete fee
-router.delete('/fees/:type/:id', authenticate, requirePermission('calculator_config'), async (req, res) => {
+router.delete('/fees/:type/:id', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const { type, id } = req.params;
         const pool = await getPool();
@@ -127,7 +127,7 @@ router.get('/mappings', authenticate, requirePermission('calculator_view'), asyn
     }
 });
 
-router.post('/mappings', authenticate, requirePermission('calculator_config'), async (req, res) => {
+router.post('/mappings', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const pool = await getPool();
         const doc = req.body;
@@ -175,7 +175,7 @@ router.get('/asins', authenticate, requirePermission('calculator_view'), async (
     }
 });
 
-router.post('/asins/bulk', authenticate, requirePermission('calculator_bulk'), async (req, res) => {
+router.post('/asins/bulk', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const items = req.body || [];
         const pool = await getPool();
@@ -207,7 +207,7 @@ router.post('/asins/bulk', authenticate, requirePermission('calculator_bulk'), a
     }
 });
 
-router.delete('/asins/:id', authenticate, requirePermission('calculator_bulk'), async (req, res) => {
+router.delete('/asins/:id', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await getPool();
@@ -225,7 +225,7 @@ router.get('/health', (req, res) => {
 });
 
 // --- Calculation Route ---
-router.post('/calculate', authenticate, requirePermission('calculator_bulk'), async (req, res) => {
+router.post('/calculate', authenticate, requirePermission('calculator_manage'), async (req, res) => {
     try {
         const { asinIds } = req.body; // Can be empty to calculate all
         await calculateProfits(asinIds);

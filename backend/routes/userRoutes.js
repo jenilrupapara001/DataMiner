@@ -11,13 +11,13 @@ router.get('/permissions', authenticate, userController.getGroupedPermissions);
 
 // User CRUD
 router.get('/', authenticate, requirePermission('users_view'), userController.getUsers);
-router.post('/', authenticate, requirePermission('users_create'), userController.createUser);
+router.post('/', authenticate, requirePermission('users_manage'), userController.createUser);
 router.get('/:id', authenticate, userController.getUser);
-router.put('/:id', authenticate, requirePermission('users_edit'), userController.updateUser);
-router.delete('/:id', authenticate, requirePermission('users_delete'), userController.deleteUser);
+router.put('/:id', authenticate, requirePermission('users_manage'), userController.updateUser);
+router.delete('/:id', authenticate, requirePermission('users_manage'), userController.deleteUser);
 
 // User status and security
-router.put('/:id/toggle-status', authenticate, requirePermission('users_edit'), userController.toggleUserStatus);
-router.put('/:id/reset-password', authenticate, requirePermission('users_edit'), userController.resetUserPassword);
+router.put('/:id/toggle-status', authenticate, requirePermission('users_manage'), userController.toggleUserStatus);
+router.put('/:id/reset-password', authenticate, requirePermission('users_manage'), userController.resetUserPassword);
 
 module.exports = router;

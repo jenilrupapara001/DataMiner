@@ -1869,14 +1869,16 @@ const AsinManagerPage = () => {
               )}
             </div>
 
-            <button
-              className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm"
-              onClick={() => setShowAddModal(true)}
-              style={{ backgroundColor: '#18181B', color: '#fff', fontSize: '11px' }}
-            >
-              <Plus size={12} />
-              <span className="fw-bold">Add ASIN</span>
-            </button>
+            {hasPermission('asinmanager_manage') && (
+              <button
+                className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm"
+                onClick={() => setShowAddModal(true)}
+                style={{ backgroundColor: '#18181B', color: '#fff', fontSize: '11px' }}
+              >
+                <Plus size={12} />
+                <span className="fw-bold">Add ASIN</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2161,18 +2163,20 @@ const AsinManagerPage = () => {
               )}
 
               <div className="d-flex align-items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={handleBulkCreateActions}
-                  disabled={asins.length === 0 || syncing}
-                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
-                  style={{ fontSize: '10px', height: '26px' }}
-                >
-                  <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
-                  <span className="fw-bold">BULK OPTIMIZATION</span>
-                </button>
+                {hasPermission('asinmanager_manage') && (
+                  <button
+                    onClick={handleBulkCreateActions}
+                    disabled={asins.length === 0 || syncing}
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
+                    style={{ fontSize: '10px', height: '26px' }}
+                  >
+                    <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
+                    <span className="fw-bold">BULK OPTIMIZATION</span>
+                  </button>
+                )}
 
                 {/* Export Button */}
-                {true && (
+                {hasPermission('asinmanager_export') && (
                   <button
                     onClick={() => setShowExportModal(true)}
                     className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
@@ -2184,14 +2188,16 @@ const AsinManagerPage = () => {
                 )}
 
                 {/* Bulk Import Button */}
-                <button
-                  onClick={() => setShowBulkImportModal(true)}
-                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                  style={{ fontSize: '10px', height: '26px' }}
-                >
-                  <FileUp size={11} className="text-emerald-600" />
-                  <span className="fw-bold">IMPORT</span>
-                </button>
+                {hasPermission('asinmanager_import') && (
+                  <button
+                    onClick={() => setShowBulkImportModal(true)}
+                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
+                    style={{ fontSize: '10px', height: '26px' }}
+                  >
+                    <FileUp size={11} className="text-emerald-600" />
+                    <span className="fw-bold">IMPORT</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2377,7 +2383,7 @@ const AsinManagerPage = () => {
                         icon={Package}
                         title="No ASINs Found"
                         description="There are no ASINs matching the current filters or seller selection."
-                        action={{ label: 'Add ASINs', onClick: () => setShowAddModal(true) }}
+                        action={hasPermission('asinmanager_manage') ? { label: 'Add ASINs', onClick: () => setShowAddModal(true) } : null}
                       />
                     </td>
                   </tr>

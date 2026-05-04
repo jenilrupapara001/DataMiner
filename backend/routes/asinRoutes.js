@@ -32,55 +32,55 @@ const upload = multer({
 
 // Priority Actions
 router.get('/health-check/tags', (req, res) => res.json({ success: true, message: 'Tags routes are definitely active' }));
-router.get('/:asinId/tags-history', protect, requirePermission('sellers_view'), getTagsHistory);
-router.get('/:asinId/tags-summary', protect, requirePermission('sellers_view'), getTagsSummary);
-router.put('/:asinId/tags', protect, requirePermission('sellers_manage_asins'), tagController.updateAsinTags);
+router.get('/:asinId/tags-history', protect, requirePermission('asinmanager_view'), getTagsHistory);
+router.get('/:asinId/tags-summary', protect, requirePermission('asinmanager_view'), getTagsSummary);
+router.put('/:asinId/tags', protect, requirePermission('asinmanager_manage'), tagController.updateAsinTags);
 
-router.post('/:id/generate-images', protect, requirePermission('sellers_manage_asins'), asinController.generateImages);
+router.post('/:id/generate-images', protect, requirePermission('asinmanager_manage'), asinController.generateImages);
 
 // Search and stats
-router.get('/search', protect, requirePermission('sellers_view'), asinController.searchAsins);
-router.get('/stats', protect, requirePermission('sellers_view'), asinController.getAsinStats);
-router.get('/filters', protect, requirePermission('sellers_view'), asinController.getAsinFilterOptions);
-router.get('/brands', protect, requirePermission('sellers_view'), asinController.getAsinBrands);
-router.get('/lqs-top', protect, requirePermission('sellers_view'), asinController.getAsinsByLQS);
+router.get('/search', protect, requirePermission('asinmanager_view'), asinController.searchAsins);
+router.get('/stats', protect, requirePermission('asinmanager_view'), asinController.getAsinStats);
+router.get('/filters', protect, requirePermission('asinmanager_view'), asinController.getAsinFilterOptions);
+router.get('/brands', protect, requirePermission('asinmanager_view'), asinController.getAsinBrands);
+router.get('/lqs-top', protect, requirePermission('asinmanager_view'), asinController.getAsinsByLQS);
 
 // Main routes
-router.get('/', protect, requirePermission('sellers_view'), asinController.getAsins);
-router.get('/all', protect, requirePermission('sellers_view'), asinController.getAllAsinsWithHistory);
-router.get('/seller/:sellerId', protect, requirePermission('sellers_view'), checkSellerAccess, asinController.getAsinsBySeller);
-router.get('/repair-status/:sellerId', protect, requirePermission('sellers_view'), checkSellerAccess, asinController.getRepairJobStatus);
-router.post('/repair/:sellerId', protect, requirePermission('sellers_manage_asins'), checkSellerAccess, asinController.repairIncompleteAsins);
+router.get('/', protect, requirePermission('asinmanager_view'), asinController.getAsins);
+router.get('/all', protect, requirePermission('asinmanager_view'), asinController.getAllAsinsWithHistory);
+router.get('/seller/:sellerId', protect, requirePermission('asinmanager_view'), checkSellerAccess, asinController.getAsinsBySeller);
+router.get('/repair-status/:sellerId', protect, requirePermission('asinmanager_view'), checkSellerAccess, asinController.getRepairJobStatus);
+router.post('/repair/:sellerId', protect, requirePermission('asinmanager_manage'), checkSellerAccess, asinController.repairIncompleteAsins);
 
 
 // Trends and week history
-router.get('/:id/trends', protect, requirePermission('sellers_view'), asinController.getAsinTrends);
-router.get('/:id/subbsr-trend', protect, requirePermission('sellers_view'), asinController.getSubBsrTrend);
-router.put('/:id/week-history', protect, requirePermission('sellers_manage_asins'), asinController.updateWeekHistory);
+router.get('/:id/trends', protect, requirePermission('asinmanager_view'), asinController.getAsinTrends);
+router.get('/:id/subbsr-trend', protect, requirePermission('asinmanager_view'), asinController.getSubBsrTrend);
+router.put('/:id/week-history', protect, requirePermission('asinmanager_manage'), asinController.updateWeekHistory);
 
 // CRUD operations
-router.post('/', protect, requirePermission('sellers_manage_asins'), checkSellerAccess, asinController.createAsin);
-router.post('/bulk', protect, requirePermission('sellers_manage_asins'), checkSellerAccess, asinController.createAsins);
-router.post('/bulk-delete', protect, requirePermission('sellers_manage_asins'), asinController.bulkDeleteAsins);
-router.post('/bulk-update', protect, requirePermission('sellers_manage_asins'), asinController.bulkUpdateAsins);
-router.post('/bulk-week-history', protect, requirePermission('sellers_manage_asins'), asinController.bulkUpdateWeekHistory);
-router.post('/import-csv', protect, requirePermission('sellers_manage_asins'), upload.single('file'), asinController.importFromCsv);
-router.post('/bulk-upload-all-sellers', protect, requirePermission('sellers_manage_asins'), upload.single('file'), asinController.bulkUploadAllSellers);
-router.post('/recalculate-lqs', protect, requirePermission('sellers_manage_asins'), asinController.recalculateLqs);
+router.post('/', protect, requirePermission('asinmanager_manage'), checkSellerAccess, asinController.createAsin);
+router.post('/bulk', protect, requirePermission('asinmanager_manage'), checkSellerAccess, asinController.createAsins);
+router.post('/bulk-delete', protect, requirePermission('asinmanager_manage'), asinController.bulkDeleteAsins);
+router.post('/bulk-update', protect, requirePermission('asinmanager_manage'), asinController.bulkUpdateAsins);
+router.post('/bulk-week-history', protect, requirePermission('asinmanager_manage'), asinController.bulkUpdateWeekHistory);
+router.post('/import-csv', protect, requirePermission('asinmanager_import'), upload.single('file'), asinController.importFromCsv);
+router.post('/bulk-upload-all-sellers', protect, requirePermission('asinmanager_import'), upload.single('file'), asinController.bulkUploadAllSellers);
+router.post('/recalculate-lqs', protect, requirePermission('asinmanager_manage'), asinController.recalculateLqs);
 
 // Raw data upload endpoints (Octoparse format)
-router.post('/upload-raw', protect, requirePermission('sellers_manage_asins'), asinController.uploadRawAsins);
-router.post('/parse-test', protect, requirePermission('sellers_manage_asins'), asinController.testParseRaw);
+router.post('/upload-raw', protect, requirePermission('asinmanager_manage'), asinController.uploadRawAsins);
+router.post('/parse-test', protect, requirePermission('asinmanager_manage'), asinController.testParseRaw);
 
-router.post('/export', protect, requirePermission('sellers_view'), asinController.exportData);
+router.post('/export', protect, requirePermission('asinmanager_export'), asinController.exportData);
 
 // Tags routes — must be before /:id to avoid conflict
-router.get('/tags', protect, requirePermission('sellers_view'), tagController.getTags);
-router.get('/tags/template', protect, requirePermission('sellers_view'), tagController.downloadTagsTemplate);
-router.post('/bulk-tags', protect, requirePermission('sellers_manage_asins'), tagController.bulkUpdateTags);
-router.post('/tags/bulk', protect, requirePermission('sellers_manage_asins'), upload.single('file'), tagController.bulkUpdateTagsCSV);
-router.get('/:id', protect, requirePermission('sellers_view'), asinController.getAsin);
-router.put('/:id', protect, requirePermission('sellers_manage_asins'), asinController.updateAsin);
-router.delete('/:id', protect, requirePermission('sellers_manage_asins'), asinController.deleteAsin);
+router.get('/tags', protect, requirePermission('asinmanager_view'), tagController.getTags);
+router.get('/tags/template', protect, requirePermission('asinmanager_view'), tagController.downloadTagsTemplate);
+router.post('/bulk-tags', protect, requirePermission('asinmanager_manage'), tagController.bulkUpdateTags);
+router.post('/tags/bulk', protect, requirePermission('asinmanager_import'), upload.single('file'), tagController.bulkUpdateTagsCSV);
+router.get('/:id', protect, requirePermission('asinmanager_view'), asinController.getAsin);
+router.put('/:id', protect, requirePermission('asinmanager_manage'), asinController.updateAsin);
+router.delete('/:id', protect, requirePermission('asinmanager_manage'), asinController.deleteAsin);
 
 module.exports = router;

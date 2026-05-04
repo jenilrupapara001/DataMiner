@@ -50,7 +50,7 @@ export const DropdownButton = () => {
                                 <Dropdown.Item addon="⌘K->P" icon={User01} onClick={() => navigate('/profile')}>
                                     View profile
                                 </Dropdown.Item>
-                                {hasPermission('settings_view') && (
+                                {hasPermission('dashboard_view') && (
                                     <Dropdown.Item addon="⌘S" icon={Settings01} onClick={() => navigate('/settings')}>
                                         Settings
                                     </Dropdown.Item>

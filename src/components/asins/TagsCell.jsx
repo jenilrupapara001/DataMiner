@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Check, Search, Eye, Tag as TagIcon } from 'lucide-react';
 import { asinApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import TagsHistoryModal from '../TagsHistoryModal';
 import EditTagsModal from './EditTagsModal';
 
@@ -13,6 +14,7 @@ const DEFAULT_TAGS = [
 ];
 
 const TagsCell = ({ asin, onUpdate }) => {
+    const { hasPermission } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [historyVisible, setHistoryVisible] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -155,7 +157,9 @@ const TagsCell = ({ asin, onUpdate }) => {
                 className="d-flex align-items-center gap-1 flex-wrap cursor-pointer"
                 onClick={(e) => { 
                     e.stopPropagation(); 
-                    setShowEditModal(true); 
+                    if (hasPermission('asinmanager_manage')) {
+                        setShowEditModal(true); 
+                    }
                 }}
                 style={{ 
                     minHeight: '26px', 
@@ -193,7 +197,9 @@ const TagsCell = ({ asin, onUpdate }) => {
                                     }}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        removeTag(tag, e);
+                                        if (hasPermission('asinmanager_manage')) {
+                                            removeTag(tag, e);
+                                        }
                                     }}
                                 >
                                     {tag.length > 14 ? tag.substring(0, 13) + '…' : tag}

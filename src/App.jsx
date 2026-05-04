@@ -122,39 +122,39 @@ function AppRoutes() {
                 <Routes>
                   <Route path="/" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />
-                  <Route path="/sku-report" element={<ProtectedRoute permission="reports_sku_view"><SkuReport /></ProtectedRoute>} />
-                  <Route path="/parent-asin-report" element={<ProtectedRoute permission="reports_parent_view"><ParentAsinReport /></ProtectedRoute>} />
-                  <Route path="/month-wise-report" element={<ProtectedRoute permission="reports_monthly_view"><MonthWiseReport /></ProtectedRoute>} />
-                  <Route path="/ads-report" element={<ProtectedRoute permission="reports_ads_view"><AdsReport /></ProtectedRoute>} />
-                  <Route path="/asin-tracker" element={<ProtectedRoute permission="sellers_view"><AsinManagerPage /></ProtectedRoute>} />
-                  <Route path="/profit-loss" element={<ProtectedRoute permission="reports_profit_view"><ProfitLossPage /></ProtectedRoute>} />
-                  <Route path="/inventory" element={<ProtectedRoute permission="reports_inventory_view"><InventoryPage /></ProtectedRoute>} />
+                  <Route path="/sku-report" element={<ProtectedRoute permission="skureport_view"><SkuReport /></ProtectedRoute>} />
+                  <Route path="/parent-asin-report" element={<ProtectedRoute permission="parentreport_view"><ParentAsinReport /></ProtectedRoute>} />
+                  <Route path="/month-wise-report" element={<ProtectedRoute permission="monthlyreport_view"><MonthWiseReport /></ProtectedRoute>} />
+                  <Route path="/ads-report" element={<ProtectedRoute permission="adsreport_view"><AdsReport /></ProtectedRoute>} />
+                  <Route path="/asin-tracker" element={<ProtectedRoute permission="asinmanager_view"><AsinManagerPage /></ProtectedRoute>} />
+                  <Route path="/profit-loss" element={<ProtectedRoute permission="pnlreport_view"><ProfitLossPage /></ProtectedRoute>} />
+                  <Route path="/inventory" element={<ProtectedRoute permission="inventoryreport_view"><InventoryPage /></ProtectedRoute>} />
                   <Route path="/actions" element={<ProtectedRoute permission="actions_view"><ActionsPage /></ProtectedRoute>} />
                   <Route path="/users" element={<ProtectedRoute permission="users_view"><UsersPage /></ProtectedRoute>} />
                   <Route path="/roles" element={<ProtectedRoute permission="roles_view"><RolesPage /></ProtectedRoute>} />
                   <Route path="/team-management" element={<ProtectedRoute permission="roles_view"><TeamManagementPage /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute permission="settings_view"><SettingsPage /></ProtectedRoute>} />
-                  <Route path="/api-keys" element={<ProtectedRoute permission="settings_view"><ApiKeysPage /></ProtectedRoute>} />
-                  <Route path="/file-manager" element={<ProtectedRoute permission="dashboard_view"><FileManagerPage /></ProtectedRoute>} />
-                  <Route path="/upload-export" element={<ProtectedRoute permission="sellers_manage_asins"><UploadExport /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute permission="dashboard_view"><SettingsPage /></ProtectedRoute>} />
+                  <Route path="/api-keys" element={<ProtectedRoute permission="dashboard_view"><ApiKeysPage /></ProtectedRoute>} />
+                  <Route path="/file-manager" element={<ProtectedRoute permission="files_manage"><FileManagerPage /></ProtectedRoute>} />
+                  <Route path="/upload-export" element={<ProtectedRoute permission="asinmanager_import"><UploadExport /></ProtectedRoute>} />
                   <Route path="/alerts" element={<ProtectedRoute permission="dashboard_view"><AlertsPage /></ProtectedRoute>} />
-                  <Route path="/alert-rules" element={<ProtectedRoute permission="settings_view"><AlertRulesPage /></ProtectedRoute>} />
-                  <Route path="/rule-sets" element={<ProtectedRoute permission="settings_view"><RuleSetsPage /></ProtectedRoute>} />
-                  <Route path="/rule-sets/new" element={<ProtectedRoute permission="settings_edit"><RulesetBuilderPage /></ProtectedRoute>} />
-                  <Route path="/rule-sets/:id/edit" element={<ProtectedRoute permission="settings_edit"><RulesetBuilderPage /></ProtectedRoute>} />
+                  <Route path="/alert-rules" element={<ProtectedRoute permission="rules_view"><AlertRulesPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets" element={<ProtectedRoute permission="rules_view"><RuleSetsPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets/new" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets/:id/edit" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
                   <Route path="/scrape-tasks" element={<ProtectedRoute permission="scraping_view"><ScrapeTasksPage /></ProtectedRoute>} />
-                  <Route path="/sellers" element={<ProtectedRoute permission="sellers_view"><SellersPage /></ProtectedRoute>} />
-                  <Route path="/seller-tracker" element={<ProtectedRoute permission="sellers_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
-                  <Route path="/seller-tracker/:sellerId" element={<ProtectedRoute permission="sellers_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
-                  <Route path="/activity-log" element={<ProtectedRoute permission="settings_view"><ActivityLog /></ProtectedRoute>} />
+                  <Route path="/sellers" element={<ProtectedRoute permission="seller_view"><SellersPage /></ProtectedRoute>} />
+                  <Route path="/seller-tracker" element={<ProtectedRoute permission="asintracker_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
+                  <Route path="/seller-tracker/:sellerId" element={<ProtectedRoute permission="asintracker_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
+                  <Route path="/activity-log" element={<ProtectedRoute permission="activitylogs_view"><ActivityLog /></ProtectedRoute>} />
                   <Route path="/actions/templates" element={<ProtectedRoute permission="actions_manage"><TemplateManagerPage /></ProtectedRoute>} />
-                  <Route path="/actions/achievement-report" element={<ProtectedRoute permission="reports_monthly_view"><GoalAchievementReport /></ProtectedRoute>} />
+                  <Route path="/actions/achievement-report" element={<ProtectedRoute permission="monthlyreport_view"><GoalAchievementReport /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
                   <Route path="/tasks" element={<ProtectedRoute permission="dashboard_view"><TasksPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:id" element={<ProfilePage />} />
-                  <Route path="/chat" element={<ChatContainer />} />
+                  <Route path="/chat" element={<ProtectedRoute permission="dashboard_view"><ChatContainer /></ProtectedRoute>} />
                   <Route path="/unauthorized" element={<Unauthorized />} />
                 </Routes>
                 </Suspense>
