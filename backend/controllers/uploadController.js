@@ -149,11 +149,40 @@ exports.uploadAdsData = async (req, res) => {
           const asin = findValue(row, ['asin', 'Advertised ASIN', 'ASIN']);
           if (!asin) { skipped++; continue; }
 
-          const spend = parseFloat((findValue(row, ['spend','Spend','ad_spend'])||'0').replace(/,/g,'')) || 0;
-          const sales = parseFloat((findValue(row, ['sales','Sales','ad_sales'])||'0').replace(/,/g,'')) || 0;
-          const impressions = parseInt(findValue(row, ['impressions','Impressions']) || '0');
-          const clicks = parseInt(findValue(row, ['clicks','Clicks']) || '0');
-          const orders = parseInt(findValue(row, ['orders','Orders']) || '0');
+          const spend = parseFloat((findValue(row, ['spend','Spend','ad_spend', 'metrics.spend'])||'0').replace(/,/g,'')) || 0;
+          const sales = parseFloat((findValue(row, ['sales','Sales','ad_sales', 'metrics.sales'])||'0').replace(/,/g,'')) || 0;
+          const impressions = parseInt((findValue(row, ['impressions','Impressions', 'metrics.impressions']) || '0').replace(/,/g,''));
+          const clicks = parseInt((findValue(row, ['clicks','Clicks', 'metrics.clicks']) || '0').replace(/,/g,''));
+          const orders = parseInt((findValue(row, ['orders','Orders', 'metrics.orders']) || '0').replace(/,/g,''));
+          
+          // Additional metrics
+          const conversions = parseInt((findValue(row, ['conversions', 'metrics.conversions']) || '0').replace(/,/g,''));
+          const sameSkuSales = parseFloat((findValue(row, ['same_sku_sales', 'metrics.same_sku_sales']) || '0').replace(/,/g,'')) || 0;
+          const sameSkuOrders = parseInt((findValue(row, ['same_sku_orders', 'metrics.same_sku_orders']) || '0').replace(/,/g,''));
+          const dailyBudget = parseFloat((findValue(row, ['daily_budget', 'metrics.daily_budget']) || '0').replace(/,/g,'')) || 0;
+          const totalBudget = parseFloat((findValue(row, ['total_budget', 'metrics.total_budget']) || '0').replace(/,/g,'')) || 0;
+          const maxSpend = parseFloat((findValue(row, ['max_spend', 'metrics.max_spend']) || '0').replace(/,/g,'')) || 0;
+          const avgSpend = parseFloat((findValue(row, ['avg_spend', 'metrics.avg_spend']) || '0').replace(/,/g,'')) || 0;
+          const totalSales = parseFloat((findValue(row, ['total_sales', 'metrics.total_sales']) || '0').replace(/,/g,'')) || 0;
+          const totalAcos = parseFloat((findValue(row, ['total_acos', 'metrics.total_acos']) || '0').replace(/,/g,'')) || 0;
+          const totalUnits = parseInt((findValue(row, ['total_units', 'metrics.total_units']) || '0').replace(/,/g,''));
+          const organicSales = parseFloat((findValue(row, ['organic_sales', 'metrics.organic_sales']) || '0').replace(/,/g,'')) || 0;
+          const organicOrders = parseInt((findValue(row, ['organic_orders', 'metrics.organic_orders']) || '0').replace(/,/g,''));
+          const pageViews = parseInt((findValue(row, ['page_views', 'metrics.page_views']) || '0').replace(/,/g,''));
+          const adSalesPerc = parseFloat((findValue(row, ['ad_sales_perc', 'metrics.ad_sales_perc']) || '0').replace(/,/g,'')) || 0;
+          const tosIs = parseFloat((findValue(row, ['tos_is', 'metrics.tos_is']) || '0').replace(/,/g,'')) || 0;
+          const aov = parseFloat((findValue(row, ['aov', 'metrics.aov']) || '0').replace(/,/g,'')) || 0;
+          const sessions = parseInt((findValue(row, ['sessions', 'metrics.sessions']) || '0').replace(/,/g,''));
+          const buyBoxPercentage = parseFloat((findValue(row, ['buy_box_percentage', 'metrics.buy_box_percentage']) || '0').replace(/,/g,'')) || 0;
+          const browserSessions = parseInt((findValue(row, ['browser_sessions', 'metrics.browser_sessions']) || '0').replace(/,/g,''));
+          const mobileAppSessions = parseInt((findValue(row, ['mobile_app_sessions', 'metrics.mobile_app_sessions']) || '0').replace(/,/g,''));
+
+          // Derived metrics (if not in CSV)
+          const acos = sales > 0 ? (spend / sales) * 100 : 0;
+          const roas = spend > 0 ? sales / spend : 0;
+          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+          const cpc = clicks > 0 ? spend / clicks : 0;
+          const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
 
           const dateVal = reportType === 'daily' ? (findValue(row, ['date','Date']) || reportDate) : reportDate;
           const parsedDate = parseDate(dateVal);
@@ -165,56 +194,157 @@ exports.uploadAdsData = async (req, res) => {
               .input('asin', sql.VarChar, asin)
               .input('date', sql.Date, parsedDate)
               .query('SELECT Id FROM AdsPerformance WHERE Asin = @asin AND Date = @date AND ReportType = \'daily\'');
+            
+            const query = existing.recordset.length > 0 
+              ? `UPDATE AdsPerformance SET 
+                  AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders,
+                  ACoS=@acos, RoAS=@roas, CTR=@ctr, CPC=@cpc, ConversionRate=@conversionRate,
+                  Conversions=@conversions, SameSkuSales=@sameSkuSales, SameSkuOrders=@sameSkuOrders,
+                  DailyBudget=@dailyBudget, TotalBudget=@totalBudget, MaxSpend=@maxSpend, AvgSpend=@avgSpend,
+                  TotalSales=@totalSales, TotalAcos=@totalAcos, TotalUnits=@totalUnits,
+                  OrganicSales=@organicSales, OrganicOrders=@organicOrders, PageViews=@pageViews,
+                  AdSalesPerc=@adSalesPerc, TosIs=@tosIs, Aov=@aov, Sessions=@sessions,
+                  BuyBoxPercentage=@buyBoxPercentage, BrowserSessions=@browserSessions, MobileAppSessions=@mobileAppSessions
+                 WHERE Id=@id`
+              : `INSERT INTO AdsPerformance (
+                  Asin, Date, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders,
+                  ACoS, RoAS, CTR, CPC, ConversionRate,
+                  Conversions, SameSkuSales, SameSkuOrders,
+                  DailyBudget, TotalBudget, MaxSpend, AvgSpend,
+                  TotalSales, TotalAcos, TotalUnits,
+                  OrganicSales, OrganicOrders, PageViews,
+                  AdSalesPerc, TosIs, Aov, Sessions,
+                  BuyBoxPercentage, BrowserSessions, MobileAppSessions
+                 ) VALUES (
+                  @asin, @date, @reportType, @spend, @sales, @impressions, @clicks, @orders,
+                  @acos, @roas, @ctr, @cpc, @conversionRate,
+                  @conversions, @sameSkuSales, @sameSkuOrders,
+                  @dailyBudget, @totalBudget, @maxSpend, @avgSpend,
+                  @totalSales, @totalAcos, @totalUnits,
+                  @organicSales, @organicOrders, @pageViews,
+                  @adSalesPerc, @tosIs, @aov, @sessions,
+                  @buyBoxPercentage, @browserSessions, @mobileAppSessions
+                 )`;
+
+            const request = transaction.request()
+              .input('asin', sql.VarChar, asin)
+              .input('date', sql.Date, parsedDate)
+              .input('reportType', sql.NVarChar, 'daily')
+              .input('spend', sql.Decimal(18,2), spend)
+              .input('sales', sql.Decimal(18,2), sales)
+              .input('impressions', sql.Int, impressions)
+              .input('clicks', sql.Int, clicks)
+              .input('orders', sql.Int, orders)
+              .input('acos', sql.Decimal(18,4), acos)
+              .input('roas', sql.Decimal(18,4), roas)
+              .input('ctr', sql.Decimal(18,4), ctr)
+              .input('cpc', sql.Decimal(18,4), cpc)
+              .input('conversionRate', sql.Decimal(18,4), conversionRate)
+              .input('conversions', sql.Int, conversions)
+              .input('sameSkuSales', sql.Decimal(18,2), sameSkuSales)
+              .input('sameSkuOrders', sql.Int, sameSkuOrders)
+              .input('dailyBudget', sql.Decimal(18,2), dailyBudget)
+              .input('totalBudget', sql.Decimal(18,2), totalBudget)
+              .input('maxSpend', sql.Decimal(18,2), maxSpend)
+              .input('avgSpend', sql.Decimal(18,2), avgSpend)
+              .input('totalSales', sql.Decimal(18,2), totalSales)
+              .input('totalAcos', sql.Decimal(18,4), totalAcos)
+              .input('totalUnits', sql.Int, totalUnits)
+              .input('organicSales', sql.Decimal(18,2), organicSales)
+              .input('organicOrders', sql.Int, organicOrders)
+              .input('pageViews', sql.Int, pageViews)
+              .input('adSalesPerc', sql.Decimal(18,4), adSalesPerc)
+              .input('tosIs', sql.Decimal(18,4), tosIs)
+              .input('aov', sql.Decimal(18,2), aov)
+              .input('sessions', sql.Int, sessions)
+              .input('buyBoxPercentage', sql.Decimal(18,4), buyBoxPercentage)
+              .input('browserSessions', sql.Int, browserSessions)
+              .input('mobileAppSessions', sql.Int, mobileAppSessions);
+
             if (existing.recordset.length > 0) {
-              // Update
-              await transaction.request()
-                .input('id', sql.Int, existing.recordset[0].Id)
-                .input('spend', sql.Decimal(18,2), spend)
-                .input('sales', sql.Decimal(18,2), sales)
-                .input('impressions', sql.Int, impressions)
-                .input('clicks', sql.Int, clicks)
-                .input('orders', sql.Int, orders)
-                .query(`UPDATE AdsPerformance SET AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders WHERE Id=@id`);
-            } else {
-              await transaction.request()
-                .input('asin', sql.VarChar, asin)
-                .input('date', sql.Date, parsedDate)
-                .input('reportType', sql.NVarChar, 'daily')
-                .input('spend', sql.Decimal(18,2), spend)
-                .input('sales', sql.Decimal(18,2), sales)
-                .input('impressions', sql.Int, impressions)
-                .input('clicks', sql.Int, clicks)
-                .input('orders', sql.Int, orders)
-                .query(`INSERT INTO AdsPerformance (Asin, Date, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@asin,@date,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
+              request.input('id', sql.Int, existing.recordset[0].Id);
             }
+            
+            await request.query(query);
           } else {
-            // monthly similar, using Month field
+            // monthly similar
             const monthDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1);
             const existing = await transaction.request()
               .input('asin', sql.VarChar, asin)
               .input('month', sql.Date, monthDate)
               .query('SELECT Id FROM AdsPerformance WHERE Asin = @asin AND Month = @month AND ReportType = \'monthly\'');
+            
+            const query = existing.recordset.length > 0 
+              ? `UPDATE AdsPerformance SET 
+                  AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders,
+                  ACoS=@acos, RoAS=@roas, CTR=@ctr, CPC=@cpc, ConversionRate=@conversionRate,
+                  Conversions=@conversions, SameSkuSales=@sameSkuSales, SameSkuOrders=@sameSkuOrders,
+                  DailyBudget=@dailyBudget, TotalBudget=@totalBudget, MaxSpend=@maxSpend, AvgSpend=@avgSpend,
+                  TotalSales=@totalSales, TotalAcos=@totalAcos, TotalUnits=@totalUnits,
+                  OrganicSales=@organicSales, OrganicOrders=@organicOrders, PageViews=@pageViews,
+                  AdSalesPerc=@adSalesPerc, TosIs=@tosIs, Aov=@aov, Sessions=@sessions,
+                  BuyBoxPercentage=@buyBoxPercentage, BrowserSessions=@browserSessions, MobileAppSessions=@mobileAppSessions
+                 WHERE Id=@id`
+              : `INSERT INTO AdsPerformance (
+                  Asin, Month, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders,
+                  ACoS, RoAS, CTR, CPC, ConversionRate,
+                  Conversions, SameSkuSales, SameSkuOrders,
+                  DailyBudget, TotalBudget, MaxSpend, AvgSpend,
+                  TotalSales, TotalAcos, TotalUnits,
+                  OrganicSales, OrganicOrders, PageViews,
+                  AdSalesPerc, TosIs, Aov, Sessions,
+                  BuyBoxPercentage, BrowserSessions, MobileAppSessions
+                 ) VALUES (
+                  @asin, @month, @reportType, @spend, @sales, @impressions, @clicks, @orders,
+                  @acos, @roas, @ctr, @cpc, @conversionRate,
+                  @conversions, @sameSkuSales, @sameSkuOrders,
+                  @dailyBudget, @totalBudget, @maxSpend, @avgSpend,
+                  @totalSales, @totalAcos, @totalUnits,
+                  @organicSales, @organicOrders, @pageViews,
+                  @adSalesPerc, @tosIs, @aov, @sessions,
+                  @buyBoxPercentage, @browserSessions, @mobileAppSessions
+                 )`;
+
+            const request = transaction.request()
+              .input('asin', sql.VarChar, asin)
+              .input('month', sql.Date, monthDate)
+              .input('reportType', sql.NVarChar, 'monthly')
+              .input('spend', sql.Decimal(18,2), spend)
+              .input('sales', sql.Decimal(18,2), sales)
+              .input('impressions', sql.Int, impressions)
+              .input('clicks', sql.Int, clicks)
+              .input('orders', sql.Int, orders)
+              .input('acos', sql.Decimal(18,4), acos)
+              .input('roas', sql.Decimal(18,4), roas)
+              .input('ctr', sql.Decimal(18,4), ctr)
+              .input('cpc', sql.Decimal(18,4), cpc)
+              .input('conversionRate', sql.Decimal(18,4), conversionRate)
+              .input('conversions', sql.Int, conversions)
+              .input('sameSkuSales', sql.Decimal(18,2), sameSkuSales)
+              .input('sameSkuOrders', sql.Int, sameSkuOrders)
+              .input('dailyBudget', sql.Decimal(18,2), dailyBudget)
+              .input('totalBudget', sql.Decimal(18,2), totalBudget)
+              .input('maxSpend', sql.Decimal(18,2), maxSpend)
+              .input('avgSpend', sql.Decimal(18,2), avgSpend)
+              .input('totalSales', sql.Decimal(18,2), totalSales)
+              .input('totalAcos', sql.Decimal(18,4), totalAcos)
+              .input('totalUnits', sql.Int, totalUnits)
+              .input('organicSales', sql.Decimal(18,2), organicSales)
+              .input('organicOrders', sql.Int, organicOrders)
+              .input('pageViews', sql.Int, pageViews)
+              .input('adSalesPerc', sql.Decimal(18,4), adSalesPerc)
+              .input('tosIs', sql.Decimal(18,4), tosIs)
+              .input('aov', sql.Decimal(18,2), aov)
+              .input('sessions', sql.Int, sessions)
+              .input('buyBoxPercentage', sql.Decimal(18,4), buyBoxPercentage)
+              .input('browserSessions', sql.Int, browserSessions)
+              .input('mobileAppSessions', sql.Int, mobileAppSessions);
+
             if (existing.recordset.length > 0) {
-              await transaction.request()
-                .input('id', sql.Int, existing.recordset[0].Id)
-                .input('spend', sql.Decimal(18,2), spend)
-                .input('sales', sql.Decimal(18,2), sales)
-                .input('impressions', sql.Int, impressions)
-                .input('clicks', sql.Int, clicks)
-                .input('orders', sql.Int, orders)
-                .query(`UPDATE AdsPerformance SET AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders WHERE Id=@id`);
-            } else {
-              await transaction.request()
-                .input('asin', sql.VarChar, asin)
-                .input('month', sql.Date, monthDate)
-                .input('reportType', sql.NVarChar, 'monthly')
-                .input('spend', sql.Decimal(18,2), spend)
-                .input('sales', sql.Decimal(18,2), sales)
-                .input('impressions', sql.Int, impressions)
-                .input('clicks', sql.Int, clicks)
-                .input('orders', sql.Int, orders)
-                .query(`INSERT INTO AdsPerformance (Asin, Month, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders) VALUES (@asin,@month,@reportType,@spend,@sales,@impressions,@clicks,@orders)`);
+              request.input('id', sql.Int, existing.recordset[0].Id);
             }
+            
+            await request.query(query);
           }
           processed++;
         } catch (e) {

@@ -71,27 +71,29 @@ const formatDateShort = (d) => {
   return new Date(d).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const getAgeTag = (createdAt) => {
+  if (!createdAt) return null;
+  const days = differenceInDays(new Date(), new Date(createdAt));
+  if (days <= 30) return { label: '0-30D', color: 'emerald' };
+  if (days <= 60) return { label: '31-60D', color: 'indigo' };
+  if (days <= 90) return { label: '61-90D', color: 'violet' };
+  if (days <= 180) return { label: '91-180D', color: 'amber' };
+  if (days <= 365) return { label: '181-365D', color: 'orange' };
+  return { label: '365+D', color: 'rose' };
+};
+
 // ─── Component ──────────────────────────────────────────────────
 const AdsReport = () => {
   const { startDate, endDate, rangeType } = useDateRange();
-  const [data, setData] = useState([]);
-  const [dailyData, setDailyData] = useState([]);
-  const [prevData, setPrevData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [compareMode, setCompareMode] = useState(false);
-  const [chartMode, setChartMode] = useState('revenue');
-  const [tableSearch, setTableSearch] = useState('');
-  const [perfFilter, setPerfFilter] = useState('all');
-  const [sortKey, setSortKey] = useState('ad_sales');
-  const [sortDir, setSortDir] = useState('desc');
-  const [viewMode, setViewMode] = useState('asin'); // 'asin' or 'daily'
-  const [tablePage, setTablePage] = useState(1);
-   const [drawerAsin, setDrawerAsin] = useState(null);
-   const [selectedAsin, setSelectedAsin] = useState(null);
-   const [copiedAsin, setCopiedAsin] = useState(false);
-   const fileRef = useRef(null);
-   const [reportType] = useState('daily');
-   const [importProgress, setImportProgress] = useState(0);
+  const [hierarchicalData, setHierarchicalData] = useState([]);
+  const [expandedParents, setExpandedParents] = useState(new Set());
+  const [expandedChildren, setExpandedChildren] = useState(new Set());
+  const [selectedAsin, setSelectedAsin] = useState(null);
+  const [copiedAsin, setCopiedAsin] = useState(false);
+  const fileRef = useRef(null);
+  const [reportType] = useState('daily');
+  const [importProgress, setImportProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'trends', 'attribution'
   const TABLE_PAGE_SIZE = 15;
 
   const chartModes = [
@@ -135,6 +137,7 @@ const AdsReport = () => {
 
       const res = await api.get('/data/ads-report', cleanParams);
       setData(res.data || []);
+      setHierarchicalData(res.hierarchicalData || []);
       setDailyData(res.dailyData || []);
 
       if (compareMode) {
@@ -346,33 +349,44 @@ const efficiencyMetrics = useMemo(() => {
 
   // ─── Table Data ─────────────────────────────────────────────
   const filteredTableData = useMemo(() => {
-    let rows = viewMode === 'asin' ? [...data] : [...dailyData];
-
-    if (tableSearch) {
-      const q = tableSearch.toLowerCase();
-      if (viewMode === 'asin') {
-        rows = rows.filter(r => (r.asin && r.asin.toLowerCase().includes(q)) || (r.sku && r.sku.toLowerCase().includes(q)));
-      } else {
-        rows = rows.filter(r => r.date && r.date.includes(q));
-      }
-    }
-
+    let rows = [];
+    
     if (viewMode === 'asin') {
+      rows = [...hierarchicalData];
+      
+      // Apply Search to Parents and Children
+      if (tableSearch) {
+        const q = tableSearch.toLowerCase();
+        rows = rows.filter(p => {
+          const matchParent = p.asin.toLowerCase().includes(q);
+          const matchChild = p.children?.some(c => c.asin.toLowerCase().includes(q) || (c.sku && c.sku.toLowerCase().includes(q)));
+          return matchParent || matchChild;
+        });
+      }
+
+      // Apply Filter
       switch (perfFilter) {
         case 'high_roas': rows = rows.filter(r => (r.roas || 0) > 10); break;
         case 'high_acos': rows = rows.filter(r => (r.acos || 0) > 30); break;
         case 'zero_sales': rows = rows.filter(r => !r.ad_sales || r.ad_sales === 0); break;
-        case 'top_spenders': rows = [...rows].sort((a, b) => (b.ad_spend || 0) - (a.ad_spend || 0)).slice(0, 20); break;
         default: break;
+      }
+    } else {
+      rows = [...dailyData];
+      if (tableSearch) {
+        const q = tableSearch.toLowerCase();
+        rows = rows.filter(r => r.date && r.date.includes(q));
       }
     }
 
+    // Sort
     rows.sort((a, b) => {
       const va = a[sortKey] || 0, vb = b[sortKey] || 0;
       return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
     });
+
     return rows;
-  }, [data, dailyData, viewMode, tableSearch, perfFilter, sortKey, sortDir]);
+  }, [hierarchicalData, dailyData, viewMode, tableSearch, perfFilter, sortKey, sortDir]);
 
   const pagedData = useMemo(() => {
     const start = (tablePage - 1) * TABLE_PAGE_SIZE;
@@ -446,14 +460,17 @@ const efficiencyMetrics = useMemo(() => {
   const tableColumns = useMemo(() => {
     if (viewMode === 'asin') {
       return [
-        { key: 'asin', label: 'ASIN', align: 'left' },
-        { key: 'ad_spend', label: 'Spend', align: 'right' },
+        { key: 'asin', label: 'ASIN / SKU', align: 'left' },
+        { key: 'ad_spend', label: 'Ad Spend', align: 'right' },
         { key: 'ad_sales', label: 'Ad Sales', align: 'right' },
-        { key: 'organic_sales', label: 'Org. Sales', align: 'right' },
+        { key: 'same_sku_sales', label: 'Same SKU Sales', align: 'right' },
+        { key: 'organic_sales', label: 'Org Sales', align: 'right' },
         { key: 'total_sales', label: 'Total Sales', align: 'right' },
         { key: 'orders', label: 'Orders', align: 'right' },
-        { key: 'roas', label: 'ROAS', align: 'right' },
+        { key: 'conversions', label: 'Conv.', align: 'right' },
         { key: 'acos', label: 'ACoS', align: 'right' },
+        { key: 'roas', label: 'ROAS', align: 'right' },
+        { key: 'buy_box_percentage', label: 'Buy Box', align: 'right' },
         { key: 'aov', label: 'AOV', align: 'right' },
       ];
     }
@@ -461,7 +478,7 @@ const efficiencyMetrics = useMemo(() => {
       { key: 'date', label: 'Date', align: 'left' },
       { key: 'ad_spend', label: 'Spend', align: 'right' },
       { key: 'ad_sales', label: 'Ad Sales', align: 'right' },
-      { key: 'organic_sales', label: 'Org. Sales', align: 'right' },
+      { key: 'same_sku_sales', label: 'Same SKU Sales', align: 'right' },
       { key: 'total_sales', label: 'Total Sales', align: 'right' },
       { key: 'orders', label: 'Orders', align: 'right' },
       { key: 'roas', label: 'ROAS', align: 'right' },
@@ -470,14 +487,60 @@ const efficiencyMetrics = useMemo(() => {
     ];
   }, [viewMode]);
 
-  const getCellValue = (row, key) => {
+  const getCellValue = (row, key, isChild = false) => {
     const v = row[key];
     switch (key) {
-      case 'asin': return <span className="asin-cell">{v}</span>;
+      case 'asin': 
+        const age = getAgeTag(row.createdAt);
+        const isDaily = !!row.date;
+        
+        return (
+          <div className={`d-flex align-items-center gap-2 ${isChild ? 'ps-4' : ''} ${isDaily ? 'ps-5' : ''}`}>
+            {!isChild && row.children?.length > 0 && (
+              <button 
+                className="btn btn-link p-0 text-zinc-400 hover-text-indigo-600"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleParent(row.asin);
+                }}
+              >
+                {expandedParents.has(row.asin) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            )}
+            {isChild && !isDaily && row.history?.length > 0 && (
+              <button 
+                className="btn btn-link p-0 text-zinc-400 hover-text-indigo-600"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleChild(row.asin);
+                }}
+              >
+                {expandedChildren.has(row.asin) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              </button>
+            )}
+            <div className="d-flex flex-column">
+              <div className="d-flex align-items-center gap-2">
+                {isDaily ? (
+                  <span className="text-zinc-500 fw-600" style={{ fontSize: '11px' }}>{formatDateShort(row.date)}</span>
+                ) : (
+                  <>
+                    <span className={`asin-cell ${!isChild ? 'fw-700' : 'fw-500 text-zinc-600'}`}>{row.asin}</span>
+                    {!isChild && age && (
+                      <span className={`badge bg-${age.color}-subtle text-${age.color}-700 border border-${age.color}-200`} style={{ fontSize: '9px', padding: '2px 5px' }}>
+                        {age.label}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+              {!isDaily && row.sku && row.sku !== 'None' && <span className="text-zinc-400" style={{ fontSize: '10px' }}>{row.sku}</span>}
+            </div>
+          </div>
+        );
        case 'date': return <span className="fw-bold">{formatDateShort(v)}</span>;
-      case 'ad_spend': case 'ad_sales': case 'organic_sales': case 'total_sales': case 'cpc': case 'aov': return fmtFull(v);
-      case 'orders': case 'clicks': case 'impressions': return fmtNum(v);
-      case 'ctr': case 'conversion_rate': return fmtPct(v);
+      case 'ad_spend': case 'ad_sales': case 'organic_sales': case 'total_sales': case 'cpc': case 'aov': case 'same_sku_sales': return fmtFull(v);
+      case 'orders': case 'clicks': case 'impressions': case 'conversions': return fmtNum(v);
+      case 'ctr': case 'conversion_rate': case 'buy_box_percentage': return fmtPct(v);
       case 'roas': {
         const val = v || 0;
         const barW = Math.min((val / 25) * 100, 100);
@@ -486,11 +549,25 @@ const efficiencyMetrics = useMemo(() => {
       }
       case 'acos': {
         const val = v || 0;
-        const cls = val === 0 ? '' : val <= 10 ? 'acos-green' : val <= 20 ? 'acos-amber' : 'acos-red';
+        const cls = val === 0 ? '' : val <= 15 ? 'acos-green' : val <= 30 ? 'acos-amber' : 'acos-red';
         return <span className={cls} style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>{val === 0 ? '—' : `${val.toFixed(1)}%`}</span>;
       }
       default: return v || '—';
     }
+  };
+
+  const toggleParent = (asin) => {
+    const next = new Set(expandedParents);
+    if (next.has(asin)) next.delete(asin);
+    else next.add(asin);
+    setExpandedParents(next);
+  };
+
+  const toggleChild = (asin) => {
+    const next = new Set(expandedChildren);
+    if (next.has(asin)) next.delete(asin);
+    else next.add(asin);
+    setExpandedChildren(next);
   };
   
   // ─── Render ─────────────────────────────────────────────
@@ -738,13 +815,46 @@ const efficiencyMetrics = useMemo(() => {
                   </thead>
                   <tbody className="border-0">
                     {pagedData.map((row, idx) => (
-                      <tr key={idx} className="border-bottom border-zinc-100 hover-bg-light transition-all cursor-pointer" onClick={() => setDrawerAsin(row.asin)}>
-                        {tableColumns.map(c => (
-                          <td key={c.key} className={`py-3 px-4 fw-600 text-zinc-900 smallest ${c.align === 'right' ? 'text-end' : ''}`}>
-                            {getCellValue(row, c.key)}
-                          </td>
+                      <React.Fragment key={row.asin || idx}>
+                        <tr 
+                          className={`border-bottom border-zinc-100 hover-bg-light transition-all cursor-pointer ${row.isParent ? 'bg-zinc-50/30' : ''}`} 
+                          onClick={() => setDrawerAsin(row.asin)}
+                        >
+                          {tableColumns.map(c => (
+                            <td key={c.key} className={`py-3 px-4 fw-600 text-zinc-900 smallest ${c.align === 'right' ? 'text-end' : ''}`}>
+                              {getCellValue(row, c.key)}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* Render Children if expanded */}
+                        {viewMode === 'asin' && row.isParent && expandedParents.has(row.asin) && row.children?.map((child, cIdx) => (
+                          <React.Fragment key={`${row.asin}-child-${cIdx}`}>
+                            <tr 
+                              className="border-bottom border-zinc-50 bg-zinc-50/10 hover-bg-light transition-all cursor-pointer"
+                              onClick={() => setDrawerAsin(child.asin)}
+                            >
+                              {tableColumns.map(c => (
+                                <td key={c.key} className={`py-2.5 px-4 fw-500 text-zinc-600 smallest ${c.align === 'right' ? 'text-end' : ''}`}>
+                                  {getCellValue(child, c.key, true)}
+                                </td>
+                              ))}
+                            </tr>
+                            {/* Render Daily History if expanded */}
+                            {expandedChildren.has(child.asin) && child.history?.map((day, dIdx) => (
+                              <tr 
+                                key={`${child.asin}-day-${dIdx}`} 
+                                className="border-bottom border-zinc-50 bg-zinc-50/5 hover-bg-light transition-all cursor-default"
+                              >
+                                {tableColumns.map(c => (
+                                  <td key={c.key} className={`py-2 px-4 fw-400 text-zinc-500 smallest ${c.align === 'right' ? 'text-end' : ''}`}>
+                                    {getCellValue(day, c.key, true)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         ))}
-                      </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
