@@ -99,8 +99,19 @@ const Header = () => {
                     </button>
                 </div>
 
-                <div className="user-avatar-top" onClick={() => navigate('/profile')}>
-                    {getInitials(user)}
+                <div className="header-user-profile" onClick={() => navigate('/profile')}>
+                    <div className="header-user-details text-end me-3 d-none d-md-block">
+                        <div className="header-user-name fw-semibold" style={{ fontSize: '13px', color: '#1f2937' }}>
+                            {user?.fullName || 'User'}
+                        </div>
+                        <div className="header-user-role" style={{ fontSize: '11px', color: '#6b7280', textTransform: 'capitalize' }}>
+                            {user?.role?.displayName || user?.role?.name || 'User'}
+                        </div>
+                    </div>
+                    <div className="user-avatar-top">
+                        {getInitials(user)}
+                        <div className="user-status-indicator" />
+                    </div>
                 </div>
             </div>
             

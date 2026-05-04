@@ -39,9 +39,26 @@ exports.getRoles = async (req, res) => {
         .query('SELECT P.* FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
       
       return {
-        ...role,
         _id: role.Id,
-        permissions: perms.recordset.map(p => ({ ...p, _id: p.Id }))
+        id: role.Id,
+        name: role.Name,
+        displayName: role.DisplayName,
+        description: role.Description,
+        level: role.Level || 0,
+        color: role.Color || '#4F46E5',
+        isSystem: role.IsSystem === 1 || role.IsSystem === true,
+        isActive: role.IsActive === 1 || role.IsActive === true,
+        createdAt: role.CreatedAt,
+        updatedAt: role.UpdatedAt,
+        permissions: perms.recordset.map(p => ({
+          _id: p.Id,
+          id: p.Id,
+          name: p.Name,
+          displayName: p.DisplayName,
+          description: p.Description,
+          category: p.Category,
+          action: p.Action
+        }))
       };
     }));
 
@@ -78,9 +95,26 @@ exports.getRole = async (req, res) => {
     res.json({
       success: true,
       data: {
-        ...role,
         _id: role.Id,
-        permissions: perms.recordset.map(p => ({ ...p, _id: p.Id }))
+        id: role.Id,
+        name: role.Name,
+        displayName: role.DisplayName,
+        description: role.Description,
+        level: role.Level || 0,
+        color: role.Color || '#4F46E5',
+        isSystem: role.IsSystem === 1 || role.IsSystem === true,
+        isActive: role.IsActive === 1 || role.IsActive === true,
+        createdAt: role.CreatedAt,
+        updatedAt: role.UpdatedAt,
+        permissions: perms.recordset.map(p => ({
+          _id: p.Id,
+          id: p.Id,
+          name: p.Name,
+          displayName: p.DisplayName,
+          description: p.Description,
+          category: p.Category,
+          action: p.Action
+        }))
       }
     });
   } catch (error) {
@@ -200,10 +234,20 @@ exports.getPermissions = async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query('SELECT * FROM Permissions ORDER BY Category, Action');
 
-    const permissions = result.recordset.map(p => ({ ...p, _id: p.Id }));
+    const permissions = result.recordset.map(p => ({
+      _id: p.Id,
+      id: p.Id,
+      name: p.Name,
+      displayName: p.DisplayName,
+      description: p.Description,
+      category: p.Category,
+      action: p.Action
+    }));
+
     const groupedPermissions = permissions.reduce((acc, perm) => {
-      if (!acc[perm.Category]) acc[perm.Category] = [];
-      acc[perm.Category].push(perm);
+      const cat = perm.category || 'Default';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(perm);
       return acc;
     }, {});
 
@@ -214,120 +258,128 @@ exports.getPermissions = async (req, res) => {
 };
 
 const defaultPermissions = [
-  // Dashboard
-  { name: 'dashboard_view', displayName: 'View Dashboard', description: 'View dashboard overview', category: 'dashboard', action: 'view' },
+  // Dashboard & Analytics
+  { name: 'dashboard_view', displayName: 'View Dashboard', description: 'Access to main dashboard overview and analytics', category: 'Analytics', action: 'view' },
+  { name: 'activity_logs_view', displayName: 'View Activity Logs', description: 'View system-wide activity and audit logs', category: 'Analytics', action: 'view' },
 
   // Reports
-  { name: 'reports_sku_view', displayName: 'View SKU Report', description: 'View SKU performance report', category: 'reports', action: 'view' },
-  { name: 'reports_parent_view', displayName: 'View Parent ASIN Report', description: 'View parent ASIN performance report', category: 'reports', action: 'view' },
-  { name: 'reports_monthly_view', displayName: 'View Monthly Report', description: 'View monthly performance report', category: 'reports', action: 'view' },
-  { name: 'reports_ads_view', displayName: 'View Ads Report', description: 'View advertising performance report', category: 'reports', action: 'view' },
-  { name: 'reports_profit_view', displayName: 'View Profit & Loss', description: 'View profit and loss report', category: 'reports', action: 'view' },
-  { name: 'reports_inventory_view', displayName: 'View Inventory', description: 'View inventory report', category: 'reports', action: 'view' },
-  { name: 'reports_export', displayName: 'Export Reports', description: 'Export report data', category: 'reports', action: 'export' },
+  { name: 'reports_sku_view', displayName: 'View SKU Reports', description: 'Access to SKU-level performance reports', category: 'Reports', action: 'view' },
+  { name: 'reports_parent_view', displayName: 'View Parent ASIN Reports', description: 'Access to Parent ASIN-level reports', category: 'Reports', action: 'view' },
+  { name: 'reports_monthly_view', displayName: 'View Monthly Trends', description: 'View month-over-month performance trends', category: 'Reports', action: 'view' },
+  { name: 'reports_ads_view', displayName: 'View Ads Intelligence', description: 'Access to advertising performance data', category: 'Reports', action: 'view' },
+  { name: 'reports_profit_view', displayName: 'View Profit & Loss', description: 'Access to financial and P&L reports', category: 'Reports', action: 'view' },
+  { name: 'reports_inventory_view', displayName: 'View Inventory Reports', description: 'Access to inventory health and stock reports', category: 'Reports', action: 'view' },
+  { name: 'reports_goals_view', displayName: 'View Goal Progress', description: 'Track progress against achievement goals', category: 'Reports', action: 'view' },
+  { name: 'reports_export', displayName: 'Export Data', description: 'Export report data to CSV/Excel', category: 'Reports', action: 'export' },
 
-  // Sellers
-  { name: 'sellers_view', displayName: 'View Sellers', description: 'View seller list', category: 'sellers', action: 'view' },
-  { name: 'sellers_create', displayName: 'Add Sellers', description: 'Add new sellers', category: 'sellers', action: 'create' },
-  { name: 'sellers_edit', displayName: 'Edit Sellers', description: 'Edit seller information', category: 'sellers', action: 'edit' },
-  { name: 'sellers_delete', displayName: 'Delete Sellers', description: 'Delete sellers', category: 'sellers', action: 'delete' },
-  { name: 'sellers_manage_asins', displayName: 'Manage ASINs', description: 'Manage seller ASINs', category: 'sellers', action: 'manage' },
+  // Marketplace & Sellers
+  { name: 'sellers_view', displayName: 'View Sellers', description: 'View registered sellers and marketplaces', category: 'Marketplace', action: 'view' },
+  { name: 'sellers_manage', displayName: 'Manage Sellers', description: 'Add, edit or deactivate sellers', category: 'Marketplace', action: 'manage' },
+  { name: 'asins_view', displayName: 'View ASINs', description: 'View product catalog and ASIN details', category: 'Marketplace', action: 'view' },
+  { name: 'asins_manage', displayName: 'Manage ASINs', description: 'Add, edit or delete product ASINs', category: 'Marketplace', action: 'manage' },
+  { name: 'asins_tracker', displayName: 'Access ASIN Tracker', description: 'Use the BSR and price tracker tools', category: 'Marketplace', action: 'view' },
+  { name: 'asins_bulk', displayName: 'Bulk Operations', description: 'Perform bulk ASIN uploads and updates', category: 'Marketplace', action: 'manage' },
 
-  // Users
-  { name: 'users_view', displayName: 'View Users', description: 'View user list', category: 'users', action: 'view' },
-  { name: 'users_create', displayName: 'Add Users', description: 'Add new users', category: 'users', action: 'create' },
-  { name: 'users_edit', displayName: 'Edit Users', description: 'Edit user information', category: 'users', action: 'edit' },
-  { name: 'users_delete', displayName: 'Delete Users', description: 'Delete users', category: 'users', action: 'delete' },
-  { name: 'users_assign_roles', displayName: 'Assign Roles', description: 'Assign roles to users', category: 'users', action: 'manage' },
+  // Automation & Scraping
+  { name: 'scraping_view', displayName: 'View Scrape Tasks', description: 'View status of data extraction tasks', category: 'Automation', action: 'view' },
+  { name: 'scraping_manage', displayName: 'Manage Automation', description: 'Control Octoparse tasks and sync schedules', category: 'Automation', action: 'manage' },
+  { name: 'rules_view', displayName: 'View Smart Rules', description: 'View automated rules and alert conditions', category: 'Automation', action: 'view' },
+  { name: 'rules_manage', displayName: 'Manage Rulesets', description: 'Create and edit automated business rules', category: 'Automation', action: 'manage' },
+  { name: 'templates_manage', displayName: 'Manage Templates', description: 'Manage scraping and data templates', category: 'Automation', action: 'manage' },
 
-  // Roles & Permissions
-  { name: 'roles_view', displayName: 'View Roles', description: 'View roles list', category: 'users', action: 'view' },
-  { name: 'roles_create', displayName: 'Create Roles', description: 'Create new roles', category: 'users', action: 'create' },
-  { name: 'roles_edit', displayName: 'Edit Roles', description: 'Edit role permissions', category: 'users', action: 'edit' },
-  { name: 'roles_delete', displayName: 'Delete Roles', description: 'Delete roles', category: 'users', action: 'delete' },
+  // Operations & Teams
+  { name: 'actions_view', displayName: 'View Task Actions', description: 'View assigned operational tasks', category: 'Operations', action: 'view' },
+  { name: 'actions_manage', displayName: 'Manage Operations', description: 'Assign tasks and manage workflows', category: 'Operations', action: 'manage' },
+  { name: 'teams_manage', displayName: 'Manage Teams', description: 'Create and manage organizational teams', category: 'Operations', action: 'manage' },
+  { name: 'files_manage', displayName: 'File Manager', description: 'Upload and manage system files and assets', category: 'Operations', action: 'manage' },
 
-  // Settings
-  { name: 'settings_view', displayName: 'View Settings', description: 'View system settings', category: 'settings', action: 'view' },
-  { name: 'settings_edit', displayName: 'Edit Settings', description: 'Edit system settings', category: 'settings', action: 'edit' },
+  // Security & Users
+  { name: 'users_view', displayName: 'View User List', description: 'View all system users', category: 'Security', action: 'view' },
+  { name: 'users_manage', displayName: 'Manage Users', description: 'Create, edit and deactivate system users', category: 'Security', action: 'manage' },
+  { name: 'roles_view', displayName: 'View Roles', description: 'View roles and permission sets', category: 'Security', action: 'view' },
+  { name: 'roles_manage', displayName: 'Manage Permissions', description: 'Modify role-based access control policies', category: 'Security', action: 'manage' },
+  { name: 'apikeys_manage', displayName: 'Manage API Keys', description: 'Manage integration and service API keys', category: 'Security', action: 'manage' },
+  { name: 'settings_manage', displayName: 'System Settings', description: 'Modify global application configurations', category: 'Security', action: 'manage' },
 
-  // Scraping
-  { name: 'scraping_view', displayName: 'View Scraping', description: 'View scraping tasks', category: 'scraping', action: 'view' },
-  { name: 'scraping_create', displayName: 'Create Tasks', description: 'Create scraping tasks', category: 'scraping', action: 'create' },
-  { name: 'scraping_manage', displayName: 'Manage Scraping', description: 'Manage all scraping operations', category: 'scraping', action: 'manage' },
-
-  // Actions (Task Management)
-  { name: 'actions_view', displayName: 'View Actions', description: 'View actions and tasks', category: 'actions', action: 'view' },
-  { name: 'actions_create', displayName: 'Create Actions', description: 'Create new actions', category: 'actions', action: 'create' },
-  { name: 'actions_edit', displayName: 'Edit Actions', description: 'Edit existing actions', category: 'actions', action: 'edit' },
-  { name: 'actions_delete', displayName: 'Delete Actions', description: 'Delete actions', category: 'actions', action: 'delete' },
-  { name: 'actions_manage', displayName: 'Manage Actions', description: 'Assign and manage actions', category: 'actions', action: 'manage' },
-
-  // Revenue Calculator
-  { name: 'calculator_view', displayName: 'View Calculator', description: 'Use revenue calculator', category: 'calculator', action: 'view' },
-  { name: 'calculator_bulk', displayName: 'Bulk Calculation', description: 'Use bulk calculation features', category: 'calculator', action: 'create' },
-  { name: 'calculator_config', displayName: 'Configure Fees', description: 'Configure fee structures', category: 'calculator', action: 'manage' },
-
-  // Inventory
-  { name: 'inventory_view', displayName: 'View Inventory', description: 'View inventory levels', category: 'inventory', action: 'view' },
-  { name: 'inventory_manage', displayName: 'Manage Inventory', description: 'Update inventory details', category: 'inventory', action: 'manage' },
+  // Specialized Tools
+  { name: 'calculator_view', displayName: 'Revenue Calculator', description: 'Access the profit and margin calculator', category: 'Tools', action: 'view' },
+  { name: 'calculator_config', displayName: 'Configure Fees', description: 'Modify fee and cost structures for calculations', category: 'Tools', action: 'manage' },
+  { name: 'alerts_view', displayName: 'View Alerts', description: 'View system and performance alerts', category: 'Tools', action: 'view' },
+  { name: 'alerts_manage', displayName: 'Resolve Alerts', description: 'Acknowledge and resolve active alerts', category: 'Tools', action: 'manage' },
 ];
 
 const defaultRoles = [
   {
     name: 'admin',
-    displayName: 'Administrator',
-    description: 'Full system access with all permissions',
+    displayName: 'Super Admin',
+    description: 'Master access to all system modules and security settings.',
     isSystem: true,
     level: 100,
-    color: '#DC2626',
+    color: '#EF4444', // Red-500
   },
   {
     name: 'operational_manager',
     displayName: 'Operational Manager',
-    description: 'High-level operational access across all managers and sellers',
+    description: 'Full operational control over marketplace, tasks, and teams.',
     isSystem: true,
     level: 90,
-    color: '#7C3AED',
+    color: '#8B5CF6', // Violet-500
   },
   {
-    name: 'manager',
-    displayName: 'Manager',
-    description: 'Can manage sellers and view all reports',
+    name: 'marketplace_lead',
+    displayName: 'Marketplace Lead',
+    description: 'Dedicated focus on seller management, ASINs, and scraping automation.',
     isSystem: true,
     level: 80,
-    color: '#D97706',
+    color: '#F59E0B', // Amber-500
   },
   {
-    name: 'analyst',
-    displayName: 'Analyst',
-    description: 'Can view reports and dashboards',
+    name: 'data_analyst',
+    displayName: 'Data Analyst',
+    description: 'Expert access to all reports, analytics, and business intelligence.',
     isSystem: true,
-    level: 50,
-    color: '#0891B2',
+    level: 70,
+    color: '#06B6D4', // Cyan-500
   },
   {
     name: 'team_leader',
     displayName: 'Team Leader',
-    description: 'Manages a specific team and their tasks',
+    description: 'Manages team operations, tasks, and basic reporting.',
+    isSystem: true,
+    level: 60,
+    color: '#10B981', // Emerald-500
+  },
+  {
+    name: 'inventory_specialist',
+    displayName: 'Inventory Specialist',
+    description: 'Focus on inventory management and stock health monitoring.',
     isSystem: true,
     level: 40,
-    color: '#8B5CF6',
+    color: '#3B82F6', // Blue-500
+  },
+  {
+    name: 'catalogue_manager',
+    displayName: 'Catalogue Manager',
+    description: 'Dedicated to product catalog maintenance and data exports.',
+    isSystem: true,
+    level: 30,
+    color: '#F472B6', // Pink-400
   },
   {
     name: 'employee',
-    displayName: 'Employee',
-    description: 'Core team member executing tasks',
+    displayName: 'Associate',
+    description: 'Standard access for executing assigned tasks and viewing data.',
     isSystem: true,
     level: 20,
-    color: '#10B981',
+    color: '#6366F1', // Indigo-500
   },
   {
     name: 'viewer',
-    displayName: 'Viewer',
-    description: 'Read-only access to dashboards and reports',
+    displayName: 'Guest Viewer',
+    description: 'Restricted read-only access to dashboards and basic reports.',
     isSystem: true,
     level: 10,
-    color: '#6B7280',
+    color: '#94A3B8', // Slate-400
   },
 ];
 
@@ -341,13 +393,13 @@ exports.seedRolesAndPermissions = async (req, res) => {
 
     // Seed permissions (upsert)
     for (const perm of defaultPermissions) {
-      const checkResult = await request
+      const checkResult = await transaction.request()
         .input('name', sql.NVarChar, perm.name)
         .query('SELECT Id FROM Permissions WHERE Name = @name');
 
       const permId = generateId();
       if (checkResult.recordset.length === 0) {
-        await request
+        await transaction.request()
           .input('id', sql.VarChar, permId)
           .input('name', sql.NVarChar, perm.name)
           .input('displayName', sql.NVarChar, perm.displayName)
@@ -362,25 +414,25 @@ exports.seedRolesAndPermissions = async (req, res) => {
     }
 
     // Fetch all permissions after seeding
-    const allPermissionsResult = await pool.request().query('SELECT * FROM Permissions');
+    const allPermissionsResult = await transaction.request().query('SELECT * FROM Permissions');
     const allPermissions = allPermissionsResult.recordset;
 
-    // Permission mapping helpers
     const getPermIds = (filterFn) => allPermissions.filter(filterFn).map(p => p.Id);
 
     const permissionSets = {
       admin: allPermissions.map(p => p.Id),
-      operational_manager: getPermIds(p => p.Action !== 'delete'),
-      manager: getPermIds(p => ['dashboard', 'reports', 'sellers', 'scraping', 'actions', 'calculator', 'inventory', 'users'].includes(p.Category)),
-      analyst: getPermIds(p => ['dashboard', 'reports', 'actions', 'calculator', 'inventory'].includes(p.Category)),
-      team_leader: getPermIds(p => ['dashboard', 'reports', 'actions', 'calculator', 'inventory', 'users'].includes(p.Category) && p.Action !== 'manage'),
-      employee: getPermIds(p => ['dashboard', 'actions', 'calculator', 'inventory'].includes(p.Category) && ['view', 'edit', 'execute'].includes(p.Action)),
-      viewer: getPermIds(p => p.Action === 'view' && p.Category !== 'settings'),
+      operational_manager: getPermIds(p => p.Category !== 'Security' || p.Name === 'users_view'),
+      marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
+      data_analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools'].includes(p.Category)),
+      team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || p.Name === 'asins_view'),
+      inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || p.Name === 'dashboard_view' || p.Category === 'Reports'),
+      catalogue_manager: getPermIds(p => p.Category === 'Marketplace' || p.Name === 'reports_export' || p.Name === 'dashboard_view'),
+      employee: getPermIds(p => ['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)),
+      viewer: getPermIds(p => p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)),
     };
 
-    // Seed roles (upsert)
     for (const roleData of defaultRoles) {
-      const existingResult = await request
+      const existingResult = await transaction.request()
         .input('name', sql.NVarChar, roleData.name)
         .query('SELECT Id, IsSystem FROM Roles WHERE Name = @name');
 
@@ -388,7 +440,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
       const rolePerms = permissionSets[roleData.name] || [];
 
       if (existingResult.recordset.length === 0) {
-        await request
+        await transaction.request()
           .input('id', sql.VarChar, roleId)
           .input('name', sql.NVarChar, roleData.name)
           .input('displayName', sql.NVarChar, roleData.displayName)
@@ -402,7 +454,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
             VALUES (@id, @name, @displayName, @description, @level, @color, @isSystem, @isActive, GETDATE(), GETDATE())
           `);
       } else if (existingResult.recordset[0].IsSystem) {
-        await request
+        await transaction.request()
           .input('id', sql.VarChar, roleId)
           .input('displayName', sql.NVarChar, roleData.displayName)
           .input('description', sql.NVarChar, roleData.description || null)
@@ -420,9 +472,9 @@ exports.seedRolesAndPermissions = async (req, res) => {
       }
 
       // Update role permissions: clear existing and insert new
-      await request.input('roleId', sql.VarChar, roleId).query('DELETE FROM RolePermissions WHERE RoleId = @roleId');
+      await transaction.request().input('roleId', sql.VarChar, roleId).query('DELETE FROM RolePermissions WHERE RoleId = @roleId');
       for (const permId of rolePerms) {
-        await request
+        await transaction.request()
           .input('roleId', sql.VarChar, roleId)
           .input('permId', sql.VarChar, permId)
           .query('INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@roleId, @permId)');

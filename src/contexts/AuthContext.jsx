@@ -34,7 +34,12 @@ export const AuthProvider = ({ children }) => {
                                 ...result.data,
                                 firstName: result.data.firstName || result.data.FirstName,
                                 lastName: result.data.lastName || result.data.LastName,
-                                fullName: result.data.fullName || `${result.data.firstName || result.data.FirstName || ''} ${result.data.lastName || result.data.LastName || ''}`.trim()
+                                fullName: result.data.fullName || `${result.data.firstName || result.data.FirstName || ''} ${result.data.lastName || result.data.LastName || ''}`.trim(),
+                                role: typeof result.data.role === 'object' ? {
+                                    ...result.data.role,
+                                    name: result.data.role.name || result.data.role.Name,
+                                    displayName: result.data.role.displayName || result.data.role.DisplayName || result.data.role.Name
+                                } : { name: result.data.role, displayName: result.data.role }
                             };
                             setUser(normalizedUser);
                             localStorage.setItem('user', JSON.stringify(normalizedUser));
@@ -82,7 +87,12 @@ export const AuthProvider = ({ children }) => {
                 ...user,
                 firstName: user.firstName || user.FirstName,
                 lastName: user.lastName || user.LastName,
-                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim()
+                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim(),
+                role: typeof user.role === 'object' ? {
+                    ...user.role,
+                    name: user.role.name || user.role.Name,
+                    displayName: user.role.displayName || user.role.DisplayName || user.role.Name
+                } : { name: user.role, displayName: user.role }
             };
             localStorage.setItem('authToken', accessToken);
             localStorage.setItem('user', JSON.stringify(normalizedUser));
@@ -144,7 +154,12 @@ export const AuthProvider = ({ children }) => {
             ...updatedUser,
             firstName: updatedUser.firstName || updatedUser.FirstName,
             lastName: updatedUser.lastName || updatedUser.LastName,
-            fullName: updatedUser.fullName || `${updatedUser.firstName || updatedUser.FirstName || ''} ${updatedUser.lastName || updatedUser.LastName || ''}`.trim()
+            fullName: updatedUser.fullName || `${updatedUser.firstName || updatedUser.FirstName || ''} ${updatedUser.lastName || updatedUser.LastName || ''}`.trim(),
+            role: typeof updatedUser.role === 'object' ? {
+                ...updatedUser.role,
+                name: updatedUser.role.name || updatedUser.role.Name,
+                displayName: updatedUser.role.displayName || updatedUser.role.DisplayName || updatedUser.role.Name
+            } : { name: updatedUser.role, displayName: updatedUser.role }
         };
         setUser(normalizedUser);
         localStorage.setItem('user', JSON.stringify(normalizedUser));

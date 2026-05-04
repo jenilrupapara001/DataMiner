@@ -210,7 +210,7 @@ const Sidebar = () => {
                         <>
                             <div className="user-info">
                                 <div className="user-name">{user?.fullName || 'User'}</div>
-                                <div className="user-role">{user?.role?.title || 'admin'}</div>
+                                <div className="user-role">{user?.role?.displayName || user?.role?.name || 'User'}</div>
                             </div>
                             <ChevronRight size={14} className="user-arrow" />
                         </>

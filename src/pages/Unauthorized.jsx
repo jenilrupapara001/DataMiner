@@ -1,45 +1,97 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { ShieldAlert, ArrowLeft, Home } from 'lucide-react';
 
 const Unauthorized = () => {
+    const navigate = useNavigate();
+
     return (
         <div style={{
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
-            height: '100vh',
+            height: 'calc(100vh - 64px)',
             textAlign: 'center',
-            padding: '20px'
+            padding: '20px',
+            backgroundColor: '#f9fafb'
         }}>
             <div style={{
-                fontSize: '120px',
-                fontWeight: 'bold',
-                color: '#ff4d4f',
-                marginBottom: '20px'
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                backgroundColor: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '24px'
             }}>
-                403
+                <ShieldAlert size={40} color="#ef4444" />
             </div>
-            <h1 style={{ fontSize: '32px', marginBottom: '20px' }}>Access Denied</h1>
-            <p style={{ fontSize: '18px', color: '#666', marginBottom: '30px', maxWidth: '500px' }}>
-                Sorry, you do not have permission to access this page. If you believe this is an error, please contact your administrator.
+            
+            <h1 style={{ 
+                fontSize: '30px', 
+                fontWeight: '800',
+                color: '#111827',
+                marginBottom: '12px' 
+            }}>
+                Access Denied
+            </h1>
+            
+            <p style={{ 
+                fontSize: '16px', 
+                color: '#6b7280', 
+                marginBottom: '32px', 
+                maxWidth: '420px',
+                lineHeight: '1.5'
+            }}>
+                Your current role does not have the required permissions to view this section. 
+                Please contact your supervisor if you believe this is a mistake.
             </p>
-            <Link
-                to="/"
-                style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    borderRadius: '8px',
-                    textDecoration: 'none',
-                    fontWeight: '600',
-                    transition: 'background-color 0.3s'
-                }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
-                onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
-            >
-                Return to Dashboard
-            </Link>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                    onClick={() => navigate(-1)}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <ArrowLeft size={16} />
+                    Go Back
+                </button>
+                
+                <button
+                    onClick={() => navigate('/')}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        backgroundColor: '#6366f1',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Home size={16} />
+                    Dashboard
+                </button>
+            </div>
         </div>
     );
 };
