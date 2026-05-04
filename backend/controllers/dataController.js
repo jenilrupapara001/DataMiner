@@ -84,11 +84,16 @@ exports.getAdsReport = async (req, res) => {
             request.input('sellerId', sql.VarChar, sellerId);
         }
 
-        // Fetch all matching records with ASIN metadata
+        // 1. Fetch relations
+        const relResult = await pool.request().query('SELECT ParentAsin, ChildAsin FROM AsinRelations');
+        const relations = relResult.recordset;
+        const childToParent = {};
+        relations.forEach(r => { childToParent[r.ChildAsin] = r.ParentAsin; });
+
+        // 2. Fetch all matching records with ASIN metadata
         const result = await request.query(`
             SELECT 
                 p.*,
-                a.ParentAsin,
                 a.Title,
                 a.ImageUrl,
                 a.Category,
@@ -103,7 +108,7 @@ exports.getAdsReport = async (req, res) => {
 
         const rawData = result.recordset;
 
-        // 1. Group by ASIN (to aggregate totals for the period)
+        // 3. Group by ASIN (to aggregate totals and history)
         const asinMap = {};
         rawData.forEach(row => {
             const key = row.Asin;
@@ -113,13 +118,14 @@ exports.getAdsReport = async (req, res) => {
                     sku: row.AdvertisedSku || row.MasterSku || 'None',
                     title: row.Title || 'Unknown',
                     imageUrl: row.ImageUrl,
-                    parentAsin: row.ParentAsin || row.Asin, // Fallback to self if no parent
+                    parentAsin: childToParent[row.Asin] || row.Asin, // Use mapping or self
                     createdAt: row.AsinCreatedAt,
                     ad_spend: 0, ad_sales: 0, impressions: 0, clicks: 0, orders: 0,
                     conversions: 0, same_sku_sales: 0, same_sku_orders: 0,
                     total_sales: 0, total_units: 0, organic_sales: 0, organic_orders: 0,
                     page_views: 0, sessions: 0, browser_sessions: 0, mobile_app_sessions: 0,
-                    total_acos_sum: 0, record_count: 0
+                    total_acos_sum: 0, record_count: 0,
+                    history: []
                 };
             }
             
@@ -142,13 +148,13 @@ exports.getAdsReport = async (req, res) => {
             asinMap[key].total_acos_sum += Number(row.TotalAcos || 0);
             asinMap[key].record_count++;
 
-            // Accumulate daily history for this ASIN
-            if (!asinMap[key].history) asinMap[key].history = [];
             asinMap[key].history.push({
                 date: row.Date,
                 ad_spend: Number(row.AdSpend || 0),
                 ad_sales: Number(row.AdSales || 0),
                 orders: Number(row.Orders || 0),
+                clicks: Number(row.Clicks || 0),
+                impressions: Number(row.Impressions || 0),
                 conversions: Number(row.Conversions || 0),
                 organic_sales: Number(row.OrganicSales || 0),
                 total_sales: Number(row.TotalSales || 0),
@@ -157,7 +163,6 @@ exports.getAdsReport = async (req, res) => {
             });
         });
 
-        // Finalize ASIN metrics
         const asinList = Object.values(asinMap).map(a => {
             a.acos = a.ad_sales > 0 ? (a.ad_spend / a.ad_sales) * 100 : 0;
             a.roas = a.ad_spend > 0 ? a.ad_sales / a.ad_spend : 0;
@@ -168,7 +173,7 @@ exports.getAdsReport = async (req, res) => {
             return a;
         });
 
-        // 2. Group by Parent ASIN (Tree View)
+        // 4. Build Hierarchy
         const parentMap = {};
         asinList.forEach(child => {
             const pid = child.parentAsin;
@@ -179,7 +184,8 @@ exports.getAdsReport = async (req, res) => {
                     title: `Parent: ${pid}`,
                     children: [],
                     ad_spend: 0, ad_sales: 0, impressions: 0, clicks: 0, orders: 0,
-                    conversions: 0, total_sales: 0, organic_sales: 0, total_units: 0
+                    conversions: 0, total_sales: 0, organic_sales: 0, total_units: 0,
+                    history: []
                 };
             }
             parentMap[pid].children.push(child);
@@ -194,7 +200,6 @@ exports.getAdsReport = async (req, res) => {
             parentMap[pid].total_units += child.total_units;
         });
 
-        // Finalize Parent metrics
         const hierarchicalData = Object.values(parentMap).map(p => {
             p.acos = p.ad_sales > 0 ? (p.ad_spend / p.ad_sales) * 100 : 0;
             p.roas = p.ad_spend > 0 ? p.ad_sales / p.ad_spend : 0;
@@ -204,7 +209,7 @@ exports.getAdsReport = async (req, res) => {
             return p;
         });
 
-        // 3. Daily trend data (for charts)
+        // 5. Daily trend data
         const dailyMap = {};
         rawData.forEach(row => {
             const d = row.Date ? row.Date.toISOString().split('T')[0] : 'Unknown';
@@ -225,11 +230,32 @@ exports.getAdsReport = async (req, res) => {
             d.roas = d.ad_spend > 0 ? d.ad_sales / d.ad_spend : 0;
         });
 
+        const allDailyRows = rawData.map(row => ({
+            asin: row.Asin,
+            sku: row.AdvertisedSku || row.MasterSku || 'None',
+            title: row.Title || 'Unknown',
+            date: row.Date,
+            ad_spend: Number(row.AdSpend || 0),
+            ad_sales: Number(row.AdSales || 0),
+            impressions: Number(row.Impressions || 0),
+            clicks: Number(row.Clicks || 0),
+            orders: Number(row.Orders || 0),
+            conversions: Number(row.Conversions || 0),
+            total_sales: Number(row.TotalSales || 0),
+            organic_sales: Number(row.OrganicSales || 0),
+            acos: row.AdSales > 0 ? (row.AdSpend / row.AdSales) * 100 : 0,
+            roas: row.AdSpend > 0 ? row.AdSales / row.AdSpend : 0,
+            ctr: row.Impressions > 0 ? (row.Clicks / row.Impressions) * 100 : 0,
+            cpc: row.Clicks > 0 ? row.AdSpend / row.Clicks : 0,
+            conversion_rate: row.Clicks > 0 ? (row.Orders / row.Clicks) * 100 : 0
+        })).sort((a, b) => new Date(b.date) - new Date(a.date));
+
         res.json({ 
             success: true, 
-            data: asinList, // Flat list for backward compat if needed
+            data: asinList,
             hierarchicalData, 
-            dailyData 
+            dailyData,
+            allDailyRows
         });
     } catch (error) {
         console.error('getAdsReport error:', error);

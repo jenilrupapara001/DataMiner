@@ -85,7 +85,14 @@ const getAgeTag = (createdAt) => {
 // ─── Component ──────────────────────────────────────────────────
 const AdsReport = () => {
   const { startDate, endDate, rangeType } = useDateRange();
+  const [data, setData] = useState([]);
+  const [prevData, setPrevData] = useState([]);
   const [hierarchicalData, setHierarchicalData] = useState([]);
+  const [dailyData, setDailyData] = useState([]);
+  const [allDailyRows, setAllDailyRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  
   const [expandedParents, setExpandedParents] = useState(new Set());
   const [expandedChildren, setExpandedChildren] = useState(new Set());
   const [selectedAsin, setSelectedAsin] = useState(null);
@@ -94,6 +101,15 @@ const AdsReport = () => {
   const [reportType] = useState('daily');
   const [importProgress, setImportProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'trends', 'attribution'
+  
+  const [tableSearch, setTableSearch] = useState('');
+  const [tablePage, setTablePage] = useState(1);
+  const [perfFilter, setPerfFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('ad_spend');
+  const [sortDir, setSortDir] = useState('desc');
+  const [drawerAsin, setDrawerAsin] = useState(null);
+  const [viewMode, setViewMode] = useState('asin');
+  const [chartMode, setChartMode] = useState('performance'); // 'performance', 'attribution', 'funnel'
   const TABLE_PAGE_SIZE = 15;
 
   const chartModes = [
@@ -139,6 +155,7 @@ const AdsReport = () => {
       setData(res.data || []);
       setHierarchicalData(res.hierarchicalData || []);
       setDailyData(res.dailyData || []);
+      setAllDailyRows(res.allDailyRows || []);
 
       if (compareMode) {
         const prevParams = { startDate: prevStartDate, endDate: prevEndDate, reportType };
@@ -372,10 +389,10 @@ const efficiencyMetrics = useMemo(() => {
         default: break;
       }
     } else {
-      rows = [...dailyData];
+      rows = [...allDailyRows];
       if (tableSearch) {
         const q = tableSearch.toLowerCase();
-        rows = rows.filter(r => r.date && r.date.includes(q));
+        rows = rows.filter(r => (r.date && r.date.includes(q)) || (r.asin && r.asin.toLowerCase().includes(q)) || (r.sku && r.sku.toLowerCase().includes(q)));
       }
     }
 
@@ -404,6 +421,12 @@ const efficiencyMetrics = useMemo(() => {
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const copyAsin = (asin) => {
+    navigator.clipboard.writeText(asin);
+    setCopiedAsin(true);
+    setTimeout(() => setCopiedAsin(false), 2000);
   };
 
 
@@ -454,7 +477,6 @@ const efficiencyMetrics = useMemo(() => {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const copyAsin = (asin) => { navigator.clipboard.writeText(asin); setCopiedAsin(true); setTimeout(() => setCopiedAsin(false), 1500); };
 
   // ─── Table Cell Renderer ───────────────────────────────────
   const tableColumns = useMemo(() => {
