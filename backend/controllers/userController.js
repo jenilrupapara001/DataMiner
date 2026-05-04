@@ -588,19 +588,40 @@ exports.getAvailableRoles = async (req, res) => {
 exports.getSellersForAssignment = async (req, res) => {
   try {
     const pool = await getPool();
-    const result = await pool.request()
-      .query('SELECT Id, Name, Marketplace, SellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name');
+    const sellersResult = await pool.request()
+      .query('SELECT Id as _id, Id, Name as name, Marketplace as marketplace, SellerId as sellerId FROM Sellers WHERE IsActive = 1 ORDER BY Name');
+    
+    const sellers = sellersResult.recordset;
+    if (sellers.length === 0) {
+      return res.json({ success: true, data: { sellers: [] } });
+    }
+
+    // Enrich with managers
+    const sellerIds = sellers.map(s => `'${s.Id}'`).join(',');
+    const managersResult = await pool.request().query(`
+      SELECT US.SellerId, U.Id as _id, U.FirstName as firstName, U.LastName as lastName, U.Email as email
+      FROM UserSellers US
+      JOIN Users U ON US.UserId = U.Id
+      JOIN Roles R ON U.RoleId = R.Id
+      WHERE US.SellerId IN (${sellerIds}) AND R.Name IN ('admin', 'manager', 'Brand Manager')
+    `);
+
+    const managerMap = {};
+    managersResult.recordset.forEach(m => {
+      if (!managerMap[m.SellerId]) managerMap[m.SellerId] = [];
+      const { SellerId, ...managerInfo } = m;
+      managerMap[m.SellerId].push(managerInfo);
+    });
+
+    const enrichedSellers = sellers.map(s => ({
+      ...s,
+      managers: managerMap[s.Id] || []
+    }));
     
     res.json({ 
       success: true, 
       data: { 
-        sellers: result.recordset.map(s => ({ 
-          _id: s.Id, 
-          id: s.Id, 
-          name: s.Name, 
-          marketplace: s.Marketplace, 
-          sellerId: s.SellerId 
-        })) 
+        sellers: enrichedSellers
       } 
     });
   } catch (error) {

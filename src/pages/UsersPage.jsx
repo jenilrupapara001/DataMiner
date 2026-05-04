@@ -18,6 +18,7 @@ const UsersPage = () => {
     const [filters, setFilters] = useState({ search: '', role: '', isActive: '' });
     const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0 });
     const [allPermissions, setAllPermissions] = useState([]);
+    const [sellerSelectionMode, setSellerSelectionMode] = useState('all'); // 'all' or 'manager'
 
     const [formData, setFormData] = useState({
         email: '',
@@ -159,6 +160,7 @@ const UsersPage = () => {
             });
         }
         setShowModal(true);
+        setSellerSelectionMode('all');
     };
 
     const handleSaveUser = async () => {
@@ -663,9 +665,51 @@ const UsersPage = () => {
                                                     Seller Access ({formData.assignedSellers.length} selected)
                                                 </span>
                                             </div>
-                                            <p className="text-zinc-500 mb-3" style={{ fontSize: '11px' }}>
-                                                Select which sellers this user can access. Non-admin users can only see data for assigned sellers.
-                                            </p>
+                                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                                <p className="text-zinc-500 mb-0" style={{ fontSize: '11px' }}>
+                                                    Select which sellers this user can access. Non-admin users can only see data for assigned sellers.
+                                                </p>
+                                                <div className="d-flex gap-2">
+                                                    <button 
+                                                        className={`btn btn-sm py-1 px-2 ${sellerSelectionMode === 'all' ? 'btn-dark' : 'btn-light border'}`}
+                                                        style={{ fontSize: '10px' }}
+                                                        onClick={() => setSellerSelectionMode('all')}
+                                                    >
+                                                        All Sellers
+                                                    </button>
+                                                    <button 
+                                                        className={`btn btn-sm py-1 px-2 ${sellerSelectionMode === 'manager' ? 'btn-dark' : 'btn-light border'}`}
+                                                        style={{ fontSize: '10px' }}
+                                                        onClick={() => setSellerSelectionMode('manager')}
+                                                    >
+                                                        By Brand Manager
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {sellerSelectionMode === 'all' && sellers.length > 0 && (
+                                                <div className="mb-3 d-flex gap-2">
+                                                    <button 
+                                                        className="btn btn-sm btn-light border text-primary fw-bold" 
+                                                        style={{ fontSize: '10px' }}
+                                                        onClick={() => {
+                                                            const allIds = sellers.map(s => s._id || s.id);
+                                                            setFormData(prev => ({ ...prev, assignedSellers: allIds }));
+                                                        }}
+                                                    >
+                                                        Select All Sellers
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-sm btn-light border text-danger fw-bold" 
+                                                        style={{ fontSize: '10px' }}
+                                                        onClick={() => {
+                                                            setFormData(prev => ({ ...prev, assignedSellers: [] }));
+                                                        }}
+                                                    >
+                                                        Deselect All
+                                                    </button>
+                                                </div>
+                                            )}
                                             
                                             {sellers.length === 0 ? (
                                                 <div className="text-center py-3 bg-zinc-50 rounded-3">
@@ -673,47 +717,142 @@ const UsersPage = () => {
                                                     <p className="text-zinc-400 mb-0" style={{ fontSize: '12px' }}>No sellers available</p>
                                                 </div>
                                             ) : (
-                                                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                    <div className="row g-2">
-                                                        {sellers.map((seller) => (
-                                                            <div key={seller._id || seller.id} className="col-md-4 col-sm-6">
-                                                                <div
-                                                                    className={`p-2 rounded-3 border cursor-pointer transition-all ${
-                                                                        formData.assignedSellers.includes(seller._id || seller.id) 
-                                                                            ? 'bg-emerald-50 border-emerald-300' 
-                                                                            : 'bg-white border-zinc-200 hover-bg-zinc-50'
-                                                                    }`}
-                                                                    onClick={() => {
-                                                                        const sid = seller._id || seller.id;
-                                                                        setFormData(prev => ({
-                                                                            ...prev,
-                                                                            assignedSellers: prev.assignedSellers.includes(sid)
-                                                                                ? prev.assignedSellers.filter(id => id !== sid)
-                                                                                : [...prev.assignedSellers, sid]
-                                                                        }));
-                                                                    }}
-                                                                >
-                                                                    <div className="d-flex align-items-center gap-2">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="form-check-input m-0"
-                                                                            checked={formData.assignedSellers.includes(seller._id || seller.id)}
-                                                                            readOnly
-                                                                            style={{ width: '15px', height: '15px', cursor: 'pointer' }}
-                                                                        />
-                                                                        <div className="min-w-0">
-                                                                            <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '11px' }}>
-                                                                                {seller.name}
-                                                                            </div>
-                                                                            <div className="text-zinc-400" style={{ fontSize: '9px' }}>
-                                                                                {seller.marketplace}
+                                                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                    {sellerSelectionMode === 'all' ? (
+                                                        <div className="row g-2">
+                                                            {sellers.map((seller) => (
+                                                                <div key={seller._id || seller.id} className="col-md-4 col-sm-6">
+                                                                    <div
+                                                                        className={`p-2 rounded-3 border cursor-pointer transition-all ${
+                                                                            formData.assignedSellers.includes(seller._id || seller.id) 
+                                                                                ? 'bg-emerald-50 border-emerald-300' 
+                                                                                : 'bg-white border-zinc-200 hover-bg-zinc-50'
+                                                                        }`}
+                                                                        onClick={() => {
+                                                                            const sid = seller._id || seller.id;
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                assignedSellers: prev.assignedSellers.includes(sid)
+                                                                                    ? prev.assignedSellers.filter(id => id !== sid)
+                                                                                    : [...prev.assignedSellers, sid]
+                                                                            }));
+                                                                        }}
+                                                                    >
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                className="form-check-input m-0"
+                                                                                checked={formData.assignedSellers.includes(seller._id || seller.id)}
+                                                                                readOnly
+                                                                                style={{ width: '15px', height: '15px', cursor: 'pointer' }}
+                                                                            />
+                                                                            <div className="min-w-0">
+                                                                                <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '11px' }}>
+                                                                                    {seller.name}
+                                                                                </div>
+                                                                                <div className="text-zinc-400" style={{ fontSize: '9px' }}>
+                                                                                    {seller.marketplace}
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="d-flex flex-column gap-4">
+                                                            {Object.entries(
+                                                                sellers.reduce((acc, seller) => {
+                                                                    const managers = seller.managers && seller.managers.length > 0 
+                                                                        ? seller.managers.map(m => `${m.firstName} ${m.lastName}`) 
+                                                                        : ['Unassigned'];
+                                                                    
+                                                                    managers.forEach(mName => {
+                                                                        if (!acc[mName]) acc[mName] = [];
+                                                                        acc[mName].push(seller);
+                                                                    });
+                                                                    return acc;
+                                                                }, {})
+                                                            ).map(([mName, mSellers]) => (
+                                                                <div key={mName} className="border rounded-3 p-3 bg-white">
+                                                                    <div className="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <div className="p-1.5 rounded-2 bg-primary-subtle text-primary">
+                                                                                <UserCheck size={12} />
+                                                                            </div>
+                                                                            <span className="fw-bold text-zinc-800" style={{ fontSize: '12px' }}>{mName}</span>
+                                                                            <span className="badge bg-zinc-100 text-zinc-500" style={{ fontSize: '9px' }}>{mSellers.length} Sellers</span>
+                                                                        </div>
+                                                                        <div className="d-flex gap-2">
+                                                                            <button 
+                                                                                className="btn btn-xs btn-link p-0 text-primary fw-bold text-decoration-none" 
+                                                                                style={{ fontSize: '10px' }}
+                                                                                onClick={() => {
+                                                                                    const sIds = mSellers.map(s => s._id || s.id);
+                                                                                    setFormData(prev => ({
+                                                                                        ...prev,
+                                                                                        assignedSellers: [...new Set([...prev.assignedSellers, ...sIds])]
+                                                                                    }));
+                                                                                }}
+                                                                            >
+                                                                                Select Group
+                                                                            </button>
+                                                                            <button 
+                                                                                className="btn btn-xs btn-link p-0 text-danger fw-bold text-decoration-none" 
+                                                                                style={{ fontSize: '10px' }}
+                                                                                onClick={() => {
+                                                                                    const sIds = mSellers.map(s => s._id || s.id);
+                                                                                    setFormData(prev => ({
+                                                                                        ...prev,
+                                                                                        assignedSellers: prev.assignedSellers.filter(id => !sIds.includes(id))
+                                                                                    }));
+                                                                                }}
+                                                                            >
+                                                                                Unselect
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="row g-2">
+                                                                        {mSellers.map(seller => (
+                                                                            <div key={`${mName}-${seller._id}`} className="col-md-4 col-sm-6">
+                                                                                <div
+                                                                                    className={`p-2 rounded-3 border cursor-pointer transition-all ${
+                                                                                        formData.assignedSellers.includes(seller._id || seller.id) 
+                                                                                            ? 'bg-emerald-50 border-emerald-300' 
+                                                                                            : 'bg-white border-zinc-200 hover-bg-zinc-50'
+                                                                                    }`}
+                                                                                    onClick={() => {
+                                                                                        const sid = seller._id || seller.id;
+                                                                                        setFormData(prev => ({
+                                                                                            ...prev,
+                                                                                            assignedSellers: prev.assignedSellers.includes(sid)
+                                                                                                ? prev.assignedSellers.filter(id => id !== sid)
+                                                                                                : [...prev.assignedSellers, sid]
+                                                                                        }));
+                                                                                    }}
+                                                                                >
+                                                                                    <div className="d-flex align-items-center gap-2">
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            className="form-check-input m-0"
+                                                                                            checked={formData.assignedSellers.includes(seller._id || seller.id)}
+                                                                                            readOnly
+                                                                                            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                                                                                        />
+                                                                                        <div className="min-w-0">
+                                                                                            <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '10px' }}>
+                                                                                                {seller.name}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
