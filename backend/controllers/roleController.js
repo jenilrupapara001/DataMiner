@@ -397,6 +397,38 @@ const defaultRoles = [
     color: '#6366F1', // Indigo-500
   },
   {
+    name: 'Brand Manager',
+    displayName: 'Brand Manager',
+    description: 'Manages specific brands and their product catalogs.',
+    isSystem: true,
+    level: 50,
+    color: '#8B5CF6', // Violet-500
+  },
+  {
+    name: 'category_manager',
+    displayName: 'Category Manager',
+    description: 'Responsible for product categories and catalog quality.',
+    isSystem: true,
+    level: 45,
+    color: '#F59E0B', // Amber-500
+  },
+  {
+    name: 'analyst',
+    displayName: 'Analyst',
+    description: 'Access to data analysis and reporting tools.',
+    isSystem: true,
+    level: 40,
+    color: '#06B6D4', // Cyan-500
+  },
+  {
+    name: 'Listing Manager',
+    displayName: 'Listing Manager',
+    description: 'Dedicated to ASIN management with access to all sellers for catalog filtering.',
+    isSystem: true,
+    level: 35,
+    color: '#10B981', // Emerald-500
+  },
+  {
     name: 'viewer',
     displayName: 'Guest Viewer',
     description: 'Restricted read-only access to dashboards and basic reports.',
@@ -453,6 +485,10 @@ exports.seedRolesAndPermissions = async (req, res) => {
       team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || ['asinmanager_view', 'seller_view'].includes(p.Name)),
       inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || ['dashboard_view', 'seller_view'].includes(p.Name) || p.Category === 'Reports'),
       catalogue_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
+      'Brand Manager': getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view' || p.Category === 'Reports'),
+      category_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
+      analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
+      'Listing Manager': getPermIds(p => p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')),
       employee: getPermIds(p => (['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
       viewer: getPermIds(p => (p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
     };

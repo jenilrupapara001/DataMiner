@@ -64,7 +64,7 @@ const enrichSellersWithAsinCounts = async (sellers) => {
 exports.getSellers = async (req, res) => {
   try {
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
     const { status, marketplace, search, page = 1, limit = 200 } = req.query;
     const pageNum = parseInt(page);
@@ -165,7 +165,7 @@ exports.getSeller = async (req, res) => {
   try {
     const { id } = req.params;
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
     const isAssigned = (req.user?.assignedSellers || []).some(s => (s._id || s).toString() === id);
 
     if (!isGlobalUser && !isAssigned) {
@@ -211,7 +211,7 @@ exports.getSeller = async (req, res) => {
 exports.createSeller = async (req, res) => {
   try {
     const userRole = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
     const isManager = userRole === 'manager' || userRole === 'Brand Manager';
     const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
 
@@ -266,7 +266,7 @@ exports.updateSeller = async (req, res) => {
     const { id } = req.params;
     const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
     const userRole = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
 
     const pool = await getPool();
     await pool.request()

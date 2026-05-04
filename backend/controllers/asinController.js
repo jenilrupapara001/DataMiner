@@ -35,7 +35,7 @@ exports.getAsins = async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
     const pool = await getPool();
     
@@ -547,7 +547,7 @@ exports.getAsin = async (req, res) => {
 
     // User Scope Check
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
     const isAssigned = isGlobalUser || (req.user && req.user.assignedSellers.some(s => (s._id || s).toString() === a.SellerId));
 
     if (!isAssigned) {
@@ -761,7 +761,7 @@ exports.getAsinStats = async (req, res) => {
     let whereClause = 'WHERE 1=1';
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
     if (!isGlobalUser) {
       const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
