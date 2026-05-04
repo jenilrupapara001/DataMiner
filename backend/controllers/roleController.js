@@ -448,12 +448,13 @@ exports.seedRolesAndPermissions = async (req, res) => {
       admin: allPermissions.map(p => p.Id),
       operational_manager: getPermIds(p => p.Category !== 'Security' || p.Name === 'users_view'),
       marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
-      data_analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools'].includes(p.Category)),
-      team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || p.Name === 'asinmanager_view'),
-      inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || p.Name === 'dashboard_view' || p.Category === 'Reports'),
-      catalogue_manager: getPermIds(p => p.Name && p.Name.includes('asinmanager') || p.Name === 'dashboard_view'),
-      employee: getPermIds(p => ['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)),
-      viewer: getPermIds(p => p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)),
+      marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
+      data_analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
+      team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || ['asinmanager_view', 'seller_view'].includes(p.Name)),
+      inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || ['dashboard_view', 'seller_view'].includes(p.Name) || p.Category === 'Reports'),
+      catalogue_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
+      employee: getPermIds(p => (['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
+      viewer: getPermIds(p => (p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
     };
 
     for (const roleData of defaultRoles) {
