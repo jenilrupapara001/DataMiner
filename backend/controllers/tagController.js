@@ -7,7 +7,8 @@ const { logTagChange } = require('./tagsHistoryController');
 const DEFAULT_TAGS = [
     'Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization',
     'A+ Content Missing', 'Low LQS', 'BuyBox Lost', 'Price Drop',
-    'New Launch', 'Seasonal', 'Clearance', 'Replenishment',
+    '30Days', '60 Days', '90Days', '180 Days', '365 Days', '365 + Days',
+    'Seasonal', 'Clearance', 'Replenishment',
     'Ad Active', 'No Ads', 'Review Alert', 'Competitor Alert',
     'MAP Violation', 'Hijacker Alert', 'Inventory Low', 'Out of Stock'
 ];

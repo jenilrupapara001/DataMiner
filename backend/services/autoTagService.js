@@ -22,41 +22,19 @@ class AutoTagService {
 
         const tags = [];
 
-        // Age-based tags
+        // Age-based tags (User requested specific naming)
         if (diffDays >= 0 && diffDays <= 30) {
-            tags.push('New Launch');
-            tags.push('New 30D');
-        }
-        if (diffDays > 30 && diffDays <= 60) {
-            tags.push('30-60 Days');
-            tags.push('Growth Phase');
-        }
-        if (diffDays > 60 && diffDays <= 90) {
-            tags.push('60-90 Days');
-            tags.push('Established');
-        }
-        if (diffDays > 90 && diffDays <= 180) {
-            tags.push('90-180 Days');
-            tags.push('Mature');
-        }
-        if (diffDays > 180 && diffDays <= 365) {
-            tags.push('180-365 Days');
-            tags.push('Veteran');
-        }
-        if (diffDays > 365) {
-            tags.push('365+ Days');
-            tags.push('Legacy');
-        }
-
-        // Performance markers
-        if (diffDays > 30) {
-            tags.push('30+ Days Live');
-        }
-        if (diffDays > 60) {
-            tags.push('60+ Days Live');
-        }
-        if (diffDays > 90) {
-            tags.push('90+ Days Live');
+            tags.push('30Days');
+        } else if (diffDays > 30 && diffDays <= 60) {
+            tags.push('60 Days');
+        } else if (diffDays > 60 && diffDays <= 90) {
+            tags.push('90Days');
+        } else if (diffDays > 90 && diffDays <= 180) {
+            tags.push('180 Days');
+        } else if (diffDays > 180 && diffDays <= 365) {
+            tags.push('365 Days');
+        } else if (diffDays > 365) {
+            tags.push('365 + Days');
         }
 
         return tags;
@@ -92,7 +70,7 @@ class AutoTagService {
             daysSinceRelease: diffDays,
             priority,
             needsReview,
-            ageCategory: diffDays <= 30 ? 'New' : diffDays <= 60 ? 'Growing' : diffDays <= 90 ? 'Established' : 'Mature'
+            ageCategory: diffDays <= 30 ? '30Days' : diffDays <= 60 ? '60 Days' : diffDays <= 90 ? '90Days' : diffDays <= 180 ? '180 Days' : diffDays <= 365 ? '365 Days' : '365 + Days'
         };
     }
 
@@ -106,6 +84,7 @@ class AutoTagService {
     static mergeTags(existingTags = [], autoTags = [], replaceAgeTags = true) {
         // Age-related tag patterns to identify
         const ageTagPatterns = [
+            '30Days', '60 Days', '90Days', '180 Days', '365 Days', '365 + Days',
             'New Launch', 'New 30D', '30-60 Days', '60-90 Days', '90-180 Days', '180-365 Days', '365+ Days',
             'Growth Phase', 'Established', 'Mature', 'Veteran', 'Legacy',
             '30+ Days Live', '60+ Days Live', '90+ Days Live',
