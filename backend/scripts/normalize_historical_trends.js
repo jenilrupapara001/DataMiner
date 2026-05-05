@@ -20,10 +20,13 @@ async function normalizeHistoricalTrends() {
         
         // Filter out zero values for average calculation
         const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
+        if (prevPoints.length === 0) return 'Stable';
+
         // Use the most recent previous valid point as baseline ("last data" as requested)
         const lastPoint = prevPoints[prevPoints.length - 1];
-        const baseline = lastPoint[field] || 0;
+        if (!lastPoint) return 'Stable';
         
+        const baseline = lastPoint[field] || 0;
         if (baseline === 0) return 'Stable';
         
         if (isAbsolute) {
