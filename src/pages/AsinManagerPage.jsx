@@ -407,7 +407,8 @@ const AsinManagerPage = () => {
         asinsWithHistory.forEach(asin => {
           const allHistory = [
             ...(asin.weekHistory || []),
-            ...(asin.history || [])
+            ...(asin.history || []),
+            ...(asin.subBsrHistory || [])
           ];
 
           allHistory.forEach(h => {
@@ -2749,7 +2750,11 @@ const AsinManagerPage = () => {
                         <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                           onClick={(e) => handleViewBsr(asin, e)}>
                           <div style={{ fontWeight: 600, color: '#6b7280' }}>
-                            {asin.subBsr && asin.subBsr !== '0' ? (asin.subBsr.includes(' in ') ? asin.subBsr.split(' in ')[0] : asin.subBsr) : '-'}
+                            {(() => {
+                              const val = (asin.subBsr && asin.subBsr !== '0') ? asin.subBsr : (Array.isArray(asin.subBSRs) && asin.subBSRs[0]);
+                              if (!val || val === '0') return '-';
+                              return val.includes(' in ') ? val.split(' in ')[0] : val;
+                            })()}
                           </div>
                         </td>
                       )}
@@ -2830,13 +2835,18 @@ const AsinManagerPage = () => {
                         </td>
                       )}
                       {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                        const hDate = date.raw;
+                        const subBsrPoint = asin.subBsrHistory?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate);
+                        const histPoint = asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate)
+                                       || asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === hDate);
+                        
+                        const displayVal = subBsrPoint?.rank || histPoint?.subBsr || histPoint?.bsr;
+
                         return (
                           <td key={`b-${week.label}-${dIdx}`}
                             onClick={(e) => handleViewBsr(asin, e)}
                             style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
-                            {wData?.subBsr ? getWeekHistoryBadge(wData.subBsr, 'subBsr') : (wData?.bsr ? getWeekHistoryBadge(wData.bsr, 'subBsr') : '-')}
+                            {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
                           </td>
                         );
                       }))}

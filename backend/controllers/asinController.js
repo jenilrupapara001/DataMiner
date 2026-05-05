@@ -331,6 +331,27 @@ exports.getAsins = async (req, res) => {
         let subBSRs = [];
         try { subBSRs = a.SubBSRs ? (typeof a.SubBSRs === 'string' ? JSON.parse(a.SubBSRs) : a.SubBSRs) : []; } catch (e) { subBSRs = []; }
 
+        let subBsrCategories = [];
+        try { subBsrCategories = a.SubBsrCategories ? (typeof a.SubBsrCategories === 'string' ? JSON.parse(a.SubBsrCategories) : a.SubBsrCategories) : []; } catch (e) { subBsrCategories = []; }
+
+        // If subBsr is "0" or empty, try to get from history or subBSRs
+        let currentSubBsr = a.SubBsr || '';
+        if ((!currentSubBsr || currentSubBsr === '0') && subBSRs.length > 0) {
+            currentSubBsr = subBSRs[0];
+        }
+        if ((!currentSubBsr || currentSubBsr === '0') && subBsrHistory.length > 0) {
+            const latest = subBsrHistory[subBsrHistory.length - 1];
+            currentSubBsr = `#${latest.rank.toLocaleString()} in ${latest.category}`;
+        }
+        if (subBSRs.length === 0 && subBsrHistory.length > 0) {
+            // Build subBSRs from unique categories in history
+            const uniqueCats = {};
+            subBsrHistory.forEach(h => {
+                uniqueCats[h.category] = h.rank;
+            });
+            subBSRs = Object.entries(uniqueCats).map(([cat, rank]) => `#${rank.toLocaleString()} in ${cat}`);
+        }
+
         let images = [];
         try { images = a.Images ? (typeof a.Images === 'string' ? JSON.parse(a.Images) : a.Images) : []; } catch (e) { images = []; }
 
@@ -468,7 +489,8 @@ exports.getAsins = async (req, res) => {
             descLength: parseInt(a.DescLength) || 0,
             
             // Sub BSR
-            subBsr: a.SubBsr || '',
+            subBsr: currentSubBsr,
+            subBsrCategories: subBsrCategories,
             
             // Parsed JSON arrays/objects
             allOffers: allOffers,
