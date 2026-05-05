@@ -297,7 +297,7 @@ exports.getAsins = async (req, res) => {
       FROM SubBsrHistory
       WHERE AsinId IN (${asinIds})
       AND Date >= DATEADD(day, -14, GETDATE())
-      ORDER BY Date ASC, SubBsrRank ASC
+      ORDER BY Date ASC, CreatedAt DESC
     `);
 
     const subBsrHistoryMap = {};
@@ -426,7 +426,9 @@ exports.getAsins = async (req, res) => {
             
             // BSR & Ratings
             bsr: parseInt(a.BSR) || 0,
+            bsrTrend: a.BsrTrend || 'Stable',
             rating: parseFloat(a.Rating) || 0,
+            ratingTrend: a.RatingTrend || 'Stable',
             reviewCount: parseInt(a.ReviewCount) || 0,
             ratingBreakdown: ratingBreakdown,
             

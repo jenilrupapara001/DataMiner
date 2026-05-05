@@ -2837,10 +2837,7 @@ const AsinManagerPage = () => {
                       {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
                         const hDate = date.raw;
                         const subBsrPoint = asin.subBsrHistory?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate);
-                        const histPoint = asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate)
-                                       || asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === hDate);
-                        
-                        const displayVal = subBsrPoint?.rank || histPoint?.subBsr || histPoint?.bsr;
+                        const displayVal = subBsrPoint?.rank;
 
                         return (
                           <td key={`b-${week.label}-${dIdx}`}

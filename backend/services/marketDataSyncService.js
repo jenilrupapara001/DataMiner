@@ -1873,7 +1873,9 @@ class MarketDataSyncService {
             const currentPrice = price > 0 ? price : (asin.CurrentPrice || 0);
             const uploadedPrice = asin.UploadedPrice || 0;
             // Simple match logic: if uploaded price is set and doesn't match current price, it's a dispute
-            const isDisputed = uploadedPrice > 0 && Math.abs(uploadedPrice - currentPrice) > 0.01;
+            // User requested: If deal badge is present, it's NOT a price dispute
+            const hasDeal = dealBadge && dealBadge !== 'No deal found';
+            const isDisputed = uploadedPrice > 0 && Math.abs(uploadedPrice - currentPrice) > 0.01 && !hasDeal;
             
             // Handle Tags
             let currentTags = [];
@@ -1894,7 +1896,7 @@ class MarketDataSyncService {
             }
 
             // --- Trend Calculations (Last 7 Days Average Comparison) ---
-            const calculateTrend = (current, history, field, threshold = 0.05, isAbsolute = false) => {
+            const calculateTrend = (current, history, field, threshold = 0.05, isAbsolute = false, invert = false) => {
                 // history here is uniqueHistory which includes current point at the end
                 if (!history || history.length < 2) return 'Stable';
                 
@@ -1908,16 +1910,22 @@ class MarketDataSyncService {
                 if (avg === 0) return 'Stable';
                 
                 if (isAbsolute) {
+                    // Rating is absolute
                     if (current < avg - threshold) return 'Down';
                     if (current > avg + threshold) return 'Grow';
                     return 'Stable';
                 } else {
                     const diffPercent = (current - avg) / avg;
-                    // For BSR, a DECREASE in value is actually GROWTH in rank
-                    // But user specifically asked: "if it decreased more then 5% of average then have to show down ... and if it going up then show Grow"
-                    // We will follow the literal instruction for BSR
-                    if (diffPercent < -threshold) return 'Down';
-                    if (diffPercent > threshold) return 'Grow';
+                    
+                    if (invert) {
+                        // For BSR, a DECREASE in number (-%) is GOOD (Grow)
+                        if (diffPercent < -threshold) return 'Grow';
+                        if (diffPercent > threshold) return 'Down';
+                    } else {
+                        // For Prices/Reviews, an INCREASE (+%) is usually GROW
+                        if (diffPercent < -threshold) return 'Down';
+                        if (diffPercent > threshold) return 'Grow';
+                    }
                     return 'Stable';
                 }
             };
@@ -1926,7 +1934,7 @@ class MarketDataSyncService {
             const currentRating = rating > 0 ? rating : asin.Rating;
             const currentReviews = reviewCount || asin.ReviewCount || 0;
 
-            const bsrTrend = calculateTrend(currentBSR, uniqueHistory, 'bsr', 0.05);
+            const bsrTrend = calculateTrend(currentBSR, uniqueHistory, 'bsr', 0.05, false, true);
             const ratingTrend = calculateTrend(currentRating, uniqueHistory, 'rating', 0.1, true);
 
             const updates = {
@@ -2049,14 +2057,17 @@ class MarketDataSyncService {
                         
                         try {
                             await pool.request()
-                                .input('id', sql.VarChar, generateId())
                                 .input('asinId', sql.VarChar, asinId)
                                 .input('date', sql.Date, today)
                                 .input('category', sql.NVarChar, category)
                                 .input('rank', sql.Int, rank)
                                 .query(`
-                                    INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                    VALUES (@id, @asinId, @date, @category, @rank, GETDATE())
+                                    IF EXISTS (SELECT 1 FROM SubBsrHistory WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
+                                        UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
+                                        WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
+                                    ELSE
+                                        INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                        VALUES (REPLACE(NEWID(), '-', ''), @asinId, @date, @category, @rank, GETDATE())
                                 `);
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
