@@ -139,7 +139,7 @@ class SchedulerService {
     }
 
     async runEnterprisePipeline() {
-        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Concurrent)...');
+        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Stop-then-Start Strategy)...');
         try {
             const pool = await getPool();
 
@@ -152,51 +152,34 @@ class SchedulerService {
             await MarketSyncService.preWarmTaskIdCache();
 
             const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+                .query("SELECT TOP 5 * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' ORDER BY Name");
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) return { success: true, totalSellers: 0 };
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for conservative staggered sync.`);
+            console.log(`🏢 [ENTERPRISE] Processing exactly ${sellers.length} sellers as requested (Clean Start).`);
 
-            const CONCURRENCY_LIMIT = 2; // Reduced to 2 for maximum stability against Octoparse 429s
+            const CONCURRENCY_LIMIT = 5; // Start all 5 as requested
             let successful = 0;
             const startTime = Date.now();
 
-            for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
-                const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
+            await Promise.all(sellers.map(async (seller, index) => {
+                try {
+                    // Stagger starts to respect burst limits (5s between each start)
+                    await new Promise(r => setTimeout(r, index * 5000));
 
-                console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers (High-Delay Stagger)...`);
-
-                await Promise.all(batch.map(async (seller, index) => {
-                    try {
-                        // Add significant staggering within the batch (10s delay per seller position)
-                        if (index > 0) {
-                            await new Promise(r => setTimeout(r, index * 10000));
-                        }
-
-                        // 3. Clear previous data from Octoparse cloud before starting
-                        console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
-                        await MarketSyncService.clearTaskData(seller.OctoparseId);
-
-                        // 4. Trigger sync and scrape
-                        await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, {
-                            triggerScrape: true,
-                            fullSync: true,
-                            forceReRun: true
-                        });
-                        successful++;
-                        console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
-                    } catch (err) {
-                        console.error(`❌ [ENTERPRISE] Failed to trigger sync for ${seller.Name}:`, err.message);
-                    }
-                }));
-
-                // Delay between batches for API stability
-                if (i + CONCURRENCY_LIMIT < sellers.length) {
-                    await new Promise(r => setTimeout(r, 15000));
+                    // 3. Trigger robust sync (Now handles Stop -> Clear -> Inject -> Start internally)
+                    await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, {
+                        triggerScrape: true,
+                        fullSync: true,
+                        forceReRun: true
+                    });
+                    successful++;
+                    console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
+                } catch (err) {
+                    console.error(`❌ [ENTERPRISE] Failed to trigger sync for ${seller.Name}:`, err.message);
                 }
-            }
+            }));
 
             const duration = Math.round((Date.now() - startTime) / 1000);
             const result = {
@@ -361,11 +344,15 @@ class SchedulerService {
                     if (rawData && rawData.length > 0) {
                         const processedCount = await MarketSyncService.processBatchResults(seller.Id, rawData);
                         console.log(`[Scheduler] ✅ Successfully bulk-linked ${processedCount} results for ${seller.Name}`);
+                        
+                        // 3. POST-EXPORT CLEANUP: Clear data from Octoparse once it's in our DB
+                        console.log(`[Scheduler] 🧹 Clearing data in Octoparse for ${seller.Name} after export...`);
+                        await MarketSyncService.clearTaskData(seller.OctoparseId);
                     }
                 } catch (err) {
                     console.error(`[Scheduler] ❌ Failed to fetch result for ${seller.Name}:`, err.message);
                 }
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 5000)); // Increased stagger
             }
         } catch (error) {
             console.error('[Scheduler] Critical Octoparse Fetch error:', error.message);

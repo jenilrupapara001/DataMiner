@@ -65,6 +65,10 @@ class MarketDataSyncService {
         this.syncLocks = new Map(); // Concurrency control per sellerId
         this.statusCache = new Map(); // Simple status cache to prevent 429s (TTL: 10s)
         this.taskIdCache = new Map(); // UUID to Integer ID mapping cache
+        this.taskGroupCache = null;
+        this.taskGroupCacheTime = 0;
+        this.isPreWarming = false;
+        this.isPreWarmed = false;
 
         // Throttling for setup operations
         this._executingSetups = 0;
@@ -662,16 +666,25 @@ class MarketDataSyncService {
      * Get list of Octoparse Task Groups
      */
     async getTaskGroupList() {
+        // Cache group list for 10 minutes
+        if (this.taskGroupCache && Date.now() - this.taskGroupCacheTime < 600000) {
+            return this.taskGroupCache;
+        }
+
         try {
             console.log('🔍 Fetching Octoparse Task Group List...');
 
-            // 1. Try Modern endpoint first (from Python snippet)
+            // 1. Try Modern endpoint first
             try {
                 const res = await this.callOctoparseApi({
                     method: 'get',
                     url: `${this.baseUrl}/taskGroup`
                 });
-                if (res.data?.data) return res.data.data;
+                if (res.data?.data) {
+                    this.taskGroupCache = res.data.data;
+                    this.taskGroupCacheTime = Date.now();
+                    return res.data.data;
+                }
             } catch (err) { /* fallback */ }
 
             // 2. Try legacy API snippet fallback
@@ -680,13 +693,17 @@ class MarketDataSyncService {
                     method: 'get',
                     url: `${this.baseUrl}/api/taskgroup/getlist`
                 });
-                if (res.data?.data) return res.data.data;
+                if (res.data?.data) {
+                    this.taskGroupCache = res.data.data;
+                    this.taskGroupCacheTime = Date.now();
+                    return res.data.data;
+                }
             } catch (err) { /* fallback */ }
 
-            return [];
+            return this.taskGroupCache || [];
         } catch (error) {
-            console.error('❌ Get Task Group List Error:', error.response?.status, error.response?.data || error.message);
-            return [];
+            console.error('❌ Get Task Group List Error:', error.message);
+            return this.taskGroupCache || [];
         }
     }
 
@@ -695,38 +712,57 @@ class MarketDataSyncService {
      * This prevents 429 errors by avoiding thousands of search calls during batch processing.
      */
     async preWarmTaskIdCache() {
+        if (this.isPreWarming) return;
+        if (this.isPreWarmed && Date.now() - this.taskGroupCacheTime < 3600000) return; // Warm for 1 hour
+
+        this.isPreWarming = true;
         try {
-            console.log('🔥 [CACHE] Pre-warming Task ID Cache...');
+            console.log('🔥 [CACHE] Pre-warming Task ID Cache from all groups...');
             const groups = await this.getTaskGroupList();
             if (!groups || groups.length === 0) return;
 
-            let totalCached = 0;
             for (const group of groups) {
                 const groupId = group.categoryId || group.id || group.taskGroupId;
                 if (!groupId) continue;
 
-                // Fetch first page of tasks for this group using resilient wrapper
-                const response = await this.callOctoparseApi({
-                    method: 'get',
-                    url: `${this.baseUrl}/task/search`,
-                    params: { taskGroupId: groupId, size: 200 }
-                });
+                console.log(`📑 [CACHE] Indexing group: ${group.categoryName || group.name || groupId}...`);
+                
+                // Fetch first 200 tasks in this group (4 pages of 50)
+                for (let offset = 0; offset <= 150; offset += 50) {
+                    try {
+                        const response = await this.callOctoparseApi({
+                            method: 'get',
+                            url: `${this.baseUrl}/task/search`,
+                            params: { taskGroupId: groupId, size: 50, offset }
+                        });
 
-                const tasks = response.data?.data || [];
-                for (const task of tasks) {
-                    const uuid = task.taskId;
-                    const intId = task.id;
-                    if (uuid && intId) {
-                        this.taskIdCache.set(uuid.toString(), intId);
-                        totalCached++;
+                        const tasks = response.data?.data || [];
+                        if (tasks.length === 0) break;
+
+                        for (const task of tasks) {
+                            const uuid = task.taskId || task.TaskID;
+                            const intId = task.id || task.intId;
+                            if (uuid && intId) {
+                                this.taskIdCache.set(uuid.toString(), intId);
+                                // Also cache reverse mapping for safety
+                                this.taskIdCache.set(intId.toString(), intId);
+                            }
+                        }
+
+                        if (tasks.length < 50) break;
+                        await this.wait(2000); // Respect rate limits
+                    } catch (err) {
+                        console.warn(`⚠️ [CACHE] Failed to index group ${groupId} at offset ${offset}:`, err.message);
+                        break;
                     }
                 }
-                // Small breath between groups
-                await this.wait(2000); // Increased delay
             }
-            console.log(`✅ [CACHE] Pre-warmed ${totalCached} task IDs.`);
-        } catch (err) {
-            console.error('⚠️ [CACHE] Failed to pre-warm cache:', err.message);
+            this.isPreWarmed = true;
+            console.log(`✅ [CACHE] Pre-warmed cache with ${this.taskIdCache.size} task mappings.`);
+        } catch (error) {
+            console.error('❌ [CACHE] Pre-warm failed:', error.message);
+        } finally {
+            this.isPreWarming = false;
         }
     }
 
@@ -1576,33 +1612,14 @@ class MarketDataSyncService {
                 return false;
             }
 
-            // 2. Task Stop (Only wait if not a forced manual re-run to save time)
-            if (forceReRun) {
-                console.log(`📡 Forcing immediate restart for task ${taskId}...`);
-                await this.stopSync(taskId);
-                // Wait for task to actually stop before proceeding
-                console.log(`⏳ Waiting for task to stop...`);
-                await this.wait(5000);
-            } else {
-                await this.ensureTaskStopped(taskId);
-            }
-
-            // 2.1 PRE-SYNC CLEANUP: Fetch pending data and clear it to prevent duplication
-            try {
-                console.log(`🧹 [Pre-Sync] Checking for pending data in task ${taskId}...`);
-                const pendingData = await this.retrieveResults(taskId);
-                if (pendingData && pendingData.length > 0) {
-                    console.log(`📦 Found ${pendingData.length} pending items. Processing before clearing...`);
-                    await this.processBatchResults(sellerId, pendingData);
-                }
-                await this.markDataAsExported(taskId);
-                console.log(`✅ [Pre-Sync] Cleanup complete for task ${taskId}.`);
-            } catch (cleanupErr) {
-                console.warn(`⚠️ [Pre-Sync] Cleanup warning (continuing sync): ${cleanupErr.message}`);
-            }
-
-            // 2.5 Settling Delay: Give Octoparse a moment to stabilize after a stop command
-            // This prevents "TaskExecuting" errors during immediate injection
+            // 2. STOPS & CLEARS: Ensure task is idle and empty before injection
+            console.log(`🛡️ [PROPER] Phase 1: Ensuring task ${taskId} is stopped...`);
+            await this.ensureTaskStopped(taskId);
+            
+            console.log(`🛡️ [PROPER] Phase 2: Clearing all previous data for task ${taskId}...`);
+            await this.clearTaskData(taskId);
+            
+            // 2.1 Settling Delay: Give Octoparse a moment to stabilize after a stop/clear command
             await this.wait(5000);
 
             // 3. Get ASINs for this seller from database
