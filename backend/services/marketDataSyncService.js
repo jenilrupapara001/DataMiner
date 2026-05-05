@@ -1902,20 +1902,19 @@ class MarketDataSyncService {
                 
                 // Filter out zero values for average calculation to avoid skewing
                 const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
-                if (prevPoints.length === 0) return 'Stable';
+                // Use the most recent previous valid point as baseline ("last data" as requested)
+                const lastPoint = prevPoints[prevPoints.length - 1];
+                const baseline = lastPoint[field] || 0;
                 
-                const sum = prevPoints.reduce((acc, item) => acc + (item[field] || 0), 0);
-                const avg = sum / prevPoints.length;
-                
-                if (avg === 0) return 'Stable';
+                if (baseline === 0) return 'Stable';
                 
                 if (isAbsolute) {
-                    // Rating is absolute
-                    if (current < avg - threshold) return 'Down';
-                    if (current > avg + threshold) return 'Grow';
+                    // Absolute comparison (e.g. Rating: 4.5 -> 4.4 is down 0.1)
+                    if (current <= baseline - threshold + 0.001) return 'Down';
+                    if (current >= baseline + threshold - 0.001) return 'Grow';
                     return 'Stable';
                 } else {
-                    const diffPercent = (current - avg) / avg;
+                    const diffPercent = (current - baseline) / baseline;
                     
                     if (invert) {
                         // For BSR, a DECREASE in number (-%) is GOOD (Grow)
