@@ -109,7 +109,13 @@ exports.getAsins = async (req, res) => {
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
     if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxWin = @buyBoxStatus';
-    if (priceDispute !== undefined && priceDispute !== '') whereClause += ' AND PriceDispute = @priceDispute';
+    if (priceDispute !== undefined && priceDispute !== '') {
+      if (priceDispute === 'true') {
+        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+      } else {
+        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+      }
+    }
 
     // [3] Numeric Ranges
     if (minPrice) whereClause += ' AND CurrentPrice >= @minPrice';
@@ -334,22 +340,10 @@ exports.getAsins = async (req, res) => {
         let subBsrCategories = [];
         try { subBsrCategories = a.SubBsrCategories ? (typeof a.SubBsrCategories === 'string' ? JSON.parse(a.SubBsrCategories) : a.SubBsrCategories) : []; } catch (e) { subBsrCategories = []; }
 
-        // If subBsr is "0" or empty, try to get from history or subBSRs
+        // If subBsr is "0" or empty, try to get from subBSRs (current data)
         let currentSubBsr = a.SubBsr || '';
         if ((!currentSubBsr || currentSubBsr === '0') && subBSRs.length > 0) {
             currentSubBsr = subBSRs[0];
-        }
-        if ((!currentSubBsr || currentSubBsr === '0') && subBsrHistory.length > 0) {
-            const latest = subBsrHistory[subBsrHistory.length - 1];
-            currentSubBsr = `#${latest.rank.toLocaleString()} in ${latest.category}`;
-        }
-        if (subBSRs.length === 0 && subBsrHistory.length > 0) {
-            // Build subBSRs from unique categories in history
-            const uniqueCats = {};
-            subBsrHistory.forEach(h => {
-                uniqueCats[h.category] = h.rank;
-            });
-            subBSRs = Object.entries(uniqueCats).map(([cat, rank]) => `#${rank.toLocaleString()} in ${cat}`);
         }
 
         let images = [];
@@ -400,6 +394,9 @@ exports.getAsins = async (req, res) => {
             }
         }
 
+        const hasDeal = a.DealBadge && a.DealBadge !== '' && a.DealBadge !== 'No deal found';
+        const priceDisputeValue = (a.UploadedPrice > 0 && Math.abs(a.UploadedPrice - (a.CurrentPrice || 0)) > 0.01 && !hasDeal);
+
         // ---- BUILD FINAL RESPONSE OBJECT ----
         return {
             _id: a.Id,
@@ -424,6 +421,8 @@ exports.getAsins = async (req, res) => {
             dealBadge: a.DealBadge || 'No deal found',
             priceType: a.PriceType || 'Standard Price',
             discountPercentage: parseInt(a.DiscountPercentage) || 0,
+            priceDispute: priceDisputeValue,
+            hasDeal: hasDeal,
             
             // BSR & Ratings
             bsr: parseInt(a.BSR) || 0,

@@ -51,8 +51,9 @@ async function verifySqlConnection() {
 verifySqlConnection();
 
 async function loadAutomationSetting() {
-  process.env.AUTOMATION_ENABLED = 'true';
-  console.log(`🔧 Automation is enabled globally`);
+  const isEnabled = process.env.AUTOMATION_ENABLED !== 'false'; // Default to true if not explicitly set to 'false'
+  process.env.AUTOMATION_ENABLED = isEnabled ? 'true' : 'false';
+  console.log(`🔧 Automation is ${isEnabled ? 'ENABLED' : 'DISABLED'} globally`);
 }
 
 // Call after DB connection

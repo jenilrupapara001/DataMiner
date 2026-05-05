@@ -743,23 +743,79 @@ class MarketDataSyncService {
         // Fallback: Try legacy V1 method
         try {
             console.log(`🛑 Sending STOP command for task: ${taskId} (Legacy V1 method)...`);
-
-            const response = await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
+            const v1Response = await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
                 params: { taskId: taskId },
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            return !!v1Response.data;
+        } catch (v1Err) {
+            console.error(`❌ All Stop variants failed for ${taskId}:`, v1Err.message);
+            return false;
+        }
+    }
 
-            if (response.data && (response.data.requestId || response.data.data === true)) {
-                console.log(`✅ Stop command acknowledge (V1) for: ${taskId}`);
-                this.statusCache.delete(taskId);
+    /**
+     * Clear all data for a specific task from Octoparse cloud.
+     * Official API: https://openapi.octoparse.com/data/remove
+     */
+    async clearTaskData(taskId) {
+        if (!taskId) return false;
+        const token = await this.authenticate();
+        try {
+            console.log(`🧹 [Octoparse] Clearing all previous data for task: ${taskId}...`);
+            const response = await axios.post(`${this.baseUrl}/data/remove`, 
+                { taskId },
+                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
+            console.log(`✅ [Octoparse] Task ${taskId} data deleted successfully.`);
+            return true;
+        } catch (error) {
+            console.error(`❌ [Octoparse] Clear Data Error for ${taskId}:`, error.response?.data || error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Stop all active Octoparse tasks for all sellers.
+     * Used at the start of the midnight automation run.
+     */
+    async stopAllActiveTasks() {
+        try {
+            console.log('🛑 [Octoparse] Stopping all active tasks before midnight run...');
+            const pool = await getPool();
+            const sellersResult = await pool.request()
+                .query("SELECT OctoparseId, Name FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId != '' AND IsActive = 1");
+            const sellers = sellersResult.recordset;
+
+            if (sellers.length === 0) {
+                console.log('ℹ️ [Octoparse] No tasks to stop.');
                 return true;
             }
-        } catch (error) {
-            console.log(`⚠️ V1 Stop also failed: ${error.response?.status || error.message}`);
-        }
 
-        console.log(`⚠️ Stop command attempted but task may already be stopped: ${taskId}`);
-        return true; // Return true so sync continues anyway
+            const results = await Promise.all(sellers.map(async (seller) => {
+                try {
+                    // Check status first to avoid unnecessary stop calls
+                    const status = await this.getStatus(seller.OctoparseId);
+                    const taskStatus = typeof status?.status === 'string' ? status.status.toLowerCase() : status?.status;
+                    
+                    // 1: Running, 2: Finished, 3: Stopped
+                    if (taskStatus === 'running' || taskStatus === 1 || taskStatus === '1') {
+                        console.log(`🛑 Stopping running task for ${seller.Name}...`);
+                        await this.stopSync(seller.OctoparseId);
+                    }
+                    return { name: seller.Name, success: true };
+                } catch (err) {
+                    console.log(`⚠️ Could not stop task for ${seller.Name}: ${err.message}`);
+                    return { name: seller.Name, success: false };
+                }
+            }));
+            
+            console.log(`✅ [Octoparse] Bulk stop cycle completed.`);
+            return true;
+        } catch (error) {
+            console.error('❌ [Octoparse] Error in stopAllActiveTasks:', error.message);
+            return false;
+        }
     }
 
     /**

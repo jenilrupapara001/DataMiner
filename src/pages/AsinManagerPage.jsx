@@ -2663,10 +2663,10 @@ const AsinManagerPage = () => {
                           onClick={(e) => handleViewPrice(asin, e)}
                           title="View Price Trend Matrix">
                           <div className="d-flex flex-column align-items-end">
-                            <span style={{ color: (asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01) ? '#dc2626' : '#16a34a' }}>
+                            <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
                               ₹{(asin.uploadedPrice || 0).toLocaleString()}
                             </span>
-                            {(asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01) && (
+                            {asin.priceDispute && (
                               <span className="badge mt-1 shadow-sm" style={{
                                 fontSize: '8px',
                                 padding: '2px 6px',
@@ -2685,7 +2685,7 @@ const AsinManagerPage = () => {
                       {isVisible('priceDispute') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <div className="d-flex justify-content-center">
-                            {asin.uploadedPrice > 0 && Math.abs(asin.uploadedPrice - (asin.currentPrice || 0)) > 0.01 ? (
+                            {asin.priceDispute ? (
                               <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{ 
                                 backgroundColor: '#dc2626', 
                                 color: '#fff', 

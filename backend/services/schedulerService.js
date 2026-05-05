@@ -145,27 +145,40 @@ class SchedulerService {
         console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Concurrent)...');
         try {
             const pool = await getPool();
+
+            // 1. FIRST: Stop all active tasks to ensure a fresh state
+            console.log('🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse tasks...');
+            await MarketSyncService.stopAllActiveTasks();
+            await new Promise(r => setTimeout(r, 15000)); // Allow time for stop commands to propagate
+
             const sellersResult = await pool.request()
                 .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) return { success: true, totalSellers: 0 };
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for sequential sync.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync.`);
             
-            const CONCURRENCY_LIMIT = 1; // Sequential to strictly avoid 429s
+            const CONCURRENCY_LIMIT = 5; // Updated to 5 concurrent tasks as requested
             let successful = 0;
             const startTime = Date.now();
 
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
                 
+                console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers...`);
+                
                 await Promise.all(batch.map(async (seller) => {
                     try {
+                        // 2. Clear previous data from Octoparse cloud before starting
+                        console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
+                        await MarketSyncService.clearTaskData(seller.OctoparseId);
+                        
+                        // 3. Trigger sync and scrape
                         await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
                             triggerScrape: true,
                             fullSync: true,
-                            forceReRun: true // Ensure fresh start at midnight
+                            forceReRun: true 
                         });
                         successful++;
                         console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
@@ -174,9 +187,9 @@ class SchedulerService {
                     }
                 }));
 
-                // Delay between sellers (Increased for stability)
+                // Delay between batches for API stability
                 if (i + CONCURRENCY_LIMIT < sellers.length) {
-                    await new Promise(r => setTimeout(r, 10000));
+                    await new Promise(r => setTimeout(r, 15000));
                 }
             }
 
