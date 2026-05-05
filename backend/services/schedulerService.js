@@ -25,25 +25,27 @@ class SchedulerService {
             await this.runKeepaSync();
         });
 
-        // 2. Enterprise Octoparse Pipeline - 12:00 AM Trigger
-        this.jobs.enterprisePipeline12AM = cron.schedule('0 0 * * *', async () => {
+        // 2. Enterprise Octoparse Pipeline - Trigger 1
+        const cron1 = process.env.AUTOMATION_12AM_CRON || '0 0 * * *';
+        this.jobs.enterprisePipeline12AM = cron.schedule(cron1, async () => {
             if (process.env.AUTOMATION_ENABLED !== 'true' || process.env.AUTOMATION_12AM_ENABLED !== 'true') {
                 return;
             }
-            console.log('🕒 [SCHEDULE] Triggering 12:00 AM Octoparse Pipeline...');
+            console.log(`🕒 [SCHEDULE] Triggering Pipeline (Cron: ${cron1})...`);
             await this.runEnterprisePipeline();
         });
 
-        // 3. Enterprise Octoparse Pipeline - 2:00 PM Trigger
-        this.jobs.enterprisePipeline2PM = cron.schedule('0 16 * * *', async () => {
+        // 3. Enterprise Octoparse Pipeline - Trigger 2
+        const cron2 = process.env.AUTOMATION_2PM_CRON || '0 14 * * *';
+        this.jobs.enterprisePipeline2PM = cron.schedule(cron2, async () => {
             if (process.env.AUTOMATION_ENABLED !== 'true' || process.env.AUTOMATION_2PM_ENABLED !== 'true') {
                 return;
             }
-            console.log('🕒 [SCHEDULE] Triggering 02:00 PM Octoparse Pipeline...');
+            console.log(`🕒 [SCHEDULE] Triggering Pipeline (Cron: ${cron2})...`);
             await this.runEnterprisePipeline();
         });
 
-        console.log(`🏢 Enterprise Pipeline triggers: 12AM (${process.env.AUTOMATION_12AM_ENABLED === 'true' ? 'ON' : 'OFF'}), 2PM (${process.env.AUTOMATION_2PM_ENABLED === 'true' ? 'ON' : 'OFF'})`);
+        console.log(`🏢 Enterprise Pipeline triggers: T1 (${cron1}, ${process.env.AUTOMATION_12AM_ENABLED === 'true' ? 'ON' : 'OFF'}), T2 (${cron2}, ${process.env.AUTOMATION_2PM_ENABLED === 'true' ? 'ON' : 'OFF'})`);
 
         // 6. Database Integrity Repair (Every 6 hours)
         this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
