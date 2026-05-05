@@ -27,7 +27,6 @@ exports.getAsins = async (req, res) => {
       seller, status, category, brand, search,
       minPrice, maxPrice, minBSR, maxBSR, minLQS, maxLQS,
       scrapeStatus, buyBoxWin, hasAplus, priceDispute,
-      bsrTrend, ratingTrend, dateRange,
       page = 1, limit = 50, sortBy = 'CreatedAt', sortOrder = 'DESC'
     } = req.query;
 
@@ -82,8 +81,6 @@ exports.getAsins = async (req, res) => {
             });
         }
         if (priceDispute !== undefined && priceDispute !== '') reqObj.input('priceDispute', sql.Bit, priceDispute === 'true' ? 1 : 0);
-        if (bsrTrend) reqObj.input('bsrTrend', sql.NVarChar, bsrTrend);
-        if (ratingTrend) reqObj.input('ratingTrend', sql.NVarChar, ratingTrend);
         return reqObj;
     };
 
@@ -104,6 +101,10 @@ exports.getAsins = async (req, res) => {
     } else if (seller) {
       whereClause += ' AND a.SellerId = @seller';
     }
+
+    // [1.5] Trend Filters
+    if (req.query.bsrTrend) whereClause += ' AND BsrTrend = @bsrTrend';
+    if (req.query.ratingTrend) whereClause += ' AND RatingTrend = @ratingTrend';
 
     // [2] Filters
     if (status) whereClause += ' AND Status = @status';
@@ -196,22 +197,8 @@ exports.getAsins = async (req, res) => {
       whereClause += ' AND a.SubBsrCategories LIKE @subBsrCategory';
     }
 
+    if (req.query.minReleaseDate) whereClause += ' AND ReleaseDate >= @minReleaseDate';
     if (req.query.maxReleaseDate) whereClause += ' AND ReleaseDate <= @maxReleaseDate';
-    
-    if (bsrTrend) whereClause += ' AND BsrTrend = @bsrTrend';
-    if (ratingTrend) whereClause += ' AND RatingTrend = @ratingTrend';
-    
-    if (dateRange) {
-      if (dateRange === 'today') {
-        whereClause += ' AND LastScrapedAt >= CAST(GETDATE() AS DATE)';
-      } else if (dateRange === 'yesterday') {
-        whereClause += ' AND LastScrapedAt >= CAST(DATEADD(day, -1, GETDATE()) AS DATE) AND LastScrapedAt < CAST(GETDATE() AS DATE)';
-      } else if (dateRange === '7d') {
-        whereClause += ' AND LastScrapedAt >= DATEADD(day, -7, GETDATE())';
-      } else if (dateRange === '30d') {
-        whereClause += ' AND LastScrapedAt >= DATEADD(day, -30, GETDATE())';
-      }
-    }
 
     if (req.query.ageFilter) {
       if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, GETDATE())';
@@ -262,7 +249,8 @@ exports.getAsins = async (req, res) => {
       return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } });
     }
 
-    // [7] Fetch Daily History for these ASINs (Last 14 days)
+    // [7] Fetch Daily History for these ASINs (Dynamic Range)
+    const historyDays = parseInt(req.query.historyDays) || 14;
     const asinIds = asins.map(a => `'${a.Id}'`).join(',');
     const dailyHistoryResult = await pool.request().query(`
       SELECT AsinId, Date, Price as price, BSR as bsr, 
@@ -270,7 +258,7 @@ exports.getAsins = async (req, res) => {
              StockLevel as stockLevel, LQS as lqs
       FROM AsinHistory 
       WHERE AsinId IN (${asinIds}) 
-      AND Date >= DATEADD(day, -14, GETDATE())
+      AND Date >= DATEADD(day, -${historyDays}, GETDATE())
       ORDER BY Date ASC
     `);
     
@@ -2257,7 +2245,8 @@ exports.exportData = async (req, res) => {
       lastScraped: 'LastScrapedAt',
       createdAt: 'CreatedAt',
       updatedAt: 'UpdatedAt',
-      tags: 'Tags'
+      tags: 'Tags',
+      priceDispute: 'PriceDispute'
     };
 
     // Label mapping (for header)
@@ -2275,7 +2264,8 @@ exports.exportData = async (req, res) => {
       videoCount: 'Video Count', bulletPoints: 'Bullet Points',
       bulletPointsText: 'Bullet Points Text', descLength: 'Desc Length',
       lastScraped: 'Last Scraped', createdAt: 'Created At', updatedAt: 'Updated At',
-      tags: 'Tags'
+      tags: 'Tags',
+      priceDispute: 'Price Dispute'
     };
 
     // Format data
@@ -2288,6 +2278,15 @@ exports.exportData = async (req, res) => {
           // Convert booleans (SQL BIT)
           if (field === 'buyBoxWin' || field === 'hasAplus') {
             value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
+          }
+          // Special handling for Price Dispute calculation in export
+          if (field === 'priceDispute') {
+            const up = parseFloat(row.UploadedPrice) || 0;
+            const cp = parseFloat(row.CurrentPrice) || 0;
+            const db = row.DealBadge;
+            const isDeal = db && db !== '' && db !== 'No deal found';
+            const isDisputed = up > 0 && Math.abs(up - cp) > 0.01 && !isDeal;
+            value = isDisputed ? 'Yes' : 'No';
           }
           // Parse JSON fields
           if (['allOffers', 'subBSRs', 'bulletPointsText', 'ratingBreakdown', 'tags'].includes(field)) {

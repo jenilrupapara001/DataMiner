@@ -50,8 +50,6 @@ const ALL_ASIN_FIELDS = [
     { key: 'bulletPoints', label: 'Bullet Points Count', category: 'Content' },
     { key: 'availabilityStatus', label: 'Availability Status', category: 'Inventory' },
     { key: 'stockLevel', label: 'Stock Level', category: 'Inventory' },
-    { key: 'priceDispute', label: 'Price Dispute', category: 'Pricing' },
-    { key: 'uploadedPrice', label: 'Uploaded Price (₹)', category: 'Pricing' },
     { key: 'aplusAbsentSince', label: 'A+ Days Absent', category: 'Content' },
     { key: 'lastScraped', label: 'Last Scraped', category: 'Dates' },
     { key: 'createdAt', label: 'Created At', category: 'Dates' },
@@ -194,8 +192,6 @@ async function processExportJob(downloadId, params, userId) {
             maxImageScore,
             minDescriptionScore,
             maxDescriptionScore,
-            bsrTrend,
-            ratingTrend,
             asinIds = []
         } = params;
 
@@ -317,15 +313,6 @@ async function processExportJob(downloadId, params, userId) {
             whereClause += ' AND a.ReviewCount <= @maxReviewCount';
         }
 
-        if (bsrTrend) {
-            request.input('bsrTrend', sql.NVarChar, bsrTrend);
-            whereClause += ' AND a.BsrTrend = @bsrTrend';
-        }
-        if (ratingTrend) {
-            request.input('ratingTrend', sql.NVarChar, ratingTrend);
-            whereClause += ' AND a.RatingTrend = @ratingTrend';
-        }
-
         // LQS Breakdown Filters
         if (minTitleScore) whereClause += ' AND a.TitleScore >= ' + parseFloat(minTitleScore);
         if (maxTitleScore) whereClause += ' AND a.TitleScore <= ' + parseFloat(maxTitleScore);
@@ -349,8 +336,8 @@ async function processExportJob(downloadId, params, userId) {
         // Date Range (CreatedAt or LastScrapedAt based on context)
         if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, GETDATE())';
         else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, GETDATE()))';
-        else if (dateRange === '7days' || dateRange === '7d') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, GETDATE())';
-        else if (dateRange === '30days' || dateRange === '30d') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, GETDATE())';
+        else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, GETDATE())';
+        else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, GETDATE())';
         else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, GETDATE())';
         else if (dateRange && typeof dateRange === 'object' && dateRange.start) {
             request.input('dateStart', sql.DateTime2, new Date(dateRange.start));
@@ -412,8 +399,6 @@ async function processExportJob(downloadId, params, userId) {
             'updatedAt': 'a.UpdatedAt',
             'tags': 'a.Tags',
             'releaseDate': 'a.ReleaseDate',
-            'priceDispute': 'a.PriceDispute',
-            'uploadedPrice': 'a.UploadedPrice',
             'sellerName': 's.Name'
         };
 
@@ -465,7 +450,7 @@ async function processExportJob(downloadId, params, userId) {
                 // Special field handling
                 if (field === 'brand' || field === 'Brand') {
                     value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
-                } else if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
+                } else if (field === 'buyBoxWin' || field === 'hasAplus') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
                 } else if (field === 'tags' || field === 'Tags') {
                     try { 

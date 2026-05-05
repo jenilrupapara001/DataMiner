@@ -21,6 +21,7 @@ const ALL_ASIN_FIELDS = [
   { key: 'currentPrice', label: 'Current Price (₹)', category: 'Pricing' },
   { key: 'mrp', label: 'MRP (₹)', category: 'Pricing' },
   { key: 'dealBadge', label: 'Deal Badge', category: 'Pricing' },
+  { key: 'priceDispute', label: 'Price Dispute', category: 'Pricing' },
   { key: 'discountPercentage', label: 'Discount %', category: 'Pricing' },
   { key: 'secondAsp', label: 'Second ASP (₹)', category: 'Pricing' },
   { key: 'bsr', label: 'BSR', category: 'Performance' },
@@ -45,8 +46,6 @@ const ALL_ASIN_FIELDS = [
   { key: 'bulletPointsText', label: 'Bullet Points Text', category: 'Content' },
   { key: 'availabilityStatus', label: 'Availability', category: 'Inventory' },
   { key: 'stockLevel', label: 'Stock Level', category: 'Inventory' },
-  { key: 'priceDispute', label: 'Price Dispute', category: 'Pricing' },
-  { key: 'uploadedPrice', label: 'Uploaded Price (₹)', category: 'Pricing' },
   { key: 'aplusAbsentSince', label: 'A+ Days Absent', category: 'Content' },
   { key: 'lastScraped', label: 'Last Scraped', category: 'Dates' },
   { key: 'createdAt', label: 'Created At', category: 'Dates' },
@@ -195,9 +194,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
           if (currentFilters.maxRating) exportParams.maxRating = currentFilters.maxRating;
           if (currentFilters.minReviewCount) exportParams.minReviewCount = currentFilters.minReviewCount;
           if (currentFilters.maxReviewCount) exportParams.maxReviewCount = currentFilters.maxReviewCount;
-          if (currentFilters.bsrTrend) exportParams.bsrTrend = currentFilters.bsrTrend;
-          if (currentFilters.ratingTrend) exportParams.ratingTrend = currentFilters.ratingTrend;
-          if (currentFilters.dateRange) exportParams.dateRange = currentFilters.dateRange;
+          if (currentFilters.priceDispute) exportParams.priceDispute = currentFilters.priceDispute;
         }
 
         // If a specific seller was selected in the main page and none selected in modal, use that

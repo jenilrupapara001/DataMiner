@@ -65,10 +65,6 @@ class MarketDataSyncService {
         this.syncLocks = new Map(); // Concurrency control per sellerId
         this.statusCache = new Map(); // Simple status cache to prevent 429s (TTL: 10s)
         this.taskIdCache = new Map(); // UUID to Integer ID mapping cache
-        this.taskGroupCache = null;
-        this.taskGroupCacheTime = 0;
-        this.isPreWarming = false;
-        this.isPreWarmed = false;
 
         // Throttling for setup operations
         this._executingSetups = 0;
@@ -100,35 +96,6 @@ class MarketDataSyncService {
 
     async wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Resilient API call wrapper with 429 retry logic and exponential backoff
-     */
-    async callOctoparseApi(config, maxRetries = 5) {
-        let lastError;
-        for (let i = 0; i < maxRetries; i++) {
-            try {
-                // Ensure fresh authentication
-                if (!config.headers) config.headers = {};
-                config.headers['Authorization'] = `Bearer ${await this.authenticate()}`;
-                
-                return await axios(config);
-            } catch (error) {
-                lastError = error;
-                const status = error.response?.status;
-                
-                if (status === 429 || (error.response?.data?.error?.code === 'TooManyRequests')) {
-                    const delay = Math.pow(2, i) * 5000 + (Math.random() * 2000); // 5s, 10s, 20s...
-                    console.warn(`⚠️ Octoparse Rate Limited (429). Retrying in ${Math.round(delay/1000)}s... (Attempt ${i+1}/${maxRetries})`);
-                    await this.wait(delay);
-                    continue;
-                }
-                
-                throw error;
-            }
-        }
-        throw lastError;
     }
 
     log(level, message, data = {}) {
@@ -210,11 +177,6 @@ class MarketDataSyncService {
             return this.token;
         }
 
-        // AUTH LOCK: If a refresh is already in progress, wait for it
-        if (this._authPromise) {
-            return this._authPromise;
-        }
-
         const username = process.env.MARKET_SYNC_USERNAME;
         const password = process.env.MARKET_SYNC_PASSWORD;
 
@@ -222,36 +184,33 @@ class MarketDataSyncService {
             throw new Error('MARKET_SYNC_USERNAME or MARKET_SYNC_PASSWORD not configured in .env');
         }
 
-        this._authPromise = (async () => {
-            try {
-                // Silent authentication
-                const response = await axios.post(`${this.baseUrl}/token`, {
-                    username: username,
-                    password: password,
-                    grant_type: 'password'
-                }, {
-                    headers: { 'Content-Type': 'application/json' }
-                });
+        try {
+            // Silent authentication
+            const response = await axios.post(`${this.baseUrl}/token`, {
+                username: username,
+                password: password,
+                grant_type: 'password'
+            }, {
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-                const data = response.data;
-                const newToken = data.access_token || data.data?.access_token;
+            const data = response.data;
+            // Octoparse response can be { access_token: "..." } or { data: { access_token: "..." } }
+            this.token = data.access_token || data.data?.access_token;
 
-                if (!newToken) {
-                    throw new Error(`Authentication failed: No access token returned`);
-                }
-
-                this.token = newToken;
-                this.tokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
-                return this.token;
-            } catch (error) {
-                console.error('❌ Octoparse Authentication Error:', error.response?.data || error.message);
-                throw new Error('Failed to authenticate with Octoparse service.');
-            } finally {
-                this._authPromise = null;
+            if (!this.token) {
+                throw new Error(`Authentication failed: No access token returned`);
             }
-        })();
 
-        return this._authPromise;
+            // Update internal state - default 1 hour if not provided
+            this.tokenExpiry = now + ((data.expires_in || 3600) * 1000);
+            // Silent success
+
+            return this.token;
+        } catch (error) {
+            console.error('❌ Octoparse Authentication Error:', error.response?.data || error.message);
+            throw new Error('Failed to authenticate with Octoparse service.');
+        }
     }
 
     /**
@@ -666,103 +625,30 @@ class MarketDataSyncService {
      * Get list of Octoparse Task Groups
      */
     async getTaskGroupList() {
-        // Cache group list for 10 minutes
-        if (this.taskGroupCache && Date.now() - this.taskGroupCacheTime < 600000) {
-            return this.taskGroupCache;
-        }
-
+        const token = await this.authenticate();
         try {
             console.log('🔍 Fetching Octoparse Task Group List...');
 
-            // 1. Try Modern endpoint first
+            // 1. Try Modern endpoint first (from Python snippet)
             try {
-                const res = await this.callOctoparseApi({
-                    method: 'get',
-                    url: `${this.baseUrl}/taskGroup`
+                const res = await axios.get(`${this.baseUrl}/taskGroup`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.data?.data) {
-                    this.taskGroupCache = res.data.data;
-                    this.taskGroupCacheTime = Date.now();
-                    return res.data.data;
-                }
+                if (res.data?.data) return res.data.data;
             } catch (err) { /* fallback */ }
 
             // 2. Try legacy API snippet fallback
             try {
-                const res = await this.callOctoparseApi({
-                    method: 'get',
-                    url: `${this.baseUrl}/api/taskgroup/getlist`
+                const res = await axios.get(`${this.baseUrl}/api/taskgroup/getlist`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.data?.data) {
-                    this.taskGroupCache = res.data.data;
-                    this.taskGroupCacheTime = Date.now();
-                    return res.data.data;
-                }
+                if (res.data?.data) return res.data.data;
             } catch (err) { /* fallback */ }
 
-            return this.taskGroupCache || [];
+            return [];
         } catch (error) {
-            console.error('❌ Get Task Group List Error:', error.message);
-            return this.taskGroupCache || [];
-        }
-    }
-
-    /**
-     * Proactively fetches all tasks from all groups to warm up the UUID -> Integer ID cache.
-     * This prevents 429 errors by avoiding thousands of search calls during batch processing.
-     */
-    async preWarmTaskIdCache() {
-        if (this.isPreWarming) return;
-        if (this.isPreWarmed && Date.now() - this.taskGroupCacheTime < 3600000) return; // Warm for 1 hour
-
-        this.isPreWarming = true;
-        try {
-            console.log('🔥 [CACHE] Pre-warming Task ID Cache from all groups...');
-            const groups = await this.getTaskGroupList();
-            if (!groups || groups.length === 0) return;
-
-            for (const group of groups) {
-                const groupId = group.categoryId || group.id || group.taskGroupId;
-                if (!groupId) continue;
-
-                console.log(`📑 [CACHE] Indexing group: ${group.categoryName || group.name || groupId}...`);
-                
-                // Fetch first 200 tasks in this group (4 pages of 50)
-                for (let offset = 0; offset <= 150; offset += 50) {
-                    try {
-                        const response = await this.callOctoparseApi({
-                            method: 'get',
-                            url: `${this.baseUrl}/task/search`,
-                            params: { taskGroupId: groupId, size: 50, offset }
-                        });
-
-                        const tasks = response.data?.data || [];
-                        if (tasks.length === 0) break;
-
-                        for (const task of tasks) {
-                            const uuid = task.taskId || task.TaskID;
-                            const intId = task.id || task.intId;
-                            if (uuid && intId) {
-                                this.taskIdCache.set(uuid.toString(), intId);
-                                // Also cache reverse mapping for safety
-                                this.taskIdCache.set(intId.toString(), intId);
-                            }
-                        }
-
-                        if (tasks.length < 50) break;
-                        await this.wait(2000); // Respect rate limits
-                    } catch (err) {
-                        console.warn(`⚠️ [CACHE] Failed to index group ${groupId} at offset ${offset}:`, err.message);
-                        break;
-                    }
-                }
-            }
-            this.isPreWarmed = true;
-            console.log(`✅ [CACHE] Pre-warmed cache with ${this.taskIdCache.size} task mappings.`);
-        } catch (error) {
-            console.error('❌ [CACHE] Pre-warm failed:', error.message);
-        } finally {
-            this.isPreWarming = false;
+            console.error('❌ Get Task Group List Error:', error.response?.status, error.response?.data || error.message);
+            return [];
         }
     }
 
@@ -836,15 +722,15 @@ class MarketDataSyncService {
     async stopSync(taskId) {
         if (!taskId) throw new Error('Task ID required for stop command');
 
+        const token = await this.authenticate();
+
         // Try modern OpenAPI V3 stop first (POST /cloudextraction/stop)
         try {
             console.log(`🛑 Sending STOP command for task: ${taskId} (OpenAPI V3 method)...`);
-            const response = await this.callOctoparseApi({
-                method: 'post',
-                url: `${this.baseUrl}/cloudextraction/stop`,
-                data: { taskId },
-                headers: { 'Content-Type': 'application/json' }
-            });
+            const response = await axios.post(`${this.baseUrl}/cloudextraction/stop`,
+                { taskId },
+                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
             if (response.data) {
                 console.log(`✅ Stop command sent (V3) for: ${taskId}`);
                 this.statusCache.delete(taskId);
@@ -857,10 +743,9 @@ class MarketDataSyncService {
         // Fallback: Try legacy V1 method
         try {
             console.log(`🛑 Sending STOP command for task: ${taskId} (Legacy V1 method)...`);
-            const v1Response = await this.callOctoparseApi({
-                method: 'get',
-                url: `${this.baseUrl}/api/CloudTask/StopTask`,
-                params: { taskId: taskId }
+            const v1Response = await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
+                params: { taskId: taskId },
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             return !!v1Response.data;
         } catch (v1Err) {
@@ -875,14 +760,13 @@ class MarketDataSyncService {
      */
     async clearTaskData(taskId) {
         if (!taskId) return false;
+        const token = await this.authenticate();
         try {
             console.log(`🧹 [Octoparse] Clearing all previous data for task: ${taskId}...`);
-            await this.callOctoparseApi({
-                method: 'post',
-                url: `${this.baseUrl}/data/remove`,
-                data: { taskId },
-                headers: { 'Content-Type': 'application/json' }
-            });
+            const response = await axios.post(`${this.baseUrl}/data/remove`, 
+                { taskId },
+                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+            );
             console.log(`✅ [Octoparse] Task ${taskId} data deleted successfully.`);
             return true;
         } catch (error) {
@@ -1004,6 +888,7 @@ class MarketDataSyncService {
             return results.length > 0 ? results[0] : null;
         } catch (error) {
             // Fallback to legacy single-task status if Batch/V2 fails
+            const token = await this.authenticate();
             try {
                 // RESOLVE UUID FOR V1 API
                 let currentId = taskId;
@@ -1012,10 +897,9 @@ class MarketDataSyncService {
                     if (resolved) currentId = resolved;
                 }
 
-                const response = await this.callOctoparseApi({
-                    method: 'get',
-                    url: `${this.baseUrl}/api/CloudTask/GetTaskStatus`,
-                    params: { taskId: currentId }
+                const response = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatus`, {
+                    params: { taskId: currentId },
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const result = response.data.data;
                 if (result) {
@@ -1050,11 +934,10 @@ class MarketDataSyncService {
 
             // 1. Try Modern V2
             try {
-                const response = await this.callOctoparseApi({
-                    method: 'post',
-                    url: `${this.baseUrl}/cloudextraction/statuses/v2`,
-                    data: { taskIds: resolvedIds },
-                    headers: { 'Content-Type': 'application/json' }
+                const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`, {
+                    taskIds: resolvedIds
+                }, {
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
                 });
                 if (response.data?.data && response.data.data.length > 0) return response.data.data;
             } catch (v2Err) {
@@ -1062,10 +945,9 @@ class MarketDataSyncService {
             }
 
             // 2. Try Legacy List Endpoint
-            const legacyRes = await this.callOctoparseApi({
-                method: 'get',
-                url: `${this.baseUrl}/api/CloudTask/GetTaskStatusList`,
-                params: { taskIds: resolvedIds.join(',') }
+            const legacyRes = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatusList`, {
+                params: { taskIds: resolvedIds.join(',') },
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (legacyRes.data?.data) {
@@ -1612,14 +1494,33 @@ class MarketDataSyncService {
                 return false;
             }
 
-            // 2. STOPS & CLEARS: Ensure task is idle and empty before injection
-            console.log(`🛡️ [PROPER] Phase 1: Ensuring task ${taskId} is stopped...`);
-            await this.ensureTaskStopped(taskId);
-            
-            console.log(`🛡️ [PROPER] Phase 2: Clearing all previous data for task ${taskId}...`);
-            await this.clearTaskData(taskId);
-            
-            // 2.1 Settling Delay: Give Octoparse a moment to stabilize after a stop/clear command
+            // 2. Task Stop (Only wait if not a forced manual re-run to save time)
+            if (forceReRun) {
+                console.log(`📡 Forcing immediate restart for task ${taskId}...`);
+                await this.stopSync(taskId);
+                // Wait for task to actually stop before proceeding
+                console.log(`⏳ Waiting for task to stop...`);
+                await this.wait(5000);
+            } else {
+                await this.ensureTaskStopped(taskId);
+            }
+
+            // 2.1 PRE-SYNC CLEANUP: Fetch pending data and clear it to prevent duplication
+            try {
+                console.log(`🧹 [Pre-Sync] Checking for pending data in task ${taskId}...`);
+                const pendingData = await this.retrieveResults(taskId);
+                if (pendingData && pendingData.length > 0) {
+                    console.log(`📦 Found ${pendingData.length} pending items. Processing before clearing...`);
+                    await this.processBatchResults(sellerId, pendingData);
+                }
+                await this.markDataAsExported(taskId);
+                console.log(`✅ [Pre-Sync] Cleanup complete for task ${taskId}.`);
+            } catch (cleanupErr) {
+                console.warn(`⚠️ [Pre-Sync] Cleanup warning (continuing sync): ${cleanupErr.message}`);
+            }
+
+            // 2.5 Settling Delay: Give Octoparse a moment to stabilize after a stop command
+            // This prevents "TaskExecuting" errors during immediate injection
             await this.wait(5000);
 
             // 3. Get ASINs for this seller from database
@@ -2001,13 +1902,10 @@ class MarketDataSyncService {
                 
                 // Filter out zero values for average calculation to avoid skewing
                 const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
-                if (prevPoints.length === 0) return 'Stable';
-
                 // Use the most recent previous valid point as baseline ("last data" as requested)
                 const lastPoint = prevPoints[prevPoints.length - 1];
-                if (!lastPoint) return 'Stable';
-                
                 const baseline = lastPoint[field] || 0;
+                
                 if (baseline === 0) return 'Stable';
                 
                 if (isAbsolute) {
@@ -2168,7 +2066,7 @@ class MarketDataSyncService {
                                         WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
                                     ELSE
                                         INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                        VALUES (LEFT(REPLACE(NEWID(), '-', ''), 24), @asinId, @date, @category, @rank, GETDATE())
+                                        VALUES (REPLACE(NEWID(), '-', ''), @asinId, @date, @category, @rank, GETDATE())
                                 `);
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
@@ -3129,14 +3027,13 @@ class MarketDataSyncService {
             // 1. If groupId is provided, check that group first
             if (groupId) {
                 for (let offset = 0; offset <= 200; offset += 50) {
-                    await this.wait(1000);
+                    // Small delay to prevent burst
+                    await this.wait(500);
                     
-                    const response = await this.callOctoparseApi({
-                        method: 'get',
-                        url: `${this.baseUrl}/task/search`,
-                        params: { taskGroupId: groupId, size: 50, offset }
+                    const response = await axios.get(`${this.baseUrl}/task/search`, {
+                        params: { taskGroupId: groupId, size: 50, offset },
+                        headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
                     });
-
                     const tasks = response.data?.data || [];
                     const task = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (task) {
@@ -3156,14 +3053,12 @@ class MarketDataSyncService {
                 if (!id) continue;
 
                 for (let offset = 0; offset <= 200; offset += 50) {
-                    await this.wait(1500); 
+                    await this.wait(800); // More aggressive delay for global search
                     
-                    const tasksResponse = await this.callOctoparseApi({
-                        method: 'get',
-                        url: `${this.baseUrl}/task/search`,
-                        params: { taskGroupId: id, size: 50, offset }
+                    const tasksResponse = await axios.get(`${this.baseUrl}/task/search`, {
+                        params: { taskGroupId: id, size: 50, offset },
+                        headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
                     });
-
                     const tasks = tasksResponse.data?.data || [];
                     const found = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (found) {
