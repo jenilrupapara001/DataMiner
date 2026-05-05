@@ -31,14 +31,17 @@ class SchedulerService {
         const cronExpr = `${scheduleMinute || 0} ${scheduleHour || 0} * * *`;
         
         this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
-            // console.log('🏢 Starting Enterprise Octoparse Automation Pipeline...');
+            if (process.env.AUTOMATION_ENABLED !== 'true') {
+                console.log('🛑 Enterprise Pipeline skipped (Automation is disabled in .env)');
+                return;
+            }
             await this.runEnterprisePipeline();
         });
         console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
 
         // 4. Octoparse Daily 1 PM Sync
         this.jobs.daily1PMSync = cron.schedule('0 13 * * *', async () => {
-            // console.log('🕒 Starting Daily 1 PM Octoparse Enterprise Pipeline...');
+            if (process.env.AUTOMATION_ENABLED !== 'true') return;
             await this.runEnterprisePipeline();
         });
 

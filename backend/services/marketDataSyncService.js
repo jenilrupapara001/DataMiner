@@ -1466,6 +1466,11 @@ class MarketDataSyncService {
      * Optionally triggers a new cloud scrape.
      */
     async syncSellerAsinsToOctoparse(sellerId, options = {}) {
+        if (process.env.AUTOMATION_ENABLED !== 'true') {
+            console.log('🛑 syncSellerAsinsToOctoparse blocked (Automation is disabled in .env)');
+            return false;
+        }
+
         // DEFAULT TO TRUE: We always want to start the scrape unless explicitly told not to
         const triggerScrape = options.triggerScrape !== undefined ? options.triggerScrape : true;
         const forceReRun = options.forceReRun || false;
