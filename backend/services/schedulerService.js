@@ -35,7 +35,7 @@ class SchedulerService {
         });
 
         // 3. Enterprise Octoparse Pipeline - 2:00 PM Trigger
-        this.jobs.enterprisePipeline2PM = cron.schedule('0 14 * * *', async () => {
+        this.jobs.enterprisePipeline2PM = cron.schedule('0 16 * * *', async () => {
             if (process.env.AUTOMATION_ENABLED !== 'true' || process.env.AUTOMATION_2PM_ENABLED !== 'true') {
                 return;
             }
@@ -63,12 +63,12 @@ class SchedulerService {
         // Optional: Run once on startup
         setTimeout(() => {
             this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
-        }, 30000); 
+        }, 30000);
     }
 
     async runOctoparseTaskRecovery() {
         console.log('🔄 [RECOVERY] Starting Octoparse task status check on startup...');
-        
+
         try {
             const pool = await getPool();
             const sellersResult = await pool.request()
@@ -76,20 +76,20 @@ class SchedulerService {
             const sellers = sellersResult.recordset;
 
             console.log(`🔄 [RECOVERY] Found ${sellers.length} sellers - running with concurrency limit...`);
-            
+
             const CONCURRENCY_LIMIT = 3;
             const results = [];
-            
+
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
-                
+
                 const batchResults = await Promise.all(batch.map(async (seller) => {
                     try {
                         const taskId = seller.OctoparseId;
                         // console.log(`🔄 [RECOVERY] Checking task ${taskId} for seller ${seller.Name}...`);
-                        
+
                         const status = await MarketSyncService.getStatus(taskId);
-                    
+
                         if (!status) {
                             console.log(`⚠️ [RECOVERY] Could not get status for task ${taskId}`);
                             return { seller, success: false, reason: 'No status' };
@@ -99,12 +99,12 @@ class SchedulerService {
                         // Octoparse status can be numbers (1: Running, 0: Stopped)
                         if (taskStatus === 'finished' || taskStatus === 'stopped' || taskStatus === 'idle' || taskStatus === 0) {
                             console.log(`📥 [RECOVERY] Fetching data for completed/idle task ${taskId}...`);
-                            
+
                             const rawData = await MarketSyncService.retrieveResults(taskId);
                             if (rawData && rawData.length > 0) {
                                 const processedCount = await MarketSyncService.processBatchResults(seller.Id, rawData);
                                 console.log(`✅ [RECOVERY] Saved ${processedCount} ASINs for seller ${seller.Name}`);
-                                
+
                                 return { seller, success: true, count: processedCount };
                             }
                         }
@@ -114,10 +114,10 @@ class SchedulerService {
                         return { seller, success: false, error: err.message };
                     }
                 }));
-                
+
                 results.push(...batchResults);
             }
-            
+
             console.log(`✅ [RECOVERY] Initial check completed: ${results.filter(r => r.success).length}/${sellers.length} sellers`);
         } catch (error) {
             console.error('❌ [RECOVERY] Critical error:', error.message);
@@ -153,27 +153,27 @@ class SchedulerService {
             if (sellers.length === 0) return { success: true, totalSellers: 0 };
 
             console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync.`);
-            
+
             const CONCURRENCY_LIMIT = 5; // Updated to 5 concurrent tasks as requested
             let successful = 0;
             const startTime = Date.now();
 
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
-                
+
                 console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers...`);
-                
+
                 await Promise.all(batch.map(async (seller) => {
                     try {
                         // 2. Clear previous data from Octoparse cloud before starting
                         console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
                         await MarketSyncService.clearTaskData(seller.OctoparseId);
-                        
+
                         // 3. Trigger sync and scrape
-                        await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                        await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, {
                             triggerScrape: true,
                             fullSync: true,
-                            forceReRun: true 
+                            forceReRun: true
                         });
                         successful++;
                         console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
@@ -201,7 +201,7 @@ class SchedulerService {
             try {
                 const adminsResult = await pool.request()
                     .query("SELECT u.Id FROM Users u JOIN Roles r ON u.RoleId = r.Id WHERE r.Name = 'admin'");
-                
+
                 const { createNotification } = require('../controllers/notificationController');
                 for (const admin of adminsResult.recordset) {
                     await createNotification(
@@ -242,12 +242,12 @@ class SchedulerService {
 
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
-                
+
                 await Promise.all(batch.map(async (seller) => {
                     try {
-                        const result = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                        const result = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, {
                             onlyMissing: true,
-                            triggerScrape: true 
+                            triggerScrape: true
                         });
                         if (result) totalTriggered++;
                     } catch (err) {
@@ -263,7 +263,7 @@ class SchedulerService {
 
             const duration = Math.round((Date.now() - startTime) / 1000);
             console.log(`✅ [MISSING DATA] Recovery cycle completed. Triggered ${totalTriggered} sellers in ${duration}s`);
-            
+
             return { success: true, triggered: totalTriggered, duration };
         } catch (error) {
             console.error('❌ [MISSING DATA] Critical failure:', error.message);

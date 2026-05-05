@@ -27,6 +27,7 @@ exports.getAsins = async (req, res) => {
       seller, status, category, brand, search,
       minPrice, maxPrice, minBSR, maxBSR, minLQS, maxLQS,
       scrapeStatus, buyBoxWin, hasAplus, priceDispute,
+      bsrTrend, ratingTrend, dateRange,
       page = 1, limit = 50, sortBy = 'CreatedAt', sortOrder = 'DESC'
     } = req.query;
 
@@ -81,6 +82,8 @@ exports.getAsins = async (req, res) => {
             });
         }
         if (priceDispute !== undefined && priceDispute !== '') reqObj.input('priceDispute', sql.Bit, priceDispute === 'true' ? 1 : 0);
+        if (bsrTrend) reqObj.input('bsrTrend', sql.NVarChar, bsrTrend);
+        if (ratingTrend) reqObj.input('ratingTrend', sql.NVarChar, ratingTrend);
         return reqObj;
     };
 
@@ -193,8 +196,22 @@ exports.getAsins = async (req, res) => {
       whereClause += ' AND a.SubBsrCategories LIKE @subBsrCategory';
     }
 
-    if (req.query.minReleaseDate) whereClause += ' AND ReleaseDate >= @minReleaseDate';
     if (req.query.maxReleaseDate) whereClause += ' AND ReleaseDate <= @maxReleaseDate';
+    
+    if (bsrTrend) whereClause += ' AND BsrTrend = @bsrTrend';
+    if (ratingTrend) whereClause += ' AND RatingTrend = @ratingTrend';
+    
+    if (dateRange) {
+      if (dateRange === 'today') {
+        whereClause += ' AND LastScrapedAt >= CAST(GETDATE() AS DATE)';
+      } else if (dateRange === 'yesterday') {
+        whereClause += ' AND LastScrapedAt >= CAST(DATEADD(day, -1, GETDATE()) AS DATE) AND LastScrapedAt < CAST(GETDATE() AS DATE)';
+      } else if (dateRange === '7d') {
+        whereClause += ' AND LastScrapedAt >= DATEADD(day, -7, GETDATE())';
+      } else if (dateRange === '30d') {
+        whereClause += ' AND LastScrapedAt >= DATEADD(day, -30, GETDATE())';
+      }
+    }
 
     if (req.query.ageFilter) {
       if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, GETDATE())';

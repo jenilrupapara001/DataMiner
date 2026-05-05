@@ -501,7 +501,9 @@ const AsinManagerPage = () => {
     selectedTags: [],
     minReleaseDate: '',
     maxReleaseDate: '',
-    priceDispute: ''
+    priceDispute: '',
+    bsrTrend: '',
+    ratingTrend: ''
   });
 
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -544,7 +546,9 @@ const AsinManagerPage = () => {
     selectedTags: [],
     minReleaseDate: '',
     maxReleaseDate: '',
-    priceDispute: ''
+    priceDispute: '',
+    bsrTrend: '',
+    ratingTrend: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -572,7 +576,8 @@ const AsinManagerPage = () => {
       minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
       minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: '',
       minReviewCount: '', maxReviewCount: '', minImagesCount: '', maxImagesCount: '',
-      minBulletPoints: '', maxBulletPoints: '', priceDispute: ''
+      minBulletPoints: '', maxBulletPoints: '', priceDispute: '',
+      bsrTrend: '', ratingTrend: '', dateRange: ''
     };
     setFilters(resetState);
     setAppliedFilters(resetState);
@@ -625,7 +630,10 @@ const AsinManagerPage = () => {
       ageFilter: 'Age',
       minReleaseDate: 'From',
       maxReleaseDate: 'To',
-      priceDispute: 'Price Dispute'
+      priceDispute: 'Price Dispute',
+      bsrTrend: 'BSR Trend',
+      ratingTrend: 'Rating Trend',
+      dateRange: 'Scrape Date'
     };
 
     Object.entries(appliedFilters).forEach(([key, value]) => {
@@ -1685,6 +1693,28 @@ const AsinManagerPage = () => {
                       </select>
                     </div>
                   </div>
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">BSR TREND</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.bsrTrend} onChange={(e) => setFilters({ ...filters, bsrTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="Grow">Grow Only</option>
+                        <option value="Down">Down Only</option>
+                        <option value="Stable">Stable Only</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="filter-group">
+                      <label className="filter-label">RATING TREND</label>
+                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.ratingTrend} onChange={(e) => setFilters({ ...filters, ratingTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                        <option value="">All</option>
+                        <option value="Grow">Grow Only</option>
+                        <option value="Down">Down Only</option>
+                        <option value="Stable">Stable Only</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1750,6 +1780,30 @@ const AsinManagerPage = () => {
                           {filters.selectedTags.includes(tag) && <X size={10} />}
                         </button>
                       ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* SCRAPE DATE RANGE */}
+              <div className="mb-5">
+                <h6 className="filter-section-title">Scrape Date Range</h6>
+                <div className="filter-group">
+                  <div className="d-flex flex-wrap gap-2">
+                    {[
+                      { label: 'Today', value: 'today' },
+                      { label: 'Yesterday', value: 'yesterday' },
+                      { label: 'Last 7 Days', value: '7d' },
+                      { label: 'Last 30 Days', value: '30d' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        className={`btn btn-sm rounded-pill px-3 py-1 transition-all ${filters.dateRange === opt.value ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                        onClick={() => setFilters({ ...filters, dateRange: filters.dateRange === opt.value ? '' : opt.value })}
+                        style={{ fontSize: '10px', fontWeight: 600 }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
