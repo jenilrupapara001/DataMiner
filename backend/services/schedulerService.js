@@ -58,19 +58,11 @@ class SchedulerService {
             await this.refreshAgeTags();
         });
 
-        // 8. Missing Data Recovery (Every 4 hours)
-        this.jobs.missingDataRecovery = cron.schedule('0 */4 * * *', async () => {
-            console.log('🕒 Starting Concurrent Missing Data Recovery...');
-            await this.runMissingDataRecovery();
-        });
-
         console.log('✅ Background tasks scheduled');
 
         // Optional: Run once on startup
         setTimeout(() => {
             this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
-            this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
-            this.runMissingDataRecovery().catch(err => console.error('Startup Missing Data Recovery failed:', err.message));
         }, 30000); 
     }
 
@@ -204,14 +196,6 @@ class SchedulerService {
             };
 
             console.log('🏢 [ENTERPRISE] Pipeline completed:', result);
-            
-            // --- SMART SCRAPING (DELTA SYNC) ---
-            // After the main sync, find ASINs that STILL have no found data in the last 12 hours
-            // and trigger a targeted recovery scrape for them.
-            setTimeout(async () => {
-                console.log('🔍 [ENTERPRISE] Starting follow-up Smart Scraping for missing data...');
-                await this.runMissingDataRecovery();
-            }, 3600000); // Wait 1 hour after triggering the main pipeline to allow initial cloud jobs to settle
 
             // Create notification for admin
             try {
