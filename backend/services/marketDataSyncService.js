@@ -98,6 +98,35 @@ class MarketDataSyncService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    /**
+     * Resilient API call wrapper with 429 retry logic and exponential backoff
+     */
+    async callOctoparseApi(config, maxRetries = 5) {
+        let lastError;
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                // Ensure fresh authentication
+                if (!config.headers) config.headers = {};
+                config.headers['Authorization'] = `Bearer ${await this.authenticate()}`;
+                
+                return await axios(config);
+            } catch (error) {
+                lastError = error;
+                const status = error.response?.status;
+                
+                if (status === 429 || (error.response?.data?.error?.code === 'TooManyRequests')) {
+                    const delay = Math.pow(2, i) * 5000 + (Math.random() * 2000); // 5s, 10s, 20s...
+                    console.warn(`⚠️ Octoparse Rate Limited (429). Retrying in ${Math.round(delay/1000)}s... (Attempt ${i+1}/${maxRetries})`);
+                    await this.wait(delay);
+                    continue;
+                }
+                
+                throw error;
+            }
+        }
+        throw lastError;
+    }
+
     log(level, message, data = {}) {
         // Only log errors or important info in production-like mode
         const timestamp = new Date().toLocaleTimeString();
@@ -177,6 +206,11 @@ class MarketDataSyncService {
             return this.token;
         }
 
+        // AUTH LOCK: If a refresh is already in progress, wait for it
+        if (this._authPromise) {
+            return this._authPromise;
+        }
+
         const username = process.env.MARKET_SYNC_USERNAME;
         const password = process.env.MARKET_SYNC_PASSWORD;
 
@@ -184,33 +218,36 @@ class MarketDataSyncService {
             throw new Error('MARKET_SYNC_USERNAME or MARKET_SYNC_PASSWORD not configured in .env');
         }
 
-        try {
-            // Silent authentication
-            const response = await axios.post(`${this.baseUrl}/token`, {
-                username: username,
-                password: password,
-                grant_type: 'password'
-            }, {
-                headers: { 'Content-Type': 'application/json' }
-            });
+        this._authPromise = (async () => {
+            try {
+                // Silent authentication
+                const response = await axios.post(`${this.baseUrl}/token`, {
+                    username: username,
+                    password: password,
+                    grant_type: 'password'
+                }, {
+                    headers: { 'Content-Type': 'application/json' }
+                });
 
-            const data = response.data;
-            // Octoparse response can be { access_token: "..." } or { data: { access_token: "..." } }
-            this.token = data.access_token || data.data?.access_token;
+                const data = response.data;
+                const newToken = data.access_token || data.data?.access_token;
 
-            if (!this.token) {
-                throw new Error(`Authentication failed: No access token returned`);
+                if (!newToken) {
+                    throw new Error(`Authentication failed: No access token returned`);
+                }
+
+                this.token = newToken;
+                this.tokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000);
+                return this.token;
+            } catch (error) {
+                console.error('❌ Octoparse Authentication Error:', error.response?.data || error.message);
+                throw new Error('Failed to authenticate with Octoparse service.');
+            } finally {
+                this._authPromise = null;
             }
+        })();
 
-            // Update internal state - default 1 hour if not provided
-            this.tokenExpiry = now + ((data.expires_in || 3600) * 1000);
-            // Silent success
-
-            return this.token;
-        } catch (error) {
-            console.error('❌ Octoparse Authentication Error:', error.response?.data || error.message);
-            throw new Error('Failed to authenticate with Octoparse service.');
-        }
+        return this._authPromise;
     }
 
     /**
@@ -625,22 +662,23 @@ class MarketDataSyncService {
      * Get list of Octoparse Task Groups
      */
     async getTaskGroupList() {
-        const token = await this.authenticate();
         try {
             console.log('🔍 Fetching Octoparse Task Group List...');
 
             // 1. Try Modern endpoint first (from Python snippet)
             try {
-                const res = await axios.get(`${this.baseUrl}/taskGroup`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await this.callOctoparseApi({
+                    method: 'get',
+                    url: `${this.baseUrl}/taskGroup`
                 });
                 if (res.data?.data) return res.data.data;
             } catch (err) { /* fallback */ }
 
             // 2. Try legacy API snippet fallback
             try {
-                const res = await axios.get(`${this.baseUrl}/api/taskgroup/getlist`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const res = await this.callOctoparseApi({
+                    method: 'get',
+                    url: `${this.baseUrl}/api/taskgroup/getlist`
                 });
                 if (res.data?.data) return res.data.data;
             } catch (err) { /* fallback */ }
@@ -649,6 +687,46 @@ class MarketDataSyncService {
         } catch (error) {
             console.error('❌ Get Task Group List Error:', error.response?.status, error.response?.data || error.message);
             return [];
+        }
+    }
+
+    /**
+     * Proactively fetches all tasks from all groups to warm up the UUID -> Integer ID cache.
+     * This prevents 429 errors by avoiding thousands of search calls during batch processing.
+     */
+    async preWarmTaskIdCache() {
+        try {
+            console.log('🔥 [CACHE] Pre-warming Task ID Cache...');
+            const groups = await this.getTaskGroupList();
+            if (!groups || groups.length === 0) return;
+
+            let totalCached = 0;
+            for (const group of groups) {
+                const groupId = group.categoryId || group.id || group.taskGroupId;
+                if (!groupId) continue;
+
+                // Fetch first page of tasks for this group using resilient wrapper
+                const response = await this.callOctoparseApi({
+                    method: 'get',
+                    url: `${this.baseUrl}/task/search`,
+                    params: { taskGroupId: groupId, size: 200 }
+                });
+
+                const tasks = response.data?.data || [];
+                for (const task of tasks) {
+                    const uuid = task.taskId;
+                    const intId = task.id;
+                    if (uuid && intId) {
+                        this.taskIdCache.set(uuid.toString(), intId);
+                        totalCached++;
+                    }
+                }
+                // Small breath between groups
+                await this.wait(2000); // Increased delay
+            }
+            console.log(`✅ [CACHE] Pre-warmed ${totalCached} task IDs.`);
+        } catch (err) {
+            console.error('⚠️ [CACHE] Failed to pre-warm cache:', err.message);
         }
     }
 
@@ -722,15 +800,15 @@ class MarketDataSyncService {
     async stopSync(taskId) {
         if (!taskId) throw new Error('Task ID required for stop command');
 
-        const token = await this.authenticate();
-
         // Try modern OpenAPI V3 stop first (POST /cloudextraction/stop)
         try {
             console.log(`🛑 Sending STOP command for task: ${taskId} (OpenAPI V3 method)...`);
-            const response = await axios.post(`${this.baseUrl}/cloudextraction/stop`,
-                { taskId },
-                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-            );
+            const response = await this.callOctoparseApi({
+                method: 'post',
+                url: `${this.baseUrl}/cloudextraction/stop`,
+                data: { taskId },
+                headers: { 'Content-Type': 'application/json' }
+            });
             if (response.data) {
                 console.log(`✅ Stop command sent (V3) for: ${taskId}`);
                 this.statusCache.delete(taskId);
@@ -743,9 +821,10 @@ class MarketDataSyncService {
         // Fallback: Try legacy V1 method
         try {
             console.log(`🛑 Sending STOP command for task: ${taskId} (Legacy V1 method)...`);
-            const v1Response = await axios.get(`${this.baseUrl}/api/CloudTask/StopTask`, {
-                params: { taskId: taskId },
-                headers: { 'Authorization': `Bearer ${token}` }
+            const v1Response = await this.callOctoparseApi({
+                method: 'get',
+                url: `${this.baseUrl}/api/CloudTask/StopTask`,
+                params: { taskId: taskId }
             });
             return !!v1Response.data;
         } catch (v1Err) {
@@ -760,13 +839,14 @@ class MarketDataSyncService {
      */
     async clearTaskData(taskId) {
         if (!taskId) return false;
-        const token = await this.authenticate();
         try {
             console.log(`🧹 [Octoparse] Clearing all previous data for task: ${taskId}...`);
-            const response = await axios.post(`${this.baseUrl}/data/remove`, 
-                { taskId },
-                { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-            );
+            await this.callOctoparseApi({
+                method: 'post',
+                url: `${this.baseUrl}/data/remove`,
+                data: { taskId },
+                headers: { 'Content-Type': 'application/json' }
+            });
             console.log(`✅ [Octoparse] Task ${taskId} data deleted successfully.`);
             return true;
         } catch (error) {
@@ -888,7 +968,6 @@ class MarketDataSyncService {
             return results.length > 0 ? results[0] : null;
         } catch (error) {
             // Fallback to legacy single-task status if Batch/V2 fails
-            const token = await this.authenticate();
             try {
                 // RESOLVE UUID FOR V1 API
                 let currentId = taskId;
@@ -897,9 +976,10 @@ class MarketDataSyncService {
                     if (resolved) currentId = resolved;
                 }
 
-                const response = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatus`, {
-                    params: { taskId: currentId },
-                    headers: { 'Authorization': `Bearer ${token}` }
+                const response = await this.callOctoparseApi({
+                    method: 'get',
+                    url: `${this.baseUrl}/api/CloudTask/GetTaskStatus`,
+                    params: { taskId: currentId }
                 });
                 const result = response.data.data;
                 if (result) {
@@ -934,10 +1014,11 @@ class MarketDataSyncService {
 
             // 1. Try Modern V2
             try {
-                const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`, {
-                    taskIds: resolvedIds
-                }, {
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+                const response = await this.callOctoparseApi({
+                    method: 'post',
+                    url: `${this.baseUrl}/cloudextraction/statuses/v2`,
+                    data: { taskIds: resolvedIds },
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 if (response.data?.data && response.data.data.length > 0) return response.data.data;
             } catch (v2Err) {
@@ -945,9 +1026,10 @@ class MarketDataSyncService {
             }
 
             // 2. Try Legacy List Endpoint
-            const legacyRes = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatusList`, {
-                params: { taskIds: resolvedIds.join(',') },
-                headers: { 'Authorization': `Bearer ${token}` }
+            const legacyRes = await this.callOctoparseApi({
+                method: 'get',
+                url: `${this.baseUrl}/api/CloudTask/GetTaskStatusList`,
+                params: { taskIds: resolvedIds.join(',') }
             });
 
             if (legacyRes.data?.data) {
@@ -3030,13 +3112,14 @@ class MarketDataSyncService {
             // 1. If groupId is provided, check that group first
             if (groupId) {
                 for (let offset = 0; offset <= 200; offset += 50) {
-                    // Small delay to prevent burst
-                    await this.wait(500);
+                    await this.wait(1000);
                     
-                    const response = await axios.get(`${this.baseUrl}/task/search`, {
-                        params: { taskGroupId: groupId, size: 50, offset },
-                        headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
+                    const response = await this.callOctoparseApi({
+                        method: 'get',
+                        url: `${this.baseUrl}/task/search`,
+                        params: { taskGroupId: groupId, size: 50, offset }
                     });
+
                     const tasks = response.data?.data || [];
                     const task = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (task) {
@@ -3056,12 +3139,14 @@ class MarketDataSyncService {
                 if (!id) continue;
 
                 for (let offset = 0; offset <= 200; offset += 50) {
-                    await this.wait(800); // More aggressive delay for global search
+                    await this.wait(1500); 
                     
-                    const tasksResponse = await axios.get(`${this.baseUrl}/task/search`, {
-                        params: { taskGroupId: id, size: 50, offset },
-                        headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
+                    const tasksResponse = await this.callOctoparseApi({
+                        method: 'get',
+                        url: `${this.baseUrl}/task/search`,
+                        params: { taskGroupId: id, size: 50, offset }
                     });
+
                     const tasks = tasksResponse.data?.data || [];
                     const found = (tasks || []).find(t => t.taskId === uuid || t.id?.toString() === uuid);
                     if (found) {

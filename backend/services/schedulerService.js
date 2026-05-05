@@ -20,10 +20,10 @@ class SchedulerService {
         // console.log(`🗓️ Initializing Background Scheduler...`);
 
         // 1. Keepa ASIN Sync (Every 12 hours)
-        this.jobs.keepaSync = cron.schedule('0 */12 * * *', async () => {
-            // console.log('🕒 Starting Scheduled Keepa ASIN Sync...');
-            await this.runKeepaSync();
-        });
+        // this.jobs.keepaSync = cron.schedule('0 */12 * * *', async () => {
+        //     // console.log('🕒 Starting Scheduled Keepa ASIN Sync...');
+        //     await this.runKeepaSync();
+        // });
 
         // 2. Enterprise Octoparse Pipeline - Trigger 1
         const cron1 = process.env.AUTOMATION_12AM_CRON || '0 0 * * *';
@@ -35,9 +35,9 @@ class SchedulerService {
             await this.runEnterprisePipeline();
         });
 
-        // 3. Enterprise Octoparse Pipeline - Trigger 2
-        const cron2 = process.env.AUTOMATION_2PM_CRON || '0 14 * * *';
-        this.jobs.enterprisePipeline2PM = cron.schedule(cron2, async () => {
+        // 3. Enterprise Octoparse Pipeline - Secondary Trigger
+        const cron2 = process.env.AUTOMATION_2PM_CRON || '30 17 * * *';
+        this.jobs.enterprisePipelineSecondary = cron.schedule(cron2, async () => {
             if (process.env.AUTOMATION_ENABLED !== 'true' || process.env.AUTOMATION_2PM_ENABLED !== 'true') {
                 return;
             }
@@ -63,9 +63,9 @@ class SchedulerService {
         console.log('✅ Background tasks scheduled');
 
         // Optional: Run once on startup
-        setTimeout(() => {
-            this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
-        }, 30000);
+        // setTimeout(() => {
+        //     this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
+        // }, 30000);
     }
 
     async runOctoparseTaskRecovery() {
@@ -148,30 +148,38 @@ class SchedulerService {
             await MarketSyncService.stopAllActiveTasks();
             await new Promise(r => setTimeout(r, 15000)); // Allow time for stop commands to propagate
 
+            // 2. Pre-warm Task ID Cache to prevent 429s during search
+            await MarketSyncService.preWarmTaskIdCache();
+
             const sellersResult = await pool.request()
                 .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) return { success: true, totalSellers: 0 };
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for conservative staggered sync.`);
 
-            const CONCURRENCY_LIMIT = 5; // Updated to 5 concurrent tasks as requested
+            const CONCURRENCY_LIMIT = 2; // Reduced to 2 for maximum stability against Octoparse 429s
             let successful = 0;
             const startTime = Date.now();
 
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
 
-                console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers...`);
+                console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers (High-Delay Stagger)...`);
 
-                await Promise.all(batch.map(async (seller) => {
+                await Promise.all(batch.map(async (seller, index) => {
                     try {
-                        // 2. Clear previous data from Octoparse cloud before starting
+                        // Add significant staggering within the batch (10s delay per seller position)
+                        if (index > 0) {
+                            await new Promise(r => setTimeout(r, index * 10000));
+                        }
+
+                        // 3. Clear previous data from Octoparse cloud before starting
                         console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
                         await MarketSyncService.clearTaskData(seller.OctoparseId);
 
-                        // 3. Trigger sync and scrape
+                        // 4. Trigger sync and scrape
                         await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, {
                             triggerScrape: true,
                             fullSync: true,
