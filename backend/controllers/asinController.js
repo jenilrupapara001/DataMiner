@@ -81,6 +81,8 @@ exports.getAsins = async (req, res) => {
             });
         }
         if (priceDispute !== undefined && priceDispute !== '') reqObj.input('priceDispute', sql.Bit, priceDispute === 'true' ? 1 : 0);
+        if (req.query.bsrTrend) reqObj.input('bsrTrend', sql.NVarChar, req.query.bsrTrend);
+        if (req.query.ratingTrend) reqObj.input('ratingTrend', sql.NVarChar, req.query.ratingTrend);
         return reqObj;
     };
 
@@ -2190,6 +2192,61 @@ exports.exportData = async (req, res) => {
         request.input('endDate', sql.VarChar, end);
         whereClause += ` AND a.LastScrapedAt <= @endDate`;
       }
+    }
+    
+    // [3] Additional Filters (from req.body)
+    const { 
+      status, category, brand, scrapeStatus, hasAplus, buyBoxWin, priceDispute,
+      search, bsrTrend, ratingTrend, asinIds = []
+    } = req.body;
+
+    // Filter by specific ASIN IDs if provided
+    if (asinIds.length > 0) {
+      whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
+    }
+
+    if (status) {
+      request.input('status', sql.NVarChar, status);
+      whereClause += ' AND a.Status = @status';
+    }
+    if (category) {
+      request.input('category', sql.NVarChar, category);
+      whereClause += ' AND a.Category = @category';
+    }
+    if (brand) {
+      request.input('brand', sql.NVarChar, brand);
+      whereClause += ' AND s.Name = @brand';
+    }
+    if (scrapeStatus) {
+      request.input('scrapeStatus', sql.NVarChar, scrapeStatus);
+      whereClause += ' AND a.ScrapeStatus = @scrapeStatus';
+    }
+    if (hasAplus !== undefined && hasAplus !== '') {
+      request.input('hasAplus', sql.Bit, hasAplus === 'true' ? 1 : 0);
+      whereClause += ' AND a.HasAplus = @hasAplus';
+    }
+    if (buyBoxWin !== undefined && buyBoxWin !== '') {
+      request.input('buyBoxWin', sql.Bit, buyBoxWin === 'true' ? 1 : 0);
+      whereClause += ' AND a.BuyBoxWin = @buyBoxWin';
+    }
+    if (bsrTrend) {
+      request.input('bsrTrend', sql.NVarChar, bsrTrend);
+      whereClause += ' AND a.BsrTrend = @bsrTrend';
+    }
+    if (ratingTrend) {
+      request.input('ratingTrend', sql.NVarChar, ratingTrend);
+      whereClause += ' AND a.RatingTrend = @ratingTrend';
+    }
+    if (priceDispute !== undefined && priceDispute !== '') {
+      if (priceDispute === 'true') {
+        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+      } else {
+        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+      }
+    }
+    if (search) {
+      request.input('search', sql.NVarChar, `%${search}%`);
+      whereClause += ' AND (a.AsinCode LIKE @search OR a.Title LIKE @search OR a.Sku LIKE @search)';
     }
 
     // Fetch ASINs
