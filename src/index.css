@@ -3105,3 +3105,16 @@ a:hover {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #CBD5E1;
 }
+
+/* Custom Modal Table for complete tabular format */
+.custom-modal-table {
+  border-collapse: collapse !important;
+}
+.custom-modal-table th, 
+.custom-modal-table td {
+  border: 1px solid #e5e7eb !important;
+  vertical-align: middle;
+}
+.custom-modal-table th {
+  background-color: #fafafa;
+}

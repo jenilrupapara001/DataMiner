@@ -500,7 +500,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
 
         {/* TABLE */}
         <div className="flex-grow-1 overflow-auto position-relative">
-          <table className="bt">
+          <table className="table table-bordered table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
                 <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
@@ -542,7 +542,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
                     <span className="fw-bold text-primary" style={{ fontSize: '11px' }}>{item.asinCode}</span>
                   </td>
-                  <td className="text-zinc-500" style={{ width: '120px', fontSize: '10px' }}>{item.sku || '—'}</td>
+                  <td className="text-zinc-500" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
                   <td className="text-end" style={{ width: '160px' }}>
                     <div className="d-flex flex-column align-items-end">
                       <span className="fw-bold" style={{ fontSize: '11px', color: '#7c3aed' }}>{item.mainBsrStr}</span>

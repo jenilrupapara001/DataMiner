@@ -513,7 +513,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
         {/* TABLE */}
         <div className="flex-grow-1 overflow-auto position-relative custom-scrollbar">
-          <table className="rt">
+          <table className="table table-bordered table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
                 <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
@@ -558,7 +558,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
                     <span className="fw-bold text-blue-600 hover-underline cursor-pointer" style={{ fontSize: '11px' }}>{item.asinCode}</span>
                   </td>
-                  <td className="text-zinc-500 font-mono" style={{ width: '120px', fontSize: '10px' }}>{item.sku || '—'}</td>
+                  <td className="text-zinc-500 font-mono" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
                   <td className="text-center">
                     {item.currentRating > 0 ? (
                       <div className="d-inline-flex align-items-center gap-1 px-2 py-0.5 rounded-2 bg-amber-50 text-amber-700 fw-bold border border-amber-100" style={{ fontSize: '11px' }}>
