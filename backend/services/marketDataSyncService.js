@@ -1898,13 +1898,13 @@ class MarketDataSyncService {
             // --- Trend Calculations (Last 7 Days Average Comparison) ---
             const calculateTrend = (current, history, field, threshold = 0.05, isAbsolute = false, invert = false) => {
                 // history here is uniqueHistory which includes current point at the end
-                if (!history || history.length < 2) return 'Stable';
+                if (!history || !Array.isArray(history) || history.length < 2) return 'Stable';
                 
                 // Filter out zero values for average calculation to avoid skewing
-                const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
+                const prevPoints = history.slice(0, -1).filter(item => item && typeof item === 'object' && (item[field] || 0) > 0);
                 // Use the most recent previous valid point as baseline ("last data" as requested)
                 const lastPoint = prevPoints.length > 0 ? prevPoints[prevPoints.length - 1] : null;
-                if (!lastPoint) return 'Stable';
+                if (!lastPoint || typeof lastPoint !== 'object') return 'Stable';
                 const baseline = lastPoint[field] || 0;
                 
                 if (baseline === 0) return 'Stable';
