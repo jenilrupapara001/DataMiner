@@ -1139,6 +1139,7 @@ class MarketDataSyncService {
 
                 if (isCompleted) {
                     // Silent completion
+                    let processedCount = 0;
 
                     try {
                         // Use our ROBUST multi-path retrieval method
@@ -1147,6 +1148,7 @@ class MarketDataSyncService {
                         if (rawData && rawData.length > 0) {
                             console.log(`📥 [AUTO] Fetched ${rawData.length} rows for ingestion.`);
                             const count = await this.processBatchResults(sellerId, rawData);
+                            processedCount = count;
 
                             // Update Seller metadata
                             const pool = await getPool();
@@ -1166,12 +1168,12 @@ class MarketDataSyncService {
                     } catch (ingestErr) {
                         console.error(`❌ [AUTO] Ingestion Error for ${taskId}:`, ingestErr.message);
                     }
-                    return;
+                    return processedCount;
                 }
 
                 if (isFailed) {
                     console.error(`❌ [AUTO] Task ${taskId} FAILED or STOPPED (Status: ${status}). Automation aborted.`);
-                    return;
+                    return 0;
                 }
 
                 const currentInterval = attempts < 10 ? FAST_INTERVAL : STANDARD_INTERVAL;
@@ -1184,6 +1186,7 @@ class MarketDataSyncService {
         }
 
         console.warn(`⏰ [AUTO] Max attempts reached for ${taskId}.`);
+        return 0;
     }
 
     /**
@@ -1582,11 +1585,17 @@ class MarketDataSyncService {
                 const startResult = await this.startCloudExtraction(taskId);
                 console.log(`✅ Cloud extraction started for task ${taskId}:`, startResult);
 
-                // START BACKGROUND AUTOMATION: Poll and Ingest once done
-                console.log(`🔄 Starting background polling for seller ${sellerId}, task ${taskId}...`);
-                this.pollAndAutomate(sellerId, taskId, { fullSync: options.fullSync }).catch(err => {
-                    console.error(`❌ Background Automation Critical Error for seller ${sellerId}:`, err.message);
-                });
+                if (options.awaitCompletion) {
+                    console.log(`🔄 [AWAIT] Polling and Ingesting synchronously for seller ${sellerId}, task ${taskId}...`);
+                    const count = await this.pollAndAutomate(sellerId, taskId, { fullSync: options.fullSync, returnCount: true });
+                    return { success: true, count, asinsCount: asins.length };
+                } else {
+                    // START BACKGROUND AUTOMATION: Poll and Ingest once done
+                    console.log(`🔄 Starting background polling for seller ${sellerId}, task ${taskId}...`);
+                    this.pollAndAutomate(sellerId, taskId, { fullSync: options.fullSync }).catch(err => {
+                        console.error(`❌ Background Automation Critical Error for seller ${sellerId}:`, err.message);
+                    });
+                }
             }
 
             console.log(`✅ syncSellerAsinsToOctoparse completed for seller ${sellerId}`);

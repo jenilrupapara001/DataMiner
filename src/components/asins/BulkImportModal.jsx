@@ -213,21 +213,35 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
 
                     {/* Result Message */}
                     {result && (
-                        <div className="bg-success-subtle text-success rounded-3 p-3 mb-3" style={{ fontSize: '12px' }}>
-                            <Check size={14} className="me-1" />
-                            {result.message}
-                            <div className="mt-1 d-flex flex-wrap gap-x-3">
-                                {result.updated > 0 && <span>✅ Updated: {result.updated}</span>}
-                                {result.created > 0 && <span>🆕 Created: {result.created}</span>}
-                                {result.skipped > 0 && <span>⏭️ Skipped: {result.skipped}</span>}
+                        <div className="rounded-3 p-3 mb-3 text-white shadow-sm" style={{ fontSize: '13px', background: '#10b981', borderLeft: '5px solid #059669', animation: 'fadeIn 0.2s ease-out' }}>
+                            <div className="d-flex align-items-center gap-2 fw-semibold mb-2">
+                                <Check size={16} className="bg-white text-emerald-600 rounded-circle p-0.5" style={{ minWidth: '16px', minHeight: '16px' }} />
+                                <span>{result.message || 'Import Completed Successfully!'}</span>
+                            </div>
+                            <div className="d-flex flex-wrap gap-2 mt-2">
+                                {result.updated >= 0 && (
+                                    <span className="badge bg-white bg-opacity-20 text-white px-2 py-1.5 rounded-2 d-flex align-items-center gap-1">
+                                        <span>🔄</span> Updated: <strong className="ms-1">{result.updated}</strong>
+                                    </span>
+                                )}
+                                {result.created >= 0 && (
+                                    <span className="badge bg-white bg-opacity-20 text-white px-2 py-1.5 rounded-2 d-flex align-items-center gap-1">
+                                        <span>🆕</span> Created: <strong className="ms-1">{result.created}</strong>
+                                    </span>
+                                )}
+                                {result.skipped >= 0 && (
+                                    <span className="badge bg-white bg-opacity-20 text-white px-2 py-1.5 rounded-2 d-flex align-items-center gap-1">
+                                        <span>⏭️</span> Skipped: <strong className="ms-1">{result.skipped}</strong>
+                                    </span>
+                                )}
                             </div>
                             
                             {result.errors && result.errors.length > 0 && (
-                                <div className="mt-2 pt-2 border-top border-success-subtle text-danger" style={{ fontSize: '11px' }}>
-                                    <div className="fw-bold mb-1">Row Errors (first 5):</div>
-                                    <ul className="ps-3 mb-0">
+                                <div className="mt-3 pt-2 border-top border-white border-opacity-20 text-white-50" style={{ fontSize: '12px' }}>
+                                    <div className="fw-semibold text-white mb-1">Row Errors (first 5):</div>
+                                    <ul className="ps-3 mb-0" style={{ color: '#fee2e2' }}>
                                         {result.errors.slice(0, 5).map((err, idx) => (
-                                            <li key={idx}>{err.asin || 'Row'}: {err.reason || err}</li>
+                                            <li key={idx} className="mb-0.5">{err.asin || 'Row'}: {err.reason || err}</li>
                                         ))}
                                         {result.errors.length > 5 && <li>... and {result.errors.length - 5} more</li>}
                                     </ul>
@@ -237,9 +251,9 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                     )}
 
                     {error && (
-                        <div className="bg-danger-subtle text-danger rounded-3 p-3 mb-3 d-flex align-items-center gap-2" style={{ fontSize: '12px' }}>
-                            <AlertCircle size={14} />
-                            {error}
+                        <div className="rounded-3 p-3 mb-3 text-white d-flex align-items-center gap-2 shadow-sm" style={{ fontSize: '13px', background: '#ef4444', borderLeft: '5px solid #dc2626', animation: 'fadeIn 0.2s ease-out' }}>
+                            <AlertCircle size={16} className="bg-white text-rose-600 rounded-circle p-0.5" style={{ minWidth: '16px', minHeight: '16px' }} />
+                            <span className="fw-medium">{error}</span>
                         </div>
                     )}
 

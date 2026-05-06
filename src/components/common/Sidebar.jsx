@@ -96,6 +96,7 @@ const Sidebar = () => {
                 { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'asinmanager_view', badge: asinCount },
                 { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'asintracker_view' },
                 { label: 'Scrape Tasks', icon: Bot, to: '/scrape-tasks', permission: 'scraping_view' },
+                { label: 'Scheduled Runs', icon: Clock, to: '/scheduled-runs', permission: 'scraping_view' },
             ],
         },
         {

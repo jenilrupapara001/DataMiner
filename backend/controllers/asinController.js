@@ -1386,11 +1386,18 @@ exports.importFromCsv = async (req, res) => {
 
         if (!identifier || identifier.length < 5) continue;
 
+        const rawStatus = (getValue(row, ['Status', 'ASIN Status', 'State']) || '').toString().trim();
+        let status = 'Active';
+        if (rawStatus && (rawStatus.toLowerCase() === 'inactive' || rawStatus.toLowerCase() === 'false' || rawStatus === '0')) {
+          status = 'Inactive';
+        }
+
         if (existingCodes.has(identifier)) {
           await transaction.request()
             .input('id', sql.VarChar, existingCodes.get(identifier))
             .input('sku', sql.NVarChar, sku)
-            .query('UPDATE Asins SET Sku = @sku, UpdatedAt = GETDATE() WHERE Id = @id');
+            .input('status', sql.VarChar, status)
+            .query('UPDATE Asins SET Sku = @sku, Status = @status, UpdatedAt = GETDATE() WHERE Id = @id');
           updatedCount++;
         } else {
           const id = generateId();
@@ -1399,9 +1406,10 @@ exports.importFromCsv = async (req, res) => {
             .input('asin', sql.VarChar, identifier)
             .input('sellerId', sql.VarChar, sellerId)
             .input('sku', sql.NVarChar, sku)
+            .input('status', sql.VarChar, status)
             .query(`
               INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-              VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', GETDATE(), GETDATE())
+              VALUES (@id, @asin, @sellerId, @sku, @status, 'PENDING', GETDATE(), GETDATE())
             `);
           insertedCount++;
           existingCodes.set(identifier, id); // Add to map to prevent duplicate inserts in this batch
@@ -1558,6 +1566,12 @@ exports.bulkUploadAllSellers = async (req, res) => {
                         .input('sellerId', sql.VarChar, sellerId)
                         .query('SELECT Id FROM Asins WHERE AsinCode = @asin AND SellerId = @sellerId');
 
+                    const rawStatus = getValue(row, ['Status', 'ASIN Status', 'State'])?.toString().trim();
+                    let status = 'Active';
+                    if (rawStatus && (rawStatus.toLowerCase() === 'inactive' || rawStatus.toLowerCase() === 'false' || rawStatus === '0')) {
+                        status = 'Inactive';
+                    }
+
                     if (checkResult.recordset.length > 0) {
                         // Update
                         const existingId = checkResult.recordset[0].Id;
@@ -1567,9 +1581,10 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('parentAsin', sql.NVarChar, parentAsin)
                             .input('releaseDate', sql.DateTime2, releaseDate)
                             .input('price', sql.Decimal(18, 2), price)
+                            .input('status', sql.VarChar, status)
                             .query(`
                                 UPDATE Asins 
-                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, UpdatedAt = GETDATE()
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Status = @status, UpdatedAt = GETDATE()
                                 WHERE Id = @id
                             `);
                         updated++;
@@ -1584,9 +1599,10 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('parentAsin', sql.NVarChar, parentAsin)
                             .input('releaseDate', sql.DateTime2, releaseDate)
                             .input('price', sql.Decimal(18, 2), price)
+                            .input('status', sql.VarChar, status)
                             .query(`
                                 INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, 'Active', 'PENDING', GETDATE(), GETDATE())
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @status, 'PENDING', GETDATE(), GETDATE())
                             `);
                         created++;
                     }

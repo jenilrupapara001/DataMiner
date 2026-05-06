@@ -38,6 +38,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const ScrapeTasksPage = lazy(() => import('./pages/ScrapeTasksPage'));
 const SellersPage = lazy(() => import('./pages/SellersPage'));
+const ScheduledRunsPage = lazy(() => import('./pages/ScheduledRunsPage'));
 const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const GoalAchievementReport = lazy(() => import('./pages/GoalAchievementReport'));
 const RevenueCalculatorPage = lazy(() => import('./pages/RevenueCalculatorPage'));
@@ -142,7 +143,8 @@ function AppRoutes() {
                   <Route path="/rule-sets" element={<ProtectedRoute permission="rules_view"><RuleSetsPage /></ProtectedRoute>} />
                   <Route path="/rule-sets/new" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
                   <Route path="/rule-sets/:id/edit" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
-                  <Route path="/scrape-tasks" element={<ProtectedRoute permission="scraping_view"><ScrapeTasksPage /></ProtectedRoute>} />
+                   <Route path="/scrape-tasks" element={<ProtectedRoute permission="scraping_view"><ScrapeTasksPage /></ProtectedRoute>} />
+                  <Route path="/scheduled-runs" element={<ProtectedRoute permission="scraping_view"><ScheduledRunsPage /></ProtectedRoute>} />
                   <Route path="/sellers" element={<ProtectedRoute permission="seller_view"><SellersPage /></ProtectedRoute>} />
                   <Route path="/seller-tracker" element={<ProtectedRoute permission="asintracker_view"><SellerAsinTrackerPage /></ProtectedRoute>} />
                   <Route path="/seller-tracker/:sellerId" element={<ProtectedRoute permission="asintracker_view"><SellerAsinTrackerPage /></ProtectedRoute>} />

@@ -332,6 +332,34 @@ export const marketSyncApi = {
   }
 };
 
+// Scheduled Runs API
+export const scheduledRunsApi = {
+  getAll: async () => {
+    const res = await fetch(`${API_BASE}/scheduled-runs`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch scheduled runs');
+    return res.json();
+  },
+
+  getDetails: async (id) => {
+    const res = await fetch(`${API_BASE}/scheduled-runs/${id}`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch scheduled run details');
+    return res.json();
+  },
+
+  trigger: async () => {
+    const res = await fetch(`${API_BASE}/scheduled-runs/trigger`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to trigger scheduled run');
+    return res.json();
+  },
+};
+
 // User API
 export const userApi = {
   getAll: async (params = {}) => {

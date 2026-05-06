@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { sql, getPool } = require('../database/db');
+const { sql, getPool, generateId } = require('../database/db');
 const MarketSyncService = require('./marketDataSyncService');
 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
 const AutoTagService = require('./autoTagService');
@@ -11,6 +11,9 @@ const AutoTagService = require('./autoTagService');
 class SchedulerService {
     constructor() {
         this.jobs = {};
+        this.ensureTablesExist().catch(err => {
+            console.error('❌ ScheduledRuns table verification failed on startup:', err.message);
+        });
     }
 
     /**
@@ -144,10 +147,75 @@ class SchedulerService {
         }
     }
 
-    async runEnterprisePipeline() {
-        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Concurrent)...');
+    async ensureTablesExist() {
         try {
             const pool = await getPool();
+            await pool.request().query(`
+                IF OBJECT_ID(N'dbo.ScheduledRuns', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE ScheduledRuns (
+                        Id VARCHAR(50) PRIMARY KEY,
+                        StartTime DATETIME2 NOT NULL,
+                        EndTime DATETIME2,
+                        Status VARCHAR(50) NOT NULL, -- 'RUNNING', 'COMPLETED', 'FAILED'
+                        Details NVARCHAR(MAX), -- JSON string with seller-wise stats
+                        CreatedAt DATETIME2 DEFAULT GETDATE(),
+                        UpdatedAt DATETIME2 DEFAULT GETDATE()
+                    );
+                END
+            `);
+            console.log('✅ ScheduledRuns table verified/created successfully.');
+        } catch (err) {
+            console.error('❌ Failed to ensure ScheduledRuns table exists:', err.message);
+        }
+    }
+
+    async updateRunDetails(runId, details, status = 'RUNNING', isEnd = false) {
+        try {
+            const pool = await getPool();
+            const detailsJson = JSON.stringify(details);
+            const request = pool.request()
+                .input('id', sql.VarChar, runId)
+                .input('status', sql.VarChar, status)
+                .input('details', sql.NVarChar, detailsJson);
+            
+            if (isEnd) {
+                await request.query(`
+                    UPDATE ScheduledRuns 
+                    SET Status = @status, Details = @details, EndTime = GETDATE(), UpdatedAt = GETDATE()
+                    WHERE Id = @id
+                `);
+            } else {
+                await request.query(`
+                    UPDATE ScheduledRuns 
+                    SET Status = @status, Details = @details, UpdatedAt = GETDATE()
+                    WHERE Id = @id
+                `);
+            }
+        } catch (err) {
+            console.error(`❌ Failed to update ScheduledRuns details for run ${runId}:`, err.message);
+        }
+    }
+
+    async runEnterprisePipeline() {
+        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Synchronous batches of 5)...');
+        const runId = generateId();
+        const details = [];
+        const startTime = new Date();
+
+        try {
+            const pool = await getPool();
+
+            // Insert initial run record
+            await pool.request()
+                .input('id', sql.VarChar, runId)
+                .input('startTime', sql.DateTime2, startTime)
+                .input('status', sql.VarChar, 'RUNNING')
+                .input('details', sql.NVarChar, JSON.stringify([]))
+                .query(`
+                    INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
+                    VALUES (@id, @startTime, @status, @details, GETDATE(), GETDATE())
+                `);
 
             // 1. FIRST: Stop all active tasks to ensure a fresh state
             console.log('🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse tasks...');
@@ -158,60 +226,82 @@ class SchedulerService {
                 .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
-            if (sellers.length === 0) return { success: true, totalSellers: 0 };
+            if (sellers.length === 0) {
+                await this.updateRunDetails(runId, [], 'COMPLETED', true);
+                return { success: true, totalSellers: 0 };
+            }
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync (synchronous awaiting).`);
             
-            const CONCURRENCY_LIMIT = 5; // Updated to 5 concurrent tasks as requested
+            const CONCURRENCY_LIMIT = 5;
             let successful = 0;
-            const startTime = Date.now();
 
             for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
                 const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
-                
-                console.log(`🚀 [ENTERPRISE] Processing batch of ${batch.length} sellers...`);
+                console.log(`🚀 [ENTERPRISE] Processing concurrent batch of ${batch.length} sellers...`);
                 
                 await Promise.all(batch.map(async (seller) => {
+                    const sellerStat = {
+                        sellerId: seller.Id,
+                        name: seller.Name,
+                        startTime: new Date(),
+                        endTime: null,
+                        status: 'RUNNING',
+                        asinsCount: 0,
+                        count: 0,
+                        error: null
+                    };
+                    details.push(sellerStat);
+                    await this.updateRunDetails(runId, details);
+
                     try {
                         // 2. Clear previous data from Octoparse cloud before starting
                         console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
-                        await MarketSyncService.clearTaskData(seller.OctoparseId);
+                        await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
                         
-                        // 3. Trigger sync and scrape
-                        await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                        // 3. Trigger sync and await complete scrape + polling
+                        const syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
                             triggerScrape: true,
                             fullSync: true,
-                            forceReRun: true 
+                            forceReRun: true,
+                            awaitCompletion: true
                         });
+
+                        sellerStat.status = 'COMPLETED';
+                        if (syncResult && typeof syncResult === 'object') {
+                            sellerStat.asinsCount = syncResult.asinsCount || 0;
+                            sellerStat.count = syncResult.count || 0;
+                        }
                         successful++;
-                        console.log(`✅ [ENTERPRISE] Triggered sync for ${seller.Name}`);
                     } catch (err) {
-                        console.error(`❌ [ENTERPRISE] Failed to trigger sync for ${seller.Name}:`, err.message);
+                        sellerStat.status = 'FAILED';
+                        sellerStat.error = err.message;
+                        console.error(`❌ [ENTERPRISE] Failed for ${seller.Name}:`, err.message);
+                    } finally {
+                        sellerStat.endTime = new Date();
+                        await this.updateRunDetails(runId, details);
                     }
                 }));
 
-                // Delay between batches for API stability
+                // Short stability delay between completed batches
                 if (i + CONCURRENCY_LIMIT < sellers.length) {
-                    await new Promise(r => setTimeout(r, 15000));
+                    await new Promise(r => setTimeout(r, 5000));
                 }
             }
 
-            const duration = Math.round((Date.now() - startTime) / 1000);
+            // After completed, stop all active tasks completely as requested
+            console.log('🏢 [ENTERPRISE] Stopping all active tasks after pipeline completion to prevent concurrency...');
+            await MarketSyncService.stopAllActiveTasks().catch(() => {});
+
+            const totalDurationSecs = Math.round((Date.now() - startTime) / 1000);
             const result = {
                 totalSellers: sellers.length,
                 successful,
-                duration: `${duration}s`
+                duration: `${totalDurationSecs}s`
             };
 
-            console.log('🏢 [ENTERPRISE] Pipeline completed:', result);
-            
-            // --- SMART SCRAPING (DELTA SYNC) ---
-            // After the main sync, find ASINs that STILL have no found data in the last 12 hours
-            // and trigger a targeted recovery scrape for them.
-            setTimeout(async () => {
-                console.log('🔍 [ENTERPRISE] Starting follow-up Smart Scraping for missing data...');
-                await this.runMissingDataRecovery();
-            }, 3600000); // Wait 1 hour after triggering the main pipeline to allow initial cloud jobs to settle
+            console.log('🏢 [ENTERPRISE] Pipeline fully completed:', result);
+            await this.updateRunDetails(runId, details, 'COMPLETED', true);
 
             // Create notification for admin
             try {
@@ -225,7 +315,7 @@ class SchedulerService {
                         'SYSTEM',
                         'System',
                         admin.Id,
-                        `🏢 Enterprise Pipeline: ${result.successful}/${result.totalSellers} sellers synced in ${result.duration}. Smart Scraping follow-up scheduled.`
+                        `🏢 Scheduled Run Complete: ${result.successful}/${result.totalSellers} sellers synced successfully in ${result.duration}.`
                     );
                 }
             } catch (notifErr) {
@@ -235,6 +325,7 @@ class SchedulerService {
             return result;
         } catch (error) {
             console.error('🏢 [ENTERPRISE] Pipeline failed:', error.message);
+            await this.updateRunDetails(runId, details, 'FAILED', true);
             return { success: false, error: error.message };
         }
     }
