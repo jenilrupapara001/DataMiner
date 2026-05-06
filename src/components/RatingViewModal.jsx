@@ -379,8 +379,8 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     .pulse-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 1; } }
     .trend-badge { display: inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; }
-    .trend-up { background: #ecfdf5; color: #059669; }
-    .trend-dn { background: #fef2f2; color: #dc2626; }
+    .trend-up { background: #059669; color: #ffffff; }
+    .trend-dn { background: #dc2626; color: #ffffff; }
     .trend-st { background: #f4f4f5; color: #71717a; }
   `;
 
@@ -513,7 +513,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
         {/* TABLE */}
         <div className="flex-grow-1 overflow-auto position-relative custom-scrollbar">
-          <table className="table table-bordered table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
+          <table className="table table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
                 <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
@@ -542,7 +542,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
               </tr>
               <tr>
                 {dateColumns.map((col, idx) => (
-                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                     {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
                   </th>
                 ))}
@@ -576,7 +576,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                   {item.dateValues.map((dv, di) => {
                     const col = dateColumns[di];
                     return (
-                      <td key={di} className="text-center" style={{ padding: '4px 2px', background: di % 2 === 0 ? '#fafafa' : '#fff', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                      <td key={di} className="text-center" style={{ padding: '4px 2px', background: di % 2 === 0 ? '#fafafa' : '#fff', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                         <div className="d-flex flex-column align-items-center gap-0.5">
                           {dv.rating ? (
                             <span className="fw-bold text-amber-600" style={{ fontSize: '10px' }}>{dv.rating.toFixed(1)}</span>

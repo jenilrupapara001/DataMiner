@@ -192,6 +192,7 @@ async function processExportJob(downloadId, params, userId) {
             maxImageScore,
             minDescriptionScore,
             maxDescriptionScore,
+            priceDispute,
             asinIds = []
         } = params;
 
@@ -259,6 +260,13 @@ async function processExportJob(downloadId, params, userId) {
         if (buyBoxWin !== undefined && buyBoxWin !== '' && buyBoxWin !== null) {
             request.input('buyBoxStatus', sql.Bit, (buyBoxWin === true || buyBoxWin === 'true') ? 1 : 0);
             whereClause += ' AND a.BuyBoxWin = @buyBoxStatus';
+        }
+        if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
+            if (priceDispute === 'true' || priceDispute === true) {
+                whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+            } else {
+                whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+            }
         }
         if (minPrice) {
             request.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
@@ -365,6 +373,7 @@ async function processExportJob(downloadId, params, userId) {
             'currentPrice': 'a.CurrentPrice',
             'mrp': 'a.Mrp',
             'dealBadge': 'a.DealBadge',
+            'priceDispute': 'a.PriceDispute',
             'priceType': 'a.PriceType',
             'discountPercentage': 'a.DiscountPercentage',
             'secondAsp': 'a.SecondAsp',

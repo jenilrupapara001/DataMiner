@@ -520,7 +520,33 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                     </div>
                   </div>
 
-                  {/* 3. FORMAT */}
+                  {/* 3. DATA RANGE */}
+                  <div className="bg-white rounded-3 border p-4 mb-3">
+                    <div className="d-flex align-items-center gap-2 mb-3">
+                      <Calendar size={16} className="text-zinc-500" />
+                      <span className="fw-bold text-zinc-800" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Data Range
+                      </span>
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {[
+                        { label: 'All Time', value: 'all' },
+                        { label: 'Today', value: 'today' },
+                        { label: 'Yesterday', value: 'yesterday' },
+                        { label: 'Last 7 Days', value: '7days' },
+                        { label: 'Last 30 Days', value: '30days' }
+                      ].map(opt => (
+                        <button key={opt.value} 
+                          className={`btn btn-sm rounded-pill px-3 py-1.5 transition-all ${dateOption === opt.value ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                          style={{ fontSize: '12px' }}
+                          onClick={() => setDateOption(opt.value)}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 4. FORMAT */}
                   <div className="bg-white rounded-3 border p-4">
                     <div className="d-flex align-items-center gap-2 mb-3">
                       <FileSpreadsheet size={16} className="text-zinc-500" />

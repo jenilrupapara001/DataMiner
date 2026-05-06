@@ -538,7 +538,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
               </tr>
               <tr>
                 {dateColumns.map((col, idx) => (
-                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                     {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
                   </th>
                 ))}
@@ -569,13 +569,13 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                   </td>
                   <td className="text-center">
                     {item.discountPercent > 0 ? (
-                      <span className="badge" style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span>
+                      <span className="badge" style={{ background: '#dc2626', color: '#ffffff', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span>
                     ) : <span className="text-zinc-300">—</span>}
                   </td>
                   {item.dateValues.map((dv, di) => {
                     const col = dateColumns[di];
                     return (
-                      <td key={di} className={`dd text-center ${dv.price ? 'dd-has' : 'dd-no'}`} style={{ borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                      <td key={di} className={`dd text-center ${dv.price ? 'dd-has' : 'dd-no'}`} style={{ borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                         {dv.price ? '₹' + dv.price.toLocaleString() : '·'}
                       </td>
                     );

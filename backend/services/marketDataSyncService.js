@@ -1903,7 +1903,8 @@ class MarketDataSyncService {
                 // Filter out zero values for average calculation to avoid skewing
                 const prevPoints = history.slice(0, -1).filter(item => (item[field] || 0) > 0);
                 // Use the most recent previous valid point as baseline ("last data" as requested)
-                const lastPoint = prevPoints[prevPoints.length - 1];
+                const lastPoint = prevPoints.length > 0 ? prevPoints[prevPoints.length - 1] : null;
+                if (!lastPoint) return 'Stable';
                 const baseline = lastPoint[field] || 0;
                 
                 if (baseline === 0) return 'Stable';
@@ -2066,7 +2067,7 @@ class MarketDataSyncService {
                                         WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
                                     ELSE
                                         INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                        VALUES (REPLACE(NEWID(), '-', ''), @asinId, @date, @category, @rank, GETDATE())
+                                        VALUES (SUBSTRING(REPLACE(NEWID(), '-', ''), 1, 24), @asinId, @date, @category, @rank, GETDATE())
                                 `);
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);

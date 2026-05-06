@@ -500,7 +500,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
 
         {/* TABLE */}
         <div className="flex-grow-1 overflow-auto position-relative">
-          <table className="table table-bordered table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
+          <table className="table table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
                 <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
@@ -526,7 +526,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
               </tr>
               <tr>
                 {dateColumns.map((col, idx) => (
-                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                     {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
                   </th>
                 ))}
@@ -552,7 +552,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
                   {item.dateValues.map((dv, di) => {
                     const col = dateColumns[di];
                     return (
-                      <td key={di} className={`dd text-center ${dv.rank ? 'dd-has' : 'dd-no'}`} style={{ borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                      <td key={di} className={`dd text-center ${dv.rank ? 'dd-has' : 'dd-no'}`} style={{ borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                         {dv.rank ? '#' + dv.rank.toLocaleString() : '·'}
                       </td>
                     );

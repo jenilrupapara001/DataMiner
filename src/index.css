@@ -3213,6 +3213,8 @@ a:hover {
 .custom-modal-table {
   border-collapse: separate !important;
   border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 .custom-modal-table thead th {
@@ -3220,14 +3222,27 @@ a:hover {
   top: 0;
   z-index: 30;
   background-clip: padding-box;
-}
-
-.custom-modal-table th,
-.custom-modal-table td {
-  border: 1px solid #000000;
-  vertical-align: middle;
-}
-
-.custom-modal-table th {
   background-color: #fafafa;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  padding: 4px 8px;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: 0.5px solid #f1f1f1;
+}
+
+.custom-modal-table tbody td {
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  color: #27272a;
+  height: 28px;
+  vertical-align: middle;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: 0.5px solid #f1f5f9;
 }
