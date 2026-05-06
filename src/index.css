@@ -48,13 +48,18 @@
   --bg-tertiary: #F3F4F6;
 
   /* Text Colors - High Contrast Hierarchy */
-  --text-primary: #09090B; /* Zinc 950 */
-  --text-secondary: #52525B; /* Zinc 600 */
-  --text-tertiary: #71717A; /* Zinc 500 */
-  --text-muted: #A1A1AA; /* Zinc 400 */
+  --text-primary: #09090B;
+  /* Zinc 950 */
+  --text-secondary: #52525B;
+  /* Zinc 600 */
+  --text-tertiary: #71717A;
+  /* Zinc 500 */
+  --text-muted: #A1A1AA;
+  /* Zinc 400 */
 
   /* Borders - Hairline Precision */
-  --border-color: #E4E4E7; /* Zinc 200 */
+  --border-color: #E4E4E7;
+  /* Zinc 200 */
   --border-radius-sm: 4px;
   --border-radius: 8px;
   --border-radius-lg: 12px;
@@ -77,12 +82,18 @@
   --font-size-3xl: 1.5rem;
 
   /* Spacing - Rigid 8px (0.5rem) System */
-  --spacing-xs: 0.25rem;  /* 4px */
-  --spacing-sm: 0.5rem;   /* 8px */
-  --spacing-md: 1rem;    /* 16px */
-  --spacing-lg: 1.5rem;  /* 24px */
-  --spacing-xl: 2rem;    /* 32px */
-  --spacing-2xl: 3rem;   /* 48px */
+  --spacing-xs: 0.25rem;
+  /* 4px */
+  --spacing-sm: 0.5rem;
+  /* 8px */
+  --spacing-md: 1rem;
+  /* 16px */
+  --spacing-lg: 1.5rem;
+  /* 24px */
+  --spacing-xl: 2rem;
+  /* 32px */
+  --spacing-2xl: 3rem;
+  /* 48px */
 
   /* Redesign Variables */
   --sidebar-w: 240px;
@@ -116,9 +127,17 @@
 
 /* Animations */
 @keyframes pulse-green {
-  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
 .pulse-green {
@@ -139,32 +158,101 @@
 }
 
 /* Zinc Utility Spectrum - Missing from original system */
-.text-zinc-50 { color: #fafafa !important; }
-.text-zinc-100 { color: #f4f4f5 !important; }
-.text-zinc-200 { color: #e4e4e7 !important; }
-.text-zinc-300 { color: #d4d4d8 !important; }
-.text-zinc-400 { color: #a1a1aa !important; }
-.text-zinc-500 { color: #71717a !important; }
-.text-zinc-600 { color: #52525b !important; }
-.text-zinc-700 { color: #3f3f46 !important; }
-.text-zinc-800 { color: #27272a !important; }
-.text-zinc-900 { color: #18181b !important; }
-.text-zinc-950 { color: #09090b !important; }
+.text-zinc-50 {
+  color: #fafafa !important;
+}
 
-.bg-zinc-50 { background-color: #fafafa !important; }
-.bg-zinc-100 { background-color: #f4f4f5 !important; }
-.bg-zinc-200 { background-color: #e4e4e7 !important; }
-.bg-zinc-300 { background-color: #d4d4d8 !important; }
-.bg-zinc-400 { background-color: #a1a1aa !important; }
-.bg-zinc-500 { background-color: #71717a !important; }
-.bg-zinc-600 { background-color: #52525b !important; }
-.bg-zinc-700 { background-color: #3f3f46 !important; }
-.bg-zinc-800 { background-color: #27272a !important; }
-.bg-zinc-900 { background-color: #18181b !important; }
+.text-zinc-100 {
+  color: #f4f4f5 !important;
+}
 
-.border-zinc-100 { border-color: #f4f4f5 !important; }
-.border-zinc-200 { border-color: #e4e4e7 !important; }
-.border-zinc-300 { border-color: #d4d4d8 !important; }
+.text-zinc-200 {
+  color: #e4e4e7 !important;
+}
+
+.text-zinc-300 {
+  color: #d4d4d8 !important;
+}
+
+.text-zinc-400 {
+  color: #a1a1aa !important;
+}
+
+.text-zinc-500 {
+  color: #71717a !important;
+}
+
+.text-zinc-600 {
+  color: #52525b !important;
+}
+
+.text-zinc-700 {
+  color: #3f3f46 !important;
+}
+
+.text-zinc-800 {
+  color: #27272a !important;
+}
+
+.text-zinc-900 {
+  color: #18181b !important;
+}
+
+.text-zinc-950 {
+  color: #09090b !important;
+}
+
+.bg-zinc-50 {
+  background-color: #fafafa !important;
+}
+
+.bg-zinc-100 {
+  background-color: #f4f4f5 !important;
+}
+
+.bg-zinc-200 {
+  background-color: #e4e4e7 !important;
+}
+
+.bg-zinc-300 {
+  background-color: #d4d4d8 !important;
+}
+
+.bg-zinc-400 {
+  background-color: #a1a1aa !important;
+}
+
+.bg-zinc-500 {
+  background-color: #71717a !important;
+}
+
+.bg-zinc-600 {
+  background-color: #52525b !important;
+}
+
+.bg-zinc-700 {
+  background-color: #3f3f46 !important;
+}
+
+.bg-zinc-800 {
+  background-color: #27272a !important;
+}
+
+.bg-zinc-900 {
+  background-color: #18181b !important;
+}
+
+.border-zinc-100 {
+  border-color: #f4f4f5 !important;
+}
+
+.border-zinc-200 {
+  border-color: #e4e4e7 !important;
+}
+
+.border-zinc-300 {
+  border-color: #d4d4d8 !important;
+}
 
 /* Premium Action Buttons */
 .btn-prism {
@@ -179,7 +267,7 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -214,7 +302,7 @@
   color: var(--color-gray-900) !important;
   border-radius: 8px;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .btn-white-icon:hover {
@@ -3072,9 +3160,20 @@ a:hover {
    Live Alerts ($100M Aesthetic)
    ========================================================================== */
 @keyframes pulse-ring {
-  0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.5); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(238, 0, 0, 0); }
-  100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(238, 0, 0, 0); }
+  0% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.5);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(238, 0, 0, 0);
+  }
+
+  100% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 rgba(238, 0, 0, 0);
+  }
 }
 
 .pulse-indicator {
@@ -3091,30 +3190,44 @@ a:hover {
   border-color: var(--color-border-strong) !important;
   transform: translateY(-1px);
 }
+
 /* Custom Scrollbar for Precision Modals */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #E2E8F0;
   border-radius: 10px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #CBD5E1;
 }
 
 /* Custom Modal Table for complete tabular format */
 .custom-modal-table {
-  border-collapse: collapse !important;
+  border-collapse: separate !important;
+  border-spacing: 0;
 }
-.custom-modal-table th, 
+
+.custom-modal-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-clip: padding-box;
+}
+
+.custom-modal-table th,
 .custom-modal-table td {
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid #000000;
   vertical-align: middle;
 }
+
 .custom-modal-table th {
   background-color: #fafafa;
 }
