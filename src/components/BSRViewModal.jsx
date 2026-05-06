@@ -135,8 +135,26 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
       const h = a.history || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
-    const sorted = [...dates].sort().slice(-7);
-    return { dateColumns: sorted };
+    
+    // Sort descending (newest first)
+    const sorted = [...dates].sort((a, b) => new Date(b) - new Date(a));
+    
+    // Group by week, picking the latest date for each week
+    const weekMap = new Map();
+    sorted.forEach(d => {
+      const dateObj = new Date(d);
+      const day = dateObj.getDay();
+      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const monday = new Date(dateObj.setDate(diff));
+      const weekKey = monday.toISOString().split('T')[0];
+      
+      if (!weekMap.has(weekKey)) {
+        weekMap.set(weekKey, d);
+      }
+    });
+    
+    const selectedDates = Array.from(weekMap.values()).sort(); // Sort ascending for display
+    return { dateColumns: selectedDates };
   }, [asins]);
 
   // ===== PROCESS DATA FOR DISPLAY =====
