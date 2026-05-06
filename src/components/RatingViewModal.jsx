@@ -126,32 +126,40 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
   }, []);
 
   // ===== GENERATE DATE COLUMNS FROM HISTORY DATA =====
-  const { dateColumns } = useMemo(() => {
+  const { dateColumns, weekGroups } = useMemo(() => {
     const dates = new Set();
     asins.forEach(a => {
       const h = a.history || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
     
-    // Sort descending (newest first)
-    const sorted = [...dates].sort((a, b) => new Date(b) - new Date(a));
+    // Sort ascending (oldest first)
+    const sorted = [...dates].sort();
     
-    // Group by week, picking the latest date for each week
-    const weekMap = new Map();
+    const dateColumnsArray = [];
+    const groups = [];
+    let currentWeek = null;
+    let weekCounter = 0;
+    let currentGroup = null;
+
     sorted.forEach(d => {
       const dateObj = new Date(d);
       const day = dateObj.getDay();
       const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Monday
-      const monday = new Date(dateObj.setDate(diff));
-      const weekKey = monday.toISOString().split('T')[0];
+      const monday = new Date(dateObj.setDate(diff)).toISOString().split('T')[0];
       
-      if (!weekMap.has(weekKey)) {
-        weekMap.set(weekKey, d);
+      if (monday !== currentWeek) {
+        currentWeek = monday;
+        weekCounter++;
+        currentGroup = { name: `W${weekCounter}`, colSpan: 0 };
+        groups.push(currentGroup);
       }
+      
+      currentGroup.colSpan++;
+      dateColumnsArray.push({ date: d, weekName: `W${weekCounter}` });
     });
     
-    const selectedDates = Array.from(weekMap.values()).sort(); // Sort ascending for display
-    return { dateColumns: selectedDates };
+    return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
 
   // ===== PROCESS DATA FOR DISPLAY (Trends, WoW) =====
@@ -174,10 +182,10 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         }
       });
 
-      const dateValues = dateColumns.map(d => ({
-        date: d,
-        rating: ratingByDate[d]?.rating || null,
-        reviews: ratingByDate[d]?.reviews || null,
+      const dateValues = dateColumns.map(col => ({
+        date: col.date,
+        rating: ratingByDate[col.date]?.rating || null,
+        reviews: ratingByDate[col.date]?.reviews || null,
       }));
 
       const currentWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -331,7 +339,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
   };
 
   const exportData = () => {
-    const headers = ['ASIN', 'SKU', 'Title', 'Rating', 'Reviews', ...dateColumns.map(d => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })), 'WoW %', 'Trend'];
+    const headers = ['ASIN', 'SKU', 'Title', 'Rating', 'Reviews', ...dateColumns.map(c => `${c.weekName} - ${new Date(c.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`), 'WoW %', 'Trend'];
     const rows = filteredData.map(d => [d.asinCode, d.sku, d.title, d.currentRating, d.reviewCount, ...d.dateValues.map(v => v.rating || ''), d.woWPercent.toFixed(1) + '%', d.trend]);
     const csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -501,29 +509,36 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
           <table className="rt">
             <thead>
               <tr>
-                <th style={{ width: '40px', position: 'sticky', left: 0, zIndex: 30, background: '#fafafa', textAlign: 'center' }}>
+                <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
                   <input type="checkbox" checked={selectedIds.size === filteredData.length && filteredData.length > 0} onChange={toggleSelectAll} style={{ width: '13px', height: '13px', cursor: 'pointer', accentColor: '#18181b' }} />
                 </th>
-                <th style={{ width: '45px', position: 'sticky', left: '40px', zIndex: 30, background: '#fafafa', textAlign: 'center' }}>#</th>
-                <th style={{ width: '85px', position: 'sticky', left: '85px', zIndex: 30, background: '#fff' }} onClick={() => handleSort('asinCode')}>
+                <th rowSpan={2} style={{ width: '45px', position: 'sticky', left: '40px', zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>#</th>
+                <th rowSpan={2} style={{ width: '85px', position: 'sticky', left: '85px', zIndex: 40, background: '#fff', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('asinCode')}>
                   <div className="d-flex align-items-center gap-2">ASIN <Si f="asinCode" /></div>
                 </th>
-                <th style={{ width: '120px' }}>SKU</th>
-                <th style={{ width: '80px', textAlign: 'center' }} onClick={() => handleSort('rating')}>
+                <th rowSpan={2} style={{ width: '120px', borderBottom: '1px solid #e5e7eb' }}>SKU</th>
+                <th rowSpan={2} style={{ width: '80px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('rating')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">SCORE <Si f="rating" /></div>
                 </th>
-                <th style={{ width: '85px', textAlign: 'center' }} onClick={() => handleSort('reviews')}>
+                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('reviews')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">VOLUME <Si f="reviews" /></div>
                 </th>
-                {dateColumns.map((date, idx) => (
-                  <th key={date} style={{ width: '65px', textAlign: 'center', background: idx === dateColumns.length - 1 ? '#fff7ed' : '#fafafa', fontSize: '9px' }}>
-                    {new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                {weekGroups.map(grp => (
+                  <th key={grp.name} colSpan={grp.colSpan} style={{ textAlign: 'center', background: '#fff7ed', color: '#9a3412', fontSize: '10px', borderBottom: '1px solid #e5e7eb', letterSpacing: '0.05em' }}>
+                    {grp.name}
                   </th>
                 ))}
-                <th style={{ width: '85px', textAlign: 'center', background: '#fffbeb' }} onClick={() => handleSort('wowPercent')}>
+                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', background: '#fffbeb', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('wowPercent')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">WoW % <Si f="wowPercent" /></div>
                 </th>
-                <th style={{ width: '60px', textAlign: 'center' }}>TREND</th>
+                <th rowSpan={2} style={{ width: '60px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>TREND</th>
+              </tr>
+              <tr>
+                {dateColumns.map((col, idx) => (
+                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb' }}>
+                    {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
