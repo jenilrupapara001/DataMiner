@@ -1824,7 +1824,9 @@ class MarketDataSyncService {
             let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
             let availabilityStatus = 'Available';
             
-            if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
+            if (price > 0) {
+                availabilityStatus = 'Available';
+            } else if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
                 const lowerAvail = rawAvailability.toLowerCase().trim();
                 if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
                     availabilityStatus = 'Currently unavailable.';
@@ -1835,10 +1837,10 @@ class MarketDataSyncService {
                 }
             } else {
                 // Heuristic Fallback: If price is 0 or empty, it is highly likely currently unavailable on Amazon
-                if (price === 0 || (!price && asin.CurrentPrice === 0)) {
+                if (price === 0 || (!price && (asin.CurrentPrice === 0 || !asin.CurrentPrice))) {
                     availabilityStatus = 'Currently unavailable.';
                 } else {
-                    availabilityStatus = (asin.AvailabilityStatus || 'Available').trim();
+                    availabilityStatus = 'Available';
                 }
             }
 
