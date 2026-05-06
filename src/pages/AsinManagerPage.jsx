@@ -504,7 +504,7 @@ const AsinManagerPage = () => {
     priceDispute: '',
     bsrTrend: '',
     ratingTrend: '',
-    historyDays: '14'
+    historyDays: ''
   });
 
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -550,7 +550,7 @@ const AsinManagerPage = () => {
     priceDispute: '',
     bsrTrend: '',
     ratingTrend: '',
-    historyDays: '14'
+    historyDays: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -579,7 +579,7 @@ const AsinManagerPage = () => {
       minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: '',
       minReviewCount: '', maxReviewCount: '', minImagesCount: '', maxImagesCount: '',
       minBulletPoints: '', maxBulletPoints: '', priceDispute: '',
-      bsrTrend: '', ratingTrend: '', historyDays: '14'
+      bsrTrend: '', ratingTrend: '', historyDays: ''
     };
     setFilters(resetState);
     setAppliedFilters(resetState);
@@ -1730,6 +1730,7 @@ const AsinManagerPage = () => {
                   <div className="filter-group">
                     <label className="filter-label">HISTORY DATA RANGE</label>
                     <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.historyDays} onChange={(e) => setFilters({ ...filters, historyDays: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">Select Range (Default: 14 Days)</option>
                       <option value="1">Today Only</option>
                       <option value="7">Last 7 Days</option>
                       <option value="14">Last 14 Days</option>
@@ -2948,7 +2949,7 @@ const AsinManagerPage = () => {
                           <span
                             className="badge"
                             style={{
-                              backgroundColor: (asin.availabilityStatus || 'Available').toLowerCase().includes('unavailable') ? '#dc2626' : '#059669',
+                              backgroundColor: (asin.availabilityStatus || 'Available').toLowerCase().includes('unavailable') || (asin.availabilityStatus || '').toLowerCase().includes('out of stock') || (asin.availabilityStatus || '').trim() === '' ? '#dc2626' : '#059669',
                               color: '#fff',
                               fontWeight: 600,
                               fontSize: '0.75rem',

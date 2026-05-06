@@ -428,9 +428,26 @@ exports.uploadOctoparseData = async (req, res) => {
       // Split by double newline (each entry separated by blank line)
       rawDataArray = fileContent.split(/\n\s*\n/).filter(entry => entry.trim().length > 0);
     } else if (ext === 'json') {
-      // JSON array
+      // JSON array or wrapped object
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      const jsonData = JSON.parse(fileContent);
+      let jsonData = JSON.parse(fileContent);
+      
+      if (!Array.isArray(jsonData) && jsonData && typeof jsonData === 'object') {
+        // Look for array properties like data, records, list, results, etc.
+        const arrayProp = Object.values(jsonData).find(v => Array.isArray(v));
+        if (arrayProp) {
+          jsonData = arrayProp;
+        } else if (jsonData.data && Array.isArray(jsonData.data)) {
+          jsonData = jsonData.data;
+        } else if (jsonData.records && Array.isArray(jsonData.records)) {
+          jsonData = jsonData.records;
+        } else if (jsonData.list && Array.isArray(jsonData.list)) {
+          jsonData = jsonData.list;
+        } else if (jsonData.results && Array.isArray(jsonData.results)) {
+          jsonData = jsonData.results;
+        }
+      }
+      
       rawDataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     } else {
       // Excel format

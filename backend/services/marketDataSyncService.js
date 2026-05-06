@@ -1821,24 +1821,24 @@ class MarketDataSyncService {
             }
 
             // ✅ Robust Availability Detection
-            let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16'], '');
+            let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
             let availabilityStatus = 'Available';
             
-            if (rawAvailability && typeof rawAvailability === 'string') {
+            if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
                 const lowerAvail = rawAvailability.toLowerCase().trim();
-                if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable')) {
+                if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
                     availabilityStatus = 'Currently unavailable.';
                 } else if (lowerAvail.includes('available') || lowerAvail.includes('in stock')) {
                     availabilityStatus = 'Available';
-                } else if (lowerAvail.length > 3) {
+                } else {
                     availabilityStatus = rawAvailability.trim();
                 }
             } else {
-                // Heuristic Fallback: If no price and no seller found, it's highly likely unavailable.
-                if (price === 0 && allOffers.length === 0 && (!soldBy || soldBy.trim() === '')) {
+                // Heuristic Fallback: If price is 0 or empty, it is highly likely currently unavailable on Amazon
+                if (price === 0 || (!price && asin.CurrentPrice === 0)) {
                     availabilityStatus = 'Currently unavailable.';
                 } else {
-                    availabilityStatus = asin.AvailabilityStatus || 'Available';
+                    availabilityStatus = (asin.AvailabilityStatus || 'Available').trim();
                 }
             }
 
@@ -1883,9 +1883,11 @@ class MarketDataSyncService {
             const seenDates = new Set();
             for (let i = history.length - 1; i >= 0; i--) {
                 const item = history[i];
-                if (!seenDates.has(item.date)) {
-                    uniqueHistory.unshift(item);
-                    seenDates.add(item.date);
+                if (item && item.date) {
+                    if (!seenDates.has(item.date)) {
+                        uniqueHistory.unshift(item);
+                        seenDates.add(item.date);
+                    }
                 }
                 if (uniqueHistory.length >= 7) break;
             }
@@ -2004,9 +2006,9 @@ class MarketDataSyncService {
                 BuyBoxStatus: buyBoxWin ? 1 : 0,
                 ImageUrl: mainImageUrl,
                 SubBsr: subBsr,
-                SubBSRs: JSON.stringify(subBSRs),
-                SubBsrCategories: JSON.stringify(subBSRs.map(rankStr => {
-                    const match = rankStr.match(/in\s+([^\(#]+)/i);
+                SubBSRs: subBSRs && Array.isArray(subBSRs) ? JSON.stringify(subBSRs) : null,
+                SubBsrCategories: JSON.stringify((subBSRs && Array.isArray(subBSRs) ? subBSRs : []).map(rankStr => {
+                    const match = String(rankStr).match(/in\s+([^\(#]+)/i);
                     return match ? match[1].trim() : '';
                 }).filter(Boolean)),
                 Images: JSON.stringify(images),
@@ -2088,7 +2090,7 @@ class MarketDataSyncService {
                                         WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
                                     ELSE
                                         INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                        VALUES (SUBSTRING(REPLACE(NEWID(), '-', ''), 1, 24), @asinId, @date, @category, @rank, GETDATE())
+                                        VALUES (SUBSTRING(REPLACE(NEWID(), '-', ''), 1, 20), @asinId, @date, @category, @rank, GETDATE())
                                 `);
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
@@ -2164,7 +2166,7 @@ class MarketDataSyncService {
                 .filter(Boolean)
                 .map(code => code.toUpperCase()); // Normalize to uppercase
 
-            if (chunkStart === 0 && chunk.length > 0) {
+            if (asinCodesToFind.length === 0) {
                 // console.log(`[DEBUG] No ASIN codes found in chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1}`);
                 skippedNoCode += chunk.length;
                 continue;
@@ -2274,11 +2276,22 @@ class MarketDataSyncService {
     _getFromRaw(rawData, fieldNames, defaultValue = null) {
         if (!rawData) return defaultValue;
 
+        // Create a lookup of lowercase trimmed keys to actual keys
+        const rawKeys = Object.keys(rawData);
+        const keyMap = {};
+        for (const k of rawKeys) {
+            keyMap[k.toLowerCase().trim()] = k;
+        }
+
         for (const field of fieldNames) {
-            const value = rawData[field];
-            if (value !== undefined && value !== null && value !== '') {
-                if (typeof value === 'string' && value.trim() === '') continue;
-                return value;
+            const normalizedField = field.toLowerCase().trim();
+            const actualKey = keyMap[normalizedField];
+            if (actualKey) {
+                const value = rawData[actualKey];
+                if (value !== undefined && value !== null && value !== '') {
+                    if (typeof value === 'string' && value.trim() === '') continue;
+                    return value;
+                }
             }
         }
         return defaultValue;
@@ -2887,10 +2900,10 @@ class MarketDataSyncService {
 
         // Direct fields - check common ASIN field names
         const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE'], '');
-        if (direct && direct.length === 10) {
-            // Ensure it's a valid ASIN format (alphanumeric, 10 chars)
-            if (/^[A-Z0-9]{10}$/i.test(direct)) {
-                return direct.toUpperCase(); // Return normalized uppercase
+        if (direct) {
+            const cleaned = direct.toString().trim().toUpperCase();
+            if (/^[A-Z0-9]{10}$/.test(cleaned)) {
+                return cleaned;
             }
         }
 
@@ -2898,8 +2911,6 @@ class MarketDataSyncService {
         const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url'], '');
         if (urlField && typeof urlField === 'string') {
             // Enhanced regex to match various Amazon URL formats
-            // Supports: /dp/ASIN, /product/ASIN, /gp/product/ASIN, /gp/offer-listing/ASIN
-            // Also handles URLs with query parameters and fragments
             const patterns = [
                 /\/dp\/([A-Z0-9]{10})/i,
                 /\/product\/([A-Z0-9]{10})/i,
@@ -2917,6 +2928,17 @@ class MarketDataSyncService {
                     if (/^[A-Z0-9]{10}$/.test(asin)) {
                         return asin;
                     }
+                }
+            }
+        }
+
+        // Ultimate Fallback: search ALL keys for a value matching a 10-char ASIN regex
+        for (const key of Object.keys(rawData)) {
+            const val = rawData[key];
+            if (val && typeof val === 'string') {
+                const cleaned = val.trim().toUpperCase();
+                if (/^B0[A-Z0-9]{8}$/.test(cleaned)) {
+                    return cleaned;
                 }
             }
         }
@@ -3116,7 +3138,8 @@ class MarketDataSyncService {
 
         try {
             // Re-use the robust batch processing logic
-            const updatedCount = await this.processBatchResults(sellerId, jsonData);
+            const batchResult = await this.processBatchResults(sellerId, jsonData);
+            const updatedCount = batchResult.updatedCount || 0;
 
             // Log completion
             console.log(`✅ Manual Octoparse JSON Sync completed. Updated ${updatedCount} ASINs.`);
