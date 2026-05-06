@@ -152,8 +152,15 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
       }
       
       currentGroup.colSpan++;
-      dateColumnsArray.push({ date: d, weekName: `W${weekCounter}` });
+      dateColumnsArray.push({ date: d, weekName: `W${weekCounter}`, isLastOfWeek: false });
     });
+    
+    // Mark the last element of each week
+    for (let i = 0; i < dateColumnsArray.length; i++) {
+        if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i+1].weekName) {
+            dateColumnsArray[i].isLastOfWeek = true;
+        }
+    }
     
     return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
@@ -519,19 +526,19 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                 <th rowSpan={2} style={{ width: '65px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('discountPercent')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">D% <Si f="discountPercent" /></div>
                 </th>
-                {weekGroups.map(grp => (
-                  <th key={grp.name} colSpan={grp.colSpan} style={{ textAlign: 'center', background: '#fff7ed', color: '#9a3412', fontSize: '10px', borderBottom: '1px solid #e5e7eb', letterSpacing: '0.05em' }}>
+                {weekGroups.map((grp, idx) => (
+                  <th key={grp.name} colSpan={grp.colSpan} style={{ textAlign: 'center', background: '#fff7ed', color: '#9a3412', fontSize: '10px', borderBottom: '1px solid #e5e7eb', borderRight: idx !== weekGroups.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb', letterSpacing: '0.05em' }}>
                     {grp.name}
                   </th>
                 ))}
-                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', background: '#fefce8', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('wowPercent')}>
+                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', background: '#fefce8', borderBottom: '1px solid #e5e7eb', borderLeft: '1px solid #e5e7eb' }} onClick={() => handleSort('wowPercent')}>
                   <div className="d-flex align-items-center justify-content-center gap-2">WoW % <Si f="wowPercent" /></div>
                 </th>
                 <th rowSpan={2} style={{ width: '60px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>TREND</th>
               </tr>
               <tr>
                 {dateColumns.map((col, idx) => (
-                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb' }}>
+                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
                     {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
                   </th>
                 ))}
@@ -565,12 +572,15 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                       <span className="badge" style={{ background: '#fef2f2', color: '#dc2626', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span>
                     ) : <span className="text-zinc-300">—</span>}
                   </td>
-                  {item.dateValues.map((dv, di) => (
-                    <td key={di} className={`dd text-center ${dv.price ? 'dd-has' : 'dd-no'}`}>
-                      {dv.price ? '₹' + dv.price.toLocaleString() : '·'}
-                    </td>
-                  ))}
-                  <td className="text-center" style={{ background: '#fefce8' }}>
+                  {item.dateValues.map((dv, di) => {
+                    const col = dateColumns[di];
+                    return (
+                      <td key={di} className={`dd text-center ${dv.price ? 'dd-has' : 'dd-no'}`} style={{ borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : '1px solid #f4f4f5' }}>
+                        {dv.price ? '₹' + dv.price.toLocaleString() : '·'}
+                      </td>
+                    );
+                  })}
+                  <td className="text-center" style={{ background: '#fefce8', borderLeft: '1px solid #e5e7eb' }}>
                     {item.woWChange !== 0 ? (
                       <div className={`d-inline-flex align-items-center gap-1 fw-bold ${item.wowTrend === 'up' ? 'up' : 'dn'}`} style={{ fontSize: '11px' }}>
                         {item.wowTrend === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
