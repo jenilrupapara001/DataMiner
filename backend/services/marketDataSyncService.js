@@ -1730,10 +1730,9 @@ class MarketDataSyncService {
 
             // console.log(`📝 Extracted ${bulletPointsCount} bullet points:`, bulletPointsText.map(b => b.substring(0, 60)));
 
-            // 8. Stock Level, A+ Content & Availability
+            // 8. Stock Level, A+ Content
             const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
             const hasAplus = this._detectAplusContent(rawData);
-            const availabilityStatus = rawData.unavilable || rawData.status || rawData.availabilityStatus || rawData.availability || asin.AvailabilityStatus || 'Available';
 
             let aplusAbsentSince = asin.AplusAbsentSince;
             let aplusPresentSince = asin.AplusPresentSince;
@@ -1819,6 +1818,28 @@ class MarketDataSyncService {
                     price: price || asin.CurrentPrice || 0,
                     isBuyBoxWinner: true
                 });
+            }
+
+            // ✅ Robust Availability Detection
+            let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16'], '');
+            let availabilityStatus = 'Available';
+            
+            if (rawAvailability && typeof rawAvailability === 'string') {
+                const lowerAvail = rawAvailability.toLowerCase().trim();
+                if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable')) {
+                    availabilityStatus = 'Currently unavailable.';
+                } else if (lowerAvail.includes('available') || lowerAvail.includes('in stock')) {
+                    availabilityStatus = 'Available';
+                } else if (lowerAvail.length > 3) {
+                    availabilityStatus = rawAvailability.trim();
+                }
+            } else {
+                // Heuristic Fallback: If no price and no seller found, it's highly likely unavailable.
+                if (price === 0 && allOffers.length === 0 && (!soldBy || soldBy.trim() === '')) {
+                    availabilityStatus = 'Currently unavailable.';
+                } else {
+                    availabilityStatus = asin.AvailabilityStatus || 'Available';
+                }
             }
 
             // 10. Listing Quality Analysis (LQS) - New Implementation
