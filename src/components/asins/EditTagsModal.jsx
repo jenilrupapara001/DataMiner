@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  X, Tag, Plus, Search, Check, Trash2, Eye, Clock, 
+import {
+  X, Tag, Plus, Search, Check, Trash2, Eye, Clock,
   RefreshCw, Save, AlertCircle, History, Sparkles,
   ArrowRight
 } from 'lucide-react';
@@ -10,7 +10,7 @@ import TagsHistoryModal from '../TagsHistoryModal';
 
 const DEFAULT_TAGS = [
   // Performance Tags
-  'Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization',
+  'Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization', 'Suppressed',
   // Content Tags
   'A+ Content Missing', 'Low LQS', 'Title Needs Work', 'Bullet Points Missing',
   'Images Low', 'Description Short',
@@ -89,7 +89,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
     try {
       const saved = localStorage.getItem('recently-used-tags');
       if (saved) setRecentlyUsed(JSON.parse(saved).slice(0, 8));
-    } catch {}
+    } catch { }
   }, []);
 
   // Keyboard shortcut: Escape to close
@@ -104,7 +104,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   // Categorize tags
   const tagCategories = {
     'All': DEFAULT_TAGS,
-    'Performance': ['Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization'],
+    'Performance': ['Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization', 'Suppressed'],
     'Content': ['A+ Content Missing', 'Low LQS', 'Title Needs Work', 'Bullet Points Missing', 'Images Low', 'Description Short'],
     'BuyBox': ['BuyBox Lost', 'BuyBox Won', 'Price Drop', 'Price Increase'],
     'Lifecycle': ['New Launch', 'New 30D', '30-60 Days', '60-90 Days', '90-180 Days', '180-365 Days', '365+ Days', 'Growth Phase', 'Established', 'Mature'],
@@ -126,10 +126,10 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   const getTagColor = (tag) => {
     const t = tag.toLowerCase();
     // Green
-    if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
+    if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential'))
       return { bg: '#10b981', text: '#ffffff' };
     // Red
-    if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
+    if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation') || t.includes('suppressed'))
       return { bg: '#ef4444', text: '#ffffff' };
     // Amber/Orange
     if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
@@ -149,9 +149,9 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
 
   // Toggle a tag
   const toggleTag = (tag) => {
-    setTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag) 
+    setTags(prev =>
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
         : [...prev, tag]
     );
     setError(null);
@@ -173,7 +173,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
     setTags(prev => [...prev, custom]);
     setCustomInput('');
     setError(null);
-    
+
     // Add to recently used
     setRecentlyUsed(prev => {
       const updated = [custom, ...prev.filter(t => t !== custom)].slice(0, 10);
@@ -193,7 +193,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   const handleSave = async () => {
     const currentSorted = [...tags].sort().join(',');
     const originalSorted = [...originalTags].sort().join(',');
-    
+
     if (currentSorted === originalSorted) {
       setError('No changes made');
       return;
@@ -201,16 +201,16 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
 
     setSaving(true);
     setError(null);
-    
+
     try {
       const response = await asinApi.updateTags(asin._id || asin.id, tags);
       if (response.success) {
         setOriginalTags([...tags]);
         setSuccessMessage('Tags saved successfully!');
-        
+
         // Update parent component
         if (onUpdate) onUpdate(asin._id || asin.id, tags);
-        
+
         // Auto-close after 1.5 seconds
         setTimeout(() => {
           onClose();
@@ -228,7 +228,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   if (!isOpen || !asin) return null;
 
   return createPortal(
-    <div 
+    <div
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', zIndex: 1050 }}
       onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
@@ -284,9 +284,9 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
         }
       `}</style>
 
-      <div 
+      <div
         className="bg-white shadow-2xl d-flex flex-column"
-        style={{ 
+        style={{
           width: '100%', maxWidth: '650px', maxHeight: '90vh',
           borderRadius: '20px', overflow: 'hidden',
           animation: 'modalSlideIn 0.2s ease-out'
@@ -306,7 +306,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                 </span>
                 <span className="text-zinc-300">|</span>
                 {loadingSummary ? (
-                   <span className="text-zinc-400" style={{ fontSize: '10px' }}>Loading summary...</span>
+                  <span className="text-zinc-400" style={{ fontSize: '10px' }}>Loading summary...</span>
                 ) : summary?.recentChanges?.[0] ? (
                   <span className="text-zinc-400 d-flex align-items-center gap-1" style={{ fontSize: '10px' }}>
                     <Clock size={10} /> Last modified by <span className="text-zinc-600 fw-bold">{summary.recentChanges[0].userName}</span> {new Date(summary.recentChanges[0].createdAt).toLocaleDateString()}
@@ -339,7 +339,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
               Selected Tags
             </span>
             {tags.length > 0 && (
-              <button 
+              <button
                 className="btn btn-ghost p-0 text-zinc-400 hover-text-danger"
                 onClick={() => { setTags([]); setError(null); }}
                 style={{ fontSize: '10px', fontWeight: 600 }}
@@ -373,8 +373,8 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                   >
                     <Tag size={10} className="opacity-70" />
                     {tag}
-                    <X 
-                      size={14} 
+                    <X
+                      size={14}
                       className="ms-1"
                       style={{ cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.15s' }}
                       onMouseOver={e => e.currentTarget.style.opacity = '1'}
@@ -549,7 +549,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             </span>
           </div>
           <div className="d-flex gap-3">
-            <button 
+            <button
               className="btn btn-outline-secondary fw-bold rounded-3 px-4"
               onClick={onClose}
               disabled={saving}
@@ -557,7 +557,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             >
               Cancel
             </button>
-            <button 
+            <button
               className="btn btn-dark fw-bold rounded-3 px-5 d-flex align-items-center gap-2"
               onClick={handleSave}
               disabled={!hasChanges || saving}
@@ -574,11 +574,11 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
       </div>
 
       {/* Tags History Modal */}
-      <TagsHistoryModal 
-        isOpen={showHistory} 
-        onClose={() => setShowHistory(false)} 
+      <TagsHistoryModal
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
         asinId={asin._id || asin.id}
-        asinCode={asin.asinCode} 
+        asinCode={asin.asinCode}
       />
     </div>,
     document.body
