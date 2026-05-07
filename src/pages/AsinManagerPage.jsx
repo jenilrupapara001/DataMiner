@@ -28,6 +28,7 @@ import {
   Scan,
   IndianRupee,
   ChevronRight,
+  ChevronLeft,
   TrendingDown,
   Trash2,
   Sparkles,
@@ -453,12 +454,37 @@ const AsinManagerPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [priceTrendExpanded, setPriceTrendExpanded] = useState(false);
+  const [bsrTrendExpanded, setBsrTrendExpanded] = useState(false);
+  const [ratingTrendExpanded, setRatingTrendExpanded] = useState(false);
+  const [reviewTrendExpanded, setReviewTrendExpanded] = useState(false);
+  const [imageTrendExpanded, setImageTrendExpanded] = useState(false);
+
   const visibleLQSCount = useMemo(() => ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore', 'lqs'].filter(isVisible).length, [isVisible]);
-  const visiblePriceTrendCount = useMemo(() => isVisible('priceTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-  const visibleBsrTrendCount = useMemo(() => isVisible('bsrTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-  const visibleRatingTrendCount = useMemo(() => isVisible('ratingTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-  const visibleReviewTrendCount = useMemo(() => isVisible('reviewTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
-  const visibleImageTrendCount = useMemo(() => isVisible('imageTrend') ? visibleHistoryCols : 0, [isVisible, visibleHistoryCols]);
+  const visiblePriceTrendCount = useMemo(() => {
+    if (!isVisible('priceTrend')) return 0;
+    return priceTrendExpanded ? visibleHistoryCols : 1;
+  }, [isVisible, priceTrendExpanded, visibleHistoryCols]);
+
+  const visibleBsrTrendCount = useMemo(() => {
+    if (!isVisible('bsrTrend')) return 0;
+    return bsrTrendExpanded ? visibleHistoryCols : 1;
+  }, [isVisible, bsrTrendExpanded, visibleHistoryCols]);
+
+  const visibleRatingTrendCount = useMemo(() => {
+    if (!isVisible('ratingTrend')) return 0;
+    return ratingTrendExpanded ? visibleHistoryCols : 1;
+  }, [isVisible, ratingTrendExpanded, visibleHistoryCols]);
+
+  const visibleReviewTrendCount = useMemo(() => {
+    if (!isVisible('reviewTrend')) return 0;
+    return reviewTrendExpanded ? visibleHistoryCols : 1;
+  }, [isVisible, reviewTrendExpanded, visibleHistoryCols]);
+
+  const visibleImageTrendCount = useMemo(() => {
+    if (!isVisible('imageTrend')) return 0;
+    return imageTrendExpanded ? visibleHistoryCols : 1;
+  }, [isVisible, imageTrendExpanded, visibleHistoryCols]);
 
   const [tagSearch, setTagSearch] = useState('');
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
@@ -2323,68 +2349,112 @@ const AsinManagerPage = () => {
                     </th>
                   )}
 
-                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right' }}>PRICE</th>}
-                  {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center' }}>DISPUTE</th>}
-                  {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', color: '#6b7280' }}>MRP</th>}
+                  {/* ===== STATUS & DEAL COLUMNS (Slate Palette) ===== */}
+                  {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>STATUS</th>}
+                  {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
+                  {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
+                  {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
 
+                  {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
+                  {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>MRP</th>}
+                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>PRICE</th>}
+                  {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISPUTE</th>}
                   {visiblePriceTrendCount > 0 && (
                     <th colSpan={visiblePriceTrendCount}
-                      onClick={async () => { setShowAllPriceHistory(true); }}
-                      style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', cursor: 'pointer' }}>
-                      Price Trend (7 Days) <Eye size={10} />
+                      style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', borderBottom: '2px solid #c7d2fe' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1">
+                        <span>Price Trend</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setPriceTrendExpanded(!priceTrendExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
+                          style={{ border: 'none', background: 'none', color: '#4338ca', cursor: 'pointer' }}
+                          title={priceTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
+                        >
+                          {priceTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
                     </th>
                   )}
 
-                  {isVisible('mainBsr') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f5f3ff' }}>MAIN BSR</th>}
-                  {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center' }}>SUB-BSR</th>}
-                  {isVisible('bsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>CATEGORY RANK</th>}
-                  {isVisible('video') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center' }} title="Video Present">Video</th>}
-                  {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff' }}>BSR TR</th>}
-
+                  {isVisible('mainBsr') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>MAIN BSR</th>}
+                  {isVisible('bsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>CATEGORY RANK</th>}
+                  {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>BSR TR</th>}
                   {visibleBsrTrendCount > 0 && (
                     <th colSpan={visibleBsrTrendCount}
-                      onClick={async () => { setShowAllBsrHistory(true); }}
-                      style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #ddd6fe' }}>
-                      SUB-BSR TREND (7D)
+                      style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', borderBottom: '2px solid #ddd6fe' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1">
+                        <span>SUB-BSR TREND</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setBsrTrendExpanded(!bsrTrendExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
+                          style={{ border: 'none', background: 'none', color: '#6d28d9', cursor: 'pointer' }}
+                          title={bsrTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
+                        >
+                          {bsrTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
                     </th>
                   )}
 
-                  {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center' }}>RT</th>}
-                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center' }}>CNT</th>}
-                  {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center' }}>RATING TR</th>}
-
+                  {/* ===== RATING COLUMNS (Amber Palette) ===== */}
+                  {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RT</th>}
+                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>CNT</th>}
+                  {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RATING TR</th>}
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
-                      onClick={async () => { setShowAllRatingHistory(true); }}
-                      style={{ ...thStyle, background: '#fffbeb', color: '#92400e', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #fef3c7' }}>
-                      RATING TREND
+                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1">
+                        <span>RATING TREND</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setRatingTrendExpanded(!ratingTrendExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
+                          style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
+                          title={ratingTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
+                        >
+                          {ratingTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
                     </th>
                   )}
-
                   {visibleReviewTrendCount > 0 && (
                     <th colSpan={visibleReviewTrendCount}
-                      onClick={async () => { setShowAllRatingHistory(true); }}
-                      style={{ ...thStyle, background: '#e0e7ff', color: '#3730a3', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #c7d2fe' }}>
-                      REVIEWS TREND
+                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1">
+                        <span>REVIEWS TREND</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setReviewTrendExpanded(!reviewTrendExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
+                          style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
+                          title={reviewTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
+                        >
+                          {reviewTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
                     </th>
                   )}
 
-                  {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center' }}>STATUS</th>}
-                  {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center' }}>DEAL</th>}
-                  {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left' }}>CURRENT BUYBOX</th>}
-                  {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left' }}>OTHER BUYBOX</th>}
-                  {isVisible('imagesCount') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>IMG</th>}
-
+                  {/* ===== VISUALS & CONTENT COLUMNS (Video, Images, Bullet Points, A+) (Pink Palette) ===== */}
+                  {isVisible('video') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }} title="Video Present">Video</th>}
+                  {isVisible('imagesCount') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>IMG</th>}
                   {visibleImageTrendCount > 0 && (
                     <th colSpan={visibleImageTrendCount}
-                      style={{ ...thStyle, background: '#fdf2f8', color: '#be185d', textAlign: 'center', cursor: 'pointer', borderBottom: '1px solid #fbcfe8' }}>
-                      IMG TREND (7D)
+                      style={{ ...thStyle, background: '#fdf2f8', color: '#db2777', textAlign: 'center', borderBottom: '2px solid #fbcfe8' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1">
+                        <span>IMG TREND</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setImageTrendExpanded(!imageTrendExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
+                          style={{ border: 'none', background: 'none', color: '#db2777', cursor: 'pointer' }}
+                          title={imageTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
+                        >
+                          {imageTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
                     </th>
                   )}
-
-                  {isVisible('bulletPoints') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center' }}>B</th>}
-                  {isVisible('hasAplus') && <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center' }}>A+</th>}
-                  {isVisible('aplusDays') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', color: '#b91c1c' }}>A+ DAYS</th>}
+                  {isVisible('bulletPoints') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>B</th>}
+                  {isVisible('hasAplus') && <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>A+</th>}
+                  {isVisible('aplusDays') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>A+ DAYS</th>}
                 </tr>
                 <tr>
                   {isVisible('titleScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>}
@@ -2394,39 +2464,54 @@ const AsinManagerPage = () => {
                   {isVisible('lqs') && <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>}
 
                   {/* Price Trend Dates */}
-                  {isVisible('priceTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`p-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#eef2ff', color: '#6366f1' }}>
-                      {date.label}
-                    </th>
-                  )))}
+                  {isVisible('priceTrend') && historyStructure.map(week => {
+                    const datesToMap = priceTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                    return datesToMap.map((date, idx) => (
+                      <th key={`p-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#eef2ff', color: '#4338ca' }}>
+                        {date.label}
+                      </th>
+                    ));
+                  })}
 
                   {/* BSR Trend Dates */}
-                  {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f5f3ff', color: '#7c3aed' }}>
-                      {date.label}
-                    </th>
-                  )))}
+                  {isVisible('bsrTrend') && historyStructure.map(week => {
+                    const datesToMap = bsrTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                    return datesToMap.map((date, idx) => (
+                      <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f5f3ff', color: '#6d28d9' }}>
+                        {date.label}
+                      </th>
+                    ));
+                  })}
 
                   {/* Rating Trend Dates */}
-                  {isVisible('ratingTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
-                      {date.label}
-                    </th>
-                  )))}
+                  {isVisible('ratingTrend') && historyStructure.map(week => {
+                    const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                    return datesToMap.map((date, idx) => (
+                      <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
+                        {date.label}
+                      </th>
+                    ));
+                  })}
 
                   {/* Review Trend Dates */}
-                  {isVisible('reviewTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`rev-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#e0e7ff', color: '#4338ca' }}>
-                      {date.label}
-                    </th>
-                  )))}
+                  {isVisible('reviewTrend') && historyStructure.map(week => {
+                    const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                    return datesToMap.map((date, idx) => (
+                      <th key={`rev-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
+                        {date.label}
+                      </th>
+                    ));
+                  })}
 
                   {/* Image Trend Dates */}
-                  {isVisible('imageTrend') && historyStructure.map(week => week.dates.map((date, idx) => (
-                    <th key={`i-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fdf2f8', color: '#db2777' }}>
-                      {date.label}
-                    </th>
-                  )))}
+                  {isVisible('imageTrend') && historyStructure.map(week => {
+                    const datesToMap = imageTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                    return datesToMap.map((date, idx) => (
+                      <th key={`i-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fdf2f8', color: '#db2777' }}>
+                        {date.label}
+                      </th>
+                    ));
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -2565,14 +2650,20 @@ const AsinManagerPage = () => {
                       )}
                       {isVisible('sku') && <td style={tdStyle}>{asin.sku || '-'}</td>}
                       {isVisible('title') && (
-                        <td style={tdStyle}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <td style={{ ...tdStyle, width: '220px', maxWidth: '220px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
                             {asin.imageUrl && (
-                              <img src={asin.imageUrl} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'cover' }} />
+                              <img src={asin.imageUrl} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
                             )}
                             <span style={{
-                              whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden',
-                              fontSize: 11, cursor: 'pointer'
+                              display: 'inline-block',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              fontSize: '10.5px',
+                              cursor: 'pointer',
+                              maxWidth: '180px',
+                              fontWeight: 500
                             }} onClick={() => handleViewAsin(asin)} title={asin.title}>
                               {asin.title}
                             </span>
@@ -2711,239 +2802,6 @@ const AsinManagerPage = () => {
                           )}
                         </td>
                       )}
-                      {isVisible('price') && (
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, cursor: 'pointer' }}
-                          onClick={(e) => handleViewPrice(asin, e)}
-                          title="View Price Trend Matrix">
-                          <div className="d-flex flex-column align-items-end">
-                            <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
-                              ₹{(asin.uploadedPrice || 0).toLocaleString()}
-                            </span>
-                            {asin.priceDispute && (
-                              <span className="badge mt-1 shadow-sm" style={{
-                                fontSize: '8px',
-                                padding: '2px 6px',
-                                fontWeight: 800,
-                                backgroundColor: '#dc2626',
-                                color: '#fff',
-                                borderRadius: '4px',
-                                textTransform: 'uppercase'
-                              }}>
-                                PRICE DISPUTE
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('priceDispute') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div className="d-flex justify-content-center">
-                            {asin.priceDispute ? (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{ 
-                                backgroundColor: '#dc2626', 
-                                color: '#fff', 
-                                fontSize: '10px', 
-                                fontWeight: 800,
-                                padding: '5px 12px',
-                                borderRadius: '4px',
-                                minWidth: '55px'
-                              }}>
-                                <AlertTriangle size={10} />
-                                YES
-                              </span>
-                            ) : (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{ 
-                                backgroundColor: '#16a34a', 
-                                color: '#fff', 
-                                fontSize: '10px', 
-                                fontWeight: 800,
-                                padding: '5px 12px',
-                                borderRadius: '4px',
-                                minWidth: '55px'
-                              }}>
-                                NO
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('mrp') && (
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
-                          ₹{(asin.mrp || 0).toLocaleString()}
-                        </td>
-                      )}
-                      {isVisible('priceTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
-                        return (
-                          <td key={`p-${week.label}-${dIdx}`}
-                            onClick={(e) => handleViewPrice(asin, e)}
-                            title="View Price Trend Matrix"
-                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 45, cursor: 'pointer' }}>
-                            {wData?.price ? getWeekHistoryBadge(wData.price, 'price', asin.uploadedPrice) : '-'}
-                          </td>
-                        );
-                      }))}
-                      {isVisible('mainBsr') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
-                          onClick={(e) => handleViewBsr(asin, e)}>
-                          <div className="d-flex flex-column align-items-center">
-                            <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
-                              {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
-                            </div>
-                            {asin.category && (
-                              <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
-                                in {asin.category}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('subBsr') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
-                          onClick={(e) => handleViewBsr(asin, e)}>
-                          <div style={{ fontWeight: 600, color: '#6b7280' }}>
-                            {(() => {
-                              const val = (asin.subBsr && asin.subBsr !== '0') ? asin.subBsr : (Array.isArray(asin.subBSRs) && asin.subBSRs[0]);
-                              if (!val || val === '0') return '-';
-                              return val.includes(' in ') ? val.split(' in ')[0] : val;
-                            })()}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('bsr') && (
-                        <td style={{ ...tdStyle, width: '120px' }}>
-                          {(() => {
-                            const subBsrValue = (asin.subBsr && asin.subBsr !== '0' && asin.subBsr !== 0) ? asin.subBsr : ((Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '');
-                            const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
-                            let rank = subBsrValue;
-                            let category = '';
-                            if (subBsrValue.includes(' in ')) {
-                              const parts = subBsrValue.split(' in ');
-                              rank = parts[0];
-                              category = parts.slice(1).join(' in ');
-                            }
-
-                            return subBsrValue && subBsrValue !== '0' ? (
-                              <div className="d-flex flex-column gap-1">
-                                <div className="d-flex align-items-center gap-1">
-                                  <span style={{
-                                    fontSize: '10px',
-                                    color: '#4b5563',
-                                    fontWeight: 600,
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: hasMultiple ? '85px' : '110px'
-                                  }} title={rank}>
-                                    {rank}
-                                  </span>
-                                  {hasMultiple && (
-                                    <span
-                                      className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200"
-                                      style={{ fontSize: '8px', padding: '1px 4px' }}
-                                      title={asin.subBSRs.slice(1).join('\n')}
-                                    >
-                                      +{asin.subBSRs.length - 1}
-                                    </span>
-                                  )}
-                                </div>
-                                {category && (
-                                  <span style={{
-                                    fontSize: '9px',
-                                    color: '#6b7280',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: '110px'
-                                  }} title={category}>
-                                    {category}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ color: '#9ca3af' }}>-</span>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      {isVisible('video') && (
-                        <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
-                              color: '#fff',
-                              fontWeight: 600,
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            {asin.videoCount > 0 ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                      )}
-                      {isVisible('bsrTrendStatus') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a' }}>
-                          <TrendBadge status={asin.bsrTrend} />
-                        </td>
-                      )}
-                      {isVisible('bsrTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const hDate = date.raw;
-                        const subBsrPoint = asin.subBsrHistory?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate);
-                        const displayVal = subBsrPoint?.rank;
-
-                        return (
-                          <td key={`b-${week.label}-${dIdx}`}
-                            onClick={(e) => handleViewBsr(asin, e)}
-                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
-                            {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
-                          </td>
-                        );
-                      }))}
-                      {isVisible('rating') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
-                          onClick={(e) => handleViewRating(asin, e)}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                            <Star size={10} className="text-warning fill-warning" />
-                            <span style={{ fontWeight: 600 }}>
-                              {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '-')}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('reviewCount') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
-                          {(asin.reviewCount || 0).toLocaleString()}
-                        </td>
-                      )}
-                      {isVisible('ratingTrendStatus') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <TrendBadge status={asin.ratingTrend} />
-                        </td>
-                      )}
-                      {isVisible('ratingTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
-                        return (
-                          <td key={`r-${week.label}-${dIdx}`}
-                            onClick={(e) => handleViewRating(asin, e)}
-                            style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
-                            {wData?.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
-                          </td>
-                        );
-                      }))}
-
-                      {isVisible('reviewTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
-                        return (
-                          <td key={`rev-${week.label}-${dIdx}`}
-                            onClick={(e) => handleViewRating(asin, e)}
-                            style={{ ...tdStyle, textAlign: 'center', background: '#e0e7ff33', width: 40, cursor: 'pointer' }}>
-                            {(wData?.reviews || wData?.reviewCount) ? <span style={{ fontSize: '10px', color: '#4338ca', fontWeight: 600 }}>{(wData.reviews || wData.reviewCount).toLocaleString()}</span> : '-'}
-                          </td>
-                        );
-                      }))}
                       {isVisible('status') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <span
@@ -3113,21 +2971,257 @@ const AsinManagerPage = () => {
                           })()}
                         </td>
                       )}
+                      {isVisible('mrp') && (
+                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
+                          ₹{(asin.mrp || 0).toLocaleString()}
+                        </td>
+                      )}
+                      {isVisible('price') && (
+                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, cursor: 'pointer' }}
+                          onClick={(e) => handleViewPrice(asin, e)}
+                          title="View Price Trend Matrix">
+                          <div className="d-flex flex-column align-items-end">
+                            <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
+                              ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                            </span>
+                            {asin.priceDispute && (
+                              <span className="badge mt-1 shadow-sm" style={{
+                                fontSize: '8px',
+                                padding: '2px 6px',
+                                fontWeight: 800,
+                                backgroundColor: '#dc2626',
+                                color: '#fff',
+                                borderRadius: '4px',
+                                textTransform: 'uppercase'
+                              }}>
+                                PRICE DISPUTE
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isVisible('priceDispute') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <div className="d-flex justify-content-center">
+                            {asin.priceDispute ? (
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{ 
+                                backgroundColor: '#dc2626', 
+                                color: '#fff', 
+                                fontSize: '10px', 
+                                fontWeight: 800,
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                minWidth: '55px'
+                              }}>
+                                <AlertTriangle size={10} />
+                                YES
+                              </span>
+                            ) : (
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{ 
+                                backgroundColor: '#16a34a', 
+                                color: '#fff', 
+                                fontSize: '10px', 
+                                fontWeight: 800,
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                minWidth: '55px'
+                              }}>
+                                NO
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isVisible('priceTrend') && historyStructure.map(week => {
+                        const datesToMap = priceTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                        return datesToMap.map((date, dIdx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          return (
+                            <td key={`p-${week.label}-${dIdx}`}
+                              onClick={(e) => handleViewPrice(asin, e)}
+                              title="View Price Trend Matrix"
+                              style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 45, cursor: 'pointer' }}>
+                              {wData?.price ? getWeekHistoryBadge(wData.price, 'price', asin.uploadedPrice) : '-'}
+                            </td>
+                          );
+                        });
+                      })}
+                      {isVisible('mainBsr') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
+                          onClick={(e) => handleViewBsr(asin, e)}>
+                          <div className="d-flex flex-column align-items-center">
+                            <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
+                              {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
+                            </div>
+                            {asin.category && (
+                              <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
+                                in {asin.category}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
 
+                      {isVisible('bsr') && (
+                        <td style={{ ...tdStyle, width: '120px' }}>
+                          {(() => {
+                            const subBsrValue = (asin.subBsr && asin.subBsr !== '0' && asin.subBsr !== 0) ? asin.subBsr : ((Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '');
+                            const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
+                            let rank = subBsrValue;
+                            let category = '';
+                            if (subBsrValue.includes(' in ')) {
+                              const parts = subBsrValue.split(' in ');
+                              rank = parts[0];
+                              category = parts.slice(1).join(' in ');
+                            }
+
+                            return subBsrValue && subBsrValue !== '0' ? (
+                              <div className="d-flex flex-column gap-1">
+                                <div className="d-flex align-items-center gap-1">
+                                  <span style={{
+                                    fontSize: '10px',
+                                    color: '#4b5563',
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: hasMultiple ? '85px' : '110px'
+                                  }} title={rank}>
+                                    {rank}
+                                  </span>
+                                  {hasMultiple && (
+                                    <span
+                                      className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200"
+                                      style={{ fontSize: '8px', padding: '1px 4px' }}
+                                      title={asin.subBSRs.slice(1).join('\n')}
+                                    >
+                                      +{asin.subBSRs.length - 1}
+                                    </span>
+                                  )}
+                                </div>
+                                {category && (
+                                  <span style={{
+                                    fontSize: '9px',
+                                    color: '#6b7280',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '110px'
+                                  }} title={category}>
+                                    {category}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#9ca3af' }}>-</span>
+                            );
+                          })()}
+                        </td>
+                      )}
+                      {isVisible('bsrTrendStatus') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a' }}>
+                          <TrendBadge status={asin.bsrTrend} />
+                        </td>
+                      )}
+                      {isVisible('bsrTrend') && historyStructure.map(week => {
+                        const datesToMap = bsrTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                        return datesToMap.map((date, dIdx) => {
+                          const hDate = date.raw;
+                          const subBsrPoint = asin.subBsrHistory?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate);
+                          const displayVal = subBsrPoint?.rank;
+
+                          return (
+                            <td key={`b-${week.label}-${dIdx}`}
+                              onClick={(e) => handleViewBsr(asin, e)}
+                              style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
+                              {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
+                            </td>
+                          );
+                        });
+                      })}
+                      {isVisible('rating') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                          onClick={(e) => handleViewRating(asin, e)}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                            <Star size={10} className="text-warning fill-warning" />
+                            <span style={{ fontWeight: 600 }}>
+                              {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '-')}
+                            </span>
+                          </div>
+                        </td>
+                      )}
+                      {isVisible('reviewCount') && (
+                        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
+                          {(asin.reviewCount || 0).toLocaleString()}
+                        </td>
+                      )}
+                      {isVisible('ratingTrendStatus') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <TrendBadge status={asin.ratingTrend} />
+                        </td>
+                      )}
+                      {isVisible('ratingTrend') && historyStructure.map(week => {
+                        const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                        return datesToMap.map((date, dIdx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          return (
+                            <td key={`r-${week.label}-${dIdx}`}
+                              onClick={(e) => handleViewRating(asin, e)}
+                              style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
+                              {wData?.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
+                            </td>
+                          );
+                        });
+                      })}
+
+                      {isVisible('reviewTrend') && historyStructure.map(week => {
+                        const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                        return datesToMap.map((date, dIdx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          return (
+                            <td key={`rev-${week.label}-${dIdx}`}
+                              onClick={(e) => handleViewRating(asin, e)}
+                              style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
+                              {(wData?.reviews || wData?.reviewCount) ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{(wData.reviews || wData.reviewCount).toLocaleString()}</span> : '-'}
+                            </td>
+                          );
+                        });
+                      })}
+                      {isVisible('video') && (
+                        <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
+                              color: '#fff',
+                              fontWeight: 600,
+                              fontSize: '0.75rem'
+                            }}
+                          >
+                            {asin.videoCount > 0 ? 'Yes' : 'No'}
+                          </span>
+                        </td>
+                      )}
                       {isVisible('imagesCount') && <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>}
 
-                      {isVisible('imageTrend') && historyStructure.map(week => week.dates.map((date, dIdx) => {
-                        const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                          || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
-                        return (
-                          <td key={`i-${week.label}-${dIdx}`}
-                            style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>
-                            <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
-                              {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
-                            </span>
-                          </td>
-                        );
-                      }))}
+                      {isVisible('imageTrend') && historyStructure.map(week => {
+                        const datesToMap = imageTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
+                        return datesToMap.map((date, dIdx) => {
+                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
+                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          return (
+                            <td key={`i-${week.label}-${dIdx}`}
+                              style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>
+                              <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
+                                {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
+                              </span>
+                            </td>
+                          );
+                        });
+                      })}
 
                       {isVisible('bulletPoints') && (
                         <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>

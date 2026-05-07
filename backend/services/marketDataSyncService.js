@@ -2221,28 +2221,9 @@ class MarketDataSyncService {
                 let asin = asinMap.get(normalizedCode);
 
                 if (!asin) {
-                    // Create missing ASIN if it's found in Octoparse data but not in SQL
-                    try {
-                        const newAsinId = generateId();
-                        const productName = this._getFromRaw(rawData, ['Product_Name', 'title', 'Field1'], 'Unknown Product');
-
-                        await pool.request()
-                            .input('id', sql.VarChar, newAsinId)
-                            .input('sellerId', sql.VarChar, sellerId)
-                            .input('asinCode', sql.VarChar, normalizedCode)
-                            .input('title', sql.NVarChar, productName)
-                            .query(`
-                                INSERT INTO Asins (Id, SellerId, AsinCode, Title, Status, CreatedAt, UpdatedAt)
-                                VALUES (@id, @sellerId, @asinCode, @title, 'Active', GETDATE(), GETDATE())
-                            `);
-
-                        console.log(`[MarketSync] Automatically created missing ASIN ${normalizedCode} for seller ${sellerId}`);
-                        asin = { Id: newAsinId, AsinCode: normalizedCode };
-                    } catch (createErr) {
-                        console.error(`❌ Error creating missing ASIN ${normalizedCode}:`, createErr.message);
-                        skippedNoMatch++;
-                        continue;
-                    }
+                    console.log(`[MarketSync] Skipping ASIN ${normalizedCode} as it was not uploaded via files/UI (not found in database for seller ${sellerId}).`);
+                    skippedNoMatch++;
+                    continue;
                 }
 
                 try {
