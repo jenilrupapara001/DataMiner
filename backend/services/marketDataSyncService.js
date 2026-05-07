@@ -1147,15 +1147,15 @@ class MarketDataSyncService {
 
                         if (rawData && rawData.length > 0) {
                             console.log(`📥 [AUTO] Fetched ${rawData.length} rows for ingestion.`);
-                            const count = await this.processBatchResults(sellerId, rawData);
-                            processedCount = count;
+                            const batchResult = await this.processBatchResults(sellerId, rawData);
+                            processedCount = batchResult?.updatedCount || 0;
 
                             // Update Seller metadata
                             const pool = await getPool();
                             await pool.request()
                                 .input('sellerId', sql.VarChar, sellerId)
                                 .input('lastScraped', sql.DateTime2, new Date())
-                                .input('scrapeUsed', sql.Int, count)
+                                .input('scrapeUsed', sql.Int, processedCount)
                                 .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = GETDATE() WHERE Id = @sellerId');
 
                             // Silent ingestion completion

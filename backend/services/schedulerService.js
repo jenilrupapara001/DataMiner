@@ -114,9 +114,10 @@ class SchedulerService {
                             const rawData = await MarketSyncService.retrieveResults(taskId);
                             if (rawData && rawData.length > 0) {
                                 const processedCount = await MarketSyncService.processBatchResults(seller.Id, rawData);
-                                console.log(`✅ [RECOVERY] Saved ${processedCount} ASINs for seller ${seller.Name}`);
+                                const updated = processedCount?.updatedCount !== undefined ? processedCount.updatedCount : 0;
+                                console.log(`✅ [RECOVERY] Saved ${updated} ASINs for seller ${seller.Name}`);
                                 
-                                return { seller, success: true, count: processedCount };
+                                return { seller, success: true, count: updated };
                             }
                         }
                         return { seller, success: true, status: taskStatus };
@@ -241,13 +242,23 @@ class SchedulerService {
                 console.log(`🚀 [ENTERPRISE] Processing concurrent batch of ${batch.length} sellers...`);
                 
                 await Promise.all(batch.map(async (seller) => {
+                    let activeAsinsCount = 0;
+                    try {
+                        const countResult = await pool.request()
+                            .input('sellerId', sql.VarChar, seller.Id)
+                            .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                        activeAsinsCount = countResult.recordset[0]?.activeCount || 0;
+                    } catch (err) {
+                        console.error(`⚠️ Failed to query active ASIN count for seller ${seller.Name}:`, err.message);
+                    }
+
                     const sellerStat = {
                         sellerId: seller.Id,
                         name: seller.Name,
                         startTime: new Date(),
                         endTime: null,
                         status: 'RUNNING',
-                        asinsCount: 0,
+                        asinsCount: activeAsinsCount,
                         count: 0,
                         error: null
                     };
