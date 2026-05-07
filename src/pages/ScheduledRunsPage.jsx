@@ -45,7 +45,9 @@ const ScheduledRunsPage = () => {
 
     useEffect(() => {
         fetchRuns();
-        
+    }, []);
+
+    useEffect(() => {
         // Auto-refresh every 10 seconds if any run is running
         const interval = setInterval(() => {
             const activeRun = runs.some(r => r.Status === 'RUNNING');
