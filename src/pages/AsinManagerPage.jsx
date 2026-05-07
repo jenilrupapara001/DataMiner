@@ -126,9 +126,9 @@ const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
   if (type === 'price') {
     return (
       <div className="d-flex flex-column align-items-center justify-content-center">
-        <span style={{ 
-          fontWeight: 700, 
-          color: '#059669', 
+        <span style={{
+          fontWeight: 700,
+          color: '#059669',
           fontSize: '10.5px',
           lineHeight: 1
         }}>
@@ -174,6 +174,31 @@ const TrendBadge = ({ status }) => {
   }
 
   return <span style={{ fontSize: '10px' }}>{status}</span>;
+};
+
+const getReviewTrendStatus = (asin) => {
+  if (asin.reviewTrendStatus) return asin.reviewTrendStatus;
+
+  let history = [];
+  try {
+    history = asin.History ? (typeof asin.History === 'string' ? JSON.parse(asin.History) : asin.History) : [];
+  } catch (e) {
+    history = [];
+  }
+
+  if (!Array.isArray(history) || history.length < 2) return 'Stable';
+
+  const sortedHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const currentReviews = asin.reviewCount || sortedHistory[sortedHistory.length - 1]?.reviews || sortedHistory[sortedHistory.length - 1]?.reviewCount || 0;
+
+  const prevPoints = sortedHistory.slice(0, -1).filter(h => (h.reviews || h.reviewCount || 0) > 0);
+  if (prevPoints.length === 0) return 'Stable';
+
+  const baselineReviews = prevPoints[prevPoints.length - 1].reviews || prevPoints[prevPoints.length - 1].reviewCount || 0;
+
+  if (currentReviews < baselineReviews) return 'Down';
+  if (currentReviews > baselineReviews) return 'Grow';
+  return 'Stable';
 };
 
 // Extended demo ASIN data with date stamps and 8 weeks of history
@@ -2364,7 +2389,7 @@ const AsinManagerPage = () => {
                       style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', borderBottom: '2px solid #c7d2fe' }}>
                       <div className="d-flex align-items-center justify-content-center gap-1">
                         <span>Price Trend</span>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setPriceTrendExpanded(!priceTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#4338ca', cursor: 'pointer' }}
@@ -2384,7 +2409,7 @@ const AsinManagerPage = () => {
                       style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', borderBottom: '2px solid #ddd6fe' }}>
                       <div className="d-flex align-items-center justify-content-center gap-1">
                         <span>SUB-BSR TREND</span>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setBsrTrendExpanded(!bsrTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#6d28d9', cursor: 'pointer' }}
@@ -2400,12 +2425,13 @@ const AsinManagerPage = () => {
                   {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RT</th>}
                   {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>CNT</th>}
                   {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RATING TR</th>}
+                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }} title="Reviews Trend Status">REV TR</th>}
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
                       style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
                       <div className="d-flex align-items-center justify-content-center gap-1">
                         <span>RATING TREND</span>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setRatingTrendExpanded(!ratingTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
@@ -2421,7 +2447,7 @@ const AsinManagerPage = () => {
                       style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
                       <div className="d-flex align-items-center justify-content-center gap-1">
                         <span>REVIEWS TREND</span>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setReviewTrendExpanded(!reviewTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
@@ -2441,7 +2467,7 @@ const AsinManagerPage = () => {
                       style={{ ...thStyle, background: '#fdf2f8', color: '#db2777', textAlign: 'center', borderBottom: '2px solid #fbcfe8' }}>
                       <div className="d-flex align-items-center justify-content-center gap-1">
                         <span>IMG TREND</span>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); setImageTrendExpanded(!imageTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#db2777', cursor: 'pointer' }}
@@ -3004,10 +3030,10 @@ const AsinManagerPage = () => {
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <div className="d-flex justify-content-center">
                             {asin.priceDispute ? (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{ 
-                                backgroundColor: '#dc2626', 
-                                color: '#fff', 
-                                fontSize: '10px', 
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{
+                                backgroundColor: '#dc2626',
+                                color: '#fff',
+                                fontSize: '10px',
                                 fontWeight: 800,
                                 padding: '5px 12px',
                                 borderRadius: '4px',
@@ -3017,10 +3043,10 @@ const AsinManagerPage = () => {
                                 YES
                               </span>
                             ) : (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{ 
-                                backgroundColor: '#16a34a', 
-                                color: '#fff', 
-                                fontSize: '10px', 
+                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{
+                                backgroundColor: '#16a34a',
+                                color: '#fff',
+                                fontSize: '10px',
                                 fontWeight: 800,
                                 padding: '5px 12px',
                                 borderRadius: '4px',
@@ -3159,6 +3185,11 @@ const AsinManagerPage = () => {
                       {isVisible('ratingTrendStatus') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <TrendBadge status={asin.ratingTrend} />
+                        </td>
+                      )}
+                      {isVisible('reviewCount') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <TrendBadge status={getReviewTrendStatus(asin)} />
                         </td>
                       )}
                       {isVisible('ratingTrend') && historyStructure.map(week => {
