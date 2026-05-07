@@ -20,14 +20,6 @@ class SchedulerService {
      * Initialize all scheduled jobs
      */
     init() {
-        // console.log(`🗓️ Initializing Background Scheduler...`);
-
-        // 1. Keepa ASIN Sync (Every 12 hours)
-        this.jobs.keepaSync = cron.schedule('0 */12 * * *', async () => {
-            // console.log('🕒 Starting Scheduled Keepa ASIN Sync...');
-            await this.runKeepaSync();
-        });
-
         // 2. Enterprise Octoparse Pipeline
         const scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '00:00';
         const [scheduleHour, scheduleMinute] = scheduleTime.split(':');
@@ -42,12 +34,6 @@ class SchedulerService {
         });
         console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
 
-        // 4. Octoparse Daily 1 PM Sync
-        this.jobs.daily1PMSync = cron.schedule('0 13 * * *', async () => {
-            if (process.env.AUTOMATION_ENABLED !== 'true') return;
-            await this.runEnterprisePipeline();
-        });
-
         // 6. Database Integrity Repair (Every 6 hours)
         this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
@@ -61,20 +47,7 @@ class SchedulerService {
             await this.refreshAgeTags();
         });
 
-        // 8. Missing Data Recovery (Every 4 hours)
-        this.jobs.missingDataRecovery = cron.schedule('0 */4 * * *', async () => {
-            console.log('🕒 Starting Concurrent Missing Data Recovery...');
-            await this.runMissingDataRecovery();
-        });
-
-        console.log('✅ Background tasks scheduled');
-
-        // Optional: Run once on startup
-        setTimeout(() => {
-            this.runKeepaSync().catch(err => console.error('Startup Keepa sync failed:', err.message));
-            this.runOctoparseTaskRecovery().catch(err => console.error('Startup Octoparse recovery failed:', err.message));
-            this.runMissingDataRecovery().catch(err => console.error('Startup Missing Data Recovery failed:', err.message));
-        }, 30000); 
+        console.log('✅ Background tasks scheduled (Enterprise 00:00 Only)');
     }
 
     async runOctoparseTaskRecovery() {
