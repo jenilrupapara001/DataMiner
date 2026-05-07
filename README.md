@@ -12,7 +12,7 @@ GMS Dashboard Pro is an enterprise-grade **E-commerce Intelligence Platform** ta
 
 The platform is designed around a **Service-Oriented MERN Stack**, prioritizing data integrity, high-speed aggregations, and automated marketplace synchronization.
 
-### 1. High-Level Ecosystem
+### High-Level Ecosystem
 ```mermaid
 graph TD
     subgraph "Frontend Layer (React 19)"
@@ -39,7 +39,32 @@ graph TD
 
 ---
 
-## 📂 Project Structure (Full Tree)
+## 💻 Technology Stack
+
+### Frontend
+- **Framework:** React 19 (via Vite)
+- **Design System:** Custom Zinc UI (Glassmorphic)
+- **Visualizations:** ApexCharts (Triple-stack for BSR, Price, Rating)
+- **Icons:** Lucide React
+- **State Management:** Context API & Zustand
+- **Real-Time:** Socket.io-client, CometChat React UI Kit
+
+### Backend
+- **Runtime & Framework:** Node.js, Express.js
+- **Database:** MongoDB Atlas (Mongoose ODM)
+- **Authentication:** Clerk SDK + Custom JWT Auth
+- **File Processing:** Multer, xlsx
+- **Scheduling:** node-cron
+
+### Integrations
+- **Web Scraping:** Octoparse OpenAPI v1.0
+- **AI Analytics:** Perplexity API
+- **Asset Generation:** NVIDIA NIM (SD3 Medium)
+- **Communications:** CometChat
+
+---
+
+## 📂 Project Structure
 
 ```text
 gms-dashboard/
@@ -61,99 +86,111 @@ gms-dashboard/
 │   ├── styles/             # Zinc Design System Utilities
 │   └── utils/              # Frontend formatting & UI logic
 ├── public/                 # Static Assets
-└── package.json            # Core Dependencies (ApexCharts, Lucide, etc.)
+└── package.json            # Core Dependencies
 ```
 
 ---
 
 ## 🗄️ Database Strategy & Core Schemas
 
-The system utilizes **MongoDB Atlas** for document-oriented storage, with heavy optimization for time-series data (Ads) and relational-like tracking (ASINs).
+The system utilizes **MongoDB Atlas** with heavy optimization for time-series data (Ads) and relational-like tracking (ASINs).
 
 ### 1. `Asin` Model (The Platform Anchor)
-The `Asin` model is a sophisticated document that tracks 110+ data points including:
-- **Identity**: ASIN, SKU, Seller ID, Brand, Category.
-- **Market State**: `currentPrice`, `bsr`, `rating`, `reviewCount`, `soldBy`.
-- **Historical Arrays**:
-    - `history`: Daily snapshot of Price/BSR/Rating.
-    - `weekHistory`: Week-over-week performance metrics for trend analysis.
-- **Intelligent Wrappers**: `lqsDetails` (Listing Quality Score) and `feePreview` (FBA Profitability).
+Tracks 110+ data points including:
+- **Identity:** ASIN, SKU, Seller ID, Brand, Category.
+- **Market State:** `currentPrice`, `bsr`, `rating`, `reviewCount`, `soldBy`.
+- **Historical Arrays:** `history` (Daily snapshot) and `weekHistory` (WoW metrics).
+- **Intelligent Wrappers:** `lqsDetails` (Listing Quality Score) and `feePreview` (FBA Profitability).
 
 ### 2. `AdsPerformance` Model (Attribution Engine)
 Optimized for daily/monthly performance tracking:
-- **Core KPIs**: Spend, Sales, Impressions, Clicks, Orders.
-- **Attribution Logic**: Automated calculation of **ROAS**, **ACoS**, **CTR**, and **AOV**.
-- **Indexing**: Partial unique indexes ensure zero data duplication at the `ASIN` + `Date` + `reportType` level.
+- **Core KPIs:** Spend, Sales, Impressions, Clicks, Orders.
+- **Attribution Logic:** Automated calculation of ROAS, ACoS, CTR, and AOV.
 
-### 3. `Action` & `Goal` (OKR Hierarchy)
+### 3. Strategy Models (`Action`, `Goal`, `Objective`)
 Supports the AI-driven strategy layer:
-- `Goal`: High-level business intent (e.g., "Improve Margin").
-- `Action`: Decomposition of goals into trackable tasks with `Time to Complete` and `Status` loops.
+- **Goal:** High-level business intent (e.g., "Improve Margin").
+- **Objective / KeyResult (OKR):** Measurable targets.
+- **Action:** Executable tasks with statuses and deadlines.
 
 ---
 
 ## 🚀 Advanced Module Capabilities
 
-### 🛡️ ASIN Manager Pro (Horizontal Layout)
-The redesigned ASIN interface provides a "Mission Control" experience:
-- **Horizontal Product Intelligence**: A top-bar summary housing all vital stats + live Buy Box monitoring.
-- **ApexCharts Triple-Stack**:
-    - **Price History**: Indigo area chart with gradient fills.
-    - **BSR Trend**: Emerald line chart with **Reversed Y-Axis** (Top ranking visibility).
-    - **Rating Progression**: Amber line chart for long-term customer sentiment tracking.
-- **Smart Filtering**: Integrated range selectors (7D, 30D, 90D, All) that slice through historical arrays in real-time.
+### 🛡️ ASIN Manager Pro
+The central interface provides a "Mission Control" experience:
+- **Horizontal Product Intelligence:** Top-bar summary housing vital stats + live Buy Box monitoring.
+- **ApexCharts Triple-Stack:** Price History, BSR Trend (Reversed Y-Axis), and Rating Progression.
+- **Smart Filtering:** Range selectors slicing historical arrays in real-time.
 
-### 🤖 Automation Service (Octoparse Engine)
-The `octoparseAutomationService` manages complex web-scraping lifecycles:
-- **Self-Healing Sync**: When local data deviates from marketplace reality, the system automatically queues a background scrape.
-- **Concurrent Orchestration**: Manages 100+ concurrent seller tasks with automated retry and fallback logic.
-- **Data Reconciliation**: Ingests disparate marketplace results into the unified `Asin` history layer.
+### 🤖 Octoparse Sync Service (Data Ingestion)
+Seamless integration with **Octoparse OpenAPI v1.0** automates marketplace data lifecycles:
+- **Daily Extraction:** Cron jobs trigger cloud scrapes nightly.
+- **Advanced Mapping:** Regex and DOM parsing structure raw HTML (e.g., counting image nodes to verify LQS thresholds).
+- **Self-Healing Loops:** If anomalies exist, the system automatically queues targeted scrapes.
+- **Bug Fix Highlight:** Features memory-safe, case-insensitive ASIN matching with parameterized SQL protection to ensure reliable data aggregation.
 
 ---
 
 ## 🧠 Intelligence & AI Layer
 
-### 🖼️ NVIDIA NIM Image Optimization
-- **SD3 Workflow**: Automatically generates high-quality lifestyle images for ASINs failing the LQS image count threshold (< 7).
-- **Automation**: Triggered directly from the ASIN Manager when "Image Optimization" is required.
+### 🎯 OKR Engine (Perplexity AI)
+- Uses advanced LLMs to decompose vague business goals into 4-week execution plans.
+- Validates tasks against marketplace KPIs (ACoS, ROAS).
 
-### 🎯 Perplexity AI OKR Engine
-- **Decomposition**: Uses advanced LLM prompts to split vague intentions into 4-week execution plans.
-- **Validation**: Ensures every task generated is measurable against marketplace KPIs (ACoS, ROAS).
-
----
-
-## 🛠️ API Reference & Key Endpoints
-
-### `asinController.js`
-- `GET /api/asins`: Unified list with seller filtering and aggregation.
-- `PATCH /api/asins/:id`: Partial updates for LQS and marketplace status.
-- `POST /api/asins/sync`: Manual trigger for the Octoparse orchestration.
-
-### `uploadController.js`
-- `POST /api/upload/ads-data`: Complex CSV parser with **Case-Insensitive Header Mapping** supporting standard Amazon Advertising reports.
+### 🖼️ Image Optimization (NVIDIA NIM)
+- Triggered when listings fail LQS image count thresholds (< 7).
+- Automatically invokes the SD3 workflow to generate high-quality lifestyle images for the product.
 
 ---
 
-## 🚀 DevOps & Maintenance
+## 🛠️ API Reference (Highlights)
 
-### 1. Environment Management
-- Production-grade `.env` includes secrets for **Clerk Auth**, **Keepa SDK**, **Octoparse API**, and **NVIDIA NIM**.
+- `GET /api/asins`: Unified, paginated list with seller filtering.
+- `POST /api/asins/sync`: Manual trigger for Octoparse orchestration.
+- `POST /api/upload/ads-data`: Complex CSV parsing with **case-insensitive header mapping**.
 
-### 2. Performance Optimization
-- **MongoDB Indexing**: Compound indexing on `asinCode + seller` and `date + reportType` ensures sub-100ms query performance on 1M+ records.
-- **Vercel Edge Rendering**: The frontend is optimized for zero-latency loading of massive DataTables.
+---
+
+## 🔧 DevOps, Config, & Setup
+
+### Environment Variables (Backend)
+Required secrets in `.env`:
+```env
+PORT=3001
+MONGODB_URI=mongodb+srv://...
+JWT_SECRET=your-secret
+CLERK_SECRET_KEY=sk_live_...
+OCTOPARSE_API_KEY=...
+NIM_API_KEY=...
+PERPLEXITY_API_KEY=...
+```
+
+### Development
+```bash
+# Start Backend
+cd backend
+npm run dev
+
+# Start Frontend
+cd src
+npm run dev
+```
+
+### Performance Optimization
+- **MongoDB Indexing:** Compound indexes on `asinCode + seller` ensure sub-100ms queries.
+- **Vercel Edge Rendering:** Optimized zero-latency loading for massive React DataTables.
 
 ---
 
 ## 🎨 Design System: Zinc Pro
-Built on a bespoke design system focusing on **Clarity and Precision**.
-- **Typography**: Inter (UI) / Outfit (Header) for maximum readability.
-- **Grid**: 24px unified corner-radius system.
-- **Effects**: 12px Backdrop Blur (Glassmorphism) for focused detail modals.
+Focuses on clarity and data density:
+- **Typography:** Inter (UI) / Outfit (Headers).
+- **Styling:** Tailwind-based with glassmorphism (12px backdrop blur).
+- **Iconography:** Lucide React icons standardized across the platform.
 
 ---
 
-## 📄 License & Proprietary
+## 📄 License
 © 2026 Easysell Projects. Distributed under the ISC License. 
 Confidential and Proprietary. All Rights Reserved.

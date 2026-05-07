@@ -21,24 +21,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       # ==================
       # Frontend Check
       # ==================
       - name: Install frontend deps
         run: |
-          cd retail-ops
           npm ci --legacy-peer-deps
 
       - name: Run ESLint
         run: |
-          cd retail-ops
           npm run lint -- --max-warnings=0 || true
 
       - name: Check TypeScript types
         run: |
-          cd retail-ops
           npm run typecheck || true
 
       # ==================
