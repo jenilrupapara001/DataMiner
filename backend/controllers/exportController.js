@@ -232,129 +232,131 @@ async function processExportJob(downloadId, params, userId) {
         console.log(`🔍 [Export] Generated Where Clause: ${whereClause}`);
         if (asinIds.length > 0) console.log(`🔍 [Export] Specific ASINs requested: ${asinIds.length}`);
 
-        // Apply advanced filters (Matching asinController.js logic)
-        if (search) {
-            request.input('search', sql.NVarChar, `%${search}%`);
-            whereClause += ' AND (a.AsinCode LIKE @search OR a.Title LIKE @search OR a.Sku LIKE @search)';
-        }
-        if (status) {
-            request.input('status', sql.NVarChar, status);
-            whereClause += ' AND a.Status = @status';
-        }
-        if (category) {
-            request.input('category', sql.NVarChar, category);
-            whereClause += ' AND a.Category = @category';
-        }
-        if (brand) {
-            request.input('brand', sql.NVarChar, brand);
-            whereClause += ' AND a.Brand = @brand';
-        }
-        if (scrapeStatus) {
-            request.input('scrapeStatus', sql.NVarChar, scrapeStatus);
-            whereClause += ' AND a.ScrapeStatus = @scrapeStatus';
-        }
-        if (hasAplus !== undefined && hasAplus !== '' && hasAplus !== null) {
-            request.input('hasAplus', sql.Bit, (hasAplus === true || hasAplus === 'true') ? 1 : 0);
-            whereClause += ' AND a.HasAplus = @hasAplus';
-        }
-        if (buyBoxWin !== undefined && buyBoxWin !== '' && buyBoxWin !== null) {
-            request.input('buyBoxStatus', sql.Bit, (buyBoxWin === true || buyBoxWin === 'true') ? 1 : 0);
-            whereClause += ' AND a.BuyBoxWin = @buyBoxStatus';
-        }
-        if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
-            if (priceDispute === 'true' || priceDispute === true) {
-                whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
-            } else {
-                whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+        // Apply advanced filters ONLY if no specific sellers or specific ASIN IDs are selected
+        if (sellerIds.length === 0 && asinIds.length === 0) {
+            if (search) {
+                request.input('search', sql.NVarChar, `%${search}%`);
+                whereClause += ' AND (a.AsinCode LIKE @search OR a.Title LIKE @search OR a.Sku LIKE @search)';
             }
-        }
-        if (minPrice) {
-            request.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
-            whereClause += ' AND a.CurrentPrice >= @minPrice';
-        }
-        if (maxPrice) {
-            request.input('maxPrice', sql.Decimal(18, 2), parseFloat(maxPrice));
-            whereClause += ' AND a.CurrentPrice <= @maxPrice';
-        }
-        if (minBSR) {
-            request.input('minBSR', sql.Int, parseInt(minBSR));
-            whereClause += ' AND a.BSR >= @minBSR';
-        }
-        if (maxBSR) {
-            request.input('maxBSR', sql.Int, parseInt(maxBSR));
-            whereClause += ' AND a.BSR <= @maxBSR';
-        }
-        if (minLQS) {
-            request.input('minLQS', sql.Decimal(5, 2), parseFloat(minLQS));
-            whereClause += ' AND a.LQS >= @minLQS';
-        }
-        if (maxLQS) {
-            request.input('maxLQS', sql.Decimal(5, 2), parseFloat(maxLQS));
-            whereClause += ' AND a.LQS <= @maxLQS';
-        }
-        if (parentAsin) {
-            request.input('parentAsin', sql.NVarChar, parentAsin);
-            whereClause += ' AND a.ParentAsin = @parentAsin';
-        }
-        if (sku) {
-            request.input('skuFilter', sql.NVarChar, `%${sku}%`);
-            whereClause += ' AND a.Sku LIKE @skuFilter';
-        }
-        if (subBsrCategory) {
-            request.input('subBsrCategory', sql.NVarChar, `%${subBsrCategory}%`);
-            whereClause += ' AND a.SubBSRs LIKE @subBsrCategory';
-        }
-        if (minRating) {
-            request.input('minRating', sql.Decimal(3, 2), parseFloat(minRating));
-            whereClause += ' AND a.Rating >= @minRating';
-        }
-        if (maxRating) {
-            request.input('maxRating', sql.Decimal(3, 2), parseFloat(maxRating));
-            whereClause += ' AND a.Rating <= @maxRating';
-        }
-        if (minReviewCount) {
-            request.input('minReviewCount', sql.Int, parseInt(minReviewCount));
-            whereClause += ' AND a.ReviewCount >= @minReviewCount';
-        }
-        if (maxReviewCount) {
-            request.input('maxReviewCount', sql.Int, parseInt(maxReviewCount));
-            whereClause += ' AND a.ReviewCount <= @maxReviewCount';
-        }
+            if (status) {
+                request.input('status', sql.NVarChar, status);
+                whereClause += ' AND a.Status = @status';
+            }
+            if (category) {
+                request.input('category', sql.NVarChar, category);
+                whereClause += ' AND a.Category = @category';
+            }
+            if (brand) {
+                request.input('brand', sql.NVarChar, brand);
+                whereClause += ' AND a.Brand = @brand';
+            }
+            if (scrapeStatus) {
+                request.input('scrapeStatus', sql.NVarChar, scrapeStatus);
+                whereClause += ' AND a.ScrapeStatus = @scrapeStatus';
+            }
+            if (hasAplus !== undefined && hasAplus !== '' && hasAplus !== null) {
+                request.input('hasAplus', sql.Bit, (hasAplus === true || hasAplus === 'true') ? 1 : 0);
+                whereClause += ' AND a.HasAplus = @hasAplus';
+            }
+            if (buyBoxWin !== undefined && buyBoxWin !== '' && buyBoxWin !== null) {
+                request.input('buyBoxStatus', sql.Bit, (buyBoxWin === true || buyBoxWin === 'true') ? 1 : 0);
+                whereClause += ' AND a.BuyBoxWin = @buyBoxStatus';
+            }
+            if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
+                if (priceDispute === 'true' || priceDispute === true) {
+                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+                } else {
+                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+                }
+            }
+            if (minPrice) {
+                request.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
+                whereClause += ' AND a.CurrentPrice >= @minPrice';
+            }
+            if (maxPrice) {
+                request.input('maxPrice', sql.Decimal(18, 2), parseFloat(maxPrice));
+                whereClause += ' AND a.CurrentPrice <= @maxPrice';
+            }
+            if (minBSR) {
+                request.input('minBSR', sql.Int, parseInt(minBSR));
+                whereClause += ' AND a.BSR >= @minBSR';
+            }
+            if (maxBSR) {
+                request.input('maxBSR', sql.Int, parseInt(maxBSR));
+                whereClause += ' AND a.BSR <= @maxBSR';
+            }
+            if (minLQS) {
+                request.input('minLQS', sql.Decimal(5, 2), parseFloat(minLQS));
+                whereClause += ' AND a.LQS >= @minLQS';
+            }
+            if (maxLQS) {
+                request.input('maxLQS', sql.Decimal(5, 2), parseFloat(maxLQS));
+                whereClause += ' AND a.LQS <= @maxLQS';
+            }
+            if (parentAsin) {
+                request.input('parentAsin', sql.NVarChar, parentAsin);
+                whereClause += ' AND a.ParentAsin = @parentAsin';
+            }
+            if (sku) {
+                request.input('skuFilter', sql.NVarChar, `%${sku}%`);
+                whereClause += ' AND a.Sku LIKE @skuFilter';
+            }
+            if (subBsrCategory) {
+                request.input('subBsrCategory', sql.NVarChar, `%${subBsrCategory}%`);
+                whereClause += ' AND a.SubBSRs LIKE @subBsrCategory';
+            }
+            if (minRating) {
+                request.input('minRating', sql.Decimal(3, 2), parseFloat(minRating));
+                whereClause += ' AND a.Rating >= @minRating';
+            }
+            if (maxRating) {
+                request.input('maxRating', sql.Decimal(3, 2), parseFloat(maxRating));
+                whereClause += ' AND a.Rating <= @maxRating';
+            }
+            if (minReviewCount) {
+                request.input('minReviewCount', sql.Int, parseInt(minReviewCount));
+                whereClause += ' AND a.ReviewCount >= @minReviewCount';
+            }
+            if (maxReviewCount) {
+                request.input('maxReviewCount', sql.Int, parseInt(maxReviewCount));
+                whereClause += ' AND a.ReviewCount <= @maxReviewCount';
+            }
 
-        // LQS Breakdown Filters
-        if (minTitleScore) whereClause += ' AND a.TitleScore >= ' + parseFloat(minTitleScore);
-        if (maxTitleScore) whereClause += ' AND a.TitleScore <= ' + parseFloat(maxTitleScore);
-        if (minBulletScore) whereClause += ' AND a.BulletScore >= ' + parseFloat(minBulletScore);
-        if (maxBulletScore) whereClause += ' AND a.BulletScore <= ' + parseFloat(maxBulletScore);
-        if (minImageScore) whereClause += ' AND a.ImageScore >= ' + parseFloat(minImageScore);
-        if (maxImageScore) whereClause += ' AND a.ImageScore <= ' + parseFloat(maxImageScore);
-        if (minDescriptionScore) whereClause += ' AND a.DescriptionScore >= ' + parseFloat(minDescriptionScore);
-        if (maxDescriptionScore) whereClause += ' AND a.DescriptionScore <= ' + parseFloat(maxDescriptionScore);
+            // LQS Breakdown Filters
+            if (minTitleScore) whereClause += ' AND a.TitleScore >= ' + parseFloat(minTitleScore);
+            if (maxTitleScore) whereClause += ' AND a.TitleScore <= ' + parseFloat(maxTitleScore);
+            if (minBulletScore) whereClause += ' AND a.BulletScore >= ' + parseFloat(minBulletScore);
+            if (maxBulletScore) whereClause += ' AND a.BulletScore <= ' + parseFloat(maxBulletScore);
+            if (minImageScore) whereClause += ' AND a.ImageScore >= ' + parseFloat(minImageScore);
+            if (maxImageScore) whereClause += ' AND a.ImageScore <= ' + parseFloat(maxImageScore);
+            if (minDescriptionScore) whereClause += ' AND a.DescriptionScore >= ' + parseFloat(minDescriptionScore);
+            if (maxDescriptionScore) whereClause += ' AND a.DescriptionScore <= ' + parseFloat(maxDescriptionScore);
 
-        // Tags filter
-        if (tags && (Array.isArray(tags) ? tags.length > 0 : tags)) {
-            const tagList = Array.isArray(tags) ? tags : [tags];
-            tagList.forEach((t, i) => {
-                const paramName = `tag_${i}`;
-                request.input(paramName, sql.NVarChar, `%${t.trim()}%`);
-                whereClause += ` AND a.Tags LIKE @${paramName}`;
-            });
-        }
+            // Tags filter
+            if (tags && (Array.isArray(tags) ? tags.length > 0 : tags)) {
+                const tagList = Array.isArray(tags) ? tags : [tags];
+                tagList.forEach((t, i) => {
+                    const paramName = `tag_${i}`;
+                    request.input(paramName, sql.NVarChar, `%${t.trim()}%`);
+                    whereClause += ` AND a.Tags LIKE @${paramName}`;
+                });
+            }
 
-        // Date Range (CreatedAt or LastScrapedAt based on context)
-        if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, GETDATE())';
-        else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, GETDATE()))';
-        else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, GETDATE())';
-        else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, GETDATE())';
-        else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, GETDATE())';
-        else if (dateRange && typeof dateRange === 'object' && dateRange.start) {
-            request.input('dateStart', sql.DateTime2, new Date(dateRange.start));
-            whereClause += ' AND a.LastScrapedAt >= @dateStart';
-            if (dateRange.end) {
-                const dEnd = new Date(dateRange.end);
-                dEnd.setHours(23, 59, 59, 999);
-                request.input('dateEnd', sql.DateTime2, dEnd);
-                whereClause += ' AND a.LastScrapedAt <= @dateEnd';
+            // Date Range (CreatedAt or LastScrapedAt based on context)
+            if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, GETDATE())';
+            else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, GETDATE()))';
+            else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, GETDATE())';
+            else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, GETDATE())';
+            else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, GETDATE())';
+            else if (dateRange && typeof dateRange === 'object' && dateRange.start) {
+                request.input('dateStart', sql.DateTime2, new Date(dateRange.start));
+                whereClause += ' AND a.LastScrapedAt >= @dateStart';
+                if (dateRange.end) {
+                    const dEnd = new Date(dateRange.end);
+                    dEnd.setHours(23, 59, 59, 999);
+                    request.input('dateEnd', sql.DateTime2, dEnd);
+                    whereClause += ' AND a.LastScrapedAt <= @dateEnd';
+                }
             }
         }
 

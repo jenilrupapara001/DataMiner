@@ -61,7 +61,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
   
   // Sellers
   const [sellers, setSellers] = useState([]);
-  const [selectedSellerIds, setSelectedSellerIds] = useState([]);
+  const [selectedSellerIds, setSelectedSellerIds] = useState(selectedSeller ? [selectedSeller] : []);
   const [sellerSearch, setSellerSearch] = useState('');
   const [sellerDropdownOpen, setSellerDropdownOpen] = useState(false);
   const sellerDropdownRef = useRef(null);
@@ -89,8 +89,9 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     if (isOpen) {
       fetchSellers();
       setStep(1); setError(null); setExportProgress(0);
+      setSelectedSellerIds(selectedSeller ? [selectedSeller] : []);
     }
-  }, [isOpen]);
+  }, [isOpen, selectedSeller]);
 
   // Close seller dropdown on outside click
   useEffect(() => {
