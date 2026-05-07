@@ -232,70 +232,68 @@ class SchedulerService {
                 return { success: true, totalSellers: 0 };
             }
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers for 5-concurrent sync (synchronous awaiting).`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers. Processing ONE-BY-ONE sequentially.`);
             
-            const CONCURRENCY_LIMIT = 5;
             let successful = 0;
 
-            for (let i = 0; i < sellers.length; i += CONCURRENCY_LIMIT) {
-                const batch = sellers.slice(i, i + CONCURRENCY_LIMIT);
-                console.log(`🚀 [ENTERPRISE] Processing concurrent batch of ${batch.length} sellers...`);
+            for (let i = 0; i < sellers.length; i++) {
+                const seller = sellers[i];
+                console.log(`🚀 [ENTERPRISE] Processing seller ${i + 1}/${sellers.length}: ${seller.Name}...`);
                 
-                await Promise.all(batch.map(async (seller) => {
-                    let activeAsinsCount = 0;
-                    try {
-                        const countResult = await pool.request()
-                            .input('sellerId', sql.VarChar, seller.Id)
-                            .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
-                        activeAsinsCount = countResult.recordset[0]?.activeCount || 0;
-                    } catch (err) {
-                        console.error(`⚠️ Failed to query active ASIN count for seller ${seller.Name}:`, err.message);
-                    }
+                let activeAsinsCount = 0;
+                try {
+                    const countResult = await pool.request()
+                        .input('sellerId', sql.VarChar, seller.Id)
+                        .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                    activeAsinsCount = countResult.recordset[0]?.activeCount || 0;
+                } catch (err) {
+                    console.error(`⚠️ Failed to query active ASIN count for seller ${seller.Name}:`, err.message);
+                }
 
-                    const sellerStat = {
-                        sellerId: seller.Id,
-                        name: seller.Name,
-                        startTime: new Date(),
-                        endTime: null,
-                        status: 'RUNNING',
-                        asinsCount: activeAsinsCount,
-                        count: 0,
-                        error: null
-                    };
-                    details.push(sellerStat);
+                const sellerStat = {
+                    sellerId: seller.Id,
+                    name: seller.Name,
+                    startTime: new Date(),
+                    endTime: null,
+                    status: 'RUNNING',
+                    asinsCount: activeAsinsCount,
+                    count: 0,
+                    error: null
+                };
+                details.push(sellerStat);
+                await this.updateRunDetails(runId, details);
+
+                try {
+                    // 2. Clear previous data from Octoparse cloud before starting
+                    console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
+                    await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
+                    
+                    // 3. Trigger sync and await complete scrape + polling (This injects ASINs and runs the task sequentially)
+                    const syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                        triggerScrape: true,
+                        fullSync: true,
+                        forceReRun: true,
+                        awaitCompletion: true
+                    });
+
+                    sellerStat.status = 'COMPLETED';
+                    if (syncResult && typeof syncResult === 'object') {
+                        sellerStat.asinsCount = syncResult.asinsCount || 0;
+                        sellerStat.count = syncResult.count || 0;
+                    }
+                    successful++;
+                } catch (err) {
+                    sellerStat.status = 'FAILED';
+                    sellerStat.error = err.message;
+                    console.error(`❌ [ENTERPRISE] Failed for ${seller.Name}:`, err.message);
+                } finally {
+                    sellerStat.endTime = new Date();
                     await this.updateRunDetails(runId, details);
+                }
 
-                    try {
-                        // 2. Clear previous data from Octoparse cloud before starting
-                        console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
-                        await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
-                        
-                        // 3. Trigger sync and await complete scrape + polling
-                        const syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
-                            triggerScrape: true,
-                            fullSync: true,
-                            forceReRun: true,
-                            awaitCompletion: true
-                        });
-
-                        sellerStat.status = 'COMPLETED';
-                        if (syncResult && typeof syncResult === 'object') {
-                            sellerStat.asinsCount = syncResult.asinsCount || 0;
-                            sellerStat.count = syncResult.count || 0;
-                        }
-                        successful++;
-                    } catch (err) {
-                        sellerStat.status = 'FAILED';
-                        sellerStat.error = err.message;
-                        console.error(`❌ [ENTERPRISE] Failed for ${seller.Name}:`, err.message);
-                    } finally {
-                        sellerStat.endTime = new Date();
-                        await this.updateRunDetails(runId, details);
-                    }
-                }));
-
-                // Short stability delay between completed batches
-                if (i + CONCURRENCY_LIMIT < sellers.length) {
+                // Stability delay between sequential runs
+                if (i < sellers.length - 1) {
+                    console.log(`⏳ Waiting 5 seconds before starting next seller task...`);
                     await new Promise(r => setTimeout(r, 5000));
                 }
             }
