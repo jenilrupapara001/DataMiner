@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ScheduledRunController = require('../controllers/scheduledRunController');
-const { protect } = require('../middleware/authMiddleware'); // Assuming project uses standard authMiddleware
+const { authenticate: protect } = require('../middleware/auth');
 
 // All scheduled runs endpoints are protected by authentication
 router.get('/', protect, ScheduledRunController.getScheduledRuns);
