@@ -42,6 +42,99 @@ const SellerAsinsModal = ({
   // Selection Logic
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [matchInputText, setMatchInputText] = useState('');
+
+  const handleSelectPastedAsins = () => {
+    if (!matchInputText.trim()) return;
+    const pastedCodes = matchInputText
+      .split(/[,\s\n\t]+/)
+      .map(a => a.trim().toUpperCase())
+      .filter(a => a.length > 0);
+
+    const matchedIds = asins
+      .filter(asin => pastedCodes.includes((asin.asinCode || '').toUpperCase()))
+      .map(asin => asin._id);
+
+    if (matchedIds.length > 0) {
+      const next = new Set(selectedIds);
+      matchedIds.forEach(id => next.add(id));
+      setSelectedIds(next);
+      addToast({
+        title: 'ASIN Selection Match',
+        message: `Successfully matched and selected ${matchedIds.length} ASIN(s).`,
+        type: 'success'
+      });
+    } else {
+      addToast({
+        title: 'No Matches Found',
+        message: 'None of the pasted ASINs matched current loaded items.',
+        type: 'warning'
+      });
+    }
+    setMatchInputText('');
+  };
+
+  const handleSelectAllFromDatabase = async () => {
+    setIsSubmitting(true);
+    setSubmitProgress(20);
+    try {
+      const result = await asinApi.getBySeller(seller._id, { page: 1, limit: 10000 });
+      if (result && result.asins) {
+        const allIds = result.asins.map(a => a._id);
+        setSelectedIds(new Set(allIds));
+        addToast({
+          title: 'ASIN Bulk Selection',
+          message: `Successfully matched and selected all ${allIds.length} ASINs from database.`,
+          type: 'success'
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: 'Selection Failed',
+        message: error.message || 'Failed to fetch all ASINs',
+        type: 'error'
+      });
+    } finally {
+      setIsSubmitting(false);
+      setSubmitProgress(0);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (newStatus) => {
+    if (selectedIds.size === 0) return;
+
+    setIsSubmitting(true);
+    setSubmitProgress(10);
+
+    try {
+      const idsArray = Array.from(selectedIds);
+      const step = 90 / idsArray.length;
+
+      await Promise.all(idsArray.map(async (id) => {
+        await asinApi.update(id, { status: newStatus });
+        setSubmitProgress(prev => Math.min(prev + step, 95));
+      }));
+
+      setSubmitProgress(100);
+      addToast({
+        title: 'Bulk Action Success',
+        message: `Successfully updated status to ${newStatus} for ${selectedIds.size} items.`,
+        type: 'success'
+      });
+
+      setSelectedIds(new Set());
+      if (onRefresh) await onRefresh();
+    } catch (error) {
+      addToast({
+        title: 'Bulk Action Failed',
+        message: error.message || 'Failed to update status',
+        type: 'error'
+      });
+    } finally {
+      setIsSubmitting(false);
+      setSubmitProgress(0);
+    }
+  };
 
   const toggleSelectAll = () => {
     if (selectedIds.size === asins.length && asins.length > 0) {
@@ -297,7 +390,7 @@ const SellerAsinsModal = ({
 
           <div className="modal-body p-0 d-flex flex-column" style={{ overflow: 'hidden' }}>
             {/* Bulk Action Bar (Sticky) */}
-            {selectedIds.size > 0 && isAdmin && (
+            {selectedIds.size > 0 && (
               <div className="px-4 py-3 bg-zinc-900 text-white d-flex align-items-center justify-content-between sticky-top animate-in fade-in slide-in-from-top-4 duration-300" style={{ zIndex: 1065 }}>
                 <div className="d-flex align-items-center gap-3">
                   <div className="d-flex align-items-center justify-content-center bg-zinc-800 text-white rounded-2 px-2 py-1 smallest fw-bold font-monospace">
@@ -307,9 +400,26 @@ const SellerAsinsModal = ({
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   <button
+                    className="btn btn-sm btn-success d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale"
+                    onClick={() => handleBulkStatusUpdate('Active')}
+                    disabled={isSubmitting}
+                  >
+                    <CheckCircle2 size={14} />
+                    MARK ACTIVE
+                  </button>
+                  <button
+                    className="btn btn-sm btn-warning d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale text-white"
+                    onClick={() => handleBulkStatusUpdate('Paused')}
+                    disabled={isSubmitting}
+                    style={{ backgroundColor: '#d97706', borderColor: '#d97706' }}
+                  >
+                    <PauseCircle size={14} />
+                    MARK INACTIVE
+                  </button>
+                  <button
                     className="btn btn-sm btn-danger d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale"
                     onClick={handleBulkDelete}
-                    disabled={isBulkDeleting}
+                    disabled={isSubmitting}
                   >
                     {isBulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
                     DELETE SELECTED
@@ -336,6 +446,31 @@ const SellerAsinsModal = ({
                   <div className="d-flex align-items-center gap-2">
                     <div className="p-1 px-2 bg-blue-50 text-blue-600 rounded-pill border border-blue-100 smallest fw-bold uppercase tracking-widest">
                       Catalog View
+                    </div>
+                    {/* ASIN Pasting Select Input */}
+                    <div className="d-flex align-items-center gap-1 bg-zinc-100 p-1 rounded-3 border border-zinc-200 ms-2">
+                      <textarea
+                        className="form-control form-control-sm border-0 bg-transparent px-3 py-1 smallest shadow-none"
+                        placeholder="Paste ASINs to select (Shift+Enter for newline, Enter to match)..."
+                        value={matchInputText}
+                        onChange={(e) => setMatchInputText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSelectPastedAsins();
+                          }
+                        }}
+                        style={{ fontSize: '11px', width: '280px', height: '36px', resize: 'none', lineHeight: '1.2' }}
+                        rows={2}
+                        title="Enter ASINs separated by spaces, commas, or newlines (Press Enter to match)"
+                      />
+                      <button
+                        className="btn btn-zinc-900 btn-sm rounded-3 px-3 fw-bold smallest"
+                        onClick={handleSelectPastedAsins}
+                        style={{ height: '36px', fontSize: '10px', background: '#18181B', color: '#fff', border: 'none' }}
+                      >
+                        SELECT
+                      </button>
                     </div>
                   </div>
                   <div className="d-flex align-items-center gap-2">
@@ -372,6 +507,16 @@ const SellerAsinsModal = ({
                     <div className="vr mx-1 opacity-10"></div>
 
                     <button
+                      className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 px-3 rounded-pill hover-scale transition-all"
+                      onClick={handleSelectAllFromDatabase}
+                      disabled={isSubmitting}
+                      style={{ height: '34px', fontSize: '11px' }}
+                    >
+                      <CheckSquare size={14} className="text-zinc-500" />
+                      <span className="fw-black uppercase tracking-wider text-zinc-700">Select All ASINs ({pagination.total})</span>
+                    </button>
+
+                    <button
                       className="btn btn-zinc-900 btn-sm shadow-lg d-flex align-items-center gap-2 px-4 rounded-pill hover-scale transition-all"
                       onClick={() => setShowAddAsinModal(true)}
                       style={{ height: '34px', fontSize: '11px', background: '#18181B', color: '#fff' }}
@@ -386,13 +531,11 @@ const SellerAsinsModal = ({
                   <table className="table data-table mb-0 align-middle">
                     <thead className="sticky-top bg-zinc-50/80" style={{ zIndex: 10, top: '-1px', backdropFilter: 'blur(8px)' }}>
                       <tr className="border-bottom border-zinc-100">
-                        {isAdmin && (
-                          <th className="py-3 px-3 text-start" style={{ width: '40px' }}>
-                            <button className="btn btn-link p-0 text-zinc-400 hover-text-zinc-900 shadow-none" onClick={toggleSelectAll}>
-                              {(selectedIds.size === asins.length && asins.length > 0) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
-                            </button>
-                          </th>
-                        )}
+                        <th className="py-3 px-3 text-start" style={{ width: '40px' }}>
+                          <button className="btn btn-link p-0 text-zinc-400 hover-text-zinc-900 shadow-none" onClick={toggleSelectAll}>
+                            {(selectedIds.size === asins.length && asins.length > 0) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
+                          </button>
+                        </th>
                         <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Identifier</th>
                         <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Identity & Specs</th>
                         <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Commercials</th>
@@ -404,7 +547,7 @@ const SellerAsinsModal = ({
                     <tbody>
                       {asins.length === 0 && !loading ? (
                         <tr>
-                          <td colSpan={isAdmin ? "7" : "6"} className="text-center py-5 bg-zinc-50/30">
+                          <td colSpan="7" className="text-center py-5 bg-zinc-50/30">
                             <div className="d-flex flex-column align-items-center opacity-40">
                               <Database size={48} strokeWidth={1.5} className="mb-3 text-zinc-300" />
                               <span className="fw-bold text-zinc-500 uppercase tracking-widest smaller">No ASINs tracked for this store yet</span>
@@ -416,13 +559,11 @@ const SellerAsinsModal = ({
                         <>
                           {asins.map(asin => (
                             <tr key={asin._id} className={`border-bottom border-zinc-50 hover-bg-zinc-50 transition-all ${selectedIds.has(asin._id) ? 'bg-zinc-50/80 shadow-inner' : ''}`}>
-                              {isAdmin && (
-                                <td className="py-3 px-3">
-                                  <button className="btn btn-link p-0 text-zinc-300 hover-text-zinc-600 shadow-none transition-colors" onClick={() => toggleSelectOne(asin._id)}>
-                                    {selectedIds.has(asin._id) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
-                                  </button>
-                                </td>
-                              )}
+                              <td className="py-3 px-3">
+                                <button className="btn btn-link p-0 text-zinc-300 hover-text-zinc-600 shadow-none transition-colors" onClick={() => toggleSelectOne(asin._id)}>
+                                  {selectedIds.has(asin._id) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
+                                </button>
+                              </td>
                               <td className="py-3">
                                 <div className="d-flex flex-column">
                                   <span className="fw-black text-zinc-900 font-monospace tracking-tight" style={{ fontSize: '12px' }}>{asin.asinCode}</span>

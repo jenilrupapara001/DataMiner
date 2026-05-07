@@ -2376,6 +2376,7 @@ const AsinManagerPage = () => {
 
                   {/* ===== STATUS & DEAL COLUMNS (Slate Palette) ===== */}
                   {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>STATUS</th>}
+                  {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DB STATUS</th>}
                   {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
                   {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
                   {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
@@ -2847,6 +2848,23 @@ const AsinManagerPage = () => {
                             title={asin.availabilityStatus || 'Available'}
                           >
                             {asin.availabilityStatus || 'Available'}
+                          </span>
+                        </td>
+                      )}
+                      {isVisible('status') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <span
+                            className="badge shadow-sm"
+                            style={{
+                              backgroundColor: (asin.status || 'Active') === 'Active' ? '#10b981' : '#f59e0b',
+                              color: '#fff',
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              padding: '4px 8px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {(asin.status || 'Active').toUpperCase()}
                           </span>
                         </td>
                       )}

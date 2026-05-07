@@ -376,8 +376,8 @@ const Dashboard = () => {
                   <Chart options={donutChartOptions} series={data.categoryData.map(c => c.data[0])} type="donut" width="100%" height={240} />
                 ) : (
                   <div className="d-flex flex-column align-items-center justify-content-center w-100 h-100 p-3 rounded" style={{ backgroundColor: 'var(--color-surface-2)', border: '1px dashed var(--color-border)' }}>
-                     <PieChart size={24} className="text-muted mb-2 opacity-50" />
-                     <span className="text-muted fw-bold" style={{ fontSize: '11px' }}>NO CATEGORY MIX</span>
+                    <PieChart size={24} className="text-muted mb-2 opacity-50" />
+                    <span className="text-muted fw-bold" style={{ fontSize: '11px' }}>NO CATEGORY MIX</span>
                   </div>
                 )}
               </Suspense>
@@ -393,12 +393,12 @@ const Dashboard = () => {
             <div style={{ minHeight: data.stackedBarSeries.some(s => s.data.some(d => d > 0)) ? '240px' : '120px' }}>
               <Suspense fallback={<SkeletonChart height={240} />}>
                 {data.stackedBarSeries.some(s => s.data.some(d => d > 0)) ? (
-                    <Chart options={stackedBarOptions} series={data.stackedBarSeries} type="bar" height={240} />
+                  <Chart options={stackedBarOptions} series={data.stackedBarSeries} type="bar" height={240} />
                 ) : (
-                    <div className="d-flex flex-column align-items-center justify-content-center w-100 h-100 p-3 rounded" style={{ height: '120px', backgroundColor: 'var(--color-surface-2)', border: '1px dashed var(--color-border)' }}>
-                        <BarChart2 size={24} className="text-muted mb-2 opacity-50" />
-                        <span className="text-muted fw-bold" style={{ fontSize: '11px' }}>INSUFFICIENT PERFORMANCE DATA</span>
-                    </div>
+                  <div className="d-flex flex-column align-items-center justify-content-center w-100 h-100 p-3 rounded" style={{ height: '120px', backgroundColor: 'var(--color-surface-2)', border: '1px dashed var(--color-border)' }}>
+                    <BarChart2 size={24} className="text-muted mb-2 opacity-50" />
+                    <span className="text-muted fw-bold" style={{ fontSize: '11px' }}>INSUFFICIENT PERFORMANCE DATA</span>
+                  </div>
                 )}
               </Suspense>
             </div>
@@ -428,7 +428,7 @@ const Dashboard = () => {
               Quick Access
             </h6>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-{[
+              {[
                 { label: 'Inventory Hub', icon: Package, href: '/inventory', color: 'var(--color-brand-600)' },
                 { label: 'Strategic OKRs', icon: Target, href: '/actions', color: '#8b5cf6' },
                 { label: 'Market Scraper', icon: Zap, href: '/scrape-tasks', color: '#f59e0b' },
