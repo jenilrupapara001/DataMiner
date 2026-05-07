@@ -7,7 +7,7 @@ const Card = ({
   extra, 
   children, 
   className = '', 
-  padding = 'var(--spacing-lg)',
+  padding = 'var(--spacing-md)',
   height = '100%',
   noHeader = false
 }) => {
@@ -28,12 +28,12 @@ const Card = ({
         <div 
           className="card-header" 
           style={{ 
-            padding: 'var(--spacing-md) var(--spacing-lg)',
+            padding: 'var(--spacing-sm) var(--spacing-md)',
             borderBottom: '1px solid var(--border-color)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            minHeight: '48px'
+            minHeight: '40px'
           }}
         >
           <div className="d-flex align-items-center gap-2">
