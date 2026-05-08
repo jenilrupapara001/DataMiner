@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../services/db';
 import ActionListEnhanced from '../components/actions/ActionListEnhanced';
 import ActionModal from '../components/actions/ActionModal';
@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 const TasksPage = () => {
   const { user: currentUser } = useAuth();
   const [objectives, setObjectives] = useState([]);
-  const [allActions, setAllActions] = useState([]); // Flatted actions for KPIs
+  const [allActions, setAllActions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isObjectiveModalOpen, setIsObjectiveModalOpen] = useState(false);
@@ -25,99 +25,130 @@ const TasksPage = () => {
   const [viewMode, setViewMode] = useState('STRATEGIC');
   const [searchParams, setSearchParams] = useSearchParams();
   const [toasts, setToasts] = useState([]);
+
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0, hasMore: false });
+
   const activeFilter = searchParams.get('filter') || 'ALL';
   const searchQuery = searchParams.get('q') || '';
   const selectedKeyResultIdFromUrl = searchParams.get('krId');
 
-  const [selectedKeyResultId, setSelectedKeyResultId] = useState(selectedKeyResultIdFromUrl); // Track target KR for new action
+  const [selectedKeyResultId, setSelectedKeyResultId] = useState(selectedKeyResultIdFromUrl);
   const [users, setUsers] = useState([]);
   const [sellers, setSellers] = useState([]);
   const [asins, setAsins] = useState([]);
 
-  // KPI States
+  // KPI States — driven by server-side totals
   const [kpis, setKpis] = useState({
     all: 0,
     todo: 0,
     overdue: 0,
     tomorrow: 0,
     upcoming: 0,
-    status: {
-      pending: 0,
-      inProgress: 0,
-      review: 0,
-      completed: 0,
-      rejected: 0
-    }
+    status: { pending: 0, inProgress: 0, review: 0, completed: 0, rejected: 0 }
   });
 
   const navigate = useNavigate();
 
-  const loadData = async () => {
-    setLoading(true);
+  // Debounce ref for search
+  const searchDebounceRef = useRef(null);
+  // Ref to track if support data (users/sellers/asins) is already loaded
+  const supportDataLoaded = useRef(false);
+
+  // ─── Core action loader (paginated, server-side filtered) ───────────────────
+  const loadActions = useCallback(async (opts = {}) => {
+    const {
+      page = pagination.page,
+      silent = false,
+      statusFilter,
+      search,
+    } = opts;
+
+    if (!silent) setLoading(true);
+
     try {
-      // Fetch Objectives with full hierarchy
-      const objectivesData = await db.getObjectives();
-      const loadedObjectives = objectivesData?.data || objectivesData || [];
-      setObjectives(loadedObjectives);
+      // Map frontend filter tokens → backend status values
+      const statusMap = {
+        PENDING: 'PENDING',
+        IN_PROGRESS: 'IN_PROGRESS',
+        REVIEW: 'REVIEW',
+        COMPLETED: 'COMPLETED',
+        REJECTED: 'REJECTED',
+      };
 
-      // Fetch All Actions directly from Database
-      const actionsData = await db.getActions();
-      const loadedActions = actionsData?.data || actionsData || [];
+      const params = { page, limit: pagination.limit };
+      const sf = statusFilter ?? activeFilter;
+      if (statusMap[sf]) params.status = statusMap[sf];
+      if (search !== undefined ? search : searchQuery) params.search = search !== undefined ? search : searchQuery;
 
-      calculateKPIs(loadedObjectives, loadedActions);
+      const res = await db.getActions(params);
+      const actions = res?.data || [];
+      const meta = res?.pagination || { page: 1, limit: 50, total: 0, totalPages: 0, hasMore: false };
 
-      // Fetch Users, Sellers & ASINs for assignment/tagging
-      const usersRes = await db.getUsers();
+      setAllActions(actions);
+      setPagination(meta);
+      calculateKPIs(actions, meta);
+    } catch (error) {
+      console.error('Failed to load actions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeFilter, searchQuery, pagination.page, pagination.limit]);
+
+  // ─── Support data loader (users, sellers, asins) — loaded once in parallel ──
+  const loadSupportData = useCallback(async () => {
+    if (supportDataLoaded.current) return;
+    try {
+      const [usersRes, sellersRes, asinsRes] = await Promise.all([
+        db.getUsers(),
+        db.getSellers(),
+        db.getAsins(),
+      ]);
+
       if (usersRes && usersRes.success !== false) {
-        const usersList = Array.isArray(usersRes) ? usersRes : (usersRes.data?.users || usersRes.data || []);
-        setUsers(Array.isArray(usersList) ? usersList : []);
+        const list = Array.isArray(usersRes) ? usersRes : (usersRes.data?.users || usersRes.data || []);
+        setUsers(Array.isArray(list) ? list : []);
       }
-
-      const sellersRes = await db.getSellers();
       if (sellersRes) {
-        const sellersList = Array.isArray(sellersRes) ? sellersRes : (sellersRes.sellers || sellersRes.data || []);
-        setSellers(Array.isArray(sellersList) ? sellersList : []);
+        const list = Array.isArray(sellersRes) ? sellersRes : (sellersRes.sellers || sellersRes.data || []);
+        setSellers(Array.isArray(list) ? list : []);
       }
+      if (asinsRes && asinsRes.success !== false) {
+        setAsins(Array.isArray(asinsRes) ? asinsRes : asinsRes.asins || asinsRes.data || []);
+      }
+      supportDataLoaded.current = true;
+    } catch (err) {
+      console.error('Failed to load support data:', err);
+    }
+  }, []);
 
-      const asinsRes = await db.getAsins();
-      if (asinsRes && asinsRes.success !== false) setAsins(Array.isArray(asinsRes) ? asinsRes : asinsRes.asins || asinsRes.data || []);
-
+  // ─── Full page load (objectives + actions + support data in parallel) ────────
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      // Objectives + actions + support data all at once
+      const [objectivesRes] = await Promise.all([
+        db.getObjectives(),
+        loadActions({ page: 1, silent: true }),
+        loadSupportData(),
+      ]);
+      const loaded = objectivesRes?.data || objectivesRes || [];
+      setObjectives(loaded);
     } catch (error) {
       console.error('Failed to load OKR data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadActions, loadSupportData]);
 
   const addToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
   };
 
-  const calculateKPIs = (objs, directActions = []) => {
-    const actions = [...directActions];
-
-    // Flatten actions from hierarchy (avoid duplicate IDs)
-    objs.forEach(obj => {
-      if (obj.keyResults) {
-        obj.keyResults.forEach(kr => {
-          if (kr.actions) {
-            kr.actions.forEach(a => {
-              const id = a._id || a.id;
-              if (!actions.some(existing => (existing._id || existing.id) === id)) {
-                actions.push(a);
-              }
-            });
-          }
-        });
-      }
-    });
-
-    setAllActions(actions);
-
+  // KPI calculation from current page's actions + server total
+  const calculateKPIs = (actions, meta) => {
     const now = new Date();
     const tomorrow = new Date();
     tomorrow.setDate(now.getDate() + 1);
@@ -126,38 +157,22 @@ const TasksPage = () => {
     dayAfter.setDate(tomorrow.getDate() + 1);
 
     const counts = {
-      all: actions.length,
-      todo: 0,
-      overdue: 0,
-      tomorrow: 0,
-      upcoming: 0,
-      status: {
-        pending: 0,
-        inProgress: 0,
-        review: 0,
-        completed: 0,
-        rejected: 0
-      }
+      all: meta?.total || actions.length,
+      todo: 0, overdue: 0, tomorrow: 0, upcoming: 0,
+      status: { pending: 0, inProgress: 0, review: 0, completed: 0, rejected: 0 }
     };
 
     actions.forEach(a => {
-      // Status Counts
       const currentStatus = String(a.status || a.Status || 'PENDING').toUpperCase();
       let statusKey = 'pending';
       if (currentStatus === 'IN_PROGRESS') statusKey = 'inProgress';
       else if (currentStatus === 'COMPLETED' || currentStatus === 'DONE') statusKey = 'completed';
       else if (currentStatus === 'REVIEW' || currentStatus === 'IN_REVIEW') statusKey = 'review';
       else if (currentStatus === 'REJECTED') statusKey = 'rejected';
-      else statusKey = 'pending';
+      if (counts.status[statusKey] !== undefined) counts.status[statusKey]++;
 
-      if (counts.status[statusKey] !== undefined) {
-        counts.status[statusKey]++;
-      }
-
-      // High Level KPIs
       if (currentStatus !== 'COMPLETED') {
         counts.todo++;
-
         const deadlineVal = a.timeTracking?.deadline || a.DueDate;
         if (deadlineVal) {
           const deadline = new Date(deadlineVal);
@@ -171,11 +186,19 @@ const TasksPage = () => {
     setKpis(counts);
   };
 
+  // ─── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
     loadData();
   }, []);
 
+  // ─── Re-fetch when filter changes (page resets to 1) ────────────────────────
+  useEffect(() => {
+    loadActions({ page: 1 });
+  }, [activeFilter]);
+
+
   const handleCreateObjective = () => {
+
     setEditingObjective(null);
     setIsObjectiveModalOpen(true);
   };
@@ -394,14 +417,17 @@ const TasksPage = () => {
   };
 
   const handleSearchChange = (query) => {
+    // Update URL param immediately for UX
     setSearchParams(prev => {
-      if (!query) {
-        prev.delete('q');
-      } else {
-        prev.set('q', query);
-      }
+      if (!query) prev.delete('q');
+      else prev.set('q', query);
       return prev;
     });
+    // Debounce actual API call by 400ms
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      loadActions({ page: 1, search: query });
+    }, 400);
   };
 
 
@@ -567,34 +593,65 @@ const TasksPage = () => {
       </div>
 
 
-      {/* Strategic Objectives List */}
+      {/* Task List */}
       {
         loading ? (
           <div className="text-center py-5">
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Loading...</span>
             </div>
+            <p className="text-muted mt-2" style={{ fontSize: '13px' }}>Loading tasks...</p>
           </div>
         ) : (
-          <ActionListEnhanced
-            objectives={objectives}
-            actions={allActions}
-            standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
-            loading={loading}
-            activeFilter={activeFilter}
-            searchQuery={searchQuery}
-            currentUser={currentUser}
-            onSearchChange={handleSearchChange}
-            onEdit={handleEdit}
-            onAddAction={handleAddActionForKR}
-            onAISuggest={handleAISuggest}
-            onDelete={handleDelete}
-            onStartTask={handleStartTask}
-            onCompleteTask={handleCompleteTask}
-            onSubmitForReview={handleSubmitForReview}
-            onReviewAction={(action) => openReviewModal(action)}
-            viewMode={viewMode}
-          />
+          <>
+            <ActionListEnhanced
+              objectives={objectives}
+              actions={allActions}
+              standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
+              loading={loading}
+              activeFilter={activeFilter}
+              searchQuery={searchQuery}
+              currentUser={currentUser}
+              onSearchChange={handleSearchChange}
+              onEdit={handleEdit}
+              onAddAction={handleAddActionForKR}
+              onAISuggest={handleAISuggest}
+              onDelete={handleDelete}
+              onStartTask={handleStartTask}
+              onCompleteTask={handleCompleteTask}
+              onSubmitForReview={handleSubmitForReview}
+              onReviewAction={(action) => openReviewModal(action)}
+              viewMode={viewMode}
+            />
+
+            {/* Pagination Bar */}
+            {pagination.totalPages > 1 && (
+              <div className="d-flex align-items-center justify-content-between mt-4 px-2">
+                <span className="text-muted" style={{ fontSize: '13px' }}>
+                  Showing <strong>{(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)}</strong> of <strong>{pagination.total}</strong> tasks
+                </span>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                    disabled={pagination.page <= 1}
+                    onClick={() => loadActions({ page: pagination.page - 1 })}
+                  >
+                    ← Prev
+                  </button>
+                  <span className="text-muted" style={{ fontSize: '13px', minWidth: '80px', textAlign: 'center' }}>
+                    Page {pagination.page} / {pagination.totalPages}
+                  </span>
+                  <button
+                    className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                    disabled={!pagination.hasMore}
+                    onClick={() => loadActions({ page: pagination.page + 1 })}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )
       }
 

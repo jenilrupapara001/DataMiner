@@ -388,9 +388,18 @@ class DatabaseService {
    * Get all actions
    * @returns {Promise<Action[]>}
    */
-  async getActions() {
-    return this.request('/actions', {}, []);
+  async getActions(params = {}) {
+    const { page = 1, limit = 50, status, priority, search, assignedTo } = params;
+    const qs = new URLSearchParams();
+    qs.set('page', page);
+    qs.set('limit', limit);
+    if (status)     qs.set('status', status);
+    if (priority)   qs.set('priority', priority);
+    if (search)     qs.set('search', search);
+    if (assignedTo) qs.set('assignedTo', assignedTo);
+    return this.request(`/actions?${qs.toString()}`, {}, { data: [], pagination: { total: 0, totalPages: 0, hasMore: false } });
   }
+
 
   /**
    * Create a new action
