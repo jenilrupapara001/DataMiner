@@ -5,7 +5,7 @@ import ProgressBar from '../components/common/ProgressBar';
 import EmptyState from '../components/common/EmptyState';
 import octoparseService from '../services/octoparseService';
 import { db } from '../services/db';
-import { asinApi, marketSyncApi, sellerApi, taskApi } from '../services/api';
+import { asinApi, marketSyncApi, sellerApi, taskApi, rulesetApi } from '../services/api';
 import InfiniteScrollSelect from '../components/common/InfiniteScrollSelect';
 import { useSocket } from '../contexts/SocketContext';
 import { calculateLQS } from '../utils/lqs';
@@ -19,6 +19,7 @@ import {
   BarChart2,
   Star,
   Plus,
+  PlusCircle,
   Table,
   ChevronDown,
   ChevronUp,
@@ -374,6 +375,11 @@ const AsinManagerPage = () => {
   const [newAsin, setNewAsin] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManualTaskModal, setShowManualTaskModal] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [taskPriority, setTaskPriority] = useState('MEDIUM');
+  const [taskCategory, setTaskCategory] = useState('GENERAL_OPTIMIZATION');
   const [error, setError] = useState(null);
   const [scrapingIds, setScrapingIds] = useState(new Set());
   const [stats, setStats] = useState(null);
@@ -889,6 +895,101 @@ const AsinManagerPage = () => {
     } finally {
       setLoading(false);
       setShowActionsDropdown(false);
+    }
+  };
+
+  const handleRunRulesets = async () => {
+    if (selectedIds.size === 0) {
+      alert('Please select at least one ASIN');
+      return;
+    }
+
+    const selectedAsinCodes = asins
+      .filter(a => selectedIds.has(a._id || a.Id))
+      .map(a => a.asinCode || a.AsinCode);
+
+    if (selectedAsinCodes.length === 0) {
+      alert('No valid ASIN codes found in selection.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to run active rulesets on ${selectedAsinCodes.length} selected ASIN(s)?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await rulesetApi.executeForAsins(selectedAsinCodes);
+      if (res.success) {
+        alert(`Successfully evaluated active rulesets and generated tasks!`);
+        setSelectedIds(new Set());
+      } else {
+        alert('Ruleset execution failed: ' + (res.message || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Ruleset execution error:', err);
+      alert('Error running rulesets: ' + err.message);
+    } finally {
+      setLoading(false);
+      setShowActionsDropdown(false);
+    }
+  };
+
+  const handleOpenTaskModal = () => {
+    if (selectedIds.size === 0) {
+      alert('Please select at least one ASIN');
+      return;
+    }
+    setTaskTitle('');
+    setTaskDescription('');
+    setTaskPriority('MEDIUM');
+    setTaskCategory('GENERAL_OPTIMIZATION');
+    setShowManualTaskModal(true);
+    setShowActionsDropdown(false);
+  };
+
+  const handleCreateManualTask = async () => {
+    if (!taskTitle.trim()) {
+      alert('Please enter a task title');
+      return;
+    }
+
+    const selectedAsinCodes = asins
+      .filter(a => selectedIds.has(a._id || a.Id))
+      .map(a => a.asinCode || a.AsinCode);
+
+    if (selectedAsinCodes.length === 0) {
+      alert('No valid ASIN codes found in selection.');
+      return;
+    }
+
+    const firstSelectedAsin = asins.find(a => selectedIds.has(a._id || a.Id));
+    const sellerId = firstSelectedAsin?.sellerId || firstSelectedAsin?.SellerId || null;
+
+    setLoading(true);
+    try {
+      const payload = {
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        priority: taskPriority,
+        type: taskCategory,
+        asins: selectedAsinCodes,
+        sellerId: sellerId
+      };
+
+      const res = await db.createAction(payload);
+      if (res && (res.success || res.data)) {
+        alert(`✅ Successfully created task for ${selectedAsinCodes.length} ASIN(s)!`);
+        setSelectedIds(new Set());
+        setShowManualTaskModal(false);
+      } else {
+        alert('Failed to create task: ' + (res?.message || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Task creation error:', err);
+      alert('Error creating task: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1969,6 +2070,28 @@ const AsinManagerPage = () => {
                   >
                     <RefreshCw size={14} className="text-emerald-500" />
                     Resolve Dispute
+                  </button>
+                  <div className="px-3 py-2 border-top border-bottom my-1">
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Ruleset Automation</span>
+                  </div>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
+                    onClick={handleRunRulesets}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <PlayCircle size={14} className="text-indigo-500" />
+                    Run Rulesets on Selected
+                  </button>
+                  <div className="px-3 py-2 border-top border-bottom my-1">
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Manual Task Creation</span>
+                  </div>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
+                    onClick={handleOpenTaskModal}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <PlusCircle size={14} className="text-emerald-500" />
+                    Create Task for Selected
                   </button>
                 </div>
               )}
@@ -3400,6 +3523,76 @@ const AsinManagerPage = () => {
           </div>
         )}
 
+        {showManualTaskModal && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
+          }}>
+            <div style={{ width: 500, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              <div style={{ padding: '18px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
+                <div>
+                  <h5 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#18181b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PlusCircle size={18} className="text-emerald-500" />
+                    Create Task for Selected ASINs
+                  </h5>
+                  <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#71717a', fontWeight: 500 }}>
+                    Assigning a custom task category-wise for {selectedIds.size} selected ASIN(s)
+                  </p>
+                </div>
+                <X size={20} style={{ cursor: 'pointer', color: '#9ca3af' }} onClick={() => setShowManualTaskModal(false)} />
+              </div>
+              <div style={{ padding: 24 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Title</label>
+                  <input type="text" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="e.g., Update listing bullet points"
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 500, outline: 'none' }} />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Description</label>
+                  <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)}
+                    placeholder="Describe the steps or requirements for this task..."
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, height: 90, outline: 'none', resize: 'vertical' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Priority</label>
+                    <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 600, outline: 'none', background: '#fff' }}>
+                      <option value="LOW">Low</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="HIGH">High</option>
+                      <option value="CRITICAL">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Category</label>
+                    <select value={taskCategory} onChange={(e) => setTaskCategory(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 600, outline: 'none', background: '#fff' }}>
+                      <option value="TITLE_OPTIMIZATION">Title Optimization</option>
+                      <option value="IMAGE_OPTIMIZATION">Image Optimization</option>
+                      <option value="DESCRIPTION_OPTIMIZATION">Description Optimization</option>
+                      <option value="A_PLUS_CONTENT">A+ Content Optimization</option>
+                      <option value="GENERAL_OPTIMIZATION">Listing Quality (LQS)</option>
+                      <option value="GENERAL">Custom General Task</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <button onClick={() => setShowManualTaskModal(false)}
+                  style={{ padding: '8px 18px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', transition: 'all 0.2s' }}>
+                  Cancel
+                </button>
+                <button onClick={handleCreateManualTask} disabled={loading}
+                  style={{ padding: '8px 24px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: '#10b981', color: '#fff', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)', transition: 'all 0.2s' }}>
+                  {loading ? 'Creating...' : 'Create Task'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showUploadModal && (
           <div style={{
             position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
@@ -3488,7 +3681,7 @@ const AsinManagerPage = () => {
         <BulkTagsModal
           isOpen={showBulkTagsModal}
           onClose={() => setShowBulkTagsModal(false)}
-          selectedAsins={asins.filter(a => selectedIds.has(a._id))}
+          selectedAsins={asins.filter(a => selectedIds.has(a._id || a.Id))}
           onComplete={() => {
             setShowBulkTagsModal(false);
             clearSelection();

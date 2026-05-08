@@ -201,14 +201,16 @@ const ActionList = ({
     // Robust Permission Helpers
     const hasAdminPrivileges = (user) => {
         if (!user) return false;
-        const role = (user.role?.name || user.role || '').toLowerCase();
-        return ['admin', 'manager', 'administrator', 'superadmin'].includes(role);
+        const rawRole = user.role?.name || user.role?.Name || (typeof user.role === 'string' ? user.role : '') || user.roleId || user.RoleId || '';
+        const role = String(rawRole).toLowerCase();
+        return ['admin', 'manager', 'administrator', 'superadmin', '699048ca4fcb2d4ffb3091c7'].includes(role);
     };
 
     const isActuallyAdmin = (user) => {
         if (!user) return false;
-        const role = (user.role?.name || user.role || '').toLowerCase();
-        return ['admin', 'administrator', 'superadmin'].includes(role);
+        const rawRole = user.role?.name || user.role?.Name || (typeof user.role === 'string' ? user.role : '') || user.roleId || user.RoleId || '';
+        const role = String(rawRole).toLowerCase();
+        return ['admin', 'administrator', 'superadmin', '699048ca4fcb2d4ffb3091c7'].includes(role);
     };
 
     const isOwnerOfItem = (item, user) => {
@@ -226,41 +228,48 @@ const ActionList = ({
 
     // Shared Filtering Logic
     const matchesFilters = (action) => {
+        if (!action) return false;
         const now = new Date();
         const tomorrow = new Date();
         tomorrow.setDate(now.getDate() + 1);
         tomorrow.setHours(0, 0, 0, 0);
 
+        const title = (action.title || action.Title || '').toLowerCase();
+        const description = (action.description || action.Description || '').toLowerCase();
+        const status = action.status || action.Status || 'PENDING';
+        const priority = action.priority || action.Priority || 'MEDIUM';
+        const timeTracking = action.timeTracking || action.TimeTracking || {};
+
         const matchesSearch = !searchQuery ||
-            action.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            action.description?.toLowerCase().includes(searchQuery.toLowerCase());
+            title.includes(searchQuery.toLowerCase()) ||
+            description.includes(searchQuery.toLowerCase());
 
         if (!matchesSearch) return false;
-        if (filterStatus && action.status !== filterStatus) return false;
-        if (filterPriority && action.priority !== filterPriority) return false;
+        if (filterStatus && status !== filterStatus) return false;
+        if (filterPriority && priority !== filterPriority) return false;
 
         // KPI active filters
         if (activeFilter === 'ALL') return true;
-        if (activeFilter === 'TODO') return action.status !== 'COMPLETED';
-        if (activeFilter === 'PENDING') return action.status === 'PENDING';
-        if (activeFilter === 'IN_PROGRESS') return action.status === 'IN_PROGRESS';
-        if (activeFilter === 'REVIEW') return action.status === 'REVIEW';
-        if (activeFilter === 'COMPLETED') return action.status === 'COMPLETED';
-        if (activeFilter === 'REJECTED') return action.status === 'REJECTED';
-        if (activeFilter === 'OVERDUE') return action.timeTracking?.deadline && new Date(action.timeTracking.deadline) < now && action.status !== 'COMPLETED';
+        if (activeFilter === 'TODO') return status !== 'COMPLETED';
+        if (activeFilter === 'PENDING') return status === 'PENDING';
+        if (activeFilter === 'IN_PROGRESS') return status === 'IN_PROGRESS';
+        if (activeFilter === 'REVIEW') return status === 'REVIEW';
+        if (activeFilter === 'COMPLETED') return status === 'COMPLETED';
+        if (activeFilter === 'REJECTED') return status === 'REJECTED';
+        if (activeFilter === 'OVERDUE') return timeTracking?.deadline && new Date(timeTracking.deadline) < now && status !== 'COMPLETED';
         if (activeFilter === 'TOMORROW') {
-            if (!action.timeTracking?.deadline) return false;
-            const d = new Date(action.timeTracking.deadline);
+            if (!timeTracking?.deadline) return false;
+            const d = new Date(timeTracking.deadline);
             const dayAfter = new Date(tomorrow);
             dayAfter.setDate(tomorrow.getDate() + 1);
-            return d >= tomorrow && d < dayAfter && action.status !== 'COMPLETED';
+            return d >= tomorrow && d < dayAfter && status !== 'COMPLETED';
         }
         if (activeFilter === 'UPCOMING') {
-            if (!action.timeTracking?.deadline) return false;
-            const d = new Date(action.timeTracking.deadline);
+            if (!timeTracking?.deadline) return false;
+            const d = new Date(timeTracking.deadline);
             const dayAfter = new Date(tomorrow);
             dayAfter.setDate(tomorrow.getDate() + 1);
-            return d >= dayAfter && action.status !== 'COMPLETED';
+            return d >= dayAfter && status !== 'COMPLETED';
         }
 
         return true;
@@ -391,7 +400,7 @@ const ActionList = ({
                             <th style={{ width: '18%' }}>Details</th>
                             <th style={{ width: '12%' }}>Type</th>
                             <th className="text-center">Progress</th>
-                            <th>Resource</th>
+                            <th>Assigned</th>
                             <th className="text-center">Priority</th>
                             <th style={{ width: '15%' }}>Review</th>
                             <th className="text-center">Activity</th>
@@ -430,37 +439,37 @@ const ActionList = ({
                                                 )}
                                                 {type === 'ACTION' && !standalone && <span className="me-2 opacity-25"><div style={{ width: '10px' }}></div></span>}
                                                 <div className="d-flex align-items-center gap-2">
-                                                                 {type === 'ACTION' && getStatusDot(data.status)}
-                                                                <div className={`sm-task-title ${type !== 'ACTION' ? 'fw-bold' : ''}`}>
-                                                                    {type === 'OBJECTIVE' && <span className="badge bg-primary-subtle text-primary border-primary-subtle me-2" style={{ fontSize: '9px' }}>OBJ</span>}
-                                                                    {type === 'KR' && <span className="badge bg-info-subtle text-info border-info-subtle me-2" style={{ fontSize: '9px' }}>KR</span>}
-                                                                    {data.title}
-                                                                    {type === 'ACTION' && (
-                                                                        <>
-                                                                            {data.scopeType === 'BRAND' && (
-                                                                                <span className="badge bg-indigo-subtle text-indigo border border-indigo-subtle ms-2" style={{ fontSize: '9px' }}>
-                                                                                    BRAND SCOPE
-                                                                                </span>
-                                                                            )}
-                                                                            {data.aiGenerated && (
-                                                                                <span className="ms-2 text-info" title="AI Generated Strategy">
-                                                                                    <Sparkles size={12} />
-                                                                                </span>
-                                                                            )}
-                                                                        </>
-                                                                    )}
-                                                                    {type === 'ACTION' && data.asins?.length > 0 && data.scopeType !== 'BRAND' && (
-                                                                        <span className="badge bg-light text-dark border ms-1" style={{ fontSize: '9px' }}>
-                                                                            {data.asins.length} ASIN{data.asins.length > 1 ? 's' : ''}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
+                                                    {type === 'ACTION' && getStatusDot(data.status || data.Status)}
+                                                    <div className={`sm-task-title ${type !== 'ACTION' ? 'fw-bold' : ''}`}>
+                                                        {type === 'OBJECTIVE' && <span className="badge bg-primary-subtle text-primary border-primary-subtle me-2" style={{ fontSize: '9px' }}>OBJ</span>}
+                                                        {type === 'KR' && <span className="badge bg-info-subtle text-info border-info-subtle me-2" style={{ fontSize: '9px' }}>KR</span>}
+                                                        {data.title || data.Title || ''}
+                                                        {type === 'ACTION' && (
+                                                            <>
+                                                                {data.scopeType === 'BRAND' && (
+                                                                    <span className="badge bg-indigo-subtle text-indigo border border-indigo-subtle ms-2" style={{ fontSize: '9px' }}>
+                                                                        BRAND SCOPE
+                                                                    </span>
+                                                                )}
+                                                                {data.aiGenerated && (
+                                                                    <span className="ms-2 text-info" title="AI Generated Strategy">
+                                                                        <Sparkles size={12} />
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                        {type === 'ACTION' && (data.asins?.length > 0 || data.Asins?.length > 0) && data.scopeType !== 'BRAND' && (
+                                                            <span className="badge bg-light text-dark border ms-1" style={{ fontSize: '9px' }}>
+                                                                {(data.asins || data.Asins).length} ASIN{(data.asins || data.Asins).length > 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="text-muted small text-truncate" style={{ maxWidth: '200px' }}>
-                                                {data.description || (type === 'OBJECTIVE' ? 'Strategic Goal' : type === 'KR' ? 'Key Metric' : '--')}
+                                                {data.description || data.Description || (type === 'OBJECTIVE' ? 'Strategic Goal' : type === 'KR' ? 'Key Metric' : '--')}
                                             </div>
                                         </td>
                                          <td>
@@ -765,20 +774,20 @@ const ActionList = ({
                             <tr key={action._id || action.id}>
                                 <td className="row-index">{index + 1}</td>
                                 <td>
-                                    <div className="fw-bold">{action.title}</div>
-                                    <div className="text-muted smallest text-truncate">{action.description}</div>
+                                    <div className="fw-bold">{action.title || action.Title}</div>
+                                    <div className="text-muted smallest text-truncate">{action.description || action.Description}</div>
                                 </td>
                                 <td>
                                     <div className="smallest text-primary fw-bold text-uppercase">{action.objectiveTitle}</div>
                                     <div className="smallest text-muted">{action.krTitle}</div>
                                 </td>
                                 <td>
-                                    <span className={`badge ${action.status === 'COMPLETED' ? 'bg-success-subtle text-success' :
-                                        action.status === 'IN_PROGRESS' ? 'bg-primary-subtle text-primary' :
-                                            action.status === 'REVIEW' ? 'bg-info-subtle text-info' :
+                                    <span className={`badge ${(action.status || action.Status) === 'COMPLETED' ? 'bg-success-subtle text-success' :
+                                        (action.status || action.Status) === 'IN_PROGRESS' ? 'bg-primary-subtle text-primary' :
+                                            (action.status || action.Status) === 'REVIEW' ? 'bg-info-subtle text-info' :
                                                 'bg-warning-subtle text-warning-emphasis'
                                         }`} style={{ fontSize: '10px' }}>
-                                        {action.status?.replace('_', ' ')}
+                                        {(action.status || action.Status)?.replace('_', ' ')}
                                     </span>
                                 </td>
                                 <td className="small text-muted">{action.sellerId?.name || '--'}</td>

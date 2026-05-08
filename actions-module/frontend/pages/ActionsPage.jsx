@@ -9,7 +9,7 @@ import { Plus, CheckCircle, Clock, Calendar, AlertTriangle, List, BarChart2, Tre
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const TasksPage = () => {
+const ActionsPage = () => {
   const { user: currentUser } = useAuth();
   const [objectives, setObjectives] = useState([]);
   const [allActions, setAllActions] = useState([]); // Flatted actions for KPIs
@@ -58,13 +58,9 @@ const TasksPage = () => {
       // Fetch Objectives with full hierarchy
       const objectivesData = await db.getObjectives();
       const loadedObjectives = objectivesData?.data || objectivesData || [];
+
       setObjectives(loadedObjectives);
-
-      // Fetch All Actions directly from Database
-      const actionsData = await db.getActions();
-      const loadedActions = actionsData?.data || actionsData || [];
-
-      calculateKPIs(loadedObjectives, loadedActions);
+      calculateKPIs(loadedObjectives);
 
       // Fetch Users, Sellers & ASINs for assignment/tagging
       const usersRes = await db.getUsers();
@@ -97,25 +93,21 @@ const TasksPage = () => {
     }, 5000);
   };
 
-  const calculateKPIs = (objs, directActions = []) => {
-    const actions = [...directActions];
+  const calculateKPIs = (objs) => {
+    const actions = [];
 
-    // Flatten actions from hierarchy (avoid duplicate IDs)
+    // Flatten actions from hierarchy
     objs.forEach(obj => {
       if (obj.keyResults) {
         obj.keyResults.forEach(kr => {
           if (kr.actions) {
-            kr.actions.forEach(a => {
-              const id = a._id || a.id;
-              if (!actions.some(existing => (existing._id || existing.id) === id)) {
-                actions.push(a);
-              }
-            });
+            actions.push(...kr.actions);
           }
         });
       }
     });
 
+    // Also fetch orphan actions if needed (omitted for now to focus on OKRs)
     setAllActions(actions);
 
     const now = new Date();
@@ -142,25 +134,17 @@ const TasksPage = () => {
 
     actions.forEach(a => {
       // Status Counts
-      const currentStatus = String(a.status || a.Status || 'PENDING').toUpperCase();
-      let statusKey = 'pending';
-      if (currentStatus === 'IN_PROGRESS') statusKey = 'inProgress';
-      else if (currentStatus === 'COMPLETED' || currentStatus === 'DONE') statusKey = 'completed';
-      else if (currentStatus === 'REVIEW' || currentStatus === 'IN_REVIEW') statusKey = 'review';
-      else if (currentStatus === 'REJECTED') statusKey = 'rejected';
-      else statusKey = 'pending';
-
+      const statusKey = a.status === 'IN_PROGRESS' ? 'inProgress' : a.status.toLowerCase();
       if (counts.status[statusKey] !== undefined) {
         counts.status[statusKey]++;
       }
 
       // High Level KPIs
-      if (currentStatus !== 'COMPLETED') {
+      if (a.status !== 'COMPLETED') {
         counts.todo++;
 
-        const deadlineVal = a.timeTracking?.deadline || a.DueDate;
-        if (deadlineVal) {
-          const deadline = new Date(deadlineVal);
+        if (a.timeTracking?.deadline) {
+          const deadline = new Date(a.timeTracking.deadline);
           if (deadline < now) counts.overdue++;
           else if (deadline >= tomorrow && deadline < dayAfter) counts.tomorrow++;
           else if (deadline >= dayAfter) counts.upcoming++;
@@ -411,7 +395,7 @@ const TasksPage = () => {
       <div className="d-flex justify-content-between align-items-center mb-5 mt-4">
         <div>
           <h1 className="fw-700 mb-1" style={{ fontSize: '2rem', letterSpacing: '-0.02em', color: '#1e293b' }}>
-            Optimization <span className="text-primary">Tasks</span> Hub
+            Action <span className="text-primary">Operations</span> Hub
           </h1>
           <p className="text-muted mb-0">Strategic Performance & Tactical Oversight</p>
         </div>
@@ -579,7 +563,6 @@ const TasksPage = () => {
           <ActionListEnhanced
             objectives={objectives}
             actions={allActions}
-            standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
             loading={loading}
             activeFilter={activeFilter}
             searchQuery={searchQuery}
@@ -700,4 +683,4 @@ const TasksPage = () => {
   );
 };
 
-export default TasksPage;
+export default ActionsPage;

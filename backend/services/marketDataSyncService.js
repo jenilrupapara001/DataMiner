@@ -1833,23 +1833,29 @@ class MarketDataSyncService {
             let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
             let availabilityStatus = 'Available';
             
-            if (price > 0) {
-                availabilityStatus = 'Available';
-            } else if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
+            // Get the best known price (either currently scraped or existing in the database)
+            const activePrice = price > 0 ? price : (asin.CurrentPrice || 0);
+            
+            if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
                 const lowerAvail = rawAvailability.toLowerCase().trim();
                 if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
-                    availabilityStatus = 'Currently unavailable.';
+                    // Only mark as unavailable if there is no active price
+                    if (activePrice === 0) {
+                        availabilityStatus = 'Currently unavailable.';
+                    } else {
+                        availabilityStatus = 'Available';
+                    }
                 } else if (lowerAvail.includes('available') || lowerAvail.includes('in stock')) {
                     availabilityStatus = 'Available';
                 } else {
                     availabilityStatus = rawAvailability.trim();
                 }
             } else {
-                // Heuristic Fallback: If price is 0 or empty, it is highly likely currently unavailable on Amazon
-                if (price === 0 || (!price && (asin.CurrentPrice === 0 || !asin.CurrentPrice))) {
-                    availabilityStatus = 'Currently unavailable.';
-                } else {
+                // If no availability text, fall back on price existence
+                if (activePrice > 0) {
                     availabilityStatus = 'Available';
+                } else {
+                    availabilityStatus = 'Currently unavailable.';
                 }
             }
 

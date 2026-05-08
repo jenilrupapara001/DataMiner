@@ -166,7 +166,7 @@ function evaluateRule(rule, entity) {
   return true;
 }
 
-async function applyAction(entity, action, type, sellerId, userId) {
+async function applyAction(entity, action, type, sellerId, userId, matchedRule = null) {
   const results = [];
   const pool = await getPool();
 
@@ -179,8 +179,8 @@ async function applyAction(entity, action, type, sellerId, userId) {
           .input('Id', sql.VarChar, id)
           .input('UserId', sql.VarChar, userId)
           .input('Type', sql.NVarChar, 'RULESET')
-          .input('Title', sql.NVarChar, `Ruleset Action: ${action.actionType}`)
-          .input('Message', sql.NVarChar, `Action applied to ${entity.asinCode || entity.entityId}: ${action.actionType}`)
+          .input('Title', sql.NVarChar, matchedRule ? `Ruleset Alert: ${matchedRule.name}` : `Ruleset Action: ${action.actionType}`)
+          .input('Message', sql.NVarChar, matchedRule ? `Alert triggered from ruleset "${matchedRule.name}" on ${entity.asinCode || entity.entityId}` : `Action applied to ${entity.asinCode || entity.entityId}: ${action.actionType}`)
           .input('Read', sql.Bit, 0)
           .query(`
             INSERT INTO Notifications (Id, UserId, Type, Title, Message, [Read], CreatedAt)
@@ -195,18 +195,25 @@ async function applyAction(entity, action, type, sellerId, userId) {
     case 'create_task':
       try {
         const id = generateId();
+        const asinsJson = JSON.stringify([entity.asinCode || entity.entityId]);
+        const title = matchedRule ? `Ruleset: ${matchedRule.name}` : `Ruleset Action: ${action.actionType}`;
+        const description = matchedRule 
+          ? `Automated task created from ruleset "${matchedRule.name}" on ASIN ${entity.asinCode || entity.entityId}. Conditions met: ${matchedRule.conditions.map(c => `${c.attribute} ${c.operator} ${c.value}`).join(', ')}.`
+          : `Automated action from ruleset on ${entity.asinCode || entity.entityId}`;
+
         await pool.request()
           .input('Id', sql.VarChar, id)
-          .input('Title', sql.NVarChar, `Ruleset: ${action.actionType}`)
-          .input('Description', sql.NVarChar, `Automated action from ruleset on ${entity.asinCode || entity.entityId}`)
+          .input('Title', sql.NVarChar, title)
+          .input('Description', sql.NVarChar, description)
           .input('Priority', sql.NVarChar, 'medium')
           .input('Status', sql.NVarChar, 'pending')
           .input('Type', sql.NVarChar, 'automated')
+          .input('Asins', sql.NVarChar, asinsJson)
           .input('SellerId', sql.VarChar, sellerId)
           .input('CreatedBy', sql.VarChar, userId)
           .query(`
-            INSERT INTO Actions (Id, Title, Description, Priority, Status, Type, SellerId, CreatedBy, CreatedAt, UpdatedAt)
-            VALUES (@Id, @Title, @Description, @Priority, @Status, @Type, @SellerId, @CreatedBy, GETDATE(), GETDATE())
+            INSERT INTO Actions (Id, Title, Description, Priority, Status, Type, Asins, SellerId, CreatedBy, CreatedAt, UpdatedAt)
+            VALUES (@Id, @Title, @Description, @Priority, @Status, @Type, @Asins, @SellerId, @CreatedBy, GETDATE(), GETDATE())
           `);
         results.push({ action: 'task_created', status: 'success', taskId: id });
       } catch (err) {
@@ -241,27 +248,32 @@ async function applyAction(entity, action, type, sellerId, userId) {
 async function evaluateRuleset(rulesetId, options = {}) {
   const dryRun = options.dryRun || false;
   const triggeredBy = options.triggeredBy || 'manual';
+  const selectedAsins = options.selectedAsins || null;
 
   const pool = await getPool();
   const result = await pool.request()
     .input('id', sql.VarChar, rulesetId)
-    .query("SELECT * FROM Rulesets WHERE Id = @id");
+    .query("SELECT * FROM Rulesets WHERE Id = @id AND IsActive = 1");
   
   const ruleset = result.recordset[0];
   if (!ruleset) {
-    throw new Error('Ruleset not found');
+    throw new Error('Ruleset not found or inactive');
   }
 
   // Parse JSON fields
   ruleset.Rules = JSON.parse(ruleset.Rules || '[]');
 
   const startTime = Date.now();
-  const entities = await getEntityData(
+  let entities = await getEntityData(
     ruleset.Type,
     ruleset.SellerId,
     ruleset.UsingDataFrom,
     ruleset.ExcludeDays
   );
+
+  if (selectedAsins && selectedAsins.length > 0) {
+    entities = entities.filter(entity => selectedAsins.includes(entity.asinCode));
+  }
 
   const summary = {
     totalEvaluated: entities.length,
@@ -295,7 +307,8 @@ async function evaluateRuleset(rulesetId, options = {}) {
           matchedRule.action,
           ruleset.Type,
           ruleset.SellerId,
-          ruleset.CreatedBy
+          ruleset.CreatedBy,
+          matchedRule
         );
 
         const entry = {

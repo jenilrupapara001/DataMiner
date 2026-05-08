@@ -11,6 +11,7 @@ router.put('/rulesets/:id', authenticate, requirePermission('rules_manage'), rul
 router.delete('/rulesets/:id', authenticate, requirePermission('rules_manage'), rulesetController.deleteRuleset);
 router.patch('/rulesets/:id/toggle', authenticate, requirePermission('rules_manage'), rulesetController.toggleRuleset);
 router.post('/rulesets/:id/execute', authenticate, requirePermission('rules_manage'), rulesetController.executeRuleset);
+router.post('/rulesets/execute-for-asins', authenticate, requirePermission('rules_manage'), rulesetController.executeAllRulesetsForAsins);
 router.post('/rulesets/:id/preview', authenticate, requirePermission('rules_view'), rulesetController.previewRuleset);
 router.get('/rulesets/:id/history', authenticate, requirePermission('rules_view'), rulesetController.getRulesetHistory);
 router.get('/rulesets/history/:logId', authenticate, requirePermission('rules_view'), rulesetController.getExecutionDetails);

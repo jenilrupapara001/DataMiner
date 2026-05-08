@@ -1434,6 +1434,9 @@ export const rulesetApi = {
   },
   duplicate: async (id) => {
     return api.post(`/rulesets/${id}/duplicate`);
+  },
+  executeForAsins: async (selectedAsins) => {
+    return api.post('/rulesets/execute-for-asins', { selectedAsins });
   }
 };
 

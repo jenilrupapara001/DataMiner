@@ -129,38 +129,69 @@ exports.deleteRuleset = async (req, res) => {
 exports.executeRuleset = async (req, res) => {
     try {
         const { id } = req.params;
-        const pool = await getPool();
+        const { selectedAsins } = req.body;
+        const { evaluateRuleset } = require('../services/rulesetEngineService');
 
-        const rulesetResult = await pool.request()
-            .input('id', sql.VarChar, id)
-            .query("SELECT * FROM Rulesets WHERE Id = @id AND IsActive = 1");
-
-        if (rulesetResult.recordset.length === 0) {
-            return res.status(404).json({ success: false, message: 'Ruleset not found or inactive' });
-        }
-
-        const ruleset = rulesetResult.recordset[0];
-        const rules = ruleset.Rules ? JSON.parse(ruleset.Rules) : [];
-        const conditions = ruleset.Conditions ? JSON.parse(ruleset.Conditions) : {};
-
-        // For simplicity, just log the execution - actual rule evaluation would need complex logic
-        const logId = generateId();
-        await pool.request()
-            .input('Id', sql.VarChar, logId)
-            .input('RulesetId', sql.VarChar, id)
-            .input('TriggeredBy', sql.NVarChar, 'MANUAL')
-            .input('Status', sql.NVarChar, 'SUCCESS')
-            .input('MatchedCount', sql.Int, 0)
-            .input('ActionedCount', sql.Int, 0)
-            .query(`
-                INSERT INTO RulesetExecutionLogs (Id, RulesetId, TriggeredBy, Status, MatchedCount, ActionedCount, ExecutedAt)
-                VALUES (@Id, @RulesetId, @TriggeredBy, @Status, @MatchedCount, @ActionedCount, GETDATE())
-            `);
+        const result = await evaluateRuleset(id, {
+            selectedAsins,
+            triggeredBy: 'manual'
+        });
 
         res.json({ 
             success: true, 
-            message: 'Ruleset execution logged',
-            data: { rulesetId: id, rulesCount: rules.length, executed: true }
+            message: 'Ruleset executed successfully',
+            data: result
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Execute all active rulesets for selected ASINs
+ */
+exports.executeAllRulesetsForAsins = async (req, res) => {
+    try {
+        const { selectedAsins } = req.body;
+        if (!selectedAsins || !Array.isArray(selectedAsins) || selectedAsins.length === 0) {
+            return res.status(400).json({ success: false, message: 'No ASINs specified' });
+        }
+
+        const pool = await getPool();
+        const activeRulesetsResult = await pool.request()
+            .query("SELECT Id, Name FROM Rulesets WHERE IsActive = 1");
+
+        const rulesets = activeRulesetsResult.recordset;
+        const results = [];
+
+        const { evaluateRuleset } = require('../services/rulesetEngineService');
+
+        for (const ruleset of rulesets) {
+            try {
+                const runResult = await evaluateRuleset(ruleset.Id, {
+                    selectedAsins,
+                    triggeredBy: 'manual'
+                });
+                results.push({
+                    rulesetId: ruleset.Id,
+                    name: ruleset.Name,
+                    success: true,
+                    summary: runResult.summary
+                });
+            } catch (err) {
+                results.push({
+                    rulesetId: ruleset.Id,
+                    name: ruleset.Name,
+                    success: false,
+                    error: err.message
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Evaluated ${rulesets.length} active rulesets on ${selectedAsins.length} ASINs`,
+            data: results
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

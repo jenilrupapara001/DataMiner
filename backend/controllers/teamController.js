@@ -27,7 +27,7 @@ exports.getTeams = async (req, res) => {
             const membersResult = await pool.request()
                 .input('teamId', sql.VarChar, team.Id)
                 .query(`
-                    SELECT tm.*, u.Id as userId, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role as userRole
+                    SELECT tm.*, u.Id as userId, u.FirstName, u.LastName, u.Email, u.Avatar, u.RoleId as userRole
                     FROM TeamMembers tm
                     JOIN Users u ON tm.UserId = u.Id
                     WHERE tm.TeamId = @teamId
@@ -156,7 +156,7 @@ exports.getTeamMembers = async (req, res) => {
         const membersResult = await pool.request()
             .input('teamId', sql.VarChar, id)
             .query(`
-                SELECT tm.*, u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role as userRole, u.IsOnline
+                SELECT tm.*, u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.RoleId as userRole, u.IsOnline
                 FROM TeamMembers tm
                 JOIN Users u ON tm.UserId = u.Id
                 WHERE tm.TeamId = @teamId

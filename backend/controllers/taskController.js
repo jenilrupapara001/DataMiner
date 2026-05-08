@@ -43,6 +43,7 @@ exports.generateTasks = async (req, res) => {
             const assignedUserId = task.sellerId ? sellerUserMap[task.sellerId] : null;
             
             try {
+                // Insert into Tasks table (for backwards-compatibility)
                 await pool.request()
                     .input('id', sql.VarChar, taskId)
                     .input('title', sql.NVarChar, task.title)
@@ -69,9 +70,37 @@ exports.generateTasks = async (req, res) => {
                             @asinId, @asinCode, @sellerId, @sellerName, @createdBy, @assignedTo,
                             @impactScore, @effortEstimate, @isAIGenerated, @aiReasoning, GETDATE(), GETDATE())
                     `);
+
+                // Insert into Actions table (for the premium TasksPage interface)
+                const asinsJson = JSON.stringify([task.asinCode]);
+                const stageJson = JSON.stringify({ current: 'PENDING', history: [] });
+                const timeTrackingJson = JSON.stringify({ startDate: new Date(), deadline: null, timeLimit: 60 });
+                const actionPriority = (task.priority || 'MEDIUM').toUpperCase();
+
+                await pool.request()
+                    .input('actionId', sql.VarChar, taskId)
+                    .input('actionTitle', sql.NVarChar, task.title)
+                    .input('actionDesc', sql.NVarChar, task.description)
+                    .input('actionType', sql.NVarChar, task.category || 'TASK')
+                    .input('actionPriority', sql.NVarChar, actionPriority)
+                    .input('actionStatus', sql.NVarChar, 'PENDING')
+                    .input('actionAsinId', sql.VarChar, task.asinId)
+                    .input('actionAsins', sql.NVarChar, asinsJson)
+                    .input('actionSellerId', sql.VarChar, task.sellerId || null)
+                    .input('actionCreatedBy', sql.VarChar, creatorId)
+                    .input('actionAssignedTo', sql.VarChar, assignedUserId)
+                    .input('actionIsAIGenerated', sql.Bit, 1)
+                    .input('actionAiReasoning', sql.NVarChar, task.aiReasoning)
+                    .input('actionStage', sql.NVarChar, stageJson)
+                    .input('actionTimeTracking', sql.NVarChar, timeTrackingJson)
+                    .query(`
+                        INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, AsinId, SellerId, CreatedBy, AssignedTo, IsAIGenerated, AiReasoning, Asins, Stage, TimeTracking, CreatedAt, UpdatedAt)
+                        VALUES (@actionId, @actionTitle, @actionDesc, @actionType, @actionPriority, @actionStatus, @actionAsinId, @actionSellerId, @actionCreatedBy, @actionAssignedTo, @actionIsAIGenerated, @actionAiReasoning, @actionAsins, @actionStage, @actionTimeTracking, GETDATE(), GETDATE())
+                    `);
+
                 savedCount++;
             } catch (e) {
-                console.error(`Failed to save task: ${task.title}`, e.message);
+                console.error(`Failed to save task/action: ${task.title}`, e.message);
             }
         }
 

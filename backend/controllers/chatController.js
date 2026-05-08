@@ -33,7 +33,7 @@ exports.getConversations = async (req, res) => {
             const partsResult = await pool.request()
                 .input('convId', sql.VarChar, conv.Id)
                 .query(`
-                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.RoleId as Role, u.IsOnline, u.LastSeen
                     FROM ConversationParticipants cp
                     JOIN Users u ON cp.UserId = u.Id
                     WHERE cp.ConversationId = @convId
@@ -131,7 +131,7 @@ exports.getOrCreateConversation = async (req, res) => {
             const partsResult = await pool.request()
                 .input('convId', sql.VarChar, conversation.Id)
                 .query(`
-                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                    SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.RoleId as Role, u.IsOnline, u.LastSeen
                     FROM ConversationParticipants cp
                     JOIN Users u ON cp.UserId = u.Id
                     WHERE cp.ConversationId = @convId
@@ -179,7 +179,7 @@ exports.getOrCreateConversation = async (req, res) => {
         const partsResult = await pool.request()
             .input('convId', sql.VarChar, convId)
             .query(`
-                SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.Role, u.IsOnline, u.LastSeen
+                SELECT u.Id, u.FirstName, u.LastName, u.Email, u.Avatar, u.RoleId as Role, u.IsOnline, u.LastSeen
                 FROM ConversationParticipants cp
                 JOIN Users u ON cp.UserId = u.Id
                 WHERE cp.ConversationId = @convId
@@ -555,7 +555,7 @@ exports.getUsersForChat = async (req, res) => {
         }
 
         const result = await request.query(`
-            SELECT Id, FirstName, LastName, Email, Avatar, Role, IsOnline, LastSeen
+            SELECT Id, FirstName, LastName, Email, Avatar, RoleId as Role, IsOnline, LastSeen
             FROM Users
             ${whereClause}
             ORDER BY FirstName, LastName
@@ -792,7 +792,7 @@ exports.getUsersForChat = async (req, res) => {
         }
 
         const result = await request.query(`
-            SELECT Id, FirstName, LastName, Email, Avatar, Role, IsOnline, LastSeen
+            SELECT Id, FirstName, LastName, Email, Avatar, RoleId as Role, IsOnline, LastSeen
             FROM Users
             ${whereClause}
             ORDER BY FirstName, LastName

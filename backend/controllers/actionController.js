@@ -187,14 +187,28 @@ exports.getActions = async (req, res) => {
 
         const actionsResult = await pool.request()
             .query(`
+                WITH FirstUserSeller AS (
+                    SELECT SellerId, MIN(UserId) as UserId
+                    FROM UserSellers
+                    GROUP BY SellerId
+                )
                 SELECT a.*,
-                       ua.FirstName as assignedToFirstName, ua.LastName as assignedToLastName, ua.Email as assignedToEmail,
+                       COALESCE(ua.FirstName, uas.FirstName) as assignedToFirstName,
+                       COALESCE(ua.LastName, uas.LastName) as assignedToLastName,
+                       COALESCE(ua.Email, uas.Email) as assignedToEmail,
+                       COALESCE(a.AssignedTo, us.UserId) as resolvedAssignedTo,
                        uc.FirstName as createdByFirstName, uc.LastName as createdByLastName,
                        s.Name as sellerName, s.Marketplace as sellerMarketplace
                 FROM Actions a
                 LEFT JOIN Users ua ON a.AssignedTo = ua.Id
-                LEFT JOIN Users uc ON a.CreatedBy = uc.Id
                 LEFT JOIN Sellers s ON a.SellerId = s.Id
+                LEFT JOIN FirstUserSeller us ON a.SellerId = us.SellerId OR (a.SellerId IS NULL AND a.Asins IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM Asins asin 
+                    WHERE asin.SellerId = us.SellerId 
+                    AND a.Asins LIKE '%' + asin.Id + '%'
+                ))
+                LEFT JOIN Users uas ON us.UserId = uas.Id
+                LEFT JOIN Users uc ON a.CreatedBy = uc.Id
                 ${whereSql}
                 ORDER BY a.CreatedAt DESC
             `);
@@ -202,7 +216,18 @@ exports.getActions = async (req, res) => {
         const actions = actionsResult.recordset.map(a => ({
             ...a,
             _id: a.Id,
-            assignedTo: a.AssignedTo ? { _id: a.AssignedTo, firstName: a.assignedToFirstName, lastName: a.assignedToLastName, email: a.assignedToEmail } : null,
+            id: a.Id,
+            title: a.Title || a.title,
+            description: a.Description || a.description,
+            status: a.Status || a.status,
+            priority: a.Priority || a.priority,
+            type: a.Type || a.type,
+            assignedTo: (a.AssignedTo || a.resolvedAssignedTo) ? { 
+                _id: a.AssignedTo || a.resolvedAssignedTo, 
+                firstName: a.assignedToFirstName, 
+                lastName: a.assignedToLastName, 
+                email: a.assignedToEmail 
+            } : null,
             createdBy: a.CreatedBy ? { _id: a.CreatedBy, firstName: a.createdByFirstName, lastName: a.createdByLastName } : null,
             sellerId: a.SellerId ? { _id: a.SellerId, name: a.sellerName, marketplace: a.sellerMarketplace } : null,
             asins: a.Asins ? JSON.parse(a.Asins || '[]') : [],
@@ -229,14 +254,30 @@ exports.getAction = async (req, res) => {
         const actionResult = await pool.request()
             .input('id', sql.VarChar, req.params.id)
             .query(`
+                WITH FirstUserSeller AS (
+                    SELECT SellerId, MIN(UserId) as UserId
+                    FROM UserSellers
+                    GROUP BY SellerId
+                )
                 SELECT a.*,
-                       ua.FirstName as assignedToFirstName, ua.LastName as assignedToLastName, ua.Email as assignedToEmail, ua.Avatar as assignedToAvatar, ua.Role as assignedToRole,
+                       COALESCE(ua.FirstName, uas.FirstName) as assignedToFirstName,
+                       COALESCE(ua.LastName, uas.LastName) as assignedToLastName,
+                       COALESCE(ua.Email, uas.Email) as assignedToEmail,
+                       COALESCE(ua.Avatar, uas.Avatar) as assignedToAvatar,
+                       COALESCE(ua.RoleId, uas.RoleId) as assignedToRole,
+                       COALESCE(a.AssignedTo, us.UserId) as resolvedAssignedTo,
                        uc.FirstName as createdByFirstName, uc.LastName as createdByLastName, uc.Email as createdByEmail,
                        s.Name as sellerName, s.Marketplace as sellerMarketplace
                 FROM Actions a
                 LEFT JOIN Users ua ON a.AssignedTo = ua.Id
-                LEFT JOIN Users uc ON a.CreatedBy = uc.Id
                 LEFT JOIN Sellers s ON a.SellerId = s.Id
+                LEFT JOIN FirstUserSeller us ON a.SellerId = us.SellerId OR (a.SellerId IS NULL AND a.Asins IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM Asins asin 
+                    WHERE asin.SellerId = us.SellerId 
+                    AND a.Asins LIKE '%' + asin.Id + '%'
+                ))
+                LEFT JOIN Users uas ON us.UserId = uas.Id
+                LEFT JOIN Users uc ON a.CreatedBy = uc.Id
                 WHERE a.Id = @id
             `);
 
@@ -248,8 +289,8 @@ exports.getAction = async (req, res) => {
         const action = {
             ...a,
             _id: a.Id,
-            assignedTo: a.AssignedTo ? {
-                _id: a.AssignedTo,
+            assignedTo: (a.AssignedTo || a.resolvedAssignedTo) ? {
+                _id: a.AssignedTo || a.resolvedAssignedTo,
                 firstName: a.assignedToFirstName,
                 lastName: a.assignedToLastName,
                 email: a.assignedToEmail,

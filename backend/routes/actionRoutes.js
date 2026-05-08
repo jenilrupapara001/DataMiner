@@ -43,7 +43,7 @@ const sseClients = [];
 function sendSseEvent(eventName, data) {
     const payload = `data: ${JSON.stringify({ event: eventName, data })}\n\n`;
     sseClients.forEach(res => {
-        try { res.write(payload); } catch (e) {}
+        try { res.write(payload); } catch (e) { }
     });
 }
 
@@ -96,7 +96,7 @@ router.delete('/bulk-delete-all', protect, requireRole('admin'), async (req, res
         const pool = await actionController.getPool();
         const result = await pool.request().query("DELETE FROM Actions; SELECT @@ROWCOUNT as deletedCount");
         const count = result.recordset[0]?.deletedCount || 0;
-        try { sendSseEvent('bulk_deleted', { count }); } catch (e) {}
+        try { sendSseEvent('bulk_deleted', { count }); } catch (e) { }
         res.json({ success: true, message: `Deleted ${count} actions`, deletedCount: count });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -123,15 +123,37 @@ router.post('/:id/start', protect, requireAnyPermission(['actions_edit', 'action
             return res.status(403).json({ success: false, message: 'Only the assigned user or an administrator can start this task' });
         }
 
-        const stageHistory = action.Stage ? JSON.parse(action.Stage) : { current: 'PENDING', history: [] };
+        let stageHistory = { current: 'PENDING', history: [] };
+        if (action.Stage) {
+            try {
+                const parsed = JSON.parse(action.Stage);
+                if (parsed && typeof parsed === 'object') {
+                    stageHistory = parsed;
+                } else if (typeof parsed === 'string') {
+                    stageHistory = { current: parsed, history: [] };
+                }
+            } catch (e) {
+                stageHistory = { current: String(action.Stage), history: [] };
+            }
+        }
         stageHistory.history = stageHistory.history || [];
-        stageHistory.history.push({ from: stageHistory.current, to: 'IN_PROGRESS', changedBy: userId, changedAt: new Date() });
+        stageHistory.history.push({ from: stageHistory.current || 'PENDING', to: 'IN_PROGRESS', changedBy: userId, changedAt: new Date() });
         stageHistory.current = 'IN_PROGRESS';
+
+        let timeTracking = {};
+        if (action.TimeTracking) {
+            try {
+                const parsed = JSON.parse(action.TimeTracking);
+                if (parsed && typeof parsed === 'object') {
+                    timeTracking = parsed;
+                }
+            } catch (e) { }
+        }
 
         await pool.request()
             .input('id', sql.VarChar, req.params.id)
             .input('Stage', sql.NVarChar, JSON.stringify(stageHistory))
-            .input('TimeTracking', sql.NVarChar, JSON.stringify({ ...JSON.parse(action.TimeTracking || '{}'), startedAt: new Date() }))
+            .input('TimeTracking', sql.NVarChar, JSON.stringify({ ...timeTracking, startedAt: new Date() }))
             .query(`UPDATE Actions SET Stage = @Stage, TimeTracking = @TimeTracking, UpdatedAt = GETDATE() WHERE Id = @id`);
 
         await SystemLogService.log({
@@ -146,7 +168,7 @@ router.post('/:id/start', protect, requireAnyPermission(['actions_edit', 'action
         const updated = await pool.request()
             .input('id', sql.VarChar, req.params.id)
             .query(`SELECT * FROM Actions WHERE Id = @id`);
-        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) {}
+        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) { }
         res.json({ success: true, data: updated.recordset[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -180,9 +202,21 @@ router.post('/:id/submit-review', protect, requireAnyPermission(['actions_edit',
             completedAt: new Date()
         };
 
-        const stageHistory = action.Stage ? JSON.parse(action.Stage) : { current: 'PENDING', history: [] };
+        let stageHistory = { current: 'PENDING', history: [] };
+        if (action.Stage) {
+            try {
+                const parsed = JSON.parse(action.Stage);
+                if (parsed && typeof parsed === 'object') {
+                    stageHistory = parsed;
+                } else if (typeof parsed === 'string') {
+                    stageHistory = { current: parsed, history: [] };
+                }
+            } catch (e) {
+                stageHistory = { current: String(action.Stage), history: [] };
+            }
+        }
         stageHistory.history = stageHistory.history || [];
-        stageHistory.history.push({ from: stageHistory.current, to: 'SUBMITTED', changedBy: userId, changedAt: new Date() });
+        stageHistory.history.push({ from: stageHistory.current || 'PENDING', to: 'SUBMITTED', changedBy: userId, changedAt: new Date() });
         stageHistory.current = 'SUBMITTED';
 
         await pool.request()
@@ -225,7 +259,7 @@ router.post('/:id/submit-review', protect, requireAnyPermission(['actions_edit',
         const updated = await pool.request()
             .input('id', sql.VarChar, req.params.id)
             .query(`SELECT * FROM Actions WHERE Id = @id`);
-        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) {}
+        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) { }
         res.json({ success: true, data: updated.recordset[0] });
     } catch (error) {
         console.error('Submit review error:', error);
@@ -246,15 +280,34 @@ router.post('/:id/review-action', protect, requireRole('admin', 'operational_man
         const action = actionResult.recordset[0];
         const userId = req.user.Id || req.user._id;
 
-        const stageHistory = action.Stage ? JSON.parse(action.Stage) : { current: 'PENDING', history: [] };
+        let stageHistory = { current: 'PENDING', history: [] };
+        if (action.Stage) {
+            try {
+                const parsed = JSON.parse(action.Stage);
+                if (parsed && typeof parsed === 'object') {
+                    stageHistory = parsed;
+                } else if (typeof parsed === 'string') {
+                    stageHistory = { current: parsed, history: [] };
+                }
+            } catch (e) {
+                stageHistory = { current: String(action.Stage), history: [] };
+            }
+        }
         stageHistory.history = stageHistory.history || [];
 
         if (decision === 'APPROVE') {
-            stageHistory.history.push({ from: stageHistory.current, to: 'COMPLETED', changedBy: userId, changedAt: new Date(), comment: comments });
+            stageHistory.history.push({ from: stageHistory.current || 'PENDING', to: 'COMPLETED', changedBy: userId, changedAt: new Date(), comment: comments });
             stageHistory.current = 'COMPLETED';
 
             // Recurring action: create next occurrence
-            if (action.Recurring && JSON.parse(action.Recurring).enabled) {
+            let isRecurringEnabled = false;
+            if (action.Recurring) {
+                try {
+                    const parsed = JSON.parse(action.Recurring);
+                    isRecurringEnabled = parsed && !!parsed.enabled;
+                } catch (e) { }
+            }
+            if (isRecurringEnabled) {
                 // Logic for creating recurring instance would go here
             }
 
@@ -304,7 +357,7 @@ router.post('/:id/review-action', protect, requireRole('admin', 'operational_man
         const updated = await pool.request()
             .input('id', sql.VarChar, req.params.id)
             .query(`SELECT * FROM Actions WHERE Id = @id`);
-        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) {}
+        try { sendSseEvent('updated', updated.recordset[0]); } catch (e) { }
         res.json({ success: true, data: updated.recordset[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -337,7 +390,7 @@ router.delete('/:id', protect, requireRole('admin'), async (req, res) => {
             description: `Deleted action: ${action.Title}`
         });
 
-        try { sendSseEvent('deleted', { id: req.params.id }); } catch (e) {}
+        try { sendSseEvent('deleted', { id: req.params.id }); } catch (e) { }
         res.json({ success: true, message: 'Action deleted' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error' });
@@ -463,7 +516,7 @@ router.post('/create-from-analysis/:asinId', protect, requireAnyPermission(['act
             createdActions.push(await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM Actions WHERE Id = @id'));
         }
 
-        try { sendSseEvent('auto_created', createdActions); } catch (e) {}
+        try { sendSseEvent('auto_created', createdActions); } catch (e) { }
         res.status(201).json({ success: true, data: createdActions, count: createdActions.length });
     } catch (error) {
         console.error('Error creating actions:', error.message);
@@ -492,9 +545,22 @@ router.post('/:id/complete', protect, requireAnyPermission(['actions_edit', 'act
             completedAt: new Date()
         };
 
-        const stageHistory = action.Stage ? JSON.parse(action.Stage) : { current: 'PENDING', history: [] };
+        let stageHistory = { current: 'PENDING', history: [] };
+        if (action.Stage) {
+            try {
+                const parsed = JSON.parse(action.Stage);
+                if (parsed && typeof parsed === 'object') {
+                    stageHistory = parsed;
+                } else if (typeof parsed === 'string') {
+                    stageHistory = { current: parsed, history: [] };
+                }
+            } catch (e) {
+                stageHistory = { current: String(action.Stage), history: [] };
+            }
+        }
         stageHistory.current = 'COMPLETED';
-        stageHistory.history.push({ from: 'IN_PROGRESS', to: 'COMPLETED', changedBy: userId, changedAt: new Date() });
+        stageHistory.history = stageHistory.history || [];
+        stageHistory.history.push({ from: stageHistory.current || 'IN_PROGRESS', to: 'COMPLETED', changedBy: userId, changedAt: new Date() });
 
         await pool.request()
             .input('id', sql.VarChar, req.params.id)
@@ -503,7 +569,14 @@ router.post('/:id/complete', protect, requireAnyPermission(['actions_edit', 'act
             .input('Status', sql.NVarChar, 'COMPLETED')
             .query(`UPDATE Actions SET Completion = @Completion, Stage = @Stage, Status = @Status, UpdatedAt = GETDATE() WHERE Id = @id`);
 
-        if (action.Recurring && JSON.parse(action.Recurring).enabled) {
+        let isRecurringEnabled = false;
+        if (action.Recurring) {
+            try {
+                const parsed = JSON.parse(action.Recurring);
+                isRecurringEnabled = parsed && !!parsed.enabled;
+            } catch (e) { }
+        }
+        if (isRecurringEnabled) {
             // Create next occurrence logic
         }
 
@@ -511,7 +584,7 @@ router.post('/:id/complete', protect, requireAnyPermission(['actions_edit', 'act
             .input('id', sql.VarChar, req.params.id)
             .query(`SELECT * FROM Actions WHERE Id = @id`);
 
-        try { sendSseEvent('task_completed', updated.recordset[0]); } catch (e) {}
+        try { sendSseEvent('task_completed', updated.recordset[0]); } catch (e) { }
         res.json({ success: true, data: updated.recordset[0] });
     } catch (error) {
         console.error('Complete task error:', error);
@@ -557,9 +630,37 @@ router.get('/:id/history', protect, async (req, res) => {
         if (actionResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'Action not found' });
 
         const action = actionResult.recordset[0];
-        const stage = action.Stage ? JSON.parse(action.Stage) : { current: 'PENDING', history: [] };
-        const timeTracking = action.TimeTracking ? JSON.parse(action.TimeTracking) : {};
-        const completion = action.Completion ? JSON.parse(action.Completion) : {};
+        let stage = { current: 'PENDING', history: [] };
+        if (action.Stage) {
+            try {
+                const parsed = JSON.parse(action.Stage);
+                if (parsed && typeof parsed === 'object') {
+                    stage = parsed;
+                } else if (typeof parsed === 'string') {
+                    stage = { current: parsed, history: [] };
+                }
+            } catch (e) {
+                stage = { current: String(action.Stage), history: [] };
+            }
+        }
+        let timeTracking = {};
+        if (action.TimeTracking) {
+            try {
+                const parsed = JSON.parse(action.TimeTracking);
+                if (parsed && typeof parsed === 'object') {
+                    timeTracking = parsed;
+                }
+            } catch (e) { }
+        }
+        let completion = {};
+        if (action.Completion) {
+            try {
+                const parsed = JSON.parse(action.Completion);
+                if (parsed && typeof parsed === 'object') {
+                    completion = parsed;
+                }
+            } catch (e) { }
+        }
 
         res.json({ success: true, data: { stageHistory: stage.history || [], timeTracking, completion } });
     } catch (error) {

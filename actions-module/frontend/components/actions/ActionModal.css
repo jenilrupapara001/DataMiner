@@ -1,0 +1,176 @@
+/* Modern Action Modal Redesign */
+.action-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 90vh;
+    max-height: 950px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: none;
+    background: #fff;
+}
+
+.action-modal-header {
+    background-color: #fff;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.action-header-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.action-modal-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.025em;
+}
+
+/* Tabs */
+.action-modal-tabs {
+    padding: 0 2rem;
+    background: #fff;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    gap: 2rem;
+}
+
+.action-tab-btn {
+    padding: 1.25rem 0.5rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #64748b;
+    border: none;
+    background: none;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-tab-btn.active {
+    color: #3b82f6;
+}
+
+.action-tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #3b82f6;
+    border-radius: 3px 3px 0 0;
+}
+
+/* Body Layout */
+.action-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    background: #f8fafc;
+}
+
+.action-two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+
+/* Cards */
+.action-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.action-card-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 1rem;
+    letter-spacing: 0.05em;
+}
+
+/* Form Elements */
+.form-input-clean {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.form-input-clean:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.form-label-clean {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 0.5rem;
+}
+
+/* ASIN Display */
+.asin-info-card {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f1f5f9;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.asin-thumb {
+    width: 60px;
+    height: 60px;
+    background: #fff;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+}
+
+/* Chat Styles (Persisted but polished) */
+.chat-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-sent {
+    background: #3b82f6;
+    color: #fff;
+    border-radius: 16px 16px 2px 16px;
+    padding: 0.75rem 1rem;
+    max-width: 80%;
+    align-self: flex-end;
+}
+
+.message-received {
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px 16px 16px 2px;
+    padding: 0.75rem 1rem;
+    max-width: 80%;
+}
