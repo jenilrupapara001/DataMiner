@@ -71,14 +71,14 @@ const UsersPage = () => {
                 ...filters,
             };
             const response = await userApi.getAll(params);
-            if (response.success) {
-                setUsers(response.data.users || []);
-                setPagination(prev => ({
-                    ...prev,
-                    total: response.data.pagination?.total || 0,
-                    totalPages: response.data.pagination?.pages || 1
-                }));
-            }
+if (response.success) {
+                 setUsers(response.data.users || []);
+                 setPagination(prev => ({
+                     ...prev,
+                     total: response.data.pagination?.total || 0,
+                     totalPages: response.data.pagination?.totalPages || response.data.pagination?.pages || 1
+                 }));
+             }
         } catch (error) {
             console.error('Failed to load users:', error);
         }
@@ -692,7 +692,7 @@ const UsersPage = () => {
                                                                         <div className="avatar-circle" style={{ width: '16px', height: '16px', fontSize: '8px', backgroundColor: '#e2e8f0', color: '#475569' }}>
                                                                             {renderInitials(s.firstName, s.lastName)}
                                                                         </div>
-                                                                        {s.firstName} {s.lastName}
+                                                                        {s.firstName} {s.lastName ? s.lastName.charAt(0) + '.' : ''}
                                                                     </span>
                                                                 ))
                                                             ) : (
@@ -736,9 +736,9 @@ const UsersPage = () => {
                         </div>
 
                         {/* Pagination Footer */}
-                        {pagination.totalPages > 1 && (
+                        {pagination.total > 0 && (
                             <div className="d-flex justify-content-between align-items-center px-4 py-3 border-top bg-light">
-                                <span className="text-muted small">Showing Page {pagination.page} of {pagination.totalPages}</span>
+                                <span className="text-muted small">Showing {users.length} of {pagination.total} users (Page {pagination.page} of {pagination.totalPages})</span>
                                 <div className="btn-group">
                                     <button className="btn btn-sm btn-white border px-3" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>
                                         Previous

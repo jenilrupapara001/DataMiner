@@ -70,6 +70,9 @@ const Sidebar = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [asinCount, setAsinCount] = useState('...');
+    
+    // Check if user has only ASIN Manager access (no dashboard permission)
+    const isAsinManagerOnly = user?.role?.name === 'Listing Manager' || user?.role?.displayName === 'Listing Manager';
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -91,7 +94,7 @@ const Sidebar = () => {
             id: 'MAIN',
             label: 'Main',
             items: [
-                { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard', permission: 'dashboard_view' },
+                { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard', permission: 'dashboard_view', hiddenForAsinManager: true },
                 { label: 'Sellers', icon: Store, to: '/sellers', permission: 'seller_view' },
                 { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'asinmanager_view', badge: asinCount },
                 { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'asintracker_view' },
@@ -167,6 +170,8 @@ const Sidebar = () => {
                 {sections.map((section) => {
                     const filteredItems = section.items.filter(
                         (item) => !item.permission || hasPermission(item.permission)
+                    ).filter(
+                        (item) => !(isAsinManagerOnly && item.hiddenForAsinManager)
                     );
                     if (filteredItems.length === 0) return null;
 

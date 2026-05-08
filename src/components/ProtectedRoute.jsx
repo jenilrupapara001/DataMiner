@@ -3,9 +3,16 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children, permission, requiredRole }) => {
-    const { isAuthenticated, loading, hasPermission, user } = useAuth();
+    const {
+        isAuthenticated,
+        loading,             // general auth loading (user still being fetched)
+        loadingPermissions,  // true while permissions are loaded after login
+        hasPermission,
+        user,
+    } = useAuth();
 
-    if (loading) {
+    // Still verifying the user’s session OR loading permissions
+    if (loading || loadingPermissions) {
         return (
             <div style={{
                 display: 'flex',
@@ -14,20 +21,16 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
                 height: '100vh',
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
             }}>
-                <div style={{
-                    textAlign: 'center',
-                    color: 'white'
-                }}>
+                <div style={{ textAlign: 'center', color: 'white' }}>
                     <div style={{
-                        width: '50px',
-                        height: '50px',
+                        width: '50px', height: '50px',
                         border: '4px solid rgba(255,255,255,0.3)',
                         borderTop: '4px solid white',
                         borderRadius: '50%',
                         animation: 'spin 1s linear infinite',
                         margin: '0 auto 20px'
                     }}></div>
-                    <p>Loading...</p>
+                    <p>Verifying access…</p>
                 </div>
             </div>
         );
@@ -42,7 +45,7 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
         return <Navigate to="/unauthorized" replace />;
     }
 
-    // Permission check
+    // Permission check – only runs when permissions are fully loaded
     if (permission && !hasPermission(permission)) {
         return <Navigate to="/unauthorized" replace />;
     }

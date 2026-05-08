@@ -1,54 +1,52 @@
+// contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (!context) throw new Error('useAuth must be used within an AuthProvider');
     return context;
 };
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadingPermissions, setLoadingPermissions] = useState(false);   // ← NEW
     const [error, setError] = useState(null);
 
-    // Check for existing token on mount
+    // Helper to normalize user object
+    const normalizeUser = (raw) => ({
+        ...raw,
+        firstName: raw.firstName || raw.FirstName,
+        lastName: raw.lastName || raw.LastName,
+        fullName: raw.fullName || `${raw.firstName || raw.FirstName || ''} ${raw.lastName || raw.LastName || ''}`.trim(),
+        role: typeof raw.role === 'object'
+            ? {
+                ...raw.role,
+                name: raw.role.name || raw.role.Name,
+                displayName: raw.role.displayName || raw.role.DisplayName || raw.role.Name,
+            }
+            : { name: raw.role, displayName: raw.role },
+    });
+
+    // ----- Restore session on mount -----
     useEffect(() => {
         const initAuth = async () => {
             const token = localStorage.getItem('authToken');
             if (token) {
                 try {
                     const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/me`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
+                        headers: { Authorization: `Bearer ${token}` },
                     });
-
                     if (response.ok) {
                         const result = await response.json();
                         if (result.success && result.data) {
-                            const normalizedUser = {
-                                ...result.data,
-                                firstName: result.data.firstName || result.data.FirstName,
-                                lastName: result.data.lastName || result.data.LastName,
-                                fullName: result.data.fullName || `${result.data.firstName || result.data.FirstName || ''} ${result.data.lastName || result.data.LastName || ''}`.trim(),
-                                role: typeof result.data.role === 'object' ? {
-                                    ...result.data.role,
-                                    name: result.data.role.name || result.data.role.Name,
-                                    displayName: result.data.role.displayName || result.data.role.DisplayName || result.data.role.Name
-                                } : { name: result.data.role, displayName: result.data.role }
-                            };
-                            setUser(normalizedUser);
-                            localStorage.setItem('user', JSON.stringify(normalizedUser));
-                        } else {
-                            throw new Error('Invalid user data');
-                        }
-                    } else {
-                        throw new Error('Session expired');
-                    }
+                            const normalized = normalizeUser(result.data);
+                            setUser(normalized);
+                            localStorage.setItem('user', JSON.stringify(normalized));
+                        } else throw new Error('Invalid user data');
+                    } else throw new Error('Session expired');
                 } catch (err) {
                     console.warn('Auth initialization warning:', err.message);
                     localStorage.removeItem('authToken');
@@ -58,79 +56,106 @@ export const AuthProvider = ({ children }) => {
             } else {
                 setUser(null);
             }
-            // Ensure loading is only set to false AFTER we've attempted re-hydration
             setLoading(false);
         };
-
         initAuth();
     }, []);
 
+    // ----- Login -----
     const login = async (email, password) => {
         try {
             setError(null);
+            setLoading(true);
+
             const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email, password })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
             });
 
             const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Login failed');
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || 'Login failed');
+            const { user: rawUser, accessToken } = result.data;
+            let normalized = normalizeUser(rawUser);
+
+            // If the login response already includes the permissions array, use it immediately.
+            if (normalized.permissions && normalized.permissions.length > 0) {
+                // Already have permissions – no extra loading
+                setUser(normalized);
+                localStorage.setItem('authToken', accessToken);
+                localStorage.setItem('user', JSON.stringify(normalized));
+            } else {
+                // Permissions missing – fetch them now
+                setUser(normalized);                // set user without permissions
+                localStorage.setItem('authToken', accessToken);
+                setLoadingPermissions(true);        // start permission loading
+                try {
+                    const meRes = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/me`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    if (meRes.ok) {
+                        const meResult = await meRes.json();
+                        if (meResult.success && meResult.data) {
+                            const updated = normalizeUser({ ...normalized, permissions: meResult.data.permissions || [] });
+                            setUser(updated);
+                            localStorage.setItem('user', JSON.stringify(updated));
+                        }
+                    }
+                } catch (permErr) {
+                    console.warn('Permission fetch failed:', permErr.message);
+                } finally {
+                    setLoadingPermissions(false);   // done loading permissions
+                }
             }
 
-            const { user, accessToken } = result.data;
-            const normalizedUser = {
-                ...user,
-                firstName: user.firstName || user.FirstName,
-                lastName: user.lastName || user.LastName,
-                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim(),
-                role: typeof user.role === 'object' ? {
-                    ...user.role,
-                    name: user.role.name || user.role.Name,
-                    displayName: user.role.displayName || user.role.DisplayName || user.role.Name
-                } : { name: user.role, displayName: user.role }
-            };
-            localStorage.setItem('authToken', accessToken);
-            localStorage.setItem('user', JSON.stringify(normalizedUser));
-            setUser(normalizedUser);
+            setLoading(false);
             return { success: true };
         } catch (err) {
             setError(err.message);
+            setLoading(false);
             return { success: false, error: err.message };
         }
     };
 
+    // ----- Register (same permission loading logic) -----
     const register = async (userData) => {
         try {
             setError(null);
             const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/register`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(userData)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData),
             });
-
             const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Registration failed');
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || 'Registration failed');
+            const { user: rawUser, accessToken } = result.data;
+            let normalized = normalizeUser(rawUser);
+            if (normalized.permissions && normalized.permissions.length > 0) {
+                setUser(normalized);
+                localStorage.setItem('authToken', accessToken);
+                localStorage.setItem('user', JSON.stringify(normalized));
+            } else {
+                setUser(normalized);
+                localStorage.setItem('authToken', accessToken);
+                setLoadingPermissions(true);
+                try {
+                    const meRes = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/me`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    if (meRes.ok) {
+                        const meResult = await meRes.json();
+                        if (meResult.success && meResult.data) {
+                            const updated = normalizeUser({ ...normalized, permissions: meResult.data.permissions || [] });
+                            setUser(updated);
+                            localStorage.setItem('user', JSON.stringify(updated));
+                        }
+                    }
+                } finally {
+                    setLoadingPermissions(false);
+                }
             }
-
-            const { user, accessToken } = result.data;
-            const normalizedUser = {
-                ...user,
-                firstName: user.firstName || user.FirstName,
-                lastName: user.lastName || user.LastName,
-                fullName: user.fullName || `${user.firstName || user.FirstName || ''} ${user.lastName || user.LastName || ''}`.trim()
-            };
-            localStorage.setItem('authToken', accessToken);
-            localStorage.setItem('user', JSON.stringify(normalizedUser));
-            setUser(normalizedUser);
             return { success: true };
         } catch (err) {
             setError(err.message);
@@ -143,48 +168,28 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
         setUser(null);
         setError(null);
-        // Navigate to login page
         if (window.location.pathname !== '/login') {
             window.location.href = '/login';
         }
     };
 
     const refreshUser = (updatedUser) => {
-        const normalizedUser = {
-            ...updatedUser,
-            firstName: updatedUser.firstName || updatedUser.FirstName,
-            lastName: updatedUser.lastName || updatedUser.LastName,
-            fullName: updatedUser.fullName || `${updatedUser.firstName || updatedUser.FirstName || ''} ${updatedUser.lastName || updatedUser.LastName || ''}`.trim(),
-            role: typeof updatedUser.role === 'object' ? {
-                ...updatedUser.role,
-                name: updatedUser.role.name || updatedUser.role.Name,
-                displayName: updatedUser.role.displayName || updatedUser.role.DisplayName || updatedUser.role.Name
-            } : { name: updatedUser.role, displayName: updatedUser.role }
-        };
-        setUser(normalizedUser);
-        localStorage.setItem('user', JSON.stringify(normalizedUser));
+        const normalized = normalizeUser(updatedUser);
+        setUser(normalized);
+        localStorage.setItem('user', JSON.stringify(normalized));
     };
 
     const hasPermission = (permissionName) => {
         if (!user) return false;
-        
-        // 1. Super Admin always has full access
         const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
         if (roleName === 'admin') return true;
-
-        // 2. Operational Manager has global access EXCEPT delete
         if (roleName === 'operational_manager') {
             if (permissionName.toLowerCase().includes('delete')) return false;
             return true;
         }
-
-        // 3. Resolved Dynamic Permissions (Role + Extra - Excluded)
-        // This is provided by the backend as a flat list of names
         if (user.permissions && Array.isArray(user.permissions)) {
             return user.permissions.includes(permissionName);
         }
-
-        // 4. Fallback to Role-only permissions (if resolved list is missing)
         if (!user.role?.permissions) return false;
         return user.role.permissions.some(p => p.name === permissionName);
     };
@@ -192,13 +197,13 @@ export const AuthProvider = ({ children }) => {
     const hasAnyPermission = (permissionNames) => {
         if (!user || !user.role) return false;
         if (user.role.name === 'admin') return true;
-        
         return permissionNames.some(name => hasPermission(name));
     };
 
     const value = {
         user,
         loading,
+        loadingPermissions,              // ← NEW
         error,
         login,
         register,
@@ -209,12 +214,8 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!user,
         isAdmin: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'admin',
         isOperationalManager: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'operational_manager',
-        isGlobalUser: ['admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase())
+        isGlobalUser: ['admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()),
     };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
