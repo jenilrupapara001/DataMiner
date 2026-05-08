@@ -140,7 +140,28 @@ exports.getTasks = async (req, res) => {
             whereClause += ' AND Priority = @priority';
             params.priority = priority;
         }
-        if (sellerId) {
+        const roleName = req.user?.role?.name || req.user?.role;
+        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+
+        if (!isGlobalUser) {
+            const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
+            if (allowedSellerIds.length === 0) {
+                return res.json({
+                    success: true,
+                    data: {
+                        tasks: [],
+                        counts: { todo: 0, inProgress: 0, inReview: 0, completed: 0 },
+                        pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, totalPages: 0 }
+                    }
+                });
+            }
+            if (sellerId && allowedSellerIds.includes(sellerId)) {
+                whereClause += ' AND SellerId = @sellerId';
+                params.sellerId = sellerId;
+            } else {
+                whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+            }
+        } else if (sellerId) {
             whereClause += ' AND SellerId = @sellerId';
             params.sellerId = sellerId;
         }
@@ -208,8 +229,10 @@ exports.getTasks = async (req, res) => {
         }));
 
         // Get status counts
-        const statusCounts = await pool.request().query(`
-            SELECT Status, COUNT(*) as count FROM Tasks GROUP BY Status
+        const statusRequest = pool.request();
+        Object.entries(params).forEach(([key, val]) => statusRequest.input(key, val));
+        const statusCounts = await statusRequest.query(`
+            SELECT Status, COUNT(*) as count FROM Tasks ${whereClause} GROUP BY Status
         `);
         const counts = { todo: 0, inProgress: 0, inReview: 0, completed: 0 };
         statusCounts.recordset.forEach(r => {

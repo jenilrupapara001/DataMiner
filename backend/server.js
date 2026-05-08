@@ -247,6 +247,63 @@ io.on('connection', async (socket) => {
     }
   });
 
+  socket.on('update_role_permissions', async ({ roleId, permissions }) => {
+    try {
+      const pool = await getPool();
+      
+      await pool.request()
+        .input('roleId', sql.VarChar, roleId)
+        .query('DELETE FROM RolePermissions WHERE RoleId = @roleId');
+        
+      if (permissions && Array.isArray(permissions)) {
+        for (const permId of permissions) {
+          await pool.request()
+            .input('roleId', sql.VarChar, roleId)
+            .input('permId', sql.VarChar, permId)
+            .query('INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@roleId, @permId)');
+        }
+      }
+      
+      const roleResult = await pool.request()
+        .input('roleId', sql.VarChar, roleId)
+        .query('SELECT * FROM Roles WHERE Id = @roleId');
+        
+      if (roleResult.recordset.length > 0) {
+        const role = roleResult.recordset[0];
+        const perms = await pool.request()
+          .input('roleId', sql.VarChar, roleId)
+          .query('SELECT P.* FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
+          
+        const formattedRole = {
+          _id: role.Id,
+          id: role.Id,
+          name: role.Name,
+          displayName: role.DisplayName,
+          description: role.Description,
+          level: role.Level || 0,
+          color: role.Color || '#4F46E5',
+          isSystem: role.IsSystem === 1 || role.IsSystem === true,
+          isActive: role.IsActive === 1 || role.IsActive === true,
+          createdAt: role.CreatedAt,
+          updatedAt: role.UpdatedAt,
+          permissions: perms.recordset.map(p => ({
+            _id: p.Id,
+            id: p.Id,
+            name: p.Name,
+            displayName: p.DisplayName,
+            description: p.Description,
+            category: p.Category,
+            action: p.Action
+          }))
+        };
+        
+        io.emit('role_permissions_updated', formattedRole);
+      }
+    } catch (err) {
+      console.error('Socket update_role_permissions error:', err);
+    }
+  });
+
   socket.on('typing', ({ conversationId, senderId, isTyping }) => {
     socket.to(conversationId).emit('typing', { conversationId, senderId, isTyping });
   });

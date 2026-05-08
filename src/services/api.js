@@ -1115,8 +1115,9 @@ export const bulkApi = {
     if (sellerId) formData.append('sellerId', sellerId);
     return api.post('/bulk/tags-import', formData);
   },
-  downloadCatalogTemplate: async () => {
-    const res = await fetch(`${API_BASE}/bulk/catalog-template`, {
+  downloadCatalogTemplate: async (marketplace = '') => {
+    const query = marketplace ? `?marketplace=${marketplace}` : '';
+    const res = await fetch(`${API_BASE}/bulk/catalog-template${query}`, {
       headers: { ...getAuthHeader() }
     });
     if (!res.ok) throw new Error('Failed to download template');
@@ -1124,7 +1125,7 @@ export const bulkApi = {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'catalog_template.xlsx';
+    link.download = marketplace === 'ajio' ? 'ajio_catalog_template.xlsx' : 'catalog_template.xlsx';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -1,26 +1,44 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { userApi, roleApi, sellerApi } from '../services/api';
+import { userApi, roleApi } from '../services/api';
+import { useSocket } from '../contexts/SocketContext';
 import {
-    Users, Shield, UserPlus, Search, Pencil, Pause, Play, Trash2, Mail, Phone,
-    Clock, CheckCircle2, XCircle, Info, UserCheck, RefreshCw, X, Store, Check
+    Users, Shield, UserPlus, Search, Pencil, Trash2, Mail, Phone,
+    Clock, CheckCircle2, XCircle, Info, UserCheck, RefreshCw, X, Store, Check,
+    ChevronDown, ChevronRight, SlidersHorizontal, Lock, Plus, ArrowRight, User, AlertCircle
 } from 'lucide-react';
-import ListView from '../components/common/ListView';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
 const UsersPage = () => {
+    const socket = useSocket();
+
+    // Tab Management
+    const [activeTab, setActiveTab] = useState('users'); // 'users' or 'roles'
+
+    // Core Data State
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
     const [sellers, setSellers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
-    const [editingUser, setEditingUser] = useState(null);
-    const [filters, setFilters] = useState({ search: '', role: '', isActive: '' });
-    const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0 });
+    const [managers, setManagers] = useState([]);
+    const [groupedPermissions, setGroupedPermissions] = useState({});
     const [allPermissions, setAllPermissions] = useState([]);
-    const [sellerSelectionMode, setSellerSelectionMode] = useState('all'); // 'all' or 'manager'
 
-    const [formData, setFormData] = useState({
+    // Loading State
+    const [loading, setLoading] = useState(true);
+
+    // Filters and Pagination
+    const [filters, setFilters] = useState({ search: '', role: '', isActive: '' });
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+
+    // Collapsible Categories in Matrix
+    const [collapsedCategories, setCollapsedCategories] = useState({});
+
+    // Search inside Permissions Matrix
+    const [permissionSearch, setPermissionSearch] = useState('');
+
+    // --- USER MODAL STATE ---
+    const [showUserModal, setShowUserModal] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
+    const [userFormData, setUserFormData] = useState({
         email: '',
         password: '',
         firstName: '',
@@ -29,16 +47,21 @@ const UsersPage = () => {
         role: '',
         isActive: true,
         assignedSellers: [],
-        supervisors: [],
-        extraPermissions: [],
-        excludedPermissions: [],
+        brandManagers: [],
     });
 
-    const rolePermissionIds = useMemo(() => {
-        const selectedRole = roles.find(r => r._id === formData.role || r.id === formData.role);
-        return selectedRole?.permissions?.map(p => p._id || p.id || p) || [];
-    }, [formData.role, roles]);
+    // --- ROLE MODAL STATE ---
+    const [showRoleModal, setShowRoleModal] = useState(false);
+    const [editingRole, setEditingRole] = useState(null);
+    const [roleFormData, setRoleFormData] = useState({
+        name: '',
+        displayName: '',
+        description: '',
+        level: 30,
+        color: '#4F46E5'
+    });
 
+    // --- REFRESH / DATA FETCH ---
     const loadUsers = useCallback(async () => {
         setLoading(true);
         try {
@@ -50,7 +73,11 @@ const UsersPage = () => {
             const response = await userApi.getAll(params);
             if (response.success) {
                 setUsers(response.data.users || []);
-                setPagination(prev => ({ ...prev, ...response.data.pagination }));
+                setPagination(prev => ({
+                    ...prev,
+                    total: response.data.pagination?.total || 0,
+                    totalPages: response.data.pagination?.pages || 1
+                }));
             }
         } catch (error) {
             console.error('Failed to load users:', error);
@@ -58,38 +85,38 @@ const UsersPage = () => {
         setLoading(false);
     }, [pagination.page, pagination.limit, filters]);
 
-    const loadRoles = useCallback(async () => {
+    const loadRolesAndPerms = useCallback(async () => {
         try {
             const [rolesRes, permsRes] = await Promise.all([
                 userApi.getRoles(),
                 roleApi.getPermissions()
             ]);
-            
             if (rolesRes.success) {
                 const rolesData = rolesRes.data?.roles || rolesRes.data || [];
                 setRoles(Array.isArray(rolesData) ? rolesData : []);
             }
-            
             if (permsRes.success) {
-                const grouped = permsRes.data?.groupedPermissions || {};
-                const flatPerms = Object.values(grouped).flat();
-                setAllPermissions(flatPerms);
+                setGroupedPermissions(permsRes.data?.groupedPermissions || {});
+                setAllPermissions(permsRes.data?.permissions || []);
             }
         } catch (error) {
-            console.error('Failed to load roles:', error);
-            setRoles([]);
-            setAllPermissions([]);
+            console.error('Failed to load roles and permissions:', error);
         }
     }, []);
 
-    const loadSellers = useCallback(async () => {
+    const loadSellersAndManagers = useCallback(async () => {
         try {
-            const response = await userApi.getSellers();
-            const sellersData = response?.data?.sellers || response?.data || [];
+            const [sellersRes, managersRes] = await Promise.all([
+                userApi.getSellers(),
+                userApi.getManagers()
+            ]);
+            const sellersData = sellersRes?.data?.sellers || sellersRes?.data || [];
             setSellers(Array.isArray(sellersData) ? sellersData : []);
+            if (managersRes.success) {
+                setManagers(managersRes.data || []);
+            }
         } catch (error) {
-            console.error('Failed to load sellers:', error);
-            setSellers([]);
+            console.error('Failed to load sellers and managers:', error);
         }
     }, []);
 
@@ -98,54 +125,92 @@ const UsersPage = () => {
     }, [loadUsers]);
 
     useEffect(() => {
-        loadRoles();
-        loadSellers();
-    }, [loadRoles, loadSellers]);
+        loadRolesAndPerms();
+        loadSellersAndManagers();
+    }, [loadRolesAndPerms, loadSellersAndManagers]);
 
+    useEffect(() => {
+        if (!socket) return;
+        socket.on('role_permissions_updated', (updatedRole) => {
+            setRoles(prevRoles => prevRoles.map(role => 
+                (role._id === updatedRole._id || role.id === updatedRole.id) ? updatedRole : role
+            ));
+        });
+        return () => {
+            socket.off('role_permissions_updated');
+        };
+    }, [socket]);
+
+    // Filters Toggle
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
         setPagination(prev => ({ ...prev, page: 1 }));
     };
 
+    const resetFilters = () => {
+        setFilters({ search: '', role: '', isActive: '' });
+        setPagination(prev => ({ ...prev, page: 1 }));
+    };
+
+    // Toggle User Status
+    const handleToggleStatus = async (userId) => {
+        try {
+            await userApi.toggleStatus(userId);
+            loadUsers();
+        } catch (error) {
+            console.error('Failed to toggle status:', error);
+            alert(error.message || 'Failed to toggle status');
+        }
+    };
+
+    // Delete User
+    const handleDeleteUser = async (userId) => {
+        if (!window.confirm('Are you sure you want to delete this user? This cannot be undone.')) return;
+        try {
+            await userApi.delete(userId);
+            loadUsers();
+        } catch (error) {
+            console.error('Failed to delete user:', error);
+            alert(error.message || 'Failed to delete user');
+        }
+    };
+
+    // --- DYNAMIC USER MODAL ACTIONS ---
     const handleOpenUserModal = async (user = null) => {
         if (user) {
             try {
                 const response = await userApi.getById(user._id || user.id);
                 const fullUser = response.data;
                 setEditingUser(fullUser);
-                setFormData({
-                    email: fullUser.email,
+                setUserFormData({
+                    email: fullUser.email || '',
                     password: '',
-                    firstName: fullUser.firstName,
-                    lastName: fullUser.lastName,
+                    firstName: fullUser.firstName || '',
+                    lastName: fullUser.lastName || '',
                     phone: fullUser.phone || '',
                     role: fullUser.role?._id || fullUser.role?.id || fullUser.role || '',
-                    isActive: fullUser.isActive,
+                    isActive: fullUser.isActive !== undefined ? fullUser.isActive : true,
                     assignedSellers: fullUser.assignedSellers?.map(s => s._id || s.id || s) || [],
-                    supervisors: fullUser.supervisors || [],
-                    extraPermissions: fullUser.extraPermissions?.map(p => p._id || p.id || p) || [],
-                    excludedPermissions: fullUser.excludedPermissions?.map(p => p._id || p.id || p) || [],
+                    brandManagers: fullUser.supervisors?.map(s => s._id || s.id || s) || fullUser.brandManagers || [],
                 });
             } catch (error) {
-                console.error('Failed to load user details:', error);
+                console.error('Failed to load full user details:', error);
                 setEditingUser(user);
-                setFormData({
-                    email: user.email,
+                setUserFormData({
+                    email: user.email || '',
                     password: '',
-                    firstName: user.firstName,
-                    lastName: user.lastName,
+                    firstName: user.firstName || '',
+                    lastName: user.lastName || '',
                     phone: user.phone || '',
                     role: user.role?._id || user.role?.id || user.role || '',
-                    isActive: user.isActive,
+                    isActive: user.isActive !== undefined ? user.isActive : true,
                     assignedSellers: user.assignedSellers?.map(s => s._id || s.id || s) || [],
-                    supervisors: user.supervisors?.map(s => s._id || s.id || s) || [],
-                    extraPermissions: user.extraPermissions?.map(p => p._id || p.id || p) || [],
-                    excludedPermissions: user.excludedPermissions?.map(p => p._id || p.id || p) || [],
+                    brandManagers: user.supervisors?.map(s => s._id || s.id || s) || [],
                 });
             }
         } else {
             setEditingUser(null);
-            setFormData({
+            setUserFormData({
                 email: '',
                 password: '',
                 firstName: '',
@@ -154,29 +219,46 @@ const UsersPage = () => {
                 role: '',
                 isActive: true,
                 assignedSellers: [],
-                supervisors: [],
-                extraPermissions: [],
-                excludedPermissions: [],
+                brandManagers: [],
             });
         }
-        setShowModal(true);
-        setSellerSelectionMode('all');
+        setShowUserModal(true);
+    };
+
+    // Reactive role selection handler in User Creation Modal
+    const handleUserRoleChange = (roleId) => {
+        const selectedRole = roles.find(r => r._id === roleId || r.id === roleId);
+        const isBM = selectedRole?.name === 'brand_manager' || selectedRole?.displayName === 'Brand Manager';
+        const isLT = selectedRole?.name === 'listing_team' || selectedRole?.displayName === 'Listing Team';
+
+        setUserFormData(prev => ({
+            ...prev,
+            role: roleId,
+            assignedSellers: isBM ? sellers.map(s => s._id || s.id) : (isLT ? [] : prev.assignedSellers),
+            brandManagers: isLT ? prev.brandManagers : []
+        }));
     };
 
     const handleSaveUser = async () => {
+        if (!userFormData.firstName || !userFormData.lastName || !userFormData.email || !userFormData.role) {
+            alert('Please fill in all required fields (First Name, Last Name, Email, and Access Role).');
+            return;
+        }
         try {
             const data = {
-                ...formData,
-                roleId: formData.role,
-                assignedSellerIds: formData.assignedSellers
+                ...userFormData,
+                roleId: userFormData.role,
+                assignedSellerIds: userFormData.assignedSellers,
+                brandManagers: userFormData.brandManagers,
+                supervisors: userFormData.brandManagers // Support both keys to be safe
             };
-            
+
             if (editingUser) {
                 await userApi.update(editingUser._id || editingUser.id, data);
             } else {
                 await userApi.create(data);
             }
-            setShowModal(false);
+            setShowUserModal(false);
             loadUsers();
         } catch (error) {
             console.error('Failed to save user:', error);
@@ -184,778 +266,911 @@ const UsersPage = () => {
         }
     };
 
-    const handleDeleteUser = async (userId) => {
-        if (!window.confirm('Are you sure you want to delete this user?')) return;
+    // --- DYNAMIC ROLES & PERMISSIONS GRID ACTIONS ---
+    const handleToggleCellPermission = async (role, permId) => {
         try {
-            await userApi.delete(userId);
-            loadUsers();
-        } catch (error) {
-            alert(error.message || 'Failed to delete user');
-        }
-    };
+            const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
+            const isAssigned = rolePermIds.includes(permId);
+            
+            const updatedPermIds = isAssigned
+                ? rolePermIds.filter(id => id !== permId)
+                : [...rolePermIds, permId];
 
-    const handleToggleStatus = async (userId) => {
-        try {
-            await userApi.toggleStatus(userId);
-            loadUsers();
-        } catch (error) {
-            alert(error.message || 'Failed to toggle status');
-        }
-    };
+            if (socket) {
+                // Optimistic UI state update for an ultra-premium reactive experience
+                const updatedPermsObjects = updatedPermIds.map(id => {
+                    const found = allPermissions.find(p => p._id === id || p.id === id);
+                    return found || { id, _id: id };
+                });
+                const updatedRole = { ...role, permissions: updatedPermsObjects };
+                setRoles(prevRoles => prevRoles.map(r => 
+                    (r._id === role._id || r.id === role.id) ? updatedRole : r
+                ));
 
-    const togglePermission = (permId) => {
-        const isInherited = rolePermissionIds.includes(permId);
-        setFormData(prev => {
-            if (isInherited) {
-                const isExcluded = prev.excludedPermissions.includes(permId);
-                return {
-                    ...prev,
-                    excludedPermissions: isExcluded
-                        ? prev.excludedPermissions.filter(id => id !== permId)
-                        : [...prev.excludedPermissions, permId]
-                };
+                // Emit live socket.io update directly
+                socket.emit('update_role_permissions', { roleId: role._id || role.id, permissions: updatedPermIds });
             } else {
-                const isExtra = prev.extraPermissions.includes(permId);
-                return {
-                    ...prev,
-                    extraPermissions: isExtra
-                        ? prev.extraPermissions.filter(id => id !== permId)
-                        : [...prev.extraPermissions, permId]
-                };
+                await roleApi.update(role._id || role.id, { permissions: updatedPermIds });
+                loadRolesAndPerms();
+            }
+        } catch (error) {
+            console.error('Failed to toggle cell permission:', error);
+            alert(error.message || 'Failed to update permission');
+        }
+    };
+
+    const handleOpenRoleModal = (role = null) => {
+        if (role) {
+            setEditingRole(role);
+            setRoleFormData({
+                name: role.name || '',
+                displayName: role.displayName || '',
+                description: role.description || '',
+                level: role.level || 30,
+                color: role.color || '#4F46E5'
+            });
+        } else {
+            setEditingRole(null);
+            setRoleFormData({
+                name: '',
+                displayName: '',
+                description: '',
+                level: 30,
+                color: '#4F46E5'
+            });
+        }
+        setShowRoleModal(true);
+    };
+
+    const handleSaveRole = async () => {
+        if (!roleFormData.displayName) {
+            alert('Please specify a Display Name for this role.');
+            return;
+        }
+        try {
+            const nameSlug = roleFormData.name || roleFormData.displayName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+            const data = {
+                ...roleFormData,
+                name: nameSlug
+            };
+
+            if (editingRole) {
+                await roleApi.update(editingRole._id || editingRole.id, data);
+            } else {
+                await roleApi.create(data);
+            }
+            setShowRoleModal(false);
+            loadRolesAndPerms();
+        } catch (error) {
+            console.error('Failed to save role:', error);
+            alert(error.message || 'Failed to save role');
+        }
+    };
+
+    const handleDeleteRole = async (roleId) => {
+        if (!window.confirm('Are you sure you want to delete this role? Users assigned to this role will lose access.')) return;
+        try {
+            await roleApi.delete(roleId);
+            setShowRoleModal(false);
+            loadRolesAndPerms();
+        } catch (error) {
+            console.error('Failed to delete role:', error);
+            alert(error.message || 'Failed to delete role');
+        }
+    };
+
+    const toggleCategoryCollapse = (category) => {
+        setCollapsedCategories(prev => ({
+            ...prev,
+            [category]: !prev[category]
+        }));
+    };
+
+    // Filter permissions by search query
+    const filteredGroupedPermissions = useMemo(() => {
+        if (!permissionSearch) return groupedPermissions;
+        const result = {};
+        Object.entries(groupedPermissions).forEach(([category, perms]) => {
+            const filtered = perms.filter(p => 
+                p.displayName?.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+                p.name?.toLowerCase().includes(permissionSearch.toLowerCase())
+            );
+            if (filtered.length > 0) {
+                result[category] = filtered;
             }
         });
+        return result;
+    }, [groupedPermissions, permissionSearch]);
+
+    // Helpers to render Initials for Avatars
+    const renderInitials = (firstName, lastName) => {
+        const f = firstName ? firstName[0].toUpperCase() : '';
+        const l = lastName ? lastName[0].toUpperCase() : '';
+        return `${f}${l}` || 'U';
     };
 
-    if (loading && users.length === 0) return <PageLoader message="Loading Users..." />;
-
     return (
-        <div className="p-4" style={{ backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-            <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="users-container p-4 min-vh-100" style={{ backgroundColor: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>
+            <style>{`
+                /* Beautiful glassmorphism effects and modern styling */
+                .glass-card {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 16px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.025);
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .glass-card:hover {
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+                }
+                .nav-tab-btn {
+                    border: none;
+                    background: transparent;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #64748b;
+                    position: relative;
+                    transition: all 0.2s;
+                }
+                .nav-tab-btn.active {
+                    color: #1e293b;
+                }
+                .nav-tab-btn.active::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 0;
+                    left: 20px;
+                    right: 20px;
+                    height: 3px;
+                    background: #0f172a;
+                    border-radius: 10px;
+                }
+                .table-modern th {
+                    font-weight: 600;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    color: #64748b;
+                    background-color: #f8fafc;
+                    border-bottom: 1px solid #e2e8f0;
+                    padding: 16px 20px;
+                }
+                .table-modern td {
+                    padding: 16px 20px;
+                    vertical-align: middle;
+                    border-bottom: 1px solid #f1f5f9;
+                    font-size: 14px;
+                    color: #334155;
+                }
+                .table-modern tr:hover td {
+                    background-color: #f8fafc;
+                }
+                .badge-role {
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 4px 10px;
+                    border-radius: 9999px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .avatar-circle {
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 9999px;
+                    font-weight: 700;
+                    font-size: 13px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .btn-icon-modern {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid #e2e8f0;
+                    background: #ffffff;
+                    color: #64748b;
+                    transition: all 0.15s;
+                }
+                .btn-icon-modern:hover {
+                    background: #f1f5f9;
+                    color: #0f172a;
+                    border-color: #cbd5e1;
+                }
+                .btn-icon-modern.text-danger:hover {
+                    background: #fef2f2;
+                    color: #ef4444;
+                    border-color: #fca5a5;
+                }
+                .status-toggle {
+                    width: 36px;
+                    height: 20px;
+                    border-radius: 10px;
+                    background: #cbd5e1;
+                    position: relative;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .status-toggle.active {
+                    background: #10b981;
+                }
+                .status-toggle-circle {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: white;
+                    position: absolute;
+                    top: 3px;
+                    left: 3px;
+                    transition: all 0.2s;
+                }
+                .status-toggle.active .status-toggle-circle {
+                    left: 19px;
+                }
+                .matrix-cell-cb {
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    accent-color: #0f172a;
+                }
+                .perm-cat-header {
+                    background-color: #f1f5f9 !important;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .perm-cat-header:hover {
+                    background-color: #e2e8f0 !important;
+                }
+                .pill-btn {
+                    border: 1px solid #e2e8f0;
+                    background: white;
+                    padding: 6px 12px;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #475569;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .pill-btn:hover {
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                }
+                .pill-btn.active {
+                    background: #0f172a;
+                    color: white;
+                    border-color: #0f172a;
+                }
+                .role-row-name:hover .role-actions-hover {
+                    opacity: 1 !important;
+                }
+            `}</style>
+
+            {/* Header Section */}
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
                 <div>
-                    <h4 className="fw-bold mb-1">User Management</h4>
-                    <p className="text-muted mb-0 small">{pagination.total} total members in your organization</p>
+                    <h3 className="fw-bold text-slate-900 mb-1 d-flex align-items-center gap-2">
+                        <Users size={24} className="text-slate-700" /> Team & Permissions
+                    </h3>
+                    <p className="text-muted mb-0 small">Control access levels and assign roles to your team.</p>
                 </div>
                 <div className="d-flex gap-2">
-                    <button className="btn btn-white border shadow-sm d-flex align-items-center gap-2" onClick={() => loadUsers()}>
-                        <RefreshCw size={16} /> Refresh
+                    <button className="btn btn-white border glass-card d-flex align-items-center gap-2 px-3 py-2 fw-semibold" style={{ fontSize: '13px' }} onClick={() => loadUsers()}>
+                        <RefreshCw size={14} /> Refresh Data
                     </button>
-                    <button className="btn btn-dark d-flex align-items-center gap-2" onClick={() => handleOpenUserModal()}>
-                        <UserPlus size={16} /> Add Member
+                    {activeTab === 'users' ? (
+                        <button className="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3 shadow" onClick={() => handleOpenUserModal()}>
+                            <UserPlus size={16} /> Add Member
+                        </button>
+                    ) : (
+                        <button className="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3 shadow" onClick={() => handleOpenRoleModal()}>
+                            <Plus size={16} /> Create Role
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Tabbed Navigation */}
+            <div className="border-bottom mb-4 d-flex align-items-center justify-content-between">
+                <div className="d-flex">
+                    <button className={`nav-tab-btn ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+                        👥 Members & Teams
+                    </button>
+                    <button className={`nav-tab-btn ${activeTab === 'roles' ? 'active' : ''}`} onClick={() => setActiveTab('roles')}>
+                        🔒 Roles & Permissions Grid
                     </button>
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="card border-0 shadow-sm mb-4 rounded-3">
-                <div className="card-body p-3">
-                    <div className="row g-3">
-                        <div className="col-md-5">
-                            <div className="position-relative">
-                                <Search size={16} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                                <input 
-                                    type="text" 
-                                    className="form-control ps-5 border-0 bg-light" 
-                                    placeholder="Search by name, email..." 
-                                    value={filters.search}
-                                    onChange={(e) => handleFilterChange('search', e.target.value)}
-                                />
+            {/* Loading Indicator */}
+            {loading && users.length === 0 && <PageLoader message="Loading workspace components..." />}
+
+            {/* TAB 1: MEMBERS */}
+            {activeTab === 'users' && (
+                <>
+                    {/* Filters Header */}
+                    <div className="glass-card bg-white p-3 mb-4 border-0">
+                        <div className="row g-3 align-items-center">
+                            <div className="col-md-5">
+                                <div className="position-relative">
+                                    <Search size={16} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
+                                    <input 
+                                        type="text" 
+                                        className="form-control ps-5 border-0 bg-light" 
+                                        style={{ height: '42px', borderRadius: '10px', fontSize: '14px' }}
+                                        placeholder="Search by name, email..." 
+                                        value={filters.search}
+                                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="col-md-3">
+                                <select 
+                                    className="form-select border-0 bg-light"
+                                    style={{ height: '42px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}
+                                    value={filters.role}
+                                    onChange={(e) => handleFilterChange('role', e.target.value)}
+                                >
+                                    <option value="">All Access Roles</option>
+                                    {roles.map(r => <option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-md-3">
+                                <select 
+                                    className="form-select border-0 bg-light"
+                                    style={{ height: '42px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}
+                                    value={filters.isActive}
+                                    onChange={(e) => handleFilterChange('isActive', e.target.value)}
+                                >
+                                    <option value="">All Statuses</option>
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                                </select>
+                            </div>
+                            <div className="col-md-1">
+                                <button className="btn btn-light w-100 d-flex align-items-center justify-content-center" style={{ height: '42px', borderRadius: '10px' }} onClick={resetFilters} title="Clear Filters">
+                                    <X size={18} />
+                                </button>
                             </div>
                         </div>
-                        <div className="col-md-3">
-                            <select 
-                                className="form-select border-0 bg-light"
-                                value={filters.role}
-                                onChange={(e) => handleFilterChange('role', e.target.value)}
-                            >
-                                <option value="">All Roles</option>
-                                {roles.map(r => <option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</option>)}
-                            </select>
+                    </div>
+
+                    {/* Table View */}
+                    <div className="glass-card bg-white border-0 overflow-hidden">
+                        <div className="table-responsive">
+                            <table className="table table-modern mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '40px' }}><input type="checkbox" className="form-check-input" /></th>
+                                        <th>Member Name</th>
+                                        <th>Access Role</th>
+                                        <th>Supervisors (Managers)</th>
+                                        <th>Status</th>
+                                        <th className="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.length > 0 ? (
+                                        users.map((user) => {
+                                            const roleColor = user.role?.color || '#64748b';
+                                            const initials = renderInitials(user.firstName, user.lastName);
+                                            return (
+                                                <tr key={user._id || user.id}>
+                                                    <td><input type="checkbox" className="form-check-input" /></td>
+                                                    <td>
+                                                        <div className="d-flex align-items-center gap-3">
+                                                            <div className="avatar-circle" style={{ backgroundColor: `${roleColor}15`, color: roleColor }}>
+                                                                {initials}
+                                                            </div>
+                                                            <div>
+                                                                <div className="fw-bold text-slate-800" style={{ fontSize: '14px' }}>
+                                                                    {user.firstName} {user.lastName}
+                                                                </div>
+                                                                <div className="text-muted d-flex align-items-center gap-3 mt-0.5" style={{ fontSize: '12px' }}>
+                                                                    <span className="d-flex align-items-center gap-1"><Mail size={12} /> {user.email}</span>
+                                                                    {user.phone && <span className="d-flex align-items-center gap-1"><Phone size={12} /> {user.phone}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span className="badge-role" style={{ backgroundColor: `${roleColor}12`, color: roleColor }}>
+                                                            <Shield size={12} /> {user.role?.displayName || 'Custom Role'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                            {user.supervisors && user.supervisors.length > 0 ? (
+                                                                user.supervisors.map((s, idx) => (
+                                                                    <span key={idx} className="badge bg-light text-slate-700 border px-2 py-1 rounded-pill d-flex align-items-center gap-1.5" style={{ fontSize: '11px', fontWeight: '500' }}>
+                                                                        <div className="avatar-circle" style={{ width: '16px', height: '16px', fontSize: '8px', backgroundColor: '#e2e8f0', color: '#475569' }}>
+                                                                            {renderInitials(s.firstName, s.lastName)}
+                                                                        </div>
+                                                                        {s.firstName} {s.lastName}
+                                                                    </span>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-muted" style={{ fontSize: '12px' }}>-</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="d-flex align-items-center gap-2">
+                                                            <div className={`status-toggle ${user.isActive ? 'active' : ''}`} onClick={() => handleToggleStatus(user._id || user.id)}>
+                                                                <div className="status-toggle-circle"></div>
+                                                            </div>
+                                                            <span className="small fw-semibold" style={{ color: user.isActive ? '#10b981' : '#64748b', fontSize: '12px' }}>
+                                                                {user.isActive ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="d-flex gap-1 justify-content-end">
+                                                            <button className="btn-icon-modern" onClick={() => handleOpenUserModal(user)} title="Edit Member">
+                                                                <Pencil size={14} />
+                                                            </button>
+                                                            <button className="btn-icon-modern text-danger" onClick={() => handleDeleteUser(user._id || user.id)} title="Delete Member">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="text-center py-5">
+                                                <Users size={32} className="text-muted mb-2 mx-auto" />
+                                                <p className="mb-0 text-muted small">No organization members found matching criteria.</p>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                        <div className="col-md-3">
-                            <select 
-                                className="form-select border-0 bg-light"
-                                value={filters.isActive}
-                                onChange={(e) => handleFilterChange('isActive', e.target.value)}
-                            >
-                                <option value="">All Status</option>
-                                <option value="true">Active</option>
-                                <option value="false">Inactive</option>
-                            </select>
+
+                        {/* Pagination Footer */}
+                        {pagination.totalPages > 1 && (
+                            <div className="d-flex justify-content-between align-items-center px-4 py-3 border-top bg-light">
+                                <span className="text-muted small">Showing Page {pagination.page} of {pagination.totalPages}</span>
+                                <div className="btn-group">
+                                    <button className="btn btn-sm btn-white border px-3" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>
+                                        Previous
+                                    </button>
+                                    <button className="btn btn-sm btn-white border px-3" disabled={pagination.page === pagination.totalPages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}>
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+
+            {/* TAB 2: ROLES & PERMISSIONS MATRIX */}
+            {activeTab === 'roles' && (
+                <>
+                    {/* Matrix Actions */}
+                    <div className="glass-card bg-white p-3 mb-4 border-0 d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-3">
+                        <div className="position-relative flex-grow-1" style={{ maxWidth: '400px' }}>
+                            <Search size={16} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
+                            <input 
+                                type="text" 
+                                className="form-control ps-5 border-0 bg-light" 
+                                style={{ height: '40px', borderRadius: '10px', fontSize: '13px' }}
+                                placeholder="Filter permissions by name..." 
+                                value={permissionSearch}
+                                onChange={(e) => setPermissionSearch(e.target.value)}
+                            />
                         </div>
-                        <div className="col-md-1">
-                            <button className="btn btn-light w-100" onClick={() => setFilters({ search: '', role: '', isActive: '' })}>
-                                <X size={18} />
+                        <div className="d-flex align-items-center gap-3">
+                            <span className="small text-slate-500 font-monospace">{roles.length} Active Roles Configured</span>
+                            <button className="btn btn-dark btn-sm rounded-3 px-3 py-2 d-flex align-items-center gap-1.5 fw-bold" onClick={() => handleOpenRoleModal()}>
+                                <Plus size={14} /> Add Custom Role
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* List */}
-            <div className="card border-0 shadow-sm rounded-3 overflow-hidden">
-                <ListView
-                    columns={[
-                        {
-                            label: 'Member',
-                            key: 'firstName',
-                            render: (_, user) => (
-                                <div className="d-flex align-items-center gap-3">
-                                    <div className="avatar rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold" style={{ width: '38px', height: '38px' }}>
-                                        {user.firstName?.[0]}{user.lastName?.[0]}
-                                    </div>
-                                    <div>
-                                        <div className="fw-bold small">{user.firstName} {user.lastName}</div>
-                                        <div className="text-muted smallest">{user.email}</div>
-                                    </div>
+                    {/* Permission Category Blocks (Taskora UI Grid) */}
+                    <div className="d-flex flex-column gap-4">
+                        {Object.entries(filteredGroupedPermissions).map(([category, perms]) => (
+                            <div key={category} className="glass-card bg-white border-0 overflow-hidden shadow-sm" style={{ borderRadius: '14px' }}>
+                                <div className="table-responsive">
+                                    <table className="table mb-0 align-middle">
+                                        <thead>
+                                            <tr style={{ backgroundColor: '#fcfdfe', borderBottom: '1.5px solid #f1f5f9' }}>
+                                                <th style={{ width: '280px', padding: '16px 24px', fontSize: '14px', fontWeight: '700', color: '#1e293b', textTransform: 'capitalize' }}>
+                                                    {category}
+                                                </th>
+                                                {perms.map((perm) => (
+                                                    <th key={perm._id || perm.id} className="text-center" style={{ padding: '16px', fontSize: '12.5px', fontWeight: '600', color: '#475569', minWidth: '130px' }}>
+                                                        {perm.displayName}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {roles.map((role) => {
+                                                const roleColor = role.color || '#4F46E5';
+                                                const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
+                                                return (
+                                                    <tr key={role._id || role.id} className="role-matrix-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '16px 24px', fontWeight: '600', fontSize: '13.5px', color: '#334155' }} className="position-relative role-row-name">
+                                                            <div className="d-flex align-items-center justify-content-between">
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    <div className="avatar-circle" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: roleColor }}></div>
+                                                                    <span>{role.displayName}</span>
+                                                                </div>
+                                                                <div className="role-actions-hover d-flex gap-2 opacity-0 transition-all">
+                                                                    <button className="btn btn-link p-0 text-decoration-none text-slate-400 hover-dark" onClick={() => handleOpenRoleModal(role)} title="Edit Role">
+                                                                        <Pencil size={12} />
+                                                                    </button>
+                                                                    {role.name !== 'super_admin' && (
+                                                                        <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleDeleteRole(role._id || role.id)} title="Delete Role">
+                                                                            <Trash2 size={12} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        {perms.map((perm) => {
+                                                            const isAssigned = rolePermIds.includes(perm._id || perm.id);
+                                                            return (
+                                                                <td key={perm._id || perm.id} className="text-center" style={{ padding: '16px' }}>
+                                                                    <div className="d-flex justify-content-center">
+                                                                        <div 
+                                                                            className="d-inline-flex align-items-center justify-content-center cursor-pointer transition-all"
+                                                                            style={{ 
+                                                                                width: '20px', 
+                                                                                height: '20px', 
+                                                                                borderRadius: '6px', 
+                                                                                border: isAssigned ? '1.5px solid #10b981' : '1.5px solid #cbd5e1', 
+                                                                                backgroundColor: isAssigned ? '#10b981' : 'transparent',
+                                                                                boxShadow: isAssigned ? '0 2px 4px rgba(16, 185, 129, 0.2)' : 'none',
+                                                                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                                            }}
+                                                                            onClick={() => handleToggleCellPermission(role, perm._id || perm.id)}
+                                                                        >
+                                                                            {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )
-                        },
-                        {
-                            label: 'Access Role',
-                            key: 'role',
-                            render: (role) => (
-                                <span className="badge rounded-pill fw-bold" style={{ backgroundColor: (role?.color || '#6366f1') + '15', color: role?.color || '#6366f1', fontSize: '10px' }}>
-                                    <Shield size={10} className="me-1" /> {role?.displayName || 'Standard'}
-                                </span>
-                            )
-                        },
-                        {
-                            label: 'Supervisors',
-                            key: 'supervisors',
-                            render: (supervisors) => (
-                                <div className="d-flex flex-wrap gap-1">
-                                    {supervisors && supervisors.length > 0 ? (
-                                        supervisors.map((s, idx) => (
-                                            <div key={idx} className="d-flex align-items-center gap-1 bg-light border rounded-pill px-2 py-0.5" title={s.email} style={{ fontSize: '10px' }}>
-                                                <div className="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" style={{ width: '16px', height: '16px', fontSize: '8px' }}>
-                                                    {s.firstName?.[0]}{s.lastName?.[0]}
-                                                </div>
-                                                <span className="text-secondary fw-medium">{s.firstName}</span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <span className="text-muted smallest">-</span>
-                                    )}
-                                </div>
-                            )
-                        },
-                        {
-                            label: 'Status',
-                            key: 'isActive',
-                            render: (isActive, user) => (
-                                <button className="btn btn-link p-0 text-decoration-none border-0" onClick={() => handleToggleStatus(user._id)}>
-                                    {isActive ? (
-                                        <span className="text-success small d-flex align-items-center gap-1"><CheckCircle2 size={14} /> Active</span>
-                                    ) : (
-                                        <span className="text-danger small d-flex align-items-center gap-1"><XCircle size={14} /> Inactive</span>
-                                    )}
-                                </button>
-                            )
-                        },
-                        {
-                            label: 'Last Seen',
-                            key: 'lastSeen',
-                            render: (val) => (
-                                <div className="text-muted smallest d-flex align-items-center gap-1">
-                                    <Clock size={12} /> {val ? new Date(val).toLocaleDateString() : 'Never'}
-                                </div>
-                            )
-                        }
-                    ]}
-                    rows={users}
-                    rowKey="_id"
-                    actions={(user) => (
-                        <div className="d-flex gap-1">
-                            <button className="btn btn-sm btn-light" onClick={() => handleOpenUserModal(user)}><Pencil size={14} /></button>
-                            <button className="btn btn-sm btn-light text-danger" onClick={() => handleDeleteUser(user._id)}><Trash2 size={14} /></button>
-                        </div>
-                    )}
-                />
-            </div>
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-                <div className="d-flex justify-content-between align-items-center mt-3">
-                    <span className="text-muted small">Page {pagination.page} of {pagination.totalPages}</span>
-                    <div className="btn-group shadow-sm">
-                        <button className="btn btn-sm btn-white border" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>Previous</button>
-                        <button className="btn btn-sm btn-white border" disabled={pagination.page === pagination.totalPages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}>Next</button>
+                            </div>
+                        ))}
                     </div>
-                </div>
+                </>
             )}
 
-            {/* ===== USER ADD/EDIT MODAL ===== */}
-            {showModal && (
+            {/* ===== DYNAMIC CREATE / EDIT MEMBER MODAL ===== */}
+            {showUserModal && (
                 <div 
                     className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(6px)', zIndex: 1050 }}
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+                    style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowUserModal(false); }}
                 >
                     <div 
                         className="bg-white shadow-2xl overflow-hidden"
-                        style={{ width: '100%', maxWidth: '750px', maxHeight: '90vh', borderRadius: '24px', display: 'flex', flexDirection: 'column' }}
+                        style={{ width: '100%', maxWidth: '650px', maxHeight: '90vh', borderRadius: '24px', display: 'flex', flexDirection: 'column' }}
                     >
                         {/* Header */}
-                        <div className="px-5 py-4 border-bottom d-flex justify-content-between align-items-center bg-white">
+                        <div className="px-4 py-3.5 border-bottom d-flex justify-content-between align-items-center">
                             <div className="d-flex align-items-center gap-3">
-                                <div className="p-2 rounded-3" style={{ background: editingUser ? '#eff6ff' : '#ecfdf5', color: editingUser ? '#2563eb' : '#059669' }}>
-                                    {editingUser ? <Pencil size={22} /> : <UserPlus size={22} />}
+                                <div className="p-2 bg-light text-slate-800 rounded-3">
+                                    <UserCheck size={20} />
                                 </div>
                                 <div>
-                                    <h5 className="mb-0 fw-bold text-zinc-900">
-                                        {editingUser ? `Edit ${editingUser.firstName} ${editingUser.lastName}` : 'Add New Team Member'}
-                                    </h5>
-                                    <p className="text-zinc-500 small mb-0" style={{ fontSize: '12px' }}>
-                                        {editingUser ? 'Update profile details and access permissions' : 'Create account with role-based access control'}
+                                    <h5 className="mb-0 fw-bold text-slate-900">{editingUser ? 'Edit Organization Member' : 'Add New Member'}</h5>
+                                    <p className="text-muted small mb-0" style={{ fontSize: '11px' }}>
+                                        {editingUser ? 'Modify account roles and structural hierarchies' : 'Register a new member and assign structural roles'}
                                     </p>
                                 </div>
                             </div>
-                            <button className="btn btn-ghost p-2 rounded-circle border-0" onClick={() => setShowModal(false)}>
-                                <X size={22} className="text-zinc-400" />
+                            <button className="btn btn-link p-1 text-slate-400 border-0" onClick={() => setShowUserModal(false)}>
+                                <X size={20} />
                             </button>
                         </div>
 
-                        {/* Scrollable Body */}
-                        <div className="flex-grow-1 overflow-auto p-5" style={{ background: '#f9fafb' }}>
-                            <div className="d-flex flex-column gap-4">
+                        {/* Scrollable Form Body */}
+                        <div className="flex-grow-1 overflow-auto p-4 bg-light">
+                            <div className="d-flex flex-column gap-3.5">
                                 
-                                {/* ===== SECTION 1: BASIC INFO ===== */}
-                                <div className="bg-white rounded-3 border p-4">
-                                    <div className="d-flex align-items-center gap-2 mb-3">
-                                        <div className="p-1.5 rounded-2" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                                            <UserCheck size={14} />
-                                        </div>
-                                        <span className="fw-bold text-zinc-800" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Basic Information
-                                        </span>
+                                {/* BASIC DETAILS */}
+                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
+                                    <div className="fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                        Basic Information
                                     </div>
                                     <div className="row g-3">
-                                        <div className="col-sm-6">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>FIRST NAME *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control rounded-3"
-                                                placeholder="e.g. John"
-                                                value={formData.firstName}
-                                                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb' }}
-                                                required
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">First Name *</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                placeholder="e.g. John" 
+                                                value={userFormData.firstName}
+                                                onChange={(e) => setUserFormData(prev => ({ ...prev, firstName: e.target.value }))}
                                             />
                                         </div>
-                                        <div className="col-sm-6">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>LAST NAME *</label>
-                                            <input
-                                                type="text"
-                                                className="form-control rounded-3"
-                                                placeholder="e.g. Doe"
-                                                value={formData.lastName}
-                                                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb' }}
-                                                required
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">Last Name *</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                placeholder="e.g. Doe" 
+                                                value={userFormData.lastName}
+                                                onChange={(e) => setUserFormData(prev => ({ ...prev, lastName: e.target.value }))}
                                             />
                                         </div>
-                                        <div className="col-sm-6">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>EMAIL ADDRESS *</label>
-                                            <input
-                                                type="email"
-                                                className="form-control rounded-3"
-                                                placeholder="john.doe@example.com"
-                                                value={formData.email}
-                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">Email Address *</label>
+                                            <input 
+                                                type="email" 
+                                                className="form-control" 
+                                                placeholder="e.g. john@retailops.com" 
+                                                value={userFormData.email}
+                                                onChange={(e) => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
                                                 disabled={!!editingUser}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb', background: editingUser ? '#fafafa' : '#fff' }}
-                                                required
-                                            />
-                                            {editingUser && <span className="text-zinc-400" style={{ fontSize: '10px' }}>Email cannot be changed</span>}
-                                        </div>
-                                        <div className="col-sm-6">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>
-                                                {editingUser ? 'NEW PASSWORD (leave blank to keep)' : 'PASSWORD *'}
-                                            </label>
-                                            <input
-                                                type="password"
-                                                className="form-control rounded-3"
-                                                placeholder={editingUser ? "Leave blank to keep current" : "Minimum 6 characters"}
-                                                value={formData.password}
-                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb' }}
-                                                required={!editingUser}
                                             />
                                         </div>
-                                        <div className="col-sm-6">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>PHONE NUMBER</label>
-                                            <input
-                                                type="tel"
-                                                className="form-control rounded-3"
-                                                placeholder="+91 98765 43210"
-                                                value={formData.phone}
-                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb' }}
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">Phone Number</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                placeholder="e.g. +1 (555) 123-4567" 
+                                                value={userFormData.phone}
+                                                onChange={(e) => setUserFormData(prev => ({ ...prev, phone: e.target.value }))}
                                             />
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* ===== SECTION 2: ROLE & STATUS ===== */}
-                                <div className="bg-white rounded-3 border p-4">
-                                    <div className="d-flex align-items-center gap-2 mb-3">
-                                        <div className="p-1.5 rounded-2" style={{ background: '#fef3c7', color: '#d97706' }}>
-                                            <Shield size={14} />
-                                        </div>
-                                        <span className="fw-bold text-zinc-800" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Role & Access Level
-                                        </span>
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-sm-8">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>ASSIGNED ROLE *</label>
-                                            <select
-                                                className="form-select rounded-3"
-                                                value={formData.role}
-                                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                                style={{ fontSize: '13px', height: '42px', border: '1.5px solid #e5e7eb' }}
-                                                required
-                                            >
-                                                <option value="">Select a role...</option>
-                                                {roles.map((role) => (
-                                                    <option key={role._id || role.id} value={role._id || role.id}>
-                                                        {role.displayName} (Level {role.level})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="col-sm-4 d-flex flex-column justify-content-end">
-                                            <label className="form-label fw-bold text-zinc-600 mb-1" style={{ fontSize: '11px' }}>ACCOUNT STATUS</label>
-                                            <div className="form-check form-switch d-flex align-items-center" style={{ height: '42px' }}>
-                                                <input
-                                                    className="form-check-input me-2"
-                                                    type="checkbox"
-                                                    role="switch"
-                                                    id="isActiveSwitch"
-                                                    checked={formData.isActive}
-                                                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                                                    style={{ cursor: 'pointer', width: '40px', height: '22px' }}
+                                        {!editingUser && (
+                                            <div className="col-md-12">
+                                                <label className="form-label text-slate-600 small fw-semibold">Temporary Password *</label>
+                                                <input 
+                                                    type="password" 
+                                                    className="form-control" 
+                                                    placeholder="Must be at least 6 characters" 
+                                                    value={userFormData.password}
+                                                    onChange={(e) => setUserFormData(prev => ({ ...prev, password: e.target.value }))}
                                                 />
-                                                <label className="form-check-label fw-bold" htmlFor="isActiveSwitch" style={{ fontSize: '12px', cursor: 'pointer' }}>
-                                                    {formData.isActive ? (
-                                                        <span className="text-success d-flex align-items-center gap-1"><CheckCircle2 size={14} /> Active</span>
-                                                    ) : (
-                                                        <span className="text-danger d-flex align-items-center gap-1"><XCircle size={14} /> Inactive</span>
-                                                    )}
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* ===== SECTION 3: SUPERVISORS ===== */}
-                                <div className="bg-white rounded-3 border p-4">
-                                    <div className="d-flex align-items-center gap-2 mb-3">
-                                        <div className="p-1.5 rounded-2" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-                                            <Users size={14} />
-                                        </div>
-                                        <span className="fw-bold text-zinc-800" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Supervisors (Higher Role Level)
-                                        </span>
-                                    </div>
-                                    <p className="text-zinc-500 mb-3" style={{ fontSize: '11px' }}>
-                                        Select users with <strong>equal or higher role level</strong> who can supervise this team member.
-                                    </p>
-                                    
-                                    {(() => {
-                                        const selectedRoleLevel = roles.find(r => (r._id === formData.role || r.id === formData.role))?.level || 0;
-                                        const eligibleSupervisors = users.filter(u => 
-                                            (u._id !== editingUser?._id && u.id !== editingUser?._id) && 
-                                            (u.role?.level || 0) >= selectedRoleLevel
-                                        );
-
-                                        if (eligibleSupervisors.length === 0) {
-                                            return (
-                                                <div className="text-center py-4 bg-zinc-50 rounded-3">
-                                                    <Users size={24} className="text-zinc-300 mb-2" />
-                                                    <p className="text-zinc-400 mb-0" style={{ fontSize: '12px' }}>
-                                                        {!formData.role 
-                                                            ? 'Select a role first to see eligible supervisors'
-                                                            : 'No users found with equal or higher role level'}
-                                                    </p>
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                <div className="row g-2">
-                                                    {eligibleSupervisors.map((user) => (
-                                                        <div key={user._id || user.id} className="col-md-6">
-                                                            <div
-                                                                className={`p-3 rounded-3 border cursor-pointer transition-all ${
-                                                                    formData.supervisors.includes(user._id || user.id) 
-                                                                        ? 'bg-violet-50 border-violet-300' 
-                                                                        : 'bg-white border-zinc-200 hover-bg-zinc-50'
-                                                                }`}
-                                                                onClick={() => {
-                                                                    const uid = user._id || user.id;
-                                                                    setFormData(prev => ({
-                                                                        ...prev,
-                                                                        supervisors: prev.supervisors.includes(uid)
-                                                                            ? prev.supervisors.filter(id => id !== uid)
-                                                                            : [...prev.supervisors, uid]
-                                                                    }));
-                                                                }}
-                                                            >
-                                                                <div className="d-flex align-items-center gap-3">
-                                                                    <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white flex-shrink-0"
-                                                                        style={{ 
-                                                                            width: '36px', 
-                                                                            height: '36px', 
-                                                                            fontSize: '12px',
-                                                                            background: user.role?.color 
-                                                                                ? `linear-gradient(135deg, ${user.role.color}, ${user.role.color}dd)` 
-                                                                                : 'linear-gradient(135deg, #6366f1, #4f46e5)'
-                                                                        }}
-                                                                    >
-                                                                        {user.firstName?.[0]}{user.lastName?.[0]}
-                                                                    </div>
-                                                                    <div className="flex-grow-1 min-w-0">
-                                                                        <div className="fw-bold text-zinc-800 text-truncate" style={{ fontSize: '12px' }}>
-                                                                            {user.firstName} {user.lastName}
-                                                                            {formData.supervisors.includes(user._id || user.id) && (
-                                                                                <span className="badge bg-violet-100 text-violet-700 ms-2" style={{ fontSize: '9px' }}>Selected</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="d-flex align-items-center gap-2 mt-0.5">
-                                                                            <span className="text-zinc-400 text-truncate" style={{ fontSize: '10px' }}>{user.email}</span>
-                                                                            <span className="badge rounded-pill" style={{ 
-                                                                                fontSize: '9px', 
-                                                                                background: (user.role?.color || '#6B7280') + '20', 
-                                                                                color: user.role?.color || '#6B7280' 
-                                                                            }}>
-                                                                                Lvl {user.role?.level || 0}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className={`checkbox-custom ${formData.supervisors.includes(user._id || user.id) ? 'checked' : ''}`}
-                                                                        style={{ width: '20px', height: '20px', flexShrink: 0 }}>
-                                                                        {formData.supervisors.includes(user._id || user.id) && <Check size={12} />}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-
-                                {/* ===== SECTION 4: SELLER ACCESS ===== */}
-                                {(() => {
-                                    const selectedRoleObj = roles.find(r => (r._id === formData.role || r.id === formData.role));
-                                    const isGlobalRole = selectedRoleObj && ['admin', 'operational_manager'].includes(selectedRoleObj.name);
-
-                                    if (!formData.role || isGlobalRole) return null;
-
-                                    return (
-                                        <div className="bg-white rounded-3 border p-4">
-                                            <div className="d-flex align-items-center gap-2 mb-3">
-                                                <div className="p-1.5 rounded-2" style={{ background: '#ecfdf5', color: '#059669' }}>
-                                                    <Store size={14} />
-                                                </div>
-                                                <span className="fw-bold text-zinc-800" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                    Seller Access ({formData.assignedSellers.length} selected)
-                                                </span>
-                                            </div>
-                                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                                <p className="text-zinc-500 mb-0" style={{ fontSize: '11px' }}>
-                                                    Select which sellers this user can access. Non-admin users can only see data for assigned sellers.
-                                                </p>
-                                                <div className="d-flex gap-2">
-                                                    <button 
-                                                        className={`btn btn-sm py-1 px-2 ${sellerSelectionMode === 'all' ? 'btn-dark' : 'btn-light border'}`}
-                                                        style={{ fontSize: '10px' }}
-                                                        onClick={() => setSellerSelectionMode('all')}
-                                                    >
-                                                        All Sellers
-                                                    </button>
-                                                    <button 
-                                                        className={`btn btn-sm py-1 px-2 ${sellerSelectionMode === 'manager' ? 'btn-dark' : 'btn-light border'}`}
-                                                        style={{ fontSize: '10px' }}
-                                                        onClick={() => setSellerSelectionMode('manager')}
-                                                    >
-                                                        By Brand Manager
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {sellerSelectionMode === 'all' && sellers.length > 0 && (
-                                                <div className="mb-3 d-flex gap-2">
-                                                    <button 
-                                                        className="btn btn-sm btn-light border text-primary fw-bold" 
-                                                        style={{ fontSize: '10px' }}
-                                                        onClick={() => {
-                                                            const allIds = sellers.map(s => s._id || s.id);
-                                                            setFormData(prev => ({ ...prev, assignedSellers: allIds }));
-                                                        }}
-                                                    >
-                                                        Select All Sellers
-                                                    </button>
-                                                    <button 
-                                                        className="btn btn-sm btn-light border text-danger fw-bold" 
-                                                        style={{ fontSize: '10px' }}
-                                                        onClick={() => {
-                                                            setFormData(prev => ({ ...prev, assignedSellers: [] }));
-                                                        }}
-                                                    >
-                                                        Deselect All
-                                                    </button>
-                                                </div>
-                                            )}
-                                            
-                                            {sellers.length === 0 ? (
-                                                <div className="text-center py-3 bg-zinc-50 rounded-3">
-                                                    <Store size={20} className="text-zinc-300 mb-1" />
-                                                    <p className="text-zinc-400 mb-0" style={{ fontSize: '12px' }}>No sellers available</p>
-                                                </div>
-                                            ) : (
-                                                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                                    {sellerSelectionMode === 'all' ? (
-                                                        <div className="row g-2">
-                                                            {sellers.map((seller) => (
-                                                                <div key={seller._id || seller.id} className="col-md-4 col-sm-6">
-                                                                    <div
-                                                                        className={`p-2 rounded-3 border cursor-pointer transition-all ${
-                                                                            formData.assignedSellers.includes(seller._id || seller.id) 
-                                                                                ? 'bg-emerald-50 border-emerald-300' 
-                                                                                : 'bg-white border-zinc-200 hover-bg-zinc-50'
-                                                                        }`}
-                                                                        onClick={() => {
-                                                                            const sid = seller._id || seller.id;
-                                                                            setFormData(prev => ({
-                                                                                ...prev,
-                                                                                assignedSellers: prev.assignedSellers.includes(sid)
-                                                                                    ? prev.assignedSellers.filter(id => id !== sid)
-                                                                                    : [...prev.assignedSellers, sid]
-                                                                            }));
-                                                                        }}
-                                                                    >
-                                                                        <div className="d-flex align-items-center gap-2">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                className="form-check-input m-0"
-                                                                                checked={formData.assignedSellers.includes(seller._id || seller.id)}
-                                                                                readOnly
-                                                                                style={{ width: '15px', height: '15px', cursor: 'pointer' }}
-                                                                            />
-                                                                            <div className="min-w-0">
-                                                                                <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '11px' }}>
-                                                                                    {seller.name}
-                                                                                </div>
-                                                                                <div className="text-zinc-400" style={{ fontSize: '9px' }}>
-                                                                                    {seller.marketplace}
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="d-flex flex-column gap-4">
-                                                            {Object.entries(
-                                                                sellers.reduce((acc, seller) => {
-                                                                    const managers = seller.managers && seller.managers.length > 0 
-                                                                        ? seller.managers.map(m => `${m.firstName} ${m.lastName}`) 
-                                                                        : ['Unassigned'];
-                                                                    
-                                                                    managers.forEach(mName => {
-                                                                        if (!acc[mName]) acc[mName] = [];
-                                                                        acc[mName].push(seller);
-                                                                    });
-                                                                    return acc;
-                                                                }, {})
-                                                            ).map(([mName, mSellers]) => (
-                                                                <div key={mName} className="border rounded-3 p-3 bg-white">
-                                                                    <div className="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                                                                        <div className="d-flex align-items-center gap-2">
-                                                                            <div className="p-1.5 rounded-2 bg-primary-subtle text-primary">
-                                                                                <UserCheck size={12} />
-                                                                            </div>
-                                                                            <span className="fw-bold text-zinc-800" style={{ fontSize: '12px' }}>{mName}</span>
-                                                                            <span className="badge bg-zinc-100 text-zinc-500" style={{ fontSize: '9px' }}>{mSellers.length} Sellers</span>
-                                                                        </div>
-                                                                        <div className="d-flex gap-2">
-                                                                            <button 
-                                                                                className="btn btn-xs btn-link p-0 text-primary fw-bold text-decoration-none" 
-                                                                                style={{ fontSize: '10px' }}
-                                                                                onClick={() => {
-                                                                                    const sIds = mSellers.map(s => s._id || s.id);
-                                                                                    setFormData(prev => ({
-                                                                                        ...prev,
-                                                                                        assignedSellers: [...new Set([...prev.assignedSellers, ...sIds])]
-                                                                                    }));
-                                                                                }}
-                                                                            >
-                                                                                Select Group
-                                                                            </button>
-                                                                            <button 
-                                                                                className="btn btn-xs btn-link p-0 text-danger fw-bold text-decoration-none" 
-                                                                                style={{ fontSize: '10px' }}
-                                                                                onClick={() => {
-                                                                                    const sIds = mSellers.map(s => s._id || s.id);
-                                                                                    setFormData(prev => ({
-                                                                                        ...prev,
-                                                                                        assignedSellers: prev.assignedSellers.filter(id => !sIds.includes(id))
-                                                                                    }));
-                                                                                }}
-                                                                            >
-                                                                                Unselect
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="row g-2">
-                                                                        {mSellers.map(seller => (
-                                                                            <div key={`${mName}-${seller._id}`} className="col-md-4 col-sm-6">
-                                                                                <div
-                                                                                    className={`p-2 rounded-3 border cursor-pointer transition-all ${
-                                                                                        formData.assignedSellers.includes(seller._id || seller.id) 
-                                                                                            ? 'bg-emerald-50 border-emerald-300' 
-                                                                                            : 'bg-white border-zinc-200 hover-bg-zinc-50'
-                                                                                    }`}
-                                                                                    onClick={() => {
-                                                                                        const sid = seller._id || seller.id;
-                                                                                        setFormData(prev => ({
-                                                                                            ...prev,
-                                                                                            assignedSellers: prev.assignedSellers.includes(sid)
-                                                                                                ? prev.assignedSellers.filter(id => id !== sid)
-                                                                                                : [...prev.assignedSellers, sid]
-                                                                                        }));
-                                                                                    }}
-                                                                                >
-                                                                                    <div className="d-flex align-items-center gap-2">
-                                                                                        <input
-                                                                                            type="checkbox"
-                                                                                            className="form-check-input m-0"
-                                                                                            checked={formData.assignedSellers.includes(seller._id || seller.id)}
-                                                                                            readOnly
-                                                                                            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
-                                                                                        />
-                                                                                        <div className="min-w-0">
-                                                                                            <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '10px' }}>
-                                                                                                {seller.name}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
-
-                                {/* ===== SECTION 5: EXTRA PERMISSIONS ===== */}
-                                {formData.role && (
-                                    <div className="bg-white rounded-3 border p-4">
-                                        <div className="d-flex align-items-center gap-2 mb-3">
-                                            <div className="p-1.5 rounded-2" style={{ background: '#fff7ed', color: '#ea580c' }}>
-                                                <Shield size={14} />
-                                            </div>
-                                            <span className="fw-bold text-zinc-800" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                                Extra Permissions
-                                            </span>
-                                            <span className="badge bg-zinc-100 text-zinc-500" style={{ fontSize: '10px' }}>
-                                                {formData.extraPermissions.length} extra / {formData.excludedPermissions.length} excluded
-                                            </span>
-                                        </div>
-                                        
-                                        {allPermissions.length === 0 ? (
-                                            <div className="text-center py-3 bg-zinc-50 rounded-3">
-                                                <Shield size={20} className="text-zinc-300 mb-1" />
-                                                <p className="text-zinc-400 mb-0" style={{ fontSize: '12px' }}>No permissions available</p>
-                                            </div>
-                                        ) : (
-                                            <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                                                <div className="row g-2">
-                                                    {allPermissions.map((perm) => {
-                                                        const pid = perm._id || perm.id;
-                                                        const isInherited = rolePermissionIds.includes(pid);
-                                                        const isExcluded = formData.excludedPermissions.includes(pid);
-                                                        const isExtra = formData.extraPermissions.includes(pid);
-                                                        const isActive = (isInherited && !isExcluded) || isExtra;
-
-                                                        return (
-                                                            <div key={pid} className="col-md-6">
-                                                                <div
-                                                                    className={`p-2 rounded-3 border cursor-pointer transition-all ${
-                                                                        isActive ? 'bg-orange-50 border-orange-300' : 
-                                                                        isExcluded ? 'bg-red-50 border-red-200 opacity-60' : 
-                                                                        'bg-white border-zinc-200 hover-bg-zinc-50'
-                                                                    }`}
-                                                                    onClick={() => togglePermission(pid)}
-                                                                    title={isInherited ? 'Granted by role' : 'Optional permission'}
-                                                                >
-                                                                    <div className="d-flex align-items-center gap-2">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="form-check-input m-0"
-                                                                            checked={isActive}
-                                                                            readOnly
-                                                                            style={{ width: '15px', height: '15px', cursor: 'pointer' }}
-                                                                        />
-                                                                        <div className="min-w-0 flex-grow-1">
-                                                                            <div className="fw-bold text-zinc-700 text-truncate" style={{ fontSize: '11px' }}>
-                                                                                {perm.displayName || perm.name}
-                                                                            </div>
-                                                                        </div>
-                                                                        {isInherited && !isExcluded && (
-                                                                            <span className="badge bg-blue-50 text-blue-600 flex-shrink-0" style={{ fontSize: '8px' }}>ROLE</span>
-                                                                        )}
-                                                                        {isExtra && (
-                                                                            <span className="badge bg-orange-50 text-orange-600 flex-shrink-0" style={{ fontSize: '8px' }}>EXTRA</span>
-                                                                        )}
-                                                                        {isExcluded && (
-                                                                            <span className="badge bg-red-50 text-red-600 flex-shrink-0" style={{ fontSize: '8px' }}>BLOCKED</span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                )}
+                                </div>
+
+                                {/* ROLE AND SCHEMES */}
+                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
+                                    <div className="fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                        Access and Permissions Hierarchy
+                                    </div>
+                                    <div className="row g-3">
+                                        <div className="col-md-12">
+                                            <label className="form-label text-slate-600 small fw-semibold">Access Role *</label>
+                                            <select 
+                                                className="form-select" 
+                                                value={userFormData.role}
+                                                onChange={(e) => handleUserRoleChange(e.target.value)}
+                                            >
+                                                <option value="">Select Role</option>
+                                                {roles.map(r => <option key={r._id || r.id} value={r._id || r.id}>{r.displayName}</option>)}
+                                            </select>
+                                        </div>
+
+                                        {/* CONDITIONAL FORM DYNAMICS */}
+                                        {(() => {
+                                            const selectedRole = roles.find(r => r._id === userFormData.role || r.id === userFormData.role);
+                                            const isBM = selectedRole?.name === 'brand_manager' || selectedRole?.displayName === 'Brand Manager';
+                                            const isLT = selectedRole?.name === 'listing_team' || selectedRole?.displayName === 'Listing Team';
+
+                                            if (isLT) {
+                                                return (
+                                                    <div className="col-md-12 mt-3 bg-slate-50 p-3 rounded-3 border">
+                                                        <div className="d-flex align-items-center gap-2 text-primary fw-semibold mb-2 small">
+                                                            <UserCheck size={14} /> Assign Brand Managers (Supervisors)
+                                                        </div>
+                                                        <p className="smallest text-slate-500 mb-2">As a Listing Team member, you must assign at least one Brand Manager supervisor.</p>
+                                                        <div className="d-flex flex-column gap-1.5" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                                                            {managers.length > 0 ? (
+                                                                managers.map((m) => {
+                                                                    const isChecked = userFormData.brandManagers.includes(m._id || m.id);
+                                                                    return (
+                                                                        <div key={m._id || m.id} className="d-flex align-items-center gap-2">
+                                                                            <input 
+                                                                                type="checkbox" 
+                                                                                id={`bm-${m._id || m.id}`} 
+                                                                                checked={isChecked}
+                                                                                onChange={() => {
+                                                                                    setUserFormData(prev => {
+                                                                                        const isSel = prev.brandManagers.includes(m._id || m.id);
+                                                                                        return {
+                                                                                            ...prev,
+                                                                                            brandManagers: isSel
+                                                                                                ? prev.brandManagers.filter(id => id !== (m._id || m.id))
+                                                                                                : [...prev.brandManagers, (m._id || m.id)]
+                                                                                        };
+                                                                                    });
+                                                                                }}
+                                                                            />
+                                                                            <label htmlFor={`bm-${m._id || m.id}`} className="small text-slate-700 cursor-pointer">
+                                                                                {m.firstName} {m.lastName} ({m.email})
+                                                                            </label>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                <div className="text-muted smallest">No supervisors available in the workspace.</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (isBM) {
+                                                return (
+                                                    <div className="col-md-12 mt-3 bg-green-50 p-3 rounded-3 border" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                                                        <div className="d-flex align-items-center gap-2 fw-semibold text-emerald-800 small mb-1">
+                                                            <CheckCircle2 size={14} style={{ color: '#059669' }} /> Automated Seller Association
+                                                        </div>
+                                                        <p className="smallest text-emerald-700 mb-0">
+                                                            Brand Manager role automatically selects and links all {sellers.length} registered sellers in the workspace to secure global operations.
+                                                        </p>
+                                                    </div>
+                                                );
+                                            } else if (userFormData.role) {
+                                                // Standard role seller multi-select
+                                                return (
+                                                    <div className="col-md-12 mt-3 bg-slate-50 p-3 rounded-3 border">
+                                                        <div className="d-flex align-items-center gap-2 text-slate-700 fw-semibold mb-2 small">
+                                                            <Store size={14} /> Assign Sellers
+                                                        </div>
+                                                        <div className="d-flex flex-column gap-1.5" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                                                            {sellers.map((s) => {
+                                                                const isChecked = userFormData.assignedSellers.includes(s._id || s.id);
+                                                                return (
+                                                                    <div key={s._id || s.id} className="d-flex align-items-center gap-2">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            id={`sel-${s._id || s.id}`} 
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                setUserFormData(prev => {
+                                                                                    const isSel = prev.assignedSellers.includes(s._id || s.id);
+                                                                                    return {
+                                                                                        ...prev,
+                                                                                        assignedSellers: isSel
+                                                                                            ? prev.assignedSellers.filter(id => id !== (s._id || s.id))
+                                                                                            : [...prev.assignedSellers, (s._id || s.id)]
+                                                                                    };
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                        <label htmlFor={`sel-${s._id || s.id}`} className="small text-slate-700 cursor-pointer">
+                                                                            {s.name} ({s.code || s.id})
+                                                                        </label>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {/* Footer */}
-                        <div className="px-5 py-4 bg-white border-top d-flex justify-content-end gap-3">
-                            <button 
-                                type="button" 
-                                className="btn btn-outline-secondary fw-bold px-4 rounded-3"
-                                onClick={() => setShowModal(false)}
-                                style={{ fontSize: '13px', height: '42px' }}
-                            >
+                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-white">
+                            <button className="btn btn-light px-4 fw-semibold" style={{ fontSize: '13px' }} onClick={() => setShowUserModal(false)}>
+                                Discard
+                            </button>
+                            <button className="btn btn-dark px-4 fw-bold" style={{ fontSize: '13px' }} onClick={handleSaveUser}>
+                                {editingUser ? 'Save Updates' : 'Register Member'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ===== ROLE DETAILS MODAL ===== */}
+            {showRoleModal && (
+                <div 
+                    className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
+                    style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowRoleModal(false); }}
+                >
+                    <div 
+                        className="bg-white shadow-2xl overflow-hidden"
+                        style={{ width: '100%', maxWidth: '500px', borderRadius: '24px' }}
+                    >
+                        {/* Header */}
+                        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center">
+                            <div className="d-flex align-items-center gap-3">
+                                <div className="p-2 bg-light text-indigo-700 rounded-3" style={{ color: '#4f46e5' }}>
+                                    <Shield size={20} />
+                                </div>
+                                <div>
+                                    <h5 className="mb-0 fw-bold text-slate-900">{editingRole ? 'Edit Role Details' : 'Create Custom Role'}</h5>
+                                    <p className="text-muted small mb-0" style={{ fontSize: '11px' }}>Configure role specifications and aesthetic tags</p>
+                                </div>
+                            </div>
+                            <button className="btn btn-link p-1 text-slate-400 border-0" onClick={() => setShowRoleModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-4 bg-light">
+                            <div className="d-flex flex-column gap-3">
+                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
+                                    <div className="row g-3">
+                                        <div className="col-12">
+                                            <label className="form-label text-slate-600 small fw-semibold">Display Label *</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control" 
+                                                placeholder="e.g. Listing Team" 
+                                                value={roleFormData.displayName}
+                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, displayName: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">Priority Level (0-100)</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-control" 
+                                                min="0" max="100"
+                                                value={roleFormData.level}
+                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, level: parseInt(e.target.value) || 0 }))}
+                                            />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label text-slate-600 small fw-semibold">Theme Color</label>
+                                            <div className="d-flex align-items-center gap-2">
+                                                <input 
+                                                    type="color" 
+                                                    className="form-control form-control-color border" 
+                                                    style={{ width: '42px', height: '38px', padding: '4px', cursor: 'pointer' }}
+                                                    value={roleFormData.color}
+                                                    onChange={(e) => setRoleFormData(prev => ({ ...prev, color: e.target.value }))}
+                                                />
+                                                <span className="font-monospace text-slate-500 small">{roleFormData.color}</span>
+                                            </div>
+                                        </div>
+                                        <div className="col-12">
+                                            <label className="form-label text-slate-600 small fw-semibold">Description</label>
+                                            <textarea 
+                                                className="form-control" 
+                                                rows="3"
+                                                placeholder="Briefly summarize duties assigned to this role..."
+                                                value={roleFormData.description}
+                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, description: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-white">
+                            <button className="btn btn-light px-4 fw-semibold" style={{ fontSize: '13px' }} onClick={() => setShowRoleModal(false)}>
                                 Cancel
                             </button>
-                            <button 
-                                type="button" 
-                                className="btn btn-dark fw-bold px-5 rounded-3 d-flex align-items-center gap-2"
-                                onClick={handleSaveUser}
-                                style={{ fontSize: '13px', height: '42px', background: '#18181b' }}
-                            >
-                                {editingUser ? (
-                                    <><Check size={16} /> Update Profile</>
-                                ) : (
-                                    <><UserPlus size={16} /> Create Account</>
-                                )}
+                            <button className="btn btn-dark px-4 fw-bold" style={{ fontSize: '13px' }} onClick={handleSaveRole}>
+                                {editingRole ? 'Save Changes' : 'Create Role'}
                             </button>
                         </div>
                     </div>
@@ -966,57 +1181,3 @@ const UsersPage = () => {
 };
 
 export default UsersPage;
-/**
- * Styles for the UsersPage modal and interactive elements
- */
-const style = document.createElement('style');
-style.textContent = `
-    .checkbox-custom {
-        width: 18px;
-        height: 18px;
-        border-radius: 5px;
-        border: 2px solid #d1d5db;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.15s;
-        flex-shrink: 0;
-    }
-    .checkbox-custom.checked {
-        background: #18181b;
-        border-color: #18181b;
-        color: white;
-    }
-    .checkbox-custom:hover {
-        border-color: #18181b;
-    }
-    .hover-bg-zinc-50:hover {
-        background-color: #f9fafb !important;
-    }
-    .cursor-pointer {
-        cursor: pointer;
-    }
-    .bg-violet-50 { background-color: #f5f3ff; }
-    .border-violet-300 { border-color: #c4b5fd; }
-    .text-violet-700 { color: #6d28d9; }
-    .bg-violet-100 { background-color: #ede9fe; }
-    .bg-emerald-50 { background-color: #ecfdf5; }
-    .border-emerald-300 { border-color: #6ee7b7; }
-    .bg-orange-50 { background-color: #fff7ed; }
-    .border-orange-300 { border-color: #fdba74; }
-    .text-orange-600 { color: #ea580c; }
-    .bg-blue-50 { background-color: #eff6ff; }
-    .text-blue-600 { color: #2563eb; }
-    .bg-red-50 { background-color: #fef2f2; }
-    .text-red-600 { color: #dc2626; }
-    .text-zinc-900 { color: #18181b; }
-    .text-zinc-800 { color: #27272a; }
-    .text-zinc-600 { color: #52525b; }
-    .text-zinc-500 { color: #71717a; }
-    .text-zinc-400 { color: #a1a1aa; }
-    .text-zinc-300 { color: #d4d4d8; }
-    .bg-zinc-50 { background-color: #f9fafb; }
-    .border-zinc-200 { border-color: #e4e4e7; }
-`;
-document.head.appendChild(style);

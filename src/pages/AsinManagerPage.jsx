@@ -407,6 +407,23 @@ const AsinManagerPage = () => {
     localStorage.setItem('selectedSeller', selectedSeller);
   }, [selectedSeller]);
 
+  const [marketplaceFilter, setMarketplaceFilter] = useState(() => localStorage.getItem('selectedMarketplace') || 'all');
+  // Persist marketplace selection
+  useEffect(() => {
+    localStorage.setItem('selectedMarketplace', marketplaceFilter);
+  }, [marketplaceFilter]);
+
+  const canAccessAmazon = isAdmin || hasPermission('marketplace_amazon');
+  const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
+
+  useEffect(() => {
+    if (!canAccessAmazon && canAccessAjio && marketplaceFilter !== 'ajio') {
+      setMarketplaceFilter('ajio');
+    } else if (canAccessAmazon && !canAccessAjio && (marketplaceFilter === 'ajio' || marketplaceFilter === 'all')) {
+      setMarketplaceFilter('amazon.in');
+    }
+  }, [canAccessAmazon, canAccessAjio, marketplaceFilter]);
+
   const [repairStatus, setRepairStatus] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeEditAsin, setActiveEditAsin] = useState(null);
@@ -415,14 +432,27 @@ const AsinManagerPage = () => {
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const {
     visibleColumns,
-    isVisible,
+    isVisible: baseIsVisible,
     toggleColumn,
     toggleCategory,
     resetToDefaults,
     selectAll,
     visibleCount,
-    totalCount
+    totalCount,
+    allColumns,
+    columnCategories,
+    isCatalogManager
   } = useColumnVisibility();
+
+  const isVisible = useCallback((key) => {
+    if (marketplaceFilter === 'ajio') {
+      const ajioAllowedColumns = [
+        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'imagesCount'
+      ];
+      return ajioAllowedColumns.includes(key);
+    }
+    return baseIsVisible(key);
+  }, [baseIsVisible, marketplaceFilter]);
 
   const [showColumnPanel, setShowColumnPanel] = useState(false);
   const [showBulkTagsModal, setShowBulkTagsModal] = useState(false);
@@ -993,7 +1023,7 @@ const AsinManagerPage = () => {
     }
   };
 
-  const loadData = useCallback(async (page = 1, limit = pagination.limit, seller = selectedSeller) => {
+  const loadData = useCallback(async (page = 1, limit = pagination.limit, seller = selectedSeller, marketplace = marketplaceFilter) => {
     try {
       setLoading(true);
 
@@ -1002,6 +1032,7 @@ const AsinManagerPage = () => {
         page,
         limit,
         seller,
+        marketplace: marketplace !== 'all' ? marketplace : undefined,
         search: appliedSearchQuery,
         ...appliedFilters,
         historyDays: appliedFilters.historyDays,
@@ -1009,7 +1040,10 @@ const AsinManagerPage = () => {
         sortOrder: 'desc'
       });
 
-      const statsRes = await asinApi.getStats({ seller });
+      const statsRes = await asinApi.getStats({ 
+        seller,
+        marketplace: marketplace !== 'all' ? marketplace : undefined
+      });
 
       // 🔍 DEBUG: Log the first ASIN to check allOffers
       if (asinRes?.asins?.length > 0) {
@@ -1036,7 +1070,7 @@ const AsinManagerPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters]);
+  }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters, marketplaceFilter]);
 
   const handleImportTags = async (e) => {
     const file = e.target.files?.[0];
@@ -2279,6 +2313,23 @@ const AsinManagerPage = () => {
                     placeholder="All Sellers"
                   />
                 </div>
+                <div style={{ width: '120px' }}>
+                  <select
+                    className="form-select form-select-xs bg-zinc-50 border-zinc-200 shadow-none rounded-2 smallest fw-semibold text-zinc-700"
+                    style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
+                    value={marketplaceFilter}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMarketplaceFilter(val);
+                      loadData(1, pagination.limit, selectedSeller, val);
+                    }}
+                  >
+                    {canAccessAmazon && canAccessAjio && <option value="all">All Markets</option>}
+                    {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
+                    {canAccessAmazon && <option value="amazon.com">Amazon.com</option>}
+                    {canAccessAjio && <option value="ajio">Ajio</option>}
+                  </select>
+                </div>
 
                 {/* Scrape Progress */}
                 {scrapeProgress && (
@@ -2341,6 +2392,8 @@ const AsinManagerPage = () => {
                     onSelectAll={selectAll}
                     visibleCount={visibleCount}
                     totalCount={totalCount}
+                    allColumns={allColumns}
+                    columnCategories={columnCategories}
                   />
                 </div>
               </div>
@@ -2467,7 +2520,7 @@ const AsinManagerPage = () => {
                   {isVisible('asinCode') && (
                     <th rowSpan={2} style={{ ...thStyle, width: '110px', left: isVisible('checkbox') ? '40px' : '0px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>
                       <div className="d-flex align-items-center justify-content-between">
-                        ASIN ID
+                        {marketplaceFilter === 'ajio' ? 'JIOCODE' : 'ASIN ID'}
                       </div>
                     </th>
                   )}
@@ -2506,7 +2559,7 @@ const AsinManagerPage = () => {
 
                   {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
                   {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>MRP</th>}
-                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>PRICE</th>}
+                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
                   {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISPUTE</th>}
                   {visiblePriceTrendCount > 0 && (
                     <th colSpan={visiblePriceTrendCount}
@@ -2717,10 +2770,10 @@ const AsinManagerPage = () => {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <span>{asin.asinCode}</span>
                             <a
-                              href={`https://www.amazon.in/dp/${asin.asinCode}`}
+                              href={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : `https://www.amazon.in/dp/${asin.asinCode}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              title="Open on Amazon"
+                              title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
                               style={{
                                 color: '#9ca3af',
                                 display: 'flex',

@@ -350,10 +350,17 @@ exports.tagsImport = async (req, res) => {
  */
 exports.downloadCatalogTemplate = async (req, res) => {
     try {
-        const headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date', 'Price'];
-        
-        // Sample data row
-        const sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15', '499.00'];
+        let headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date', 'Price'];
+        let sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15', '499.00'];
+        let sheetName = 'Catalog Template';
+        let filename = 'catalog_template.xlsx';
+
+        if (req.query.marketplace === 'ajio') {
+            headers = ['Jio Code', 'SKU', 'Release Date', 'MRP', 'ASP', 'Brand'];
+            sampleRow = ['703391049004', 'SKU-AJIO-001', '2025-01-15', '2762.00', '1999.00', 'JAAEZAH'];
+            sheetName = 'Ajio Catalog Template';
+            filename = 'ajio_catalog_template.xlsx';
+        }
         
         const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
         ws['!cols'] = [
@@ -361,15 +368,16 @@ exports.downloadCatalogTemplate = async (req, res) => {
             { wch: 15 },
             { wch: 30 },
             { wch: 15 },
-            { wch: 12 }
+            { wch: 12 },
+            { wch: 15 }
         ];
         
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Catalog Template');
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
         
         const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
         
-        res.setHeader('Content-Disposition', 'attachment; filename="catalog_template.xlsx"');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
     } catch (error) {

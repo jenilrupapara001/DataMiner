@@ -129,7 +129,6 @@ const Sidebar = () => {
             label: 'System',
             items: [
                 { label: 'Users', icon: Users, to: '/users', permission: 'users_view' },
-                { label: 'Security Roles', icon: ShieldCheck, to: '/roles', permission: 'roles_view' },
                 { label: 'Team Map', icon: Map, to: '/team-management', permission: 'roles_view' },
                 { label: 'Settings', icon: Settings, to: '/settings', permission: 'dashboard_view' },
                 { label: 'API Keys', icon: KeyRound, to: '/api-keys', permission: 'dashboard_view' },

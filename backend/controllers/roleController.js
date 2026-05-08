@@ -287,6 +287,8 @@ const defaultPermissions = [
   // Marketplace (Page-wise)
   { name: 'seller_view', displayName: 'Seller Manager: View', description: 'View registered sellers and marketplaces', category: 'Marketplace', action: 'view' },
   { name: 'seller_manage', displayName: 'Seller Manager: Manage', description: 'Add, edit or deactivate sellers', category: 'Marketplace', action: 'manage' },
+  { name: 'marketplace_amazon', displayName: 'Marketplace: Amazon Access', description: 'Permission to access Amazon marketplace data', category: 'Marketplace', action: 'view' },
+  { name: 'marketplace_ajio', displayName: 'Marketplace: Ajio Access', description: 'Permission to access Ajio marketplace data', category: 'Marketplace', action: 'view' },
   
   { name: 'asinmanager_view', displayName: 'ASIN Manager: View', description: 'View product catalog and ASIN details', category: 'Marketplace', action: 'view' },
   { name: 'asinmanager_manage', displayName: 'ASIN Manager: Manage', description: 'Add, edit or delete product ASINs', category: 'Marketplace', action: 'manage' },
@@ -389,6 +391,22 @@ const defaultRoles = [
     color: '#F472B6', // Pink-400
   },
   {
+    name: 'catalog_manager',
+    displayName: 'Catalog Manager',
+    description: 'Dedicated to product catalog maintenance and customizable column filtering.',
+    isSystem: true,
+    level: 30,
+    color: '#F472B6', // Pink-400
+  },
+  {
+    name: 'listing_team',
+    displayName: 'Listing Team Member',
+    description: 'Focuses on completion of assigned optimization tasks.',
+    isSystem: true,
+    level: 25,
+    color: '#10B981', // Emerald-500
+  },
+  {
     name: 'employee',
     displayName: 'Associate',
     description: 'Standard access for executing assigned tasks and viewing data.',
@@ -478,17 +496,18 @@ exports.seedRolesAndPermissions = async (req, res) => {
 
     const permissionSets = {
       admin: allPermissions.map(p => p.Id),
-      operational_manager: getPermIds(p => p.Category !== 'Security' || p.Name === 'users_view'),
-      marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
+      operational_manager: getPermIds(p => p.Category !== 'Security'),
       marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
       data_analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
       team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || ['asinmanager_view', 'seller_view'].includes(p.Name)),
       inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || ['dashboard_view', 'seller_view'].includes(p.Name) || p.Category === 'Reports'),
-      catalogue_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
-      'Brand Manager': getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view' || p.Category === 'Reports'),
+      catalogue_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'dashboard_view'].includes(p.Name)),
+      catalog_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'dashboard_view'].includes(p.Name)),
+      'Brand Manager': getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'actions_view', 'actions_manage', 'dashboard_view'].includes(p.Name)),
       category_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
       analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
       'Listing Manager': getPermIds(p => p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')),
+      listing_team: getPermIds(p => ['actions_view', 'actions_manage', 'dashboard_view'].includes(p.Name)),
       employee: getPermIds(p => (['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
       viewer: getPermIds(p => (p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
     };

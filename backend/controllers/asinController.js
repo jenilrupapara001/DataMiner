@@ -42,6 +42,7 @@ exports.getAsins = async (req, res) => {
     // Helper to apply inputs to a request
     const applyInputs = (reqObj) => {
         if (seller) reqObj.input('seller', sql.VarChar, seller);
+        if (req.query.marketplace) reqObj.input('marketplace', sql.VarChar, req.query.marketplace);
         if (status) reqObj.input('status', sql.NVarChar, status);
         if (category) reqObj.input('category', sql.NVarChar, category);
         if (brand) reqObj.input('brand', sql.NVarChar, brand);
@@ -102,6 +103,10 @@ exports.getAsins = async (req, res) => {
       }
     } else if (seller) {
       whereClause += ' AND a.SellerId = @seller';
+    }
+
+    if (req.query.marketplace) {
+      whereClause += ' AND s.Marketplace = @marketplace';
     }
 
     // [1.5] Trend Filters
@@ -798,12 +803,19 @@ exports.getAsinStats = async (req, res) => {
       if (seller && allowedSellerIds.includes(seller)) {
         whereClause += ' AND SellerId = @seller';
         request.input('seller', sql.VarChar, seller);
-      } else {
+      } else if (allowedSellerIds.length > 0) {
         whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+      } else {
+        whereClause += ' AND 1=0';
       }
     } else if (seller) {
       whereClause += ' AND SellerId = @seller';
       request.input('seller', sql.VarChar, seller);
+    }
+
+    if (req.query.marketplace) {
+      whereClause += ' AND SellerId IN (SELECT Id FROM Sellers WHERE Marketplace = @marketplace)';
+      request.input('marketplace', sql.VarChar, req.query.marketplace);
     }
 
     // 1. Basic Counts
@@ -1355,7 +1367,7 @@ exports.importFromCsv = async (req, res) => {
     };
 
     const identifiers = [...new Set(data
-      .map(row => (getValue(row, ['Identifier', 'ASIN']) || '').toString().trim().toUpperCase())
+      .map(row => (getValue(row, ['Identifier', 'ASIN', 'jiocode', 'jiocode_code', 'Jio Code']) || '').toString().trim().toUpperCase())
       .filter(id => id.length >= 5)
     )];
 
@@ -1381,8 +1393,10 @@ exports.importFromCsv = async (req, res) => {
     try {
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const identifier = (getValue(row, ['Identifier', 'ASIN']) || '').toString().trim().toUpperCase();
-        const sku = (getValue(row, ['SKU']) || '').toString().trim();
+        const identifier = (getValue(row, ['Identifier', 'ASIN', 'jiocode', 'jiocode_code', 'Jio Code']) || '').toString().trim().toUpperCase();
+        const sku = (getValue(row, ['SKU', 'sku']) || '').toString().trim();
+        const mrpRaw = getValue(row, ['MRP', 'mrp', 'List Price', 'Price']);
+        const mrp = parseFloat(mrpRaw) || 0;
 
         if (!identifier || identifier.length < 5) continue;
 
@@ -1397,7 +1411,8 @@ exports.importFromCsv = async (req, res) => {
             .input('id', sql.VarChar, existingCodes.get(identifier))
             .input('sku', sql.NVarChar, sku)
             .input('status', sql.VarChar, status)
-            .query('UPDATE Asins SET Sku = @sku, Status = @status, UpdatedAt = GETDATE() WHERE Id = @id');
+            .input('mrp', sql.Decimal(18, 2), mrp)
+            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, UpdatedAt = GETDATE() WHERE Id = @id');
           updatedCount++;
         } else {
           const id = generateId();
@@ -1407,9 +1422,10 @@ exports.importFromCsv = async (req, res) => {
             .input('sellerId', sql.VarChar, sellerId)
             .input('sku', sql.NVarChar, sku)
             .input('status', sql.VarChar, status)
+            .input('mrp', sql.Decimal(18, 2), mrp)
             .query(`
-              INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-              VALUES (@id, @asin, @sellerId, @sku, @status, 'PENDING', GETDATE(), GETDATE())
+              INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, CreatedAt, UpdatedAt)
+              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', GETDATE(), GETDATE())
             `);
           insertedCount++;
           existingCodes.set(identifier, id); // Add to map to prevent duplicate inserts in this batch
@@ -1502,11 +1518,11 @@ exports.bulkUploadAllSellers = async (req, res) => {
             try {
                 for (const row of batch) {
                     const sellerName = getValue(row, ['Seller Name', 'Seller', 'Store Name'])?.toString().trim();
-                    const asin = getValue(row, ['ASIN', 'Asin Code'])?.toString().trim().toUpperCase();
-                    const sku = getValue(row, ['SKU'])?.toString().trim();
+                    const asin = getValue(row, ['ASIN', 'Asin Code', 'jiocode', 'jiocode_code', 'Jio Code'])?.toString().trim().toUpperCase();
+                    const sku = getValue(row, ['SKU', 'sku'])?.toString().trim();
                     const parentAsin = getValue(row, ['Parent ASIN', 'Parent'])?.toString().trim().toUpperCase();
                     const releaseDateRaw = getValue(row, ['Release Date', 'Released Date', 'Date', 'First Available']);
-                    const priceRaw = getValue(row, ['Price', 'Uploaded Price', 'Sale Price']);
+                    const priceRaw = getValue(row, ['Price', 'Uploaded Price', 'Sale Price', 'MRP', 'mrp']);
 
                     if (!asin || !sellerName) continue;
 
@@ -1584,7 +1600,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('status', sql.VarChar, status)
                             .query(`
                                 UPDATE Asins 
-                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Status = @status, UpdatedAt = GETDATE()
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, UpdatedAt = GETDATE()
                                 WHERE Id = @id
                             `);
                         updated++;
@@ -1601,8 +1617,8 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('price', sql.Decimal(18, 2), price)
                             .input('status', sql.VarChar, status)
                             .query(`
-                                INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @status, 'PENDING', GETDATE(), GETDATE())
+                                INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, CreatedAt, UpdatedAt)
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', GETDATE(), GETDATE())
                             `);
                         created++;
                     }

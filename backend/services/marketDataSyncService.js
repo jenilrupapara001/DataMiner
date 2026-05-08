@@ -1657,7 +1657,7 @@ class MarketDataSyncService {
             const asinResult = await pool.request()
                 .input('asinId', sql.VarChar, asinId)
                 .query(`
-                    SELECT a.*, s.Name as sellerName 
+                    SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace 
                     FROM Asins a 
                     JOIN Sellers s ON a.SellerId = s.Id 
                     WHERE a.Id = @asinId
@@ -1668,195 +1668,243 @@ class MarketDataSyncService {
 
             // --- Robust Advanced Mapping (Octoparse Specialized) ---
 
-            // 1. Price & Deal Logic
-            const price = this._cleanPrice(this._getFromRaw(rawData, ['asp', 'price', 'currentPrice', 'Field2']));
-            const mrp = this._cleanPrice(this._getFromRaw(rawData, ['mrp', 'listPrice', 'Field3']));
-            const dealBadge = this._cleanDealBadge(this._getFromRaw(rawData, ['deal_badge', 'dealBadge', 'deal', 'Field14'], 'No deal found'));
-            const priceType = dealBadge !== 'No deal found' ? 'Deal Price' : 'Standard Price';
-
-            // 2. Title & Character Count
-            const title = (rawData.Title || rawData.title || rawData.Field1 || asin.Title || '').trim();
-            const titleLength = title.length;
-
-            // 3. Category Breadcrumbs
-            const category = this._parseCategory(rawData) || asin.Category || '';
-
-            // 4. BSR Parsing
-            const bsrData = this._parseBSR(rawData);
-            const bsr = bsrData.main;
-            const sub = bsrData.sub;
-            const subBsr = bsrData.subBsrString || bsrData.sub;
-            const subBSRs = bsrData.allRanks;
-
-            // 5. Image Processing (Gallery extraction + Video Detection)
-            const mediaData = this._countImagesAndVideos(rawData);
-            const imagesCount = mediaData.imagesCount;
-            const videoCount = mediaData.videoCount;
-            const images = mediaData.images || [];
-            const mainImageUrl = this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl', 'Field5'], asin.ImageUrl);
-
-            // 6. Rating & Reviews
-            let rating = parseFloat(rawData.avg_rating);
-            if (isNaN(rating)) rating = 0;
-
-            let reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'Rating_Count', 'rating', 'RT'], '')) || asin.ReviewCount;
-
-            const ratingBreakdown = this._parseRatingBreakdown(rawData.Rating || rawData.Field7 || rawData.Rating_breakdown || '');
-
-            // Ensure we don't lose data if breakdown is empty but we had it before
-            const hasBreakdown = Object.values(ratingBreakdown).some(v => v > 0);
-            const finalRatingBreakdown = hasBreakdown ? ratingBreakdown : (asin.RatingBreakdown ? JSON.parse(asin.RatingBreakdown) : ratingBreakdown);
-
-            // 7. Bullet Points - Get exact text from Octoparse
+            // --- Shared Variable Declarations ---
+            let price = 0;
+            let mrp = 0;
+            let dealBadge = 'No deal found';
+            let priceType = 'Standard Price';
+            let title = '';
+            let category = '';
+            let bsr = 0;
+            let sub = 0;
+            let subBsr = null;
+            let subBSRs = [];
+            let imagesCount = 0;
+            let videoCount = 0;
+            let images = [];
+            let mainImageUrl = '';
+            let rating = 0;
+            let reviewCount = 0;
+            let finalRatingBreakdown = { "5Star": 0, "4Star": 0, "3Star": 0, "2Star": 0, "1Star": 0 };
             let bulletPointsText = [];
             let bulletPointsCount = 0;
-
-            // Try bullet_points or bullet_points_count HTML field
-            const bulletHtmlField = this._getFromRaw(rawData, ['bullet_points', 'bullet_points_count', 'Field8'], '');
-            if (bulletHtmlField && typeof bulletHtmlField === 'string' && bulletHtmlField.length > 50) {
-                bulletPointsText = this._parseBulletPoints(bulletHtmlField);
-                bulletPointsCount = bulletPointsText.length;
-            }
-
-            // Fallback: individual bp_ fields
-            if (bulletPointsCount === 0) {
-                for (let i = 1; i <= 10; i++) {
-                    const bpField = `bp_${i}`;
-                    if (rawData[bpField] && typeof rawData[bpField] === 'string' && rawData[bpField].trim().length > 3) {
-                        let text = rawData[bpField].trim()
-                            .replace(/<[^>]+>/g, '')
-                            .replace(/&amp;/g, '&')
-                            .replace(/&nbsp;/g, ' ')
-                            .replace(/\s+/g, ' ')
-                            .trim();
-                        if (text.length > 3 && !bulletPointsText.includes(text)) {
-                            bulletPointsText.push(text);
-                        }
-                    }
-                }
-                bulletPointsCount = bulletPointsText.length;
-            }
-
-            // console.log(`📝 Extracted ${bulletPointsCount} bullet points:`, bulletPointsText.map(b => b.substring(0, 60)));
-
-            // 8. Stock Level, A+ Content
-            const stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
-            const hasAplus = this._detectAplusContent(rawData);
-
+            let stockLevel = 0;
+            let hasAplus = false;
             let aplusAbsentSince = asin.AplusAbsentSince;
             let aplusPresentSince = asin.AplusPresentSince;
             const now = new Date();
-
-            if (hasAplus) {
-                aplusPresentSince = aplusPresentSince || now;
-                aplusAbsentSince = null;
-            } else {
-                aplusAbsentSince = aplusAbsentSince || now;
-                aplusPresentSince = null;
-            }
-
-            // 9. Sold By & Second Buy Box
-            const soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
-            const buyBoxWin = this._isBuyBoxWinner(soldBy, asin.sellerName);
-
+            let soldBy = '';
+            let buyBoxWin = false;
             let secondAsp = asin.SecondAsp;
             let soldBySec = asin.SoldBySec;
             let allOffers = [];
-
-            // Add primary buy box as the first offer
-            if (soldBy && soldBy.trim() !== '') {
-                allOffers.push({
-                    seller: soldBy.trim(),
-                    price: price || asin.CurrentPrice || 0,
-                    isBuyBoxWinner: true
-                });
-            }
-
-            // Parse secondary buybox data
-            const secondBuyboxData = this._parseSecondaryBuybox(
-                rawData.second_buybox || rawData.Alt_buyBox || rawData.Field25 || ''
-            );
-
-            if (secondBuyboxData.offers.length > 0) {
-                // Find first non-primary seller
-                let foundSecondary = false;
-                
-                for (const offer of secondBuyboxData.offers) {
-                    const offerSeller = (offer.seller || '').trim();
-                    const isSameAsPrimary = offerSeller.toLowerCase() === soldBy.toLowerCase();
-                    
-                    if (!isSameAsPrimary && offerSeller.length > 0) {
-                        if (!foundSecondary) {
-                            // Set legacy fields
-                            secondAsp = offer.price || secondAsp;
-                            soldBySec = offerSeller;
-                            foundSecondary = true;
-                        }
-                        
-                        // Add all non-primary offers to allOffers
-                        allOffers.push({
-                            seller: offerSeller,
-                            price: offer.price || 0,
-                            isBuyBoxWinner: false
-                        });
-                    }
-                }
-            } else {
-                // Fallback: check for simple second_asp field
-                const rawSecondAsp = this._cleanPrice(rawData.second_asp || '');
-                const rawSoldBySec = (rawData.Sold_by_sec || rawData.soldBySec || '').trim();
-                
-                if (rawSecondAsp > 0 || rawSoldBySec.length > 0) {
-                    secondAsp = rawSecondAsp || secondAsp;
-                    
-                    if (rawSoldBySec && rawSoldBySec.toLowerCase() !== soldBy.toLowerCase()) {
-                        soldBySec = rawSoldBySec;
-                        allOffers.push({
-                            seller: rawSoldBySec,
-                            price: rawSecondAsp || 0,
-                            isBuyBoxWinner: false
-                        });
-                    }
-                }
-            }
-
-            // ✅ Ensure allOffers has valid data
-            if (allOffers.length === 0 && soldBy) {
-                allOffers.push({
-                    seller: soldBy,
-                    price: price || asin.CurrentPrice || 0,
-                    isBuyBoxWinner: true
-                });
-            }
-
-            // ✅ Robust Availability Detection
-            let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
             let availabilityStatus = 'Available';
-            
-            // Get the best known price (either currently scraped or existing in the database)
-            const activePrice = price > 0 ? price : (asin.CurrentPrice || 0);
-            
-            if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
-                const lowerAvail = rawAvailability.toLowerCase().trim();
-                if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
-                    // Only mark as unavailable if there is no active price
-                    if (activePrice === 0) {
-                        availabilityStatus = 'Currently unavailable.';
-                    } else {
-                        availabilityStatus = 'Available';
-                    }
-                } else if (lowerAvail.includes('available') || lowerAvail.includes('in stock')) {
-                    availabilityStatus = 'Available';
+            let brand = '';
+
+            const isAjio = asin.sellerMarketplace && asin.sellerMarketplace.toLowerCase() === 'ajio';
+
+            if (isAjio) {
+                // --- Ajio Specific Parsing Logic ---
+                const rawPrice = rawData.ASP || rawData.asp || '';
+                price = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : 0;
+                
+                const rawMrp = rawData.MRP || rawData.mrp || '';
+                mrp = rawMrp ? parseFloat(rawMrp.replace(/[^0-9.]/g, '')) : 0;
+                if (!mrp) mrp = price;
+
+                title = (rawData.title || rawData.Title || asin.Title || '').trim();
+
+                // Category Node parsing
+                if (rawData.category_node) {
+                    category = rawData.category_node.split('\n').map(s => s.trim()).filter(Boolean).join(' > ');
                 } else {
-                    availabilityStatus = rawAvailability.trim();
+                    category = asin.Category || '';
+                }
+
+                // Images extraction from HTML slick-list
+                if (rawData.img_count && typeof rawData.img_count === 'string') {
+                    const matches = rawData.img_count.match(/src=["']([^"']+)["']/g);
+                    if (matches) {
+                        images = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com'));
+                    }
+                }
+                imagesCount = images.length;
+                mainImageUrl = images[0] || asin.ImageUrl || '';
+
+                // Availability check based on Button_text
+                const buttonText = (rawData.Button_text || '').toUpperCase();
+                if (buttonText.includes('OUT OF STOCK')) {
+                    availabilityStatus = 'Currently unavailable.';
+                } else if (price === 0) {
+                    availabilityStatus = 'Currently unavailable.';
+                } else {
+                    availabilityStatus = 'Available';
+                }
+
+                soldBy = asin.sellerName || '';
+                buyBoxWin = true;
+                brand = (rawData.brand_name || rawData.brand || rawData.Brand || asin.Brand || '').trim();
+
+                if (soldBy) {
+                    allOffers.push({
+                        seller: soldBy,
+                        price: price,
+                        isBuyBoxWinner: true
+                    });
                 }
             } else {
-                // If no availability text, fall back on price existence
-                if (activePrice > 0) {
-                    availabilityStatus = 'Available';
-                } else {
-                    availabilityStatus = 'Currently unavailable.';
+                // --- Original Amazon Parsing Logic ---
+                price = this._cleanPrice(this._getFromRaw(rawData, ['asp', 'price', 'currentPrice', 'Field2']));
+                mrp = this._cleanPrice(this._getFromRaw(rawData, ['mrp', 'listPrice', 'Field3']));
+                dealBadge = this._cleanDealBadge(this._getFromRaw(rawData, ['deal_badge', 'dealBadge', 'deal', 'Field14'], 'No deal found'));
+                priceType = dealBadge !== 'No deal found' ? 'Deal Price' : 'Standard Price';
+
+                title = (rawData.Title || rawData.title || rawData.Field1 || asin.Title || '').trim();
+
+                category = this._parseCategory(rawData) || asin.Category || '';
+
+                const bsrData = this._parseBSR(rawData);
+                bsr = bsrData.main;
+                sub = bsrData.sub;
+                subBsr = bsrData.subBsrString || bsrData.sub;
+                subBSRs = bsrData.allRanks;
+
+                const mediaData = this._countImagesAndVideos(rawData);
+                imagesCount = mediaData.imagesCount;
+                videoCount = mediaData.videoCount;
+                images = mediaData.images || [];
+                mainImageUrl = this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl', 'Field5'], asin.ImageUrl);
+
+                rating = parseFloat(rawData.avg_rating);
+                if (isNaN(rating)) rating = 0;
+
+                reviewCount = this._cleanReviewCount(this._getFromRaw(rawData, ['review_count', 'Review_Count', 'Rating_Count', 'rating', 'RT'], '')) || asin.ReviewCount;
+
+                const ratingBreakdown = this._parseRatingBreakdown(rawData.Rating || rawData.Field7 || rawData.Rating_breakdown || '');
+                const hasBreakdown = Object.values(ratingBreakdown).some(v => v > 0);
+                finalRatingBreakdown = hasBreakdown ? ratingBreakdown : (asin.RatingBreakdown ? JSON.parse(asin.RatingBreakdown) : ratingBreakdown);
+
+                const bulletHtmlField = this._getFromRaw(rawData, ['bullet_points', 'bullet_points_count', 'Field8'], '');
+                if (bulletHtmlField && typeof bulletHtmlField === 'string' && bulletHtmlField.length > 50) {
+                    bulletPointsText = this._parseBulletPoints(bulletHtmlField);
+                    bulletPointsCount = bulletPointsText.length;
                 }
+
+                if (bulletPointsCount === 0) {
+                    for (let i = 1; i <= 10; i++) {
+                        const bpField = `bp_${i}`;
+                        if (rawData[bpField] && typeof rawData[bpField] === 'string' && rawData[bpField].trim().length > 3) {
+                            let text = rawData[bpField].trim()
+                                .replace(/<[^>]+>/g, '')
+                                .replace(/&amp;/g, '&')
+                                .replace(/&nbsp;/g, ' ')
+                                .replace(/\s+/g, ' ')
+                                .trim();
+                            if (text.length > 3 && !bulletPointsText.includes(text)) {
+                                bulletPointsText.push(text);
+                            }
+                        }
+                    }
+                    bulletPointsCount = bulletPointsText.length;
+                }
+
+                stockLevel = this._cleanStock(this._getFromRaw(rawData, ['stock_level', 'Field10', 'stock', 'inventory'], 0));
+                hasAplus = this._detectAplusContent(rawData);
+
+                if (hasAplus) {
+                    aplusPresentSince = aplusPresentSince || now;
+                    aplusAbsentSince = null;
+                } else {
+                    aplusAbsentSince = aplusAbsentSince || now;
+                    aplusPresentSince = null;
+                }
+
+                soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
+                buyBoxWin = this._isBuyBoxWinner(soldBy, asin.sellerName);
+
+                if (soldBy && soldBy.trim() !== '') {
+                    allOffers.push({
+                        seller: soldBy.trim(),
+                        price: price || asin.CurrentPrice || 0,
+                        isBuyBoxWinner: true
+                    });
+                }
+
+                const secondBuyboxData = this._parseSecondaryBuybox(
+                    rawData.second_buybox || rawData.Alt_buyBox || rawData.Field25 || ''
+                );
+
+                if (secondBuyboxData.offers.length > 0) {
+                    let foundSecondary = false;
+                    for (const offer of secondBuyboxData.offers) {
+                        const offerSeller = (offer.seller || '').trim();
+                        const isSameAsPrimary = offerSeller.toLowerCase() === soldBy.toLowerCase();
+                        
+                        if (!isSameAsPrimary && offerSeller.length > 0) {
+                            if (!foundSecondary) {
+                                secondAsp = offer.price || secondAsp;
+                                soldBySec = offerSeller;
+                                foundSecondary = true;
+                            }
+                            
+                            allOffers.push({
+                                seller: offerSeller,
+                                price: offer.price || 0,
+                                isBuyBoxWinner: false
+                            });
+                        }
+                    }
+                } else {
+                    const rawSecondAsp = this._cleanPrice(rawData.second_asp || '');
+                    const rawSoldBySec = (rawData.Sold_by_sec || rawData.soldBySec || '').trim();
+                    
+                    if (rawSecondAsp > 0 || rawSoldBySec.length > 0) {
+                        secondAsp = rawSecondAsp || secondAsp;
+                        
+                        if (rawSoldBySec && rawSoldBySec.toLowerCase() !== soldBy.toLowerCase()) {
+                            soldBySec = rawSoldBySec;
+                            allOffers.push({
+                                seller: rawSoldBySec,
+                                price: rawSecondAsp || 0,
+                                isBuyBoxWinner: false
+                            });
+                        }
+                    }
+                }
+
+                if (allOffers.length === 0 && soldBy) {
+                    allOffers.push({
+                        seller: soldBy,
+                        price: price || asin.CurrentPrice || 0,
+                        isBuyBoxWinner: true
+                    });
+                }
+
+                let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
+                const activePrice = price > 0 ? price : (asin.CurrentPrice || 0);
+                
+                if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
+                    const lowerAvail = rawAvailability.toLowerCase().trim();
+                    if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
+                        if (activePrice === 0) {
+                            availabilityStatus = 'Currently unavailable.';
+                        } else {
+                            availabilityStatus = 'Available';
+                        }
+                    } else if (lowerAvail.includes('available') || lowerAvail.includes('in stock')) {
+                        availabilityStatus = 'Available';
+                    } else {
+                        availabilityStatus = rawAvailability.trim();
+                    }
+                } else {
+                    if (activePrice > 0) {
+                        availabilityStatus = 'Available';
+                    } else {
+                        availabilityStatus = 'Currently unavailable.';
+                    }
+                }
+
+                brand = (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim();
             }
 
             // 10. Listing Quality Analysis (LQS) - New Implementation
@@ -2897,19 +2945,20 @@ class MarketDataSyncService {
         if (!rawData) return null;
 
         // Direct fields - check common ASIN field names
-        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE'], '');
+        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE', 'jiocode', 'jiocode_code', 'JIOCODE', 'Jiocode'], '');
         if (direct) {
             const cleaned = direct.toString().trim().toUpperCase();
-            if (/^[A-Z0-9]{10}$/.test(cleaned)) {
+            if (/^[A-Z0-9]{10}$/.test(cleaned) || /^\d+$/.test(cleaned)) {
                 return cleaned;
             }
         }
 
         // URL extraction - check multiple URL field names
-        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url'], '');
+        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url', 'Page_URL', 'Page URL'], '');
         if (urlField && typeof urlField === 'string') {
-            // Enhanced regex to match various Amazon URL formats
+            // Enhanced regex to match various Amazon URL formats and Ajio format
             const patterns = [
+                /\/p\/(\d+)/i, // Ajio format
                 /\/dp\/([A-Z0-9]{10})/i,
                 /\/product\/([A-Z0-9]{10})/i,
                 /\/gp\/product\/([A-Z0-9]{10})/i,
@@ -2923,19 +2972,19 @@ class MarketDataSyncService {
                 const match = urlField.match(pattern);
                 if (match) {
                     const asin = match[1].toUpperCase();
-                    if (/^[A-Z0-9]{10}$/.test(asin)) {
+                    if (/^[A-Z0-9]{10}$/.test(asin) || /^\d+$/.test(asin)) {
                         return asin;
                     }
                 }
             }
         }
 
-        // Ultimate Fallback: search ALL keys for a value matching a 10-char ASIN regex
+        // Ultimate Fallback: search ALL keys for a value matching a 10-char ASIN regex or numeric jiocode
         for (const key of Object.keys(rawData)) {
             const val = rawData[key];
             if (val && typeof val === 'string') {
                 const cleaned = val.trim().toUpperCase();
-                if (/^B0[A-Z0-9]{8}$/.test(cleaned)) {
+                if (/^B0[A-Z0-9]{8}$/.test(cleaned) || (/^\d{10,15}$/.test(cleaned))) {
                     return cleaned;
                 }
             }

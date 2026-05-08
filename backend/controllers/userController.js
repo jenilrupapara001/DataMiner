@@ -74,7 +74,7 @@ exports.getUsers = async (req, res) => {
         SELECT 
           U.Id, U.Email, U.FirstName, U.LastName, U.Phone,
           U.IsActive, U.LoginAttempts, U.LastSeen, U.CreatedAt, U.UpdatedAt,
-          U.RoleId, U.Preferences,
+          U.RoleId, U.Preferences, U.ExtraPermissions, U.ExcludedPermissions,
           R.Name as RoleName, R.DisplayName as RoleDisplayName, 
           R.Color as RoleColor, R.Level as RoleLevel
         FROM Users U
@@ -128,6 +128,18 @@ exports.getUsers = async (req, res) => {
       });
     }
 
+    // Fetch brand managers map for each user
+    let brandManagersMap = {};
+    if (userIds.length > 0) {
+      const bmResult = await pool.request().query(`
+        SELECT UserId, BrandManagerId FROM UserBrandManagers WHERE UserId IN (${userIds})
+      `);
+      bmResult.recordset.forEach(bm => {
+        if (!brandManagersMap[bm.UserId]) brandManagersMap[bm.UserId] = [];
+        brandManagersMap[bm.UserId].push(bm.BrandManagerId);
+      });
+    }
+
     // Fetch permissions for each user's role
     const roleIds = [...new Set(usersResult.recordset.map(u => u.RoleId).filter(Boolean))];
     let permissionMap = {};
@@ -161,6 +173,9 @@ exports.getUsers = async (req, res) => {
       updatedAt: u.UpdatedAt,
       assignedSellers: sellerMap[u.Id] || [],
       supervisors: supervisorMap[u.Id] || [],
+      brandManagers: brandManagersMap[u.Id] || [],
+      extraPermissions: u.ExtraPermissions ? JSON.parse(u.ExtraPermissions) : [],
+      excludedPermissions: u.ExcludedPermissions ? JSON.parse(u.ExcludedPermissions) : [],
       role: {
         _id: u.RoleId,
         name: u.RoleName || 'viewer',
@@ -169,7 +184,6 @@ exports.getUsers = async (req, res) => {
         level: u.RoleLevel || 0,
         permissions: permissionMap[u.RoleId] || []
       },
-      assignedSellers: sellerMap[u.Id] || [],
       preferences: u.Preferences ? (typeof u.Preferences === 'string' ? JSON.parse(u.Preferences) : u.Preferences) : {}
     }));
 
@@ -235,6 +249,12 @@ exports.getUser = async (req, res) => {
         WHERE RP.RoleId = @roleId
       `);
 
+    // Fetch brand manager assignments
+    const brandManagersResult = await pool.request()
+      .input('uid', sql.VarChar, id)
+      .query('SELECT BrandManagerId FROM UserBrandManagers WHERE UserId = @uid');
+    const brandManagers = brandManagersResult.recordset.map(bm => bm.BrandManagerId);
+
     res.json({
       success: true,
       data: {
@@ -249,6 +269,9 @@ exports.getUser = async (req, res) => {
         lastSeen: u.LastSeen,
         createdAt: u.CreatedAt,
         updatedAt: u.UpdatedAt,
+        extraPermissions: u.ExtraPermissions ? JSON.parse(u.ExtraPermissions) : [],
+        excludedPermissions: u.ExcludedPermissions ? JSON.parse(u.ExcludedPermissions) : [],
+        brandManagers,
         role: {
           _id: u.RoleId,
           name: u.RoleName || 'viewer',
@@ -276,7 +299,7 @@ exports.getUser = async (req, res) => {
  */
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone, roleId, assignedSellerIds } = req.body;
+    const { email, password, firstName, lastName, phone, roleId, assignedSellerIds, extraPermissions, excludedPermissions, brandManagers } = req.body;
     const pool = await getPool();
 
     // Check if email exists
@@ -313,9 +336,11 @@ exports.createUser = async (req, res) => {
         .input('ln', sql.NVarChar, lastName || null)
         .input('ph', sql.NVarChar, phone || null)
         .input('rid', sql.VarChar, roleId || null)
+        .input('extraPerms', sql.NVarChar, JSON.stringify(extraPermissions || []))
+        .input('exclPerms', sql.NVarChar, JSON.stringify(excludedPermissions || []))
         .query(`
-          INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt)
-          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, GETDATE(), GETDATE())
+          INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt, ExtraPermissions, ExcludedPermissions)
+          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, GETDATE(), GETDATE(), @extraPerms, @exclPerms)
         `);
 
       // Assign sellers
@@ -339,6 +364,16 @@ exports.createUser = async (req, res) => {
         }
       }
 
+      // Assign brand managers (listing team assignments)
+      if (brandManagers && Array.isArray(brandManagers)) {
+        for (const bmId of brandManagers) {
+          await transaction.request()
+            .input('uid', sql.VarChar, userId)
+            .input('bmId', sql.VarChar, bmId)
+            .query('INSERT INTO UserBrandManagers (UserId, BrandManagerId) VALUES (@uid, @bmId)');
+        }
+      }
+
       await transaction.commit();
     } catch (err) {
       await transaction.rollback();
@@ -358,7 +393,7 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, phone, email, roleId, isActive, assignedSellerIds } = req.body;
+    const { firstName, lastName, phone, email, roleId, isActive, assignedSellerIds, extraPermissions, excludedPermissions, brandManagers } = req.body;
     const pool = await getPool();
 
     // Check user exists
@@ -396,6 +431,14 @@ exports.updateUser = async (req, res) => {
         setClauses.push('IsActive = @isActive');
         updateRequest.input('isActive', sql.Bit, isActive ? 1 : 0);
       }
+      if (extraPermissions !== undefined) {
+        setClauses.push('ExtraPermissions = @extraPerms');
+        updateRequest.input('extraPerms', sql.NVarChar, JSON.stringify(extraPermissions || []));
+      }
+      if (excludedPermissions !== undefined) {
+        setClauses.push('ExcludedPermissions = @exclPerms');
+        updateRequest.input('exclPerms', sql.NVarChar, JSON.stringify(excludedPermissions || []));
+      }
 
       await updateRequest.query(`UPDATE Users SET ${setClauses.join(', ')} WHERE Id = @id`);
 
@@ -428,6 +471,22 @@ exports.updateUser = async (req, res) => {
               .input('uid', sql.VarChar, id)
               .input('supId', sql.VarChar, supervisorId)
               .query('INSERT INTO UserSupervisors (UserId, SupervisorId) VALUES (@uid, @supId)');
+          }
+        }
+      }
+
+      // Update brand manager assignments (listing team assignments)
+      if (brandManagers !== undefined) {
+        await transaction.request()
+          .input('uid', sql.VarChar, id)
+          .query('DELETE FROM UserBrandManagers WHERE UserId = @uid');
+
+        if (Array.isArray(brandManagers) && brandManagers.length > 0) {
+          for (const bmId of brandManagers) {
+            await transaction.request()
+              .input('uid', sql.VarChar, id)
+              .input('bmId', sql.VarChar, bmId)
+              .query('INSERT INTO UserBrandManagers (UserId, BrandManagerId) VALUES (@uid, @bmId)');
           }
         }
       }

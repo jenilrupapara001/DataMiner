@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const STORAGE_KEY = 'asin-datatable-columns';
 
@@ -57,6 +58,16 @@ export const ALL_COLUMNS = [
 export const COLUMN_CATEGORIES = [...new Set(ALL_COLUMNS.map(c => c.category))];
 
 export function useColumnVisibility() {
+  const { user } = useAuth();
+  
+  const isCatalogManager = useMemo(() => {
+    const roleName = (user?.role?.name || '').toString().toLowerCase();
+    const roleDisp = (user?.role?.displayName || '').toString().toLowerCase();
+    return roleName === 'catalog manager' || roleDisp === 'catalog manager' || roleName === 'catalog_manager';
+  }, [user]);
+
+  const allowedCategoriesForCatalogManager = useMemo(() => ['Core', 'Content', 'LQS'], []);
+
   const [visibleColumns, setVisibleColumns] = useState(() => {
     // Try to load from localStorage
     try {
@@ -74,11 +85,34 @@ export function useColumnVisibility() {
     return ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
   });
 
+  // Filter columns and categories dynamically for Catalog Manager
+  const filteredAllColumns = useMemo(() => {
+    if (isCatalogManager) {
+      return ALL_COLUMNS.filter(c => allowedCategoriesForCatalogManager.includes(c.category));
+    }
+    return ALL_COLUMNS;
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
+
+  const filteredCategories = useMemo(() => {
+    if (isCatalogManager) {
+      return COLUMN_CATEGORIES.filter(cat => allowedCategoriesForCatalogManager.includes(cat));
+    }
+    return COLUMN_CATEGORIES;
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
+
   const isVisible = useCallback((key) => {
+    if (isCatalogManager) {
+      const col = ALL_COLUMNS.find(c => c.key === key);
+      if (!col || !allowedCategoriesForCatalogManager.includes(col.category)) return false;
+    }
     return visibleColumns.includes(key);
-  }, [visibleColumns]);
+  }, [visibleColumns, isCatalogManager, allowedCategoriesForCatalogManager]);
 
   const toggleColumn = useCallback((key) => {
+    if (isCatalogManager) {
+      const col = ALL_COLUMNS.find(c => c.key === key);
+      if (!col || !allowedCategoriesForCatalogManager.includes(col.category)) return;
+    }
     setVisibleColumns(prev => {
       const column = ALL_COLUMNS.find(c => c.key === key);
       if (column?.required) return prev; // Don't toggle required columns
@@ -94,9 +128,10 @@ export function useColumnVisibility() {
       
       return next;
     });
-  }, []);
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
 
   const toggleCategory = useCallback((category, makeVisible) => {
+    if (isCatalogManager && !allowedCategoriesForCatalogManager.includes(category)) return;
     setVisibleColumns(prev => {
       const categoryKeys = ALL_COLUMNS
         .filter(c => c.category === category && !c.required)
@@ -116,32 +151,55 @@ export function useColumnVisibility() {
       
       return next;
     });
-  }, []);
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
 
   const resetToDefaults = useCallback(() => {
-    const defaults = ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
+    let defaults = ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
+    if (isCatalogManager) {
+      defaults = ALL_COLUMNS
+        .filter(c => c.defaultVisible && allowedCategoriesForCatalogManager.includes(c.category))
+        .map(c => c.key);
+    }
     setVisibleColumns(defaults);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
     } catch (e) {}
-  }, []);
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
 
   const selectAll = useCallback(() => {
-    const all = ALL_COLUMNS.map(c => c.key);
+    let all = ALL_COLUMNS.map(c => c.key);
+    if (isCatalogManager) {
+      all = ALL_COLUMNS
+        .filter(c => allowedCategoriesForCatalogManager.includes(c.category))
+        .map(c => c.key);
+    }
     setVisibleColumns(all);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
     } catch (e) {}
-  }, []);
+  }, [isCatalogManager, allowedCategoriesForCatalogManager]);
+
+  const finalVisibleColumns = useMemo(() => {
+    if (isCatalogManager) {
+      return visibleColumns.filter(key => {
+        const col = ALL_COLUMNS.find(c => c.key === key);
+        return col && allowedCategoriesForCatalogManager.includes(col.category);
+      });
+    }
+    return visibleColumns;
+  }, [visibleColumns, isCatalogManager, allowedCategoriesForCatalogManager]);
 
   return {
-    visibleColumns,
+    visibleColumns: finalVisibleColumns,
     isVisible,
     toggleColumn,
     toggleCategory,
     resetToDefaults,
     selectAll,
-    visibleCount: visibleColumns.length,
-    totalCount: ALL_COLUMNS.length
+    visibleCount: finalVisibleColumns.length,
+    totalCount: filteredAllColumns.length,
+    allColumns: filteredAllColumns,
+    columnCategories: filteredCategories,
+    isCatalogManager
   };
 }

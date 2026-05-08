@@ -61,20 +61,72 @@ exports.authenticate = async (req, res, next) => {
         JOIN RolePermissions RP ON P.Id = RP.PermissionId
         WHERE RP.RoleId = @roleId
       `);
-    const permissions = permissionsResult.recordset.map(p => p.Name);
+    let permissions = permissionsResult.recordset.map(p => p.Name);
+
+    // Resolve Extra/Excluded IDs to Names
+    const allPermsResult = await pool.request().query('SELECT Id, Name FROM Permissions');
+    const permMap = {};
+    allPermsResult.recordset.forEach(p => {
+      permMap[p.Id] = p.Name;
+      permMap[p.Name] = p.Name;
+    });
+
+    let extraPerms = [];
+    let exclPerms = [];
+    try {
+      if (userData.ExtraPermissions) {
+        extraPerms = JSON.parse(userData.ExtraPermissions).map(idOrName => permMap[idOrName] || idOrName);
+      }
+    } catch (e) {
+      console.error('Failed to parse ExtraPermissions:', e);
+    }
+    try {
+      if (userData.ExcludedPermissions) {
+        exclPerms = JSON.parse(userData.ExcludedPermissions).map(idOrName => permMap[idOrName] || idOrName);
+      }
+    } catch (e) {
+      console.error('Failed to parse ExcludedPermissions:', e);
+    }
+
+    // Apply overrides
+    extraPerms.forEach(p => {
+      if (p && !permissions.includes(p)) {
+        permissions.push(p);
+      }
+    });
+    permissions = permissions.filter(p => !exclPerms.includes(p));
 
     // 3. Fetch Assigned Sellers
-    const sellersResult = await pool.request()
-      .input('userId', sql.VarChar, userData.Id)
-      .query(`SELECT SellerId FROM UserSellers WHERE UserId = @userId`);
-    const assignedSellers = sellersResult.recordset.map(s => s.SellerId);
+    let assignedSellers = [];
+    if (userData.RoleName === 'listing_team') {
+      const bmSellersResult = await pool.request()
+        .input('userId', sql.VarChar, userData.Id)
+        .query(`
+          SELECT DISTINCT SellerId FROM UserSellers WHERE UserId = @userId
+          UNION
+          SELECT DISTINCT US.SellerId 
+          FROM UserSellers US
+          JOIN UserBrandManagers UBM ON US.UserId = UBM.BrandManagerId
+          WHERE UBM.UserId = @userId
+        `);
+      assignedSellers = bmSellersResult.recordset.map(s => s.SellerId);
+    } else {
+      const sellersResult = await pool.request()
+        .input('userId', sql.VarChar, userData.Id)
+        .query(`SELECT SellerId FROM UserSellers WHERE UserId = @userId`);
+      assignedSellers = sellersResult.recordset.map(s => s.SellerId);
+    }
 
     // 4. Construct User Object
     req.userId = userData.Id;
     req.user = {
       ...userData,
       _id: userData.Id, // Compatibility with legacy code
-      role: { Name: userData.RoleName, name: userData.RoleName, DisplayName: userData.RoleDisplayName },
+      role: { 
+        Name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName, 
+        name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName, 
+        DisplayName: userData.RoleDisplayName 
+      },
       assignedSellers: assignedSellers,
       permissions: permissions,
       hasPermission: async (perm) => permissions.includes(perm),
@@ -95,7 +147,7 @@ exports.authenticate = async (req, res, next) => {
 exports.requirePermission = (permissionName) => {
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
-    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin') return next();
+    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin' || req.user.role?.name === 'super_admin' || req.user.role?.Name === 'super_admin') return next();
 
     const hasPerm = await req.user.hasPermission(permissionName);
     if (!hasPerm) return res.status(403).json({ success: false, message: 'Missing required permission' });
@@ -109,7 +161,7 @@ exports.requirePermission = (permissionName) => {
 exports.requireAnyPermission = (permissionNames) => {
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
-    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin') return next();
+    if (req.user.role?.name === 'admin' || req.user.role?.Name === 'admin' || req.user.role?.name === 'super_admin' || req.user.role?.Name === 'super_admin') return next();
 
     const hasAny = await req.user.hasAnyPermission(permissionNames);
     if (!hasAny) return res.status(403).json({ success: false, message: 'Missing required permissions' });
@@ -136,7 +188,7 @@ exports.checkSellerAccess = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
   const roleName = req.user.role?.Name || req.user.role?.name;
-  const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+  const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(roleName);
   if (isGlobalUser) return next();
 
   const sellerId = req.params.sellerId || req.body.sellerId || req.query.sellerId || req.params.id; // Added params.id as fallback for some routes
@@ -158,7 +210,7 @@ exports.checkUserHierarchyAccess = async (req, res, next) => {
   if (!targetUserId || req.user.Id === targetUserId || req.user._id === targetUserId) return next();
 
   const roleName = req.user.role?.Name || req.user.role?.name;
-  if (['admin', 'operational_manager'].includes(roleName)) return next();
+  if (['admin', 'super_admin', 'operational_manager'].includes(roleName)) return next();
 
   const hasGlobalView = await req.user.hasPermission('users_view');
   if (hasGlobalView) return next();
@@ -180,5 +232,5 @@ exports.checkUserHierarchyAccess = async (req, res, next) => {
 };
 
 exports.auth = exports.authenticate;
-exports.isAdmin = exports.requireRole('admin');
-exports.isGlobalUser = exports.requireRole('admin', 'operational_manager');
+exports.isAdmin = exports.requireRole('admin', 'super_admin');
+exports.isGlobalUser = exports.requireRole('admin', 'super_admin', 'operational_manager');

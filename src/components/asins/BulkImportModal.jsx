@@ -70,7 +70,9 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
     const handleDownloadTemplate = async () => {
         try {
             if (activeTab === 'catalog') {
-                await bulkApi.downloadCatalogTemplate();
+                const selectedSellerObj = sellers.find(s => (s.Id || s._id) === selectedSellerId);
+                const isAjio = selectedSellerObj?.marketplace?.toLowerCase() === 'ajio';
+                await bulkApi.downloadCatalogTemplate(isAjio ? 'ajio' : '');
             } else {
                 await asinApi.downloadTagsTemplate(selectedSellerId || undefined);
             }

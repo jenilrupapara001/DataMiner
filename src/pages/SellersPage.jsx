@@ -59,6 +59,7 @@ const PoolManagementModal = lazy(() => import('../components/sellers/PoolManagem
 
 const SellersPage = () => {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
+  const isBrandManager = (currentUser?.role?.name || '').toString().toLowerCase() === 'brand manager' || (currentUser?.role?.displayName || '').toString().toLowerCase() === 'brand manager';
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -86,6 +87,17 @@ const SellersPage = () => {
    const socket = useSocket();
 
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
+
+  const canAccessAmazon = isAdmin || hasPermission('marketplace_amazon');
+  const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
+
+  useEffect(() => {
+    if (!canAccessAmazon && canAccessAjio && marketplaceFilter !== 'ajio') {
+      setMarketplaceFilter('ajio');
+    } else if (canAccessAmazon && !canAccessAjio && (marketplaceFilter === 'ajio' || marketplaceFilter === 'all')) {
+      setMarketplaceFilter('amazon.in');
+    }
+  }, [canAccessAmazon, canAccessAjio, marketplaceFilter]);
 
   useEffect(() => {
     setPage(1);
@@ -499,11 +511,13 @@ const SellersPage = () => {
   const getMarketplaceBadge = useCallback((marketplace) => {
     const isIN = marketplace === 'amazon.in';
     const isCOM = marketplace === 'amazon.com';
+    const isAjio = marketplace?.toLowerCase() === 'ajio';
     return (
       <span
         className={`px-3 py-1 rounded-pill smallest fw-bold d-inline-block border ${isIN ? 'bg-blue-50 text-blue-600 border-blue-100' :
           isCOM ? 'bg-orange-50 text-orange-600 border-orange-100' :
-            'bg-zinc-50 text-zinc-600 border-zinc-100'
+            isAjio ? 'bg-purple-50 text-purple-600 border-purple-100' :
+              'bg-zinc-50 text-zinc-600 border-zinc-100'
           }`}
         style={{ letterSpacing: '0.02em', fontSize: '10px' }}
       >
@@ -512,83 +526,97 @@ const SellersPage = () => {
     );
   }, []);
 
-   // Memoized Actions for ListView
-   const renderActions = useCallback((seller) => (
-     <div className="d-flex align-items-center gap-1">
-       <button
-         className="btn-white-icon"
-         onClick={() => handleEditSeller(seller)}
-         title="Edit Seller Details"
-       >
-         <Edit3 size={16} />
-       </button>
-       <button
-         className="btn-white-icon"
-         onClick={() => handleViewAsins(seller)}
-         title="Manage ASINs"
-       >
-         <Package size={16} />
-       </button>
-       <button
-         className="btn-white-icon"
-         onClick={() => handleSyncSeller(seller._id)}
-         title="Sync to Octoparse (Scrape ASINs)"
-       >
-         <RefreshCw size={16} />
-       </button>
-       <button
-         className={seller.status === 'Active' ? 'btn-white-icon' : 'btn-white-icon btn-success-icon bg-success border-success text-white'}
-         onClick={() => handleToggleStatus(seller._id)}
-         title={seller.status === 'Active' ? 'Pause Store' : 'Resume Store'}
-         style={seller.status !== 'Active' ? { background: 'var(--green)', border: 'none', color: '#fff' } : {}}
-       >
-         {seller.status === 'Active' ? <Pause size={16} /> : <Play size={16} />}
-       </button>
-
-       {hasPermission('sellers_delete') && (
-         <button
-           className="btn-white-icon text-danger border-danger-subtle hover-bg-danger-subtle"
-           onClick={() => handleDeleteSeller(seller._id)}
-           title="Delete Seller & ASINs"
-           style={{ color: '#ef4444' }}
-         >
-           <Trash2 size={16} />
-         </button>
-       )}
-
-      <div className="dropdown">
-        <button
-          className="btn-white-icon border-0 bg-transparent text-zinc-400 hover-text-zinc-900"
-          type="button"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <MoreHorizontal size={18} />
-        </button>
-        <ul className="dropdown-menu dropdown-menu-end border-0 shadow-xl rounded-4 p-2 bg-white" style={{ minWidth: '180px', zIndex: 1060 }}>
-          <div className="px-3 py-2 border-bottom border-zinc-100 mb-2">
-            <div className="smallest fw-bold text-zinc-500 text-uppercase tracking-widest">Management</div>
+    const renderActions = useCallback((seller) => {
+      if (isBrandManager) {
+        return (
+          <div className="d-flex align-items-center gap-1">
+            <button
+              className="btn-white-icon"
+              onClick={() => handleViewAsins(seller)}
+              title="View ASINs"
+            >
+              <Package size={16} />
+            </button>
           </div>
-          {isGlobalUser && (
-            <li>
-              <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2" onClick={() => handleEditSeller(seller)}>
-                <Edit3 size={16} strokeWidth={2} className="text-zinc-600" />
-                <span className="text-zinc-700 fw-medium">Edit Details</span>
-              </button>
-            </li>
-          )}
+        );
+      }
+      return (
+        <div className="d-flex align-items-center gap-1">
+          <button
+            className="btn-white-icon"
+            onClick={() => handleEditSeller(seller)}
+            title="Edit Seller Details"
+          >
+            <Edit3 size={16} />
+          </button>
+          <button
+            className="btn-white-icon"
+            onClick={() => handleViewAsins(seller)}
+            title="Manage ASINs"
+          >
+            <Package size={16} />
+          </button>
+          <button
+            className="btn-white-icon"
+            onClick={() => handleSyncSeller(seller._id)}
+            title="Sync to Octoparse (Scrape ASINs)"
+          >
+            <RefreshCw size={16} />
+          </button>
+          <button
+            className={seller.status === 'Active' ? 'btn-white-icon' : 'btn-white-icon btn-success-icon bg-success border-success text-white'}
+            onClick={() => handleToggleStatus(seller._id)}
+            title={seller.status === 'Active' ? 'Pause Store' : 'Resume Store'}
+            style={seller.status !== 'Active' ? { background: 'var(--green)', border: 'none', color: '#fff' } : {}}
+          >
+            {seller.status === 'Active' ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+
           {hasPermission('sellers_delete') && (
-            <li>
-              <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2 text-danger" onClick={() => handleDeleteSeller(seller._id)}>
-                <Trash2 size={16} strokeWidth={2} />
-                <span className="fw-semibold">Delete Store</span>
-              </button>
-            </li>
+            <button
+              className="btn-white-icon text-danger border-danger-subtle hover-bg-danger-subtle"
+              onClick={() => handleDeleteSeller(seller._id)}
+              title="Delete Seller & ASINs"
+              style={{ color: '#ef4444' }}
+            >
+              <Trash2 size={16} />
+            </button>
           )}
-        </ul>
-      </div>
-    </div>
-   ), [handleEditSeller, handleViewAsins, handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission, isGlobalUser]);
+
+          <div className="dropdown">
+            <button
+              className="btn-white-icon border-0 bg-transparent text-zinc-400 hover-text-zinc-900"
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end border-0 shadow-xl rounded-4 p-2 bg-white" style={{ minWidth: '180px', zIndex: 1060 }}>
+              <div className="px-3 py-2 border-bottom border-zinc-100 mb-2">
+                <div className="smallest fw-bold text-zinc-500 text-uppercase tracking-widest">Management</div>
+              </div>
+              {isGlobalUser && (
+                <li>
+                  <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2" onClick={() => handleEditSeller(seller)}>
+                    <Edit3 size={16} strokeWidth={2} className="text-zinc-600" />
+                    <span className="text-zinc-700 fw-medium">Edit Details</span>
+                  </button>
+                </li>
+              )}
+              {hasPermission('sellers_delete') && (
+                <li>
+                  <button className="dropdown-item rounded-3 d-flex align-items-center gap-3 py-2 text-danger" onClick={() => handleDeleteSeller(seller._id)}>
+                    <Trash2 size={16} strokeWidth={2} />
+                    <span className="fw-semibold">Delete Store</span>
+                  </button>
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      );
+    }, [isBrandManager, handleEditSeller, handleViewAsins, handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission, isGlobalUser]);
 
   const listViewColumns = useMemo(() => [
     {
@@ -673,17 +701,19 @@ const SellersPage = () => {
               <div className="text-zinc-500 smallest" style={{ fontSize: '10px' }}>{seller.activeAsins || 0} Live</div>
             </div>
           </div>
-          <div className="d-flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-            <button 
-              className="btn btn-xs btn-white border border-zinc-200 shadow-sm d-flex align-items-center gap-1 hover:bg-zinc-50"
-              onClick={(e) => { e.stopPropagation(); setShowAsinModal(true); setSelectedSeller(seller); }}
-              title="Quick Add ASIN"
-              style={{ fontSize: '10px', height: '26px' }}
-            >
-              <Plus size={12} className="text-zinc-600" />
-              <span className="fw-bold">ADD</span>
-            </button>
-          </div>
+          {!isBrandManager && (
+            <div className="d-flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+              <button 
+                className="btn btn-xs btn-white border border-zinc-200 shadow-sm d-flex align-items-center gap-1 hover:bg-zinc-50"
+                onClick={(e) => { e.stopPropagation(); setShowAsinModal(true); setSelectedSeller(seller); }}
+                title="Quick Add ASIN"
+                style={{ fontSize: '10px', height: '26px' }}
+              >
+                <Plus size={12} className="text-zinc-600" />
+                <span className="fw-bold">ADD</span>
+              </button>
+            </div>
+          )}
         </div>
       )
     },
@@ -760,18 +790,22 @@ const SellersPage = () => {
                 </button>
               </>
             )}
-            <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 rounded-pill px-4" onClick={() => setShowBulkImportModal(true)}>
-              <Upload size={16} />
-              <span className="fw-bold">Bulk Upload Catalog</span>
-            </button>
-            <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
-              <FileUp size={16} className="text-zinc-500" />
-              <span className="fw-bold text-zinc-700">Import CSV</span>
-            </button>
-            <button className="btn btn-zinc-900 btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-4 rounded-pill" onClick={() => setShowAddModal(true)} style={{ backgroundColor: '#18181B', color: '#fff' }}>
-              <Plus size={16} />
-              <span className="fw-bold">Add Seller</span>
-            </button>
+            {!isBrandManager && (
+              <>
+                <button className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 rounded-pill px-4" onClick={() => setShowBulkImportModal(true)}>
+                  <Upload size={16} />
+                  <span className="fw-bold">Bulk Upload Catalog</span>
+                </button>
+                <button className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 rounded-pill px-3" onClick={() => setShowImportModal(true)}>
+                  <FileUp size={16} className="text-zinc-500" />
+                  <span className="fw-bold text-zinc-700">Import CSV</span>
+                </button>
+                <button className="btn btn-zinc-900 btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-4 rounded-pill" onClick={() => setShowAddModal(true)} style={{ backgroundColor: '#18181B', color: '#fff' }}>
+                  <Plus size={16} />
+                  <span className="fw-bold">Add Seller</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -836,9 +870,10 @@ const SellersPage = () => {
                 value={marketplaceFilter}
                 onChange={(e) => setMarketplaceFilter(e.target.value)}
               >
-                <option value="all">All Markets</option>
-                <option value="amazon.in">Amazon.in</option>
-                <option value="amazon.com">Amazon.com</option>
+                {canAccessAmazon && canAccessAjio && <option value="all">All Markets</option>}
+                {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
+                {canAccessAmazon && <option value="amazon.com">Amazon.com</option>}
+                {canAccessAjio && <option value="ajio">Ajio</option>}
               </select>
 
               <select

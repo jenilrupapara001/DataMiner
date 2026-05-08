@@ -11,7 +11,9 @@ const ColumnVisibilityPanel = ({
   onReset,
   onSelectAll,
   visibleCount,
-  totalCount
+  totalCount,
+  allColumns = ALL_COLUMNS,
+  columnCategories = COLUMN_CATEGORIES
 }) => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [search, setSearch] = useState('');
@@ -29,14 +31,14 @@ const ColumnVisibilityPanel = ({
 
   if (!isOpen) return null;
 
-  const filteredColumns = ALL_COLUMNS.filter(c => {
+  const filteredColumns = allColumns.filter(c => {
     if (categoryFilter !== 'All' && c.category !== categoryFilter) return false;
     if (search && !c.label.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   const isCategoryFullyVisible = (category) => {
-    const categoryColumns = ALL_COLUMNS.filter(c => c.category === category && !c.required);
+    const categoryColumns = allColumns.filter(c => c.category === category && !c.required);
     return categoryColumns.every(c => visibleColumns.includes(c.key));
   };
 
@@ -129,7 +131,7 @@ const ColumnVisibilityPanel = ({
         >
           All
         </button>
-        {COLUMN_CATEGORIES.map(cat => (
+        {columnCategories.map(cat => (
           <button
             key={cat}
             className={`cat-btn ${categoryFilter === cat ? 'active' : ''}`}
@@ -139,7 +141,7 @@ const ColumnVisibilityPanel = ({
           >
             {cat}
             <span className="ms-1 text-zinc-400" style={{ fontSize: '9px' }}>
-              ({ALL_COLUMNS.filter(c => c.category === cat && visibleColumns.includes(c.key)).length}/{ALL_COLUMNS.filter(c => c.category === cat).length})
+              ({allColumns.filter(c => c.category === cat && visibleColumns.includes(c.key)).length}/{allColumns.filter(c => c.category === cat).length})
             </span>
           </button>
         ))}

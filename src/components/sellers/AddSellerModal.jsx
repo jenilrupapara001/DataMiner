@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Store, X, LayoutGrid, Globe, Key, Users } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { TagPicker } from 'rsuite';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData }) => {
+  const { hasPermission } = useAuth();
+  const canAccessAmazon = isAdmin || hasPermission('marketplace_amazon');
+  const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
+
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
-    marketplace: initialData?.marketplace || 'amazon.in',
+    marketplace: initialData?.marketplace || (isAdmin || hasPermission('marketplace_amazon') ? 'amazon.in' : 'ajio'),
     sellerId: initialData?.sellerId || '',
     apiKey: initialData?.apiKey || 'Default',
     plan: initialData?.plan || 'Starter',
@@ -18,7 +23,10 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
 
   useEffect(() => {
     userApi.getManagers()
-      .then(data => setManagers(data))
+      .then(res => {
+        const list = Array.isArray(res) ? res : (res && Array.isArray(res.data) ? res.data : []);
+        setManagers(list);
+      })
       .catch(() => setManagers([]));
   }, []);
 
@@ -33,10 +41,10 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
     }
   };
 
-  const managerOptions = managers.map(m => ({
-    label: `${m.firstName} ${m.lastName} (${m.email})`,
+  const managerOptions = Array.isArray(managers) ? managers.map(m => ({
+    label: `${m.firstName || ''} ${m.lastName || ''} (${m.email || ''})`,
     value: m._id
-  }));
+  })) : [];
 
   return (
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(12px)', zIndex: 1070 }}>
@@ -84,7 +92,8 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
                     onChange={(e) => setFormData({ ...formData, marketplace: e.target.value })}
                     style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
                   >
-                    <option value="amazon.in">Amazon.in</option>
+                    {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
+                    {canAccessAjio && <option value="ajio">Ajio</option>}
                   </select>
                 </div>
                 <div className="col-md-6 mb-3">
