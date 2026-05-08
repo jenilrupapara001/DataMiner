@@ -47,7 +47,7 @@ class SchedulerService {
             await this.refreshAgeTags();
         });
 
-        console.log('✅ Background tasks scheduled (Enterprise 00:00 Only)');
+        console.log(`✅ Background tasks scheduled (Enterprise at ${scheduleTime})`);
     }
 
     async runOctoparseTaskRecovery() {

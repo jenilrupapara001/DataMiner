@@ -83,19 +83,6 @@ body {
     margin-bottom: 48px;
 }
 
-.auth-branding-logo svg {
-    width: 40px;
-    height: 40px;
-    color: var(--accent);
-}
-
-.auth-branding-logo span {
-    font-size: 22px;
-    font-weight: 800;
-    color: var(--text-primary);
-    letter-spacing: -0.02em;
-}
-
 .auth-features {
     flex: 1;
     display: flex;

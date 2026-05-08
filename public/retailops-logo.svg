@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="200" height="200" rx="40" fill="url(#bgGrad)"/>
+
+  <!-- Subtle inner glow -->
+  <rect x="1" y="1" width="198" height="198" rx="39" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+
+  <!-- Letter R shape (geometric) -->
+  <!-- Vertical stem -->
+  <rect x="52" y="46" width="22" height="108" rx="4" fill="white" opacity="0.95"/>
+  <!-- Top horizontal bar -->
+  <rect x="52" y="46" width="68" height="22" rx="4" fill="white" opacity="0.95"/>
+  <!-- Middle horizontal bar -->
+  <rect x="52" y="89" width="60" height="20" rx="4" fill="white" opacity="0.95"/>
+  <!-- Top-right curve/post -->
+  <rect x="100" y="46" width="20" height="63" rx="4" fill="white" opacity="0.95"/>
+  <!-- Leg diagonal (bottom right of R) -->
+  <polygon points="74,109 120,154 96,154 52,109" fill="white" opacity="0.85"/>
+
+  <!-- Trending arrow (overlaid, electric blue/white gradient) -->
+  <g filter="url(#glow)">
+    <!-- Arrow line from bottom-left to top-right -->
+    <polyline
+      points="60,148 82,128 100,138 130,100 148,100"
+      stroke="url(#arrowGrad)"
+      stroke-width="6.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <!-- Arrow head -->
+    <polyline
+      points="132,88 148,100 136,112"
+      stroke="url(#arrowGrad)"
+      stroke-width="6.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+
+  <!-- Small package icon (bottom right corner accent) -->
+  <g transform="translate(116,128)">
+    <!-- Box top face -->
+    <polygon points="18,0 36,9 18,18 0,9" fill="#bfdbfe" opacity="0.9"/>
+    <!-- Box left face -->
+    <polygon points="0,9 18,18 18,36 0,27" fill="#93c5fd" opacity="0.9"/>
+    <!-- Box right face -->
+    <polygon points="36,9 18,18 18,36 36,27" fill="#60a5fa" opacity="0.9"/>
+    <!-- Center line on box top -->
+    <line x1="9" y1="4.5" x2="27" y2="13.5" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+  </g>
+</svg>

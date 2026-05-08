@@ -1091,6 +1091,14 @@ export const settingsApi = {
     if (!res.ok) throw new Error('Failed to toggle octoparse automation');
     return res.json();
   },
+
+  getScheduleConfig: async () => {
+    const res = await fetch(`${API_BASE}/settings/schedule-config`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch schedule config');
+    return res.json();
+  },
 };
 
 // Bulk API

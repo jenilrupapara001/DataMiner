@@ -12,6 +12,8 @@ import {
     ShieldCheck,
     CheckCircle 
 } from 'lucide-react';
+import { RetailOpsWordmark } from '../components/common/BrandLogo';
+
 
 const LoginPage = () => {
     const navigate = useNavigate();
@@ -55,11 +57,7 @@ const LoginPage = () => {
             <div className="auth-left-panel">
                 <div className="auth-left-content">
                     <div className="auth-branding-logo">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                            <rect width="40" height="40" rx="10" fill="#2563EB"/>
-                            <path d="M12 20L20 12M20 12L28 20M20 12V28M12 20L20 28M28 20L20 28M20 28V12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        <span>RetailOps</span>
+                        <RetailOpsWordmark size={36} />
                     </div>
 
                     <div className="auth-features">
@@ -88,7 +86,7 @@ const LoginPage = () => {
                     </div>
 
                     <div className="auth-left-footer">
-                        &copy; 2024 RetailOps. All rights reserved.
+                        &copy; 2026 RetailOps. All rights reserved.
                     </div>
                 </div>
             </div>

@@ -29,10 +29,10 @@ import {
     Database,
     ChevronLeft,
     ChevronRight,
-    Zap,
     LogOut,
     ListTodo
 } from 'lucide-react';
+import { RetailOpsWordmark, RetailOpsMark } from './BrandLogo';
 import './Sidebar.css';
 
 const NavItem = ({ item, collapsed, active, onClick }) => {
@@ -153,11 +153,10 @@ const Sidebar = () => {
         <aside className={`sidebar-redesign ${collapsed ? 'collapsed' : ''} ${isMobile && !isOpen ? 'mobile-hidden' : ''}`}>
             {/* Logo Area */}
             <div className="logo-area">
-                <div className="logo-icon">
-                    <Zap size={13} fill="white" className="text-white" />
-                </div>
-                {!collapsed && (
-                    <span className="logo-text">RetailOps</span>
+                {collapsed ? (
+                    <RetailOpsMark size={28} />
+                ) : (
+                    <RetailOpsWordmark size={28} />
                 )}
                 <button className="sidebar-toggle" onClick={toggle}>
                     <ChevronLeft size={12} style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }} />

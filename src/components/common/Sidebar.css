@@ -31,36 +31,17 @@
     padding: 0 12px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     position: relative;
+    overflow: hidden;
 }
 
-.logo-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm);
-    background: var(--blue);
-    display: flex;
-    align-items: center;
+/* When expanded, the wordmark sits naturally; when collapsed, the mark only */
+.sidebar-redesign.collapsed .logo-area {
     justify-content: center;
-    flex-shrink: 0;
-}
-
-.logo-text {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--text-primary);
-    white-space: nowrap;
-    opacity: 1;
-    transition: opacity 150ms;
-}
-
-.collapsed .logo-text {
-    opacity: 0;
-    pointer-events: none;
+    padding: 0 8px;
 }
 
 /* Toggle Button */

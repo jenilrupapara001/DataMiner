@@ -16,7 +16,7 @@ import {
     Zap,
     Search
 } from 'lucide-react';
-import { scheduledRunsApi } from '../services/api';
+import { scheduledRunsApi, settingsApi } from '../services/api';
 
 const ScheduledRunsPage = () => {
     const [runs, setRuns] = useState([]);
@@ -26,6 +26,7 @@ const ScheduledRunsPage = () => {
     const [triggering, setTriggering] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [message, setMessage] = useState(null);
+    const [scheduleConfig, setScheduleConfig] = useState({ scheduleTime: '00:00', automationEnabled: false });
 
     // Fetch all runs
     const fetchRuns = async (silent = false) => {
@@ -45,6 +46,10 @@ const ScheduledRunsPage = () => {
 
     useEffect(() => {
         fetchRuns();
+        // Fetch schedule config from env via backend
+        settingsApi.getScheduleConfig()
+            .then(res => { if (res.success) setScheduleConfig(res.data); })
+            .catch(() => {}); // silently fail, fallback stays '00:00'
     }, []);
 
     useEffect(() => {
@@ -159,7 +164,7 @@ const ScheduledRunsPage = () => {
                         </div>
                         <h2 className="h4 font-bold mb-0">Scheduled Telemetry & Summary Reports</h2>
                     </div>
-                    <p className="text-zinc-400 mb-0" style={{ fontSize: '13px' }}>Monitor nightly Scheduled Runs at 00:00: starts, completions, seller durations, and manual pipeline controls.</p>
+                    <p className="text-zinc-400 mb-0" style={{ fontSize: '13px' }}>Monitor nightly Scheduled Runs at <strong className="text-blue-300">{scheduleConfig.scheduleTime}</strong>: starts, completions, seller durations, and manual pipeline controls.</p>
                 </div>
                 <div className="d-flex align-items-center gap-2">
                     <button 

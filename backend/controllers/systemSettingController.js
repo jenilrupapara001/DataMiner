@@ -120,3 +120,19 @@ exports.toggleOctoparseAutomation = async (req, res) => {
     message: `Octoparse automation is forced to enabled globally`
   });
 };
+
+/**
+ * Get scheduler config (schedule time + automation flag) from .env
+ * GET /api/settings/schedule-config
+ */
+exports.getScheduleConfig = async (req, res) => {
+  const scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '00:00';
+  const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
+  res.json({
+    success: true,
+    data: {
+      scheduleTime,
+      automationEnabled
+    }
+  });
+};
