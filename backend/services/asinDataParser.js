@@ -3,9 +3,20 @@ const { calculateLQS } = require('../utils/lqs');
 
 class AsinDataParser {
     /**
-     * Parse raw tab-delimited Octoparse data into structured object
+     * Parse raw tab-delimited Octoparse data into a structured object.
+     * 
+     * @param {string|object} rawText - The raw tab-delimited string or a pre-parsed object.
+     * @returns {object} The parsed key-value data.
+     * @throws {TypeError} If rawText is neither a string nor a valid object.
      */
     static parseRawData(rawText) {
+        if (!rawText) return {};
+        if (typeof rawText !== 'string') {
+            if (typeof rawText === 'object' && rawText !== null) {
+                return rawText;
+            }
+            throw new TypeError(`AsinDataParser.parseRawData expected rawText to be a string or a pre-parsed object, but received ${typeof rawText}`);
+        }
         const lines = rawText.split('\n').filter(line => line.trim() !== '');
         const data = {};
         let currentKey = null;
@@ -56,6 +67,46 @@ class AsinDataParser {
         const cleaned = priceStr.toString().replace(/[^\d.]/g, '');
         const parsed = parseFloat(cleaned);
         return isNaN(parsed) ? 0 : parsed;
+    }
+
+    /**
+     * Derive prices (currentPrice, mrp) from raw input, auto-detecting and auto-correcting any fields.
+     * 
+     * @param {string|number} rawPrice - The raw price or ASP value.
+     * @param {string|number} rawMrp - The raw MRP or list price.
+     * @returns {object} An object containing parsed currentPrice and mrp.
+     */
+    static derivePricesFromRawData(rawPrice, rawMrp) {
+        let currentPrice = 0;
+        let mrp = 0;
+
+        // If ASP field contains "MRP", it is actually the MRP!
+        if (typeof rawPrice === 'string' && rawPrice.toUpperCase().includes('MRP')) {
+            mrp = this.parsePrice(rawPrice);
+            if (typeof rawMrp === 'string' && !rawMrp.toUpperCase().includes('MRP') && rawMrp.trim() !== '') {
+                currentPrice = this.parsePrice(rawMrp);
+            }
+        } else {
+            currentPrice = typeof rawPrice === 'number' ? rawPrice : this.parsePrice(rawPrice);
+            mrp = typeof rawMrp === 'number' ? rawMrp : this.parsePrice(rawMrp);
+        }
+
+        // Apply fallback rules
+        if (!currentPrice && mrp) {
+            currentPrice = mrp;
+        }
+        if (!mrp && currentPrice) {
+            mrp = currentPrice;
+        }
+
+        // Swap if currentPrice exceeds MRP (mrp must always be >= currentPrice)
+        if (currentPrice > mrp) {
+            const temp = mrp;
+            mrp = currentPrice;
+            currentPrice = temp;
+        }
+
+        return { currentPrice, mrp };
     }
 
     /**
@@ -167,26 +218,34 @@ class AsinDataParser {
         
         // Category node parsing for Ajio & Amazon
         let category = '';
-        if (parsed.category_node) {
-            category = parsed.category_node.split('\n').map(s => s.replace(/[\/\\]+$/, '').trim()).filter(Boolean).join(' > ');
+        if (parsed.Category || parsed.category || parsed.category_node) {
+            const rawCat = parsed.Category || parsed.category || parsed.category_node;
+            category = rawCat.split(/[\n\r\/\\>]+/).map(s => s.trim()).filter(Boolean).join(' > ');
         } else {
             category = this.parseCategory(parsed.category || '');
         }
 
-        const brand = (parsed.brand_name || parsed.brand || '').split(' ')[0] || '';
+        const brand = (parsed['brand name'] || parsed.brand_name || parsed.brand || '').trim();
         
         // Images and images count extraction
         let mainImage = '';
         let imagesList = [];
         let imagesCount = 0;
         
-        if (parsed.img_count && typeof parsed.img_count === 'string') {
-            const matches = parsed.img_count.match(/src=["']([^"']+)["']/g);
+        const rawImgField = parsed.Image_count || parsed.image_count || parsed.img_count || parsed.imgCount || '';
+        if (rawImgField && typeof rawImgField === 'string') {
+            const matches = rawImgField.match(/src=["']([^"']+)["']/g);
             if (matches) {
-                imagesList = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com'));
+                imagesList = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com') || src.includes('assets-jiocdn.ajio.com'));
                 imagesCount = imagesList.length;
                 if (imagesList.length > 0) {
                     mainImage = imagesList[0];
+                }
+            }
+            if (imagesCount === 0) {
+                const parsedNum = parseInt(rawImgField.replace(/[^\d]/g, ''));
+                if (!isNaN(parsedNum)) {
+                    imagesCount = parsedNum;
                 }
             }
         } else {
@@ -196,12 +255,20 @@ class AsinDataParser {
             imagesList = parsedImages ? [parsedImages] : [];
         }
 
-        const rawPrice = parsed.ASP || parsed.asp || parsed.price || parsed.currentPrice || 0;
-        const currentPrice = typeof rawPrice === 'number' ? rawPrice : this.parsePrice(rawPrice);
-        
-        const rawMrp = parsed.MRP || parsed.mrp || parsed.listPrice || 0;
-        let mrp = typeof rawMrp === 'number' ? rawMrp : this.parsePrice(rawMrp);
-        if (!mrp) mrp = currentPrice;
+        const { currentPrice, mrp } = this.derivePricesFromRawData(
+            parsed.ASP || parsed.asp || parsed.price || parsed.currentPrice || '',
+            parsed.MRP || parsed.mrp || parsed.listPrice || ''
+        );
+
+        const rawOffPercent = parsed.off_percent || parsed.offPercent || parsed.discountPercentage || '';
+        let discountPercentage = 0;
+        if (rawOffPercent) {
+            const match = rawOffPercent.toString().match(/(\d+)/);
+            discountPercentage = match ? parseInt(match[1]) : 0;
+        }
+        if (!discountPercentage && mrp > currentPrice && mrp > 0) {
+            discountPercentage = Math.round(((mrp - currentPrice) / mrp) * 100);
+        }
 
         const bsr = this.parseBSR(parsed.BSR || '');
         const subBsr = this.parseBSR(parsed.sub_BSR || '');
@@ -210,7 +277,7 @@ class AsinDataParser {
         const rawRating = parsed.Rating || parsed.rating || parsed.avg_rating || '';
         const rating = this.parseRating(rawRating);
 
-        const rawReviews = parsed.Review_count || parsed.review_count || parsed.ReviewCount || '';
+        const rawReviews = parsed['review count'] || parsed.Review_count || parsed.review_count || parsed.ReviewCount || '';
         const reviewCount = this.parseReviewCount(rawReviews);
 
         const hasAplus = this.hasAplus(parsed.A_plus || '');
@@ -219,29 +286,17 @@ class AsinDataParser {
         const bulletPoints = this.parseBulletPoints(parsed.bp_all || '');
         const bulletPointsText = bulletPoints.join('\n• ');
         
-        // Buy Box details & Availability Status
-        const buttonText = parsed.Button_text || parsed.button_text || '';
-        let buyBoxStatus = 'Unknown';
-        if (buttonText) {
-            const lowerBtn = buttonText.toLowerCase();
-            if (lowerBtn.includes('add to bag') || lowerBtn.includes('add to cart') || lowerBtn.includes('in stock')) {
-                buyBoxStatus = 'In Stock';
-            } else if (lowerBtn.includes('out of stock') || lowerBtn.includes('unavailable')) {
-                buyBoxStatus = 'Out of Stock';
-            } else {
-                buyBoxStatus = this.parseAvailabilityStatus(buttonText);
-            }
-        } else {
-            buyBoxStatus = this.parseAvailabilityStatus(parsed.unavilable || '');
-        }
+        // Buy Box details & Availability Status (Exact Button Text)
+        const buttonText = (parsed.Button_text || parsed.button_text || parsed.biutton_text || parsed.unavilable || '').trim();
+        const buyBoxStatus = buttonText || 'Unknown';
 
         const buyBoxWin = parsed.buy_box_win || 0;
         const buyBoxSellerId = parsed.second_buybox ? parsed.second_buybox.match(/seller=([^&]+)/)?.[1] || '' : '';
         const soldBy = parsed.sold_by || '';
         
-        // Deal badge
-        const secondAsp = this.parsePrice(parsed.second_asp || parsed.SecondAsp);
-        const aspDifference = currentPrice > 0 && secondAsp > 0 ? currentPrice - secondAsp : 0;
+        // Deal badge / MRP
+        const secondAsp = mrp || this.parsePrice(parsed.second_asp || parsed.SecondAsp);
+        const aspDifference = currentPrice > 0 && secondAsp > 0 ? Math.abs(currentPrice - secondAsp) : 0;
         
         // LQS calculation
         const lqs = Math.round(calculateLQS({
@@ -279,6 +334,7 @@ class AsinDataParser {
             Title: title,
             ImageUrl: mainImage,
             CurrentPrice: currentPrice,
+            DiscountPercentage: discountPercentage,
             BSR: bsr,
             SubBsr: subBsr ? subBsr.toString() : null,
             SubBSRs: null,
@@ -288,7 +344,7 @@ class AsinDataParser {
             LqsDetails: lqsDetails,
             CdqComponents: null,
             FeePreview: null,
-            BuyBoxStatus: buyBoxStatus === 'In Stock' ? 1 : 0,
+            BuyBoxStatus: buyBoxStatus.toLowerCase().includes('add to bag') || buyBoxStatus.toLowerCase().includes('add to cart') || buyBoxStatus.toLowerCase().includes('in stock') ? 1 : 0,
             BuyBoxWin: buyBoxWin ? 1 : 0,
             BuyBoxSellerId: buyBoxSellerId,
             SoldBy: soldBy,
@@ -302,7 +358,8 @@ class AsinDataParser {
             StapleLevel: 'Regular',
             Weight: 0,
             LossPerReturn: 0,
-            SecondAsp: secondAsp > 0 ? secondAsp : null,
+            Mrp: mrp > 0 ? mrp : null,
+            SecondAsp: mrp > 0 ? mrp : null,
             SoldBySec: '',
             AspDifference: aspDifference,
             AvailabilityStatus: buyBoxStatus,

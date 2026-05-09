@@ -447,7 +447,7 @@ const AsinManagerPage = () => {
   const isVisible = useCallback((key) => {
     if (marketplaceFilter === 'ajio') {
       const ajioAllowedColumns = [
-        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'priceTrend',
+        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'discountPercentage', 'priceTrend',
         'rating', 'reviewCount', 'ratingTrendStatus', 'ratingTrend', 'reviewTrend', 'imagesCount'
       ];
       return ajioAllowedColumns.includes(key);
@@ -2560,7 +2560,8 @@ const AsinManagerPage = () => {
 
                   {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
                   {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>MRP</th>}
-                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
+                   {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
+                  {isVisible('discountPercentage') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISCOUNT %</th>}
                   {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISPUTE</th>}
                   {visiblePriceTrendCount > 0 && (
                     <th colSpan={visiblePriceTrendCount}
@@ -3029,23 +3030,9 @@ const AsinManagerPage = () => {
                               padding: '4px 8px',
                               borderRadius: '4px'
                             }}
-                            title={(() => {
-                              const val = asin.availabilityStatus || 'Available';
-                              if (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') {
-                                if (val === 'Currently unavailable.') return 'OUT OF STOCK';
-                                if (val === 'Available') return 'ADD TO BAG';
-                              }
-                              return val;
-                            })()}
+                            title={asin.availabilityStatus || 'Available'}
                           >
-                            {(() => {
-                              const val = asin.availabilityStatus || 'Available';
-                              if (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') {
-                                if (val === 'Currently unavailable.') return 'OUT OF STOCK';
-                                if (val === 'Available') return 'ADD TO BAG';
-                              }
-                              return val;
-                            })()}
+                            {asin.availabilityStatus || 'Available'}
                           </span>
                         </td>
                       )}
@@ -3223,23 +3210,38 @@ const AsinManagerPage = () => {
                           onClick={(e) => handleViewPrice(asin, e)}
                           title="View Price Trend Matrix">
                           <div className="d-flex flex-column align-items-end">
-                            <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
-                              ₹{(asin.uploadedPrice || 0).toLocaleString()}
-                            </span>
-                            {asin.priceDispute && (
-                              <span className="badge mt-1 shadow-sm" style={{
-                                fontSize: '8px',
-                                padding: '2px 6px',
-                                fontWeight: 800,
-                                backgroundColor: '#dc2626',
-                                color: '#fff',
-                                borderRadius: '4px',
-                                textTransform: 'uppercase'
-                              }}>
-                                PRICE DISPUTE
+                            {asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? (
+                              <span style={{ color: '#4338ca' }}>
+                                ₹{(asin.currentPrice || 0).toLocaleString()}
                               </span>
+                            ) : (
+                              <>
+                                <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
+                                  ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                                </span>
+                                {asin.priceDispute && (
+                                  <span className="badge mt-1 shadow-sm" style={{
+                                    fontSize: '8px',
+                                    padding: '2px 6px',
+                                    fontWeight: 800,
+                                    backgroundColor: '#dc2626',
+                                    color: '#fff',
+                                    borderRadius: '4px',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    PRICE DISPUTE
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
+                        </td>
+                      )}
+                      {isVisible('discountPercentage') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <span className="badge bg-danger bg-opacity-10 text-danger" style={{ fontWeight: 700, fontSize: '11px' }}>
+                            {asin.discountPercentage ? `${asin.discountPercentage}% OFF` : '-'}
+                          </span>
                         </td>
                       )}
                       {isVisible('priceDispute') && (
@@ -3284,7 +3286,7 @@ const AsinManagerPage = () => {
                               onClick={(e) => handleViewPrice(asin, e)}
                               title="View Price Trend Matrix"
                               style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 45, cursor: 'pointer' }}>
-                              {wData?.price ? getWeekHistoryBadge(wData.price, 'price', asin.uploadedPrice) : '-'}
+                              {wData?.price ? getWeekHistoryBadge(wData.price, 'price', (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? asin.currentPrice : asin.uploadedPrice)) : '-'}
                             </td>
                           );
                         });
