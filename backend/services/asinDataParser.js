@@ -34,12 +34,17 @@ class AsinDataParser {
     }
 
     /**
-     * Extract ASIN from Amazon URL
+     * Extract ASIN from Amazon or Ajio URL
      */
     static extractAsin(url) {
         if (!url) return null;
-        const match = url.match(/\/dp\/([A-Z0-9]{10})/);
-        return match ? match[1] : null;
+        // Amazon dp
+        const match = url.match(/\/dp\/([A-Z0-9]{10})/i);
+        if (match) return match[1];
+        // Ajio /p/
+        const ajioMatch = url.match(/\/p\/([A-Za-z0-9_-]+)/i);
+        if (ajioMatch) return ajioMatch[1];
+        return null;
     }
 
     /**
@@ -148,45 +153,95 @@ class AsinDataParser {
      */
     static transformToAsinRow(rawData, sellerId) {
         const parsed = this.parseRawData(rawData);
-        const url = parsed.Original_URL || '';
+        const url = parsed.Original_URL || parsed.Page_URL || parsed.page_url || parsed.url || '';
         const asinCode = this.extractAsin(url);
 
         if (!asinCode) {
-            throw new Error('Could not extract ASIN from Original_URL');
+            throw new Error('Could not extract ASIN from Original_URL or Page_URL');
         }
 
         const now = new Date();
 
         // Core fields
-        const title = parsed.Title || '';
-        const category = this.parseCategory(parsed.category || '');
-        const brand = (parsed.brand || '').split(' ')[0] || '';
-        const mainImage = this.parseMainImage(parsed.Main_Image || '');
-        const currentPrice = this.parsePrice(parsed.mrp || parsed.asp || 0);
+        const title = (parsed.Title || parsed.title || '').trim();
+        
+        // Category node parsing for Ajio & Amazon
+        let category = '';
+        if (parsed.category_node) {
+            category = parsed.category_node.split('\n').map(s => s.replace(/[\/\\]+$/, '').trim()).filter(Boolean).join(' > ');
+        } else {
+            category = this.parseCategory(parsed.category || '');
+        }
+
+        const brand = (parsed.brand_name || parsed.brand || '').split(' ')[0] || '';
+        
+        // Images and images count extraction
+        let mainImage = '';
+        let imagesList = [];
+        let imagesCount = 0;
+        
+        if (parsed.img_count && typeof parsed.img_count === 'string') {
+            const matches = parsed.img_count.match(/src=["']([^"']+)["']/g);
+            if (matches) {
+                imagesList = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com'));
+                imagesCount = imagesList.length;
+                if (imagesList.length > 0) {
+                    mainImage = imagesList[0];
+                }
+            }
+        } else {
+            mainImage = this.parseMainImage(parsed.Main_Image || '');
+            const parsedImages = this.parseMainImage(parsed.image_count || '');
+            imagesCount = parsedImages.length > 0 ? 6 : 0;
+            imagesList = parsedImages ? [parsedImages] : [];
+        }
+
+        const rawPrice = parsed.ASP || parsed.asp || parsed.price || parsed.currentPrice || 0;
+        const currentPrice = typeof rawPrice === 'number' ? rawPrice : this.parsePrice(rawPrice);
+        
+        const rawMrp = parsed.MRP || parsed.mrp || parsed.listPrice || 0;
+        let mrp = typeof rawMrp === 'number' ? rawMrp : this.parsePrice(rawMrp);
+        if (!mrp) mrp = currentPrice;
+
         const bsr = this.parseBSR(parsed.BSR || '');
         const subBsr = this.parseBSR(parsed.sub_BSR || '');
-        const rating = this.parseRating(parsed.avg_rating || 0);
-        const reviewCount = this.parseReviewCount(parsed.review_count || '');
+        
+        // Rating and review count extraction
+        const rawRating = parsed.Rating || parsed.rating || parsed.avg_rating || '';
+        const rating = this.parseRating(rawRating);
+
+        const rawReviews = parsed.Review_count || parsed.review_count || parsed.ReviewCount || '';
+        const reviewCount = this.parseReviewCount(rawReviews);
+
         const hasAplus = this.hasAplus(parsed.A_plus || '');
         
         // Bullet points
         const bulletPoints = this.parseBulletPoints(parsed.bp_all || '');
         const bulletPointsText = bulletPoints.join('\n• ');
         
-        // Images
-        const images = this.parseMainImage(parsed.image_count || '');
-        const imagesCount = images.length > 0 ? 6 : 0; // Count from image html
-        
-        // Buy Box details
-        const buyBoxStatus = this.parseAvailabilityStatus(parsed.unavilable || '');
+        // Buy Box details & Availability Status
+        const buttonText = parsed.Button_text || parsed.button_text || '';
+        let buyBoxStatus = 'Unknown';
+        if (buttonText) {
+            const lowerBtn = buttonText.toLowerCase();
+            if (lowerBtn.includes('add to bag') || lowerBtn.includes('add to cart') || lowerBtn.includes('in stock')) {
+                buyBoxStatus = 'In Stock';
+            } else if (lowerBtn.includes('out of stock') || lowerBtn.includes('unavailable')) {
+                buyBoxStatus = 'Out of Stock';
+            } else {
+                buyBoxStatus = this.parseAvailabilityStatus(buttonText);
+            }
+        } else {
+            buyBoxStatus = this.parseAvailabilityStatus(parsed.unavilable || '');
+        }
+
         const buyBoxWin = parsed.buy_box_win || 0;
         const buyBoxSellerId = parsed.second_buybox ? parsed.second_buybox.match(/seller=([^&]+)/)?.[1] || '' : '';
         const soldBy = parsed.sold_by || '';
         
         // Deal badge
-        const asp = this.parsePrice(parsed.asp);
-        const secondAsp = this.parsePrice(parsed.second_asp);
-        const aspDifference = asp > 0 && secondAsp > 0 ? asp - secondAsp : 0;
+        const secondAsp = this.parsePrice(parsed.second_asp || parsed.SecondAsp);
+        const aspDifference = currentPrice > 0 && secondAsp > 0 ? currentPrice - secondAsp : 0;
         
         // LQS calculation
         const lqs = Math.round(calculateLQS({
@@ -240,7 +295,7 @@ class AsinDataParser {
             HasAplus: hasAplus ? 1 : 0,
             StockLevel: 0,
             VideoCount: 0,
-            Images: images,
+            Images: JSON.stringify(imagesList),
             ImagesCount: imagesCount,
             BulletPoints: bulletPoints.length > 0 ? JSON.stringify(bulletPoints) : null,
             BulletPointsText: bulletPointsText,
