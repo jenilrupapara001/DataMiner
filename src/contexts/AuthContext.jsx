@@ -182,7 +182,8 @@ export const AuthProvider = ({ children }) => {
     const hasPermission = (permissionName) => {
         if (!user) return false;
         const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
-        if (roleName === 'admin') return true;
+        const isRoleAdmin = roleName === 'admin' || roleName === 'super_admin' || roleName === 'super admin' || roleName === 'supert admin' || roleName.includes('super') || roleName.includes('supert');
+        if (isRoleAdmin) return true;
         if (roleName === 'operational_manager') {
             const excludedPermissions = [
                 'settings_manage',
@@ -206,7 +207,9 @@ export const AuthProvider = ({ children }) => {
 
     const hasAnyPermission = (permissionNames) => {
         if (!user || !user.role) return false;
-        if (user.role.name === 'admin') return true;
+        const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
+        const isRoleAdmin = roleName === 'admin' || roleName === 'super_admin' || roleName === 'super admin' || roleName === 'supert admin' || roleName.includes('super') || roleName.includes('supert');
+        if (isRoleAdmin) return true;
         return permissionNames.some(name => hasPermission(name));
     };
 
@@ -222,9 +225,9 @@ export const AuthProvider = ({ children }) => {
         hasPermission,
         hasAnyPermission,
         isAuthenticated: !!user,
-        isAdmin: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'admin',
+        isAdmin: ['admin', 'super_admin', 'super admin', 'supert admin'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()) || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('super') || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('supert'),
         isOperationalManager: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'operational_manager',
-        isGlobalUser: ['admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()),
+        isGlobalUser: ['admin', 'super_admin', 'super admin', 'supert admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()) || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('super') || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('supert'),
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
