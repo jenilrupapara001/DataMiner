@@ -142,7 +142,7 @@ class MarketDataSyncService {
             .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
 
         if (asinsResult.recordset.length === 0) {
-            throw new Error(`No active ASINs found for seller: ${sellerId}`);
+            this.log('warn', `No active ASINs found for seller: ${sellerId}. Proceeding with task duplication anyway.`);
         }
 
         // Use the consolidated duplicateTask method

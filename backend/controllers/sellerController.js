@@ -249,8 +249,10 @@ exports.createSeller = async (req, res) => {
 
      res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
 
-    if (marketDataSyncService.isConfigured()) {
-      marketDataSyncService.ensureTaskForSeller(id).catch(console.error);
+    if (marketplace) {
+      marketDataSyncService.ensureTaskForSeller(id).catch(err => {
+        console.error(`❌ Error during automated task creation for seller ${name}:`, err.message);
+      });
     }
   } catch (error) {
     if (error.message.includes('UNIQUE KEY')) {
