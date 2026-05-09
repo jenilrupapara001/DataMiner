@@ -447,7 +447,8 @@ const AsinManagerPage = () => {
   const isVisible = useCallback((key) => {
     if (marketplaceFilter === 'ajio') {
       const ajioAllowedColumns = [
-        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'imagesCount'
+        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'priceTrend',
+        'rating', 'reviewCount', 'ratingTrendStatus', 'ratingTrend', 'reviewTrend', 'imagesCount'
       ];
       return ajioAllowedColumns.includes(key);
     }
@@ -3010,20 +3011,41 @@ const AsinManagerPage = () => {
                           <span
                             className="badge"
                             style={{
-                              backgroundColor: (asin.availabilityStatus || 'Available').toLowerCase().includes('unavailable') || (asin.availabilityStatus || '').toLowerCase().includes('out of stock') || (asin.availabilityStatus || '').trim() === '' ? '#dc2626' : '#059669',
+                              backgroundColor: (() => {
+                                const s = (asin.availabilityStatus || 'Available').toLowerCase();
+                                if (s.includes('unavailable') || s.includes('out of stock') || s.trim() === '') return '#dc2626';
+                                if (s.includes('bag') || s.includes('cart') || s.includes('add')) return '#4f46e5';
+                                return '#059669';
+                              })(),
                               color: '#fff',
                               fontWeight: 600,
                               fontSize: '0.75rem',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              maxWidth: '75px',
+                              maxWidth: '110px',
                               display: 'inline-block',
-                              verticalAlign: 'middle'
+                              verticalAlign: 'middle',
+                              padding: '4px 8px',
+                              borderRadius: '4px'
                             }}
-                            title={asin.availabilityStatus || 'Available'}
+                            title={(() => {
+                              const val = asin.availabilityStatus || 'Available';
+                              if (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') {
+                                if (val === 'Currently unavailable.') return 'OUT OF STOCK';
+                                if (val === 'Available') return 'ADD TO BAG';
+                              }
+                              return val;
+                            })()}
                           >
-                            {asin.availabilityStatus || 'Available'}
+                            {(() => {
+                              const val = asin.availabilityStatus || 'Available';
+                              if (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') {
+                                if (val === 'Currently unavailable.') return 'OUT OF STOCK';
+                                if (val === 'Available') return 'ADD TO BAG';
+                              }
+                              return val;
+                            })()}
                           </span>
                         </td>
                       )}
@@ -3373,7 +3395,7 @@ const AsinManagerPage = () => {
                       )}
                       {isVisible('reviewCount') && (
                         <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
-                          {(asin.reviewCount || 0).toLocaleString()}
+                          {asin.reviewCount !== null && asin.reviewCount !== undefined ? asin.reviewCount.toLocaleString() : '-'}
                         </td>
                       )}
                       {isVisible('ratingTrendStatus') && (

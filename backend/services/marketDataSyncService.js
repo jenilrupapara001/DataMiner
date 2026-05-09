@@ -1757,18 +1757,27 @@ class MarketDataSyncService {
                 mainImageUrl = images[0] || asin.ImageUrl || '';
 
                 // Availability check based on Button_text
-                const buttonText = (rawData.Button_text || '').toUpperCase();
-                if (buttonText.includes('OUT OF STOCK')) {
-                    availabilityStatus = 'Currently unavailable.';
-                } else if (price === 0) {
-                    availabilityStatus = 'Currently unavailable.';
-                } else {
-                    availabilityStatus = 'Available';
+                let buttonText = (rawData.Button_text || rawData.button_text || '').trim();
+                if (!buttonText) {
+                    if (price === 0) {
+                        buttonText = 'OUT OF STOCK';
+                    } else {
+                        buttonText = 'ADD TO BAG';
+                    }
                 }
+                availabilityStatus = buttonText;
 
                 soldBy = asin.sellerName || '';
                 buyBoxWin = true;
                 brand = (rawData.brand_name || rawData.brand || rawData.Brand || asin.Brand || '').trim();
+
+                // Rating and Review Count extraction
+                const rawRating = rawData.Rating || rawData.rating || rawData.avg_rating || '';
+                rating = parseFloat(rawRating);
+                if (isNaN(rating)) rating = 0;
+
+                const rawReviews = rawData.Review_count || rawData.review_count || rawData.ReviewCount || '';
+                reviewCount = this._cleanReviewCount(rawReviews) || 0;
 
                 if (soldBy) {
                     allOffers.push({

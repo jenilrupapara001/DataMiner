@@ -286,7 +286,7 @@ exports.getAsins = async (req, res) => {
 
     // [7.5] Fetch Week History for long-term trends
     const weekHistoryResult = await pool.request().query(`
-      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr
+      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
       FROM AsinWeekHistory 
       WHERE AsinId IN (${asinIds}) 
       ORDER BY WeekStartDate ASC
@@ -299,7 +299,9 @@ exports.getAsins = async (req, res) => {
         week: h.WeekStartDate ? `W${Math.ceil(new Date(h.WeekStartDate).getDate() / 7)}` : '',
         date: h.WeekStartDate ? h.WeekStartDate.toISOString().split('T')[0] : '',
         price: h.price || 0,
-        bsr: h.bsr || 0
+        bsr: h.bsr || 0,
+        rating: h.rating || 0,
+        reviews: h.reviews || 0
       });
     });
 
@@ -439,9 +441,9 @@ exports.getAsins = async (req, res) => {
             // BSR & Ratings
             bsr: parseInt(a.BSR) || 0,
             bsrTrend: a.BsrTrend || 'Stable',
-            rating: parseFloat(a.Rating) || 0,
+            rating: a.Rating !== null && a.Rating !== undefined ? parseFloat(a.Rating) : null,
             ratingTrend: a.RatingTrend || 'Stable',
-            reviewCount: parseInt(a.ReviewCount) || 0,
+            reviewCount: a.ReviewCount !== null && a.ReviewCount !== undefined ? parseInt(a.ReviewCount) : null,
             ratingBreakdown: ratingBreakdown,
             
             // LQS & CDQ
@@ -635,8 +637,8 @@ exports.getAsin = async (req, res) => {
       uploadedPrice: parseFloat(a.UploadedPrice) || 0,
       mrp: parseFloat(a.Mrp) || 0,
       bsr: parseInt(a.BSR) || 0,
-      rating: parseFloat(a.Rating) || 0,
-      reviewCount: parseInt(a.ReviewCount) || 0,
+      rating: a.Rating !== null && a.Rating !== undefined ? parseFloat(a.Rating) : null,
+      reviewCount: a.ReviewCount !== null && a.ReviewCount !== undefined ? parseInt(a.ReviewCount) : null,
       lqs: parseFloat(a.LQS) || 0,
       
       buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
