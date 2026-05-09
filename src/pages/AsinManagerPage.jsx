@@ -120,9 +120,22 @@ const getWeekNumber = (date) => {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 };
 
+// Helper to normalize dates to YYYY-MM-DD string without timezone offset
+const normalizeDateStr = (dateInput) => {
+  if (!dateInput) return '';
+  if (typeof dateInput === 'string') {
+    return dateInput.substring(0, 10);
+  }
+  try {
+    return new Date(dateInput).toISOString().substring(0, 10);
+  } catch (e) {
+    return '';
+  }
+};
+
 // Helper function for week history badges
 const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
-  if (!value) return <span style={{ color: '#9ca3af' }}>-</span>;
+  if (value === undefined || value === null || value === '') return <span style={{ color: '#9ca3af' }}>-</span>;
 
   if (type === 'price') {
     return (
@@ -476,12 +489,12 @@ const AsinManagerPage = () => {
 
           allHistory.forEach(h => {
             if (h.date) {
-              const dateObj = new Date(h.date);
-              const dateKey = dateObj.toISOString().split('T')[0];
-
-              const existing = dateMap.get(dateKey);
-              if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
-                dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
+              const dateKey = normalizeDateStr(h.date);
+              if (dateKey) {
+                const existing = dateMap.get(dateKey);
+                if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
+                  dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
+                }
               }
             }
           });
@@ -1204,7 +1217,11 @@ const AsinManagerPage = () => {
 
   const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
     try {
-      const response = await sellerApi.getAll({ page, limit: 1000, search });
+      const params = { page, limit: 1000, search };
+      if (marketplaceFilter && marketplaceFilter !== 'all') {
+        params.marketplace = marketplaceFilter;
+      }
+      const response = await sellerApi.getAll(params);
       if (response.success) {
         return {
           data: response.data.sellers || [],
@@ -1216,7 +1233,7 @@ const AsinManagerPage = () => {
       console.error('Error fetching sellers for dropdown:', err);
       return { data: [], hasMore: false };
     }
-  }, []);
+  }, [marketplaceFilter]);
 
   const kpis = useMemo(() => {
     if (stats) {
@@ -3279,8 +3296,8 @@ const AsinManagerPage = () => {
                       {isVisible('priceTrend') && historyStructure.map(week => {
                         const datesToMap = priceTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
+                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewPrice(asin, e)}
@@ -3372,8 +3389,8 @@ const AsinManagerPage = () => {
                         const datesToMap = bsrTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
                           const hDate = date.raw;
-                          const subBsrPoint = asin.subBsrHistory?.find(h => new Date(h.date).toISOString().split('T')[0] === hDate);
-                          const displayVal = subBsrPoint?.rank;
+                          const subBsrPoint = asin.subBsrHistory?.find(h => normalizeDateStr(h.date) === hDate);
+                          const displayVal = subBsrPoint?.rank ?? asin.subBsr;
 
                           return (
                             <td key={`b-${week.label}-${dIdx}`}
@@ -3408,13 +3425,14 @@ const AsinManagerPage = () => {
                       {isVisible('ratingTrend') && historyStructure.map(week => {
                         const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
+                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const ratingVal = (wData && wData.rating !== undefined && wData.rating !== null) ? wData.rating : asin.rating;
                           return (
                             <td key={`r-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewRating(asin, e)}
                               style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
-                              {wData?.rating ? getWeekHistoryBadge(wData.rating, 'rating') : '-'}
+                              {(ratingVal !== undefined && ratingVal !== null && ratingVal !== '') ? getWeekHistoryBadge(ratingVal, 'rating') : '-'}
                             </td>
                           );
                         });
@@ -3427,13 +3445,14 @@ const AsinManagerPage = () => {
                       {isVisible('reviewTrend') && historyStructure.map(week => {
                         const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
+                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const reviewsVal = (wData && wData.reviews !== undefined && wData.reviews !== null) ? wData.reviews : (wData?.reviewCount !== undefined && wData?.reviewCount !== null ? wData.reviewCount : asin.reviewCount);
                           return (
                             <td key={`rev-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewRating(asin, e)}
                               style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
-                              {(wData?.reviews || wData?.reviewCount) ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{(wData.reviews || wData.reviewCount).toLocaleString()}</span> : '-'}
+                              {(reviewsVal !== undefined && reviewsVal !== null && reviewsVal !== '') ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{reviewsVal.toLocaleString()}</span> : '-'}
                             </td>
                           );
                         });
@@ -3458,8 +3477,8 @@ const AsinManagerPage = () => {
                       {isVisible('imageTrend') && historyStructure.map(week => {
                         const datesToMap = imageTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => new Date(w.date).toISOString().split('T')[0] === date.raw)
-                            || asin.history?.find(h => new Date(h.date).toISOString().split('T')[0] === date.raw);
+                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
+                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           return (
                             <td key={`i-${week.label}-${dIdx}`}
                               style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>

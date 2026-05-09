@@ -55,6 +55,13 @@ const InfiniteScrollSelect = ({
         }
     }, [fetchData, value, valueKey, labelKey, options, loading]);
 
+    // Reset options when fetchData changes
+    useEffect(() => {
+        setOptions([]);
+        setPage(1);
+        setHasMore(true);
+    }, [fetchData]);
+
     // Handle Page changes
     useEffect(() => {
         if (page > 1 && isOpen) {

@@ -28,6 +28,10 @@ const getResolvedUserResponse = async (user, pool) => {
 };
 
 exports.register = async (req, res) => {
+  return res.status(403).json({ success: false, message: 'Registration is currently disabled.' });
+};
+
+exports.register_disabled = async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;
     const pool = await getPool();

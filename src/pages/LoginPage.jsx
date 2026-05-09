@@ -185,7 +185,7 @@ const LoginPage = () => {
                     </div>
 
                     <div className="auth-footer">
-                        <p>Don't have an account? <Link to="/register">Create an account</Link></p>
+                        <p>Registration is currently disabled. Contact admin for credentials.</p>
                     </div>
                 </div>
             </div>
