@@ -2602,7 +2602,6 @@ const AsinManagerPage = () => {
                   {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RT</th>}
                   {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>CNT</th>}
                   {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RATING TR</th>}
-                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }} title="Reviews Trend Status">REV TR</th>}
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
                       style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
@@ -2619,6 +2618,7 @@ const AsinManagerPage = () => {
                       </div>
                     </th>
                   )}
+                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }} title="Reviews Trend Status">REV TR</th>}
                   {visibleReviewTrendCount > 0 && (
                     <th colSpan={visibleReviewTrendCount}
                       style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
@@ -3381,11 +3381,6 @@ const AsinManagerPage = () => {
                           <TrendBadge status={asin.ratingTrend} />
                         </td>
                       )}
-                      {isVisible('reviewCount') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <TrendBadge status={getReviewTrendStatus(asin)} />
-                        </td>
-                      )}
                       {isVisible('ratingTrend') && historyStructure.map(week => {
                         const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {
@@ -3400,7 +3395,11 @@ const AsinManagerPage = () => {
                           );
                         });
                       })}
-
+                      {isVisible('reviewCount') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <TrendBadge status={getReviewTrendStatus(asin)} />
+                        </td>
+                      )}
                       {isVisible('reviewTrend') && historyStructure.map(week => {
                         const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
                         return datesToMap.map((date, dIdx) => {

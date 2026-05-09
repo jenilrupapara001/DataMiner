@@ -1517,6 +1517,8 @@ class MarketDataSyncService {
                     await this.processBatchResults(sellerId, pendingData);
                 }
                 await this.markDataAsExported(taskId);
+                console.log(`🧹 [Pre-Sync] Clearing task data in Octoparse cloud for task ${taskId}...`);
+                await this.clearTaskData(taskId).catch(() => {});
                 console.log(`✅ [Pre-Sync] Cleanup complete for task ${taskId}.`);
             } catch (cleanupErr) {
                 console.warn(`⚠️ [Pre-Sync] Cleanup warning (continuing sync): ${cleanupErr.message}`);

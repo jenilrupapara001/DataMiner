@@ -17,6 +17,9 @@ const UsersPage = () => {
     // Core Data State
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [matrixRoles, setMatrixRoles] = useState([]);
+    const [matrixSaving, setMatrixSaving] = useState(false);
+    const [matrixSuccess, setMatrixSuccess] = useState(false);
     const [sellers, setSellers] = useState([]);
     const [managers, setManagers] = useState([]);
     const [groupedPermissions, setGroupedPermissions] = useState({});
@@ -48,7 +51,11 @@ const UsersPage = () => {
         isActive: true,
         assignedSellers: [],
         brandManagers: [],
+        supervisors: [],
     });
+    const [modalSearchSupervisor, setModalSearchSupervisor] = useState('');
+    const [modalSearchBrandManager, setModalSearchBrandManager] = useState('');
+    const [modalSearchSeller, setModalSearchSeller] = useState('');
 
     // --- ROLE MODAL STATE ---
     const [showRoleModal, setShowRoleModal] = useState(false);
@@ -60,6 +67,25 @@ const UsersPage = () => {
         level: 30,
         color: '#4F46E5'
     });
+
+    // --- CONDITIONALS FOR MEMBER MANAGEMENT ---
+    const selectedRoleObj = roles.find(r => (r._id || r.id) === userFormData.role);
+    const roleName = selectedRoleObj?.name?.toLowerCase() || '';
+    const roleDisplayName = selectedRoleObj?.displayName?.toLowerCase() || '';
+    const isListingTeam = roleName === 'listing_team' || roleDisplayName === 'listing team';
+    const isCatalogManager = roleName === 'catalog_manager' || roleDisplayName === 'catalog manager' || roleName === 'catalogue_manager' || roleDisplayName === 'catalogue manager';
+    const isBrandManager = roleName === 'brand_manager' || roleDisplayName === 'brand manager';
+
+    const inheritedSellers = useMemo(() => {
+        return sellers.filter(s => {
+            return managers.some(m => {
+                const isSelectedBM = userFormData.brandManagers.includes(m._id || m.id);
+                if (!isSelectedBM) return false;
+                const assignedSellersList = m.assignedSellers || [];
+                return assignedSellersList.includes(s._id || s.id);
+            });
+        });
+    }, [sellers, managers, userFormData.brandManagers]);
 
     // --- REFRESH / DATA FETCH ---
     const loadUsers = useCallback(async () => {
@@ -93,7 +119,12 @@ if (response.success) {
             ]);
             if (rolesRes.success) {
                 const rolesData = rolesRes.data?.roles || rolesRes.data || [];
-                setRoles(Array.isArray(rolesData) ? rolesData : []);
+                const allowedRoleNames = ['admin', 'operational_manager', 'brand manager', 'catalog_manager', 'listing_team'];
+                const filteredRoles = (Array.isArray(rolesData) ? rolesData : []).filter(r => 
+                    allowedRoleNames.includes((r.name || r.displayName || '').toString().toLowerCase())
+                );
+                setRoles(filteredRoles);
+                setMatrixRoles(JSON.parse(JSON.stringify(filteredRoles)));
             }
             if (permsRes.success) {
                 setGroupedPermissions(permsRes.data?.groupedPermissions || {});
@@ -177,6 +208,9 @@ if (response.success) {
 
     // --- DYNAMIC USER MODAL ACTIONS ---
     const handleOpenUserModal = async (user = null) => {
+        setModalSearchSupervisor('');
+        setModalSearchBrandManager('');
+        setModalSearchSeller('');
         if (user) {
             try {
                 const response = await userApi.getById(user._id || user.id);
@@ -191,7 +225,8 @@ if (response.success) {
                     role: fullUser.role?._id || fullUser.role?.id || fullUser.role || '',
                     isActive: fullUser.isActive !== undefined ? fullUser.isActive : true,
                     assignedSellers: fullUser.assignedSellers?.map(s => s._id || s.id || s) || [],
-                    brandManagers: fullUser.supervisors?.map(s => s._id || s.id || s) || fullUser.brandManagers || [],
+                    brandManagers: fullUser.brandManagers?.map(s => s._id || s.id || s) || [],
+                    supervisors: fullUser.supervisors?.map(s => s._id || s.id || s) || [],
                 });
             } catch (error) {
                 console.error('Failed to load full user details:', error);
@@ -205,7 +240,8 @@ if (response.success) {
                     role: user.role?._id || user.role?.id || user.role || '',
                     isActive: user.isActive !== undefined ? user.isActive : true,
                     assignedSellers: user.assignedSellers?.map(s => s._id || s.id || s) || [],
-                    brandManagers: user.supervisors?.map(s => s._id || s.id || s) || [],
+                    brandManagers: user.brandManagers?.map(s => s._id || s.id || s) || [],
+                    supervisors: user.supervisors?.map(s => s._id || s.id || s) || [],
                 });
             }
         } else {
@@ -220,6 +256,7 @@ if (response.success) {
                 isActive: true,
                 assignedSellers: [],
                 brandManagers: [],
+                supervisors: [],
             });
         }
         setShowUserModal(true);
@@ -234,8 +271,8 @@ if (response.success) {
         setUserFormData(prev => ({
             ...prev,
             role: roleId,
-            assignedSellers: isBM ? sellers.map(s => s._id || s.id) : (isLT ? [] : prev.assignedSellers),
-            brandManagers: isLT ? prev.brandManagers : []
+            assignedSellers: isBM ? sellers.map(s => s._id || s.id) : prev.assignedSellers,
+            brandManagers: prev.brandManagers
         }));
     };
 
@@ -245,12 +282,35 @@ if (response.success) {
             return;
         }
         try {
+            const selectedRole = roles.find(r => r._id === userFormData.role || r.id === userFormData.role);
+            const roleName = selectedRole?.name?.toLowerCase() || '';
+            const roleDisplayName = selectedRole?.displayName?.toLowerCase() || '';
+            const isListingTeam = roleName === 'listing_team' || roleDisplayName === 'listing team';
+            const isCatalogManager = roleName === 'catalog_manager' || roleDisplayName === 'catalog manager' || roleName === 'catalogue_manager' || roleDisplayName === 'catalogue manager';
+
+            let finalSellers = userFormData.assignedSellers;
+            if (isListingTeam) {
+                const inheritedIds = [];
+                sellers.forEach(s => {
+                    const isInherited = managers.some(m => {
+                        const isSelectedBM = userFormData.brandManagers.includes(m._id || m.id);
+                        if (!isSelectedBM) return false;
+                        const assignedSellersList = m.assignedSellers || [];
+                        return assignedSellersList.includes(s._id || s.id);
+                    });
+                    if (isInherited) {
+                        inheritedIds.push(s._id || s.id);
+                    }
+                });
+                finalSellers = inheritedIds;
+            }
+
             const data = {
                 ...userFormData,
                 roleId: userFormData.role,
-                assignedSellerIds: userFormData.assignedSellers,
+                assignedSellerIds: finalSellers,
                 brandManagers: userFormData.brandManagers,
-                supervisors: userFormData.brandManagers // Support both keys to be safe
+                supervisors: userFormData.supervisors
             };
 
             if (editingUser) {
@@ -267,35 +327,44 @@ if (response.success) {
     };
 
     // --- DYNAMIC ROLES & PERMISSIONS GRID ACTIONS ---
-    const handleToggleCellPermission = async (role, permId) => {
-        try {
-            const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
-            const isAssigned = rolePermIds.includes(permId);
-            
-            const updatedPermIds = isAssigned
-                ? rolePermIds.filter(id => id !== permId)
-                : [...rolePermIds, permId];
-
-            if (socket) {
-                // Optimistic UI state update for an ultra-premium reactive experience
+    const handleToggleCellPermission = (roleId, permId) => {
+        setMatrixRoles(prevRoles => prevRoles.map(r => {
+            if ((r._id || r.id) === roleId) {
+                const rolePermIds = r.permissions?.map(p => p._id || p.id || p) || [];
+                const isAssigned = rolePermIds.includes(permId);
+                const updatedPermIds = isAssigned
+                    ? rolePermIds.filter(id => id !== permId)
+                    : [...rolePermIds, permId];
+                
                 const updatedPermsObjects = updatedPermIds.map(id => {
                     const found = allPermissions.find(p => p._id === id || p.id === id);
                     return found || { id, _id: id };
                 });
-                const updatedRole = { ...role, permissions: updatedPermsObjects };
-                setRoles(prevRoles => prevRoles.map(r => 
-                    (r._id === role._id || r.id === role.id) ? updatedRole : r
-                ));
-
-                // Emit live socket.io update directly
-                socket.emit('update_role_permissions', { roleId: role._id || role.id, permissions: updatedPermIds });
-            } else {
-                await roleApi.update(role._id || role.id, { permissions: updatedPermIds });
-                loadRolesAndPerms();
+                return { ...r, permissions: updatedPermsObjects };
             }
+            return r;
+        }));
+    };
+
+    const handleSaveMatrixPermissions = async () => {
+        setMatrixSaving(true);
+        setMatrixSuccess(false);
+        try {
+            for (const r of matrixRoles) {
+                const updatedPermIds = r.permissions?.map(p => p._id || p.id || p) || [];
+                await roleApi.update(r._id || r.id, { permissions: updatedPermIds });
+                if (socket) {
+                    socket.emit('update_role_permissions', { roleId: r._id || r.id, permissions: updatedPermIds });
+                }
+            }
+            setMatrixSuccess(true);
+            setTimeout(() => setMatrixSuccess(false), 4000);
+            await loadRolesAndPerms();
         } catch (error) {
-            console.error('Failed to toggle cell permission:', error);
-            alert(error.message || 'Failed to update permission');
+            console.error('Failed to sync matrix permissions:', error);
+            alert(error.message || 'Failed to sync permissions');
+        } finally {
+            setMatrixSaving(false);
         }
     };
 
@@ -680,8 +749,8 @@ if (response.success) {
                                                         </div>
                                                     </td>
                                                     <td>
-                                                        <span className="badge-role" style={{ backgroundColor: `${roleColor}12`, color: roleColor }}>
-                                                            <Shield size={12} /> {user.role?.displayName || 'Custom Role'}
+                                                        <span className="badge rounded-pill px-2.5 py-1 text-white fw-bold d-inline-flex align-items-center gap-1.5 shadow-sm" style={{ backgroundColor: roleColor, fontSize: '11px' }}>
+                                                            <Shield size={11} /> {user.role?.displayName || 'Custom Role'}
                                                         </span>
                                                     </td>
                                                     <td>
@@ -769,13 +838,40 @@ if (response.success) {
                                 onChange={(e) => setPermissionSearch(e.target.value)}
                             />
                         </div>
-                        <div className="d-flex align-items-center gap-3">
-                            <span className="small text-slate-500 font-monospace">{roles.length} Active Roles Configured</span>
+                        <div className="d-flex flex-wrap align-items-center gap-3 justify-content-end">
+                            <span className="small text-slate-500 font-monospace">{matrixRoles.length} Active Roles Configured</span>
+                            
+                            <button 
+                                className="btn btn-sm d-flex align-items-center gap-2 fw-bold text-white px-4 py-2" 
+                                style={{ 
+                                    backgroundColor: '#10b981', 
+                                    border: 'none', 
+                                    borderRadius: '10px', 
+                                    boxShadow: '0 4px 12px rgba(16,185,129,0.2)',
+                                    transition: 'all 0.2s' 
+                                }}
+                                onClick={handleSaveMatrixPermissions}
+                                disabled={matrixSaving}
+                            >
+                                <RefreshCw size={14} className={matrixSaving ? 'spin' : ''} /> 
+                                {matrixSaving ? 'Saving & Direct Applying...' : 'Apply & Sync to Database'}
+                            </button>
+
                             <button className="btn btn-dark btn-sm rounded-3 px-3 py-2 d-flex align-items-center gap-1.5 fw-bold" onClick={() => handleOpenRoleModal()}>
                                 <Plus size={14} /> Add Custom Role
                             </button>
                         </div>
                     </div>
+
+                    {matrixSuccess && (
+                        <div className="alert alert-success d-flex align-items-center gap-3 p-3.5 mb-4 shadow-sm" style={{ borderRadius: 12, background: '#ecfdf5', border: '1px solid #10b981' }}>
+                            <CheckCircle2 size={20} style={{ color: '#059669' }} />
+                            <div>
+                                <h6 className="fw-bold mb-0.5" style={{ color: '#065f46', fontSize: '13.5px' }}>Direct Matrix Applied Successfully!</h6>
+                                <p className="mb-0 small" style={{ color: '#047857', fontSize: '12px' }}>All permissions have been directly saved in the database and instantly applied across all system components.</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Permission Category Blocks (Taskora UI Grid) */}
                     <div className="d-flex flex-column gap-4">
@@ -796,7 +892,7 @@ if (response.success) {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {roles.map((role) => {
+                                            {matrixRoles.map((role) => {
                                                 const roleColor = role.color || '#4F46E5';
                                                 const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
                                                 return (
@@ -821,24 +917,39 @@ if (response.success) {
                                                         </td>
                                                         {perms.map((perm) => {
                                                             const isAssigned = rolePermIds.includes(perm._id || perm.id);
+                                                            const isOperationalManager = (role.name || '').toLowerCase() === 'operational_manager' || (role.displayName || '').toLowerCase() === 'operational manager';
+                                                            const isRestrictedForOpManager = isOperationalManager && [
+                                                                'settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'
+                                                            ].includes(perm.name || perm.id || perm._id);
+
                                                             return (
                                                                 <td key={perm._id || perm.id} className="text-center" style={{ padding: '16px' }}>
                                                                     <div className="d-flex justify-content-center">
-                                                                        <div 
-                                                                            className="d-inline-flex align-items-center justify-content-center cursor-pointer transition-all"
-                                                                            style={{ 
-                                                                                width: '20px', 
-                                                                                height: '20px', 
-                                                                                borderRadius: '6px', 
-                                                                                border: isAssigned ? '1.5px solid #10b981' : '1.5px solid #cbd5e1', 
-                                                                                backgroundColor: isAssigned ? '#10b981' : 'transparent',
-                                                                                boxShadow: isAssigned ? '0 2px 4px rgba(16, 185, 129, 0.2)' : 'none',
-                                                                                transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                                            }}
-                                                                            onClick={() => handleToggleCellPermission(role, perm._id || perm.id)}
-                                                                        >
-                                                                            {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
-                                                                        </div>
+                                                                        {isRestrictedForOpManager ? (
+                                                                            <span 
+                                                                                className="badge text-uppercase fw-bold bg-danger" 
+                                                                                style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, cursor: 'not-allowed', backgroundColor: '#ef4444' }}
+                                                                                title="System/User settings restricted for Operational Manager"
+                                                                            >
+                                                                                Restricted
+                                                                            </span>
+                                                                        ) : (
+                                                                            <div 
+                                                                                className="d-inline-flex align-items-center justify-content-center cursor-pointer transition-all"
+                                                                                style={{ 
+                                                                                    width: '20px', 
+                                                                                    height: '20px', 
+                                                                                    borderRadius: '6px', 
+                                                                                    border: isAssigned ? '1.5px solid #10b981' : '1.5px solid #cbd5e1', 
+                                                                                    backgroundColor: isAssigned ? '#10b981' : 'transparent',
+                                                                                    boxShadow: isAssigned ? '0 2px 4px rgba(16, 185, 129, 0.2)' : 'none',
+                                                                                    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                                                }}
+                                                                                onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
+                                                                            >
+                                                                                {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </td>
                                                             );
@@ -857,49 +968,51 @@ if (response.success) {
 
             {/* ===== DYNAMIC CREATE / EDIT MEMBER MODAL ===== */}
             {showUserModal && (
-                <div 
-                    className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-                    style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowUserModal(false); }}
-                >
                     <div 
-                        className="bg-white shadow-2xl overflow-hidden"
-                        style={{ width: '100%', maxWidth: '650px', maxHeight: '90vh', borderRadius: '24px', display: 'flex', flexDirection: 'column' }}
+                        className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
+                        style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
+                        onClick={(e) => { if (e.target === e.currentTarget) setShowUserModal(false); }}
                     >
-                        {/* Header */}
-                        <div className="px-4 py-3.5 border-bottom d-flex justify-content-between align-items-center">
-                            <div className="d-flex align-items-center gap-3">
-                                <div className="p-2 bg-light text-slate-800 rounded-3">
-                                    <UserCheck size={20} />
+                        <div 
+                            className="bg-white shadow-2xl overflow-hidden"
+                            style={{ width: '95%', maxWidth: '780px', maxHeight: '90vh', borderRadius: '24px', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0' }}
+                        >
+                            {/* Header */}
+                            <div className="px-4 py-3.5 border-bottom d-flex justify-content-between align-items-center bg-light">
+                                <div className="d-flex align-items-center gap-3">
+                                <div className="p-2 bg-white text-primary rounded-3 shadow-sm border">
+                                    <UserCheck size={20} className="text-indigo-600" />
                                 </div>
                                 <div>
-                                    <h5 className="mb-0 fw-bold text-slate-900">{editingUser ? 'Edit Organization Member' : 'Add New Member'}</h5>
-                                    <p className="text-muted small mb-0" style={{ fontSize: '11px' }}>
-                                        {editingUser ? 'Modify account roles and structural hierarchies' : 'Register a new member and assign structural roles'}
+                                    <h5 className="mb-0 fw-bold text-slate-900" style={{ letterSpacing: '-0.02em' }}>
+                                        {editingUser ? 'Edit Organization Member' : 'Add New Member'}
+                                    </h5>
+                                    <p className="text-muted small mb-0" style={{ fontSize: '11.5px' }}>
+                                        {editingUser ? 'Modify member profile, assigned supervisors, and brand associations' : 'Register a new member, select access roles, and assign permissions'}
                                     </p>
                                 </div>
                             </div>
-                            <button className="btn btn-link p-1 text-slate-400 border-0" onClick={() => setShowUserModal(false)}>
+                            <button className="btn btn-link p-1 text-slate-400 border-0 hover-dark" onClick={() => setShowUserModal(false)}>
                                 <X size={20} />
                             </button>
                         </div>
 
                         {/* Scrollable Form Body */}
-                        <div className="flex-grow-1 overflow-auto p-4 bg-light">
-                            <div className="d-flex flex-column gap-3.5">
+                        <div className="flex-grow-1 overflow-auto p-4 bg-slate-50/50">
+                            <div className="d-flex flex-column gap-4">
                                 
                                 {/* BASIC DETAILS */}
-                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
-                                    <div className="fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                        Basic Information
+                                <div className="bg-white p-4 rounded-4 border shadow-sm">
+                                    <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                        <User size={14} className="text-muted" /> Basic Information
                                     </div>
                                     <div className="row g-3">
                                         <div className="col-md-6">
                                             <label className="form-label text-slate-600 small fw-semibold">First Name *</label>
                                             <input 
                                                 type="text" 
-                                                className="form-control" 
-                                                placeholder="e.g. John" 
+                                                className="form-control rounded-3 border-slate-200" 
+                                                placeholder="John" 
                                                 value={userFormData.firstName}
                                                 onChange={(e) => setUserFormData(prev => ({ ...prev, firstName: e.target.value }))}
                                             />
@@ -908,8 +1021,8 @@ if (response.success) {
                                             <label className="form-label text-slate-600 small fw-semibold">Last Name *</label>
                                             <input 
                                                 type="text" 
-                                                className="form-control" 
-                                                placeholder="e.g. Doe" 
+                                                className="form-control rounded-3 border-slate-200" 
+                                                placeholder="Doe" 
                                                 value={userFormData.lastName}
                                                 onChange={(e) => setUserFormData(prev => ({ ...prev, lastName: e.target.value }))}
                                             />
@@ -918,8 +1031,8 @@ if (response.success) {
                                             <label className="form-label text-slate-600 small fw-semibold">Email Address *</label>
                                             <input 
                                                 type="email" 
-                                                className="form-control" 
-                                                placeholder="e.g. john@retailops.com" 
+                                                className="form-control rounded-3 border-slate-200" 
+                                                placeholder="john@retailops.com" 
                                                 value={userFormData.email}
                                                 onChange={(e) => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
                                                 disabled={!!editingUser}
@@ -929,8 +1042,8 @@ if (response.success) {
                                             <label className="form-label text-slate-600 small fw-semibold">Phone Number</label>
                                             <input 
                                                 type="text" 
-                                                className="form-control" 
-                                                placeholder="e.g. +1 (555) 123-4567" 
+                                                className="form-control rounded-3 border-slate-200" 
+                                                placeholder="+1 (555) 123-4567" 
                                                 value={userFormData.phone}
                                                 onChange={(e) => setUserFormData(prev => ({ ...prev, phone: e.target.value }))}
                                             />
@@ -940,7 +1053,7 @@ if (response.success) {
                                                 <label className="form-label text-slate-600 small fw-semibold">Temporary Password *</label>
                                                 <input 
                                                     type="password" 
-                                                    className="form-control" 
+                                                    className="form-control rounded-3 border-slate-200" 
                                                     placeholder="Must be at least 6 characters" 
                                                     value={userFormData.password}
                                                     onChange={(e) => setUserFormData(prev => ({ ...prev, password: e.target.value }))}
@@ -951,15 +1064,15 @@ if (response.success) {
                                 </div>
 
                                 {/* ROLE AND SCHEMES */}
-                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
-                                    <div className="fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                        Access and Permissions Hierarchy
+                                <div className="bg-white p-4 rounded-4 border shadow-sm">
+                                    <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                        <Shield size={14} className="text-muted" /> Access & Permission Level
                                     </div>
                                     <div className="row g-3">
                                         <div className="col-md-12">
                                             <label className="form-label text-slate-600 small fw-semibold">Access Role *</label>
                                             <select 
-                                                className="form-select" 
+                                                className="form-select rounded-3 border-slate-200" 
                                                 value={userFormData.role}
                                                 onChange={(e) => handleUserRoleChange(e.target.value)}
                                             >
@@ -967,116 +1080,361 @@ if (response.success) {
                                                 {roles.map(r => <option key={r._id || r.id} value={r._id || r.id}>{r.displayName}</option>)}
                                             </select>
                                         </div>
-
-                                        {/* CONDITIONAL FORM DYNAMICS */}
-                                        {(() => {
-                                            const selectedRole = roles.find(r => r._id === userFormData.role || r.id === userFormData.role);
-                                            const isBM = selectedRole?.name === 'brand_manager' || selectedRole?.displayName === 'Brand Manager';
-                                            const isLT = selectedRole?.name === 'listing_team' || selectedRole?.displayName === 'Listing Team';
-
-                                            if (isLT) {
-                                                return (
-                                                    <div className="col-md-12 mt-3 bg-slate-50 p-3 rounded-3 border">
-                                                        <div className="d-flex align-items-center gap-2 text-primary fw-semibold mb-2 small">
-                                                            <UserCheck size={14} /> Assign Brand Managers (Supervisors)
-                                                        </div>
-                                                        <p className="smallest text-slate-500 mb-2">As a Listing Team member, you must assign at least one Brand Manager supervisor.</p>
-                                                        <div className="d-flex flex-column gap-1.5" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                                                            {managers.length > 0 ? (
-                                                                managers.map((m) => {
-                                                                    const isChecked = userFormData.brandManagers.includes(m._id || m.id);
-                                                                    return (
-                                                                        <div key={m._id || m.id} className="d-flex align-items-center gap-2">
-                                                                            <input 
-                                                                                type="checkbox" 
-                                                                                id={`bm-${m._id || m.id}`} 
-                                                                                checked={isChecked}
-                                                                                onChange={() => {
-                                                                                    setUserFormData(prev => {
-                                                                                        const isSel = prev.brandManagers.includes(m._id || m.id);
-                                                                                        return {
-                                                                                            ...prev,
-                                                                                            brandManagers: isSel
-                                                                                                ? prev.brandManagers.filter(id => id !== (m._id || m.id))
-                                                                                                : [...prev.brandManagers, (m._id || m.id)]
-                                                                                        };
-                                                                                    });
-                                                                                }}
-                                                                            />
-                                                                            <label htmlFor={`bm-${m._id || m.id}`} className="small text-slate-700 cursor-pointer">
-                                                                                {m.firstName} {m.lastName} ({m.email})
-                                                                            </label>
-                                                                        </div>
-                                                                    );
-                                                                })
-                                                            ) : (
-                                                                <div className="text-muted smallest">No supervisors available in the workspace.</div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            } else if (isBM) {
-                                                return (
-                                                    <div className="col-md-12 mt-3 bg-green-50 p-3 rounded-3 border" style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
-                                                        <div className="d-flex align-items-center gap-2 fw-semibold text-emerald-800 small mb-1">
-                                                            <CheckCircle2 size={14} style={{ color: '#059669' }} /> Automated Seller Association
-                                                        </div>
-                                                        <p className="smallest text-emerald-700 mb-0">
-                                                            Brand Manager role automatically selects and links all {sellers.length} registered sellers in the workspace to secure global operations.
-                                                        </p>
-                                                    </div>
-                                                );
-                                            } else if (userFormData.role) {
-                                                // Standard role seller multi-select
-                                                return (
-                                                    <div className="col-md-12 mt-3 bg-slate-50 p-3 rounded-3 border">
-                                                        <div className="d-flex align-items-center gap-2 text-slate-700 fw-semibold mb-2 small">
-                                                            <Store size={14} /> Assign Sellers
-                                                        </div>
-                                                        <div className="d-flex flex-column gap-1.5" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                                                            {sellers.map((s) => {
-                                                                const isChecked = userFormData.assignedSellers.includes(s._id || s.id);
-                                                                return (
-                                                                    <div key={s._id || s.id} className="d-flex align-items-center gap-2">
-                                                                        <input 
-                                                                            type="checkbox" 
-                                                                            id={`sel-${s._id || s.id}`} 
-                                                                            checked={isChecked}
-                                                                            onChange={() => {
-                                                                                setUserFormData(prev => {
-                                                                                    const isSel = prev.assignedSellers.includes(s._id || s.id);
-                                                                                    return {
-                                                                                        ...prev,
-                                                                                        assignedSellers: isSel
-                                                                                            ? prev.assignedSellers.filter(id => id !== (s._id || s.id))
-                                                                                            : [...prev.assignedSellers, (s._id || s.id)]
-                                                                                    };
-                                                                                });
-                                                                            }}
-                                                                        />
-                                                                        <label htmlFor={`sel-${s._id || s.id}`} className="small text-slate-700 cursor-pointer">
-                                                                            {s.name} ({s.code || s.id})
-                                                                        </label>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
                                     </div>
                                 </div>
+
+                                {/***** SUPERVISORS SELECTION PANEL *****/}
+                                {!isBrandManager && (
+                                    <div className="bg-white p-4 rounded-4 border shadow-sm">
+                                        <div className="d-flex align-items-center justify-content-between mb-3">
+                                            <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                                <UserCheck size={14} className="text-indigo-500" /> Supervisors (Super Admins, Operational Managers, etc.)
+                                            </div>
+                                            <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#4f46e5' }}>
+                                                {userFormData.supervisors.length} Selected
+                                            </span>
+                                        </div>
+
+                                        {/* Panel Actions */}
+                                        <div className="d-flex gap-2 mb-3">
+                                            <div className="position-relative flex-grow-1">
+                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
+                                                <input 
+                                                    type="text" 
+                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
+                                                    style={{ fontSize: '12px' }}
+                                                    placeholder="Search supervisors..." 
+                                                    value={modalSearchSupervisor}
+                                                    onChange={(e) => setModalSearchSupervisor(e.target.value)}
+                                                />
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => {
+                                                    const allIds = managers.map(m => m._id || m.id);
+                                                    setUserFormData(prev => ({ ...prev, supervisors: allIds }));
+                                                }}
+                                            >
+                                                Select All
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => setUserFormData(prev => ({ ...prev, supervisors: [] }))}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+
+                                        {/* Supervisors List Grid */}
+                                        <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                            <div className="row g-2">
+                                                {(() => {
+                                                    const filtered = managers.filter(m => 
+                                                        `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchSupervisor.toLowerCase())
+                                                    );
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <div className="col-12 py-4 text-center text-muted small">
+                                                                No supervisors found matching "{modalSearchSupervisor}"
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return filtered.map((m) => {
+                                                        const isChecked = userFormData.supervisors.includes(m._id || m.id);
+                                                        return (
+                                                            <div key={m._id || m.id} className="col-md-6">
+                                                                <div 
+                                                                    className={`p-2.5 rounded-3 border cursor-pointer transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-primary shadow-sm' : 'border-slate-200 hover-slate-50'}`}
+                                                                    style={{ 
+                                                                        borderWidth: isChecked ? '2px' : '1px',
+                                                                        borderColor: isChecked ? '#4f46e5' : '#e2e8f0'
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        setUserFormData(prev => {
+                                                                            const isSel = prev.supervisors.includes(m._id || m.id);
+                                                                            return {
+                                                                                ...prev,
+                                                                                supervisors: isSel
+                                                                                    ? prev.supervisors.filter(id => id !== (m._id || m.id))
+                                                                                    : [...prev.supervisors, (m._id || m.id)]
+                                                                            };
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#e0e7ff' : '#f1f5f9', color: isChecked ? '#4f46e5' : '#475569', fontWeight: '600' }}>
+                                                                            {renderInitials(m.firstName, m.lastName)}
+                                                                        </div>
+                                                                        <div style={{ minWidth: 0 }}>
+                                                                            <div className="fw-bold text-slate-800 small text-truncate">{m.firstName} {m.lastName}</div>
+                                                                            <div className="text-muted smallest text-truncate">{m.email} <span className="text-indigo-500 fw-semibold text-uppercase font-monospace" style={{ fontSize: '9px' }}>({m.role?.displayName || m.role?.name || 'User'})</span></div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#4f46e5' : 'transparent', borderColor: isChecked ? '#4f46e5' : '#cbd5e1' }}>
+                                                                        {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/***** BRAND MANAGERS SELECTION PANEL *****/}
+                                {isListingTeam && (
+                                    <div className="bg-white p-4 rounded-4 border shadow-sm">
+                                        <div className="d-flex align-items-center justify-content-between mb-3">
+                                            <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                                <UserCheck size={14} className="text-emerald-500" /> Assigned Brand Managers (For Brand Inheritance)
+                                            </div>
+                                            <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#10b981' }}>
+                                                {userFormData.brandManagers.length} Selected
+                                            </span>
+                                        </div>
+
+                                        {/* Panel Actions */}
+                                        <div className="d-flex gap-2 mb-3">
+                                            <div className="position-relative flex-grow-1">
+                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
+                                                <input 
+                                                    type="text" 
+                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
+                                                    style={{ fontSize: '12px' }}
+                                                    placeholder="Search brand managers..." 
+                                                    value={modalSearchBrandManager}
+                                                    onChange={(e) => setModalSearchBrandManager(e.target.value)}
+                                                />
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => {
+                                                    const bmUsers = managers.filter(m => 
+                                                        m.role?.name?.toLowerCase() === 'brand_manager' || 
+                                                        m.role?.displayName?.toLowerCase() === 'brand manager'
+                                                    );
+                                                    const allIds = bmUsers.map(m => m._id || m.id);
+                                                    setUserFormData(prev => ({ ...prev, brandManagers: allIds }));
+                                                }}
+                                            >
+                                                Select All
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => setUserFormData(prev => ({ ...prev, brandManagers: [] }))}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+
+                                        {/* Brand Managers List Grid */}
+                                        <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                            <div className="row g-2">
+                                                {(() => {
+                                                    const bmUsers = managers.filter(m => 
+                                                        m.role?.name?.toLowerCase() === 'brand_manager' || 
+                                                        m.role?.displayName?.toLowerCase() === 'brand manager'
+                                                    );
+                                                    const filtered = bmUsers.filter(m => 
+                                                        `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchBrandManager.toLowerCase())
+                                                    );
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <div className="col-12 py-4 text-center text-muted small">
+                                                                No brand managers found matching "{modalSearchBrandManager}"
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return filtered.map((m) => {
+                                                        const isChecked = userFormData.brandManagers.includes(m._id || m.id);
+                                                        return (
+                                                            <div key={m._id || m.id} className="col-md-6">
+                                                                <div 
+                                                                    className={`p-2.5 rounded-3 border cursor-pointer transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-primary shadow-sm' : 'border-slate-200 hover-slate-50'}`}
+                                                                    style={{ 
+                                                                        borderWidth: isChecked ? '2px' : '1px',
+                                                                        borderColor: isChecked ? '#10b981' : '#e2e8f0'
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        setUserFormData(prev => {
+                                                                            const isSel = prev.brandManagers.includes(m._id || m.id);
+                                                                            return {
+                                                                                ...prev,
+                                                                                brandManagers: isSel
+                                                                                    ? prev.brandManagers.filter(id => id !== (m._id || m.id))
+                                                                                    : [...prev.brandManagers, (m._id || m.id)]
+                                                                            };
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#d1fae5' : '#f1f5f9', color: isChecked ? '#059669' : '#475569', fontWeight: '600' }}>
+                                                                            {renderInitials(m.firstName, m.lastName)}
+                                                                        </div>
+                                                                        <div style={{ minWidth: 0 }}>
+                                                                            <div className="fw-bold text-slate-800 small text-truncate">{m.firstName} {m.lastName}</div>
+                                                                            <div className="text-muted smallest text-truncate">{m.email}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#10b981' : 'transparent', borderColor: isChecked ? '#10b981' : '#cbd5e1' }}>
+                                                                        {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="bg-white p-4 rounded-4 border shadow-sm">
+                                    <div className="d-flex align-items-center justify-content-between mb-3">
+                                        <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
+                                            <Store size={14} className="text-emerald-500" /> Brands & Sellers Association
+                                        </div>
+                                        <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#10b981' }}>
+                                            {isListingTeam ? inheritedSellers.length : userFormData.assignedSellers.length} Selected
+                                        </span>
+                                    </div>
+
+                                    {/* Info Alert Banner */}
+                                    {isListingTeam && (
+                                        <div className="alert alert-info border-info/20 bg-info/5 rounded-3 p-3 mb-3 d-flex align-items-start gap-2.5">
+                                            <div style={{ flexShrink: 0 }} className="text-info-600 mt-0.5">
+                                                <Store size={16} />
+                                            </div>
+                                            <div style={{ fontSize: '12px', lineHeight: '1.5' }} className="text-info-800">
+                                                <strong>Listing Team Inheritance:</strong> Sellers are automatically inherited from the selected Brand Managers (Supervisors). Direct selection is locked.
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isCatalogManager && (
+                                        <div className="alert alert-warning border-warning/25 bg-warning/5 rounded-3 p-3 mb-3 d-flex align-items-start gap-2.5">
+                                            <div style={{ flexShrink: 0 }} className="text-warning-600 mt-0.5">
+                                                <Store size={16} />
+                                            </div>
+                                            <div style={{ fontSize: '12px', lineHeight: '1.5' }} className="text-warning-800">
+                                                <strong>Catalog Manager Access:</strong> View-only sellers access enabled. No brand assignments can be modified for this role.
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/***** Panel Actions *****/}
+                                    {!isListingTeam && (
+                                        <div className="d-flex gap-2 mb-3">
+                                            <div className="position-relative flex-grow-1">
+                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
+                                                <input 
+                                                    type="text" 
+                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
+                                                    style={{ fontSize: '12px' }}
+                                                    placeholder="Search brands..." 
+                                                    value={modalSearchSeller}
+                                                    onChange={(e) => setModalSearchSeller(e.target.value)}
+                                                />
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => {
+                                                    const allIds = sellers.map(s => s._id || s.id);
+                                                    setUserFormData(prev => ({ ...prev, assignedSellers: allIds }));
+                                                }}
+                                            >
+                                                Select All
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
+                                                onClick={() => setUserFormData(prev => ({ ...prev, assignedSellers: [] }))}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Sellers List Grid */}
+                                    <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                        <div className="row g-2">
+                                            {(() => {
+                                                const listToRender = isListingTeam ? inheritedSellers : sellers;
+                                                const filtered = listToRender.filter(s => 
+                                                    `${s.name} ${s.code || ''}`.toLowerCase().includes(modalSearchSeller.toLowerCase())
+                                                );
+                                                if (filtered.length === 0) {
+                                                    return (
+                                                        <div className="col-12 py-4 text-center text-muted small">
+                                                            {isListingTeam 
+                                                                ? "No inherited sellers found. Try selecting different Supervisors."
+                                                                : `No brands found matching "${modalSearchSeller}"`
+                                                            }
+                                                        </div>
+                                                    );
+                                                }
+                                                return filtered.map((s) => {
+                                                    const isChecked = isListingTeam ? true : userFormData.assignedSellers.includes(s._id || s.id);
+                                                    const isReadOnly = isListingTeam;
+                                                    return (
+                                                        <div key={s._id || s.id} className="col-md-6" style={isReadOnly ? { pointerEvents: 'none' } : {}}>
+                                                            <div 
+                                                                className={`p-2.5 rounded-3 border transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-success shadow-sm' : 'border-slate-200 hover-slate-50'}`}
+                                                                style={{ 
+                                                                    borderWidth: isChecked ? '2px' : '1px',
+                                                                    borderColor: isChecked ? '#10b981' : '#e2e8f0',
+                                                                    opacity: 1
+                                                                }}
+                                                                onClick={() => {
+                                                                    if (isReadOnly) return;
+                                                                    setUserFormData(prev => {
+                                                                        const isSel = prev.assignedSellers.includes(s._id || s.id);
+                                                                        return {
+                                                                            ...prev,
+                                                                            assignedSellers: isSel
+                                                                                ? prev.assignedSellers.filter(id => id !== (s._id || s.id))
+                                                                                : [...prev.assignedSellers, (s._id || s.id)]
+                                                                        };
+                                                                    });
+                                                                }}
+                                                            >
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#d1fae5' : '#f1f5f9', color: isChecked ? '#10b981' : '#475569', fontWeight: '600' }}>
+                                                                        <Store size={14} />
+                                                                    </div>
+                                                                    <div style={{ minWidth: 0 }}>
+                                                                        <div className="fw-bold text-slate-800 small text-truncate">{s.name}</div>
+                                                                        <div className="text-muted smallest text-truncate">{s.code || s.id || 'Active Store'}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#10b981' : 'transparent', borderColor: isChecked ? '#10b981' : '#cbd5e1' }}>
+                                                                    {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
 
                         {/* Footer */}
-                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-white">
-                            <button className="btn btn-light px-4 fw-semibold" style={{ fontSize: '13px' }} onClick={() => setShowUserModal(false)}>
+                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-light">
+                            <button className="btn btn-light border px-4 fw-semibold rounded-3" style={{ fontSize: '13px' }} onClick={() => setShowUserModal(false)}>
                                 Discard
                             </button>
-                            <button className="btn btn-dark px-4 fw-bold" style={{ fontSize: '13px' }} onClick={handleSaveUser}>
+                            <button className="btn btn-dark px-4 fw-bold rounded-3 shadow-sm" style={{ fontSize: '13px' }} onClick={handleSaveUser}>
                                 {editingUser ? 'Save Updates' : 'Register Member'}
                             </button>
                         </div>

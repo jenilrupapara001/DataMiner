@@ -40,6 +40,16 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
         return <Navigate to="/login" replace />;
     }
 
+    const roleName = (user?.role?.name || '').toString().toLowerCase();
+    const currentPath = window.location.pathname;
+
+    // Automatic login redirection to authorized page for restricted roles
+    if (currentPath === '/' || currentPath === '/dashboard') {
+        if (roleName !== 'admin' && roleName !== 'operational_manager') {
+            return <Navigate to="/asin-tracker" replace />;
+        }
+    }
+
     // Role check
     if (requiredRole && user?.role?.name !== requiredRole) {
         return <Navigate to="/unauthorized" replace />;

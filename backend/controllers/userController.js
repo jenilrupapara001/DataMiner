@@ -752,8 +752,8 @@ exports.getManagers = async (req, res) => {
     const result = await pool.request().query(`
       SELECT U.Id, U.FirstName, U.LastName, U.Email, R.Name as RoleName, R.DisplayName as RoleDisplayName
       FROM Users U
-      JOIN Roles R ON U.RoleId = R.Id
-      WHERE R.Name IN ('admin', 'manager', 'Brand Manager') AND U.IsActive = 1
+      LEFT JOIN Roles R ON U.RoleId = R.Id
+      WHERE U.IsActive = 1
     `);
 
     res.json({

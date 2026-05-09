@@ -134,11 +134,11 @@ function AppRoutes() {
                   <Route path="/users" element={<ProtectedRoute permission="users_view"><UsersPage /></ProtectedRoute>} />
                   <Route path="/roles" element={<ProtectedRoute permission="roles_view"><RolesPage /></ProtectedRoute>} />
                   <Route path="/team-management" element={<ProtectedRoute permission="roles_view"><TeamManagementPage /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute permission="dashboard_view"><SettingsPage /></ProtectedRoute>} />
-                  <Route path="/api-keys" element={<ProtectedRoute permission="dashboard_view"><ApiKeysPage /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute permission="settings_manage"><SettingsPage /></ProtectedRoute>} />
+                  <Route path="/api-keys" element={<ProtectedRoute permission="apikeys_manage"><ApiKeysPage /></ProtectedRoute>} />
                   <Route path="/file-manager" element={<ProtectedRoute permission="files_manage"><FileManagerPage /></ProtectedRoute>} />
                   <Route path="/upload-export" element={<ProtectedRoute permission="asinmanager_import"><UploadExport /></ProtectedRoute>} />
-                  <Route path="/alerts" element={<ProtectedRoute permission="dashboard_view"><AlertsPage /></ProtectedRoute>} />
+                  <Route path="/alerts" element={<ProtectedRoute permission="alerts_view"><AlertsPage /></ProtectedRoute>} />
                   <Route path="/alert-rules" element={<ProtectedRoute permission="rules_view"><AlertRulesPage /></ProtectedRoute>} />
                   <Route path="/rule-sets" element={<ProtectedRoute permission="rules_view"><RuleSetsPage /></ProtectedRoute>} />
                   <Route path="/rule-sets/new" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
@@ -152,11 +152,11 @@ function AppRoutes() {
                   <Route path="/actions/templates" element={<ProtectedRoute permission="actions_manage"><TemplateManagerPage /></ProtectedRoute>} />
                   <Route path="/actions/achievement-report" element={<ProtectedRoute permission="monthlyreport_view"><GoalAchievementReport /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
-                  <Route path="/tasks" element={<ProtectedRoute permission="dashboard_view"><TasksPage /></ProtectedRoute>} />
+                  <Route path="/tasks" element={<ProtectedRoute permission="tasks_view"><TasksPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:id" element={<ProfilePage />} />
-                  <Route path="/chat" element={<ProtectedRoute permission="dashboard_view"><ChatContainer /></ProtectedRoute>} />
+                  <Route path="/chat" element={<ProtectedRoute permission="chat_view"><ChatContainer /></ProtectedRoute>} />
                   <Route path="/unauthorized" element={<Unauthorized />} />
                 </Routes>
                 </Suspense>

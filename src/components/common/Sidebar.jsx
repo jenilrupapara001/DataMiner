@@ -72,7 +72,11 @@ const Sidebar = () => {
     const [asinCount, setAsinCount] = useState('...');
     
     // Check if user has only ASIN Manager access (no dashboard permission)
-    const isAsinManagerOnly = user?.role?.name === 'Listing Manager' || user?.role?.displayName === 'Listing Manager';
+    const isAsinManagerOnly = 
+        user?.role?.name?.toLowerCase().includes('asin manager') || 
+        user?.role?.displayName?.toLowerCase().includes('asin manager') || 
+        user?.role?.name?.toLowerCase().includes('listing manager') || 
+        user?.role?.displayName?.toLowerCase().includes('listing manager');
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -107,12 +111,12 @@ const Sidebar = () => {
             label: 'Actions',
             items: [
                 { label: 'Workflows', icon: GitBranch, to: '/actions', permission: 'actions_view' },
-                { label: 'Optimization Tasks', icon: ListTodo, to: '/tasks', permission: 'dashboard_view' },
+                { label: 'Optimization Tasks', icon: ListTodo, to: '/tasks', permission: 'tasks_view' },
                 { label: 'Templates', icon: LayoutTemplate, to: '/actions/templates', permission: 'actions_view' },
                 { label: 'Performance', icon: BarChart2, to: '/actions/achievement-report', permission: 'monthlyreport_view' },
                 { label: 'Activity Log', icon: Clock, to: '/activity-log', permission: 'activitylogs_view' },
                 { label: 'File Manager', icon: Folder, to: '/file-manager', permission: 'files_manage' },
-                { label: 'Messaging', icon: MessageSquare, to: '/chat', permission: 'dashboard_view' },
+                { label: 'Messaging', icon: MessageSquare, to: '/chat', permission: 'chat_view' },
             ],
         },
         {
@@ -133,8 +137,8 @@ const Sidebar = () => {
             items: [
                 { label: 'Users', icon: Users, to: '/users', permission: 'users_view' },
                 { label: 'Team Map', icon: Map, to: '/team-management', permission: 'roles_view' },
-                { label: 'Settings', icon: Settings, to: '/settings', permission: 'dashboard_view' },
-                { label: 'API Keys', icon: KeyRound, to: '/api-keys', permission: 'dashboard_view' },
+                { label: 'Settings', icon: Settings, to: '/settings', permission: 'settings_manage' },
+                { label: 'API Keys', icon: KeyRound, to: '/api-keys', permission: 'apikeys_manage' },
                 { label: 'Data Migration', icon: Database, to: '/upload-export', permission: 'asinmanager_import' },
             ],
         },
@@ -171,7 +175,12 @@ const Sidebar = () => {
                     const filteredItems = section.items.filter(
                         (item) => !item.permission || hasPermission(item.permission)
                     ).filter(
-                        (item) => !(isAsinManagerOnly && item.hiddenForAsinManager)
+                        (item) => {
+                            if (isAsinManagerOnly) {
+                                return item.label === 'ASIN Manager';
+                            }
+                            return true;
+                        }
                     );
                     if (filteredItems.length === 0) return null;
 

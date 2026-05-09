@@ -184,7 +184,17 @@ export const AuthProvider = ({ children }) => {
         const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
         if (roleName === 'admin') return true;
         if (roleName === 'operational_manager') {
-            if (permissionName.toLowerCase().includes('delete')) return false;
+            const excludedPermissions = [
+                'settings_manage',
+                'users_view',
+                'users_manage',
+                'roles_view',
+                'roles_manage',
+                'apikeys_manage'
+            ];
+            if (excludedPermissions.includes(permissionName)) {
+                return false;
+            }
             return true;
         }
         if (user.permissions && Array.isArray(user.permissions)) {

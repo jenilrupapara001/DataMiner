@@ -68,6 +68,10 @@ const RolesPage = () => {
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [editingRole, setEditingRole] = useState(null);
     const [selectedPermissions, setSelectedPermissions] = useState([]);
+    const [activeTab, setActiveTab] = useState('overview');
+    const [matrixRoles, setMatrixRoles] = useState([]);
+    const [savingMatrix, setSavingMatrix] = useState(false);
+    const [matrixSuccessMsg, setMatrixSuccessMsg] = useState('');
 
     const [roleFormData, setRoleFormData] = useState({
         name: '',
@@ -101,7 +105,13 @@ const RolesPage = () => {
         try {
             const response = await roleApi.getAll();
             if (response.success) {
-                setRoles(response.data.roles);
+                const rolesData = response.data?.roles || response.data || [];
+                const allowedRoleNames = ['admin', 'operational_manager', 'brand manager', 'catalog_manager', 'listing_team'];
+                const filteredRoles = (Array.isArray(rolesData) ? rolesData : []).filter(r => 
+                    allowedRoleNames.includes((r.name || r.displayName || '').toString().toLowerCase())
+                );
+                setRoles(filteredRoles);
+                setMatrixRoles(JSON.parse(JSON.stringify(filteredRoles)));
             }
         } catch (error) {
             console.error('Failed to load roles:', error);
@@ -211,10 +221,48 @@ const RolesPage = () => {
         });
     };
 
-    const getCategorySelectionCount = (category) => {
-        const categoryPerms = permissionsGrouped[category] || [];
-        const selected = categoryPerms.filter(p => selectedPermissions.includes(p._id)).length;
-        return `${selected}/${categoryPerms.length}`;
+    const handleToggleMatrixPermission = (roleId, permissionId) => {
+        setMatrixRoles(prevRoles => {
+            return prevRoles.map(role => {
+                if (role._id === roleId) {
+                    const permissionsList = role.permissions || [];
+                    const hasPerm = permissionsList.some(p => (p._id || p.Id || p.id) === permissionId);
+                    let newPermissions = [];
+                    if (hasPerm) {
+                        newPermissions = permissionsList.filter(p => (p._id || p.Id || p.id) !== permissionId);
+                    } else {
+                        const permDetails = permissions.find(p => p._id === permissionId);
+                        newPermissions = [...permissionsList, permDetails || { _id: permissionId, Id: permissionId }];
+                    }
+                    return { ...role, permissions: newPermissions };
+                }
+                return role;
+            });
+        });
+    };
+
+    const handleSaveMatrixPermissions = async () => {
+        setSavingMatrix(true);
+        setMatrixSuccessMsg('');
+        try {
+            for (const role of matrixRoles) {
+                const payload = {
+                    displayName: role.displayName,
+                    description: role.description,
+                    level: role.level,
+                    color: role.color,
+                    permissions: role.permissions?.map(p => p._id || p.Id || p.id) || []
+                };
+                await roleApi.update(role._id, payload);
+            }
+            setMatrixSuccessMsg('All role permissions successfully updated in database and applied immediately!');
+            await loadRoles();
+            setTimeout(() => setMatrixSuccessMsg(''), 5000);
+        } catch (error) {
+            console.error('Failed to save matrix permissions:', error);
+            alert('Failed to save matrix permissions: ' + error.message);
+        }
+        setSavingMatrix(false);
     };
 
     if (loading && roles.length === 0) {
@@ -274,8 +322,43 @@ const RolesPage = () => {
                 </button>
             </div>
 
-            {/* Info Panel */}
-            <div className="d-flex align-items-start gap-3 p-4 mb-4" style={{ background: '#eff6ff', borderRadius: 16, border: '1px solid #dbeafe' }}>
+            {/* Tab Navigation */}
+            <div className="d-flex border-bottom mb-4" style={{ borderColor: '#e2e8f0' }}>
+                <button
+                    onClick={() => setActiveTab('overview')}
+                    className="btn fw-semibold pb-3 px-4 position-relative"
+                    style={{
+                        color: activeTab === 'overview' ? '#4f46e5' : '#64748b',
+                        border: 'none', background: 'none', fontSize: 15,
+                        transition: 'all 0.15s'
+                    }}
+                >
+                    Role Cards Overview
+                    {activeTab === 'overview' && (
+                        <div className="position-absolute bottom-0 start-0 end-0" style={{ height: 3, background: '#4f46e5', borderRadius: '3px 3px 0 0' }} />
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('matrix')}
+                    className="btn fw-semibold pb-3 px-4 position-relative d-flex align-items-center gap-2"
+                    style={{
+                        color: activeTab === 'matrix' ? '#4f46e5' : '#64748b',
+                        border: 'none', background: 'none', fontSize: 15,
+                        transition: 'all 0.15s'
+                    }}
+                >
+                    <Key size={16} />
+                    Direct Permissions Matrix
+                    {activeTab === 'matrix' && (
+                        <div className="position-absolute bottom-0 start-0 end-0" style={{ height: 3, background: '#4f46e5', borderRadius: '3px 3px 0 0' }} />
+                    )}
+                </button>
+            </div>
+
+            {activeTab === 'overview' && (
+                <>
+                    {/* Info Panel */}
+                    <div className="d-flex align-items-start gap-3 p-4 mb-4" style={{ background: '#eff6ff', borderRadius: 16, border: '1px solid #dbeafe' }}>
                 <div className="d-flex align-items-center justify-content-center" style={{ width: 40, height: 40, borderRadius: 10, background: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                     <Settings size={18} style={{ color: '#2563eb' }} />
                 </div>
@@ -389,17 +472,169 @@ const RolesPage = () => {
                 );
             })}
 
-            {roles.length === 0 && (
-                <div className="text-center py-5">
-                    <div className="d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: 64, height: 64, borderRadius: 16, background: '#f3f4f6' }}>
-                        <Shield size={28} style={{ color: '#9ca3af' }} />
+                </>
+            )}
+
+            {activeTab === 'matrix' && (
+                <div className="bg-white border rounded-4 p-4 mb-5" style={{ borderColor: '#e5e7eb', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', borderRadius: 20 }}>
+                    {matrixSuccessMsg && (
+                        <div className="alert alert-success d-flex align-items-center gap-3 p-4 mb-4" style={{ borderRadius: 16, background: '#ecfdf5', border: '1px solid #10b981' }}>
+                            <CheckCircle2 size={24} style={{ color: '#059669' }} />
+                            <div>
+                                <h6 className="fw-bold mb-1" style={{ color: '#065f46' }}>Success!</h6>
+                                <p className="small mb-0" style={{ color: '#047857' }}>{matrixSuccessMsg}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+                        <div>
+                            <h5 className="fw-bold mb-1" style={{ color: '#1e293b' }}>Interactive Access Control Matrix</h5>
+                            <p className="small text-muted mb-0">Directly assign permissions across all 5 system roles and click sync to apply changes.</p>
+                        </div>
+                        <button
+                            className="btn fw-semibold d-flex align-items-center gap-2"
+                            onClick={handleSaveMatrixPermissions}
+                            disabled={savingMatrix}
+                            style={{
+                                background: '#059669', color: 'white', borderRadius: 12, padding: '12px 24px',
+                                border: 'none', boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)', fontSize: 14,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {savingMatrix ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    Applying Changes...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={18} />
+                                    Apply & Sync to Database
+                                </>
+                            )}
+                        </button>
                     </div>
-                    <h5 className="fw-bold mb-2" style={{ color: '#374151' }}>No roles found</h5>
-                    <p className="text-muted mb-4">Create your first role to get started with access control.</p>
-                    <button className="btn fw-semibold" onClick={() => handleOpenRoleModal()} style={{ background: '#4f46e5', color: 'white', borderRadius: 10, padding: '12px 24px', border: 'none' }}>
-                        <Plus size={18} className="me-2" />
-                        Create New Role
-                    </button>
+
+                    <div className="table-responsive" style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                        <table className="table mb-0 align-middle">
+                            <thead>
+                                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                    <th className="py-3 px-4" style={{ color: '#475569', fontWeight: 600, fontSize: 13, width: '35%' }}>Permission & Module</th>
+                                    <th className="text-center py-3" style={{ color: '#475569', fontWeight: 600, fontSize: 13 }}>Super Admin</th>
+                                    <th className="text-center py-3" style={{ color: '#475569', fontWeight: 600, fontSize: 13 }}>Operational Manager</th>
+                                    <th className="text-center py-3" style={{ color: '#475569', fontWeight: 600, fontSize: 13 }}>Brand Manager</th>
+                                    <th className="text-center py-3" style={{ color: '#475569', fontWeight: 600, fontSize: 13 }}>Catalog Manager</th>
+                                    <th className="text-center py-3" style={{ color: '#475569', fontWeight: 600, fontSize: 13 }}>Listing Team</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Object.keys(permissionsGrouped).map(category => {
+                                    const permsInCategory = permissionsGrouped[category] || [];
+                                    const superAdminRole = matrixRoles.find(r => (r.name || '').toLowerCase() === 'admin');
+                                    const operationalManagerRole = matrixRoles.find(r => (r.name || '').toLowerCase() === 'operational_manager');
+                                    const brandManagerRole = matrixRoles.find(r => (r.name || '').toLowerCase() === 'brand manager');
+                                    const catalogManagerRole = matrixRoles.find(r => (r.name || '').toLowerCase() === 'catalog_manager');
+                                    const listingTeamRole = matrixRoles.find(r => (r.name || '').toLowerCase() === 'listing_team');
+
+                                    return (
+                                        <React.Fragment key={category}>
+                                            <tr style={{ backgroundColor: '#f1f5f9' }}>
+                                                <td colSpan={6} className="fw-bold py-3 px-4" style={{ color: '#1e293b', fontSize: 14 }}>
+                                                    <span className="d-flex align-items-center gap-2">
+                                                        <Shield size={16} style={{ color: '#4f46e5' }} />
+                                                        {category} Permissions
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {permsInCategory.map(perm => {
+                                                return (
+                                                    <tr key={perm._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                        <td className="py-3 px-4">
+                                                            <div className="fw-semibold mb-1" style={{ color: '#334155', fontSize: 13 }}>
+                                                                {perm.displayName}
+                                                            </div>
+                                                            <div className="text-muted mb-1" style={{ fontSize: 11, lineHeight: 1.4 }}>
+                                                                {perm.description || 'Access to ' + perm.displayName}
+                                                            </div>
+                                                            <code className="small px-2 py-1" style={{ background: '#f8fafc', color: '#64748b', borderRadius: 4, fontSize: 10 }}>
+                                                                {perm.name}
+                                                            </code>
+                                                        </td>
+                                                        {[
+                                                            { key: 'admin', role: superAdminRole },
+                                                            { key: 'operational_manager', role: operationalManagerRole },
+                                                            { key: 'brand manager', role: brandManagerRole },
+                                                            { key: 'catalog_manager', role: catalogManagerRole },
+                                                            { key: 'listing_team', role: listingTeamRole },
+                                                        ].map(col => {
+                                                            const isOperationalManager = col.key === 'operational_manager';
+                                                            const isRestrictedForOpManager = isOperationalManager && [
+                                                                'settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'
+                                                                // Operational manager restriction criteria
+                                                            ].includes(perm.name);
+
+                                                            const hasPerm = col.role?.permissions?.some(p => (p._id || p.Id || p.id) === perm._id) || false;
+
+                                                            return (
+                                                                <td key={col.key} className="text-center align-middle py-3">
+                                                                    {isRestrictedForOpManager ? (
+                                                                        <span 
+                                                                            className="badge text-uppercase fw-bold bg-danger" 
+                                                                            style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, cursor: 'not-allowed' }}
+                                                                            title="System/User settings restricted for Operational Manager"
+                                                                        >
+                                                                            Restricted
+                                                                        </span>
+                                                                    ) : (
+                                                                        <input 
+                                                                            type="checkbox"
+                                                                            checked={hasPerm}
+                                                                            onChange={() => handleToggleMatrixPermission(col.role?._id, perm._id)}
+                                                                            disabled={!col.role}
+                                                                            style={{ 
+                                                                                width: 18, height: 18, cursor: col.role ? 'pointer' : 'not-allowed',
+                                                                                accentColor: '#4f46e5'
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="d-flex justify-content-end mt-4">
+                        <button
+                            className="btn fw-semibold d-flex align-items-center gap-2"
+                            onClick={handleSaveMatrixPermissions}
+                            disabled={savingMatrix}
+                            style={{
+                                background: '#059669', color: 'white', borderRadius: 12, padding: '12px 24px',
+                                border: 'none', boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)', fontSize: 14,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {savingMatrix ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    Applying Changes...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={18} />
+                                    Apply & Sync to Database
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             )}
 

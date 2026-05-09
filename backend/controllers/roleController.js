@@ -305,12 +305,15 @@ const defaultPermissions = [
   { name: 'rules_manage', displayName: 'Ruleset: Manage', description: 'Create and edit automated business rules', category: 'Automation', action: 'manage' },
   
   { name: 'templates_manage', displayName: 'Templates: Manage', description: 'Manage scraping and data templates', category: 'Automation', action: 'manage' },
+  { name: 'tasks_view', displayName: 'Optimization Tasks: View', description: 'Access to the Optimization Tasks Hub', category: 'Automation', action: 'view' },
+  { name: 'tasks_manage', displayName: 'Optimization Tasks: Manage', description: 'Create and edit optimization tasks', category: 'Automation', action: 'manage' },
   { name: 'calculator_view', displayName: 'Revenue Calculator: View', description: 'Access the revenue and fee calculator', category: 'Marketplace', action: 'view' },
   { name: 'calculator_manage', displayName: 'Revenue Calculator: Manage', description: 'Configure fee structures and cost variables', category: 'Marketplace', action: 'manage' },
 
   // Operations (Page-wise)
   { name: 'actions_view', displayName: 'Action Center: View', description: 'View assigned operational tasks', category: 'Operations', action: 'view' },
   { name: 'actions_manage', displayName: 'Action Center: Manage', description: 'Assign tasks and manage workflows', category: 'Operations', action: 'manage' },
+  { name: 'chat_view', displayName: 'Chat: View', description: 'Access to the communication chat interface', category: 'Operations', action: 'view' },
   
   { name: 'teams_manage', displayName: 'Team Manager: Manage', description: 'Create and manage organizational teams', category: 'Operations', action: 'manage' },
   { name: 'files_manage', displayName: 'File Manager: Manage', description: 'Upload and manage system files and assets', category: 'Operations', action: 'manage' },
@@ -345,114 +348,34 @@ const defaultRoles = [
   {
     name: 'operational_manager',
     displayName: 'Operational Manager',
-    description: 'Full operational control over marketplace, tasks, and teams.',
+    description: 'Full operational control over marketplace, tasks, and teams except security settings.',
     isSystem: true,
     level: 90,
     color: '#8B5CF6', // Violet-500
   },
   {
-    name: 'marketplace_lead',
-    displayName: 'Marketplace Lead',
-    description: 'Dedicated focus on seller management, ASINs, and scraping automation.',
+    name: 'Brand Manager',
+    displayName: 'Brand Manager',
+    description: 'Manages specific brands, view ASIN manager with export, and manage optimization tasks.',
     isSystem: true,
-    level: 80,
-    color: '#F59E0B', // Amber-500
-  },
-  {
-    name: 'data_analyst',
-    displayName: 'Data Analyst',
-    description: 'Expert access to all reports, analytics, and business intelligence.',
-    isSystem: true,
-    level: 70,
-    color: '#06B6D4', // Cyan-500
-  },
-  {
-    name: 'team_leader',
-    displayName: 'Team Leader',
-    description: 'Manages team operations, tasks, and basic reporting.',
-    isSystem: true,
-    level: 60,
-    color: '#10B981', // Emerald-500
-  },
-  {
-    name: 'inventory_specialist',
-    displayName: 'Inventory Specialist',
-    description: 'Focus on inventory management and stock health monitoring.',
-    isSystem: true,
-    level: 40,
+    level: 50,
     color: '#3B82F6', // Blue-500
-  },
-  {
-    name: 'catalogue_manager',
-    displayName: 'Catalogue Manager',
-    description: 'Dedicated to product catalog maintenance and data exports.',
-    isSystem: true,
-    level: 30,
-    color: '#F472B6', // Pink-400
   },
   {
     name: 'catalog_manager',
     displayName: 'Catalog Manager',
-    description: 'Dedicated to product catalog maintenance and customizable column filtering.',
+    description: 'Access to ASIN Manager (export only, view all sellers) and Optimization Tasks.',
     isSystem: true,
     level: 30,
     color: '#F472B6', // Pink-400
   },
   {
     name: 'listing_team',
-    displayName: 'Listing Team Member',
-    description: 'Focuses on completion of assigned optimization tasks.',
+    displayName: 'Listing Team',
+    description: 'Access to ASIN Manager and Optimization Tasks for assigned Brand Managers data.',
     isSystem: true,
     level: 25,
     color: '#10B981', // Emerald-500
-  },
-  {
-    name: 'employee',
-    displayName: 'Associate',
-    description: 'Standard access for executing assigned tasks and viewing data.',
-    isSystem: true,
-    level: 20,
-    color: '#6366F1', // Indigo-500
-  },
-  {
-    name: 'Brand Manager',
-    displayName: 'Brand Manager',
-    description: 'Manages specific brands and their product catalogs.',
-    isSystem: true,
-    level: 50,
-    color: '#8B5CF6', // Violet-500
-  },
-  {
-    name: 'category_manager',
-    displayName: 'Category Manager',
-    description: 'Responsible for product categories and catalog quality.',
-    isSystem: true,
-    level: 45,
-    color: '#F59E0B', // Amber-500
-  },
-  {
-    name: 'analyst',
-    displayName: 'Analyst',
-    description: 'Access to data analysis and reporting tools.',
-    isSystem: true,
-    level: 40,
-    color: '#06B6D4', // Cyan-500
-  },
-  {
-    name: 'Listing Manager',
-    displayName: 'Listing Manager',
-    description: 'Dedicated to ASIN management with access to all sellers for catalog filtering.',
-    isSystem: true,
-    level: 35,
-    color: '#10B981', // Emerald-500
-  },
-  {
-    name: 'viewer',
-    displayName: 'Guest Viewer',
-    description: 'Restricted read-only access to dashboards and basic reports.',
-    isSystem: true,
-    level: 10,
-    color: '#94A3B8', // Slate-400
   },
 ];
 
@@ -496,20 +419,10 @@ exports.seedRolesAndPermissions = async (req, res) => {
 
     const permissionSets = {
       admin: allPermissions.map(p => p.Id),
-      operational_manager: getPermIds(p => p.Category !== 'Security'),
-      marketplace_lead: getPermIds(p => ['Marketplace', 'Automation', 'Analytics'].includes(p.Category)),
-      data_analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
-      team_leader: getPermIds(p => ['Operations', 'Analytics', 'Tools'].includes(p.Category) || ['asinmanager_view', 'seller_view'].includes(p.Name)),
-      inventory_specialist: getPermIds(p => (p.Name && p.Name.includes('inventory')) || ['dashboard_view', 'seller_view'].includes(p.Name) || p.Category === 'Reports'),
-      catalogue_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'dashboard_view'].includes(p.Name)),
-      catalog_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'dashboard_view'].includes(p.Name)),
-      'Brand Manager': getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'actions_view', 'actions_manage', 'dashboard_view'].includes(p.Name)),
-      category_manager: getPermIds(p => (p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')) || p.Name === 'dashboard_view'),
-      analyst: getPermIds(p => ['Analytics', 'Reports', 'Tools', 'Marketplace'].includes(p.Category) && p.Action === 'view'),
-      'Listing Manager': getPermIds(p => p.Name && (p.Name.includes('asinmanager') || p.Name === 'seller_view')),
-      listing_team: getPermIds(p => ['actions_view', 'actions_manage', 'dashboard_view'].includes(p.Name)),
-      employee: getPermIds(p => (['view', 'export'].includes(p.Action) && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
-      viewer: getPermIds(p => (p.Action === 'view' && !['Security', 'Automation'].includes(p.Category)) || p.Name === 'seller_view'),
+      operational_manager: getPermIds(p => !['settings_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage', 'apikeys_manage'].includes(p.Name)),
+      'Brand Manager': getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'asintracker_view', 'tasks_view', 'tasks_manage'].includes(p.Name)),
+      catalog_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'asintracker_view', 'tasks_view', 'tasks_manage'].includes(p.Name)),
+      listing_team: getPermIds(p => ['seller_view', 'asinmanager_view', 'asintracker_view', 'tasks_view', 'tasks_manage'].includes(p.Name)),
     };
 
     for (const roleData of defaultRoles) {
