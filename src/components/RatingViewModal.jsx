@@ -556,7 +556,15 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                   </td>
                   <td className="text-zinc-400 text-center fw-medium" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20, fontSize: '10px' }}>{idx + 1}</td>
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
-                    <span className="fw-bold text-blue-600 hover-underline cursor-pointer" style={{ fontSize: '11px' }}>{item.asinCode}</span>
+                    <a
+                      href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : `https://www.amazon.in/dp/${item.asinCode}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="fw-bold text-blue-600 hover-underline"
+                      style={{ fontSize: '11px', textDecoration: 'none' }}
+                    >
+                      {item.asinCode}
+                    </a>
                   </td>
                   <td className="text-zinc-500 font-mono" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
                   <td className="text-center">
