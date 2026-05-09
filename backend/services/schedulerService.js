@@ -267,7 +267,7 @@ class SchedulerService {
 
     async runEnterprisePipeline(marketplace = 'amazon') {
         const isAjio = marketplace === 'ajio';
-        console.log(`🏢 [ENTERPRISE] Starting full ${marketplace} automation pipeline (Synchronous batches of 5)...`);
+        console.log(`🏢 [ENTERPRISE] Starting full ${marketplace} automation pipeline (Dynamic worker pool with concurrency up to 5)...`);
         const runId = generateId();
         const details = [];
         const startTime = new Date();
@@ -309,16 +309,20 @@ class SchedulerService {
                 return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
             });
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers. Processing in batches of 5 concurrently.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers. Processing with a dynamic concurrency pool of up to 5 concurrent tasks.`);
             
             let successful = 0;
-            const BATCH_SIZE = 5;
+            const CONCURRENCY_LIMIT = 5;
+            let currentIndex = 0;
 
-            for (let i = 0; i < sellers.length; i += BATCH_SIZE) {
-                const batch = sellers.slice(i, i + BATCH_SIZE);
-                console.log(`🚀 [ENTERPRISE] Executing batch of ${batch.length} sellers (${i + 1} to ${i + batch.length} of ${sellers.length})...`);
+            const runWorker = async () => {
+                while (currentIndex < sellers.length) {
+                    const index = currentIndex++;
+                    const seller = sellers[index];
+                    if (!seller) break;
 
-                await Promise.all(batch.map(async (seller) => {
+                    console.log(`🚀 [ENTERPRISE] Worker starting seller: ${seller.Name} (${index + 1} of ${sellers.length})...`);
+
                     let activeAsinsCount = 0;
                     try {
                         const countResult = await pool.request()
@@ -343,11 +347,11 @@ class SchedulerService {
                     await this.updateRunDetails(runId, details);
 
                     try {
-                        // 2. Clear previous data from Octoparse cloud before starting
+                        // Clear previous data from Octoparse cloud before starting
                         console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
                         await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
                         
-                        // 3. Trigger sync and await complete scrape + polling
+                        // Trigger sync and await complete scrape + polling
                         const syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
                             triggerScrape: true,
                             fullSync: true,
@@ -361,6 +365,7 @@ class SchedulerService {
                             sellerStat.count = syncResult.count || 0;
                         }
                         successful++;
+                        console.log(`✅ [ENTERPRISE] Successfully completed and exported data for ${seller.Name}!`);
                     } catch (err) {
                         sellerStat.status = 'FAILED';
                         sellerStat.error = err.message;
@@ -369,14 +374,27 @@ class SchedulerService {
                         sellerStat.endTime = new Date();
                         await this.updateRunDetails(runId, details);
                     }
-                }));
 
-                // Stability delay between concurrent batches
-                if (i + BATCH_SIZE < sellers.length) {
-                    console.log(`⏳ Batch completed. Waiting 10 seconds before starting next batch...`);
-                    await new Promise(r => setTimeout(r, 10000));
+                    // Stability delay after a worker finishes a task before picking up the next one
+                    if (currentIndex < sellers.length) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                }
+            };
+
+            // Start up to CONCURRENCY_LIMIT workers in parallel
+            const workers = [];
+            const activeWorkersCount = Math.min(CONCURRENCY_LIMIT, sellers.length);
+            for (let w = 0; w < activeWorkersCount; w++) {
+                workers.push(runWorker());
+                // Stagger starting the workers slightly for Octoparse API rate-limiting stability
+                if (w < activeWorkersCount - 1) {
+                    await new Promise(r => setTimeout(r, 3000));
                 }
             }
+
+            // Wait for all workers to finish processing the entire queue
+            await Promise.all(workers);
 
             // After completed, stop all active tasks completely as requested
             console.log('🏢 [ENTERPRISE] Stopping all active tasks after pipeline completion to prevent concurrency...');

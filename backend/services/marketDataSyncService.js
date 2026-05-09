@@ -1271,17 +1271,45 @@ class MarketDataSyncService {
 
         let lastErr = null;
         for (const path of paths) {
-            try {
-                // Try with currentId (Resolved)
-                const params = { taskId: currentId, size, offset };
-                if (executionId) params.executionId = executionId;
+            let attempt = 0;
+            const maxAttempts = 3;
+            let pathSuccess = false;
+            let response = null;
+            let currentSize = size;
 
-                console.log(`📥 Trying data path: ${path} with taskId: ${currentId}`);
-                const response = await axios.get(`${this.baseUrl}${path}`, {
-                    params,
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+            while (attempt < maxAttempts && !pathSuccess) {
+                attempt++;
+                try {
+                    const params = { taskId: currentId, size: currentSize, offset };
+                    if (executionId) params.executionId = executionId;
 
+                    console.log(`📥 Trying data path: ${path} with taskId: ${currentId} (size: ${currentSize}, attempt: ${attempt}/${maxAttempts})`);
+                    response = await axios.get(`${this.baseUrl}${path}`, {
+                        params,
+                        headers: { 
+                            'Authorization': `Bearer ${token}`,
+                            'Accept-Encoding': 'gzip,deflate,compress'
+                        },
+                        timeout: 30000 // 30s timeout
+                    });
+                    pathSuccess = true;
+                } catch (err) {
+                    const isTransient = !err.response || err.message?.includes('aborted') || err.message?.includes('timeout') || err.message?.includes('hang up');
+                    console.log(`⚠️ Attempt ${attempt} failed for path ${path}: ${err.message}`);
+                    if (isTransient && attempt < maxAttempts) {
+                        currentSize = Math.max(50, Math.floor(currentSize / 2));
+                        const delay = attempt * 2000;
+                        console.log(`🔄 Transient error. Retrying in ${delay}ms with smaller size: ${currentSize}...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        lastErr = (err.response?.status || 'Error') + ' ' + (err.response?.data?.error?.message || err.message);
+                        console.log(`❌ Path ${path} failed on attempt ${attempt}: ${lastErr}`);
+                        break; // Exit while loop to try next path or retry with UUID fallback
+                    }
+                }
+            }
+
+            if (pathSuccess && response) {
                 // Octoparse API success check
                 if (response.data?.data || Array.isArray(response.data)) {
                     console.log(`✅ Data fetched from ${path}:`, JSON.stringify(response.data).substring(0, 300));
@@ -1301,7 +1329,6 @@ class MarketDataSyncService {
                         });
 
                         // For /data/all, the next offset is returned in response
-                        // Store it in a custom property we can access later
                         if (response.data.data.offset !== undefined) {
                             return { dataList: Array.isArray(dataList) ? dataList : [], nextOffset: response.data.data.offset };
                         }
@@ -1321,20 +1348,20 @@ class MarketDataSyncService {
 
                     return Array.isArray(dataList) ? dataList : [];
                 } else {
-                    // Response doesn't have expected structure
                     console.log(`⚠️ Response from ${path} missing expected data structure:`, JSON.stringify(response.data).substring(0, 200));
                 }
-            } catch (err) {
-                lastErr = err.response?.status + ' ' + (err.response?.data?.error?.message || err.message);
-                console.log(`❌ Path ${path} failed: ${err.response?.status} - ${err.message}`);
-
+            } else {
                 // If it's a 404 and we used a resolved ID, try a fallback to original UUID
-                if (err.response?.status === 404 && currentId !== taskId) {
+                if (lastErr && lastErr.startsWith('404') && currentId !== taskId) {
                     try {
                         console.log(`📥 Retry with original UUID: ${taskId}`);
                         const response = await axios.get(`${this.baseUrl}${path}`, {
                             params: { taskId, size, offset, executionId },
-                            headers: { 'Authorization': `Bearer ${token}` }
+                            headers: { 
+                                'Authorization': `Bearer ${token}`,
+                                'Accept-Encoding': 'gzip,deflate,compress'
+                            },
+                            timeout: 30000
                         });
                         if (response.data?.data || Array.isArray(response.data)) {
                             const dataList = response.data.data?.dataList || response.data.data?.data || response.data;
