@@ -87,6 +87,20 @@ exports.updateSettings = async (req, res) => {
                 `);
         }
 
+        // Dynamically trigger rescheduling if schedule settings were updated
+        const keys = Object.keys(settings);
+        if (keys.includes('AUTOMATION_SCHEDULE_TIME') || keys.includes('AUTOMATION_AJIO_SCHEDULE_TIME') || keys.includes('AUTOMATION_ENABLED')) {
+            try {
+                const SchedulerService = require('../services/schedulerService');
+                // Use a non-blocking background invocation so response returns immediately
+                SchedulerService.reschedule().catch(err => {
+                    console.error('❌ Error during background dynamic rescheduling:', err.message);
+                });
+            } catch (schedErr) {
+                console.error('❌ Scheduler reschedule import failed:', schedErr.message);
+            }
+        }
+
         res.json({ success: true, message: 'Settings updated successfully' });
     } catch (error) {
         console.error('Update settings error:', error);
@@ -122,17 +136,35 @@ exports.toggleOctoparseAutomation = async (req, res) => {
 };
 
 /**
- * Get scheduler config (schedule time + automation flag) from .env
+ * Get scheduler config (schedule time + automation flag) from DB/Environment
  * GET /api/settings/schedule-config
  */
 exports.getScheduleConfig = async (req, res) => {
-  const scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '00:00';
-  const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
-  res.json({
-    success: true,
-    data: {
-      scheduleTime,
-      automationEnabled
+    try {
+        const pool = await getPool();
+        const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED')");
+        
+        const settingsMap = {};
+        settingsResult.recordset.forEach(s => {
+            settingsMap[s.Key] = s.Value;
+        });
+
+        const scheduleTime = settingsMap['AUTOMATION_SCHEDULE_TIME'] || process.env.AUTOMATION_SCHEDULE_TIME || '11:20';
+        const ajioScheduleTime = settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] || process.env.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00';
+        const automationEnabled = settingsMap['AUTOMATION_ENABLED'] !== undefined 
+            ? settingsMap['AUTOMATION_ENABLED'] === 'true'
+            : process.env.AUTOMATION_ENABLED === 'true';
+
+        res.json({
+            success: true,
+            data: {
+                scheduleTime,
+                ajioScheduleTime,
+                automationEnabled
+            }
+        });
+    } catch (error) {
+        console.error('Error in getScheduleConfig:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
-  });
 };

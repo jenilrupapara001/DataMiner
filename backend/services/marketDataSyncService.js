@@ -108,9 +108,10 @@ class MarketDataSyncService {
         }
     }
 
-    async validateMasterTask() {
-        if (!this.masterTaskId) {
-            throw new Error('OCTOPARSE_MASTER_TASK_ID not configured in environment');
+    async validateMasterTask(isAjio = false) {
+        const masterTaskId = isAjio ? process.env.OCTOPARSE_AJIO_MASTER_TASK_ID : this.masterTaskId;
+        if (!masterTaskId) {
+            throw new Error(`${isAjio ? 'OCTOPARSE_AJIO_MASTER_TASK_ID' : 'OCTOPARSE_MASTER_TASK_ID'} not configured in environment`);
         }
         return true;
     }
@@ -119,7 +120,7 @@ class MarketDataSyncService {
         const pool = await getPool();
         const sellerResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query('SELECT Id, Name, OctoparseId FROM Sellers WHERE Id = @sellerId');
+            .query('SELECT Id, Name, OctoparseId, Marketplace FROM Sellers WHERE Id = @sellerId');
 
         const seller = sellerResult.recordset[0];
         if (!seller) {
@@ -131,8 +132,10 @@ class MarketDataSyncService {
             return seller.OctoparseId;
         }
 
+        const isAjio = seller.Marketplace && seller.Marketplace.toLowerCase() === 'ajio';
+
         // Validate master task configuration before cloning
-        await this.validateMasterTask();
+        await this.validateMasterTask(isAjio);
 
         const asinsResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
@@ -143,7 +146,7 @@ class MarketDataSyncService {
         }
 
         // Use the consolidated duplicateTask method
-        const newTaskId = await this.duplicateTask(seller.Name);
+        const newTaskId = await this.duplicateTask(seller.Name, isAjio);
 
         await pool.request()
             .input('newTaskId', sql.VarChar, newTaskId)
@@ -335,13 +338,19 @@ class MarketDataSyncService {
      * Duplicates a master template task for a new seller.
      * @param {string} taskName - Name for the new task (e.g. "Sakul Collection Sync")
      */
-    async duplicateTask(taskName) {
+    async duplicateTask(taskName, isAjio = false) {
         const token = await this.authenticate();
-        const masterTaskId = process.env.OCTOPARSE_MASTER_TASK_ID;
-        let groupId = process.env.OCTOPARSE_GROUP_ID;
-        const groupName = process.env.OCTOPARSE_GROUP_NAME;
+        const masterTaskId = isAjio 
+            ? process.env.OCTOPARSE_AJIO_MASTER_TASK_ID 
+            : process.env.OCTOPARSE_MASTER_TASK_ID;
+        let groupId = isAjio 
+            ? process.env.OCTOPARSE_AJIO_GROUP_ID 
+            : process.env.OCTOPARSE_GROUP_ID;
+        const groupName = isAjio 
+            ? process.env.OCTOPARSE_AJIO_GROUP_NAME 
+            : process.env.OCTOPARSE_GROUP_NAME;
 
-        if (!masterTaskId) throw new Error('OCTOPARSE_MASTER_TASK_ID is not configured in .env');
+        if (!masterTaskId) throw new Error(`${isAjio ? 'OCTOPARSE_AJIO_MASTER_TASK_ID' : 'OCTOPARSE_MASTER_TASK_ID'} is not configured in .env`);
 
         try {
             // Find Group ID by Name if ID is not provided but Name is
@@ -779,12 +788,15 @@ class MarketDataSyncService {
      * Stop all active Octoparse tasks for all sellers.
      * Used at the start of the midnight automation run.
      */
-    async stopAllActiveTasks() {
+    async stopAllActiveTasks(marketplace = 'amazon') {
         try {
-            console.log('🛑 [Octoparse] Stopping all active tasks before midnight run...');
+            const isAjio = marketplace === 'ajio';
+            console.log(`🛑 [Octoparse] Stopping all active ${marketplace} tasks before automation run...`);
             const pool = await getPool();
-            const sellersResult = await pool.request()
-                .query("SELECT OctoparseId, Name FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId != '' AND IsActive = 1");
+            const queryStr = isAjio
+                ? "SELECT OctoparseId, Name FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId != '' AND IsActive = 1 AND LOWER(Marketplace) = 'ajio'"
+                : "SELECT OctoparseId, Name FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId != '' AND IsActive = 1 AND (Marketplace IS NULL OR LOWER(Marketplace) != 'ajio')";
+            const sellersResult = await pool.request().query(queryStr);
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) {
@@ -1430,7 +1442,7 @@ class MarketDataSyncService {
             const pool = await getPool();
             const sellerResult = await pool.request()
                 .input('sellerId', sql.VarChar, sellerId)
-                .query('SELECT Id, Name, OctoparseId FROM Sellers WHERE Id = @sellerId');
+                .query('SELECT Id, Name, OctoparseId, Marketplace FROM Sellers WHERE Id = @sellerId');
 
             const seller = sellerResult.recordset[0];
             if (!seller) throw new Error('Seller not found');
@@ -1444,7 +1456,8 @@ class MarketDataSyncService {
             // 2. Duplicate from Master Template
             console.log(`🏗️ Creating new Octoparse task for seller: ${seller.Name}...`);
             const taskName = `${seller.Name} Sync`;
-            const newTaskId = await this.duplicateTask(taskName);
+            const isAjio = seller.Marketplace && seller.Marketplace.toLowerCase() === 'ajio';
+            const newTaskId = await this.duplicateTask(taskName, isAjio);
 
             if (!newTaskId) {
                 throw new Error('Failed to duplicate task from master template.');
@@ -1558,9 +1571,19 @@ class MarketDataSyncService {
 
             console.log(`✅ Found ${asins.length} ${options.onlyMissing ? 'incomplete ' : ''}ASINs in database`);
 
+            // Fetch seller's marketplace to determine URL format
+            const sellerQuery = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('SELECT Marketplace FROM Sellers WHERE Id = @sellerId');
+            const sellerObj = sellerQuery.recordset[0];
+            const isAjio = sellerObj && sellerObj.Marketplace && sellerObj.Marketplace.toLowerCase() === 'ajio';
+
             // Create URLs from ASINs
             const asinCodes = asins.map(a => a.AsinCode);
-            const urls = asinCodes.map(code => `https://www.amazon.in/dp/${code}`);
+            const urls = asinCodes.map(code => {
+                if (code.startsWith('http://') || code.startsWith('https://')) return code;
+                return isAjio ? `https://www.ajio.com/p/${code}` : `https://www.amazon.in/dp/${code}`;
+            });
 
             // 4. PERSIST metadata to Database
             await pool.request()

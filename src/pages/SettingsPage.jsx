@@ -19,6 +19,9 @@ const SettingsPage = () => {
     minTitleLength: 80,
     minImageCount: 7,
     minDescLength: 1000,
+    AUTOMATION_SCHEDULE_TIME: '11:20',
+    AUTOMATION_AJIO_SCHEDULE_TIME: '12:00',
+    AUTOMATION_ENABLED: true,
   });
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -256,6 +259,85 @@ const SettingsPage = () => {
                   >
                     <i className="bi bi-send me-1"></i> Send Test Email
                   </button>
+                </div>
+              </div>
+
+              {/* Background Automation Schedules */}
+              <div className="card mb-4" style={{
+                borderRadius: '16px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgba(30, 30, 38, 0.6)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+              }}>
+                <div className="card-header d-flex justify-content-between align-items-center" style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderTopLeftRadius: '16px',
+                  borderTopRightRadius: '16px'
+                }}>
+                  <h5 className="mb-0 text-white"><i className="bi bi-clock-history text-primary me-2"></i>Automation Schedules</h5>
+                  <div className="form-check form-switch m-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="AUTOMATION_ENABLED"
+                      name="AUTOMATION_ENABLED"
+                      checked={settings.AUTOMATION_ENABLED === true || settings.AUTOMATION_ENABLED === 'true'}
+                      onChange={(e) => {
+                        setSettings(prev => ({
+                          ...prev,
+                          AUTOMATION_ENABLED: e.target.checked
+                        }));
+                      }}
+                    />
+                    <label className="form-check-label text-muted ms-1" htmlFor="AUTOMATION_ENABLED" style={{ fontSize: '0.85rem' }}>Enabled</label>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <p className="text-muted small mb-4">
+                    Configure independent automatic synchronization times for Amazon and Ajio background pipeline tasks. All active store ASINs are queued dynamically at these configured slots.
+                  </p>
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label text-white d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                        <i className="bi bi-amazon text-warning me-2"></i> Amazon Schedule Time
+                      </label>
+                      <input
+                        type="time"
+                        className="form-control"
+                        name="AUTOMATION_SCHEDULE_TIME"
+                        value={settings.AUTOMATION_SCHEDULE_TIME || '11:20'}
+                        onChange={handleChange}
+                        style={{
+                          background: 'rgba(20, 20, 25, 0.5)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          color: '#fff'
+                        }}
+                      />
+                      <div className="form-text text-muted small mt-1">Daily cron schedule slot for Amazon storefronts</div>
+                    </div>
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label text-white d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                        <i className="bi bi-bag-check text-info me-2"></i> Ajio Schedule Time
+                      </label>
+                      <input
+                        type="time"
+                        className="form-control"
+                        name="AUTOMATION_AJIO_SCHEDULE_TIME"
+                        value={settings.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00'}
+                        onChange={handleChange}
+                        style={{
+                          background: 'rgba(20, 20, 25, 0.5)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          color: '#fff'
+                        }}
+                      />
+                      <div className="form-text text-muted small mt-1">Daily cron schedule slot for Ajio storefronts</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -19,35 +19,97 @@ class SchedulerService {
     /**
      * Initialize all scheduled jobs
      */
-    init() {
-        // 2. Enterprise Octoparse Pipeline
-        const scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '00:00';
+    async init() {
+        try {
+            await this.scheduleJobs();
+            console.log('✅ Background tasks successfully initialized.');
+        } catch (error) {
+            console.error('❌ Scheduler initialization error:', error.message);
+        }
+    }
+
+    async scheduleJobs() {
+        // Stop existing jobs if they exist to prevent duplicates on reschedule
+        if (this.jobs.enterprisePipeline) {
+            this.jobs.enterprisePipeline.stop();
+            delete this.jobs.enterprisePipeline;
+        }
+        if (this.jobs.enterpriseAjioPipeline) {
+            this.jobs.enterpriseAjioPipeline.stop();
+            delete this.jobs.enterpriseAjioPipeline;
+        }
+        if (this.jobs.integrityRepair) {
+            this.jobs.integrityRepair.stop();
+            delete this.jobs.integrityRepair;
+        }
+        if (this.jobs.ageTagRefresh) {
+            this.jobs.ageTagRefresh.stop();
+            delete this.jobs.ageTagRefresh;
+        }
+
+        let scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '11:20';
+        let ajioScheduleTime = process.env.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00';
+        let automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
+
+        try {
+            const pool = await getPool();
+            const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED')");
+            const settingsMap = {};
+            settingsResult.recordset.forEach(s => {
+                settingsMap[s.Key] = s.Value;
+            });
+
+            if (settingsMap['AUTOMATION_SCHEDULE_TIME']) {
+                scheduleTime = settingsMap['AUTOMATION_SCHEDULE_TIME'];
+            }
+            if (settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME']) {
+                ajioScheduleTime = settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'];
+            }
+            if (settingsMap['AUTOMATION_ENABLED'] !== undefined) {
+                automationEnabled = settingsMap['AUTOMATION_ENABLED'] === 'true';
+            }
+        } catch (dbErr) {
+            console.warn('⚠️ [Scheduler] Could not query SystemSettings, falling back to environment config:', dbErr.message);
+        }
+
+        if (!automationEnabled) {
+            console.log('🛑 [Scheduler] Automation is disabled either in DB or environment. Skipping cron scheduling.');
+            return;
+        }
+
+        // 1. Amazon Enterprise Octoparse Pipeline
         const [scheduleHour, scheduleMinute] = scheduleTime.split(':');
         const cronExpr = `${scheduleMinute || 0} ${scheduleHour || 0} * * *`;
-        
         this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
-            if (process.env.AUTOMATION_ENABLED !== 'true') {
-                console.log('🛑 Enterprise Pipeline skipped (Automation is disabled in .env)');
-                return;
-            }
-            await this.runEnterprisePipeline();
+            console.log('⏰ Running scheduled Amazon Enterprise Pipeline...');
+            await this.runEnterprisePipeline('amazon');
         });
-        console.log(`🏢 Enterprise Pipeline scheduled at ${scheduleTime}`);
+        console.log(`🏢 Amazon Enterprise Pipeline scheduled at ${scheduleTime} (${cronExpr})`);
 
-        // 6. Database Integrity Repair (Every 6 hours)
+        // 2. Ajio Enterprise Octoparse Pipeline
+        const [ajioHour, ajioMinute] = ajioScheduleTime.split(':');
+        const ajioCronExpr = `${ajioMinute || 0} ${ajioHour || 0} * * *`;
+        this.jobs.enterpriseAjioPipeline = cron.schedule(ajioCronExpr, async () => {
+            console.log('⏰ Running scheduled Ajio Enterprise Pipeline...');
+            await this.runEnterprisePipeline('ajio');
+        });
+        console.log(`🏢 Ajio Enterprise Pipeline scheduled at ${ajioScheduleTime} (${ajioCronExpr})`);
+
+        // 3. Database Integrity Repair (Every 6 hours)
         this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
-            // Logic for repair is currently being moved to MarketSyncService
             console.log('ℹ️ Repair task skipped (Refactoring in progress)');
         });
 
-        // 7. Daily Age Tag Refresh (Every day at 2 AM)
+        // 4. Daily Age Tag Refresh (Every day at 2 AM)
         this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {
-            // console.log('🔄 [AutoTag] Starting daily age tag refresh...');
             await this.refreshAgeTags();
         });
+    }
 
-        console.log(`✅ Background tasks scheduled (Enterprise at ${scheduleTime})`);
+    async reschedule() {
+        console.log('🔄 [Scheduler] Settings updated, rescheduling all jobs...');
+        await this.scheduleJobs();
     }
 
     async runOctoparseTaskRecovery() {
@@ -203,8 +265,9 @@ class SchedulerService {
         }
     }
 
-    async runEnterprisePipeline() {
-        console.log('🏢 [ENTERPRISE] Starting full automation pipeline (Synchronous batches of 5)...');
+    async runEnterprisePipeline(marketplace = 'amazon') {
+        const isAjio = marketplace === 'ajio';
+        console.log(`🏢 [ENTERPRISE] Starting full ${marketplace} automation pipeline (Synchronous batches of 5)...`);
         const runId = generateId();
         const details = [];
         const startTime = new Date();
@@ -224,12 +287,14 @@ class SchedulerService {
                 `);
 
             // 1. FIRST: Stop all active tasks to ensure a fresh state
-            console.log('🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse tasks...');
-            await MarketSyncService.stopAllActiveTasks();
+            console.log(`🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse ${marketplace} tasks...`);
+            await MarketSyncService.stopAllActiveTasks(marketplace);
             await new Promise(r => setTimeout(r, 15000)); // Allow time for stop commands to propagate
 
-            const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+            const queryStr = isAjio
+                ? "SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' AND LOWER(Marketplace) = 'ajio'"
+                : "SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' AND (Marketplace IS NULL OR LOWER(Marketplace) != 'ajio')";
+            const sellersResult = await pool.request().query(queryStr);
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) {

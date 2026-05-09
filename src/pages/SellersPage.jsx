@@ -641,9 +641,11 @@ const SellersPage = () => {
           </div>
           <div>
             <div className="fw-bold text-zinc-900" style={{ fontSize: '13px' }}>{seller.name}</div>
-            <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
-              <span className="font-monospace opacity-75">{seller.sellerId}</span>
-            </div>
+            {seller.sellerId && (
+              <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
+                <span className="font-monospace opacity-75">{seller.sellerId}</span>
+              </div>
+            )}
           </div>
         </div>
       )
