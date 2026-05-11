@@ -27,6 +27,7 @@ import {
 import { adsApi } from '../services/api';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import EmptyState from '../components/common/EmptyState';
+import AdsImportModal from '../components/ads/AdsImportModal';
 
 // Utility helper: generate history matrix for the dynamic table headers
 const generateHistoryStructureFromDates = (sortedDates) => {
@@ -276,47 +277,8 @@ export default function AdsManagerPage() {
   const [groupBy, setGroupBy] = useState('asin');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const fileInputRef = useRef(null);
-  const [isImporting, setIsImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
-
-  // Handler for quick direct CSV import
-  const handleImportClick = () => {
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      alert('Format Mismatch: Please select a valid advertisement performance CSV file.');
-      return;
-    }
-
-    try {
-      setIsImporting(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('reportType', 'daily');
-      
-      const config = {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-      };
-      
-      const backendUrl = `${import.meta.env.VITE_API_URL || '/api'}/upload/upload-ads`;
-      const res = await axios.post(backendUrl, formData, config);
-      
-      alert(`✅ Success: Processed ${res.data.processed || 0} performance entries correctly.`);
-      fetchAdsData(); // auto refresh the grid
-    } catch (err) {
-      console.error('Ads Import Failed:', err);
-      alert('Direct Import Failure: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = ''; // reset
-    }
-  };
 
   // Visual Collapsible Columns Tracking
   const [expandedCols, setExpandedCols] = useState({
@@ -331,6 +293,10 @@ export default function AdsManagerPage() {
     pageViews: false,
     organicSales: false
   });
+
+  // Pagination state for performance optimization
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const toggleCol = (colKey) => {
     setExpandedCols(prev => ({ ...prev, [colKey]: !prev[colKey] }));
@@ -350,6 +316,7 @@ export default function AdsManagerPage() {
       const res = await adsApi.getAdsManagerData(params);
       if (res.success) {
         setData(res.data || []);
+        setPage(1); // Reset page on fresh fetch
       }
     } catch (err) {
       console.error('Failed to fetch ads data:', err);
@@ -546,6 +513,23 @@ export default function AdsManagerPage() {
     );
   };
 
+  // Compute paginated subset for this frame
+  const paginatedData = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    return data.slice(startIndex, startIndex + pageSize);
+  }, [data, page, pageSize]);
+
+  const totalPages = Math.ceil(data.length / pageSize);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+      // Scroll to top of table container
+      const tableContainer = document.getElementById('ads-table-container');
+      if (tableContainer) tableContainer.scrollTop = 0;
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#f8fafc' }}>
       {loading && (
@@ -553,19 +537,14 @@ export default function AdsManagerPage() {
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
-      {isImporting && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(3px)', 
-          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' 
-        }}>
-          <div className="d-flex flex-column align-items-center gap-2 bg-white p-4 rounded-3 shadow-lg border">
-            <RefreshCw size={32} className="text-indigo-600 spin" />
-            <span className="fw-bold text-zinc-800">Importing Advertising CSV...</span>
-            <small className="text-zinc-500">Processing data mapping & aggregation</small>
-          </div>
-        </div>
-      )}
+      <AdsImportModal 
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onComplete={() => {
+          setShowImportModal(false);
+          fetchAdsData();
+        }}
+      />
 
       {/* HEADER TOOLBAR */}
       <div className="bg-white border-bottom px-4 py-2.5 shadow-sm d-flex align-items-center justify-content-between" style={{ zIndex: 100 }}>
@@ -633,22 +612,13 @@ export default function AdsManagerPage() {
             />
           </div>
 
-          <input 
-            type="file"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            accept=".csv"
-            onChange={handleFileChange}
-          />
-
           <button 
-            onClick={handleImportClick} 
-            disabled={isImporting}
+            onClick={() => setShowImportModal(true)} 
             className="btn btn-white border border-zinc-200 btn-sm rounded-2 h-8 px-3 fw-bold d-flex align-items-center gap-1.5 text-zinc-700 hover-bg-zinc-50" 
             style={{ fontSize: '11px', height: '32px' }}
           >
             <Download size={12} />
-            IMPORT CSV
+            IMPORT DATA
           </button>
 
           <button onClick={fetchAdsData} className="btn btn-indigo btn-sm rounded-2 h-8 px-3 fw-bold d-flex align-items-center gap-1.5" style={{ fontSize: '11px', height: '32px' }}>
@@ -689,7 +659,7 @@ export default function AdsManagerPage() {
 
       {/* MAIN TABLE CONTAINER */}
       <div className="flex-grow-1 overflow-hidden d-flex flex-column">
-        <div style={{ flex: 1, overflow: 'auto', position: 'relative', backgroundColor: '#fff' }}>
+        <div id="ads-table-container" style={{ flex: 1, overflow: 'auto', position: 'relative', backgroundColor: '#fff' }}>
           <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 50 }}>
               {/* ROW 1: High-level groups */}
@@ -747,7 +717,7 @@ export default function AdsManagerPage() {
                   </td>
                 </tr>
               ) : (
-                data.map((row, idx) => {
+                paginatedData.map((row, idx) => {
                   const isAltRow = idx % 2 === 1;
                   const rowBg = isAltRow ? '#f9fafb' : '#ffffff';
                   
@@ -817,15 +787,66 @@ export default function AdsManagerPage() {
           </table>
         </div>
         
-        {/* Table Footer / Meta Status */}
-        <div className="bg-zinc-50 border-top px-4 py-2 d-flex align-items-center justify-content-between">
-          <span className="smallest fw-bold text-zinc-500">
-            SHOWING {data.length} {groupBy === 'parent' ? 'PARENT GROUPS' : 'ASINs'}
-          </span>
+        {/* Table Footer / Meta Status & PAGINATION */}
+        <div className="bg-white border-top px-4 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
+          <div className="d-flex align-items-center gap-3">
+            <span className="smallest fw-bold text-zinc-500">
+              TOTAL {data.length.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
+            </span>
+            
+            <div style={{ height: '12px', width: '1px', background: '#e2e8f0' }}></div>
+            
+            <div className="d-flex align-items-center gap-2">
+              <span className="smallest fw-semibold text-zinc-500">Rows per page:</span>
+              <select 
+                className="form-select form-select-sm border-0 bg-transparent fw-bold"
+                style={{ fontSize: '0.7rem', width: 'auto', paddingRight: '20px', cursor: 'pointer' }}
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+          </div>
+
+          {/* PAGINATION CONTROLS */}
+          {totalPages > 1 && (
+            <div className="d-flex align-items-center gap-2">
+              <button
+                className="btn btn-sm border-0 bg-zinc-100 text-zinc-600 d-flex align-items-center justify-content-center"
+                style={{ width: '24px', height: '24px', padding: 0, opacity: page === 1 ? 0.5 : 1 }}
+                disabled={page === 1}
+                onClick={() => handlePageChange(page - 1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              
+              <div className="d-flex align-items-center gap-1">
+                <span className="smallest fw-bold text-indigo-600">PAGE {page}</span>
+                <span className="smallest fw-semibold text-zinc-400">OF {totalPages}</span>
+              </div>
+
+              <button
+                className="btn btn-sm border-0 bg-zinc-100 text-zinc-600 d-flex align-items-center justify-content-center"
+                style={{ width: '24px', height: '24px', padding: 0, opacity: page === totalPages ? 0.5 : 1 }}
+                disabled={page === totalPages}
+                onClick={() => handlePageChange(page + 1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+
           <div className="d-flex gap-3 align-items-center">
              <div className="d-flex align-items-center gap-1.5">
-               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#059669' }} />
-               <span className="smallest fw-semibold text-zinc-600">Live Sync Active</span>
+               <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
+               <span className="smallest fw-semibold text-zinc-500" style={{ fontSize: '9px', letterSpacing: '0.02em' }}>LIVE SYNC</span>
              </div>
           </div>
         </div>

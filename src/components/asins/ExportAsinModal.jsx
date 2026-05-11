@@ -18,6 +18,7 @@ const ALL_ASIN_FIELDS = [
   { key: 'status', label: 'Status', category: 'Basic' },
   { key: 'tags', label: 'Tags', category: 'Basic' },
   { key: 'releaseDate', label: 'Release Date', category: 'Basic' },
+  { key: 'uploadedPrice', label: 'Master Price (₹)', category: 'Pricing' },
   { key: 'currentPrice', label: 'Current Price (₹)', category: 'Pricing' },
   { key: 'mrp', label: 'MRP (₹)', category: 'Pricing' },
   { key: 'dealBadge', label: 'Deal Badge', category: 'Pricing' },

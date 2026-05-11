@@ -15,13 +15,13 @@ exports.catalogSync = async (req, res) => {
 
         const sellerId = req.body.sellerId;
         if (!sellerId) {
-            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
             return res.status(400).json({ success: false, error: 'Seller ID is required' });
         }
 
         const filePath = req.file.path;
         const workbook = XLSX.readFile(filePath);
-        
+
         let data = [];
         for (const sheetName of workbook.SheetNames) {
             const sheet = workbook.Sheets[sheetName];
@@ -33,7 +33,7 @@ exports.catalogSync = async (req, res) => {
         }
 
         if (data.length === 0) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
             return res.status(400).json({ success: false, error: 'No data found in file' });
         }
 
@@ -51,7 +51,7 @@ exports.catalogSync = async (req, res) => {
 
         // Cache for brand-to-seller mapping to avoid redundant queries
         const sellerMapByBrand = new Map();
-        
+
         // If a default sellerId was provided, seed the map
         if (sellerId && sellerId !== 'all') {
             const defaultSeller = await pool.request()
@@ -66,7 +66,7 @@ exports.catalogSync = async (req, res) => {
             const keys = Object.keys(row);
             const lowerKeys = keys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
             const targetLower = possibleKeys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-            
+
             for (let i = 0; i < lowerKeys.length; i++) {
                 if (targetLower.includes(lowerKeys[i])) {
                     return row[keys[i]];
@@ -80,14 +80,14 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['Child ASIN', 'ASIN', 'asin', 'child_asin', 'asinCode'])
+                const childAsin = getValue(row, ['Child ASIN', 'ASIN', 'asin', 'child_asin', 'asinCode', 'Jio Code', 'jio_code', 'JioCode', 'Jio-code'])
                     .toString().trim().toUpperCase();
                 const parentAsin = getValue(row, ['Parent ASIN', 'parent_asin', 'parentAsin'])
                     .toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'sku']).toString().trim();
                 const uploadedPrice = parseFloat(getValue(row, ['Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
-                const brandName = getValue(row, ['Brand', 'Seller', 'brand', 'seller_name']).toString().trim();
-                
+                const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name']).toString().trim();
+
                 // 1. Resolve Seller ID
                 let rowSellerId = sellerId;
                 if (brandName) {
@@ -99,7 +99,7 @@ exports.catalogSync = async (req, res) => {
                         const sellerLookup = await pool.request()
                             .input('name', sql.NVarChar, brandName)
                             .query('SELECT Id FROM Sellers WHERE Name = @name');
-                        
+
                         if (sellerLookup.recordset.length > 0) {
                             rowSellerId = sellerLookup.recordset[0].Id;
                             sellerMapByBrand.set(brandLower, rowSellerId);
@@ -119,8 +119,8 @@ exports.catalogSync = async (req, res) => {
 
                 // 2. Handle Dates (Support DD/MM/YY)
                 let releaseDate = null;
-                const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
-                
+                const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Released Date', 'Realeased date', 'released_date', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
+
                 if (dateStr) {
                     const parsed = new Date(dateStr);
                     if (!isNaN(parsed.getTime())) {
@@ -144,12 +144,12 @@ exports.catalogSync = async (req, res) => {
                     .input('asin', sql.VarChar, childAsin)
                     .input('sellerId', sql.VarChar, rowSellerId)
                     .query('SELECT Id, Tags FROM Asins WHERE AsinCode = @asin AND SellerId = @sellerId');
-                
+
                 const existing = existingResult.recordset[0];
 
                 if (existing) {
                     let existingTags = [];
-                    try { existingTags = JSON.parse(existing.tags || '[]'); } catch (e) {}
+                    try { existingTags = JSON.parse(existing.tags || '[]'); } catch (e) { }
                     const mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
 
                     await transaction.request()
@@ -193,7 +193,7 @@ exports.catalogSync = async (req, res) => {
             await transaction.commit();
         } catch (err) {
             await transaction.rollback();
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
             throw err;
         }
 
@@ -208,7 +208,7 @@ exports.catalogSync = async (req, res) => {
     } catch (error) {
         console.error('Catalog Sync Error:', error);
         if (req.file && fs.existsSync(req.file.path)) {
-            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
         }
         res.status(500).json({ success: false, error: error.message });
     }
@@ -233,7 +233,7 @@ exports.tagsImport = async (req, res) => {
         const sellerId = req.body.sellerId || '';
         const filePath = req.file.path;
         const workbook = XLSX.readFile(filePath);
-        
+
         let data = [];
         for (const sheetName of workbook.SheetNames) {
             const sheet = workbook.Sheets[sheetName];
@@ -245,7 +245,7 @@ exports.tagsImport = async (req, res) => {
         }
 
         if (data.length === 0) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+            try { fs.unlinkSync(filePath); } catch (e) { }
             return res.status(400).json({ success: false, error: 'No data found in file' });
         }
 
@@ -265,7 +265,7 @@ exports.tagsImport = async (req, res) => {
             const keys = Object.keys(row);
             const lowerKeys = keys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
             const targetLower = possibleKeys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-            
+
             for (let i = 0; i < lowerKeys.length; i++) {
                 if (targetLower.includes(lowerKeys[i])) {
                     return row[keys[i]];
@@ -279,10 +279,10 @@ exports.tagsImport = async (req, res) => {
         if (sellerId) {
             asinQuery += ' AND SellerId = @sellerId';
         }
-        
+
         const asinRequest = pool.request();
         if (sellerId) asinRequest.input('sellerId', sql.VarChar, sellerId);
-        
+
         const asinResult = await asinRequest.query(asinQuery);
         const asinMap = new Map();
         asinResult.recordset.forEach(a => {
@@ -338,7 +338,7 @@ exports.tagsImport = async (req, res) => {
     } catch (error) {
         console.error('Tags Import Error:', error);
         if (req.file && fs.existsSync(req.file.path)) {
-            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
         }
         res.status(500).json({ success: false, error: error.message });
     }
@@ -361,7 +361,7 @@ exports.downloadCatalogTemplate = async (req, res) => {
             sheetName = 'Ajio Catalog Template';
             filename = 'ajio_catalog_template.xlsx';
         }
-        
+
         const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
         ws['!cols'] = [
             { wch: 15 },
@@ -371,12 +371,12 @@ exports.downloadCatalogTemplate = async (req, res) => {
             { wch: 12 },
             { wch: 15 }
         ];
-        
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        
+
         const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-        
+
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);

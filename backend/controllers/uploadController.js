@@ -146,14 +146,14 @@ exports.uploadAdsData = async (req, res) => {
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i];
         try {
-          let asin = findValue(row, ['asin', 'Advertised ASIN', 'ASIN']);
+          let asin = findValue(row, ['asin', 'Advertised ASIN', 'ASIN', 'Jio Code', 'jio_code']);
           if (!asin) { skipped++; continue; }
           asin = asin.replace(/^"+|"+$/g, ''); // Clean quotes
 
           let sku = findValue(row, ['sku', 'SKU', 'Advertised SKU']);
           if (sku) sku = sku.replace(/^"+|"+$/g, '');
 
-          const dateVal = findValue(row, ['date', 'Date', 'Day']);
+          const dateVal = findValue(row, ['date', 'Date', 'Day', 'Released Date', 'Realeased date', 'release_date', 'released_date']);
           const parsedDate = parseDate(dateVal) || parseDate(reportDate);
           
           if (!parsedDate || isNaN(parsedDate.getTime())) {

@@ -2078,7 +2078,7 @@ const AsinManagerPage = () => {
         </>
       )}
 
-      <div className="page-header" style={{ padding: '0.6rem 1.25rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+      <div className="page-header" style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div className="d-flex align-items-center gap-3">
             <h1 className="h6 mb-0 fw-bold text-zinc-900 d-flex align-items-center gap-2">
@@ -2227,48 +2227,40 @@ const AsinManagerPage = () => {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Compressed KPI Strip - Responsive Grid */}
-        <div className="mt-2" style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-          background: '#f8fafc',
-          borderRadius: '8px',
-          border: '1px solid #f1f5f9',
-          overflow: 'hidden'
-        }}>
-          {kpis.map((kpi, idx) => (
-            <div key={idx}
+      {/* COMPACT ANALYTICS STRIP - Zero Whitespace Layout */}
+      <div className="bg-white border-bottom px-4 py-3 shadow-sm d-flex align-items-center gap-4 overflow-auto custom-scrollbar" style={{ flexShrink: 0 }}>
+        {kpis.map((kpi, idx, arr) => (
+          <React.Fragment key={idx}>
+            <div 
+              className="d-flex align-items-center gap-3 transition-all" 
+              style={{ minWidth: '160px', cursor: kpi.onClick ? 'pointer' : 'default' }}
               onClick={kpi.onClick}
-              className="p-2 transition-all d-flex align-items-center gap-3"
-              style={{
-                borderRight: '1px solid #f1f5f9',
-                borderBottom: '1px solid #f1f5f9',
-                cursor: kpi.onClick ? 'pointer' : 'default',
-                background: kpi.onClick ? '#fff' : 'transparent',
-                minWidth: '130px'
-              }}
             >
-              <div className="d-flex align-items-center justify-content-center rounded-2" style={{
-                width: '18px', height: '18px', flexShrink: 0,
-                background: kpi.color + '10', color: kpi.color
-              }}>
-                {React.cloneElement(kpi.icon, { size: 10 })}
+              <div 
+                className="p-2 rounded-3 d-flex align-items-center justify-content-center" 
+                style={{ background: kpi.color + '10', color: kpi.color }}
+              >
+                {React.cloneElement(kpi.icon, { size: 14 })}
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div className="smallest text-zinc-400 fw-bold text-uppercase tracking-wider lh-1 mb-1" style={{ fontSize: '8px' }}>
+              <div className="d-flex flex-column">
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.05em', color: '#71717a', textTransform: 'uppercase' }}>
                   {kpi.label}
-                </div>
-                <div className="d-flex align-items-baseline gap-2">
-                  <span className="fw-bold text-zinc-900" style={{ fontSize: '11px' }}>
+                </span>
+                <div className="d-flex align-items-baseline gap-1">
+                  <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#09090b', letterSpacing: '-0.02em' }}>
                     {kpi.value}
                   </span>
-                  {kpi.sub && !kpi.sub.includes('vs') && <span className="smallest text-zinc-400 font-monospace" style={{ fontSize: '8px' }}>{kpi.sub}</span>}
+                  {kpi.sub && !kpi.sub.includes('vs') && (
+                    <span style={{ fontSize: '0.65rem', color: '#71717a', fontWeight: 600 }}>{kpi.sub}</span>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+            {idx < arr.length - 1 && <div style={{ height: '30px', width: '1px', background: '#e2e8f0' }}></div>}
+          </React.Fragment>
+        ))}
       </div>
 
 
@@ -2285,7 +2277,7 @@ const AsinManagerPage = () => {
         </div>
       )}
 
-      <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0.75rem 1.25rem' }}>
+      <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
         {/* Alerts & Errors row */}
         {error && (
           <div className="alert alert-warning border-0 shadow-sm rounded-2 py-1 px-2 mb-2 d-flex align-items-center gap-2 smallest" role="alert">
@@ -2296,8 +2288,8 @@ const AsinManagerPage = () => {
 
 
 
-        {/* [E] High-Density Table Area */}
-        <div className="bg-white border border-zinc-200 rounded-4 shadow-sm overflow-hidden flex-grow-1 d-flex flex-column position-relative">
+        {/* [E] High-Density Table Area - Full Screen Zero Whitespace */}
+        <div className="bg-white border-top border-zinc-200 shadow-none overflow-hidden flex-grow-1 d-flex flex-column position-relative">
           <style>{`
                   .filter-section-title {
                     font-size: 11px;
