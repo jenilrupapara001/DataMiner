@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
+import axios from 'axios';
 import {
   Package,
   Activity,
@@ -21,7 +22,7 @@ import {
   FileBarChart
 } from 'lucide-react';
 import { adsApi } from '../services/api';
-import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
+import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import EmptyState from '../components/common/EmptyState';
 
 // Utility helper: generate history matrix for the dynamic table headers
@@ -55,9 +56,10 @@ const formatCurrency = (val) => {
 };
 
 const formatCompact = (val) => {
-  if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
-  if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
-  return val.toString();
+  if (typeof val !== 'number') return '0.00';
+  if (val >= 1000000) return (val / 1000000).toFixed(2) + 'M';
+  if (val >= 1000) return (val / 1000).toFixed(2) + 'K';
+  return val.toFixed(2);
 };
 
 // Generic Trend Badge
@@ -105,6 +107,26 @@ const MiniSpark = ({ data, color }) => {
 };
 
 export default function AdsManagerPage() {
+  // 0. Aggregated summary for Top View
+  const summaryData = useMemo(() => {
+    const sum = {
+      impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, pageViews: 0, organicSales: 0
+    };
+    data.forEach(d => {
+      sum.impressions += Number(d.impressions || 0);
+      sum.clicks += Number(d.clicks || 0);
+      sum.spend += Number(d.spend || 0);
+      sum.sales += Number(d.sales || 0);
+      sum.orders += Number(d.orders || 0);
+      sum.pageViews += Number(d.pageViews || 0);
+      sum.organicSales += Number(d.organicSales || 0);
+    });
+    sum.acos = sum.sales > 0 ? (sum.spend / sum.sales) * 100 : 0;
+    sum.roas = sum.spend > 0 ? (sum.sales / sum.spend) : 0;
+    sum.cvr = sum.clicks > 0 ? (sum.orders / sum.clicks) * 100 : 0;
+    return sum;
+  }, [data]);
+
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
   
@@ -112,6 +134,46 @@ export default function AdsManagerPage() {
   const [groupBy, setGroupBy] = useState('asin');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const fileInputRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Handler for quick direct CSV import
+  const handleImportClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert('Format Mismatch: Please select a valid advertisement performance CSV file.');
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('reportType', 'daily');
+      
+      const config = {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      };
+      
+      const backendUrl = `${import.meta.env.VITE_API_URL || '/api'}/upload/upload-ads`;
+      const res = await axios.post(backendUrl, formData, config);
+      
+      alert(`✅ Success: Processed ${res.data.processed || 0} performance entries correctly.`);
+      fetchAdsData(); // auto refresh the grid
+    } catch (err) {
+      console.error('Ads Import Failed:', err);
+      alert('Direct Import Failure: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // reset
+    }
+  };
 
   // Visual Collapsible Columns Tracking
   const [expandedCols, setExpandedCols] = useState({
@@ -180,28 +242,29 @@ export default function AdsManagerPage() {
   // Table styles derived from AsinManagerPage design
   const thStyle = {
     fontSize: '0.66rem',
-    fontWeight: 700,
+    fontWeight: 800,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
-    color: '#71717a', // zinc-500
-    padding: '4px 8px',
-    background: '#fafafa',
+    color: '#18181b', // Zinc-900 for super sharp contrast
+    padding: '6px 8px',
+    background: '#ffffff',
     position: 'sticky',
     top: 0,
     zIndex: 10,
     whiteSpace: 'nowrap',
-    border: '0.5px solid #f1f1f1'
+    border: '1px solid #f1f5f9'
   };
 
   const tdStyle = {
-    padding: '4px 8px',
-    fontSize: '0.68rem',
-    borderBottom: '0.5px solid #f1f5f9',
+    padding: '6px 8px',
+    fontSize: '0.7rem',
+    borderBottom: '1px solid #f1f5f9',
     verticalAlign: 'middle',
-    color: '#27272a', // zinc-800
-    height: '28px',
-    borderLeft: '0.5px solid #f1f5f9',
-    borderRight: '0.5px solid #f1f5f9',
+    color: '#000000', // Perfect black text
+    fontWeight: 500,
+    height: '32px',
+    borderLeft: '1px solid #f1f5f9',
+    borderRight: '1px solid #f1f5f9',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap'
@@ -210,8 +273,8 @@ export default function AdsManagerPage() {
   // Helper to construct dynamic column header grouping
   const renderHeaderGroup = (title, colorHue, icon, expandedKey, width = '80px') => {
     const isExpanded = expandedCols[expandedKey];
-    // Total subcols = standard col count (Avg + Spark + Trend) + dynamic date subcols if expanded
-    const baseCols = 3; 
+    // Total subcols = AVG + TRN = 2 cols. Reverted as requested.
+    const baseCols = 2; 
     const activeDays = activeDates.length;
     const colSpan = isExpanded ? baseCols + activeDays : baseCols;
 
@@ -262,11 +325,10 @@ export default function AdsManagerPage() {
     
     return (
       <>
-        <th style={{ ...thStyle, width: '65px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
-        <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: c.bg, color: c.text }}>GPH</th>
-        <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
+        <th style={{ ...thStyle, width: '68px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
+        <th style={{ ...thStyle, width: '52px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
         {isExpanded && activeDates.map(d => (
-          <th key={d.raw} style={{ ...thStyle, width: '40px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
+          <th key={d.raw} style={{ ...thStyle, width: '50px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
             {d.label}
           </th>
         ))}
@@ -289,10 +351,10 @@ export default function AdsManagerPage() {
     const pastVals = Object.values(dateVals);
     const avg = pastVals.length > 0 ? pastVals.reduce((a, b) => a + b, 0) / pastVals.length : 0;
 
-    const textCol = isCurrency ? '#059669' : '#1f2937';
+    const textCol = isCurrency ? '#047857' : '#000000';
 
     const formatVal = (v) => {
-      if (isPercent) return v.toFixed(1) + '%';
+      if (isPercent) return v.toFixed(2) + '%';
       if (isCurrency) return '₹' + formatCompact(v);
       return formatCompact(v);
     };
@@ -304,27 +366,17 @@ export default function AdsManagerPage() {
     // Inverted logic: For ACOS and Spend, "LOWER IS BETTER". But user wanted HIGH/LOW badges anyway based on sheer trend.
     const isTrendInverted = (dataKey === 'acos' || dataKey === 'spend');
 
-    const colors = {
-      slate: '#64748b', blue: '#3b82f6', emerald: '#10b981',
-      amber: '#f59e0b', indigo: '#6366f1', cyan: '#06b6d4',
-      purple: '#8b5cf6', pink: '#ec4899'
-    };
-    const sparkColor = colors[colorHue] || colors.slate;
-
     return (
       <>
         {/* Main Stat Cell */}
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: textCol, background: '#fff' }}>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: textCol, background: '#fff' }}>
           {formatVal(currentVal)}
-        </td>
-        {/* Mini Sparkline Cell */}
-        <td style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '4px 2px' }}>
-          <MiniSpark data={activeDates.map(d => dateVals[d.raw] || 0)} color={sparkColor} />
         </td>
         {/* Trend Status Cell */}
         <td style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px' }}>
           <TrendBadge value={lastHistVal} prevValue={prevHistVal} isInverted={isTrendInverted} />
         </td>
+
         {/* Expandable Day Cells */}
         {isExpanded && activeDates.map(d => {
           const val = dateVals[d.raw] || 0;
@@ -342,7 +394,20 @@ export default function AdsManagerPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#f8fafc' }}>
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-          <PageLoader />
+          <LoadingIndicator type="line-simple" size="md" />
+        </div>
+      )}
+      {isImporting && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(3px)', 
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' 
+        }}>
+          <div className="d-flex flex-column align-items-center gap-2 bg-white p-4 rounded-3 shadow-lg border">
+            <RefreshCw size={32} className="text-indigo-600 spin" />
+            <span className="fw-bold text-zinc-800">Importing Advertising CSV...</span>
+            <small className="text-zinc-500">Processing data mapping & aggregation</small>
+          </div>
         </div>
       )}
 
@@ -412,11 +477,58 @@ export default function AdsManagerPage() {
             />
           </div>
 
+          <input 
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".csv"
+            onChange={handleFileChange}
+          />
+
+          <button 
+            onClick={handleImportClick} 
+            disabled={isImporting}
+            className="btn btn-white border border-zinc-200 btn-sm rounded-2 h-8 px-3 fw-bold d-flex align-items-center gap-1.5 text-zinc-700 hover-bg-zinc-50" 
+            style={{ fontSize: '11px', height: '32px' }}
+          >
+            <Download size={12} />
+            IMPORT CSV
+          </button>
+
           <button onClick={fetchAdsData} className="btn btn-indigo btn-sm rounded-2 h-8 px-3 fw-bold d-flex align-items-center gap-1.5" style={{ fontSize: '11px', height: '32px' }}>
             <RefreshCw size={12} className={loading ? 'spin' : ''} />
             REFRESH
           </button>
         </div>
+      </div>
+
+      {/* ANALYTICS TOP STRIP */}
+      <div className="bg-white border-bottom px-4 py-3 shadow-sm d-flex align-items-center gap-4 overflow-auto custom-scrollbar" style={{ flexShrink: 0 }}>
+        {[
+          { label: 'TOTAL AD SPEND', val: summaryData.spend, isCurr: true, icon: <BarChart3 size={14} className="text-indigo-500" /> },
+          { label: 'ADVERTISING SALES', val: summaryData.sales, isCurr: true, icon: <FileBarChart size={14} className="text-emerald-500" /> },
+          { label: 'BLENDED ACOS', val: summaryData.acos, isPct: true, icon: <Target size={14} className="text-purple-500" /> },
+          { label: 'AVERAGE ROAS', val: summaryData.roas, isNum: true, icon: <RefreshCw size={14} className="text-amber-500" /> },
+          { label: 'TOTAL ORDERS', val: summaryData.orders, isNum: true, icon: <Layers size={14} className="text-pink-500" /> },
+          { label: 'AVG CONVERSION', val: summaryData.cvr, isPct: true, icon: <Activity size={14} className="text-cyan-500" /> }
+        ].map((card, i, arr) => (
+          <React.Fragment key={i}>
+            <div className="d-flex align-items-center gap-3" style={{ minWidth: '160px' }}>
+              <div className="p-2 bg-light rounded-3 d-flex align-items-center justify-content-center" style={{ background: '#f8fafc' }}>
+                {card.icon}
+              </div>
+              <div className="d-flex flex-column">
+                <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.05em', color: '#71717a', textTransform: 'uppercase' }}>
+                  {card.label}
+                </span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#09090b', letterSpacing: '-0.02em' }}>
+                  {card.isCurr ? `₹${formatCompact(card.val)}` : card.isPct ? `${card.val.toFixed(2)}%` : formatCompact(card.val)}
+                </span>
+              </div>
+            </div>
+            {i < arr.length - 1 && <div style={{ height: '30px', width: '1px', background: '#e2e8f0' }}></div>}
+          </React.Fragment>
+        ))}
       </div>
 
       {/* MAIN TABLE CONTAINER */}
@@ -461,14 +573,21 @@ export default function AdsManagerPage() {
             </thead>
 
             <tbody>
-              {data.length === 0 && !loading ? (
+              {data.length === 0 ? (
                 <tr>
-                  <td colSpan={100} style={{ padding: '100px 0' }}>
-                    <EmptyState 
-                      icon={BarChart3}
-                      title="No Advertising Data"
-                      description="We couldn't find any matching performance records for your search."
-                    />
+                  <td colSpan={100} style={{ padding: '100px 0', textAlign: 'center', backgroundColor: '#fff' }}>
+                    {loading ? (
+                      <div className="d-flex flex-column align-items-center gap-2 py-5">
+                        <div className="spinner-border spinner-border-sm text-indigo-600" role="status"></div>
+                        <span className="text-zinc-500 smallest fw-bold" style={{ letterSpacing: '0.05em' }}>LOADING PERFORMANCE DATA...</span>
+                      </div>
+                    ) : (
+                      <EmptyState 
+                        icon={BarChart3}
+                        title="No Advertising Data"
+                        description="We couldn't find any matching performance records for your search."
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (

@@ -128,7 +128,7 @@ const Sidebar = () => {
                 { label: 'SKU Analysis', icon: ScanSearch, to: '/sku-report', permission: 'skureport_view' },
                 { label: 'Parent Trends', icon: TrendingUp, to: '/parent-asin-report', permission: 'parentreport_view' },
                 { label: 'Monthly Recap', icon: CalendarDays, to: '/month-wise-report', permission: 'monthlyreport_view' },
-                { label: 'Advertising', icon: Megaphone, to: '/ads-report', permission: 'adsreport_view' },
+
                 { label: 'Profit & Loss', icon: ArrowLeftRight, to: '/profit-loss', permission: 'pnlreport_view' },
                 { label: 'Inventory', icon: Warehouse, to: '/inventory', permission: 'inventoryreport_view' },
             ],
