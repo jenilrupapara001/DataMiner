@@ -465,6 +465,11 @@ const AsinManagerPage = () => {
       ];
       return ajioAllowedColumns.includes(key);
     }
+    
+    // For Amazon/General datatables: Show Deal Badge, but hide Discount Percentage as requested
+    if (key === 'discountPercentage') return false;
+    if (key === 'dealBadge') return true;
+    
     return baseIsVisible(key);
   }, [baseIsVisible, marketplaceFilter]);
 

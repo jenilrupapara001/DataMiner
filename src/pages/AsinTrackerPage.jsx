@@ -352,7 +352,7 @@ const AsinTrackerPage = () => {
         >
            <DataTable
              data={asins}
-             columns={['asin', 'sku', 'title', 'price', 'mrp', 'discountPercentage', 'soldBy', 'buyBoxWin', 'bsr', 'rating', 'reviewCount', 'lqs', 'hasAplus', 'availabilityStatus', 'priceTrend', 'bsrTrend']}
+             columns={['asin', 'sku', 'title', 'price', 'mrp', 'dealBadge', 'soldBy', 'buyBoxWin', 'bsr', 'rating', 'reviewCount', 'lqs', 'hasAplus', 'availabilityStatus', 'priceTrend', 'bsrTrend']}
              searchable={true}
              sortable={true}
              pagination={true}
@@ -361,7 +361,11 @@ const AsinTrackerPage = () => {
                  asin: (asin) => <span className="fw-bold text-primary">{asin.asin || asin.asinCode}</span>,
                  price: (asin) => <span className="fw-medium text-dark">{asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : '-'}</span>,
                  mrp: (asin) => <span className="text-muted text-decoration-line-through">{asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '-'}</span>,
-                 discountPercentage: (asin) => <span className="badge bg-danger bg-opacity-10 text-danger">{asin.discountPercentage ? `${asin.discountPercentage}% OFF` : '-'}</span>,
+                 dealBadge: (asin) => asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
+                    <span className="badge" style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 700, fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>
+                      {asin.dealBadge}
+                    </span>
+                 ) : '-',
                  soldBy: (asin) => <span className="text-truncate d-inline-block" style={{ maxWidth: '120px' }}>{asin.soldBy || '-'}</span>,
                  buyBoxWin: (asin) => typeof asin.buyBoxWin !== 'undefined' ? getBuyBoxBadge(asin.buyBoxWin) : '-',
                  bsr: (asin) => <span className="fw-500">#{asin.bsr ? asin.bsr.toLocaleString() : '-'}</span>,
