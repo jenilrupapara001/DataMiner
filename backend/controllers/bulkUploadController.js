@@ -4,6 +4,76 @@ const fs = require('fs');
 const path = require('path');
 const AutoTagService = require('../services/autoTagService');
 
+// Helper to robustly parse multiple date formats, preferring DD/MM/YYYY as requested
+const parseFlexibleDate = (val) => {
+    if (!val) return null;
+    
+    // 1. Handle Excel serial numeric dates
+    if (typeof val === 'number') {
+        const d = new Date(Date.UTC(1899, 11, 30));
+        d.setDate(d.getDate() + Math.floor(val));
+        const fractionalDay = val - Math.floor(val);
+        const millisecondsInDay = 24 * 60 * 60 * 1000;
+        d.setMilliseconds(d.getMilliseconds() + Math.round(fractionalDay * millisecondsInDay));
+        return isNaN(d.getTime()) ? null : d;
+    }
+    
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    
+    const str = val.toString().trim();
+    if (!str) return null;
+    
+    // 2. Standard ISO Matches (YYYY-MM-DD)
+    const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+        const year = parseInt(isoMatch[1]);
+        const month = parseInt(isoMatch[2]) - 1;
+        const day = parseInt(isoMatch[3]);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    // 3. Generic Delimited Format: DD/MM/YY, MM/DD/YYYY, etc.
+    const match = str.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})/);
+    if (match) {
+        let part1 = parseInt(match[1]);
+        let part2 = parseInt(match[2]);
+        let part3 = parseInt(match[3]);
+        
+        let year, month, day;
+        
+        // Case A: Year first (e.g., 2023/05/24)
+        if (part1 > 31) {
+            year = part1; month = part2; day = part3;
+        } 
+        // Case B: Year last (Most common: DD/MM/YYYY or MM/DD/YYYY)
+        else if (part3 > 31 || match[3].length === 4) {
+            year = part3;
+            if (part1 > 12) {
+                day = part1; month = part2;
+            } else if (part2 > 12) {
+                month = part1; day = part2;
+            } else {
+                // Ambiguous! Default to Global/Indian preference: DD/MM/YYYY
+                day = part1; month = part2;
+            }
+        }
+        // Case C: Short year
+        else {
+            year = part3 < 50 ? 2000 + part3 : 1900 + part3;
+            if (part1 > 12) { day = part1; month = part2; }
+            else if (part2 > 12) { month = part1; day = part2; }
+            else { day = part1; month = part2; } 
+        }
+        
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    const fallback = new Date(str);
+    return isNaN(fallback.getTime()) ? null : fallback;
+};
+
 /**
  * Bulk Catalog Sync with Release Date support
  */
@@ -117,25 +187,10 @@ exports.catalogSync = async (req, res) => {
                     continue;
                 }
 
-                // 2. Handle Dates (Support DD/MM/YY)
-                let releaseDate = null;
+                // 2. Handle Dates (Fully Dynamic Logic)
                 const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Released Date', 'Realeased date', 'released_date', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
-
-                if (dateStr) {
-                    const parsed = new Date(dateStr);
-                    if (!isNaN(parsed.getTime())) {
-                        releaseDate = parsed;
-                    } else {
-                        // Check for DD/MM/YY or DD/MM/YYYY
-                        const dmyMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-                        if (dmyMatch) {
-                            const [_, day, month, year] = dmyMatch;
-                            const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
-                            releaseDate = new Date(`${fullYear}-${month}-${day}`);
-                        }
-                    }
-                }
-                if (!releaseDate || isNaN(releaseDate.getTime())) releaseDate = new Date();
+                let releaseDate = parseFlexibleDate(dateStr);
+                if (!releaseDate) releaseDate = new Date();
 
                 const autoTags = AutoTagService.calculateAgeTags(releaseDate);
 
@@ -159,6 +214,7 @@ exports.catalogSync = async (req, res) => {
                         .input('releaseDate', sql.DateTime2, releaseDate)
                         .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .input('brand', sql.NVarChar, brandName || null)
                         .query(`
                             UPDATE Asins SET 
                                 ParentAsin = CASE WHEN @parentAsin != '' AND @parentAsin IS NOT NULL THEN @parentAsin ELSE ParentAsin END,
@@ -166,6 +222,7 @@ exports.catalogSync = async (req, res) => {
                                 ReleaseDate = @releaseDate,
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
+                                Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
@@ -181,9 +238,10 @@ exports.catalogSync = async (req, res) => {
                         .input('releaseDate', sql.DateTime2, releaseDate)
                         .input('tags', sql.NVarChar, JSON.stringify(autoTags))
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .input('brand', sql.NVarChar, brandName || null)
                         .query(`
-                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', GETDATE(), GETDATE())
+                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, GETDATE(), GETDATE())
                         `);
                     results.created++;
                 }

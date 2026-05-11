@@ -18,6 +18,80 @@ const tryParse = (data, fallback = []) => {
     }
 };
 
+// Helper to robustly parse multiple date formats, preferring DD/MM/YYYY as requested
+const parseFlexibleDate = (val) => {
+    if (!val) return null;
+    
+    // 1. Handle Excel serial numeric dates
+    if (typeof val === 'number') {
+        const d = new Date(Date.UTC(1899, 11, 30));
+        d.setDate(d.getDate() + Math.floor(val));
+        const fractionalDay = val - Math.floor(val);
+        const millisecondsInDay = 24 * 60 * 60 * 1000;
+        d.setMilliseconds(d.getMilliseconds() + Math.round(fractionalDay * millisecondsInDay));
+        return isNaN(d.getTime()) ? null : d;
+    }
+    
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    
+    const str = val.toString().trim();
+    if (!str) return null;
+    
+    // 2. Standard ISO Matches (YYYY-MM-DD)
+    const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+        const year = parseInt(isoMatch[1]);
+        const month = parseInt(isoMatch[2]) - 1;
+        const day = parseInt(isoMatch[3]);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    // 3. Generic Delimited Format: DD/MM/YY, MM/DD/YYYY, etc.
+    const match = str.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})/);
+    if (match) {
+        let part1 = parseInt(match[1]);
+        let part2 = parseInt(match[2]);
+        let part3 = parseInt(match[3]);
+        
+        let year, month, day;
+        
+        // Case A: Year first (e.g., 2023/05/24) - basically caught by isoMatch but safe
+        if (part1 > 31) {
+            year = part1; month = part2; day = part3;
+        } 
+        // Case B: Year last (Most common: DD/MM/YYYY or MM/DD/YYYY)
+        else if (part3 > 31 || match[3].length === 4) {
+            year = part3;
+            // Intelligence swapping:
+            if (part1 > 12) {
+                // Must be DD/MM/YYYY
+                day = part1; month = part2;
+            } else if (part2 > 12) {
+                // Must be MM/DD/YYYY
+                month = part1; day = part2;
+            } else {
+                // Ambiguous! Both <= 12. User requested "global format DD/MM/YYYY" as priority.
+                day = part1; month = part2;
+            }
+        }
+        // Case C: Both <= 31, short year at end (e.g. 12/05/24)
+        else {
+            year = part3 < 50 ? 2000 + part3 : 1900 + part3;
+            if (part1 > 12) { day = part1; month = part2; }
+            else if (part2 > 12) { month = part1; day = part2; }
+            else { day = part1; month = part2; } // Default to DD/MM
+        }
+        
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    // 4. Native JS fallback
+    const fallback = new Date(str);
+    return isNaN(fallback.getTime()) ? null : fallback;
+};
+
 /**
  * Get all ASINs (SQL Version)
  */
@@ -1525,7 +1599,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
 
             try {
                 for (const row of batch) {
-                    const sellerName = getValue(row, ['Seller Name', 'Seller', 'Store Name'])?.toString().trim();
+                    const sellerName = getValue(row, ['Seller Name', 'Seller', 'Store Name', 'Brand Name', 'Brand'])?.toString().trim();
                     const asin = getValue(row, ['ASIN', 'Asin Code', 'jiocode', 'jiocode_code', 'Jio Code'])?.toString().trim().toUpperCase();
                     const sku = getValue(row, ['SKU', 'sku'])?.toString().trim();
                     const parentAsin = getValue(row, ['Parent ASIN', 'Parent'])?.toString().trim().toUpperCase();
@@ -1544,45 +1618,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     affectedSellerIds.add(sellerId);
 
                     const price = parseFloat(priceRaw) || 0;
-                    let releaseDate = null;
-                    if (releaseDateRaw) {
-                        if (typeof releaseDateRaw === 'number') {
-                            // Handle Excel serial date (e.g., 44301.0001)
-                            // XLSX epoch is 1899-12-30
-                            const d = new Date(Date.UTC(1899, 11, 30));
-                            d.setDate(d.getDate() + Math.floor(releaseDateRaw));
-                            // Add fractional day (time)
-                            const fractionalDay = releaseDateRaw - Math.floor(releaseDateRaw);
-                            const millisecondsInDay = 24 * 60 * 60 * 1000;
-                            d.setMilliseconds(d.getMilliseconds() + Math.round(fractionalDay * millisecondsInDay));
-                            if (!isNaN(d.getTime())) releaseDate = d;
-                        } else {
-                            const dateStr = releaseDateRaw.toString().trim();
-                            // Format: yyyy-mm-dd hh:mm:ss (Sample: 2021-04-15 00:00:00)
-                            const dateMatchYMD = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-                            // Format: dd-mm-yyyy hh:mm:ss
-                            const dateMatchDMY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-
-                            if (dateMatchYMD) {
-                                const year = parseInt(dateMatchYMD[1]);
-                                const month = parseInt(dateMatchYMD[2]) - 1;
-                                const day = parseInt(dateMatchYMD[3]);
-                                const d = new Date(year, month, day);
-                                if (!isNaN(d.getTime())) releaseDate = d;
-                            } else if (dateMatchDMY) {
-                                const day = parseInt(dateMatchDMY[1]);
-                                const month = parseInt(dateMatchDMY[2]) - 1;
-                                const year = parseInt(dateMatchDMY[3]);
-                                const d = new Date(year, month, day);
-                                if (!isNaN(d.getTime())) releaseDate = d;
-                            } else {
-                                const d = new Date(dateStr);
-                                if (!isNaN(d.getTime())) releaseDate = d;
-                            }
-                        }
-                        
-                        if (i === 0 && !releaseDate) console.log(`Failed to parse date: "${releaseDateRaw}" (Type: ${typeof releaseDateRaw})`);
-                    }
+                    const releaseDate = parseFlexibleDate(releaseDateRaw);
 
                     // Check if exists
                     const checkResult = await transaction.request()
@@ -1606,9 +1642,10 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('releaseDate', sql.DateTime2, releaseDate)
                             .input('price', sql.Decimal(18, 2), price)
                             .input('status', sql.VarChar, status)
+                            .input('brand', sql.NVarChar, sellerName)
                             .query(`
                                 UPDATE Asins 
-                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, UpdatedAt = GETDATE()
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = GETDATE()
                                 WHERE Id = @id
                             `);
                         updated++;
@@ -1624,9 +1661,10 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('releaseDate', sql.DateTime2, releaseDate)
                             .input('price', sql.Decimal(18, 2), price)
                             .input('status', sql.VarChar, status)
+                            .input('brand', sql.NVarChar, sellerName)
                             .query(`
-                                INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', GETDATE(), GETDATE())
+                                INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, GETDATE(), GETDATE())
                             `);
                         created++;
                     }

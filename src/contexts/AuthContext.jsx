@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             setError(null);
-            setLoading(true);
+            // setLoading(true); // <-- REMOVED TO PREVENT GLOBAL UNMOUNT IN APP.JSX
 
             const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, {
                 method: 'POST',
@@ -109,11 +109,11 @@ export const AuthProvider = ({ children }) => {
                 }
             }
 
-            setLoading(false);
+            // setLoading(false); // <-- REMOVED
             return { success: true };
         } catch (err) {
             setError(err.message);
-            setLoading(false);
+            // setLoading(false); // <-- REMOVED
             return { success: false, error: err.message };
         }
     };

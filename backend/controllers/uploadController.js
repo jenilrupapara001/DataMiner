@@ -13,25 +13,63 @@ const findValue = (row, fields) => {
 
 // Helper: parse date from various formats
 const parseDate = (val) => {
-  if (!val) return null;
-  let cleaned = val.toString().trim().replace(/^"+|"+$/g, '');
-  if (cleaned.toLowerCase() === 'none' || cleaned === '') return null;
-  // Excel serial number
-  if (!isNaN(cleaned) && Number(cleaned) > 10000) {
-    const excelEpoch = new Date(1899, 11, 30);
-    return new Date(excelEpoch.getTime() + Number(cleaned) * 86400000);
-  }
-  const shortMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-  if (shortMatch) {
-    let year = parseInt(shortMatch[3]);
-    year = year < 100 ? 2000 + year : year;
-    return new Date(`${year}-${shortMatch[1].padStart(2, '0')}-${shortMatch[2].padStart(2, '0')}`);
-  }
-  const fullMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (fullMatch) {
-    return new Date(`${fullMatch[3]}-${fullMatch[1].padStart(2, '0')}-${fullMatch[2].padStart(2, '0')}`);
-  }
-  return new Date(cleaned);
+    if (!val) return null;
+    
+    // 1. Handle Excel serial numeric dates
+    if (typeof val === 'number' || (!isNaN(val) && Number(val) > 10000)) {
+        const num = Number(val);
+        const d = new Date(Date.UTC(1899, 11, 30));
+        d.setDate(d.getDate() + Math.floor(num));
+        const fractionalDay = num - Math.floor(num);
+        const millisecondsInDay = 24 * 60 * 60 * 1000;
+        d.setMilliseconds(d.getMilliseconds() + Math.round(fractionalDay * millisecondsInDay));
+        return isNaN(d.getTime()) ? null : d;
+    }
+    
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    
+    let cleaned = val.toString().trim().replace(/^"+|"+$/g, '');
+    if (!cleaned || cleaned.toLowerCase() === 'none') return null;
+    
+    // 2. Standard ISO Matches (YYYY-MM-DD)
+    const isoMatch = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+        const year = parseInt(isoMatch[1]);
+        const month = parseInt(isoMatch[2]) - 1;
+        const day = parseInt(isoMatch[3]);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    // 3. Generic Delimited Format: DD/MM/YY, MM/DD/YYYY, etc.
+    const match = cleaned.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})/);
+    if (match) {
+        let part1 = parseInt(match[1]);
+        let part2 = parseInt(match[2]);
+        let part3 = parseInt(match[3]);
+        
+        let year, month, day;
+        
+        if (part1 > 31) {
+            year = part1; month = part2; day = part3;
+        } else if (part3 > 31 || match[3].length === 4) {
+            year = part3;
+            if (part1 > 12) { day = part1; month = part2; }
+            else if (part2 > 12) { month = part1; day = part2; }
+            else { day = part1; month = part2; } // Priority to DD/MM
+        } else {
+            year = part3 < 50 ? 2000 + part3 : 1900 + part3;
+            if (part1 > 12) { day = part1; month = part2; }
+            else if (part2 > 12) { month = part1; day = part2; }
+            else { day = part1; month = part2; } 
+        }
+        
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+    
+    const fallback = new Date(cleaned);
+    return isNaN(fallback.getTime()) ? null : fallback;
 };
 
 exports.uploadMonthlyData = async (req, res) => {
@@ -55,7 +93,7 @@ exports.uploadMonthlyData = async (req, res) => {
       for (let i = 0; i < jsonData.length; i++) {
         const row = jsonData[i];
         try {
-          const asin = findValue(row, ['ASIN', 'asin']);
+          const asin = findValue(row, ['ASIN', 'asin', 'Jio Code', 'jio_code', 'jiocode']);
           const revenue = parseFloat((findValue(row, ['Ordered Revenue', 'ordered_revenue']) || '0').replace(/,/g, ''));
           const units = parseInt(findValue(row, ['Ordered Units', 'ordered_units']) || '0');
 
