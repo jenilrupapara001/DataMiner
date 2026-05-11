@@ -9,12 +9,13 @@ echo "=============================="
 
 # Config
 APP_DIR="/var/www/retailops"
-GIT_REPO="https://github.com/YOUR_USERNAME/your-repo.git"
+GIT_REPO="https://github.com/jenilrupapara001/DataMiner.git"
 BRANCH="main"
 
 # Ask for GitHub repo
-echo "Enter your GitHub repo URL:"
-read -r GIT_REPO
+echo "Enter your GitHub repo URL [Default: $GIT_REPO]:"
+read -r INPUT_REPO
+GIT_REPO=${INPUT_REPO:-$GIT_REPO}
 
 echo "📁 Creating directory structure..."
 mkdir -p $APP_DIR
@@ -61,7 +62,7 @@ fi
 echo "🚀 Starting backend..."
 pm2 start server.js \
   --name retailops-backend \
-  --max-old-space-size4096 \
+  --node-args="--max-old-space-size=4096" \
   --update-env
 
 # =====================
@@ -70,7 +71,7 @@ pm2 start server.js \
 echo ""
 echo "🔧 Setting up frontend..."
 
-cd $APP_DIR/retail-ops
+cd "$APP_DIR" # Frontend package.json is in the root of the repository
 
 echo "📦 Installing frontend dependencies..."
 npm install --legacy-peer-deps
@@ -79,11 +80,7 @@ echo "⚙️ Building frontend..."
 npm run build
 
 echo "🚀 Starting frontend..."
-pm2 start npm -- \
-  -- run preview \
-  --host \
-  --port 4173 \
-  --name retailops-frontend
+pm2 start npm --name "retailops-frontend" -- run preview -- --host --port 4173
 
 # =====================
 # Final
@@ -95,8 +92,8 @@ pm2 status
 
 echo ""
 echo "🌐 Your services:"
-echo "  Backend:  http://YOUR_IP:3001"
-echo "  Frontend: http://YOUR_IP:4173"
+echo "  Backend:  http://31.97.62.95:3001"
+echo "  Frontend: http://31.97.62.95:4173"
 echo ""
 echo "Next steps:"
 echo "  1. Point your domain DNS to server IP"

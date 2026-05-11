@@ -16,7 +16,7 @@ NC='\033[0m'
 # Config
 APP_DIR="/var/www/retailops"
 BACKEND_DIR="$APP_DIR/backend"
-FRONTEND_DIR="$APP_DIR/retail-ops"
+FRONTEND_DIR="$APP_DIR" # Frontend is in the root directory
 
 # Parse args
 BRANCH="main"
@@ -36,28 +36,27 @@ echo -e "${YELLOW}Branch: $BRANCH${NC}"
 # Start deployment
 # =====================
 
-cd $APP_DIR
+cd "$APP_DIR" || { echo -e "${RED}❌ Could not navigate to APP_DIR ($APP_DIR)${NC}"; exit 1; }
 
 echo "📥 Pulling latest code..."
-git checkout $BRANCH
-git pull origin $BRANCH
+git fetch origin
+git checkout "$BRANCH"
+git reset --hard "origin/$BRANCH"
 
 # =====================
 # Backend
 # =====================
 echo ""
-echo "🔄 Building backend..."
+echo "🔄 Updating backend..."
 
-cd $BACKEND_DIR
-npm install --production
+cd "$BACKEND_DIR" || { echo -e "${RED}❌ Backend dir not found!${NC}"; exit 1; }
+npm install --omit=dev
 
-echo "🧹 Clearing old logs..."
+echo "🚀 Restarting backend..."
 pm2 delete retailops-backend 2>/dev/null || true
-
-echo "🚀 Starting backend with increased memory..."
 pm2 start server.js \
   --name retailops-backend \
-  --max-old-space-size4096 \
+  --node-args="--max-old-space-size=4096" \
   --update-env
 
 # =====================
@@ -67,7 +66,7 @@ if [ "$SKIP_BUILD" = false ]; then
   echo ""
   echo "🔄 Building frontend..."
   
-  cd $FRONTEND_DIR
+  cd "$FRONTEND_DIR" || { echo -e "${RED}❌ Frontend dir not found!${NC}"; exit 1; }
   npm install --legacy-peer-deps
   npm run build
   
@@ -75,11 +74,8 @@ if [ "$SKIP_BUILD" = false ]; then
   pm2 delete retailops-frontend 2>/dev/null || true
   
   echo "🚀 Starting frontend preview..."
-  pm2 start npm -- \
-    -- run preview \
-    --host \
-    --port 4173 \
-    --name retailops-frontend
+  # Using preview mode via PM2 is robust for internal use, but can also point to serve or Nginx
+  pm2 start npm --name "retailops-frontend" -- run preview -- --host --port 4173
 fi
 
 # =====================
@@ -96,5 +92,5 @@ free -h
 
 echo ""
 echo "🌐 Services:"
-echo "  Backend:  http://localhost:3001"
-echo "  Frontend: http://localhost:4173"
+echo "  Backend:  http://31.97.62.95:3001"
+echo "  Frontend: http://31.97.62.95:4173"

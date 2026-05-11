@@ -37,6 +37,10 @@ jobs:
         run: |
           npm run typecheck || true
 
+      - name: Build Frontend (Verify Compilation)
+        run: |
+          npm run build
+
       # ==================
       # Backend Check
       # ==================
@@ -48,9 +52,7 @@ jobs:
       - name: Check backend syntax
         run: |
           cd backend
-          for f in $(find . -name "*.js" -not -path "./node_modules/*"); do
-            node -c "$f" 2>&1 || echo "SYNTAX ERROR in $f"
-          done
+          find . -name "*.js" -not -path "./node_modules/*" -print0 | xargs -0 -n1 node -c
 
       # ==================
       # Report Results
@@ -58,7 +60,7 @@ jobs:
       - name: Show results
         if: always()
         run: |
-          echo "✅ Lint checks completed"
+          echo "✅ All validation builds and syntax checks completed"
 
   # ============================================
   # DEPLOY TO VPS (on merge to main)
@@ -71,8 +73,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup SSH key
         uses: shimataro/ssh-key-action@v2
@@ -80,40 +80,35 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           known_hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
 
-      - name: Deploy to VPS
+      - name: Execute Deploy Script on Remote VPS
         run: |
-          echo "🚀 Deploying to VPS..."
+          echo "🚀 Connecting to VPS to execute centralized deploy script..."
           
-          # SSH to VPS and deploy
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOSSH'
+          # Extract branch name
+          BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})
+          
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOSSH
             set -e
             
-            echo "📦 Pulling latest code..."
-            cd /path/to/retail-ops
+            # Set default APP_DIR if not defined in environment
+            DEPLOY_PATH=${{ secrets.APP_PATH || '/var/www/retailops' }}
             
-            # Pull latest
-            git checkout main
-            git pull origin main
+            echo "📂 Navigating to deploy path: \$DEPLOY_PATH"
+            cd \$DEPLOY_PATH || { echo "Directory \$DEPLOY_PATH not found!"; exit 1; }
             
-            echo "📦 Installing dependencies..."
-            cd backend
-            npm install
+            # Fetch latest fetch references without losing changes
+            git fetch origin
             
-            cd ../retail-ops
-            npm install --legacy-peer-deps
+            # Make sure deploy.sh from the target branch will run
+            git checkout origin/\$BRANCH_NAME -- deploy.sh
+            chmod +x deploy.sh
             
-            echo "🔄 Restarting services..."
-            pm2 restart retailops-backend || pm2 start server.js --name retailops-backend -- --max-old-space-size=4096
-            
-            # Check frontend status (adjust as needed)
-            pm2 restart retailops-frontend || echo "Frontend not configured in PM2"
+            echo "🛠️ Executing standardized deploy.sh script..."
+            ./deploy.sh -b \$BRANCH_NAME
             
             echo "✅ Deployment complete!"
-            pm2 status
           EOSSH
 
-      - name: Verify deployment
+      - name: Final verification
         run: |
-          echo "⏳ Waiting for service to start..."
-          sleep 10
-          echo "✅ Deployment verified!"
+          echo "✅ Github Workflow successfully triggered remote deployment"
