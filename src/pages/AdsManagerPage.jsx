@@ -210,9 +210,8 @@ export default function AdsManagerPage() {
   // Helper to construct dynamic column header grouping
   const renderHeaderGroup = (title, colorHue, icon, expandedKey, width = '80px') => {
     const isExpanded = expandedCols[expandedKey];
-    // Total subcols = standard col count + dynamic date subcols if expanded
-    // standard is main total + trend/sparkline 
-    const baseCols = 2; // Total + Spark
+    // Total subcols = standard col count (Avg + Spark + Trend) + dynamic date subcols if expanded
+    const baseCols = 3; 
     const activeDays = activeDates.length;
     const colSpan = isExpanded ? baseCols + activeDays : baseCols;
 
@@ -263,10 +262,11 @@ export default function AdsManagerPage() {
     
     return (
       <>
-        <th style={{ ...thStyle, width: '70px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
-        <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
+        <th style={{ ...thStyle, width: '65px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
+        <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: c.bg, color: c.text }}>GPH</th>
+        <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
         {isExpanded && activeDates.map(d => (
-          <th key={d.raw} style={{ ...thStyle, width: '45px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
+          <th key={d.raw} style={{ ...thStyle, width: '40px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
             {d.label}
           </th>
         ))}
@@ -304,13 +304,24 @@ export default function AdsManagerPage() {
     // Inverted logic: For ACOS and Spend, "LOWER IS BETTER". But user wanted HIGH/LOW badges anyway based on sheer trend.
     const isTrendInverted = (dataKey === 'acos' || dataKey === 'spend');
 
+    const colors = {
+      slate: '#64748b', blue: '#3b82f6', emerald: '#10b981',
+      amber: '#f59e0b', indigo: '#6366f1', cyan: '#06b6d4',
+      purple: '#8b5cf6', pink: '#ec4899'
+    };
+    const sparkColor = colors[colorHue] || colors.slate;
+
     return (
       <>
         {/* Main Stat Cell */}
         <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: textCol, background: '#fff' }}>
           {formatVal(currentVal)}
         </td>
-        {/* Trend Cell */}
+        {/* Mini Sparkline Cell */}
+        <td style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '4px 2px' }}>
+          <MiniSpark data={activeDates.map(d => dateVals[d.raw] || 0)} color={sparkColor} />
+        </td>
+        {/* Trend Status Cell */}
         <td style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px' }}>
           <TrendBadge value={lastHistVal} prevValue={prevHistVal} isInverted={isTrendInverted} />
         </td>

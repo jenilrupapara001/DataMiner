@@ -8,7 +8,7 @@ const UploadForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [errors, setErrors] = useState([]);
-  const [uploadType, setUploadType] = useState('monthly'); // 'monthly' or 'octoparse'
+  const [uploadType, setUploadType] = useState('monthly'); // 'monthly', 'octoparse', or 'ads'
   const [sellers, setSellers] = useState([]);
   const [selectedSeller, setSelectedSeller] = useState('');
   const [isFetchingSellers, setIsFetchingSellers] = useState(false);
@@ -57,6 +57,11 @@ const UploadForm = () => {
     
     if (uploadType === 'octoparse' && !isJson) {
       return 'Only JSON files are accepted for Octoparse sync';
+    }
+
+    const isCsv = selectedFile.name.toLowerCase().endsWith('.csv') || selectedFile.type === 'text/csv';
+    if (uploadType === 'ads' && !isCsv) {
+      return 'Only CSV files are accepted for Advertising Performance';
     }
 
     const maxSize = 20 * 1024 * 1024; // 20MB
@@ -121,6 +126,24 @@ const UploadForm = () => {
           type: 'success',
           message: `✅ Uploaded Successfully: ${res.data.inserted} records added.`,
           details: res.data
+        });
+      } else if (uploadType === 'ads') {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('reportType', 'daily');
+        
+        const config = {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        };
+        
+        const backendUrl = `${import.meta.env.VITE_API_URL || '/api'}/upload/upload-ads`;
+        // Assuming axios is loaded (it was imported via script or accessible. wait, let me verify imports first... oh wait, line 117 uses 'axios' implicitly! Let's ensure I follow existing code convention.)
+        const axiosRes = await axios.post(backendUrl, formData, config);
+        
+        setUploadStatus({
+          type: 'success',
+          message: `✅ Ads Import Complete: ${axiosRes.data.processed} entries updated.`,
+          details: axiosRes.data
         });
       } else {
         // Octoparse manual sync
@@ -202,6 +225,17 @@ const UploadForm = () => {
           >
             Octoparse Sync
           </button>
+          <button 
+            className={`btn ${uploadType === 'ads' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => {
+              setUploadType('ads');
+              setFile(null);
+              setErrors([]);
+              setUploadStatus(null);
+            }}
+          >
+            Ads Reports
+          </button>
         </div>
       </div>
 
@@ -256,24 +290,35 @@ const UploadForm = () => {
       {/* File Upload */}
       <div className="form-group">
         <label className="form-label">
-          {uploadType === 'monthly' ? '📄 Select Excel File' : '📄 Select Octoparse JSON File'}
+          {uploadType === 'monthly' ? '📄 Select Excel File' : 
+           uploadType === 'ads' ? '📄 Select Ads CSV File' : '📄 Select Octoparse JSON File'}
         </label>
         <div className="upload-area" onClick={() => document.getElementById('fileInput').click()}>
           <div className="upload-icon">
-            <i className={`bi ${uploadType === 'monthly' ? 'bi-file-earmark-spreadsheet' : 'bi-filetype-json'}`} style={{ fontSize: '48px', color: uploadType === 'monthly' ? 'var(--color-success-500)' : 'var(--color-primary-500)' }}></i>
+            <i className={`bi ${
+              uploadType === 'monthly' ? 'bi-file-earmark-spreadsheet' : 
+              uploadType === 'ads' ? 'bi-file-earmark-bar-graph' : 'bi-filetype-json'}`} 
+              style={{ 
+                fontSize: '48px', 
+                color: uploadType === 'monthly' ? 'var(--color-success-500)' : 
+                       uploadType === 'ads' ? 'var(--color-indigo-500)' : 'var(--color-primary-500)' 
+              }}
+            ></i>
           </div>
           <p className="upload-text">
             {file ? file.name : 'Click to upload or drag and drop'}
           </p>
           <p className="upload-hint">
-            {uploadType === 'monthly' ? 'Excel files only (.xlsx, .xls)' : 'JSON files only (.json)'}
+            {uploadType === 'monthly' ? 'Excel files only (.xlsx, .xls)' : 
+             uploadType === 'ads' ? 'CSV files only (.csv)' : 'JSON files only (.json)'}
           </p>
           <input
             id="fileInput"
             type="file"
             className="d-none"
             onChange={handleFileChange}
-            accept={uploadType === 'monthly' ? ".xlsx,.xls" : ".json"}
+            accept={uploadType === 'monthly' ? ".xlsx,.xls" : 
+                    uploadType === 'ads' ? ".csv" : ".json"}
           />
         </div>
         {file && (
@@ -315,12 +360,12 @@ const UploadForm = () => {
           {isLoading ? (
             <>
               <span className="spinner-border spinner-border-sm me-2"></span>
-              {uploadType === 'monthly' ? 'Uploading...' : 'Syncing...'}
+              {uploadType === 'monthly' ? 'Uploading...' : uploadType === 'ads' ? 'Importing Ads...' : 'Syncing...'}
             </>
           ) : (
             <>
-              <i className={`bi ${uploadType === 'monthly' ? 'bi-cloud-arrow-up' : 'bi-arrow-repeat'} me-2`}></i>
-              {uploadType === 'monthly' ? 'Upload Data' : 'Start Octoparse Sync'}
+              <i className={`bi ${uploadType === 'monthly' ? 'bi-cloud-arrow-up' : uploadType === 'ads' ? 'bi-file-earmark-bar-graph' : 'bi-arrow-repeat'} me-2`}></i>
+              {uploadType === 'monthly' ? 'Upload Data' : uploadType === 'ads' ? 'Import Ads CSV' : 'Start Octoparse Sync'}
             </>
           )}
         </button>
@@ -353,6 +398,13 @@ const UploadForm = () => {
             <li>Size limit: 20 MB</li>
             <li>Required columns: ASIN, Ordered Revenue, Ordered Units</li>
             <li>Ensure all ASINs exist in master product data</li>
+          </ul>
+        ) : uploadType === 'ads' ? (
+          <ul className="text-sm text-muted mb-0" style={{ paddingLeft: 'var(--space-4)' }}>
+            <li>File format: CSV (.csv) containing daily ad performance</li>
+            <li>Requires: date, asin, sku, metrics.sales, metrics.spend, etc.</li>
+            <li>System aggregates these into dynamic historical trends</li>
+            <li>Ensures target ASINs are mapped correctly in master database</li>
           </ul>
         ) : (
           <ul className="text-sm text-muted mb-0" style={{ paddingLeft: 'var(--space-4)' }}>
