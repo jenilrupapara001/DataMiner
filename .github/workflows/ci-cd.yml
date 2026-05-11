@@ -82,7 +82,7 @@ jobs:
             Host deploy-target
               HostName ${{ secrets.VPS_HOST }}
               User ${{ secrets.VPS_USER }}
-              IdentityFile ~/.ssh/id_rsa
+              IdentityFile ~/.ssh/id_ed25519
               StrictHostKeyChecking accept-new
 
       - name: Verify SSH connection
