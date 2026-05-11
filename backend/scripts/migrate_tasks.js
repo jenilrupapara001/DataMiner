@@ -50,15 +50,16 @@ async function migrate() {
                 PRINT 'Tasks table created successfully.';
             END
 
-        // Create indexes
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_Status')
-            CREATE INDEX IX_Tasks_Status ON Tasks(Status);
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_AsinId')
-            CREATE INDEX IX_Tasks_AsinId ON Tasks(AsinId);
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_SellerId')
-            CREATE INDEX IX_Tasks_SellerId ON Tasks(SellerId);
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_AssignedTo')
-            CREATE INDEX IX_Tasks_AssignedTo ON Tasks(AssignedTo);
+            // Create indexes
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_Status')
+                CREATE INDEX IX_Tasks_Status ON Tasks(Status);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_AsinId')
+                CREATE INDEX IX_Tasks_AsinId ON Tasks(AsinId);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_SellerId')
+                CREATE INDEX IX_Tasks_SellerId ON Tasks(SellerId);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Tasks_AssignedTo')
+                CREATE INDEX IX_Tasks_AssignedTo ON Tasks(AssignedTo);
+        `);
 
         // Backfill assignments for existing tasks based on UserSellers mapping
         console.log('Backfilling assignments for existing tasks...');
