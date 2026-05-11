@@ -155,6 +155,7 @@ function AppRoutes() {
                   <Route path="/actions/achievement-report" element={<ProtectedRoute permission="monthlyreport_view"><GoalAchievementReport /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
                   <Route path="/tasks" element={<ProtectedRoute permission="tasks_view"><TasksPage /></ProtectedRoute>} />
+                  <Route path="/tasks-operations" element={<ProtectedRoute permission="tasks_view"><TasksOperationsPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:id" element={<ProfilePage />} />

@@ -2,6 +2,7 @@ const { sql, getPool, generateId } = require('../database/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config/env');
+const SystemLogService = require('../services/SystemLogService');
 
 const generateTokens = (userId) => {
   const accessToken = jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
@@ -94,15 +95,42 @@ exports.login = async (req, res) => {
 
     if (result.recordset.length === 0) {
       console.warn(`[AUTH_FAILURE] Account not found. Email: ${email} | IP: ${clientIp}`);
+      
+      // Log Auth failure
+      await SystemLogService.log({
+        type: 'AUTH_FAILURE',
+        entityType: 'USER',
+        description: `Failed login attempt: User not found (${email})`,
+        metadata: { ip: clientIp, email }
+      });
+      
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
     const user = result.recordset[0];
 
     if (user.LockUntil && new Date(user.LockUntil) > new Date()) {
+      await SystemLogService.log({
+        type: 'AUTH_FAILURE',
+        entityType: 'USER',
+        entityId: user.Id,
+        user: user.Id,
+        description: `Locked login attempt: ${email}`,
+        metadata: { ip: clientIp }
+      });
       return res.status(423).json({ success: false, message: 'Account is temporarily locked' });
     }
 
-    if (!user.IsActive) return res.status(403).json({ success: false, message: 'Account is deactivated' });
+    if (!user.IsActive) {
+       await SystemLogService.log({
+        type: 'AUTH_FAILURE',
+        entityType: 'USER',
+        entityId: user.Id,
+        user: user.Id,
+        description: `Deactivated account login attempt: ${email}`,
+        metadata: { ip: clientIp }
+      });
+      return res.status(403).json({ success: false, message: 'Account is deactivated' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.Password);
     if (!isMatch) {
@@ -117,6 +145,16 @@ exports.login = async (req, res) => {
         .query('UPDATE Users SET LoginAttempts = @attempts, LockUntil = @lockUntil WHERE Id = @id');
       
       console.warn(`[AUTH_FAILURE] Password mismatch. Email: ${email} | IP: ${clientIp} | Attempt: ${attempts}`);
+      
+      await SystemLogService.log({
+        type: 'AUTH_FAILURE',
+        entityType: 'USER',
+        entityId: user.Id,
+        user: user.Id,
+        description: `Password mismatch. Attempt: ${attempts}`,
+        metadata: { ip: clientIp, attempts }
+      });
+
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
@@ -131,6 +169,17 @@ exports.login = async (req, res) => {
       .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
 
     const resolvedUser = await getResolvedUserResponse(user, pool);
+
+    // Log success
+    await SystemLogService.log({
+      type: 'AUTH_SUCCESS',
+      entityType: 'USER',
+      entityId: user.Id,
+      user: user.Id,
+      description: `${resolvedUser.FirstName} ${resolvedUser.LastName} logged in`,
+      metadata: { ip: clientIp }
+    });
+
     res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -167,6 +216,18 @@ exports.logout = async (req, res) => {
   try {
     const pool = await getPool();
     await pool.request().input('id', sql.VarChar, req.userId).query('UPDATE Users SET RefreshToken = NULL WHERE Id = @id');
+    
+    // Log Logout
+    if (req.userId) {
+      await SystemLogService.log({
+        type: 'AUTH_LOGOUT',
+        entityType: 'USER',
+        entityId: req.userId,
+        user: req.userId,
+        description: 'User logged out'
+      });
+    }
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false });

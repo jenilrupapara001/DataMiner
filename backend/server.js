@@ -160,8 +160,27 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Error handling
-app.use((err, req, res, next) => {
+app.use(async (err, req, res, next) => {
   console.error('🚨 [GLOBAL ERROR]:', err.stack);
+  
+  try {
+    const SystemLogService = require('./services/SystemLogService');
+    await SystemLogService.log({
+      type: 'SYSTEM_ERROR',
+      entityType: 'SERVER',
+      user: req.userId || null,
+      description: `Global Error: ${err.message}`,
+      metadata: {
+        stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip || req.headers['x-forwarded-for']
+      }
+    });
+  } catch (logErr) {
+    // Don't let logging failure mask original error
+  }
+
   res.status(500).json({
     error: 'Internal server error',
     message: err.message

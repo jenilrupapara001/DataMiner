@@ -8,6 +8,7 @@ import ReviewModal from '../components/actions/ReviewModal';
 import { Plus, CheckCircle, Clock, Calendar, AlertTriangle, List, BarChart2, TrendingUp, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import TasksOperationsPage from './TasksOperationsPage';
 
 const TasksPage = () => {
   const { user: currentUser } = useAuth();
@@ -575,6 +576,8 @@ const TasksPage = () => {
               <span className="visually-hidden">Loading...</span>
             </div>
           </div>
+        ) : viewMode === 'OPERATIONS' ? (
+          <TasksOperationsPage isEmbedded={true} />
         ) : (
           <ActionListEnhanced
             objectives={objectives}

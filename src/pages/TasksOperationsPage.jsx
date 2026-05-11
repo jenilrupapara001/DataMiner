@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 
-const TasksOperationsPage = () => {
+const TasksOperationsPage = ({ isEmbedded = false }) => {
     const [actions, setActions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -25,16 +25,23 @@ const TasksOperationsPage = () => {
     const currentUser = db.getUser();
 
     if (loading && actions.length === 0) {
-        return <PageLoader message="Loading Tasks Operations..." />;
+        return isEmbedded ? (
+            <div className="text-center py-5">
+                <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading Operations...</span>
+                </div>
+            </div>
+        ) : (
+            <PageLoader message="Loading Tasks Operations..." />
+        );
     }
 
     const loadTasks = async () => {
         setLoading(true);
         try {
             const res = await db.getActions();
-            if (res && res.success) {
-                setActions(res.data);
-            }
+            const loadedActions = res?.data || (Array.isArray(res) ? res : []);
+            setActions(loadedActions);
 
             // Fetch Users & ASINs
             const usersRes = await db.getUsers();
@@ -56,7 +63,7 @@ const TasksOperationsPage = () => {
     const filteredActions = actions.filter(action => {
         const matchesStatus = filterStatus ? action.status === filterStatus : true;
         const matchesSearch = searchQuery
-            ? action.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            ? action.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             action.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             action.sellerId?.name?.toLowerCase().includes(searchQuery.toLowerCase())
             : true;
@@ -150,24 +157,26 @@ const TasksOperationsPage = () => {
     };
 
     return (
-        <div className="container-fluid p-4">
-            {loading && (
+        <div className={isEmbedded ? "" : "container-fluid p-4"}>
+            {loading && !isEmbedded && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
                     <LoadingIndicator type="line-simple" size="md" />
                 </div>
             )}
-            <header className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h1 className="fw-bold h2 mb-1">Task Operations</h1>
-                    <p className="text-muted small">Flat execution view for all tactical actions</p>
-                </div>
-                <button
-                    className="btn btn-primary rounded-pill px-4 d-flex align-items-center gap-2"
-                    onClick={() => { setEditingAction(null); setIsActionModalOpen(true); }}
-                >
-                    <Plus size={18} /> Create Task
-                </button>
-            </header>
+            {!isEmbedded && (
+                <header className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h1 className="fw-bold h2 mb-1">Task Operations</h1>
+                        <p className="text-muted small">Flat execution view for all tactical actions</p>
+                    </div>
+                    <button
+                        className="btn btn-primary rounded-pill px-4 d-flex align-items-center gap-2"
+                        onClick={() => { setEditingAction(null); setIsActionModalOpen(true); }}
+                    >
+                        <Plus size={18} /> Create Task
+                    </button>
+                </header>
+            )}
 
             <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
                 <div className="card-body">

@@ -33,6 +33,11 @@ const ActivityLog = () => {
             case 'UPDATE': return <Edit3 size={16} className="text-primary" />;
             case 'DELETE': return <Trash2 size={16} className="text-danger" />;
             case 'STATUS_CHANGE': return <CheckCircle size={16} className="text-info" />;
+            case 'AUTH_SUCCESS': return <CheckCircle size={16} className="text-success" />;
+            case 'AUTH_FAILURE': return <Trash2 size={16} className="text-danger" />;
+            case 'AUTH_LOGOUT': return <ArrowRight size={16} className="text-secondary" />;
+            case 'SYSTEM_ERROR': return <Activity size={16} className="text-danger" />;
+            case 'IMPORT': return <ClipboardList size={16} className="text-info" />;
             default: return <ClipboardList size={16} className="text-muted" />;
         }
     };
@@ -42,11 +47,16 @@ const ActivityLog = () => {
             OBJECTIVE: 'bg-primary-subtle text-primary border-primary-subtle',
             KR: 'bg-info-subtle text-info border-info-subtle',
             ACTION: 'bg-warning-subtle text-warning border-warning-subtle',
-            SYSTEM: 'bg-secondary-subtle text-secondary border-secondary-subtle'
+            SYSTEM: 'bg-secondary-subtle text-secondary border-secondary-subtle',
+            USER: 'bg-dark-subtle text-dark border-dark-subtle',
+            SERVER: 'bg-danger-subtle text-danger border-danger-subtle',
+            SELLER: 'bg-success-subtle text-success border-success-subtle',
+            ASIN: 'bg-primary-subtle text-primary border-primary-subtle',
+            MONTHLY_DATA: 'bg-info-subtle text-info border-info-subtle'
         };
         return (
             <span className={`badge border ${styles[type] || styles.SYSTEM}`} style={{ fontSize: '10px' }}>
-                {type}
+                {type || 'SYSTEM'}
             </span>
         );
     };
@@ -120,6 +130,10 @@ const ActivityLog = () => {
                                      <option value="CREATE">Creation</option>
                                      <option value="UPDATE">Updates</option>
                                      <option value="DELETE">Deletions</option>
+                                      <option value="IMPORT">Data Imports</option>
+                                      <option value="AUTH_SUCCESS">Successful Logins</option>
+                                      <option value="AUTH_FAILURE">Login Failures</option>
+                                      <option value="SYSTEM_ERROR">System Errors</option>
                                      <option value="STATUS_CHANGE">Status Changes</option>
                                  </select>
                              </div>

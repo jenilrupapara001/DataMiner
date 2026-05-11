@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const marketDataSyncService = require('../services/marketDataSyncService');
+const SystemLogService = require('../services/SystemLogService');
 
 /**
  * Enrich sellers with their assigned managers.
@@ -247,7 +248,17 @@ exports.createSeller = async (req, res) => {
         }
     }
 
-     res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
+    res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
+
+    // Log Action
+    await SystemLogService.log({
+        type: 'CREATE',
+        entityType: 'SELLER',
+        entityId: id,
+        entityTitle: name,
+        user: req.user?._id || req.userId,
+        description: `Created new seller profile: ${name} (${marketplace})`
+    });
 
     if (marketplace) {
       marketDataSyncService.ensureTaskForSeller(id).catch(err => {
@@ -301,6 +312,16 @@ exports.updateSeller = async (req, res) => {
     }
 
     res.json({ success: true });
+
+    // Log Update
+    await SystemLogService.log({
+        type: 'UPDATE',
+        entityType: 'SELLER',
+        entityId: id,
+        entityTitle: name,
+        user: req.user?._id || req.userId,
+        description: `Updated seller profile settings for ${name}`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -321,6 +342,15 @@ exports.deleteSeller = async (req, res) => {
     await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Sellers WHERE Id = @id');
 
     res.json({ message: 'Seller deleted successfully' });
+
+    // Log Delete
+    await SystemLogService.log({
+        type: 'DELETE',
+        entityType: 'SELLER',
+        entityId: id,
+        user: req.user?._id || req.userId,
+        description: `Permanently deleted seller and all cascading associations (ID: ${id})`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

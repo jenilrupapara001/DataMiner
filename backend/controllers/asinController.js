@@ -6,6 +6,7 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const AsinDataParser = require('../services/asinDataParser');
 const LQS = require('../utils/lqs');
+const SystemLogService = require('../services/SystemLogService');
 
 // Helper to safely parse JSON
 const tryParse = (data, fallback = []) => {
@@ -1686,6 +1687,15 @@ exports.bulkUploadAllSellers = async (req, res) => {
                 await updateSellerAsinCount(sellerId, io).catch(console.error);
             }
         }
+
+        // Log activity
+        await SystemLogService.log({
+            type: 'IMPORT',
+            entityType: 'ASIN',
+            user: req.user?._id || req.userId,
+            description: `Global bulk ASIN import processed`,
+            metadata: { created, updated, errorCount: errors.length }
+        });
 
         res.json({
             success: true,

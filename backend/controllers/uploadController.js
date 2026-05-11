@@ -2,6 +2,7 @@ const XLSX = require("xlsx");
 const fs = require("fs");
 const { sql, getPool, generateId } = require('../database/db');
 const marketDataSyncService = require("../services/marketDataSyncService");
+const SystemLogService = require('../services/SystemLogService');
 
 // Helper: find a value in row by possible keys
 const findValue = (row, fields) => {
@@ -148,6 +149,16 @@ exports.uploadMonthlyData = async (req, res) => {
     }
 
     fs.unlinkSync(filePath);
+
+    // Log activity
+    await SystemLogService.log({
+      type: 'IMPORT',
+      entityType: 'MONTHLY_DATA',
+      user: req.user?._id || req.userId,
+      description: `Uploaded monthly data report for ${month}`,
+      metadata: { inserted, skipped, errors }
+    });
+
     res.json({
       success: true,
       inserted,
