@@ -8,7 +8,7 @@ echo "🔧 RetailOps VPS First-Time Setup"
 echo "=============================="
 
 # Config
-APP_DIR="/var/www/retailops"
+APP_DIR="/var/www/retail-ops"
 GIT_REPO="https://github.com/jenilrupapara001/DataMiner.git"
 BRANCH="main"
 

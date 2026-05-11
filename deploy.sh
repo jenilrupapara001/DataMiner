@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Config
-APP_DIR="/var/www/retailops"
+APP_DIR="/var/www/retail-ops"
 BACKEND_DIR="$APP_DIR/backend"
 FRONTEND_DIR="$APP_DIR" # Frontend is in the root directory
 

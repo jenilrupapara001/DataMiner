@@ -91,7 +91,7 @@ jobs:
             set -e
             
             # Set default APP_DIR if not defined in environment
-            DEPLOY_PATH=${{ secrets.APP_PATH || '/var/www/retailops' }}
+            DEPLOY_PATH=${{ secrets.APP_PATH || '/var/www/retail-ops' }}
             
             echo "📂 Navigating to deploy path: \$DEPLOY_PATH"
             cd \$DEPLOY_PATH || { echo "Directory \$DEPLOY_PATH not found!"; exit 1; }
