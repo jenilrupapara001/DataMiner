@@ -69,43 +69,41 @@ jobs:
     needs: lint
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
+      - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.VPS_SSH_KEY }}
           known_hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
+          config: |
+            Host deploy-target
+              HostName ${{ secrets.VPS_HOST }}
+              User ${{ secrets.VPS_USER }}
+              IdentityFile ~/.ssh/id_rsa
+              StrictHostKeyChecking accept-new
+
+      - name: Verify SSH connection
+        run: ssh deploy-target "echo SSH connection successful"
 
       - name: Execute Deploy Script on Remote VPS
         run: |
-          echo "🚀 Connecting to VPS to execute centralized deploy script..."
-          
-          # Extract branch name
           BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})
-          
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOSSH
+          echo "🚀 Deploying branch: $BRANCH_NAME"
+
+          ssh deploy-target bash -s << 'EOSSH'
             set -e
-            
-            # Set default APP_DIR if not defined in environment
-            DEPLOY_PATH=${{ secrets.APP_PATH || '/var/www/retail-ops' }}
-            
-            echo "📂 Navigating to deploy path: \$DEPLOY_PATH"
-            cd \$DEPLOY_PATH || { echo "Directory \$DEPLOY_PATH not found!"; exit 1; }
-            
-            # Fetch latest fetch references without losing changes
+            DEPLOY_PATH=/var/www/retail-ops
+            echo "📂 Navigating to $DEPLOY_PATH"
+            cd "$DEPLOY_PATH" || { echo "Directory $DEPLOY_PATH not found!"; exit 1; }
+
             git fetch origin
-            
-            # Make sure deploy.sh from the target branch will run
-            git checkout origin/\$BRANCH_NAME -- deploy.sh
+            git checkout "origin/$BRANCH_NAME" -- deploy.sh
             chmod +x deploy.sh
-            
-            echo "🛠️ Executing standardized deploy.sh script..."
-            ./deploy.sh -b \$BRANCH_NAME
-            
+            ./deploy.sh -b "$BRANCH_NAME"
+
             echo "✅ Deployment complete!"
           EOSSH
 
