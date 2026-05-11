@@ -2089,61 +2089,127 @@ const AsinManagerPage = () => {
           </div>
 
           <div className="d-flex align-items-center gap-2">
+            {/* UNIFIED ACTIONS & FILTERS DROPDOWN */}
             <div className="position-relative" ref={actionsRef}>
               <button
-                className={`btn btn-xs d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm transition-all ${selectedIds.size > 0 ? 'btn-amber-50 text-amber-900 border-amber-200' : 'btn-zinc-100 text-zinc-500 border-zinc-200'}`}
+                className={`btn btn-xs d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm transition-all bg-white border border-zinc-200 hover-bg-zinc-50 ${selectedIds.size > 0 ? 'text-amber-700' : 'text-zinc-700'}`}
                 onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-                disabled={selectedIds.size === 0}
-                style={{ fontSize: '11px', fontWeight: 700 }}
+                style={{ fontSize: '11px', fontWeight: 700, background: selectedIds.size > 0 ? '#fffbeb' : '#ffffff' }}
               >
-                <SlidersHorizontal size={12} />
-                <span>Actions ({selectedIds.size})</span>
+                <SlidersHorizontal size={12} className={selectedIds.size > 0 ? "text-amber-500" : "text-zinc-500"} />
+                <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
                 <ChevronDown size={12} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
               </button>
 
               {showActionsDropdown && (
-                <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '200px' }}>
+                <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
                   <div className="px-3 py-2 border-bottom mb-1">
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Dispute Management</span>
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
                   </div>
                   <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
-                    onClick={() => handleBulkPriceDispute(true)}
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => {
+                      const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
+                      setAppliedFilters(newFilters);
+                      setFilters(newFilters);
+                      setShowActionsDropdown(false);
+                    }}
                     style={{ fontSize: '12px', fontWeight: 500 }}
                   >
-                    <AlertTriangle size={14} className="text-amber-500" />
-                    Mark as Price Dispute
+                    <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
+                    {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
                   </button>
                   <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
-                    onClick={() => handleBulkPriceDispute(false)}
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => {
+                      const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
+                      setAppliedFilters(newFilters);
+                      setFilters(newFilters);
+                      setShowActionsDropdown(false);
+                    }}
                     style={{ fontSize: '12px', fontWeight: 500 }}
                   >
-                    <RefreshCw size={14} className="text-emerald-500" />
-                    Resolve Dispute
+                    <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
+                    {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
                   </button>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => {
+                      const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
+                      setAppliedFilters(newFilters);
+                      setFilters(newFilters);
+                      setShowActionsDropdown(false);
+                    }}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
+                    {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
+                  </button>
+
                   <div className="px-3 py-2 border-top border-bottom my-1">
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Ruleset Automation</span>
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
                   </div>
                   <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
-                    onClick={handleRunRulesets}
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => {
+                      setShowAllBsrHistory(true);
+                      setShowActionsDropdown(false);
+                    }}
                     style={{ fontSize: '12px', fontWeight: 500 }}
                   >
-                    <PlayCircle size={14} className="text-indigo-500" />
-                    Run Rulesets on Selected
+                    <BarChart2 size={14} className="text-indigo-500" />
+                    BSR Ranking Matrix
                   </button>
-                  <div className="px-3 py-2 border-top border-bottom my-1">
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Manual Task Creation</span>
-                  </div>
                   <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50"
-                    onClick={handleOpenTaskModal}
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => {
+                      setShowAllRatingHistory(true);
+                      setShowActionsDropdown(false);
+                    }}
                     style={{ fontSize: '12px', fontWeight: 500 }}
                   >
-                    <PlusCircle size={14} className="text-emerald-500" />
-                    Create Task for Selected
+                    <LayoutGrid size={14} className="text-purple-500" />
+                    Rating Analytics
                   </button>
+
+                  <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
+                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
+                    {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
+                  </div>
+                  <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
+                    <button
+                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                      onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
+                      style={{ fontSize: '12px', fontWeight: 500 }}
+                    >
+                      <AlertTriangle size={14} className="text-amber-500" />
+                      Mark as Price Dispute
+                    </button>
+                    <button
+                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                      onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
+                      style={{ fontSize: '12px', fontWeight: 500 }}
+                    >
+                      <RefreshCw size={14} className="text-emerald-500" />
+                      Resolve Dispute
+                    </button>
+                    <button
+                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                      onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
+                      style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
+                    >
+                      <PlayCircle size={14} className="text-indigo-500" />
+                      Run Rulesets on Selected
+                    </button>
+                    <button
+                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                      onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
+                      style={{ fontSize: '12px', fontWeight: 500 }}
+                    >
+                      <PlusCircle size={14} className="text-emerald-500" />
+                      Create Task for Selected
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
