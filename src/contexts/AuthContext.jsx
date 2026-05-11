@@ -81,14 +81,14 @@ export const AuthProvider = ({ children }) => {
 
             // If the login response already includes the permissions array, use it immediately.
             if (normalized.permissions && normalized.permissions.length > 0) {
-                // Already have permissions – no extra loading
-                setUser(normalized);
+                // Store first then trigger reactivity
                 localStorage.setItem('authToken', accessToken);
                 localStorage.setItem('user', JSON.stringify(normalized));
+                setUser(normalized);
             } else {
                 // Permissions missing – fetch them now
-                setUser(normalized);                // set user without permissions
                 localStorage.setItem('authToken', accessToken);
+                setUser(normalized);                // set user without permissions
                 setLoadingPermissions(true);        // start permission loading
                 try {
                     const meRes = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/me`, {

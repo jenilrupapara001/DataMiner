@@ -318,6 +318,192 @@ exports.getCategories = async (req, res) => {
 /**
  * Global search across ASINs and sellers
  */
+/**
+ * Dynamic fetcher for Ads Manager Datatable with full aggregations
+ */
+exports.getAdsManagerData = async (req, res) => {
+    try {
+        const { groupBy = 'asin', startDate, endDate, search } = req.query;
+        const pool = await getPool();
+
+        // 1. Subquery to find the last 14 days of date range to pull history accurately
+        const dateLimit = startDate ? new Date(startDate) : new Date();
+        if (!startDate) dateLimit.setDate(dateLimit.getDate() - 14);
+
+        let whereClause = 'WHERE 1=1';
+        const request = pool.request();
+
+        if (startDate) {
+            whereClause += " AND p.Date >= @startDate";
+            request.input('startDate', sql.Date, new Date(startDate));
+        } else {
+            whereClause += " AND p.Date >= DATEADD(day, -30, GETDATE())"; // default to 30d
+        }
+        if (endDate) {
+            whereClause += " AND p.Date <= @endDate";
+            request.input('endDate', sql.Date, new Date(endDate));
+        }
+        
+        if (search) {
+            whereClause += " AND (p.Asin LIKE @search OR a.Sku LIKE @search OR a.Title LIKE @search)";
+            request.input('search', sql.VarChar, `%${search}%`);
+        }
+
+        // Fetch raw data JOINED with parent-asin info
+        const result = await request.query(`
+            SELECT 
+                p.*,
+                a.ParentAsin,
+                a.Title,
+                a.ImageUrl,
+                a.Sku as MasterSku,
+                a.Category,
+                a.Brand
+            FROM AdsPerformance p
+            LEFT JOIN Asins a ON p.Asin = a.AsinCode
+            ${whereClause}
+            ORDER BY p.Date DESC
+        `);
+
+        const rawData = result.recordset;
+
+        // Process aggregation map based on requested 'groupBy' (asin OR parent)
+        const groupMap = {};
+
+        rawData.forEach(row => {
+            // Resolve core key
+            let key;
+            if (groupBy === 'parent') {
+                key = row.ParentAsin || row.Asin; // Fallback to child if no parent assigned
+            } else {
+                key = row.Asin;
+            }
+
+            if (!groupMap[key]) {
+                groupMap[key] = {
+                    id: key,
+                    asin: groupBy === 'parent' ? null : row.Asin,
+                    parentAsin: row.ParentAsin || row.Asin,
+                    isParentView: groupBy === 'parent',
+                    sku: row.AdvertisedSku || row.MasterSku || 'N/A',
+                    title: row.Title || 'Unknown Title',
+                    imageUrl: row.ImageUrl || '',
+                    category: row.Category,
+                    brand: row.Brand,
+                    
+                    // High level stats for table columns
+                    impressions: 0,
+                    clicks: 0,
+                    spend: 0,
+                    sales: 0,
+                    orders: 0,
+                    conversions: 0,
+                    organicSales: 0,
+                    organicOrders: 0,
+                    pageViews: 0,
+                    sessions: 0,
+                    
+                    // Storage for child breakdown if grouping by parent
+                    associatedAsins: new Set(),
+
+                    // Storage for timeline building
+                    historyData: {} 
+                };
+            }
+
+            const target = groupMap[key];
+            
+            // Sum cumulative values for simple columns
+            target.impressions += Number(row.Impressions || 0);
+            target.clicks += Number(row.Clicks || 0);
+            target.spend += Number(row.AdSpend || 0);
+            target.sales += Number(row.AdSales || 0);
+            target.orders += Number(row.Orders || 0);
+            target.conversions += Number(row.Conversions || 0);
+            target.organicSales += Number(row.OrganicSales || 0);
+            target.organicOrders += Number(row.OrganicOrders || 0);
+            target.pageViews += Number(row.PageViews || 0);
+            target.sessions += Number(row.Sessions || 0);
+
+            if (groupBy === 'parent') {
+                target.associatedAsins.add(row.Asin);
+            }
+
+            // Capture distinct daily values for sparklines/history
+            const dStr = row.Date ? row.Date.toISOString().substring(0, 10) : 'Unknown';
+            if (!target.historyData[dStr]) {
+                target.historyData[dStr] = {
+                    date: dStr,
+                    impressions: 0,
+                    clicks: 0,
+                    spend: 0,
+                    sales: 0,
+                    orders: 0,
+                    organicSales: 0,
+                    pageViews: 0,
+                    conversions: 0
+                };
+            }
+            
+            // Aggregate into history day slot (e.g. if multiple asins combine onto 1 parent date)
+            const daySlot = target.historyData[dStr];
+            daySlot.impressions += Number(row.Impressions || 0);
+            daySlot.clicks += Number(row.Clicks || 0);
+            daySlot.spend += Number(row.AdSpend || 0);
+            daySlot.sales += Number(row.AdSales || 0);
+            daySlot.orders += Number(row.Orders || 0);
+            daySlot.organicSales += Number(row.OrganicSales || 0);
+            daySlot.pageViews += Number(row.PageViews || 0);
+            daySlot.conversions += Number(row.Conversions || 0);
+        });
+
+        // Final transformation & calculation step (Calculated Rates like ACOS, ROAS, CVR)
+        const finalRows = Object.values(groupMap).map(item => {
+            // Simple calculated metrics totals
+            item.acos = item.sales > 0 ? (item.spend / item.sales) * 100 : 0;
+            item.roas = item.spend > 0 ? (item.sales / item.spend) : 0;
+            item.cvr = item.clicks > 0 ? (item.orders / item.clicks) * 100 : 0;
+            item.ctr = item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0;
+            item.cpc = item.clicks > 0 ? (item.spend / item.clicks) : 0;
+
+            if (item.isParentView) {
+                item.childCount = item.associatedAsins.size;
+                item.asin = Array.from(item.associatedAsins).join(', '); // Display list or generic label
+                delete item.associatedAsins;
+            }
+
+            // Flatten and sort daily history objects
+            const flatHistory = Object.values(item.historyData).sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Inject daily-calculated percentages (Acos per day etc)
+            flatHistory.forEach(h => {
+                h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
+                h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
+                h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
+            });
+
+            item.history = flatHistory;
+            
+            // Create "weekHistory" proxy that clones flatHistory so front-end code 
+            // logic loops flawlessly over the days just like standard ASIN manager.
+            item.weekHistory = flatHistory;
+            
+            delete item.historyData;
+            return item;
+        });
+
+        res.json({
+            success: true,
+            total: finalRows.length,
+            data: finalRows
+        });
+
+    } catch (error) {
+        console.error('getAdsManagerData error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 exports.globalSearch = async (req, res) => {
     try {
         const { q } = req.query;

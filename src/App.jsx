@@ -32,6 +32,7 @@ const RulesetBuilderPage = lazy(() => import('./pages/RulesetBuilderPage'));
 const ProfitLossPage = lazy(() => import('./pages/ProfitLossPage'));
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AsinManagerPage = lazy(() => import('./pages/AsinManagerPage'));
+const AdsManagerPage = lazy(() => import('./pages/AdsManagerPage'));
 const ActionsPage = lazy(() => import('./pages/ActionsPage.jsx'));
 const SellerAsinTrackerPage = lazy(() => import('./pages/SellerAsinTrackerPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
@@ -128,6 +129,7 @@ function AppRoutes() {
                   <Route path="/month-wise-report" element={<ProtectedRoute permission="monthlyreport_view"><MonthWiseReport /></ProtectedRoute>} />
                   <Route path="/ads-report" element={<ProtectedRoute permission="adsreport_view"><AdsReport /></ProtectedRoute>} />
                   <Route path="/asin-tracker" element={<ProtectedRoute permission="asinmanager_view"><AsinManagerPage /></ProtectedRoute>} />
+                  <Route path="/ads-manager" element={<ProtectedRoute permission="adsreport_view"><AdsManagerPage /></ProtectedRoute>} />
                   <Route path="/profit-loss" element={<ProtectedRoute permission="pnlreport_view"><ProfitLossPage /></ProtectedRoute>} />
                   <Route path="/inventory" element={<ProtectedRoute permission="inventoryreport_view"><InventoryPage /></ProtectedRoute>} />
                   <Route path="/actions" element={<ProtectedRoute permission="actions_view"><ActionsPage /></ProtectedRoute>} />

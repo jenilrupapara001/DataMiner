@@ -1509,3 +1509,13 @@ export const exportApi = {
         return res.blob();
     }
 };
+
+export const adsApi = {
+    getAdsManagerData: async (params = {}) => {
+        const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
+            if (val !== undefined && val !== null && val !== '') acc[key] = val;
+            return acc;
+        }, {});
+        return api.get('/data/ads-manager', cleanParams);
+    }
+};

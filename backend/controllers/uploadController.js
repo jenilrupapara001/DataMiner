@@ -380,6 +380,12 @@ exports.uploadAdsData = async (req, res) => {
 
             await request.query(query);
           }
+
+          // MARK ASIN as having ads in main Asins table
+          await transaction.request()
+            .input('asinCode', sql.VarChar, asin)
+            .query('UPDATE Asins SET Ads = 1 WHERE AsinCode = @asinCode');
+
           processed++;
         } catch (e) {
           errors++;

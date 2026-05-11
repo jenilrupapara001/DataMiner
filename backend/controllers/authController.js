@@ -90,7 +90,12 @@ exports.login = async (req, res) => {
       .input('email', sql.NVarChar, email)
       .query('SELECT * FROM Users WHERE Email = @email');
 
-    if (result.recordset.length === 0) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    if (result.recordset.length === 0) {
+      console.warn(`[AUTH_FAILURE] Account not found. Email: ${email} | IP: ${clientIp}`);
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
     const user = result.recordset[0];
 
     if (user.LockUntil && new Date(user.LockUntil) > new Date()) {
@@ -111,6 +116,7 @@ exports.login = async (req, res) => {
         .input('lockUntil', sql.DateTime, lockUntil)
         .query('UPDATE Users SET LoginAttempts = @attempts, LockUntil = @lockUntil WHERE Id = @id');
       
+      console.warn(`[AUTH_FAILURE] Password mismatch. Email: ${email} | IP: ${clientIp} | Attempt: ${attempts}`);
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 

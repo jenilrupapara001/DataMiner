@@ -43,7 +43,7 @@ const LoginPage = () => {
         const result = await login(formData.email.trim(), formData.password);
 
         if (result.success) {
-            navigate('/');
+            window.location.href = '/';
         } else {
             setError(result.error || 'Login failed. Please try again.');
         }
