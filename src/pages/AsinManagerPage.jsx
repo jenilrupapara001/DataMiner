@@ -2090,6 +2090,34 @@ const AsinManagerPage = () => {
           </div>
 
           <div className="d-flex align-items-center gap-2">
+            {/* MARKETPLACE SWITCHER */}
+            <div className="d-flex bg-zinc-100 p-1 rounded-3 shadow-sm" style={{ height: '36px', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMarketplaceFilter('amazon.in');
+                  loadData(1, pagination.limit, selectedSeller, 'amazon.in');
+                }}
+                className={`px-4 border-0 rounded-2 d-flex align-items-center justify-content-center transition-all ${marketplaceFilter === 'amazon.in' || marketplaceFilter === 'all' ? 'bg-white shadow-sm' : 'bg-transparent'}`}
+                style={{ minWidth: '100px', height: '100%' }}
+                title="Amazon"
+              >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', filter: (marketplaceFilter === 'amazon.in' || marketplaceFilter === 'all') ? 'none' : 'grayscale(100%) brightness(20%) opacity(0.6)' }} alt="Amazon" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMarketplaceFilter('ajio');
+                  loadData(1, pagination.limit, selectedSeller, 'ajio');
+                }}
+                className={`px-4 border-0 rounded-2 d-flex align-items-center justify-content-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white shadow-sm' : 'bg-transparent'}`}
+                style={{ minWidth: '100px', height: '100%' }}
+                title="Ajio"
+              >
+                <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '14px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) brightness(20%) opacity(0.6)' }} alt="Ajio" />
+              </button>
+            </div>
+
             {/* UNIFIED ACTIONS & FILTERS DROPDOWN */}
             <div className="position-relative" ref={actionsRef}>
               <button
@@ -2389,23 +2417,7 @@ const AsinManagerPage = () => {
                     placeholder="All Sellers"
                   />
                 </div>
-                <div style={{ width: '120px' }}>
-                  <select
-                    className="form-select form-select-xs bg-zinc-50 border-zinc-200 shadow-none rounded-2 smallest fw-semibold text-zinc-700"
-                    style={{ height: '26px', fontSize: '11px', padding: '0 8px' }}
-                    value={marketplaceFilter}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setMarketplaceFilter(val);
-                      loadData(1, pagination.limit, selectedSeller, val);
-                    }}
-                  >
-                    {canAccessAmazon && canAccessAjio && <option value="all">All Markets</option>}
-                    {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
-                    {canAccessAmazon && <option value="amazon.com">Amazon.com</option>}
-                    {canAccessAjio && <option value="ajio">Ajio</option>}
-                  </select>
-                </div>
+
 
                 {/* Scrape Progress */}
                 {scrapeProgress && (

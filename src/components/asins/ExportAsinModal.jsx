@@ -84,6 +84,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
   const [exportProgress, setExportProgress] = useState(0);
   const [error, setError] = useState(null);
   const [exportType, setExportType] = useState(selectedIds.length > 0 ? 'selected' : 'filtered');
+  const [marketplace, setMarketplace] = useState('amazon');
   
   // ===== EFFECTS =====
   useEffect(() => {
@@ -91,6 +92,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
       fetchSellers();
       setStep(1); setError(null); setExportProgress(0);
       setSelectedSellerIds(selectedSeller ? [selectedSeller] : []);
+      setMarketplace('amazon');
     }
   }, [isOpen, selectedSeller]);
 
@@ -112,12 +114,18 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     } catch (err) { console.error(err); }
   };
 
-  // ===== COMPUTED =====
+  const currentMarketplaceSellers = useMemo(() => {
+    return sellers.filter(s => {
+      const m = (s.marketplace || '').toLowerCase();
+      return marketplace === 'ajio' ? m === 'ajio' : m !== 'ajio';
+    });
+  }, [sellers, marketplace]);
+
   const filteredSellers = useMemo(() => {
-    if (!sellerSearch.trim()) return sellers;
+    if (!sellerSearch.trim()) return currentMarketplaceSellers;
     const q = sellerSearch.toLowerCase();
-    return sellers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.sellerId || '').toLowerCase().includes(q));
-  }, [sellers, sellerSearch]);
+    return currentMarketplaceSellers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.sellerId || '').toLowerCase().includes(q));
+  }, [currentMarketplaceSellers, sellerSearch]);
 
   const filteredFields = useMemo(() => {
     let fields = fieldCategoryFilter === 'All' ? ALL_ASIN_FIELDS : ALL_ASIN_FIELDS.filter(f => f.category === fieldCategoryFilter);
@@ -128,12 +136,25 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     return fields;
   }, [fieldCategoryFilter, fieldSearch]);
 
-  const isAllSellersSelected = sellers.length > 0 && selectedSellerIds.length === sellers.length;
+  const isAllSellersSelected = currentMarketplaceSellers.length > 0 && 
+    currentMarketplaceSellers.every(s => selectedSellerIds.includes(s._id || s.Id));
   const isAllFieldsSelected = selectedFields.length === ALL_ASIN_FIELDS.length;
 
   // ===== HANDLERS =====
   const toggleSeller = (id) => setSelectedSellerIds(p => p.includes(id) ? p.filter(i => i !== id) : [...p, id]);
-  const toggleAllSellers = () => isAllSellersSelected ? setSelectedSellerIds([]) : setSelectedSellerIds(sellers.map(s => s._id || s.Id));
+  
+  const toggleAllSellers = () => {
+    if (isAllSellersSelected) {
+      // Remove ALL current marketplace sellers from selection
+      const marketIds = currentMarketplaceSellers.map(s => s._id || s.Id);
+      setSelectedSellerIds(p => p.filter(id => !marketIds.includes(id)));
+    } else {
+      // Add ALL current marketplace sellers to selection
+      const marketIds = currentMarketplaceSellers.map(s => s._id || s.Id);
+      setSelectedSellerIds(p => [...new Set([...p, ...marketIds])]);
+    }
+  };
+  
   const toggleField = (key) => setSelectedFields(p => p.includes(key) ? (p.length === 1 ? p : p.filter(f => f !== key)) : [...p, key]);
   const toggleAllFields = () => isAllFieldsSelected ? setSelectedFields(['asinCode','title','currentPrice']) : setSelectedFields(ALL_ASIN_FIELDS.map(f => f.key));
   const selectCategory = (cat) => {
@@ -165,7 +186,6 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
         format: exportFormat,
         dateRange: dateOption,
         sellerIds: selectedSellerIds,
-        allSellers: isAllSellersSelected,
       };
 
       if (exportType === 'selected' && selectedIds.length > 0) {
@@ -377,6 +397,26 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
 
                   {exportType === 'filtered' && (
                   <div className="bg-white rounded-3 border p-4">
+                    {/* Marketplace Switcher */}
+                    <div className="mb-3 bg-zinc-100 p-1 rounded-3 d-flex" style={{ gap: '2px' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setMarketplace('amazon'); setSelectedSellerIds([]); }}
+                        className={`flex-grow-1 py-2 border-0 rounded-2 d-flex align-items-center justify-content-center gap-2 transition-all ${marketplace === 'amazon' ? 'bg-white shadow-sm text-zinc-900 fw-bold' : 'bg-transparent text-zinc-500'}`}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', filter: marketplace === 'amazon' ? 'none' : 'grayscale(100%) brightness(50%)' }} alt="Amazon" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMarketplace('ajio'); setSelectedSellerIds([]); }}
+                        className={`flex-grow-1 py-2 border-0 rounded-2 d-flex align-items-center justify-content-center gap-2 transition-all ${marketplace === 'ajio' ? 'bg-white shadow-sm text-zinc-900 fw-bold' : 'bg-transparent text-zinc-500'}`}
+                        style={{ fontSize: '12px' }}
+                      >
+                        <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '14px', width: 'auto', objectFit: 'contain', filter: marketplace === 'ajio' ? 'none' : 'grayscale(100%) brightness(50%)' }} alt="Ajio" />
+                      </button>
+                    </div>
+
                     <div className="d-flex align-items-center gap-2 mb-3">
                       <Store size={16} className="text-zinc-500" />
                       <span className="fw-bold text-zinc-800" style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
