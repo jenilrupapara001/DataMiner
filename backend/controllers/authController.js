@@ -11,6 +11,13 @@ const generateTokens = (userId) => {
 };
 
 const getResolvedUserResponse = async (user, pool) => {
+  // Fetch role details
+  const roleResult = await pool.request()
+    .input('roleId', sql.VarChar, user.RoleId)
+    .query('SELECT Name, DisplayName FROM Roles WHERE Id = @roleId');
+  
+  const roleInfo = roleResult.recordset[0] || { Name: 'viewer', DisplayName: 'Viewer' };
+
   // Fetch permissions
   const permsResult = await pool.request()
     .input('roleId', sql.VarChar, user.RoleId)
@@ -24,6 +31,10 @@ const getResolvedUserResponse = async (user, pool) => {
     ...user,
     _id: user.Id,
     id: user.Id,
+    role: {
+      Name: roleInfo.Name,
+      DisplayName: roleInfo.DisplayName
+    },
     permissions: permsResult.recordset.map(p => p.Name)
   };
 };
