@@ -426,6 +426,7 @@ exports.getAsins = async (req, res) => {
             parentAsin: a.ParentAsin || '',
             releaseDate: a.ReleaseDate || null,
             marketplace: a.sellerMarketplace || '',
+            Ads: a.Ads ? 1 : 0,
             
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,

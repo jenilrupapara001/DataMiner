@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
   Package,
@@ -19,7 +20,9 @@ import {
   Calendar,
   Layers,
   TrendingUp as TrendUpIcon,
-  FileBarChart
+  FileBarChart,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { adsApi } from '../services/api';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -106,6 +109,145 @@ const MiniSpark = ({ data, color }) => {
   );
 };
 
+// ---------------------------------------------------------
+// Analytics History Modal for viewing full historical breakdown
+// ---------------------------------------------------------
+const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
+  if (!isOpen || !rowData) return null;
+  
+  // Sort history descending (newest first)
+  const fullHistory = [...(rowData.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const modalCss = `
+    .ah-th { background: #f8fafc; color: #475569; font-size: 10px; font-weight: 700; padding: 10px 12px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
+    .ah-td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #000000; font-weight: 500; white-space: nowrap; }
+    .ah-tr:hover td { background-color: #f8fafc; }
+  `;
+
+  return createPortal(
+    <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', zIndex: 99999 }}
+         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <style>{modalCss}</style>
+      
+      <div className="bg-white rounded-3 shadow-lg d-flex flex-column animate__animated animate__fadeInUp animate__faster"
+           style={{ width: '90%', maxWidth: '1100px', height: '80vh', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+        
+        {/* Modal Header */}
+        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
+          <div className="d-flex align-items-center gap-3">
+            {rowData.imageUrl ? (
+              <img src={rowData.imageUrl} alt="" className="rounded-2 border object-fit-contain bg-white" style={{ width: '45px', height: '45px' }} />
+            ) : (
+              <div className="rounded-2 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '45px', height: '45px' }}>
+                <ImageIcon size={20} />
+              </div>
+            )}
+            <div>
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-zinc-900 text-white fw-bold px-2" style={{ fontSize: '11px' }}>{rowData.asin || rowData.id}</span>
+                {rowData.sku && <span className="text-zinc-500 fw-medium" style={{ fontSize: '12px' }}>SKU: {rowData.sku}</span>}
+              </div>
+              <h6 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '600px', fontSize: '14px' }}>{rowData.title || 'Detailed Advertisement Timeline'}</h6>
+            </div>
+          </div>
+          
+          <button className="btn btn-light border p-2 rounded-circle d-flex align-items-center justify-content-center text-zinc-500 hover:bg-zinc-100" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Modal Sub-stats Summary */}
+        <div className="px-4 py-3 bg-light border-bottom d-flex gap-5 overflow-auto shrink-0">
+          <div>
+            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Spend</div>
+            <div className="fw-bold text-dark fs-6">₹{(rowData.spend || 0).toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Sales</div>
+            <div className="fw-bold text-success fs-6">₹{(rowData.sales || 0).toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Blended ACOS</div>
+            <div className="fw-bold text-dark fs-6">{(rowData.acos || 0).toFixed(2)}%</div>
+          </div>
+          <div>
+            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Clicks</div>
+            <div className="fw-bold text-dark fs-6">{(rowData.clicks || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Conversions</div>
+            <div className="fw-bold text-dark fs-6">{(rowData.orders || 0).toLocaleString()}</div>
+          </div>
+          <div className="ms-auto">
+            <div className="badge bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-pill fw-bold" style={{ fontSize: '11px' }}>
+              {fullHistory.length} Days Recorded
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Table Body */}
+        <div className="flex-grow-1 overflow-auto bg-white position-relative">
+          {fullHistory.length === 0 ? (
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-zinc-400">
+              <Calendar size={48} className="mb-3 opacity-20" />
+              <span className="fw-medium">No historical tracking available for this period.</span>
+            </div>
+          ) : (
+            <table className="w-100 border-collapse">
+              <thead>
+                <tr>
+                  <th className="ah-th">Date</th>
+                  <th className="ah-th text-end">Impressions</th>
+                  <th className="ah-th text-end">Clicks</th>
+                  <th className="ah-th text-end">Spend (₹)</th>
+                  <th className="ah-th text-end">Ad Sales (₹)</th>
+                  <th className="ah-th text-end">ACOS (%)</th>
+                  <th className="ah-th text-end">ROAS</th>
+                  <th className="ah-th text-end">Orders</th>
+                  <th className="ah-th text-end">CVR (%)</th>
+                  <th className="ah-th text-end">Page Views</th>
+                  <th className="ah-th text-end">Organic Sales (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fullHistory.map((day, i) => (
+                  <tr key={i} className="ah-tr">
+                    <td className="ah-td text-zinc-600 font-monospace" style={{ fontSize: '11px' }}>
+                      {new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="ah-td text-end">{(day.impressions || 0).toLocaleString()}</td>
+                    <td className="ah-td text-end">{(day.clicks || 0).toLocaleString()}</td>
+                    <td className="ah-td text-end text-danger-emphasis">{(day.spend || 0).toFixed(2)}</td>
+                    <td className="ah-td text-end fw-bold text-success-emphasis">{(day.sales || 0).toFixed(2)}</td>
+                    <td className="ah-td text-end">
+                      <span className={`badge ${(day.acos > 30) ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`} style={{ fontSize: '11px' }}>
+                        {(day.acos || 0).toFixed(2)}%
+                      </span>
+                    </td>
+                    <td className="ah-td text-end">{(day.roas || 0).toFixed(2)}</td>
+                    <td className="ah-td text-end">{(day.orders || 0).toLocaleString()}</td>
+                    <td className="ah-td text-end">{(day.cvr || 0).toFixed(2)}%</td>
+                    <td className="ah-td text-end">{(day.pageViews || 0).toLocaleString()}</td>
+                    <td className="ah-td text-end text-zinc-600">{(day.organicSales || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        
+        {/* Modal Footer */}
+        <div className="px-4 py-2 border-top bg-light d-flex justify-content-end shrink-0">
+          <button className="btn btn-dark btn-sm px-4 fw-bold" style={{ fontSize: '12px' }} onClick={onClose}>Close Window</button>
+        </div>
+
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 export default function AdsManagerPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
@@ -136,6 +278,7 @@ export default function AdsManagerPage() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const fileInputRef = useRef(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [activeHistoryRow, setActiveHistoryRow] = useState(null);
 
   // Handler for quick direct CSV import
   const handleImportClick = () => {
@@ -369,11 +512,19 @@ export default function AdsManagerPage() {
     return (
       <>
         {/* Main Stat Cell */}
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: textCol, background: '#fff' }}>
+        <td 
+          style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: textCol, background: '#fff', cursor: 'pointer' }}
+          onClick={() => setActiveHistoryRow(row)}
+          title="Click to view full history"
+        >
           {formatVal(currentVal)}
         </td>
         {/* Trend Status Cell */}
-        <td style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px' }}>
+        <td 
+          style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px', cursor: 'pointer' }}
+          onClick={() => setActiveHistoryRow(row)}
+          title="Click to view full history"
+        >
           <TrendBadge value={lastHistVal} prevValue={prevHistVal} isInverted={isTrendInverted} />
         </td>
 
@@ -381,7 +532,12 @@ export default function AdsManagerPage() {
         {isExpanded && activeDates.map(d => {
           const val = dateVals[d.raw] || 0;
           return (
-            <td key={d.raw} style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', background: '#fcfcfc', color: '#64748b' }}>
+            <td 
+              key={d.raw} 
+              style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', background: '#fcfcfc', color: '#64748b', cursor: 'pointer' }}
+              onClick={() => setActiveHistoryRow(row)}
+              title="Click to view full history"
+            >
               {formatVal(val)}
             </td>
           );
@@ -598,7 +754,11 @@ export default function AdsManagerPage() {
                   return (
                     <tr key={row.id || idx} className="table-row-hover" style={{ background: rowBg }}>
                       {/* Identifiers (Sticky) */}
-                      <td style={{ ...tdStyle, padding: '4px', position: 'sticky', left: 0, background: rowBg, zIndex: 20, borderRight: '1px solid #f1f5f9' }}>
+                      <td 
+                        style={{ ...tdStyle, padding: '4px', position: 'sticky', left: 0, background: rowBg, zIndex: 20, borderRight: '1px solid #f1f5f9', cursor: 'pointer' }}
+                        onClick={() => setActiveHistoryRow(row)}
+                        title="View Detail History"
+                      >
                         <div style={{ width: '40px', height: '40px', margin: 'auto', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {row.imageUrl ? (
                             <img src={row.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -608,7 +768,11 @@ export default function AdsManagerPage() {
                         </div>
                       </td>
                       
-                      <td style={{ ...tdStyle, position: 'sticky', left: '60px', background: rowBg, zIndex: 19, borderRight: '1px solid #f1f5f9' }}>
+                      <td 
+                        style={{ ...tdStyle, position: 'sticky', left: '60px', background: rowBg, zIndex: 19, borderRight: '1px solid #f1f5f9', cursor: 'pointer' }}
+                        onClick={() => setActiveHistoryRow(row)}
+                        title="View Detail History"
+                      >
                         <div className="d-flex flex-column gap-0.5">
                           <span className="fw-bold text-indigo-600 font-monospace" style={{ fontSize: '10px' }}>
                             {groupBy === 'parent' ? row.parentAsin : row.asin}
@@ -702,6 +866,13 @@ export default function AdsManagerPage() {
           background: #94a3b8;
         }
       `}</style>
+
+      {/* Detailed View Model Portal */}
+      <AdsHistoryModal 
+        isOpen={!!activeHistoryRow} 
+        onClose={() => setActiveHistoryRow(null)} 
+        rowData={activeHistoryRow} 
+      />
     </div>
   );
 }

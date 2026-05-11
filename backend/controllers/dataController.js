@@ -385,7 +385,7 @@ exports.getAdsManagerData = async (req, res) => {
                     asin: groupBy === 'parent' ? null : row.Asin,
                     parentAsin: row.ParentAsin || row.Asin,
                     isParentView: groupBy === 'parent',
-                    sku: row.AdvertisedSku || row.MasterSku || 'N/A',
+                    sku: row.MasterSku || row.AdvertisedSku || 'N/A',
                     title: row.Title || 'Unknown Title',
                     imageUrl: row.ImageUrl || '',
                     category: row.Category,
