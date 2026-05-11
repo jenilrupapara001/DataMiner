@@ -458,13 +458,7 @@ const AsinManagerPage = () => {
   } = useColumnVisibility();
 
   const isVisible = useCallback((key) => {
-    if (marketplaceFilter === 'ajio') {
-      const ajioAllowedColumns = [
-        'checkbox', 'asinCode', 'sellerBrand', 'sku', 'title', 'category', 'tags', 'status', 'mrp', 'price', 'discountPercentage', 'priceTrend',
-        'rating', 'reviewCount', 'ratingTrendStatus', 'ratingTrend', 'reviewTrend', 'imagesCount'
-      ];
-      return ajioAllowedColumns.includes(key);
-    }
+    // Removed restriction for marketplaceFilter === 'ajio' to ensure parity with Amazon datatable.
     
     // For Amazon/General datatables: Show Deal Badge, but hide Discount Percentage as requested
     if (key === 'discountPercentage') return false;
@@ -2603,7 +2597,7 @@ const AsinManagerPage = () => {
                   )}
 
                   {isVisible('mainBsr') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>MAIN BSR</th>}
-                  {isVisible('bsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>CATEGORY RANK</th>}
+                  {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>SUB BSR</th>}
                   {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>BSR TR</th>}
                   {visibleBsrTrendCount > 0 && (
                     <th colSpan={visibleBsrTrendCount}
@@ -2840,28 +2834,34 @@ const AsinManagerPage = () => {
                       {/* ===== PARENT ASIN ===== */}
                       {isVisible('parentAsin') && (
                         <td style={tdStyle}>
-                          <div className="d-flex align-items-center">
-                            {asin.parentAsin || asin.ParentAsin ? (
-                              <span
-                                className="badge font-monospace shadow-sm"
-                                style={{
-                                  backgroundColor: '#1e1b4b',
-                                  color: '#ffffff',
-                                  border: '1px solid #1e1b4b',
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  padding: '5px 10px',
-                                  borderRadius: '6px',
-                                  letterSpacing: '0.05em',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                }}
-                                title="Parent ASIN"
-                              >
-                                {asin.parentAsin || asin.ParentAsin}
-                              </span>
-                            ) : (
-                              <span style={{ color: '#d1d5db' }}>-</span>
-                            )}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            {(() => {
+                              const pAsin = asin.parentAsin || asin.ParentAsin;
+                              if (!pAsin) return <span style={{ color: '#d1d5db' }}>-</span>;
+                              return (
+                                <>
+                                  <span style={{ fontWeight: 600, color: '#2563eb' }}>{pAsin}</span>
+                                  <a
+                                    href={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? `https://www.ajio.com/p/${pAsin}` : `https://www.amazon.in/dp/${pAsin}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open Parent on Ajio" : "Open Parent on Amazon"}
+                                    style={{
+                                      color: '#9ca3af',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      marginLeft: '4px',
+                                      transition: 'color 0.2s'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                                    onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
+                                  >
+                                    <ExternalLink size={13} />
+                                  </a>
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                       )}
@@ -3320,7 +3320,7 @@ const AsinManagerPage = () => {
                             <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
                               {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                             </div>
-                            {asin.category && (
+                            {asin.bsr && asin.category && (
                               <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
                                 in {asin.category}
                               </span>
@@ -3329,7 +3329,7 @@ const AsinManagerPage = () => {
                         </td>
                       )}
 
-                      {isVisible('bsr') && (
+                      {isVisible('subBsr') && (
                         <td style={{ ...tdStyle, width: '120px' }}>
                           {(() => {
                             const subBsrValue = (asin.subBsr && asin.subBsr !== '0' && asin.subBsr !== 0) ? asin.subBsr : ((Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '');

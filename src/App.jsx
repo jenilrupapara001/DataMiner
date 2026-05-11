@@ -111,7 +111,7 @@ function AppRoutes() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
 
         {/* Protected routes with sidebar + header layout */}
         <Route

@@ -651,7 +651,15 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   >
                     {asin.asinCode}
                   </span>
-                  <a href={`https://www.amazon.in/dp/${asin.asinCode}`} target="_blank" rel="noopener noreferrer" className="btn btn-link p-0 text-slate-400 hover:text-indigo-600"><ExternalLink size={16} /></a>
+                  <a
+                    href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : `https://www.amazon.in/dp/${asin.asinCode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-link p-0 text-slate-400 hover:text-indigo-600"
+                    title={asin.marketplace === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
+                  >
+                    <ExternalLink size={16} />
+                  </a>
                 </div>
               </div>
 

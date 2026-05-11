@@ -425,6 +425,7 @@ exports.getAsins = async (req, res) => {
             tags: a.Tags || '[]',
             parentAsin: a.ParentAsin || '',
             releaseDate: a.ReleaseDate || null,
+            marketplace: a.sellerMarketplace || '',
             
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,
@@ -632,6 +633,7 @@ exports.getAsin = async (req, res) => {
       imageUrl: a.ImageUrl,
       tags: a.Tags || '[]',
       parentAsin: a.ParentAsin || '',
+      marketplace: a.sellerMarketplace || '',
       
       currentPrice: parseFloat(a.CurrentPrice) || 0,
       uploadedPrice: parseFloat(a.UploadedPrice) || 0,
@@ -1100,6 +1102,9 @@ exports.updateAsin = async (req, res) => {
 
     if (status && status !== existing.Status) {
       await updateSellerAsinCount(existing.SellerId, req.app.get('io'));
+      if (marketDataSyncService.isConfigured()) {
+        marketDataSyncService.syncSellerAsinsToOctoparse(existing.SellerId, { triggerScrape: true }).catch(console.error);
+      }
     }
 
     res.json({ success: true });
@@ -1866,6 +1871,9 @@ exports.bulkUpdateAsins = async (req, res) => {
       
       for (const sellerId of sellerIds) {
         await updateSellerAsinCount(sellerId, req.app.get('io'));
+        if (updates.status && marketDataSyncService.isConfigured()) {
+          marketDataSyncService.syncSellerAsinsToOctoparse(sellerId, { triggerScrape: true }).catch(console.error);
+        }
       }
     } catch (err) {
       await transaction.rollback();
