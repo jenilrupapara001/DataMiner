@@ -107,6 +107,9 @@ const MiniSpark = ({ data, color }) => {
 };
 
 export default function AdsManagerPage() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState([]);
+  
   // 0. Aggregated summary for Top View
   const summaryData = useMemo(() => {
     const sum = {
@@ -126,9 +129,6 @@ export default function AdsManagerPage() {
     sum.cvr = sum.clicks > 0 ? (sum.orders / sum.clicks) * 100 : 0;
     return sum;
   }, [data]);
-
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState([]);
   
   // Filtering and Grouping States
   const [groupBy, setGroupBy] = useState('asin');

@@ -48,7 +48,8 @@ import {
   Award,
   Filter,
   Tag,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Megaphone
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -2636,6 +2637,7 @@ const AsinManagerPage = () => {
                   {/* ===== STATUS & DEAL COLUMNS (Slate Palette) ===== */}
                   {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>STATUS</th>}
                   {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DB STATUS</th>}
+                  {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>ADS</th>}
                   {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
                   {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
                   {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
@@ -3139,6 +3141,20 @@ const AsinManagerPage = () => {
                           >
                             {(asin.status || 'Active').toUpperCase()}
                           </span>
+                        </td>
+                      )}
+                      {isVisible('ads') && (
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          {asin.Ads ? (
+                            <div className="d-flex align-items-center justify-content-center gap-1" title="Advertising Active">
+                              <span className="badge d-flex align-items-center gap-1 shadow-sm" style={{ backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 6px', fontSize: '0.65rem', fontWeight: 800, borderRadius: '4px' }}>
+                                <Megaphone size={10} />
+                                YES
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                          )}
                         </td>
                       )}
                       {isVisible('dealBadge') && (

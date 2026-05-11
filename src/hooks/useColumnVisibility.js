@@ -43,6 +43,7 @@ export const ALL_COLUMNS = [
   { key: 'reviewTrend', label: 'Review History (7D)', defaultVisible: false, category: 'Trends' },
   
   { key: 'status', label: 'Status', defaultVisible: true, category: 'Info' },
+  { key: 'ads', label: 'Ads Active', defaultVisible: true, category: 'Info' },
   { key: 'availability', label: 'Availability', defaultVisible: false, category: 'Info' },
   { key: 'currentBuybox', label: 'Current BuyBox', defaultVisible: true, category: 'BuyBox' },
   { key: 'otherBuybox', label: 'Other BuyBox', defaultVisible: true, category: 'BuyBox' },
