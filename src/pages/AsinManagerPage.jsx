@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
+import { usePageTitle } from '../contexts/PageTitleContext';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 const AsinDetailModal = lazy(() => import('../components/AsinDetailModal'));
@@ -398,6 +399,12 @@ const AsinManagerPage = () => {
   const [scrapingIds, setScrapingIds] = useState(new Set());
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
+  const { setPageTitle } = usePageTitle();
+
+  useEffect(() => {
+    setPageTitle('ASIN Manager');
+    return () => setPageTitle('');
+  }, [setPageTitle]);
   const [scrapeProgress, setScrapeProgress] = useState(null);
   const socket = useSocket();
   const [selectedAsin, setSelectedAsin] = useState(null);
@@ -2094,204 +2101,7 @@ const AsinManagerPage = () => {
         </>
       )}
 
-      {/* PREMIUM BREADCRUMB BAR / HEADER */}
-      <div className="px-4 py-3 d-flex align-items-center justify-content-between bg-white border-bottom shadow-sm" style={{ zIndex: 20, flexShrink: 0 }}>
-        <div className="d-flex align-items-center gap-3">
-          <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm">
-            <Package size={18} />
-          </div>
-          <div>
-            <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-              <span>Inventory</span> <ChevronRight size={12} /> <span className="text-dark fw-semibold">Catalog</span>
-            </div>
-            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{ fontSize: '1.2rem' }}>ASIN Manager</h4>
-          </div>
-        </div>
-
-        <div className="d-flex align-items-center gap-3">
-          {/* MARKETPLACE SWITCHER */}
-          <div className="d-flex bg-light p-1 rounded-3 border" style={{ height: '36px' }}>
-            <button
-              type="button"
-              onClick={() => {
-                setMarketplaceFilter('amazon.in');
-                loadData(1, pagination.limit, selectedSeller, 'amazon.in');
-              }}
-              className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`}
-              style={{ fontSize: '11px' }}
-            >
-              <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: (marketplaceFilter === 'amazon.in') ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Amazon" />
-
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMarketplaceFilter('ajio');
-                loadData(1, pagination.limit, selectedSeller, 'ajio');
-              }}
-              className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white text-purple-600 shadow-sm' : 'text-secondary'}`}
-              style={{ fontSize: '11px' }}
-            >
-              <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
-
-            </button>
-            {canAccessMyntra && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMarketplaceFilter('myntra');
-                  loadData(1, pagination.limit, selectedSeller, 'myntra');
-                }}
-                className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'myntra' ? 'bg-white text-pink-600 shadow-sm' : 'text-secondary'}`}
-                style={{ fontSize: '11px' }}
-              >
-                <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
-
-              </button>
-            )}
-          </div>
-
-          {/* UNIFIED ACTIONS & FILTERS DROPDOWN */}
-          <div className="position-relative" ref={actionsRef}>
-            <button
-              className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
-              onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-              style={{ fontSize: '11px', height: '36px', background: '#ffffff' }}
-            >
-              <SlidersHorizontal size={14} />
-              <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
-              <ChevronDown size={12} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showActionsDropdown && (
-              <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
-                <div className="px-3 py-2 border-bottom mb-1">
-                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
-                </div>
-                <button
-                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                  onClick={() => {
-                    const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
-                    setAppliedFilters(newFilters);
-                    setFilters(newFilters);
-                    setShowActionsDropdown(false);
-                  }}
-                  style={{ fontSize: '12px', fontWeight: 500 }}
-                >
-                  <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
-                  {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
-                </button>
-                <button
-                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                  onClick={() => {
-                    const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
-                    setAppliedFilters(newFilters);
-                    setFilters(newFilters);
-                    setShowActionsDropdown(false);
-                  }}
-                  style={{ fontSize: '12px', fontWeight: 500 }}
-                >
-                  <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
-                  {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
-                </button>
-                <button
-                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                  onClick={() => {
-                    const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
-                    setAppliedFilters(newFilters);
-                    setFilters(newFilters);
-                    setShowActionsDropdown(false);
-                  }}
-                  style={{ fontSize: '12px', fontWeight: 500 }}
-                >
-                  <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
-                  {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
-                </button>
-
-                <div className="px-3 py-2 border-top border-bottom my-1">
-                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
-                </div>
-                <button
-                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                  onClick={() => {
-                    setShowAllBsrHistory(true);
-                    setShowActionsDropdown(false);
-                  }}
-                  style={{ fontSize: '12px', fontWeight: 500 }}
-                >
-                  <BarChart2 size={14} className="text-indigo-500" />
-                  BSR Ranking Matrix
-                </button>
-                <button
-                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                  onClick={() => {
-                    setShowAllRatingHistory(true);
-                    setShowActionsDropdown(false);
-                  }}
-                  style={{ fontSize: '12px', fontWeight: 500 }}
-                >
-                  <LayoutGrid size={14} className="text-purple-500" />
-                  Rating Analytics
-                </button>
-
-                <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
-                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
-                  {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
-                </div>
-                <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <AlertTriangle size={14} className="text-amber-500" />
-                    Mark as Price Dispute
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <RefreshCw size={14} className="text-emerald-500" />
-                    Resolve Dispute
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
-                    style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
-                  >
-                    <PlayCircle size={14} className="text-indigo-500" />
-                    Run Rulesets on Selected
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <PlusCircle size={14} className="text-emerald-500" />
-                    Create Task for Selected
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={() => setShowDashboard(!showDashboard)} className={`btn ${showDashboard ? 'btn-light' : 'btn-white border'} px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm`} style={{ height: '36px', fontSize: '11px' }}>
-            <Activity size={14} /> {showDashboard ? 'HIDE DASHBOARD' : 'SHOW DASHBOARD'}
-          </button>
-
-          {hasPermission('asinmanager_manage') && (
-            <button
-              className="btn btn-indigo px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm"
-              onClick={() => setShowAddModal(true)}
-              style={{ height: '36px', fontSize: '11px' }}
-            >
-              <Plus size={14} />
-              <span>ADD ASIN</span>
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Relocated header actions to Table Toolbar for dense view UI */}
 
       {/* ANALYTICS MODULE AREA - RECTANGULAR PILLS STYLE */}
       <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
@@ -2432,10 +2242,60 @@ const AsinManagerPage = () => {
                     {pagination.total.toLocaleString()}
                   </span>
                 </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost p-1 ms-1 rounded-circle text-secondary hover-bg-light d-flex align-items-center justify-content-center"
+                  onClick={() => setShowDashboard(!showDashboard)}
+                  style={{ width: '22px', height: '22px', border: 'none' }}
+                  title={showDashboard ? 'Collapse Overview' : 'Expand Overview'}
+                >
+                  {showDashboard ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
               </div>
 
               <div className="d-flex align-items-center gap-2">
-                <div className="input-group input-group-sm" style={{ width: '260px' }}>
+                {/* MARKETPLACE SWITCHER - RELOCATED */}
+                <div className="d-flex bg-light p-0.5 rounded-2 border" style={{ height: '32px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarketplaceFilter('amazon.in');
+                      loadData(1, pagination.limit, selectedSeller, 'amazon.in');
+                    }}
+                    className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`}
+                    style={{ fontSize: '10px' }}
+                  >
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: (marketplaceFilter === 'amazon.in') ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Amazon" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarketplaceFilter('ajio');
+                      loadData(1, pagination.limit, selectedSeller, 'ajio');
+                    }}
+                    className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white text-purple-600 shadow-sm' : 'text-secondary'}`}
+                    style={{ fontSize: '10px' }}
+                  >
+                    <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '9px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
+                  </button>
+                  {canAccessMyntra && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMarketplaceFilter('myntra');
+                        loadData(1, pagination.limit, selectedSeller, 'myntra');
+                      }}
+                      className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'myntra' ? 'bg-white text-pink-600 shadow-sm' : 'text-secondary'}`}
+                      style={{ fontSize: '10px' }}
+                    >
+                      <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                <div className="input-group input-group-sm" style={{ width: '220px' }}>
                   <span className="input-group-text bg-white border-end-0 text-muted pe-1">
                     <Search size={13} />
                   </span>
@@ -2466,6 +2326,131 @@ const AsinManagerPage = () => {
                     }}
                     placeholder="All Sellers"
                   />
+                </div>
+
+                {/* ACTIONS DROPDOWN - RELOCATED AFTER SELLER */}
+                <div className="position-relative" ref={actionsRef}>
+                  <button
+                    className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
+                    onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                    style={{ fontSize: '11px', height: '32px', background: '#ffffff' }}
+                  >
+                    <SlidersHorizontal size={13} />
+                    <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                    <ChevronDown size={11} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showActionsDropdown && (
+                    <div className="position-absolute start-0 mt-1 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
+                      <div className="px-3 py-2 border-bottom mb-1">
+                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
+                      </div>
+                      <button
+                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
+                          setAppliedFilters(newFilters);
+                          setFilters(newFilters);
+                          setShowActionsDropdown(false);
+                        }}
+                        style={{ fontSize: '12px', fontWeight: 500 }}
+                      >
+                        <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
+                        {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
+                      </button>
+                      <button
+                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
+                          setAppliedFilters(newFilters);
+                          setFilters(newFilters);
+                          setShowActionsDropdown(false);
+                        }}
+                        style={{ fontSize: '12px', fontWeight: 500 }}
+                      >
+                        <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
+                        {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
+                      </button>
+                      <button
+                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
+                          setAppliedFilters(newFilters);
+                          setFilters(newFilters);
+                          setShowActionsDropdown(false);
+                        }}
+                        style={{ fontSize: '12px', fontWeight: 500 }}
+                      >
+                        <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
+                        {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
+                      </button>
+
+                      <div className="px-3 py-2 border-top border-bottom my-1">
+                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
+                      </div>
+                      <button
+                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          setShowAllBsrHistory(true);
+                          setShowActionsDropdown(false);
+                        }}
+                        style={{ fontSize: '12px', fontWeight: 500 }}
+                      >
+                        <BarChart2 size={14} className="text-indigo-500" />
+                        BSR Ranking Matrix
+                      </button>
+                      <button
+                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          setShowAllRatingHistory(true);
+                          setShowActionsDropdown(false);
+                        }}
+                        style={{ fontSize: '12px', fontWeight: 500 }}
+                      >
+                        <LayoutGrid size={14} className="text-purple-500" />
+                        Rating Analytics
+                      </button>
+
+                      <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
+                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
+                        {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
+                      </div>
+                      <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
+                        <button
+                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                          onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                        >
+                          <AlertTriangle size={14} className="text-amber-500" />
+                          Mark as Price Dispute
+                        </button>
+                        <button
+                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                          onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                        >
+                          <RefreshCw size={14} className="text-emerald-500" />
+                          Resolve Dispute
+                        </button>
+                        <button
+                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                          onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
+                          style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
+                        >
+                          <PlayCircle size={14} className="text-indigo-500" />
+                          Run Rulesets on Selected
+                        </button>
+                        <button
+                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                          onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                        >
+                          <PlusCircle size={14} className="text-emerald-500" />
+                          Create Task for Selected
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Scrape Progress */}
@@ -2564,6 +2549,16 @@ const AsinManagerPage = () => {
                     title="Import"
                   >
                     <FileUp size={14} className="text-emerald-600" />
+                  </button>
+                )}
+                {hasPermission('asinmanager_manage') && (
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm ms-1"
+                    style={{ width: '32px', height: '32px' }}
+                    title="Add ASIN"
+                  >
+                    <Plus size={14} className="text-indigo-600" />
                   </button>
                 )}
               </div>
