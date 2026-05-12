@@ -429,14 +429,17 @@ const AsinManagerPage = () => {
 
   const canAccessAmazon = isAdmin || hasPermission('marketplace_amazon');
   const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
+  const canAccessMyntra = isAdmin || hasPermission('marketplace_myntra');
 
   useEffect(() => {
-    if (!canAccessAmazon && canAccessAjio && marketplaceFilter !== 'ajio') {
+    if (!canAccessAmazon && !canAccessMyntra && canAccessAjio && marketplaceFilter !== 'ajio') {
       setMarketplaceFilter('ajio');
-    } else if (canAccessAmazon && !canAccessAjio && (marketplaceFilter === 'ajio' || marketplaceFilter === 'all')) {
+    } else if (!canAccessAmazon && !canAccessAjio && canAccessMyntra && marketplaceFilter !== 'myntra') {
+      setMarketplaceFilter('myntra');
+    } else if (canAccessAmazon && !canAccessAjio && !canAccessMyntra && (marketplaceFilter === 'ajio' || marketplaceFilter === 'myntra' || marketplaceFilter === 'all')) {
       setMarketplaceFilter('amazon.in');
     }
-  }, [canAccessAmazon, canAccessAjio, marketplaceFilter]);
+  }, [canAccessAmazon, canAccessAjio, canAccessMyntra, marketplaceFilter]);
 
   const [repairStatus, setRepairStatus] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -746,14 +749,16 @@ const AsinManagerPage = () => {
         if (value === 'false') label = 'No';
 
         badges.push(
-          <div key={key} className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-            <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>{mapping[key]}:</span>
+          <div key={key} className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#f4f4f5', color: '#3f3f46', borderColor: '#e4e4e7', borderRadius: '6px' }}>
+            <span className="fw-bold opacity-70 text-uppercase" style={{ fontSize: '8px', letterSpacing: '0.02em' }}>{mapping[key]}:</span>
             <span className="fw-bold">{label}</span>
             <button
-              className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors"
+              type="button"
+              className="p-0 border-0 bg-transparent d-flex align-items-center hover-text-danger transition-colors"
+              style={{ color: '#9ca3af', cursor: 'pointer', marginLeft: '2px' }}
               onClick={() => removeAppliedFilter(key)}
             >
-              <X size={12} />
+              <X size={11} strokeWidth={2.5} />
             </button>
           </div>
         );
@@ -763,14 +768,16 @@ const AsinManagerPage = () => {
     if (appliedFilters.selectedTags?.length > 0) {
       appliedFilters.selectedTags.forEach(tag => {
         badges.push(
-          <div key={`tag-${tag}`} className="badge bg-indigo-50 text-indigo-700 border border-indigo-100 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-            <Tag size={10} className="opacity-60" />
+          <div key={`tag-${tag}`} className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4338ca', borderColor: '#c7d2fe', borderRadius: '6px' }}>
+            <Tag size={10} className="opacity-80" />
             <span className="fw-bold">{tag}</span>
             <button
-              className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors"
+              type="button"
+              className="p-0 border-0 bg-transparent d-flex align-items-center hover-text-danger transition-colors"
+              style={{ color: '#818cf8', cursor: 'pointer', marginLeft: '2px' }}
               onClick={() => removeAppliedFilter('selectedTags', tag)}
             >
-              <X size={12} />
+              <X size={11} strokeWidth={2.5} />
             </button>
           </div>
         );
@@ -780,14 +787,16 @@ const AsinManagerPage = () => {
     if (selectedSeller) {
       const seller = sellers.find(s => s._id === selectedSeller);
       badges.unshift(
-        <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <Store size={10} className="opacity-60" />
+        <div key="seller" className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#18181b', color: '#ffffff', borderColor: '#18181b', borderRadius: '6px' }}>
+          <Store size={10} className="opacity-80" />
           <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
           <button
-            className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors"
+            type="button"
+            className="p-0 border-0 bg-transparent d-flex align-items-center text-zinc-400 hover-text-white transition-colors"
+            style={{ color: '#a1a1aa', cursor: 'pointer', marginLeft: '2px' }}
             onClick={() => setSelectedSeller('')}
           >
-            <X size={12} />
+            <X size={11} strokeWidth={2.5} />
           </button>
         </div>
       );
@@ -795,14 +804,16 @@ const AsinManagerPage = () => {
 
     if (appliedSearchQuery) {
       badges.unshift(
-        <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <Search size={10} className="opacity-60" />
+        <div key="search" className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#fffbeb', color: '#b45309', borderColor: '#fcd34d', borderRadius: '6px' }}>
+          <Search size={10} className="opacity-80" />
           <span className="fw-bold italic">"{appliedSearchQuery}"</span>
           <button
-            className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors"
+            type="button"
+            className="p-0 border-0 bg-transparent d-flex align-items-center hover-text-danger transition-colors"
+            style={{ color: '#f59e0b', cursor: 'pointer', marginLeft: '2px' }}
             onClick={() => { setAppliedSearchQuery(''); setSearchQuery(''); }}
           >
-            <X size={12} />
+            <X size={11} strokeWidth={2.5} />
           </button>
         </div>
       );
@@ -1697,31 +1708,29 @@ const AsinManagerPage = () => {
     return <PageLoader message="Loading ASIN Manager..." />;
   }
 
-
-
-
   const thStyle = {
-    fontSize: '0.66rem',
-    fontWeight: 700,
+    fontSize: '10px',
+    fontWeight: 800,
     textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    color: '#71717a', // zinc-500
-    padding: '4px 8px',
-    background: '#fafafa',
+    letterSpacing: '0.04em',
+    color: '#4b5563', // cool gray 600
+    padding: '10px 12px',
+    background: '#f9fafb',
     position: 'sticky',
     top: 0,
-    zIndex: 10,
+    borderBottom: '1px solid #e5e7eb',
     whiteSpace: 'nowrap',
-    border: '0.5px solid #f1f1f1'
+    border: '0.5px solid #f1f1f1',
+    zIndex: 10
   };
 
   const tdStyle = {
-    padding: '4px 8px',
+    padding: '3px 8px',
     fontSize: '0.68rem',
     borderBottom: '0.5px solid #f1f5f9',
     verticalAlign: 'middle',
     color: '#27272a', // zinc-800
-    height: '28px',
+    height: '34px',
     borderLeft: '0.5px solid #f1f5f9',
     borderRight: '0.5px solid #f1f5f9',
     overflow: 'hidden',
@@ -1739,7 +1748,14 @@ const AsinManagerPage = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: '#f9fafb' }}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: 'calc(100vh - 60px)', 
+      overflow: 'hidden', 
+      backgroundColor: '#f4f7fe', 
+      margin: '-1.5rem -2rem' 
+    }}>
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
@@ -2078,220 +2094,246 @@ const AsinManagerPage = () => {
         </>
       )}
 
-      <div className="page-header" style={{ padding: '0.5rem 1rem', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <div className="d-flex align-items-center gap-3">
-            <h1 className="h6 mb-0 fw-bold text-zinc-900 d-flex align-items-center gap-2">
-              <Package size={18} className="text-zinc-900" />
-              ASIN Manager
-            </h1>
-            <div className="vr mx-1 d-none d-sm-block" style={{ height: '16px', color: '#e5e7eb' }} />
-            <span className="smallest text-zinc-500 fw-medium d-none d-md-inline">Operational Metrics</span>
+      {/* PREMIUM BREADCRUMB BAR / HEADER */}
+      <div className="px-4 py-3 d-flex align-items-center justify-content-between bg-white border-bottom shadow-sm" style={{ zIndex: 20, flexShrink: 0 }}>
+        <div className="d-flex align-items-center gap-3">
+          <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm">
+            <Package size={18}/>
           </div>
+          <div>
+            <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
+              <span>Inventory</span> <ChevronRight size={12}/> <span className="text-dark fw-semibold">Catalog</span>
+            </div>
+            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{fontSize: '1.2rem'}}>ASIN Manager</h4>
+          </div>
+        </div>
 
-          <div className="d-flex align-items-center gap-2">
-            {/* MARKETPLACE SWITCHER */}
-            <div className="d-flex bg-zinc-100 p-1 rounded-3 shadow-sm" style={{ height: '36px', gap: '4px' }}>
+        <div className="d-flex align-items-center gap-3">
+          {/* MARKETPLACE SWITCHER */}
+          <div className="d-flex bg-light p-1 rounded-3 border" style={{ height: '36px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setMarketplaceFilter('amazon.in');
+                loadData(1, pagination.limit, selectedSeller, 'amazon.in');
+              }}
+              className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`}
+              style={{ fontSize: '11px' }}
+            >
+              <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: (marketplaceFilter === 'amazon.in') ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Amazon" />
+              AMZ
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMarketplaceFilter('ajio');
+                loadData(1, pagination.limit, selectedSeller, 'ajio');
+              }}
+              className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white text-purple-600 shadow-sm' : 'text-secondary'}`}
+              style={{ fontSize: '11px' }}
+            >
+              <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
+              AJIO
+            </button>
+            {canAccessMyntra && (
               <button
                 type="button"
                 onClick={() => {
-                  setMarketplaceFilter('amazon.in');
-                  loadData(1, pagination.limit, selectedSeller, 'amazon.in');
+                  setMarketplaceFilter('myntra');
+                  loadData(1, pagination.limit, selectedSeller, 'myntra');
                 }}
-                className={`px-4 border-0 rounded-2 d-flex align-items-center justify-content-center transition-all ${marketplaceFilter === 'amazon.in' || marketplaceFilter === 'all' ? 'bg-white shadow-sm' : 'bg-transparent'}`}
-                style={{ minWidth: '100px', height: '100%' }}
-                title="Amazon"
+                className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'myntra' ? 'bg-white text-pink-600 shadow-sm' : 'text-secondary'}`}
+                style={{ fontSize: '11px' }}
               >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', filter: (marketplaceFilter === 'amazon.in' || marketplaceFilter === 'all') ? 'none' : 'grayscale(100%) brightness(20%) opacity(0.6)' }} alt="Amazon" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMarketplaceFilter('ajio');
-                  loadData(1, pagination.limit, selectedSeller, 'ajio');
-                }}
-                className={`px-4 border-0 rounded-2 d-flex align-items-center justify-content-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white shadow-sm' : 'bg-transparent'}`}
-                style={{ minWidth: '100px', height: '100%' }}
-                title="Ajio"
-              >
-                <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '14px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) brightness(20%) opacity(0.6)' }} alt="Ajio" />
-              </button>
-            </div>
-
-            {/* UNIFIED ACTIONS & FILTERS DROPDOWN */}
-            <div className="position-relative" ref={actionsRef}>
-              <button
-                className={`btn btn-xs d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm transition-all bg-white border border-zinc-200 hover-bg-zinc-50 ${selectedIds.size > 0 ? 'text-amber-700' : 'text-zinc-700'}`}
-                onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-                style={{ fontSize: '11px', fontWeight: 700, background: selectedIds.size > 0 ? '#fffbeb' : '#ffffff' }}
-              >
-                <SlidersHorizontal size={12} className={selectedIds.size > 0 ? "text-amber-500" : "text-zinc-500"} />
-                <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
-                <ChevronDown size={12} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showActionsDropdown && (
-                <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
-                  <div className="px-3 py-2 border-bottom mb-1">
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
-                  </div>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => {
-                      const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
-                      setAppliedFilters(newFilters);
-                      setFilters(newFilters);
-                      setShowActionsDropdown(false);
-                    }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
-                    {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => {
-                      const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
-                      setAppliedFilters(newFilters);
-                      setFilters(newFilters);
-                      setShowActionsDropdown(false);
-                    }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
-                    {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => {
-                      const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
-                      setAppliedFilters(newFilters);
-                      setFilters(newFilters);
-                      setShowActionsDropdown(false);
-                    }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
-                    {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
-                  </button>
-
-                  <div className="px-3 py-2 border-top border-bottom my-1">
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
-                  </div>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => {
-                      setShowAllBsrHistory(true);
-                      setShowActionsDropdown(false);
-                    }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <BarChart2 size={14} className="text-indigo-500" />
-                    BSR Ranking Matrix
-                  </button>
-                  <button
-                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                    onClick={() => {
-                      setShowAllRatingHistory(true);
-                      setShowActionsDropdown(false);
-                    }}
-                    style={{ fontSize: '12px', fontWeight: 500 }}
-                  >
-                    <LayoutGrid size={14} className="text-purple-500" />
-                    Rating Analytics
-                  </button>
-
-                  <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
-                    <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
-                    {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
-                  </div>
-                  <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
-                    <button
-                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                      onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
-                      style={{ fontSize: '12px', fontWeight: 500 }}
-                    >
-                      <AlertTriangle size={14} className="text-amber-500" />
-                      Mark as Price Dispute
-                    </button>
-                    <button
-                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                      onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
-                      style={{ fontSize: '12px', fontWeight: 500 }}
-                    >
-                      <RefreshCw size={14} className="text-emerald-500" />
-                      Resolve Dispute
-                    </button>
-                    <button
-                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                      onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
-                      style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
-                    >
-                      <PlayCircle size={14} className="text-indigo-500" />
-                      Run Rulesets on Selected
-                    </button>
-                    <button
-                      className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                      onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
-                      style={{ fontSize: '12px', fontWeight: 500 }}
-                    >
-                      <PlusCircle size={14} className="text-emerald-500" />
-                      Create Task for Selected
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {hasPermission('asinmanager_manage') && (
-              <button
-                className="btn btn-zinc-900 btn-xs border-0 d-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm"
-                onClick={() => setShowAddModal(true)}
-                style={{ backgroundColor: '#18181B', color: '#fff', fontSize: '11px' }}
-              >
-                <Plus size={12} />
-                <span className="fw-bold">Add ASIN</span>
+                <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
+                MYNTRA
               </button>
             )}
           </div>
+
+          {/* UNIFIED ACTIONS & FILTERS DROPDOWN */}
+          <div className="position-relative" ref={actionsRef}>
+            <button
+              className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
+              onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+              style={{ fontSize: '11px', height: '36px', background: '#ffffff' }}
+            >
+              <SlidersHorizontal size={14} />
+              <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+              <ChevronDown size={12} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showActionsDropdown && (
+              <div className="position-absolute end-0 mt-2 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
+                <div className="px-3 py-2 border-bottom mb-1">
+                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
+                </div>
+                <button
+                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                  onClick={() => {
+                    const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
+                    setAppliedFilters(newFilters);
+                    setFilters(newFilters);
+                    setShowActionsDropdown(false);
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 500 }}
+                >
+                  <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
+                  {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
+                </button>
+                <button
+                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                  onClick={() => {
+                    const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
+                    setAppliedFilters(newFilters);
+                    setFilters(newFilters);
+                    setShowActionsDropdown(false);
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 500 }}
+                >
+                  <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
+                  {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
+                </button>
+                <button
+                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                  onClick={() => {
+                    const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
+                    setAppliedFilters(newFilters);
+                    setFilters(newFilters);
+                    setShowActionsDropdown(false);
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 500 }}
+                >
+                  <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
+                  {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
+                </button>
+
+                <div className="px-3 py-2 border-top border-bottom my-1">
+                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
+                </div>
+                <button
+                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                  onClick={() => {
+                    setShowAllBsrHistory(true);
+                    setShowActionsDropdown(false);
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 500 }}
+                >
+                  <BarChart2 size={14} className="text-indigo-500" />
+                  BSR Ranking Matrix
+                </button>
+                <button
+                  className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                  onClick={() => {
+                    setShowAllRatingHistory(true);
+                    setShowActionsDropdown(false);
+                  }}
+                  style={{ fontSize: '12px', fontWeight: 500 }}
+                >
+                  <LayoutGrid size={14} className="text-purple-500" />
+                  Rating Analytics
+                </button>
+
+                <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
+                  <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
+                  {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
+                </div>
+                <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <AlertTriangle size={14} className="text-amber-500" />
+                    Mark as Price Dispute
+                  </button>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <RefreshCw size={14} className="text-emerald-500" />
+                    Resolve Dispute
+                  </button>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
+                    style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
+                  >
+                    <PlayCircle size={14} className="text-indigo-500" />
+                    Run Rulesets on Selected
+                  </button>
+                  <button
+                    className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
+                    onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
+                    style={{ fontSize: '12px', fontWeight: 500 }}
+                  >
+                    <PlusCircle size={14} className="text-emerald-500" />
+                    Create Task for Selected
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => setShowDashboard(!showDashboard)} className={`btn ${showDashboard ? 'btn-light' : 'btn-white border'} px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm`} style={{height: '36px', fontSize: '11px'}}>
+             <Activity size={14}/> {showDashboard ? 'HIDE DASHBOARD' : 'SHOW DASHBOARD'}
+          </button>
+
+          {hasPermission('asinmanager_manage') && (
+            <button
+              className="btn btn-indigo px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm"
+              onClick={() => setShowAddModal(true)}
+              style={{ height: '36px', fontSize: '11px' }}
+            >
+              <Plus size={14} />
+              <span>ADD ASIN</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* COMPACT ANALYTICS STRIP - Zero Whitespace Layout */}
-      <div className="bg-white border-bottom px-4 py-3 shadow-sm d-flex align-items-center gap-4 overflow-auto custom-scrollbar" style={{ flexShrink: 0 }}>
-        {kpis.map((kpi, idx, arr) => (
-          <React.Fragment key={idx}>
+      {/* ANALYTICS MODULE AREA - RECTANGULAR PILLS STYLE */}
+      <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
+        <div className="px-4 pt-2 pb-3 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
+          {kpis.map((kpi, idx) => (
             <div 
-              className="d-flex align-items-center gap-3 transition-all" 
-              style={{ minWidth: '160px', cursor: kpi.onClick ? 'pointer' : 'default' }}
+              key={idx}
+              className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild" 
+              style={{ 
+                height: '32px', 
+                minWidth: 'max-content', 
+                flexShrink: 0, 
+                cursor: kpi.onClick ? 'pointer' : 'default', 
+                borderRadius: '6px', 
+                borderColor: '#e4e4e7'
+              }}
               onClick={kpi.onClick}
             >
+              {/* Status Dot */}
               <div 
-                className="p-2 rounded-3 d-flex align-items-center justify-content-center" 
-                style={{ background: kpi.color + '10', color: kpi.color }}
-              >
-                {React.cloneElement(kpi.icon, { size: 14 })}
-              </div>
-              <div className="d-flex flex-column">
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.05em', color: '#71717a', textTransform: 'uppercase' }}>
-                  {kpi.label}
-                </span>
-                <div className="d-flex align-items-baseline gap-1">
-                  <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#09090b', letterSpacing: '-0.02em' }}>
-                    {kpi.value}
-                  </span>
-                  {kpi.sub && !kpi.sub.includes('vs') && (
-                    <span style={{ fontSize: '0.65rem', color: '#71717a', fontWeight: 600 }}>{kpi.sub}</span>
-                  )}
-                </div>
-              </div>
+                style={{ 
+                  width: '6px', 
+                  height: '6px', 
+                  borderRadius: '50%', 
+                  backgroundColor: kpi.color,
+                  flexShrink: 0
+                }} 
+              />
+              
+              {/* Label */}
+              <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
+                {kpi.label}
+              </span>
+              
+              {/* Value */}
+              <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
+                {kpi.value}
+              </span>
             </div>
-            {idx < arr.length - 1 && <div style={{ height: '30px', width: '1px', background: '#e2e8f0' }}></div>}
-          </React.Fragment>
-        ))}
+          ))}
+        </div>
       </div>
-
-
 
       {/* Repair Progress simplified */}
       {repairStatus && (
@@ -2305,19 +2347,18 @@ const AsinManagerPage = () => {
         </div>
       )}
 
-      <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+      <div className="page-content flex-grow-1 d-flex flex-column overflow-hidden px-4 py-3" style={{ minHeight: 0 }}>
         {/* Alerts & Errors row */}
         {error && (
-          <div className="alert alert-warning border-0 shadow-sm rounded-2 py-1 px-2 mb-2 d-flex align-items-center gap-2 smallest" role="alert">
-            <AlertTriangle size={12} className="text-warning" />
-            <span className="fw-medium">{error}</span>
+          <div className="alert alert-danger border-0 shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2" role="alert">
+            <AlertTriangle size={14} className="text-danger" />
+            <span className="fw-medium small text-danger-emphasis">{error}</span>
           </div>
         )}
 
+        {/* ELEVATED MODULE CONTAINER */}
+        <div className="bg-white shadow-sm rounded-4 overflow-hidden flex-grow-1 d-flex flex-column border border-light-subtle position-relative">
 
-
-        {/* [E] High-Density Table Area - Full Screen Zero Whitespace */}
-        <div className="bg-white border-top border-zinc-200 shadow-none overflow-hidden flex-grow-1 d-flex flex-column position-relative">
           <style>{`
                   .filter-section-title {
                     font-size: 11px;
@@ -2349,64 +2390,73 @@ const AsinManagerPage = () => {
                     from { transform: translateX(100%); }
                     to { transform: translateX(0); }
                   }
+                  .hover-up-mild {
+                    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+                  }
+                  .hover-up-mild:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 10px 20px -5px rgba(0,0,0,0.08) !important;
+                  }
+                  .rotate-180 {
+                    transform: rotate(180deg);
+                  }
+                  .transition-all {
+                    transition: all 0.2s ease-in-out;
+                  }
+                  .tracking-tight {
+                    letter-spacing: -0.02em;
+                  }
                   .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
+                    width: 6px;
+                    height: 6px;
                   }
                   .custom-scrollbar::-webkit-scrollbar-track {
                     background: transparent;
                   }
                   .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #e4e4e7;
+                    background: #cbd5e1;
                     border-radius: 10px;
                   }
                   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: #d4d4d8;
-                  }
-                  .hover-translate-y-px:hover {
-                    transform: translateY(-1px);
-                  }
-                  .shadow-2xl {
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                    background: #94a3b8;
                   }
           `}</style>
 
           {/* Table Toolbar */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '8px 16px', background: '#fff', borderBottom: '1px solid #e5e7eb',
-            flexShrink: 0, gap: '12px 16px', flexWrap: 'wrap'
-          }}>
-            <div className="d-flex align-items-center gap-3 flex-wrap flex-grow-1">
+          <div className="d-flex align-items-center justify-content-between border-bottom bg-white" style={{ flexShrink: 0, gap: '16px', padding: '12px 24px' }}>
+            <div className="d-flex align-items-center gap-3 flex-grow-1">
               <div className="d-flex align-items-center gap-2">
-                <span style={{ fontSize: 9, fontWeight: 800, color: '#18181b', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                  INVENTORY MASTER
-                  <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 2, background: '#f4f4f5', color: '#71717a', fontSize: 8 }}>
-                    {pagination.total} ASINs
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#27272a', letterSpacing: '0.02em', whiteSpace: 'nowrap' }} className="text-uppercase">
+                  Inventory
+                  <span className="ms-2 bg-light border text-secondary px-2 py-0.5 rounded-pill" style={{ fontSize: '10px', fontWeight: 600 }}>
+                    {pagination.total.toLocaleString()}
                   </span>
                 </span>
               </div>
 
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <div className="position-relative d-flex" style={{ width: '200px' }}>
-                  <Search className="position-absolute top-50 start-0 translate-middle-y ms-2 text-zinc-400" size={12} />
+              <div className="d-flex align-items-center gap-2">
+                <div className="input-group input-group-sm" style={{ width: '260px' }}>
+                  <span className="input-group-text bg-white border-end-0 text-muted pe-1">
+                    <Search size={13} />
+                  </span>
                   <input
                     type="text"
-                    className="form-control form-control-xs ps-4.5 bg-zinc-50 border-zinc-200 shadow-none rounded-start-2 rounded-end-0 smallest"
-                    placeholder="Search ASIN, SKU..."
-                    style={{ height: '26px', fontSize: '11px' }}
+                    className="form-control border-start-0 shadow-none ps-1 bg-white"
+                    placeholder="Search ASIN, SKU, Title..."
+                    style={{ fontSize: '12px', height: '32px' }}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
                   />
                   <button
-                    className="btn btn-zinc-900 pb-0 pt-0 px-2.5 rounded-start-0 rounded-end-2 smallest fw-bold text-white"
-                    style={{ height: '26px', fontSize: '10px', backgroundColor: '#18181B' }}
+                    className="btn btn-dark fw-bold"
+                    style={{ fontSize: '11px', height: '32px' }}
                     onClick={handleApplySearch}
                   >
                     Find
                   </button>
                 </div>
-                <div style={{ width: '140px' }}>
+                <div style={{ width: '160px' }}>
                   <InfiniteScrollSelect
                     fetchData={fetchSellerDropdownData}
                     value={selectedSeller}
@@ -2418,177 +2468,171 @@ const AsinManagerPage = () => {
                   />
                 </div>
 
-
                 {/* Scrape Progress */}
                 {scrapeProgress && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-2 px-2 py-0 d-flex align-items-center gap-2" style={{ height: '26px' }}>
-                    <RefreshCw size={10} className="text-blue-600 spin" />
-                    <span className="fw-bold text-blue-700 font-monospace" style={{ fontSize: '9px' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2 px-2 d-flex align-items-center gap-2" style={{ height: '32px' }}>
+                    <RefreshCw size={12} className="text-indigo-600 spin" />
+                    <span className="fw-bold text-indigo-700 font-monospace small">{scrapeProgress.processed}/{scrapeProgress.total}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="d-flex align-items-center gap-1.5 flex-wrap justify-content-end">
-              <div className="d-flex align-items-center gap-1.5 flex-wrap">
+            <div className="d-flex align-items-center gap-2">
+              <button
+                className="btn btn-white border d-flex align-items-center gap-2 px-3 shadow-sm fw-bold rounded-3"
+                onClick={handleBulkScrape}
+                disabled={syncing}
+                style={{ fontSize: '11px', height: '32px' }}
+              >
+                <RefreshCw size={12} className={`text-secondary ${syncing ? 'spin' : ''}`} />
+                <span>Sync</span>
+              </button>
+
+              {/* FILTERS Button */}
+              <button
+                onClick={() => setFilterPanelOpen(!filterPanelOpen)}
+                className={`btn d-flex align-items-center gap-2 fw-bold rounded-3 px-3 shadow-sm border ${filterPanelOpen ? 'btn-dark' : 'btn-white'}`}
+                style={{ fontSize: '11px', height: '32px' }}
+              >
+                <ListChecks size={14} />
+                {(() => {
+                  const count = Object.values(appliedFilters).filter(v =>
+                    v !== '' && (!Array.isArray(v) || v.length > 0)
+                  ).length;
+                  return <>Filters {count > 0 && `(${count})`}</>;
+                })()}
+              </button>
+
+              {/* ✅ COLUMNS Button */}
+              <div className="position-relative">
                 <button
-                  className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2 py-1"
-                  onClick={handleBulkScrape}
-                  disabled={syncing}
-                  style={{ fontSize: '10px', height: '26px' }}
+                  onClick={() => setShowColumnPanel(!showColumnPanel)}
+                  className={`btn d-flex align-items-center gap-2 fw-bold rounded-3 px-3 shadow-sm border ${showColumnPanel ? 'btn-dark' : 'btn-white'}`}
+                  style={{ fontSize: '11px', height: '32px' }}
                 >
-                  <RefreshCw size={11} className={`text-zinc-500 ${syncing ? 'spin' : ''}`} />
-                  <span className="fw-bold text-zinc-700">SYNC</span>
+                  <LayoutGrid size={14} />
+                  <span>Columns</span>
                 </button>
 
-                {/* FILTERS Button */}
-                <button
-                  onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                  className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${filterPanelOpen ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
-                    }`}
-                  style={{ fontSize: '10px', height: '24px' }}
-                >
-                  <ListChecks size={12} />
-                  {(() => {
-                    const count = Object.values(appliedFilters).filter(v =>
-                      v !== '' && (!Array.isArray(v) || v.length > 0)
-                    ).length;
-                    return <>FILTERS {count > 0 && `(${count})`}</>;
-                  })()}
-                </button>
-
-                {/* ✅ COLUMNS Button - NEW */}
-                <div className="position-relative">
-                  <button
-                    onClick={() => setShowColumnPanel(!showColumnPanel)}
-                    className={`btn btn-xs d-flex align-items-center gap-1 fw-bold rounded-2 px-2 py-1 border transition-all ${showColumnPanel ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover-bg-zinc-50'
-                      }`}
-                    style={{ fontSize: '10px', height: '24px' }}
-                  >
-                    <LayoutGrid size={12} />
-                    COLUMNS
-                  </button>
-
-                  {/* Column Visibility Panel */}
-                  <ColumnVisibilityPanel
-                    isOpen={showColumnPanel}
-                    onClose={() => setShowColumnPanel(false)}
-                    visibleColumns={visibleColumns}
-                    onToggle={toggleColumn}
-                    onToggleCategory={toggleCategory}
-                    onReset={resetToDefaults}
-                    onSelectAll={selectAll}
-                    visibleCount={visibleCount}
-                    totalCount={totalCount}
-                    allColumns={allColumns}
-                    columnCategories={columnCategories}
-                  />
-                </div>
+                <ColumnVisibilityPanel
+                  isOpen={showColumnPanel}
+                  onClose={() => setShowColumnPanel(false)}
+                  visibleColumns={visibleColumns}
+                  onToggle={toggleColumn}
+                  onToggleCategory={toggleCategory}
+                  onReset={resetToDefaults}
+                  onSelectAll={selectAll}
+                  visibleCount={visibleCount}
+                  totalCount={totalCount}
+                  allColumns={allColumns}
+                  columnCategories={columnCategories}
+                />
               </div>
 
-              {/* Selected Actions */}
-              {selectedIds.size > 0 && (
-                <div className="d-flex align-items-center gap-1.5 pe-3 ms-2 border-end border-zinc-200 flex-wrap animate-in fade-in slide-in-from-right-4">
-                  <span className="smallest fw-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded-2 shadow-sm border border-zinc-200" style={{ fontSize: '9px' }}>
-                    {selectedIds.size} SELECTED
-                  </span>
+              <div className="vr mx-1 text-secondary opacity-25" style={{ height: '20px' }} />
 
-                  <button
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
-                    onClick={() => setShowBulkTagsModal(true)}
-                    style={{ fontSize: '10px' }}
-                  >
-                    <Tag size={10} className="text-indigo-500" />
-                    <span className="fw-bold">Tags</span>
-                  </button>
-
-                  <button
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
-                    onClick={handleBulkSyncSelected}
-                    style={{ fontSize: '10px' }}
-                    disabled={syncing}
-                  >
-                    <RefreshCw size={10} className={`text-blue-600 ${syncing ? 'spin' : ''}`} />
-                    <span className="fw-bold">Sync</span>
-                  </button>
-                  <button
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-2 rounded-2 px-2 py-1 hover-shadow transition-all"
-                    onClick={handleSelectedCreateActions}
-                    style={{ fontSize: '10px' }}
-                    disabled={syncing}
-                  >
-                    <Zap size={10} className="text-amber-500 fill-amber-500" />
-                    <span className="fw-bold">Tasks</span>
-                  </button>
-                  <button
-                    className="btn btn-ghost-danger btn-xs d-flex align-items-center gap-1 rounded-2 px-2 py-1"
-                    onClick={clearSelection}
-                    style={{ fontSize: '10px' }}
-                  >
-                    <X size={10} />
-                    <span className="fw-bold">Clear</span>
-                  </button>
-                </div>
-              )}
-
-              <div className="d-flex align-items-center gap-1.5 flex-wrap">
+              <div className="d-flex align-items-center gap-1">
                 {hasPermission('asinmanager_manage') && (
                   <button
                     onClick={handleBulkCreateActions}
                     disabled={asins.length === 0 || syncing}
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-3 py-1 shadow-sm"
-                    style={{ fontSize: '10px', height: '26px' }}
+                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
+                    style={{ width: '32px', height: '32px' }}
+                    title="Bulk Optimization"
                   >
-                    <Zap size={11} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
-                    <span className="fw-bold">BULK OPTIMIZATION</span>
+                    <Zap size={14} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
                   </button>
                 )}
 
-                {/* Export Button */}
                 {hasPermission('asinmanager_export') && (
                   <button
                     onClick={() => setShowExportModal(true)}
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                    style={{ fontSize: '10px', height: '26px' }}
+                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
+                    style={{ width: '32px', height: '32px' }}
+                    title="Export"
                   >
-                    <Download size={11} className="text-blue-600" />
-                    <span className="fw-bold">EXPORT</span>
+                    <Download size={14} className="text-indigo-500" />
                   </button>
                 )}
 
-                {/* Bulk Import Button */}
                 {hasPermission('asinmanager_import') && (
                   <button
                     onClick={() => setShowBulkImportModal(true)}
-                    className="btn btn-white btn-xs border border-zinc-200 d-flex align-items-center gap-1.5 rounded-2 px-2.5 py-1 shadow-sm"
-                    style={{ fontSize: '10px', height: '26px' }}
+                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
+                    style={{ width: '32px', height: '32px' }}
+                    title="Import"
                   >
-                    <FileUp size={11} className="text-emerald-600" />
-                    <span className="fw-bold">IMPORT</span>
+                    <FileUp size={14} className="text-emerald-600" />
                   </button>
                 )}
               </div>
             </div>
           </div>
 
+          {/* SELECTION BAR - HIGHLIGHT MODE */}
+          {selectedIds.size > 0 && (
+            <div className="bg-indigo-50 px-3 py-2 border-bottom d-flex align-items-center gap-3 animate-in slide-in-from-top-2 duration-200" style={{ flexShrink: 0 }}>
+              <div className="d-flex align-items-center gap-2">
+                <div className="bg-indigo-600 text-white fw-bold rounded-circle d-flex align-items-center justify-content-center" style={{ width: '20px', height: '20px', fontSize: '10px' }}>
+                  {selectedIds.size}
+                </div>
+                <span className="small fw-bold text-indigo-900">items selected</span>
+              </div>
+              <div className="vr bg-indigo-200 opacity-50" style={{ height: '16px' }}></div>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-sm btn-white border border-indigo-100 shadow-sm text-indigo-700 fw-bold rounded-2 d-flex align-items-center gap-1.5"
+                  onClick={() => setShowBulkTagsModal(true)}
+                  style={{ fontSize: '11px' }}
+                >
+                  <Tag size={12} /> Tag
+                </button>
+                <button
+                  className="btn btn-sm btn-white border border-indigo-100 shadow-sm text-indigo-700 fw-bold rounded-2 d-flex align-items-center gap-1.5"
+                  onClick={handleBulkSyncSelected}
+                  disabled={syncing}
+                  style={{ fontSize: '11px' }}
+                >
+                  <RefreshCw size={12} className={syncing ? 'spin' : ''} /> Sync
+                </button>
+                <button
+                  className="btn btn-sm btn-white border border-indigo-100 shadow-sm text-indigo-700 fw-bold rounded-2 d-flex align-items-center gap-1.5"
+                  onClick={handleSelectedCreateActions}
+                  style={{ fontSize: '11px' }}
+                >
+                  <Zap size={12} className="fill-indigo-700" /> Tasks
+                </button>
+              </div>
+              <button
+                className="btn btn-link text-indigo-600 fw-bold text-decoration-none ms-auto p-0"
+                style={{ fontSize: '11px' }}
+                onClick={clearSelection}
+              >
+                Deselect All
+              </button>
+            </div>
+          )}
+
           {/* APPLIED FILTERS BADGES */}
           {(Object.values(appliedFilters).some(v => v !== '' && (!Array.isArray(v) || v.length > 0)) || appliedSearchQuery || selectedSeller) && (
-            <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
-              <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Applied Filters
+            <div className="border-bottom d-flex align-items-center flex-wrap gap-3" style={{ flexShrink: 0, padding: '8px 24px', backgroundColor: '#f8fafc' }}>
+              <span className="text-secondary fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>
+                Active Filters
               </span>
               <div className="d-flex flex-wrap gap-2">
                 {getAppliedFiltersBadges()}
               </div>
               <button
-                className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none"
-                style={{ fontSize: '10px' }}
+                className="btn btn-link text-danger text-decoration-none ms-auto fw-bold p-0"
+                style={{ fontSize: '11px' }}
                 onClick={resetAllFilters}
               >
-                CLEAR ALL
+                Clear All
               </button>
             </div>
           )}
+
 
           {/* Scrollable Table Container */}
           <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
@@ -2596,7 +2640,7 @@ const AsinManagerPage = () => {
               <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                 <tr>
                   {isVisible('checkbox') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '40px', left: 0, zIndex: 22, background: '#fafafa', textAlign: 'center' }}>
+                    <th rowSpan={2} style={{ ...thStyle, width: '40px', left: 0, zIndex: 22, background: '#f8fafc', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
                       <input
                         type="checkbox"
                         checked={selectedIds.size === filteredAsins.length && filteredAsins.length > 0}
@@ -2606,31 +2650,31 @@ const AsinManagerPage = () => {
                     </th>
                   )}
                   {isVisible('asinCode') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '110px', left: isVisible('checkbox') ? '40px' : '0px', zIndex: 21, background: '#fff', borderRight: '1px solid #f1f1f1' }}>
+                    <th rowSpan={2} style={{ ...thStyle, width: '110px', left: isVisible('checkbox') ? '40px' : '0px', zIndex: 21, background: '#f8fafc', borderRight: '1px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
                       <div className="d-flex align-items-center justify-content-between">
                         {marketplaceFilter === 'ajio' ? 'JIOCODE' : 'ASIN ID'}
                       </div>
                     </th>
                   )}
-                  {isVisible('releaseDate') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center' }}>RELEASED</th>}
+                  {isVisible('releaseDate') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>RELEASED</th>}
                   {isVisible('parentAsin') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>
+                    <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <div className="d-flex align-items-center justify-content-between">
                         PARENT ASIN
                       </div>
                     </th>
                   )}
-                  {isVisible('sellerBrand') && <th rowSpan={2} style={{ ...thStyle, width: '110px' }}>SELLER / BRAND</th>}
-                  {isVisible('sku') && <th rowSpan={2} style={{ ...thStyle, width: '90px' }}>SKU</th>}
-                  {isVisible('title') && <th rowSpan={2} style={{ ...thStyle, width: '220px' }}>PRODUCT TITLE</th>}
+                  {isVisible('sellerBrand') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>SELLER / BRAND</th>}
+                  {isVisible('sku') && <th rowSpan={2} style={{ ...thStyle, width: '90px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>SKU</th>}
+                  {isVisible('title') && <th rowSpan={2} style={{ ...thStyle, width: '220px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>PRODUCT TITLE</th>}
                   {isVisible('category') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '130px' }}>
+                    <th rowSpan={2} style={{ ...thStyle, width: '130px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <div className="d-flex align-items-center justify-content-between">
                         CATEGORY
                       </div>
                     </th>
                   )}
-                  {isVisible('tags') && <th rowSpan={2} style={{ ...thStyle, width: '100px' }}>TAGS</th>}
+                  {isVisible('tags') && <th rowSpan={2} style={{ ...thStyle, width: '100px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>TAGS</th>}
 
                   {visibleLQSCount > 0 && (
                     <th colSpan={visibleLQSCount} style={{ ...thStyle, background: '#f8fafc', color: '#1e293b', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>
@@ -2860,7 +2904,7 @@ const AsinManagerPage = () => {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <span>{asin.asinCode}</span>
                             <a
-                              href={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : `https://www.amazon.in/dp/${asin.asinCode}`}
+                              href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
@@ -2884,16 +2928,15 @@ const AsinManagerPage = () => {
                       {isVisible('releaseDate') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           {asin.releaseDate ? (
-                            <div className="d-flex flex-column align-items-center">
+                            <div className="d-flex align-items-center justify-content-center gap-2" style={{ whiteSpace: 'nowrap' }}>
                               <span style={{ fontSize: '10px', fontWeight: 600 }}>
                                 {new Date(asin.releaseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
                               </span>
-                              <span className="badge bg-zinc-100 text-zinc-500 mt-1" style={{ fontSize: '8px' }}>
+                              <span className="badge bg-light text-zinc-500 border border-light" style={{ fontSize: '8px', padding: '2px 4px' }}>
                                 {(() => {
                                   const days = Math.floor((Date.now() - new Date(asin.releaseDate)) / (1000 * 60 * 60 * 24));
                                   if (days <= 30) return `${days}d`;
-                                  if (days <= 60) return `${days}d ⚡`;
-                                  if (days <= 90) return `${days}d 📈`;
+                                  if (days <= 60) return `${days}d⚡`;
                                   return `${Math.floor(days / 30)}m`;
                                 })()}
                               </span>
@@ -2914,7 +2957,7 @@ const AsinManagerPage = () => {
                                 <>
                                   <span style={{ fontWeight: 600, color: '#2563eb' }}>{pAsin}</span>
                                   <a
-                                    href={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? `https://www.ajio.com/p/${pAsin}` : `https://www.amazon.in/dp/${pAsin}`}
+                                    href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? `https://www.ajio.com/p/${pAsin}` : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? 'https://www.myntra.com' : `https://www.amazon.in/dp/${pAsin}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open Parent on Ajio" : "Open Parent on Amazon"}
@@ -2939,11 +2982,11 @@ const AsinManagerPage = () => {
                       )}
                       {isVisible('sellerBrand') && (
                         <td style={tdStyle}>
-                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <span style={{ fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden' }}>
                               {asin.seller?.name || asin.seller || 'Global'}
                             </span>
-                            <span style={{ fontSize: 9, color: '#9ca3af' }}>{asin.soldBy || '-'}</span>
+                            {asin.soldBy && <span style={{ fontSize: 9, color: '#9ca3af' }}>• {asin.soldBy}</span>}
                           </div>
                         </td>
                       )}
@@ -3636,6 +3679,13 @@ const AsinManagerPage = () => {
                 rowsPerPageOptions={[25, 50, 100, 150, 200, 300, 500]}
                 sx={{
                   fontSize: '11px',
+                  minHeight: '36px',
+                  '.MuiToolbar-root': {
+                    minHeight: '36px',
+                    height: '36px',
+                    paddingLeft: '12px',
+                    paddingRight: '12px'
+                  },
                   '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
                     fontSize: '11px',
                     fontWeight: 600,
@@ -3645,6 +3695,12 @@ const AsinManagerPage = () => {
                   '.MuiTablePagination-select': {
                     fontSize: '11px',
                     fontWeight: 600
+                  },
+                  '.MuiTablePagination-actions': {
+                    marginLeft: '8px',
+                    '& .MuiIconButton-root': {
+                      padding: '4px'
+                    }
                   }
                 }}
               />

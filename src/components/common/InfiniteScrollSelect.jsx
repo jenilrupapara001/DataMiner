@@ -245,7 +245,7 @@ const InfiniteScrollSelect = ({
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    height: 28px;
+                    height: 32px;
                     padding: 0 10px;
                     background: #fff;
                     border: 1px solid #e4e4e7;

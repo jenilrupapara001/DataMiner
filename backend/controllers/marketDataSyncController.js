@@ -479,9 +479,10 @@ exports.uploadTaskPool = async (req, res) => {
  */
 exports.getPoolStatus = async (req, res) => {
     try {
-        const result = await marketDataSyncService.runBackgroundDatabaseRepair();
-        res.json({ success: true, message: 'Database repair completed', result });
+        const stats = await marketDataSyncService.getPoolStats();
+        res.json({ success: true, stats });
     } catch (error) {
+        console.error('Get Pool Status Controller Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };

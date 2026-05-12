@@ -191,8 +191,8 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                     </div>
                   </div>
                   <div className="col-md-6 text-end">
-                    <a href={`https://amazon.in/dp/${asin.asinCode}`} target="_blank" rel="noreferrer" className="btn btn-white btn-sm rounded-pill border border-zinc-200 shadow-sm px-4 fw-bold text-zinc-700">
-                      View on Amazon <ExternalLink size={14} className="ms-1" />
+                    <a href={asin.pageUrl || (asin.marketplace === 'ajio' ? `https://www.ajio.com/p/${asin.asinCode}` : asin.marketplace === 'myntra' ? `https://www.myntra.com` : `https://amazon.in/dp/${asin.asinCode}`)} target="_blank" rel="noreferrer" className="btn btn-white btn-sm rounded-pill border border-zinc-200 shadow-sm px-4 fw-bold text-zinc-700">
+                      View Live <ExternalLink size={14} className="ms-1" />
                     </a>
                   </div>
                 </div>

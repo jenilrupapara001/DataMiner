@@ -142,7 +142,14 @@ const ListView = ({
                         {col.label}
                     </div>
                 ))}
-                {actions && <div style={{ width: actionWidth }} />}
+                {actions && (
+                    <div 
+                        className="smallest fw-bold text-muted text-uppercase tracking-wider text-end" 
+                        style={{ width: actionWidth, fontSize: '10px', paddingRight: '8px' }}
+                    >
+                        Actions
+                    </div>
+                )}
             </div>
 
             {/* Content */}

@@ -652,7 +652,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     {asin.asinCode}
                   </span>
                   <a
-                    href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : `https://www.amazon.in/dp/${asin.asinCode}`}
+                    href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : asin.marketplace === 'myntra' ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-link p-0 text-slate-400 hover:text-indigo-600"

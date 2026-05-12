@@ -553,7 +553,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                   <td className="text-zinc-400 text-center" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>{idx + 1}</td>
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
                     <a
-                      href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : `https://www.amazon.in/dp/${item.asinCode}`}
+                      href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : item.marketplace === 'myntra' ? (item.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${item.asinCode}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="fw-bold text-primary hover-underline"

@@ -154,7 +154,7 @@ const TagsCell = ({ asin, onUpdate }) => {
         <div ref={ref} className="position-relative" style={{ minWidth: '60px' }}>
             {/* TAGS DISPLAY - Click to open */}
             <div
-                className="d-flex align-items-center gap-1 flex-wrap cursor-pointer"
+                className="d-flex align-items-center gap-1 overflow-hidden cursor-pointer"
                 onClick={(e) => { 
                     e.stopPropagation(); 
                     if (hasPermission('asinmanager_manage')) {
@@ -162,10 +162,11 @@ const TagsCell = ({ asin, onUpdate }) => {
                     }
                 }}
                 style={{ 
-                    minHeight: '26px', 
-                    padding: '2px 4px',
+                    minHeight: '24px', 
+                    padding: '1px 2px',
                     borderRadius: '6px',
-                    transition: 'background 0.15s'
+                    transition: 'background 0.15s',
+                    whiteSpace: 'nowrap'
                 }}
             >
                 {tags.length === 0 ? (

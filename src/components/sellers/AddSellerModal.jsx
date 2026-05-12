@@ -8,10 +8,18 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
   const { hasPermission } = useAuth();
   const canAccessAmazon = isAdmin || hasPermission('marketplace_amazon');
   const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
+  const canAccessMyntra = isAdmin || hasPermission('marketplace_myntra');
+
+  const getDefaultMarketplace = () => {
+    if (canAccessAmazon) return 'amazon.in';
+    if (canAccessAjio) return 'ajio';
+    if (canAccessMyntra) return 'myntra';
+    return 'amazon.in'; // safe default fallback
+  };
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
-    marketplace: initialData?.marketplace || (isAdmin || hasPermission('marketplace_amazon') ? 'amazon.in' : 'ajio'),
+    marketplace: initialData?.marketplace || getDefaultMarketplace(),
     sellerId: initialData?.sellerId || '',
     apiKey: initialData?.apiKey || 'Default',
     plan: initialData?.plan || 'Starter',
@@ -94,13 +102,14 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
                   >
                     {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
                     {canAccessAjio && <option value="ajio">Ajio</option>}
+                    {canAccessMyntra && <option value="myntra">Myntra</option>}
                   </select>
                 </div>
                 <div className="col-md-6 mb-3">
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Key size={12} /></div>
                     <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">
-                      SELLER ID {formData.marketplace === 'ajio' && <span className="text-zinc-400 font-normal normal-case ms-1">(Optional)</span>}
+                      SELLER ID {(formData.marketplace === 'ajio' || formData.marketplace === 'myntra') && <span className="text-zinc-400 font-normal normal-case ms-1">(Optional)</span>}
                     </label>
                   </div>
                   <input
@@ -108,8 +117,8 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
                     className="form-control bg-zinc-50 border-zinc-200 px-3 font-monospace fw-bold text-primary shadow-sm"
                     value={formData.sellerId}
                     onChange={(e) => setFormData({ ...formData, sellerId: e.target.value })}
-                    placeholder={formData.marketplace === 'ajio' ? "Optional for Ajio" : "Merchant ID"}
-                    required={formData.marketplace !== 'ajio'}
+                    placeholder={formData.marketplace === 'ajio' || formData.marketplace === 'myntra' ? "Optional for this market" : "Merchant ID"}
+                    required={formData.marketplace === 'amazon.in'}
                     style={{ borderRadius: '10px', fontSize: '12px', height: '42px' }}
                   />
                 </div>

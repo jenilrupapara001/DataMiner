@@ -191,10 +191,10 @@ exports.checkSellerAccess = async (req, res, next) => {
   const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(roleName);
   if (isGlobalUser) return next();
 
-  const sellerId = req.params.sellerId || req.body.sellerId || req.query.sellerId || req.params.id; // Added params.id as fallback for some routes
+  const sellerId = req.params.sellerId || req.body?.sellerId || req.query?.sellerId || req.params.id; 
   if (!sellerId) return next();
 
-  if (!req.user.assignedSellers.includes(sellerId.toString())) {
+  if (!req.user.assignedSellers || !req.user.assignedSellers.includes(sellerId.toString())) {
     return res.status(403).json({ success: false, message: 'Access to this seller denied' });
   }
   next();

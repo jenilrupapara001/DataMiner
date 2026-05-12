@@ -24,7 +24,7 @@ const Z = {
   shadowMd: '0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05)',
 };
 
-const MARKETPLACE_FLAGS = { 'amazon.in': '🇮🇳' };
+const MARKETPLACE_FLAGS = { 'amazon.in': '🇮🇳', 'ajio': '💜', 'myntra': '💖' };
 
 /* ── Badge Helpers ─────────────────────────────────────── */
 const getGradeColor = (grade) => {
@@ -306,11 +306,11 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
                       </td>
                       <td style={{ borderBottom: `1px solid ${Z[100]}`, padding: '12px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
                         <a
-                          href={`https://${seller.marketplace}/dp/${asin.asinCode}`}
+                          href={asin.pageUrl || (seller.marketplace === 'ajio' ? `https://www.ajio.com/p/${asin.asinCode}` : seller.marketplace === 'myntra' ? 'https://www.myntra.com' : `https://amazon.in/dp/${asin.asinCode}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', border: `1px solid ${Z[200]}`, color: Z[600], background: Z.white, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', textDecoration: 'none', transition: 'all 0.15s' }}
-                          title="View on Amazon"
+                          title={`View on ${seller.marketplace}`}
                           onClick={e => e.stopPropagation()}
                           onMouseEnter={e => { e.currentTarget.style.background = Z[900]; e.currentTarget.style.color = Z.white; e.currentTarget.style.borderColor = Z[900]; }}
                           onMouseLeave={e => { e.currentTarget.style.background = Z.white; e.currentTarget.style.color = Z[600]; e.currentTarget.style.borderColor = Z[200]; }}
