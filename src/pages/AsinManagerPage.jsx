@@ -463,11 +463,11 @@ const AsinManagerPage = () => {
 
   const isVisible = useCallback((key) => {
     // Removed restriction for marketplaceFilter === 'ajio' to ensure parity with Amazon datatable.
-    
+
     // For Amazon/General datatables: Show Deal Badge, but hide Discount Percentage as requested
     if (key === 'discountPercentage') return false;
     if (key === 'dealBadge') return true;
-    
+
     return baseIsVisible(key);
   }, [baseIsVisible, marketplaceFilter]);
 
@@ -1065,7 +1065,7 @@ const AsinManagerPage = () => {
         sortOrder: 'desc'
       });
 
-      const statsRes = await asinApi.getStats({ 
+      const statsRes = await asinApi.getStats({
         seller,
         marketplace: marketplace !== 'all' ? marketplace : undefined
       });
@@ -1748,13 +1748,13 @@ const AsinManagerPage = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: 'calc(100vh - 60px)', 
-      overflow: 'hidden', 
-      backgroundColor: '#f4f7fe', 
-      margin: '-1.5rem -2rem' 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: 'calc(100vh - 60px)',
+      overflow: 'hidden',
+      backgroundColor: '#f4f7fe',
+      margin: '-1.5rem -2rem'
     }}>
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
@@ -2098,13 +2098,13 @@ const AsinManagerPage = () => {
       <div className="px-4 py-3 d-flex align-items-center justify-content-between bg-white border-bottom shadow-sm" style={{ zIndex: 20, flexShrink: 0 }}>
         <div className="d-flex align-items-center gap-3">
           <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm">
-            <Package size={18}/>
+            <Package size={18} />
           </div>
           <div>
             <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-              <span>Inventory</span> <ChevronRight size={12}/> <span className="text-dark fw-semibold">Catalog</span>
+              <span>Inventory</span> <ChevronRight size={12} /> <span className="text-dark fw-semibold">Catalog</span>
             </div>
-            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{fontSize: '1.2rem'}}>ASIN Manager</h4>
+            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{ fontSize: '1.2rem' }}>ASIN Manager</h4>
           </div>
         </div>
 
@@ -2121,7 +2121,7 @@ const AsinManagerPage = () => {
               style={{ fontSize: '11px' }}
             >
               <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: (marketplaceFilter === 'amazon.in') ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Amazon" />
-              AMZ
+
             </button>
             <button
               type="button"
@@ -2133,7 +2133,7 @@ const AsinManagerPage = () => {
               style={{ fontSize: '11px' }}
             >
               <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
-              AJIO
+
             </button>
             {canAccessMyntra && (
               <button
@@ -2146,7 +2146,7 @@ const AsinManagerPage = () => {
                 style={{ fontSize: '11px' }}
               >
                 <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '4px', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
-                MYNTRA
+
               </button>
             )}
           </div>
@@ -2276,8 +2276,8 @@ const AsinManagerPage = () => {
             )}
           </div>
 
-          <button onClick={() => setShowDashboard(!showDashboard)} className={`btn ${showDashboard ? 'btn-light' : 'btn-white border'} px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm`} style={{height: '36px', fontSize: '11px'}}>
-             <Activity size={14}/> {showDashboard ? 'HIDE DASHBOARD' : 'SHOW DASHBOARD'}
+          <button onClick={() => setShowDashboard(!showDashboard)} className={`btn ${showDashboard ? 'btn-light' : 'btn-white border'} px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm`} style={{ height: '36px', fontSize: '11px' }}>
+            <Activity size={14} /> {showDashboard ? 'HIDE DASHBOARD' : 'SHOW DASHBOARD'}
           </button>
 
           {hasPermission('asinmanager_manage') && (
@@ -2297,35 +2297,35 @@ const AsinManagerPage = () => {
       <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
         <div className="px-4 pt-2 pb-3 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {kpis.map((kpi, idx) => (
-            <div 
+            <div
               key={idx}
-              className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild" 
-              style={{ 
-                height: '32px', 
-                minWidth: 'max-content', 
-                flexShrink: 0, 
-                cursor: kpi.onClick ? 'pointer' : 'default', 
-                borderRadius: '6px', 
+              className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild"
+              style={{
+                height: '32px',
+                minWidth: 'max-content',
+                flexShrink: 0,
+                cursor: kpi.onClick ? 'pointer' : 'default',
+                borderRadius: '6px',
                 borderColor: '#e4e4e7'
               }}
               onClick={kpi.onClick}
             >
               {/* Status Dot */}
-              <div 
-                style={{ 
-                  width: '6px', 
-                  height: '6px', 
-                  borderRadius: '50%', 
+              <div
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
                   backgroundColor: kpi.color,
                   flexShrink: 0
-                }} 
+                }}
               />
-              
+
               {/* Label */}
               <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
                 {kpi.label}
               </span>
-              
+
               {/* Value */}
               <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
                 {kpi.value}
@@ -2692,7 +2692,7 @@ const AsinManagerPage = () => {
 
                   {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
                   {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>MRP</th>}
-                   {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
+                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
                   {isVisible('discountPercentage') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISCOUNT %</th>}
                   {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISPUTE</th>}
                   {visiblePriceTrendCount > 0 && (
