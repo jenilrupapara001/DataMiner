@@ -26,9 +26,11 @@ import {
   Image as ImageIcon,
   CheckSquare,
   Square,
-  Filter
+  Filter,
+  Store
 } from 'lucide-react';
-import { adsApi } from '../services/api';
+import { adsApi, sellerApi } from '../services/api';
+import InfiniteScrollSelect from '../components/common/InfiniteScrollSelect';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import EmptyState from '../components/common/EmptyState';
 import AdsImportModal from '../components/ads/AdsImportModal';
@@ -53,7 +55,7 @@ const METRIC_MAP = {
 // Utility helper: generate history matrix for the dynamic table headers
 const generateHistoryStructureFromDates = (sortedDates) => {
   if (!sortedDates || sortedDates.length === 0) return [{ label: 'N/A', dates: [] }];
-  
+
   // Cap to maximum 7-10 recent dates
   const recentDates = sortedDates.slice(-7);
 
@@ -90,7 +92,7 @@ const formatCompact = (val) => {
 // Generic Trend Badge
 const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   if (!prevValue) return <span style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600 }}>-</span>;
-  
+
   const diff = value - prevValue;
   if (Math.abs(diff) < 0.01) {
     return <div className="d-flex align-items-center gap-1 text-zinc-400" style={{ fontSize: '9px', fontWeight: 600 }}>
@@ -102,7 +104,7 @@ const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   const isGood = isInverted ? diff < 0 : diff > 0;
   const Icon = isGood ? TrendingUp : TrendingDown;
   const color = isGood ? '#059669' : '#dc2626';
-  
+
   return (
     <div className="d-flex align-items-center gap-0.5 fw-bold" style={{ fontSize: '9px', color }}>
       <Icon size={10} />
@@ -116,17 +118,17 @@ const MiniSpark = ({ data, color }) => {
   if (!data || data.length < 2) return <div style={{ width: '100%', height: '12px' }} />;
   const max = Math.max(...data) || 1;
   const points = data.map((val, i) => `${(i / (data.length - 1)) * 100}% ${100 - (val / max * 100)}%`).join(', ');
-  
+
   return (
     <div style={{ width: '100%', height: '14px', overflow: 'hidden', opacity: 0.8 }}>
-       <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
-          <polyline
-            fill="none"
-            stroke={color}
-            strokeWidth="8"
-            points={data.map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v / max) * 90)}`).join(' ')}
-          />
-       </svg>
+      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="8"
+          points={data.map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v / max) * 90)}`).join(' ')}
+        />
+      </svg>
     </div>
   );
 };
@@ -136,7 +138,7 @@ const MiniSpark = ({ data, color }) => {
 // ---------------------------------------------------------
 const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   if (!isOpen || !rowData) return null;
-  
+
   // Sort history descending (newest first)
   const fullHistory = [...(rowData.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -148,13 +150,13 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
 
   return createPortal(
     <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-         style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', zIndex: 99999 }}
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', zIndex: 99999 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <style>{modalCss}</style>
-      
+
       <div className="bg-white rounded-3 shadow-lg d-flex flex-column animate__animated animate__fadeInUp animate__faster"
-           style={{ width: '90%', maxWidth: '1100px', height: '80vh', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-        
+        style={{ width: '90%', maxWidth: '1100px', height: '80vh', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+
         {/* Modal Header */}
         <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
           <div className="d-flex align-items-center gap-3">
@@ -173,7 +175,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
               <h6 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '600px', fontSize: '14px' }}>{rowData.title || 'Detailed Advertisement Timeline'}</h6>
             </div>
           </div>
-          
+
           <button className="btn btn-light border p-2 rounded-circle d-flex align-items-center justify-content-center text-zinc-500 hover:bg-zinc-100" onClick={onClose}>
             <X size={18} />
           </button>
@@ -232,7 +234,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
                 yaxis: {
                   labels: {
                     style: { fontSize: '10px', fontWeight: 500 },
-                    formatter: (v) => v >= 1000 ? (v/1000).toFixed(1)+'k' : v
+                    formatter: (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
                   }
                 },
                 legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '10px', fontWeight: 700 }
@@ -291,7 +293,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
             </table>
           )}
         </div>
-        
+
         {/* Modal Footer */}
         <div className="px-4 py-2 border-top bg-light d-flex justify-content-end shrink-0">
           <button className="btn btn-dark btn-sm px-4 fw-bold" style={{ fontSize: '12px' }} onClick={onClose}>Close Window</button>
@@ -306,10 +308,33 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
 export default function AdsManagerPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
-  
+
   // State for dynamic multi-metric chart customization from screenshot
   const [chartConfigMetrics, setChartConfigMetrics] = useState(['spend', 'sales', 'acos']);
   const [metricDropdownOpen, setMetricDropdownOpen] = useState(false);
+
+  // Seller selection state
+  const [selectedSeller, setSelectedSeller] = useState(() => localStorage.getItem('selectedSeller') || '');
+
+  useEffect(() => {
+    localStorage.setItem('selectedSeller', selectedSeller);
+  }, [selectedSeller]);
+
+  const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
+    try {
+      const response = await sellerApi.getAll({ page, limit: 1000, search });
+      if (response.success) {
+        return {
+          data: response.data.sellers || [],
+          hasMore: response.data.pagination?.page < response.data.pagination?.totalPages
+        };
+      }
+      return { data: [], hasMore: false };
+    } catch (err) {
+      console.error('Error fetching sellers for dropdown:', err);
+      return { data: [], hasMore: false };
+    }
+  }, []);
 
   // 0. Aggregated summary for Top View
   const summaryData = useMemo(() => {
@@ -325,7 +350,7 @@ export default function AdsManagerPage() {
       sum.pageViews += Number(d.pageViews || 0);
       sum.organicSales += Number(d.organicSales || 0);
     });
-    
+
     // Extended Derived Metrics
     sum.totalSales = sum.sales + sum.organicSales;
     sum.acos = sum.sales > 0 ? (sum.spend / sum.sales) * 100 : 0;
@@ -335,10 +360,10 @@ export default function AdsManagerPage() {
     sum.ctr = sum.impressions > 0 ? (sum.clicks / sum.impressions) * 100 : 0;
     sum.tacos = sum.totalSales > 0 ? (sum.spend / sum.totalSales) * 100 : 0;
     sum.adSalesPct = sum.totalSales > 0 ? (sum.sales / sum.totalSales) * 100 : 0;
-    
+
     return sum;
   }, [data]);
-  
+
   // Filtering and Grouping States
   const [groupBy, setGroupBy] = useState('asin');
   const [searchQuery, setSearchQuery] = useState('');
@@ -346,7 +371,7 @@ export default function AdsManagerPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
-  
+
   // Ref tracking for dropdown cleanup
   const metricRef = useRef(null);
   useEffect(() => {
@@ -377,7 +402,7 @@ export default function AdsManagerPage() {
         dateMap[key].organicSales += Number(day.organicSales || 0);
       });
     });
-    
+
     // After raw aggregation, calculate runtime daily derived fields needed for chart lines
     const results = Object.values(dateMap).map(day => {
       const totalS = day.sales + day.organicSales;
@@ -391,7 +416,7 @@ export default function AdsManagerPage() {
         totalSales: totalS
       };
     }).sort((a, b) => a.date.localeCompare(b.date));
-    
+
     return results;
   }, [data]);
 
@@ -425,6 +450,7 @@ export default function AdsManagerPage() {
         groupBy,
         search: searchQuery
       };
+      if (selectedSeller) params.sellerId = selectedSeller;
       if (dateRange.start) params.startDate = dateRange.start;
       if (dateRange.end) params.endDate = dateRange.end;
 
@@ -438,7 +464,7 @@ export default function AdsManagerPage() {
     } finally {
       setLoading(false);
     }
-  }, [groupBy, searchQuery, dateRange]);
+  }, [groupBy, searchQuery, dateRange, selectedSeller]);
 
   useEffect(() => {
     fetchAdsData();
@@ -447,7 +473,7 @@ export default function AdsManagerPage() {
   // 2. Determine historical date header structure based on available dataset
   const historyStructure = useMemo(() => {
     if (data.length === 0) return [{ label: 'W1', dates: [] }];
-    
+
     const dateMap = new Map();
     data.forEach(row => {
       if (row.weekHistory) {
@@ -499,7 +525,7 @@ export default function AdsManagerPage() {
   const renderHeaderGroup = (title, colorHue, icon, expandedKey, width = '80px') => {
     const isExpanded = expandedCols[expandedKey];
     // Total subcols = AVG + TRN = 2 cols. Reverted as requested.
-    const baseCols = 2; 
+    const baseCols = 2;
     const activeDays = activeDates.length;
     const colSpan = isExpanded ? baseCols + activeDays : baseCols;
 
@@ -513,7 +539,7 @@ export default function AdsManagerPage() {
       purple: { bg: '#faf5ff', text: '#7c3aed', border: '#e9d5ff' },
       pink: { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8' }
     };
-    
+
     const c = colors[colorHue] || colors.slate;
 
     return (
@@ -521,7 +547,7 @@ export default function AdsManagerPage() {
         <div className="d-flex align-items-center justify-content-center gap-1.5 py-0.5">
           {icon}
           <span style={{ fontWeight: 800 }}>{title}</span>
-          <button 
+          <button
             onClick={() => toggleCol(expandedKey)}
             className="btn p-0 border-0 d-flex align-items-center justify-content-center hover-scale"
             style={{ color: c.text, cursor: 'pointer', opacity: 0.7, transition: 'all 0.2s' }}
@@ -547,7 +573,7 @@ export default function AdsManagerPage() {
       pink: { bg: '#fdf2f8', text: '#db2777' }
     };
     const c = colors[colorHue] || colors.slate;
-    
+
     return (
       <>
         <th style={{ ...thStyle, width: '68px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
@@ -565,13 +591,13 @@ export default function AdsManagerPage() {
   const renderCells = (row, dataKey, colorHue, expandedKey, isCurrency = false, isPercent = false) => {
     const isExpanded = expandedCols[expandedKey];
     const history = row.weekHistory || [];
-    
+
     // Extract values map keyed by date
     const dateVals = {};
     history.forEach(h => { dateVals[normalizeDateStr(h.date)] = Number(h[dataKey] || 0); });
-    
+
     const currentVal = row[dataKey] || 0;
-    
+
     // Calculate a naive avg of history for the Trend Check
     const pastVals = Object.values(dateVals);
     const avg = pastVals.length > 0 ? pastVals.reduce((a, b) => a + b, 0) / pastVals.length : 0;
@@ -587,14 +613,14 @@ export default function AdsManagerPage() {
     // Determine trend simply by comparing current (last entry in pastVals or row val) vs Avg
     const lastHistVal = pastVals.length > 0 ? pastVals[pastVals.length - 1] : currentVal;
     const prevHistVal = pastVals.length > 1 ? pastVals[pastVals.length - 2] : avg;
-    
+
     // Inverted logic: For ACOS and Spend, "LOWER IS BETTER". But user wanted HIGH/LOW badges anyway based on sheer trend.
     const isTrendInverted = (dataKey === 'acos' || dataKey === 'spend');
 
     return (
       <>
         {/* Main Stat Cell */}
-        <td 
+        <td
           style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: textCol, background: '#fff', cursor: 'pointer' }}
           onClick={() => setActiveHistoryRow(row)}
           title="Click to view full history"
@@ -602,7 +628,7 @@ export default function AdsManagerPage() {
           {formatVal(currentVal)}
         </td>
         {/* Trend Status Cell */}
-        <td 
+        <td
           style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px', cursor: 'pointer' }}
           onClick={() => setActiveHistoryRow(row)}
           title="Click to view full history"
@@ -614,8 +640,8 @@ export default function AdsManagerPage() {
         {isExpanded && activeDates.map(d => {
           const val = dateVals[d.raw] || 0;
           return (
-            <td 
-              key={d.raw} 
+            <td
+              key={d.raw}
               style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', background: '#fcfcfc', color: '#64748b', cursor: 'pointer' }}
               onClick={() => setActiveHistoryRow(row)}
               title="Click to view full history"
@@ -648,7 +674,7 @@ export default function AdsManagerPage() {
   // Generate dynamic Dual-Axis series mapping based on selected metrics from toolbar
   const dynamicChartState = useMemo(() => {
     if (!globalChartData || globalChartData.length === 0) return { series: [], yaxis: [], colors: [] };
-    
+
     const series = chartConfigMetrics.map(metricKey => {
       const config = METRIC_MAP[metricKey];
       return {
@@ -659,7 +685,7 @@ export default function AdsManagerPage() {
     });
 
     const colors = chartConfigMetrics.map(m => METRIC_MAP[m].color);
-    
+
     // ApexCharts requires a matching config per series to align dual axes correctly
     const yaxis = chartConfigMetrics.map((mKey, idx) => {
       const config = METRIC_MAP[mKey];
@@ -679,7 +705,7 @@ export default function AdsManagerPage() {
         axisTicks: { show: false },
         axisBorder: { show: false },
         title: {
-           style: { fontSize: '9px', fontWeight: 600, color: config.color }
+          style: { fontSize: '9px', fontWeight: 600, color: config.color }
         },
         labels: {
           show: shouldShow,
@@ -688,11 +714,11 @@ export default function AdsManagerPage() {
             const val = Number(v);
             if (isPercent) return val.toFixed(1) + '%';
             if (isCurrency) {
-               if (val >= 100000) return (val/100000).toFixed(1) + 'L';
-               if (val >= 1000) return (val/1000).toFixed(1) + 'k';
-               return val.toFixed(0);
+              if (val >= 100000) return (val / 100000).toFixed(1) + 'L';
+              if (val >= 1000) return (val / 1000).toFixed(1) + 'k';
+              return val.toFixed(0);
             }
-            return val >= 1000 ? (val/1000).toFixed(1) + 'k' : val.toFixed(0);
+            return val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0);
           }
         }
       };
@@ -702,11 +728,11 @@ export default function AdsManagerPage() {
   }, [chartConfigMetrics, globalChartData]);
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: 'calc(100vh - 60px)', 
-      overflow: 'hidden', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: 'calc(100vh - 60px)',
+      overflow: 'hidden',
       backgroundColor: '#f4f7fe', // Sleek subtle background from references
       margin: '-1.5rem -2rem' // Cancel outer shell padding to lock layout
     }}>
@@ -715,7 +741,7 @@ export default function AdsManagerPage() {
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
-      <AdsImportModal 
+      <AdsImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onComplete={() => {
@@ -727,36 +753,49 @@ export default function AdsManagerPage() {
       {/* PRECISE ADBREW BREADCRUMB BAR / DASHBOARD HEADER */}
       <div className="px-4 py-3 d-flex align-items-center justify-content-between bg-white border-bottom shadow-sm" style={{ zIndex: 20 }}>
         <div className="d-flex align-items-center gap-3">
-           <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm"><Activity size={18}/></div>
-           <div>
-             <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-               <span>Marketing</span> <ChevronRight size={12}/> <span className="text-dark fw-semibold">Ads Manager</span>
-             </div>
-             <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{fontSize: '1.2rem'}}>Performance Dashboard</h4>
-           </div>
+          <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm"><Activity size={18} /></div>
+          <div>
+            <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
+              <span>Marketing</span> <ChevronRight size={12} /> <span className="text-dark fw-semibold">Ads Manager</span>
+            </div>
+            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{ fontSize: '1.2rem' }}>Performance Dashboard</h4>
+          </div>
         </div>
 
         <div className="d-flex align-items-center gap-3">
           {/* View Mode Toggle (Mock Tabs) */}
           <div className="d-flex bg-light p-1 rounded-3 border" style={{ height: '36px' }}>
-             <button onClick={()=>setGroupBy('asin')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'asin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{fontSize: '11px'}}>ASIN Level</button>
-             <button onClick={()=>setGroupBy('parent')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'parent' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{fontSize: '11px'}}>Parent Level</button>
+            <button onClick={() => setGroupBy('asin')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'asin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{ fontSize: '11px' }}>ASIN Level</button>
+            <button onClick={() => setGroupBy('parent')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'parent' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{ fontSize: '11px' }}>Parent Level</button>
+          </div>
+
+          {/* Seller Selection */}
+          <div style={{ width: '160px' }}>
+            <InfiniteScrollSelect
+              fetchData={fetchSellerDropdownData}
+              value={selectedSeller}
+              onSelect={(val) => {
+                setSelectedSeller(val);
+                // Force reload is handled by useEffect hook attached to selectedSeller state change automatically
+              }}
+              placeholder="All Sellers"
+            />
           </div>
 
           {/* Date Selector */}
           <div className="d-flex align-items-center gap-2 border bg-white rounded-3 px-2" style={{ height: '36px' }}>
             <Calendar size={14} className="text-muted" />
-            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e=>setDateRange(p=>({...p, start:e.target.value}))} />
+            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} />
             <span className="text-muted">-</span>
-            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e=>setDateRange(p=>({...p, end:e.target.value}))} />
+            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} />
           </div>
 
-          <button onClick={fetchAdsData} className="btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{height: '36px', fontSize: '11px'}}>
-             <RefreshCw size={14} className={loading ? 'spin' : ''}/> REFRESH
+          <button onClick={fetchAdsData} className="btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{ height: '36px', fontSize: '11px' }}>
+            <RefreshCw size={14} className={loading ? 'spin' : ''} /> REFRESH
           </button>
 
-          <button onClick={() => setShowImportModal(true)} className="btn btn-indigo px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{height: '36px', fontSize: '11px'}}>
-             <Download size={14}/> IMPORT LOGS
+          <button onClick={() => setShowImportModal(true)} className="btn btn-indigo px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{ height: '36px', fontSize: '11px' }}>
+            <Download size={14} /> Import Ads Data
           </button>
         </div>
       </div>
@@ -767,165 +806,165 @@ export default function AdsManagerPage() {
         <div className="p-4 d-flex flex-column gap-4">
           {/* KPI GRID SECTION */}
           <div className="row g-3">
-             {[
-               { label: 'Total Ad Spend', key: 'spend', icon: <BarChart3/> },
-               { label: 'Ad Sales', key: 'sales', icon: <FileBarChart/> },
-               { label: 'Total Sales (Ad+Org)', key: 'totalSales', icon: <Layers/> },
-               { label: 'ACOS', key: 'acos', icon: <Target/> },
-               { label: 'ROAS', key: 'roas', icon: <Activity/> },
-               { label: 'Orders', key: 'orders', icon: <TrendingUp/> },
-               { label: 'CPC', key: 'cpc', icon: <TrendingDown/> },
-               { label: 'CVR %', key: 'cvr', icon: <TrendingUp/> }
-             ].map((kpi, idx) => {
-               const meta = METRIC_MAP[kpi.key] || {};
-               const val = summaryData[kpi.key] || 0;
-               const isCurr = meta.type === 'currency';
-               const isPct = meta.type === 'percent';
-               const isRatio = meta.type === 'ratio';
-               return (
-                 <div className="col-md-3 col-sm-6" key={idx}>
-                   <div className="card border-0 shadow-sm rounded-3 h-100 hover-up-mild" style={{backgroundColor: '#fff'}}>
-                     <div className="card-body p-3">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <span className="text-uppercase text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{kpi.label}</span>
-                          <div className="p-1.5 bg-light text-indigo-500 rounded-2" style={{opacity: 0.8}}>
-                            {React.cloneElement(kpi.icon, { size: 14 })}
-                          </div>
+            {[
+              { label: 'Total Ad Spend', key: 'spend', icon: <BarChart3 /> },
+              { label: 'Ad Sales', key: 'sales', icon: <FileBarChart /> },
+              { label: 'Total Sales (Ad+Org)', key: 'totalSales', icon: <Layers /> },
+              { label: 'ACOS', key: 'acos', icon: <Target /> },
+              { label: 'ROAS', key: 'roas', icon: <Activity /> },
+              { label: 'Orders', key: 'orders', icon: <TrendingUp /> },
+              { label: 'CPC', key: 'cpc', icon: <TrendingDown /> },
+              { label: 'CVR %', key: 'cvr', icon: <TrendingUp /> }
+            ].map((kpi, idx) => {
+              const meta = METRIC_MAP[kpi.key] || {};
+              const val = summaryData[kpi.key] || 0;
+              const isCurr = meta.type === 'currency';
+              const isPct = meta.type === 'percent';
+              const isRatio = meta.type === 'ratio';
+              return (
+                <div className="col-md-3 col-sm-6" key={idx}>
+                  <div className="card border-0 shadow-sm rounded-3 h-100 hover-up-mild" style={{ backgroundColor: '#fff' }}>
+                    <div className="card-body p-3">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <span className="text-uppercase text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{kpi.label}</span>
+                        <div className="p-1.5 bg-light text-indigo-500 rounded-2" style={{ opacity: 0.8 }}>
+                          {React.cloneElement(kpi.icon, { size: 14 })}
                         </div>
-                        <div className="d-flex align-items-baseline gap-2">
-                          <h3 className="mb-0 fw-bolder text-dark" style={{ letterSpacing: '-0.03em', fontSize: '1.4rem' }}>
-                            {isCurr ? '₹' + formatCompact(val) : isRatio ? val.toFixed(2) : isPct ? val.toFixed(1) + '%' : formatCompact(val)}
-                          </h3>
-                        </div>
-                        <div className="mt-2 pt-2 border-top d-flex align-items-center gap-1 text-success fw-bold" style={{fontSize: '11px'}}>
-                           <TrendingUp size={12}/> <span style={{color: '#059669'}}>+2.4% vs Prev.</span>
-                        </div>
-                     </div>
-                   </div>
-                 </div>
-               );
-             })}
+                      </div>
+                      <div className="d-flex align-items-baseline gap-2">
+                        <h3 className="mb-0 fw-bolder text-dark" style={{ letterSpacing: '-0.03em', fontSize: '1.4rem' }}>
+                          {isCurr ? '₹' + formatCompact(val) : isRatio ? val.toFixed(2) : isPct ? val.toFixed(1) + '%' : formatCompact(val)}
+                        </h3>
+                      </div>
+                      <div className="mt-2 pt-2 border-top d-flex align-items-center gap-1 text-success fw-bold" style={{ fontSize: '11px' }}>
+                        <TrendingUp size={12} /> <span style={{ color: '#059669' }}>+2.4% vs Prev.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* ADVANCED CHART MODULE */}
-          <div className="card border-0 shadow-sm rounded-3 overflow-hidden" style={{backgroundColor: '#fff'}}>
-             <div className="card-header bg-white border-bottom-0 pt-3 px-3 d-flex align-items-center justify-content-between">
-                <div className="d-flex align-items-center gap-2">
-                   <div style={{ width: '4px', height: '16px', background: '#6366f1', borderRadius: '2px' }}></div>
-                   <h6 className="mb-0 fw-bold text-dark">Campaign Trends & Breakdown</h6>
-                </div>
+          <div className="card border-0 shadow-sm rounded-3 overflow-hidden" style={{ backgroundColor: '#fff' }}>
+            <div className="card-header bg-white border-bottom-0 pt-3 px-3 d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center gap-2">
+                <div style={{ width: '4px', height: '16px', background: '#6366f1', borderRadius: '2px' }}></div>
+                <h6 className="mb-0 fw-bold text-dark">Campaign Trends & Breakdown</h6>
+              </div>
 
-                {/* MULTI-METRIC SELECTOR TOOLBAR */}
-                <div className="d-flex align-items-center gap-3">
-                  <div className="position-relative" ref={metricRef}>
-                    <button 
-                      onClick={()=>setMetricDropdownOpen(!metricDropdownOpen)} 
-                      className="btn btn-sm border bg-white rounded-3 fw-bold d-flex align-items-center gap-2 text-dark shadow-sm"
-                      style={{ fontSize: '11px', height: '32px' }}
-                    >
-                      <Filter size={12}/>
-                      Metrics ({chartConfigMetrics.length})
-                      <ChevronDown size={12}/>
-                    </button>
-                    {metricDropdownOpen && (
-                      <div className="position-absolute end-0 bg-white border shadow-lg rounded-3 p-2 mt-1 custom-scrollbar" style={{ zIndex: 50, width: '180px', maxHeight: '250px', overflowY: 'auto' }}>
-                        {Object.keys(METRIC_MAP).map(k => {
-                          const isSel = chartConfigMetrics.includes(k);
-                          return (
-                            <div 
-                              key={k} 
-                              className="d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light" 
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => {
-                                setChartConfigMetrics(prev => 
-                                  isSel ? prev.filter(i => i !== k) : [...prev, k]
-                                )
-                              }}
-                            >
-                               <span className="small fw-semibold" style={{fontSize: '11px'}}>{METRIC_MAP[k].label}</span>
-                               {isSel ? <CheckSquare size={14} className="text-indigo-600"/> : <Square size={14} className="text-muted"/>}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
+              {/* MULTI-METRIC SELECTOR TOOLBAR */}
+              <div className="d-flex align-items-center gap-3">
+                <div className="position-relative" ref={metricRef}>
+                  <button
+                    onClick={() => setMetricDropdownOpen(!metricDropdownOpen)}
+                    className="btn btn-sm border bg-white rounded-3 fw-bold d-flex align-items-center gap-2 text-dark shadow-sm"
+                    style={{ fontSize: '11px', height: '32px' }}
+                  >
+                    <Filter size={12} />
+                    Metrics ({chartConfigMetrics.length})
+                    <ChevronDown size={12} />
+                  </button>
+                  {metricDropdownOpen && (
+                    <div className="position-absolute end-0 bg-white border shadow-lg rounded-3 p-2 mt-1 custom-scrollbar" style={{ zIndex: 50, width: '180px', maxHeight: '250px', overflowY: 'auto' }}>
+                      {Object.keys(METRIC_MAP).map(k => {
+                        const isSel = chartConfigMetrics.includes(k);
+                        return (
+                          <div
+                            key={k}
+                            className="d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              setChartConfigMetrics(prev =>
+                                isSel ? prev.filter(i => i !== k) : [...prev, k]
+                              )
+                            }}
+                          >
+                            <span className="small fw-semibold" style={{ fontSize: '11px' }}>{METRIC_MAP[k].label}</span>
+                            {isSel ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} className="text-muted" />}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-             </div>
+              </div>
+            </div>
 
-             <div className="card-body p-2" style={{ height: '300px' }}>
-                {dynamicChartState.series.length > 0 ? (
-                  <Chart 
-                    height="100%"
-                    type="line" 
-                    series={dynamicChartState.series}
-                    options={{
-                      chart: {
-                        type: 'line',
-                        toolbar: { show: true, tools: { download: false } },
-                        zoom: { enabled: false },
-                        fontFamily: 'inherit'
-                      },
-                      stroke: {
-                        width: dynamicChartState.series.map(s => s.type === 'line' ? 2.5 : 0),
-                        curve: 'smooth'
-                      },
-                      colors: dynamicChartState.colors,
-                      plotOptions: {
-                        bar: { columnWidth: '45%', borderRadius: 4 }
-                      },
-                      fill: {
-                         opacity: dynamicChartState.series.map(s => s.type === 'line' ? 1 : 0.85)
-                      },
-                      markers: { size: dynamicChartState.series.map(s => s.type === 'line' ? 3 : 0), strokeWidth: 1 },
-                      dataLabels: { enabled: false },
-                      xaxis: {
-                        categories: globalChartData.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
-                        axisBorder: { show: false },
-                        axisTicks: { show: false },
-                        labels: { style: { colors: '#64748b', fontWeight: 600, fontSize: '10px' } }
-                      },
-                      yaxis: dynamicChartState.yaxis,
-                      grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { top: 10, right: 20, bottom: 0, left: 20 } },
-                      legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '11px', markers: { radius: 12 } },
-                      tooltip: { shared: true, intersect: false, theme: 'light' }
-                    }}
-                  />
-                ) : (
-                  <div className="h-100 d-flex align-items-center justify-content-center text-muted fw-bold small">SELECT METRICS TO VIEW CHART</div>
-                )}
-             </div>
+            <div className="card-body p-2" style={{ height: '300px' }}>
+              {dynamicChartState.series.length > 0 ? (
+                <Chart
+                  height="100%"
+                  type="line"
+                  series={dynamicChartState.series}
+                  options={{
+                    chart: {
+                      type: 'line',
+                      toolbar: { show: true, tools: { download: false } },
+                      zoom: { enabled: false },
+                      fontFamily: 'inherit'
+                    },
+                    stroke: {
+                      width: dynamicChartState.series.map(s => s.type === 'line' ? 2.5 : 0),
+                      curve: 'smooth'
+                    },
+                    colors: dynamicChartState.colors,
+                    plotOptions: {
+                      bar: { columnWidth: '45%', borderRadius: 4 }
+                    },
+                    fill: {
+                      opacity: dynamicChartState.series.map(s => s.type === 'line' ? 1 : 0.85)
+                    },
+                    markers: { size: dynamicChartState.series.map(s => s.type === 'line' ? 3 : 0), strokeWidth: 1 },
+                    dataLabels: { enabled: false },
+                    xaxis: {
+                      categories: globalChartData.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+                      axisBorder: { show: false },
+                      axisTicks: { show: false },
+                      labels: { style: { colors: '#64748b', fontWeight: 600, fontSize: '10px' } }
+                    },
+                    yaxis: dynamicChartState.yaxis,
+                    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { top: 10, right: 20, bottom: 0, left: 20 } },
+                    legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '11px', markers: { radius: 12 } },
+                    tooltip: { shared: true, intersect: false, theme: 'light' }
+                  }}
+                />
+              ) : (
+                <div className="h-100 d-flex align-items-center justify-content-center text-muted fw-bold small">SELECT METRICS TO VIEW CHART</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* TABULAR / DASHBOARD TOGGLE CONTROLS */}
       <div className="bg-white border-top border-bottom px-4 py-2.5 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0 }}>
-         <div className="d-flex align-items-center gap-3">
-            <button 
-              onClick={() => setShowDashboardCharts(!showDashboardCharts)}
-              className={`btn btn-sm border-0 fw-bold rounded-3 d-flex align-items-center gap-2 transition-all ${showDashboardCharts ? 'text-indigo-700 bg-indigo-50' : 'text-secondary bg-light'}`}
-              style={{ fontSize: '11px' }}
-            >
-              {showDashboardCharts ? <ChevronUp size={14}/> : <BarChart3 size={14}/>}
-              {showDashboardCharts ? 'HIDE ANALYTICS' : 'VIEW ANALYTICS'}
-            </button>
+        <div className="d-flex align-items-center gap-3">
+          <button
+            onClick={() => setShowDashboardCharts(!showDashboardCharts)}
+            className={`btn btn-sm border-0 fw-bold rounded-3 d-flex align-items-center gap-2 transition-all ${showDashboardCharts ? 'text-indigo-700 bg-indigo-50' : 'text-secondary bg-light'}`}
+            style={{ fontSize: '11px' }}
+          >
+            {showDashboardCharts ? <ChevronUp size={14} /> : <BarChart3 size={14} />}
+            {showDashboardCharts ? 'HIDE ANALYTICS' : 'VIEW ANALYTICS'}
+          </button>
 
-            <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb' }}></div>
-            
-            <div className="d-flex align-items-center gap-2 bg-light rounded-3 px-2 py-1 border" style={{ height: '32px' }}>
-               <Search size={13} className="text-muted" />
-               <input 
-                 type="text" placeholder="Search product..." className="border-0 bg-transparent shadow-none small fw-bold"
-                 style={{ outline: 'none', fontSize: '11px', width: '180px' }}
-                 value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
-               />
-            </div>
-         </div>
-         
-         <div className="small text-muted fw-bold" style={{fontSize: '10px', letterSpacing: '0.05em'}}>
-             Showing {paginatedData.length} results of {data.length}
-         </div>
+          <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb' }}></div>
+
+          <div className="d-flex align-items-center gap-2 bg-light rounded-3 px-2 py-1 border" style={{ height: '32px' }}>
+            <Search size={13} className="text-muted" />
+            <input
+              type="text" placeholder="Search product..." className="border-0 bg-transparent shadow-none small fw-bold"
+              style={{ outline: 'none', fontSize: '11px', width: '180px' }}
+              value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="small text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
+          Showing {paginatedData.length} results of {data.length}
+        </div>
       </div>
 
       {/* MAIN TABLE CONTAINER */}
@@ -986,7 +1025,7 @@ export default function AdsManagerPage() {
                 {renderHeaderGroup('ORGANIC SALES', 'emerald', <BarChart3 size={12} />, 'organicSales')}
                 {renderHeaderGroup('PAGE VIEWS', 'blue', <Eye size={12} />, 'pageViews')}
               </tr>
-              
+
               {/* ROW 2: Metrics Sub-headers (Avg / Trend / Dates) */}
               <tr>
                 {renderSubHeaders('blue', 'impressions')}
@@ -1012,7 +1051,7 @@ export default function AdsManagerPage() {
                         <span className="text-zinc-500 smallest fw-bold" style={{ letterSpacing: '0.05em' }}>LOADING PERFORMANCE DATA...</span>
                       </div>
                     ) : (
-                      <EmptyState 
+                      <EmptyState
                         icon={BarChart3}
                         title="No Advertising Data"
                         description="We couldn't find any matching performance records for your search."
@@ -1024,12 +1063,12 @@ export default function AdsManagerPage() {
                 paginatedData.map((row, idx) => {
                   const isAltRow = idx % 2 === 1;
                   const rowBg = isAltRow ? '#f9fafb' : '#ffffff';
-                  
+
                   return (
                     <tr key={row.id || idx} className="table-row-hover" style={{ background: rowBg }}>
                       {/* Identifiers (Sticky) */}
                       {/* IMAGE CELL */}
-                      <td 
+                      <td
                         style={{
                           ...tdStyle,
                           padding: '4px',
@@ -1051,9 +1090,9 @@ export default function AdsManagerPage() {
                           )}
                         </div>
                       </td>
-                      
+
                       {/* IDENTIFIER CELL */}
-                      <td 
+                      <td
                         style={{
                           ...tdStyle,
                           position: 'sticky',
@@ -1079,7 +1118,7 @@ export default function AdsManagerPage() {
                       </td>
 
                       <td style={{ ...tdStyle, fontWeight: 600, color: '#475569' }}>{row.sku}</td>
-                      
+
                       <td style={{ ...tdStyle }}>
                         <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
                           <span className="fw-bold text-zinc-800 text-truncate" title={row.title}>{row.title}</span>
@@ -1109,19 +1148,19 @@ export default function AdsManagerPage() {
             </tbody>
           </table>
         </div>
-        
+
         {/* Table Footer / Meta Status & PAGINATION */}
         <div className="bg-white border-top px-4 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
           <div className="d-flex align-items-center gap-3">
             <span className="smallest fw-bold text-zinc-500">
               TOTAL {data.length.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
             </span>
-            
+
             <div style={{ height: '12px', width: '1px', background: '#e2e8f0' }}></div>
-            
+
             <div className="d-flex align-items-center gap-2">
               <span className="smallest fw-semibold text-zinc-500">Rows per page:</span>
-              <select 
+              <select
                 className="form-select form-select-sm border-0 bg-transparent fw-bold"
                 style={{ fontSize: '0.7rem', width: 'auto', paddingRight: '20px', cursor: 'pointer' }}
                 value={pageSize}
@@ -1149,7 +1188,7 @@ export default function AdsManagerPage() {
               >
                 <ChevronLeft size={14} />
               </button>
-              
+
               <div className="d-flex align-items-center gap-1">
                 <span className="smallest fw-bold text-indigo-600">PAGE {page}</span>
                 <span className="smallest fw-semibold text-zinc-400">OF {totalPages}</span>
@@ -1167,10 +1206,10 @@ export default function AdsManagerPage() {
           )}
 
           <div className="d-flex gap-3 align-items-center">
-             <div className="d-flex align-items-center gap-1.5">
-               <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
-               <span className="smallest fw-semibold text-zinc-500" style={{ fontSize: '9px', letterSpacing: '0.02em' }}>LIVE SYNC</span>
-             </div>
+            <div className="d-flex align-items-center gap-1.5">
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
+              <span className="smallest fw-semibold text-zinc-500" style={{ fontSize: '9px', letterSpacing: '0.02em' }}>LIVE SYNC</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1222,10 +1261,10 @@ export default function AdsManagerPage() {
       `}</style>
 
       {/* Detailed View Model Portal */}
-      <AdsHistoryModal 
-        isOpen={!!activeHistoryRow} 
-        onClose={() => setActiveHistoryRow(null)} 
-        rowData={activeHistoryRow} 
+      <AdsHistoryModal
+        isOpen={!!activeHistoryRow}
+        onClose={() => setActiveHistoryRow(null)}
+        rowData={activeHistoryRow}
       />
     </div>
   );

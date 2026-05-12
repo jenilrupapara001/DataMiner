@@ -38,7 +38,7 @@ const parseDate = (val) => {
         const year = parseInt(isoMatch[1]);
         const month = parseInt(isoMatch[2]) - 1;
         const day = parseInt(isoMatch[3]);
-        const d = new Date(year, month, day);
+        const d = new Date(Date.UTC(year, month, day));
         if (!isNaN(d.getTime())) return d;
     }
     
@@ -65,7 +65,7 @@ const parseDate = (val) => {
             else { day = part1; month = part2; } 
         }
         
-        const d = new Date(year, month - 1, day);
+        const d = new Date(Date.UTC(year, month - 1, day));
         if (!isNaN(d.getTime())) return d;
     }
     
@@ -117,7 +117,7 @@ exports.uploadMonthlyData = async (req, res) => {
           // Check duplicate for this month
           const existing = await transaction.request()
             .input('asin', sql.VarChar, asin)
-            .input('month', sql.Date, new Date(`${month}-01`))
+            .input('month', sql.Date, new Date(`${month}-01T00:00:00Z`))
             .query('SELECT Id FROM MonthlyPerformance WHERE Asin = @asin AND Month = @month');
           if (existing.recordset.length > 0) {
             skipped++;
@@ -129,7 +129,7 @@ exports.uploadMonthlyData = async (req, res) => {
           await transaction.request()
             .input('id', sql.VarChar, id)
             .input('asin', sql.VarChar, asin)
-            .input('month', sql.Date, new Date(`${month}-01`))
+            .input('month', sql.Date, new Date(`${month}-01T00:00:00Z`))
             .input('units', sql.Int, units)
             .input('revenue', sql.Decimal(18, 2), revenue)
             .query(`
@@ -174,9 +174,16 @@ exports.uploadMonthlyData = async (req, res) => {
 };
 
 exports.uploadAdsData = async (req, res) => {
+  let filePath = null;
+  let tempTableName = null;
+  const pool = await getPool();
+
   try {
-    const filePath = req.file.path;
-    const workbook = XLSX.readFile(filePath);
+    if (!req.file) throw new Error('No file uploaded');
+    filePath = req.file.path;
+    
+    const isCSV = filePath.toLowerCase().endsWith('.csv');
+    const workbook = XLSX.readFile(filePath, isCSV ? { raw: true } : {});
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
 
@@ -184,283 +191,225 @@ exports.uploadAdsData = async (req, res) => {
     const reportDate = req.body.date;
     if (!reportDate) throw new Error('Report date is required');
 
-    const pool = await getPool();
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    // Standardized column specification matching database inspection
+    const columnsList = [
+      { name: 'Asin', type: sql.VarChar(50), required: true },
+      { name: 'AdvertisedSku', type: sql.VarChar(255) },
+      { name: 'Date', type: sql.Date },
+      { name: 'Month', type: sql.Date },
+      { name: 'ReportType', type: sql.VarChar(20), required: true },
+      { name: 'AdSpend', type: sql.Decimal(18, 2) },
+      { name: 'AdSales', type: sql.Decimal(18, 2) },
+      { name: 'Impressions', type: sql.Int },
+      { name: 'Clicks', type: sql.Int },
+      { name: 'Orders', type: sql.Int },
+      { name: 'ACoS', type: sql.Decimal(18, 4) },
+      { name: 'RoAS', type: sql.Decimal(18, 4) },
+      { name: 'CTR', type: sql.Decimal(18, 4) },
+      { name: 'CPC', type: sql.Decimal(18, 4) },
+      { name: 'ConversionRate', type: sql.Decimal(18, 4) },
+      { name: 'OrganicSales', type: sql.Decimal(18, 2) },
+      { name: 'OrganicOrders', type: sql.Int },
+      { name: 'Sessions', type: sql.Int },
+      { name: 'Conversions', type: sql.Int },
+      { name: 'SameSkuSales', type: sql.Decimal(18, 2) },
+      { name: 'SameSkuOrders', type: sql.Int },
+      { name: 'DailyBudget', type: sql.Decimal(18, 2) },
+      { name: 'TotalBudget', type: sql.Decimal(18, 2) },
+      { name: 'MaxSpend', type: sql.Decimal(18, 2) },
+      { name: 'AvgSpend', type: sql.Decimal(18, 2) },
+      { name: 'TotalSales', type: sql.Decimal(18, 2) },
+      { name: 'TotalAcos', type: sql.Decimal(18, 2) },
+      { name: 'TotalUnits', type: sql.Int },
+      { name: 'PageViews', type: sql.Int },
+      { name: 'AdSalesPerc', type: sql.Decimal(18, 4) },
+      { name: 'TosIs', type: sql.Decimal(18, 4) },
+      { name: 'Aov', type: sql.Decimal(18, 2) },
+      { name: 'BuyBoxPercentage', type: sql.Decimal(18, 4) },
+      { name: 'BrowserSessions', type: sql.Int },
+      { name: 'MobileAppSessions', type: sql.Int }
+    ];
 
-    let processed = 0, skipped = 0, errors = 0;
-    const skippedRecords = [];
+    // Generate collision-proof global temp table name to traverse pool connection barriers
+    tempTableName = `##TempAds_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-    try {
-      for (let i = 0; i < jsonData.length; i++) {
-        const row = jsonData[i];
-        try {
-          let asin = findValue(row, ['asin', 'Advertised ASIN', 'ASIN', 'Jio Code', 'jio_code']);
-          if (!asin) { skipped++; continue; }
-          asin = asin.replace(/^"+|"+$/g, ''); // Clean quotes
-
-          let sku = findValue(row, ['sku', 'SKU', 'Advertised SKU']);
-          if (sku) sku = sku.replace(/^"+|"+$/g, '');
-
-          const dateVal = findValue(row, ['date', 'Date', 'Day', 'Released Date', 'Realeased date', 'release_date', 'released_date']);
-          const parsedDate = parseDate(dateVal) || parseDate(reportDate);
-          
-          if (!parsedDate || isNaN(parsedDate.getTime())) {
-            console.error(`❌ Invalid date for ASIN ${asin}:`, { dateVal, reportDate });
-            skipped++;
-            continue;
-          }
-
-          const spend = parseFloat((findValue(row, ['spend', 'Spend', 'ad_spend', 'metrics.spend']) || '0').replace(/,/g, '')) || 0;
-          const sales = parseFloat((findValue(row, ['sales', 'Sales', 'ad_sales', 'metrics.sales']) || '0').replace(/,/g, '')) || 0;
-          const impressions = parseInt((findValue(row, ['impressions', 'Impressions', 'metrics.impressions']) || '0').replace(/,/g, ''));
-          const clicks = parseInt((findValue(row, ['clicks', 'Clicks', 'metrics.clicks']) || '0').replace(/,/g, ''));
-          const orders = parseInt((findValue(row, ['orders', 'Orders', 'metrics.orders']) || '0').replace(/,/g, ''));
-
-          const conversions = parseInt((findValue(row, ['conversions', 'Conversions', 'metrics.conversions']) || '0').replace(/,/g, '')) || 0;
-          const sameSkuSales = parseFloat((findValue(row, ['same_sku_sales', 'SameSkuSales', 'metrics.same_sku_sales']) || '0').replace(/,/g, '')) || 0;
-          const sameSkuOrders = parseInt((findValue(row, ['same_sku_orders', 'SameSkuOrders', 'metrics.same_sku_orders']) || '0').replace(/,/g, '')) || 0;
-
-          const dailyBudget = parseFloat((findValue(row, ['daily_budget', 'DailyBudget', 'metrics.daily_budget']) || '0').replace(/,/g, '')) || 0;
-          const totalBudget = parseFloat((findValue(row, ['total_budget', 'TotalBudget', 'metrics.total_budget']) || '0').replace(/,/g, '')) || 0;
-          const maxSpend = parseFloat((findValue(row, ['max_spend', 'MaxSpend', 'metrics.max_spend']) || '0').replace(/,/g, '')) || 0;
-          const avgSpend = parseFloat((findValue(row, ['avg_spend', 'AvgSpend', 'metrics.avg_spend']) || '0').replace(/,/g, '')) || 0;
-
-          const totalSales = parseFloat((findValue(row, ['total_sales', 'TotalSales', 'metrics.total_sales']) || '0').replace(/,/g, '')) || 0;
-          const totalAcos = parseFloat((findValue(row, ['total_acos', 'TotalAcos', 'metrics.total_acos']) || '0').replace(/,/g, '')) || 0;
-          const totalUnits = parseInt((findValue(row, ['total_units', 'TotalUnits', 'metrics.total_units']) || '0').replace(/,/g, '')) || 0;
-
-          const organicSales = parseFloat((findValue(row, ['organic_sales', 'OrganicSales', 'metrics.organic_sales']) || '0').replace(/,/g, '')) || 0;
-          const organicOrders = parseInt((findValue(row, ['organic_orders', 'OrganicOrders', 'metrics.organic_orders']) || '0').replace(/,/g, '')) || 0;
-          const pageViews = parseInt((findValue(row, ['page_views', 'PageViews', 'metrics.page_views']) || '0').replace(/,/g, '')) || 0;
-
-          const adSalesPerc = parseFloat((findValue(row, ['ad_sales_perc', 'AdSalesPerc', 'metrics.ad_sales_perc']) || '0').replace(/,/g, '')) || 0;
-          const tosIs = parseFloat((findValue(row, ['tos_is', 'TosIs', 'metrics.tos_is']) || '0').replace(/,/g, '')) || 0;
-          const aov = parseFloat((findValue(row, ['aov', 'Aov', 'metrics.aov']) || '0').replace(/,/g, '')) || 0;
-          const sessions = parseInt((findValue(row, ['sessions', 'Sessions', 'metrics.sessions']) || '0').replace(/,/g, '')) || 0;
-
-          const buyBoxPercentage = parseFloat((findValue(row, ['buy_box_percentage', 'BuyBoxPercentage', 'metrics.buy_box_percentage']) || '0').replace(/,/g, '')) || 0;
-          const browserSessions = parseInt((findValue(row, ['browser_sessions', 'BrowserSessions', 'metrics.browser_sessions']) || '0').replace(/,/g, '')) || 0;
-          const mobileAppSessions = parseInt((findValue(row, ['mobile_app_sessions', 'MobileAppSessions', 'metrics.mobile_app_sessions']) || '0').replace(/,/g, '')) || 0;
-
-          // Calculated
-          const acos = sales > 0 ? (spend / sales) * 100 : 0;
-          const roas = spend > 0 ? sales / spend : 0;
-          const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-          const cpc = clicks > 0 ? spend / clicks : 0;
-          const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
-
-          if (reportType === 'daily') {
-            const existing = await transaction.request()
-              .input('asin', sql.VarChar, asin)
-              .input('date', sql.Date, parsedDate)
-              .query('SELECT Id FROM AdsPerformance WHERE Asin = @asin AND Date = @date AND ReportType = \'daily\'');
-
-            let query;
-            if (existing.recordset.length > 0) {
-              query = `
-                UPDATE AdsPerformance SET 
-                  AdvertisedSku=@sku,
-                  AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders,
-                  ACoS=@acos, RoAS=@roas, CTR=@ctr, CPC=@cpc, ConversionRate=@conversionRate,
-                  Conversions=@conversions, SameSkuSales=@sameSkuSales, SameSkuOrders=@sameSkuOrders,
-                  DailyBudget=@dailyBudget, TotalBudget=@totalBudget, MaxSpend=@maxSpend, AvgSpend=@avgSpend,
-                  TotalSales=@totalSales, TotalAcos=@totalAcos, TotalUnits=@totalUnits,
-                  OrganicSales=@organicSales, OrganicOrders=@organicOrders, PageViews=@pageViews,
-                  AdSalesPerc=@adSalesPerc, TosIs=@tosIs, Aov=@aov, Sessions=@sessions,
-                  BuyBoxPercentage=@buyBoxPercentage, BrowserSessions=@browserSessions, MobileAppSessions=@mobileAppSessions,
-                  UploadedAt=GETDATE()
-                WHERE Id=@id
-              `;
-            } else {
-              query = `
-                INSERT INTO AdsPerformance (
-                  Asin, AdvertisedSku, Date, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders,
-                  ACoS, RoAS, CTR, CPC, ConversionRate,
-                  Conversions, SameSkuSales, SameSkuOrders,
-                  DailyBudget, TotalBudget, MaxSpend, AvgSpend,
-                  TotalSales, TotalAcos, TotalUnits,
-                  OrganicSales, OrganicOrders, PageViews,
-                  AdSalesPerc, TosIs, Aov, Sessions,
-                  BuyBoxPercentage, BrowserSessions, MobileAppSessions,
-                  UploadedAt
-                ) VALUES (
-                  @asin, @sku, @date, @reportType, @spend, @sales, @impressions, @clicks, @orders,
-                  @acos, @roas, @ctr, @cpc, @conversionRate,
-                  @conversions, @sameSkuSales, @sameSkuOrders,
-                  @dailyBudget, @totalBudget, @maxSpend, @avgSpend,
-                  @totalSales, @totalAcos, @totalUnits,
-                  @organicSales, @organicOrders, @pageViews,
-                  @adSalesPerc, @tosIs, @aov, @sessions,
-                  @buyBoxPercentage, @browserSessions, @mobileAppSessions,
-                  GETDATE()
-                )
-              `;
-            }
-
-            const request = transaction.request()
-              .input('asin', sql.VarChar, asin)
-              .input('sku', sql.VarChar, sku)
-              .input('date', sql.Date, parsedDate)
-              .input('reportType', sql.NVarChar, 'daily')
-              .input('spend', sql.Decimal(18, 2), spend)
-              .input('sales', sql.Decimal(18, 2), sales)
-              .input('impressions', sql.Int, impressions)
-              .input('clicks', sql.Int, clicks)
-              .input('orders', sql.Int, orders)
-              .input('acos', sql.Decimal(18, 4), acos)
-              .input('roas', sql.Decimal(18, 4), roas)
-              .input('ctr', sql.Decimal(18, 4), ctr)
-              .input('cpc', sql.Decimal(18, 4), cpc)
-              .input('conversionRate', sql.Decimal(18, 4), conversionRate)
-              .input('conversions', sql.Int, conversions)
-              .input('sameSkuSales', sql.Decimal(18, 2), sameSkuSales)
-              .input('sameSkuOrders', sql.Int, sameSkuOrders)
-              .input('dailyBudget', sql.Decimal(18, 2), dailyBudget)
-              .input('totalBudget', sql.Decimal(18, 2), totalBudget)
-              .input('maxSpend', sql.Decimal(18, 2), maxSpend)
-              .input('avgSpend', sql.Decimal(18, 2), avgSpend)
-              .input('totalSales', sql.Decimal(18, 2), totalSales)
-              .input('totalAcos', sql.Decimal(18, 2), totalAcos)
-              .input('totalUnits', sql.Int, totalUnits)
-              .input('organicSales', sql.Decimal(18, 2), organicSales)
-              .input('organicOrders', sql.Int, organicOrders)
-              .input('pageViews', sql.Int, pageViews)
-              .input('adSalesPerc', sql.Decimal(18, 4), adSalesPerc)
-              .input('tosIs', sql.Decimal(18, 4), tosIs)
-              .input('aov', sql.Decimal(18, 2), aov)
-              .input('sessions', sql.Int, sessions)
-              .input('buyBoxPercentage', sql.Decimal(18, 4), buyBoxPercentage)
-              .input('browserSessions', sql.Int, browserSessions)
-              .input('mobileAppSessions', sql.Int, mobileAppSessions);
-
-            if (existing.recordset.length > 0) {
-              request.input('id', sql.Int, existing.recordset[0].Id);
-            }
-
-            await request.query(query);
-          } else {
-            // monthly similar logic
-            const monthDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1);
-            const existing = await transaction.request()
-              .input('asin', sql.VarChar, asin)
-              .input('month', sql.Date, monthDate)
-              .query('SELECT Id FROM AdsPerformance WHERE Asin = @asin AND Month = @month AND ReportType = \'monthly\'');
-
-            let query;
-            if (existing.recordset.length > 0) {
-              query = `
-                UPDATE AdsPerformance SET 
-                  AdSpend=@spend, AdSales=@sales, Impressions=@impressions, Clicks=@clicks, Orders=@orders,
-                  ACoS=@acos, RoAS=@roas, CTR=@ctr, CPC=@cpc, ConversionRate=@conversionRate,
-                  Conversions=@conversions, SameSkuSales=@sameSkuSales, SameSkuOrders=@sameSkuOrders,
-                  DailyBudget=@dailyBudget, TotalBudget=@totalBudget, MaxSpend=@maxSpend, AvgSpend=@avgSpend,
-                  TotalSales=@totalSales, TotalAcos=@totalAcos, TotalUnits=@totalUnits,
-                  OrganicSales=@organicSales, OrganicOrders=@organicOrders, PageViews=@pageViews,
-                  AdSalesPerc=@adSalesPerc, TosIs=@tosIs, Aov=@aov, Sessions=@sessions,
-                  BuyBoxPercentage=@buyBoxPercentage, BrowserSessions=@browserSessions, MobileAppSessions=@mobileAppSessions,
-                  UploadedAt=GETDATE()
-                WHERE Id=@id
-              `;
-            } else {
-              query = `
-                INSERT INTO AdsPerformance (
-                  Asin, Month, ReportType, AdSpend, AdSales, Impressions, Clicks, Orders,
-                  ACoS, RoAS, CTR, CPC, ConversionRate,
-                  Conversions, SameSkuSales, SameSkuOrders,
-                  DailyBudget, TotalBudget, MaxSpend, AvgSpend,
-                  TotalSales, TotalAcos, TotalUnits,
-                  OrganicSales, OrganicOrders, PageViews,
-                  AdSalesPerc, TosIs, Aov, Sessions,
-                  BuyBoxPercentage, BrowserSessions, MobileAppSessions,
-                  UploadedAt
-                ) VALUES (
-                  @asin, @month, @reportType, @spend, @sales, @impressions, @clicks, @orders,
-                  @acos, @roas, @ctr, @cpc, @conversionRate,
-                  @conversions, @sameSkuSales, @sameSkuOrders,
-                  @dailyBudget, @totalBudget, @maxSpend, @avgSpend,
-                  @totalSales, @totalAcos, @totalUnits,
-                  @organicSales, @organicOrders, @pageViews,
-                  @adSalesPerc, @tosIs, @aov, @sessions,
-                  @buyBoxPercentage, @browserSessions, @mobileAppSessions,
-                  GETDATE()
-                )
-              `;
-            }
-
-            const request = transaction.request()
-              .input('asin', sql.VarChar, asin)
-              .input('month', sql.Date, monthDate)
-              .input('reportType', sql.NVarChar, 'monthly')
-              .input('spend', sql.Decimal(18, 2), spend)
-              .input('sales', sql.Decimal(18, 2), sales)
-              .input('impressions', sql.Int, impressions)
-              .input('clicks', sql.Int, clicks)
-              .input('orders', sql.Int, orders)
-              .input('acos', sql.Decimal(18, 4), acos)
-              .input('roas', sql.Decimal(18, 4), roas)
-              .input('ctr', sql.Decimal(18, 4), ctr)
-              .input('cpc', sql.Decimal(18, 4), cpc)
-              .input('conversionRate', sql.Decimal(18, 4), conversionRate)
-              .input('conversions', sql.Int, conversions)
-              .input('sameSkuSales', sql.Decimal(18, 2), sameSkuSales)
-              .input('sameSkuOrders', sql.Int, sameSkuOrders)
-              .input('dailyBudget', sql.Decimal(18, 2), dailyBudget)
-              .input('totalBudget', sql.Decimal(18, 2), totalBudget)
-              .input('maxSpend', sql.Decimal(18, 2), maxSpend)
-              .input('avgSpend', sql.Decimal(18, 2), avgSpend)
-              .input('totalSales', sql.Decimal(18, 2), totalSales)
-              .input('totalAcos', sql.Decimal(18, 2), totalAcos)
-              .input('totalUnits', sql.Int, totalUnits)
-              .input('organicSales', sql.Decimal(18, 2), organicSales)
-              .input('organicOrders', sql.Int, organicOrders)
-              .input('pageViews', sql.Int, pageViews)
-              .input('adSalesPerc', sql.Decimal(18, 4), adSalesPerc)
-              .input('tosIs', sql.Decimal(18, 4), tosIs)
-              .input('aov', sql.Decimal(18, 2), aov)
-              .input('sessions', sql.Int, sessions)
-              .input('buyBoxPercentage', sql.Decimal(18, 4), buyBoxPercentage)
-              .input('browserSessions', sql.Int, browserSessions)
-              .input('mobileAppSessions', sql.Int, mobileAppSessions);
-
-            if (existing.recordset.length > 0) {
-              request.input('id', sql.Int, existing.recordset[0].Id);
-            }
-
-            await request.query(query);
-          }
-
-          // MARK ASIN as having ads in main Asins table
-          await transaction.request()
-            .input('asinCode', sql.VarChar, asin)
-            .query('UPDATE Asins SET Ads = 1 WHERE AsinCode = @asinCode');
-
-          processed++;
-        } catch (e) {
-          errors++;
-          console.error(`Ads Row ${i + 1} error:`, e.message, 'Row Data:', JSON.stringify(row));
-        }
+    // Explicit, durable type mapping to defend against runtime serialization drifts
+    const colDefs = columnsList.map(col => {
+      let typeStr = 'NVARCHAR(MAX)'; // Safe fallback
+      if (col.type === sql.Int) {
+        typeStr = 'INT';
+      } else if (col.type === sql.Date) {
+        typeStr = 'DATE';
+      } else if (col.type.type === sql.VarChar) {
+        typeStr = `VARCHAR(${col.type.length || 255})`;
+      } else if (col.type.type === sql.Decimal) {
+        typeStr = `DECIMAL(${col.type.precision || 18}, ${col.type.scale || 4})`;
       }
-      await transaction.commit();
+      return `[${col.name}] ${typeStr} ${col.required ? 'NOT NULL' : 'NULL'}`;
+    }).join(', ');
 
-      fs.unlinkSync(filePath);
-      res.json({
-        success: true,
-        processed,
-        skipped,
-        errors
-      });
-    } catch (err) {
-      console.error('Ads Upload Outer Error:', err);
-      if (transaction) {
-        try { await transaction.rollback(); } catch (e) { console.error('Rollback failed:', e); }
+    // Initialize DB Table Structure
+    await pool.request().query(`CREATE TABLE ${tempTableName} (${colDefs})`);
+
+    // Prepare client-side Bulk Insertion engine
+    const table = new sql.Table(tempTableName);
+    columnsList.forEach(c => table.columns.add(c.name, c.type, { nullable: !c.required }));
+
+    // Utilize a map to deduplicate spreadsheet rows to obey strict atomicity constraints
+    const uniqueRowMap = new Map();
+    let skippedCount = 0;
+
+    for (const row of jsonData) {
+      let asin = findValue(row, ['asin', 'Advertised ASIN', 'ASIN', 'Jio Code', 'jio_code']);
+      if (!asin) { skippedCount++; continue; }
+      asin = asin.replace(/^"+|"+$/g, ''); 
+
+      let sku = findValue(row, ['sku', 'SKU', 'Advertised SKU']);
+      if (sku) sku = sku.replace(/^"+|"+$/g, '');
+
+      const dateVal = findValue(row, ['date', 'Date', 'Day', 'Released Date', 'Realeased date', 'release_date', 'released_date']);
+      const parsedDate = parseDate(dateVal) || parseDate(reportDate);
+      
+      if (!parsedDate || isNaN(parsedDate.getTime())) {
+        skippedCount++;
+        continue;
       }
-      res.status(500).json({ success: false, error: err.message, stack: err.stack });
+
+      const spend = parseFloat((findValue(row, ['spend', 'Spend', 'ad_spend', 'metrics.spend']) || '0').replace(/,/g, '')) || 0;
+      const sales = parseFloat((findValue(row, ['sales', 'Sales', 'ad_sales', 'metrics.sales']) || '0').replace(/,/g, '')) || 0;
+      const impressions = parseInt((findValue(row, ['impressions', 'Impressions', 'metrics.impressions']) || '0').replace(/,/g, '')) || 0;
+      const clicks = parseInt((findValue(row, ['clicks', 'Clicks', 'metrics.clicks']) || '0').replace(/,/g, '')) || 0;
+      const orders = parseInt((findValue(row, ['orders', 'Orders', 'metrics.orders']) || '0').replace(/,/g, '')) || 0;
+
+      const conversions = parseInt((findValue(row, ['conversions', 'Conversions', 'metrics.conversions']) || '0').replace(/,/g, '')) || 0;
+      const sameSkuSales = parseFloat((findValue(row, ['same_sku_sales', 'SameSkuSales', 'metrics.same_sku_sales']) || '0').replace(/,/g, '')) || 0;
+      const sameSkuOrders = parseInt((findValue(row, ['same_sku_orders', 'SameSkuOrders', 'metrics.same_sku_orders']) || '0').replace(/,/g, '')) || 0;
+      const dailyBudget = parseFloat((findValue(row, ['daily_budget', 'DailyBudget', 'metrics.daily_budget']) || '0').replace(/,/g, '')) || 0;
+      const totalBudget = parseFloat((findValue(row, ['total_budget', 'TotalBudget', 'metrics.total_budget']) || '0').replace(/,/g, '')) || 0;
+      const maxSpend = parseFloat((findValue(row, ['max_spend', 'MaxSpend', 'metrics.max_spend']) || '0').replace(/,/g, '')) || 0;
+      const avgSpend = parseFloat((findValue(row, ['avg_spend', 'AvgSpend', 'metrics.avg_spend']) || '0').replace(/,/g, '')) || 0;
+      const totalSales = parseFloat((findValue(row, ['total_sales', 'TotalSales', 'metrics.total_sales']) || '0').replace(/,/g, '')) || 0;
+      const totalAcos = parseFloat((findValue(row, ['total_acos', 'TotalAcos', 'metrics.total_acos']) || '0').replace(/,/g, '')) || 0;
+      const totalUnits = parseInt((findValue(row, ['total_units', 'TotalUnits', 'metrics.total_units']) || '0').replace(/,/g, '')) || 0;
+      const organicSales = parseFloat((findValue(row, ['organic_sales', 'OrganicSales', 'metrics.organic_sales']) || '0').replace(/,/g, '')) || 0;
+      const organicOrders = parseInt((findValue(row, ['organic_orders', 'OrganicOrders', 'metrics.organic_orders']) || '0').replace(/,/g, '')) || 0;
+      const pageViews = parseInt((findValue(row, ['page_views', 'PageViews', 'metrics.page_views']) || '0').replace(/,/g, '')) || 0;
+      const adSalesPerc = parseFloat((findValue(row, ['ad_sales_perc', 'AdSalesPerc', 'metrics.ad_sales_perc']) || '0').replace(/,/g, '')) || 0;
+      const tosIs = parseFloat((findValue(row, ['tos_is', 'TosIs', 'metrics.tos_is']) || '0').replace(/,/g, '')) || 0;
+      const aov = parseFloat((findValue(row, ['aov', 'Aov', 'metrics.aov']) || '0').replace(/,/g, '')) || 0;
+      const sessions = parseInt((findValue(row, ['sessions', 'Sessions', 'metrics.sessions']) || '0').replace(/,/g, '')) || 0;
+      const buyBoxPercentage = parseFloat((findValue(row, ['buy_box_percentage', 'BuyBoxPercentage', 'metrics.buy_box_percentage']) || '0').replace(/,/g, '')) || 0;
+      const browserSessions = parseInt((findValue(row, ['browser_sessions', 'BrowserSessions', 'metrics.browser_sessions']) || '0').replace(/,/g, '')) || 0;
+      const mobileAppSessions = parseInt((findValue(row, ['mobile_app_sessions', 'MobileAppSessions', 'metrics.mobile_app_sessions']) || '0').replace(/,/g, '')) || 0;
+
+      const acos = sales > 0 ? (spend / sales) * 100 : 0;
+      const roas = spend > 0 ? sales / spend : 0;
+      const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+      const cpc = clicks > 0 ? spend / clicks : 0;
+      const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
+
+      let targetDate = null;
+      let targetMonth = null;
+      let compositeKey = '';
+
+      if (reportType === 'daily') {
+        targetDate = parsedDate;
+        // Unique string format for consistency
+        compositeKey = `${asin}|daily|${targetDate.toISOString().split('T')[0]}`;
+      } else {
+        targetMonth = new Date(Date.UTC(parsedDate.getUTCFullYear(), parsedDate.getUTCMonth(), 1));
+        compositeKey = `${asin}|monthly|${targetMonth.toISOString().split('T')[0]}`;
+      }
+
+      // Add/Overwrite payload to fulfill the "Last Wins" semantics safely before streaming
+      uniqueRowMap.set(compositeKey, [
+        asin, sku, targetDate, targetMonth, reportType,
+        spend, sales, impressions, clicks, orders,
+        acos, roas, ctr, cpc, conversionRate,
+        organicSales, organicOrders, sessions,
+        conversions, sameSkuSales, sameSkuOrders,
+        dailyBudget, totalBudget, maxSpend, avgSpend,
+        totalSales, totalAcos, totalUnits,
+        pageViews, adSalesPerc, tosIs, aov,
+        buyBoxPercentage, browserSessions, mobileAppSessions
+      ]);
     }
+
+    // Populate memory Table with non-duplicate unique rows
+    for (const values of uniqueRowMap.values()) {
+      table.rows.add(...values);
+    }
+
+    const uniqueCount = uniqueRowMap.size;
+
+    // High-Throughput Database Streaming and Atomic Ingestion
+    if (uniqueCount > 0) {
+      // Direct Server Memory-to-Memory push
+      await pool.request().bulk(table);
+
+      // Dynamic mapping for MERGE operation to preserve safety against manual mapping drift
+      const updateCols = columnsList
+        .filter(c => !['Asin', 'Date', 'Month', 'ReportType'].includes(c.name))
+        .map(c => `T.[${c.name}] = S.[${c.name}]`)
+        .join(', ');
+
+      const insertColNames = columnsList.map(c => `[${c.name}]`).join(', ');
+      const insertColVals = columnsList.map(c => `S.[${c.name}]`).join(', ');
+
+      const matchClause = `
+        T.Asin = S.Asin 
+        AND T.ReportType = S.ReportType 
+        AND (
+          (S.ReportType = 'daily' AND T.[Date] = S.[Date]) OR 
+          (S.ReportType = 'monthly' AND T.[Month] = S.[Month])
+        )
+      `;
+
+      // Perform Atomic Unit-of-Work UPSERT across all rows simultaneously
+      await pool.request().query(`
+        MERGE AdsPerformance AS T
+        USING ${tempTableName} AS S
+        ON (${matchClause})
+        WHEN MATCHED THEN
+          UPDATE SET ${updateCols}, T.UploadedAt = GETDATE()
+        WHEN NOT MATCHED THEN
+          INSERT (${insertColNames}, UploadedAt)
+          VALUES (${insertColVals}, GETDATE());
+      `);
+
+      // Efficiently mark corresponding parent assets active
+      await pool.request().query(`
+        UPDATE Asins 
+        SET Ads = 1 
+        WHERE AsinCode IN (SELECT DISTINCT Asin FROM ${tempTableName})
+          AND (Ads IS NULL OR Ads = 0)
+      `);
+    }
+
+    res.json({
+      success: true,
+      processed: uniqueCount,
+      skipped: skippedCount,
+      duplicatesCondensed: jsonData.length - uniqueCount - skippedCount,
+      errors: 0
+    });
+
   } catch (err) {
-    console.error("❌ Ads Upload Error:", err);
-    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    console.error("❌ HighPerformance Ads Upload Failed:", err);
+    res.status(500).json({ 
+      error: "Advertising ingestion pipeline error", 
+      details: err.message 
+    });
+  } finally {
+    // Safeguarded resource release guarantees no leakage regardless of failure vector
+    if (tempTableName) {
+      try { 
+        await pool.request().query(`IF OBJECT_ID('tempdb..${tempTableName}') IS NOT NULL DROP TABLE ${tempTableName}`);
+      } catch(e) {}
+    }
+    if (filePath && fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
   }
 };
 

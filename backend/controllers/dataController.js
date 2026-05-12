@@ -323,7 +323,7 @@ exports.getCategories = async (req, res) => {
  */
 exports.getAdsManagerData = async (req, res) => {
     try {
-        const { groupBy = 'asin', startDate, endDate, search } = req.query;
+        const { groupBy = 'asin', startDate, endDate, search, sellerId } = req.query;
         const pool = await getPool();
 
         // 1. Subquery to find the last 14 days of date range to pull history accurately
@@ -349,6 +349,11 @@ exports.getAdsManagerData = async (req, res) => {
             request.input('search', sql.VarChar, `%${search}%`);
         }
 
+        if (sellerId) {
+            whereClause += " AND a.SellerId = @sellerId";
+            request.input('sellerId', sql.VarChar, sellerId);
+        }
+
         // Fetch raw data JOINED with parent-asin info
         const result = await request.query(`
             SELECT 
@@ -360,7 +365,7 @@ exports.getAdsManagerData = async (req, res) => {
                 a.Category,
                 a.Brand
             FROM AdsPerformance p
-            LEFT JOIN Asins a ON p.Asin = a.AsinCode
+            INNER JOIN Asins a ON p.Asin = a.AsinCode
             ${whereClause}
             ORDER BY p.Date DESC
         `);
