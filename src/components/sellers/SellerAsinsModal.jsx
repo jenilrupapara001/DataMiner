@@ -39,6 +39,8 @@ const SellerAsinsModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState(0);
 
+  const totalAsins = seller?.totalAsins ?? pagination?.total ?? 0;
+
   // Selection Logic
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -368,7 +370,7 @@ const SellerAsinsModal = ({
                 </h5>
                 <div className="d-flex align-items-center gap-2 mt-1">
                   <span className="badge bg-zinc-100 text-zinc-500 rounded-pill px-2 border border-zinc-200 smallest fw-bold uppercase">{seller.marketplace}</span>
-                  <span className="text-zinc-400 smaller fw-medium">{pagination.total} Total ASINs Tracked</span>
+                  <span className="text-zinc-400 smaller fw-medium">{totalAsins} Total ASINs Tracked</span>
                 </div>
               </div>
             </div>
@@ -513,7 +515,7 @@ const SellerAsinsModal = ({
                       style={{ height: '34px', fontSize: '11px' }}
                     >
                       <CheckSquare size={14} className="text-zinc-500" />
-                      <span className="fw-black uppercase tracking-wider text-zinc-700">Select All ASINs ({pagination.total})</span>
+                      <span className="fw-black uppercase tracking-wider text-zinc-700">Select All ASINs ({totalAsins})</span>
                     </button>
 
                     <button
@@ -642,7 +644,7 @@ const SellerAsinsModal = ({
                           <span>FETCHING DATA...</span>
                         </div>
                       ) : (
-                        <span>Load More ({pagination.total - asins.length} remaining)</span>
+                        <span>Load More ({totalAsins - asins.length} remaining)</span>
                       )}
                     </button>
                   </div>
