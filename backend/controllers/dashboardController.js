@@ -154,13 +154,41 @@ exports.getDashboardData = async (req, res) => {
     // Chart processing
     const { revenueData, areaSeries, stackedBarSeries, adsPerformanceSeries, labels } = processChartData(days, adsData, endDate);
 
-    // 7. Category Distribution
-    const categoryResult = await pool.request().query(`
-      SELECT Category, COUNT(*) as Count 
-      FROM Asins ${asinFilter}
-      GROUP BY Category
+    // 7. Optimized Marketplace Distribution (Safe high-performance decouple)
+    // First: Get raw counts using ONLY covering index on Asins (super fast)
+    const asinsGroupedResult = await pool.request().query(`
+      SELECT SellerId, COUNT(*) as Count 
+      FROM Asins
+      ${isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')'}
+      GROUP BY SellerId
     `);
-    const categoryData = processCategoryData(categoryResult.recordset);
+
+    // Second: Get small Sellers map
+    const sellersMapResult = await pool.request().query(`
+      SELECT Id, Marketplace FROM Sellers
+    `);
+
+    // Map to hold aggregated counts per marketplace
+    const marketplaceCounts = {};
+    const sellersMap = {};
+    
+    // Build quick lookup map for sellers
+    sellersMapResult.recordset.forEach(s => {
+      sellersMap[s.Id] = s.Marketplace || 'Other';
+    });
+
+    // Aggregate the grouped results into marketplaces
+    asinsGroupedResult.recordset.forEach(row => {
+      const mkt = sellersMap[row.SellerId] || 'Other';
+      marketplaceCounts[mkt] = (marketplaceCounts[mkt] || 0) + row.Count;
+    });
+
+    // Transform into expected structure
+    const categoryData = Object.entries(marketplaceCounts).map(([mkt, count], idx) => ({
+      name: mkt,
+      data: [count],
+      color: ['#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6'][idx % 5]
+    }));
 
     // 8. Top ASINs Table
     const topAsinsResult = await pool.request()
