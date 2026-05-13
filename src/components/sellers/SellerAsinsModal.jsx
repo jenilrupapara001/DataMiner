@@ -1,17 +1,26 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+// SellerAsinsModal.jsx - Modern Ant Design Implementation
+import React, { useState, useMemo } from 'react';
+import {
+  Table, Button, Input, Space, Tag, Typography, Tooltip, Modal,
+  Badge, Row, Col, Progress, Segmented, Empty, Dropdown, Divider
+} from 'antd';
 import {
   Package, X, RefreshCw, FileJson, Plus, Database,
   CheckCircle2, PauseCircle, Eye, Edit3, Trash2,
   CheckSquare, Square, Trash, AlertCircle, Loader2,
-  FileUp, FileSpreadsheet
+  FileUp, FileSpreadsheet, Search, Filter, Upload,
+  MoreVertical, ArrowUpDown, Download, Zap, Info
 } from 'lucide-react';
 import { asinApi, marketSyncApi } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import ProgressBar from '../common/ProgressBar';
+import { Suspense, lazy } from 'react';
 
 const AddBulkAsinModal = lazy(() => import('./AddBulkAsinModal'));
 const EditAsinModal = lazy(() => import('./EditAsinModal'));
 const AsinDetailsModal = lazy(() => import('./AsinDetailsModal'));
+
+const { Text, Title } = Typography;
 
 const SellerAsinsModal = ({
   seller,
@@ -159,37 +168,42 @@ const SellerAsinsModal = ({
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
 
-    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} selected ASINs? This action will permanently remove all associated historical data.`)) {
-      return;
-    }
+    Modal.confirm({
+      title: 'Confirm Bulk Delete',
+      content: `Are you sure you want to delete ${selectedIds.size} selected ASINs? This action will permanently remove all associated historical data.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        setIsBulkDeleting(true);
+        setIsSubmitting(true);
+        setSubmitProgress(30);
 
-    setIsBulkDeleting(true);
-    setIsSubmitting(true);
-    setSubmitProgress(30);
+        try {
+          const result = await asinApi.bulkDelete(Array.from(selectedIds));
+          setSubmitProgress(100);
 
-    try {
-      const result = await asinApi.bulkDelete(Array.from(selectedIds));
-      setSubmitProgress(100);
+          addToast({
+            title: 'Bulk Action Success',
+            message: result.message || `Successfully deleted ${selectedIds.size} selected items.`,
+            type: 'success'
+          });
 
-      addToast({
-        title: 'Bulk Action Success',
-        message: result.message || `Successfully deleted ${selectedIds.size} selected items.`,
-        type: 'success'
-      });
-
-      setSelectedIds(new Set());
-      if (onRefresh) await onRefresh();
-    } catch (error) {
-      addToast({
-        title: 'Bulk Action Failed',
-        message: error.message,
-        type: 'error'
-      });
-    } finally {
-      setIsBulkDeleting(false);
-      setIsSubmitting(false);
-      setSubmitProgress(0);
-    }
+          setSelectedIds(new Set());
+          if (onRefresh) await onRefresh();
+        } catch (error) {
+          addToast({
+            title: 'Bulk Action Failed',
+            message: error.message,
+            type: 'error'
+          });
+        } finally {
+          setIsBulkDeleting(false);
+          setIsSubmitting(false);
+          setSubmitProgress(0);
+        }
+      }
+    });
   };
 
   const handleFileUpload = async (e) => {
@@ -353,316 +367,494 @@ const SellerAsinsModal = ({
     }
   };
 
+  // Table Columns Configuration
+  const columns = useMemo(() => [
+    {
+      title: 'IDENTIFIER',
+      dataIndex: 'asinCode',
+      key: 'asinCode',
+      width: 140,
+      render: (text, record) => (
+        <div>
+          <Text strong code style={{ fontSize: 12, color: '#18181b' }}>{text}</Text>
+          {record.lastScraped && (
+            <div style={{ fontSize: 9, color: '#a1a1aa', marginTop: 2 }}>
+              Synced {new Date(record.lastScraped).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      ),
+      sorter: (a, b) => (a.asinCode || '').localeCompare(b.asinCode || ''),
+    },
+    {
+      title: 'IDENTITY & SPECS',
+      key: 'identity',
+      width: 250,
+      render: (_, record) => (
+        <div>
+          <Text strong style={{ fontSize: 11, color: '#27272a' }}>
+            {record.sku || 'UNASSIGNED-SKU'}
+          </Text>
+          <div style={{ maxWidth: 280, marginTop: 2 }}>
+            <Text
+              type="secondary"
+              style={{ fontSize: 10 }}
+              ellipsis={{ tooltip: record.title || 'Loading title...' }}
+            >
+              {record.title || 'Loading title from marketplace...'}
+            </Text>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'COMMERCIALS',
+      key: 'commercials',
+      width: 150,
+      render: (_, record) => (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Text strong style={{ fontSize: 12, color: '#18181b' }}>
+              ₹{record.currentPrice?.toLocaleString() || '0'}
+            </Text>
+            {record.buyBoxWin && (
+              <Tag color="gold" style={{ fontSize: 8, padding: '0 4px', margin: 0, lineHeight: '16px' }}>
+                WINNER
+              </Tag>
+            )}
+          </div>
+          <Text type="secondary" style={{ fontSize: 10 }}>
+            Rank: #{record.bsr || 'N/A'}
+          </Text>
+        </div>
+      ),
+      sorter: (a, b) => (a.currentPrice || 0) - (b.currentPrice || 0),
+    },
+    {
+      title: 'INVENTORY',
+      dataIndex: 'stockLevel',
+      key: 'stockLevel',
+      width: 100,
+      align: 'center',
+      render: (value) => {
+        if (!value || value === 0) {
+          return <Tag color="error" style={{ margin: 0 }}>0</Tag>;
+        }
+        if (value <= 20) {
+          return <Tag color="warning" style={{ margin: 0 }}>{value}</Tag>;
+        }
+        return <Tag color="default" style={{ margin: 0 }}>{value}</Tag>;
+      },
+      sorter: (a, b) => (a.stockLevel || 0) - (b.stockLevel || 0),
+    },
+    {
+      title: 'STATUS',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      align: 'center',
+      render: (status, record) => (
+        <Button
+          type="text"
+          size="small"
+          icon={status === 'Active' ? <CheckCircle2 size={14} color="#10b981" /> : <PauseCircle size={14} color="#a1a1aa" />}
+          onClick={() => onToggleStatus(record._id, status)}
+          style={{
+            fontWeight: 700,
+            fontSize: 10,
+            textTransform: 'uppercase',
+            color: status === 'Active' ? '#10b981' : '#a1a1aa',
+          }}
+        >
+          {status}
+        </Button>
+      ),
+    },
+    {
+      title: 'ACTIONS',
+      key: 'actions',
+      width: 120,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size={4}>
+          <Tooltip title="View Details">
+            <Button
+              type="text"
+              size="small"
+              icon={<Eye size={14} />}
+              onClick={() => handleViewDetails(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Sync Now">
+            <Button
+              type="text"
+              size="small"
+              icon={<RefreshCw size={14} />}
+              onClick={() => onSyncAsin(record._id)}
+            />
+          </Tooltip>
+          <Tooltip title="Edit ASIN">
+            <Button
+              type="text"
+              size="small"
+              icon={<Edit3 size={14} />}
+              onClick={() => handleEditAsin(record)}
+            />
+          </Tooltip>
+          {isAdmin && (
+            <Tooltip title="Delete ASIN">
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<Trash2 size={14} />}
+                onClick={() => onDeleteAsin(record._id)}
+              />
+            </Tooltip>
+          )}
+        </Space>
+      ),
+    },
+  ], [onToggleStatus, onSyncAsin, onDeleteAsin, handleViewDetails, handleEditAsin, isAdmin]);
+
+  // Row selection configuration
+  const rowSelection = {
+    selectedRowKeys: Array.from(selectedIds),
+    onChange: (selectedRowKeys) => {
+      setSelectedIds(new Set(selectedRowKeys));
+    },
+    selections: [
+      Table.SELECTION_ALL,
+      Table.SELECTION_INVERT,
+      Table.SELECTION_NONE,
+    ],
+  };
+
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.7)', backdropFilter: 'blur(16px)', zIndex: 1060 }}>
-      <div className="modal-dialog modal-xl modal-dialog-centered" style={{ maxWidth: '1200px' }}>
-        <div className="modal-content border-0 shadow-2xl rounded-4 overflow-hidden" style={{ background: '#fff', maxHeight: '92vh', transition: 'all 0.3s ease' }}>
-
-          {/* Enhanced Header */}
-          <div className="modal-header border-0 px-4 pt-4 pb-3 d-flex align-items-center justify-content-between bg-white sticky-top" style={{ zIndex: 1070 }}>
-            <div className="d-flex align-items-center gap-3">
-              <div className="p-2 bg-zinc-900 text-white rounded-3 shadow-lg">
-                <Package size={20} strokeWidth={2.5} />
-              </div>
-              <div>
-                <h5 className="modal-title text-zinc-900 fw-black mb-0" style={{ fontSize: '18px', letterSpacing: '-0.02em' }}>
-                  ASIN Inventory — {seller.name}
-                </h5>
-                <div className="d-flex align-items-center gap-2 mt-1">
-                  <span className="badge bg-zinc-100 text-zinc-500 rounded-pill px-2 border border-zinc-200 smallest fw-bold uppercase">{seller.marketplace}</span>
-                  <span className="text-zinc-400 smaller fw-medium">{totalAsins} Total ASINs Tracked</span>
+    <Modal
+      open={true}
+      onCancel={onClose}
+      width={1300}
+      footer={null}
+      closable={false}
+      style={{ top: 20 }}
+      styles={{
+        body: {
+          padding: 0,
+          maxHeight: '85vh',
+          overflow: 'hidden',
+        },
+        content: {
+          borderRadius: 20,
+          overflow: 'hidden',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        },
+      }}
+    >
+      <div style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Premium Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid #f0f0f0',
+          background: '#fff',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          <Row justify="space-between" align="middle">
+            <Col>
+              <Space size={16} align="start">
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #18181b 0%, #27272a 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                }}>
+                  <Package size={22} color="#fff" strokeWidth={2.5} />
                 </div>
-              </div>
-            </div>
-            <div className="d-flex align-items-center gap-2">
-              <button
-                type="button"
-                className="btn-white-icon border border-zinc-200 shadow-sm hover-bg-zinc-100 transition-colors"
-                onClick={onRefresh}
-                title="Refresh List"
-                disabled={loading}
+                <div>
+                  <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                    ASIN Inventory — {seller.name}
+                  </Title>
+                  <Space size={8} style={{ marginTop: 4 }}>
+                    <Tag style={{
+                      background: '#f4f4f5',
+                      border: '1px solid #e4e4e7',
+                      borderRadius: 6,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      fontSize: 10,
+                    }}>
+                      {seller.marketplace}
+                    </Tag>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      <Badge status="processing" />
+                      {totalAsins.toLocaleString()} Total ASINs Tracked
+                    </Text>
+                  </Space>
+                </div>
+              </Space>
+            </Col>
+            <Col>
+              <Space>
+                <Tooltip title="Refresh List">
+                  <Button
+                    icon={<RefreshCw size={16} />}
+                    onClick={onRefresh}
+                    loading={loading}
+                  />
+                </Tooltip>
+                <Tooltip title="Close">
+                  <Button
+                    type="text"
+                    icon={<X size={18} />}
+                    onClick={onClose}
+                  />
+                </Tooltip>
+              </Space>
+            </Col>
+          </Row>
+        </div>
+
+        {/* Bulk Actions Bar */}
+        {selectedIds.size > 0 && (
+          <div style={{
+            padding: '12px 24px',
+            background: '#18181b',
+            color: '#fff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            position: 'sticky',
+            top: 93,
+            zIndex: 9,
+          }}>
+            <Space>
+              <Tag color="blue" style={{ fontSize: 11, fontWeight: 700 }}>
+                {selectedIds.size} Selected
+              </Tag>
+              <Text style={{ color: '#a1a1aa', fontSize: 12 }}>
+                Perform bulk actions on the selected ASIN records
+              </Text>
+            </Space>
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 600 }}
+                icon={<CheckCircle2 size={14} />}
+                onClick={() => handleBulkStatusUpdate('Active')}
+                loading={isSubmitting}
               >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              </button>
-              <button type="button" className="btn-white-icon border border-zinc-200 shadow-sm hover-bg-zinc-100 transition-colors" onClick={onClose}>
-                <X size={18} />
-              </button>
-            </div>
+                Mark Active
+              </Button>
+              <Button
+                size="small"
+                style={{
+                  background: '#d97706',
+                  borderColor: '#d97706',
+                  color: '#fff',
+                  fontWeight: 600,
+                }}
+                icon={<PauseCircle size={14} />}
+                onClick={() => handleBulkStatusUpdate('Paused')}
+                loading={isSubmitting}
+              >
+                Mark Inactive
+              </Button>
+              <Button
+                size="small"
+                danger
+                icon={isBulkDeleting ? <Loader2 size={14} /> : <Trash2 size={14} />}
+                onClick={handleBulkDelete}
+                loading={isSubmitting}
+              >
+                Delete Selected
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setSelectedIds(new Set())}
+                style={{ color: '#a1a1aa' }}
+              >
+                Clear
+              </Button>
+            </Space>
           </div>
+        )}
 
-          <div className="modal-body p-0 d-flex flex-column" style={{ overflow: 'hidden' }}>
-            {/* Bulk Action Bar (Sticky) */}
-            {selectedIds.size > 0 && (
-              <div className="px-4 py-3 bg-zinc-900 text-white d-flex align-items-center justify-content-between sticky-top animate-in fade-in slide-in-from-top-4 duration-300" style={{ zIndex: 1065 }}>
-                <div className="d-flex align-items-center gap-3">
-                  <div className="d-flex align-items-center justify-content-center bg-zinc-800 text-white rounded-2 px-2 py-1 smallest fw-bold font-monospace">
-                    {selectedIds.size} Selected
-                  </div>
-                  <span className="smaller fw-medium text-zinc-400">Perform bulk actions on the selected ASIN records</span>
-                </div>
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    className="btn btn-sm btn-success d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale"
-                    onClick={() => handleBulkStatusUpdate('Active')}
-                    disabled={isSubmitting}
-                  >
-                    <CheckCircle2 size={14} />
-                    MARK ACTIVE
-                  </button>
-                  <button
-                    className="btn btn-sm btn-warning d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale text-white"
-                    onClick={() => handleBulkStatusUpdate('Paused')}
-                    disabled={isSubmitting}
-                    style={{ backgroundColor: '#d97706', borderColor: '#d97706' }}
-                  >
-                    <PauseCircle size={14} />
-                    MARK INACTIVE
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill transition-all hover-scale"
-                    onClick={handleBulkDelete}
-                    disabled={isSubmitting}
-                  >
-                    {isBulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash size={14} />}
-                    DELETE SELECTED
-                  </button>
-                  <button
-                    className="btn btn-sm btn-outline-light d-flex align-items-center gap-2 px-3 fw-bold smallest rounded-pill opacity-60 hover-opacity-100 transition-all border-0"
-                    onClick={() => setSelectedIds(new Set())}
-                  >
-                    CLEAR
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {isSubmitting && (
-              <div className="px-4 py-2 bg-zinc-50 border-bottom border-zinc-100">
-                <ProgressBar value={submitProgress} label="Processing operation..." size="xs" color="primary" />
-              </div>
-            )}
-
-            <div className="px-1 py-4 flex-grow-1 overflow-auto bg-white">
-              <div className="px-3">
-                <div className="d-flex justify-content-between align-items-center mb-4 px-2">
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="p-1 px-2 bg-blue-50 text-blue-600 rounded-pill border border-blue-100 smallest fw-bold uppercase tracking-widest">
-                      Catalog View
-                    </div>
-                    {/* ASIN Pasting Select Input */}
-                    <div className="d-flex align-items-center gap-1 bg-zinc-100 p-1 rounded-3 border border-zinc-200 ms-2">
-                      <textarea
-                        className="form-control form-control-sm border-0 bg-transparent px-3 py-1 smallest shadow-none"
-                        placeholder="Paste ASINs to select (Shift+Enter for newline, Enter to match)..."
-                        value={matchInputText}
-                        onChange={(e) => setMatchInputText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSelectPastedAsins();
-                          }
-                        }}
-                        style={{ fontSize: '11px', width: '280px', height: '36px', resize: 'none', lineHeight: '1.2' }}
-                        rows={2}
-                        title="Enter ASINs separated by spaces, commas, or newlines (Press Enter to match)"
-                      />
-                      <button
-                        className="btn btn-zinc-900 btn-sm rounded-3 px-3 fw-bold smallest"
-                        onClick={handleSelectPastedAsins}
-                        style={{ height: '36px', fontSize: '10px', background: '#18181B', color: '#fff', border: 'none' }}
-                      >
-                        SELECT
-                      </button>
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center gap-2">
-                    {/* Catalog Management Group */}
-                    <div className="d-flex align-items-center bg-zinc-100/50 p-1 rounded-pill border border-zinc-200">
-                      <input type="file" id="catalogUpload" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
-                      <button
-                        className="btn btn-white btn-sm border-0 shadow-none d-flex align-items-center gap-2 px-3 rounded-pill hover-bg-white transition-all"
-                        onClick={() => document.getElementById('catalogUpload').click()}
-                        disabled={isSubmitting}
-                        style={{ height: '32px', fontSize: '10px' }}
-                        title="Upload CSV/Excel with ASIN and SKU columns"
-                      >
-                        <FileSpreadsheet size={13} className="text-zinc-500" />
-                        <span className="fw-black uppercase tracking-wider">Bulk ASIN/SKU Sync</span>
-                      </button>
-                    </div>
-
-                    {/* Market Data Group */}
-                    <div className="d-flex align-items-center bg-zinc-100/50 p-1 rounded-pill border border-zinc-200">
-                      <input type="file" id="octoparseUpload" hidden accept=".json" onChange={handleOctoparseUpload} />
-                      <button
-                        className="btn btn-white btn-sm border-0 shadow-none d-flex align-items-center gap-2 px-3 rounded-pill hover-bg-white transition-all"
-                        onClick={() => document.getElementById('octoparseUpload').click()}
-                        disabled={isSubmitting}
-                        style={{ height: '32px', fontSize: '10px' }}
-                        title="Upload Octoparse JSON results (Price, Rank, etc.)"
-                      >
-                        <FileJson size={13} className="text-zinc-500" />
-                        <span className="fw-black uppercase tracking-wider">Data Ingest</span>
-                      </button>
-                    </div>
-
-                    <div className="vr mx-1 opacity-10"></div>
-
-                    <button
-                      className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 px-3 rounded-pill hover-scale transition-all"
-                      onClick={handleSelectAllFromDatabase}
-                      disabled={isSubmitting}
-                      style={{ height: '34px', fontSize: '11px' }}
-                    >
-                      <CheckSquare size={14} className="text-zinc-500" />
-                      <span className="fw-black uppercase tracking-wider text-zinc-700">Select All ASINs ({totalAsins})</span>
-                    </button>
-
-                    <button
-                      className="btn btn-zinc-900 btn-sm shadow-lg d-flex align-items-center gap-2 px-4 rounded-pill hover-scale transition-all"
-                      onClick={() => setShowAddAsinModal(true)}
-                      style={{ height: '34px', fontSize: '11px', background: '#18181B', color: '#fff' }}
-                    >
-                      <Plus size={14} />
-                      <span className="fw-black uppercase tracking-wider">Add ASIN(s)</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="table-responsive border border-zinc-100 rounded-4 overflow-hidden shadow-sm">
-                  <table className="table data-table mb-0 align-middle">
-                    <thead className="sticky-top bg-zinc-50/80" style={{ zIndex: 10, top: '-1px', backdropFilter: 'blur(8px)' }}>
-                      <tr className="border-bottom border-zinc-100">
-                        <th className="py-3 px-3 text-start" style={{ width: '40px' }}>
-                          <button className="btn btn-link p-0 text-zinc-400 hover-text-zinc-900 shadow-none" onClick={toggleSelectAll}>
-                            {(selectedIds.size === asins.length && asins.length > 0) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
-                          </button>
-                        </th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Identifier</th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Identity & Specs</th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Commercials</th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Inventory</th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-start" style={{ fontSize: '10px' }}>Status</th>
-                        <th className="py-3 text-zinc-400 smallest fw-black uppercase tracking-widest text-end pe-4" style={{ fontSize: '10px' }}>Control</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {asins.length === 0 && !loading ? (
-                        <tr>
-                          <td colSpan="7" className="text-center py-5 bg-zinc-50/30">
-                            <div className="d-flex flex-column align-items-center opacity-40">
-                              <Database size={48} strokeWidth={1.5} className="mb-3 text-zinc-300" />
-                              <span className="fw-bold text-zinc-500 uppercase tracking-widest smaller">No ASINs tracked for this store yet</span>
-                              <p className="smallest text-zinc-400 mt-2">Start by adding your product catalog manually or via JSON.</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        <>
-                          {asins.map(asin => (
-                            <tr key={asin._id} className={`border-bottom border-zinc-50 hover-bg-zinc-50 transition-all ${selectedIds.has(asin._id) ? 'bg-zinc-50/80 shadow-inner' : ''}`}>
-                              <td className="py-3 px-3">
-                                <button className="btn btn-link p-0 text-zinc-300 hover-text-zinc-600 shadow-none transition-colors" onClick={() => toggleSelectOne(asin._id)}>
-                                  {selectedIds.has(asin._id) ? <CheckSquare size={18} className="text-zinc-900" /> : <Square size={18} />}
-                                </button>
-                              </td>
-                              <td className="py-3">
-                                <div className="d-flex flex-column">
-                                  <span className="fw-black text-zinc-900 font-monospace tracking-tight" style={{ fontSize: '12px' }}>{asin.asinCode}</span>
-                                  {asin.lastScraped && (
-                                    <span className="text-zinc-400 smallest mt-0.5" style={{ fontSize: '9px' }}>Synced {new Date(asin.lastScraped).toLocaleDateString()}</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3">
-                                <div className="d-flex flex-column gap-0.5">
-                                  <span className="fw-bold text-zinc-800 tracking-tight" style={{ fontSize: '11px' }}>{asin.sku || 'UNASSIGNED-SKU'}</span>
-                                  <span className="text-zinc-400 truncate opacity-80" style={{ maxWidth: '280px', fontSize: '10px' }}>{asin.title || 'Loading title from marketplace...'}</span>
-                                </div>
-                              </td>
-                              <td className="py-3">
-                                <div className="d-flex flex-column gap-0.5">
-                                  <div className="d-flex align-items-center gap-1.5">
-                                    <span className="fw-black text-zinc-900" style={{ fontSize: '11px' }}>₹{asin.currentPrice?.toLocaleString() || '0'}</span>
-                                    {asin.buyBoxWin && (
-                                      <span className="badge bg-zinc-900 text-white rounded-pill px-1.5 py-0.5 smallest" style={{ fontSize: '8px' }}>WINNER</span>
-                                    )}
-                                  </div>
-                                  <span className="text-zinc-400 smallest fw-medium opacity-80 uppercase font-monospace">Rank: #{asin.bsr || 'N/A'}</span>
-                                </div>
-                              </td>
-                              <td className="py-3">
-                                <div className={`d-inline-flex px-2 py-0.5 rounded-pill fw-black smallest border ${asin.stockLevel > 20 ? 'bg-zinc-50 text-zinc-700 border-zinc-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                  {asin.stockLevel || 0}
-                                </div>
-                              </td>
-                              <td className="py-3">
-                                <button
-                                  className={`btn btn-sm p-0 border-0 d-flex align-items-center gap-1.5 transition-all ${asin.status === 'Active' ? 'text-zinc-900' : 'text-zinc-300'}`}
-                                  onClick={() => onToggleStatus(asin._id, asin.status)}
-                                >
-                                  {asin.status === 'Active' ? <CheckCircle2 size={15} /> : <PauseCircle size={15} />}
-                                  <span className="fw-black uppercase tracking-widest" style={{ fontSize: '9px' }}>{asin.status}</span>
-                                </button>
-                              </td>
-                              <td className="py-3 pe-4">
-                                <div className="d-flex gap-1 justify-content-end">
-                                  <button onClick={() => handleViewDetails(asin)} className="btn-white-icon smaller border-zinc-200 shadow-sm hover-scale transition-all" title="Details">
-                                    <Eye size={13} />
-                                  </button>
-                                  <button onClick={() => onSyncAsin(asin._id)} className="btn-white-icon smaller border-zinc-200 shadow-sm hover-scale transition-all" title="Sync">
-                                    <RefreshCw size={13} />
-                                  </button>
-                                  <button onClick={() => handleEditAsin(asin)} className="btn-white-icon smaller border-zinc-200 shadow-sm hover-scale transition-all" title="Modify">
-                                    <Edit3 size={13} />
-                                  </button>
-                                  {isAdmin && (
-                                    <button onClick={() => onDeleteAsin(asin._id)} className="btn-white-icon smaller border-zinc-200 text-danger shadow-sm hover-scale transition-all" title="Delete">
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {pagination.page < pagination.totalPages && (
-                  <div className="py-4 d-flex justify-content-center">
-                    <button
-                      className="btn btn-white border-zinc-200 px-5 rounded-pill fw-black smallest text-zinc-900 shadow-sm hover-bg-zinc-50 transition-all uppercase tracking-widest"
-                      onClick={onLoadMore}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <div className="d-flex align-items-center gap-2">
-                          <Loader2 size={14} className="animate-spin" />
-                          <span>FETCHING DATA...</span>
-                        </div>
-                      ) : (
-                        <span>Load More ({totalAsins - asins.length} remaining)</span>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Progress Bar */}
+        {isSubmitting && (
+          <div style={{ padding: '8px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+            <Progress percent={submitProgress} size="small" status="active" />
           </div>
+        )}
 
-          <div className="modal-footer border-0 px-4 py-3 bg-zinc-50/50 d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center gap-2 text-zinc-400 smaller fw-medium">
-              <AlertCircle size={14} />
-              <span>Select multiple records to perform batch operations</span>
-            </div>
-            <button className="btn btn-zinc-900 fw-black px-5 border-0 rounded-pill shadow-lg transition-all hover-scale" onClick={onClose} style={{ fontSize: '12px', background: '#18181B', color: '#fff' }}>CLOSE PANEL</button>
+        {/* Toolbar */}
+        <div style={{
+          padding: '12px 24px',
+          borderBottom: '1px solid #f0f0f0',
+          background: '#fff',
+        }}>
+          <Row justify="space-between" align="middle" gutter={[12, 12]}>
+            <Col>
+              <Space wrap>
+                <Tag color="blue" style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10 }}>
+                  Catalog View
+                </Tag>
+                {/* ASIN Search Input */}
+                <Input.Search
+                  size="small"
+                  placeholder="Paste ASINs to select (Enter to match)"
+                  value={matchInputText}
+                  onChange={(e) => setMatchInputText(e.target.value)}
+                  onSearch={handleSelectPastedAsins}
+                  style={{ width: 320 }}
+                  enterButton="Select"
+                />
+              </Space>
+            </Col>
+            <Col>
+              <Space wrap>
+                {/* File Uploads */}
+                <input type="file" id="catalogUpload" hidden accept=".csv,.xlsx,.xls" onChange={handleFileUpload} />
+                <Button
+                  size="small"
+                  icon={<FileSpreadsheet size={14} />}
+                  onClick={() => document.getElementById('catalogUpload').click()}
+                  disabled={isSubmitting}
+                >
+                  Bulk ASIN/SKU Sync
+                </Button>
+                <input type="file" id="octoparseUpload" hidden accept=".json" onChange={handleOctoparseUpload} />
+                <Button
+                  size="small"
+                  icon={<FileJson size={14} />}
+                  onClick={() => document.getElementById('octoparseUpload').click()}
+                  disabled={isSubmitting}
+                >
+                  Data Ingest
+                </Button>
+                <Divider type="vertical" />
+                <Button
+                  size="small"
+                  icon={<Database size={14} />}
+                  onClick={handleSelectAllFromDatabase}
+                  disabled={isSubmitting}
+                >
+                  Select All ASINs ({totalAsins.toLocaleString()})
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<Plus size={14} />}
+                  onClick={() => setShowAddAsinModal(true)}
+                  style={{
+                    background: '#18181b',
+                    borderColor: '#18181b',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    fontSize: 10,
+                  }}
+                >
+                  Add ASIN(s)
+                </Button>
+              </Space>
+            </Col>
+          </Row>
+        </div>
+
+        {/* Table */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '4px 24px' }}>
+          <Table
+            columns={columns}
+            dataSource={asins}
+            rowKey="_id"
+            loading={loading}
+            rowSelection={rowSelection}
+            scroll={{ x: 900 }}
+            size="small"
+            locale={{
+              emptyText: (
+                <Empty
+                  image={<Database size={48} style={{ color: '#d4d4d8' }} />}
+                  description={
+                    <div>
+                      <Text strong style={{ color: '#71717a', display: 'block', fontSize: 13, marginBottom: 8 }}>
+                        No ASINs tracked for this store yet
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Start by adding your product catalog manually or via JSON.
+                      </Text>
+                    </div>
+                  }
+                />
+              ),
+            }}
+            pagination={false}
+            style={{ marginTop: 8 }}
+          />
+        </div>
+
+        {/* Load More */}
+        {pagination.page < pagination.totalPages && (
+          <div style={{
+            padding: '16px',
+            textAlign: 'center',
+            borderTop: '1px solid #f0f0f0',
+            background: '#fff',
+          }}>
+            <Button
+              size="large"
+              onClick={onLoadMore}
+              loading={loading}
+              style={{
+                fontWeight: 700,
+                fontSize: 11,
+                textTransform: 'uppercase',
+                borderRadius: 8,
+              }}
+            >
+              {loading ? 'Fetching Data...' : `Load More (${totalAsins - asins.length} remaining)`}
+            </Button>
           </div>
+        )}
+
+        {/* Footer */}
+        <div style={{
+          padding: '12px 24px',
+          borderTop: '1px solid #f0f0f0',
+          background: '#fafafa',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <AlertCircle size={14} />
+            Select multiple records to perform batch operations
+          </Text>
+          <Button
+            type="primary"
+            size="large"
+            onClick={onClose}
+            style={{
+              background: '#18181b',
+              borderColor: '#18181b',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              fontSize: 11,
+              borderRadius: 8,
+            }}
+          >
+            Close Panel
+          </Button>
         </div>
       </div>
 
+      {/* Sub-Modals */}
       <Suspense fallback={null}>
         {showAddAsinModal && (
           <AddBulkAsinModal
@@ -693,27 +885,8 @@ const SellerAsinsModal = ({
           />
         )}
       </Suspense>
-
-      <style>{`
-        .hover-scale:hover {
-          transform: translateY(-1px) scale(1.02);
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .data-table tr.hover-bg-zinc-50:hover {
-          background-color: #fafafa !important;
-        }
-      `}</style>
-    </div>
+    </Modal>
   );
 };
 
 export default React.memo(SellerAsinsModal);
-
-
-

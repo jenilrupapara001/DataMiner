@@ -99,11 +99,14 @@ const parseFlexibleDate = (val) => {
 exports.getAsins = async (req, res) => {
   try {
     const {
-      seller, status, category, brand, search,
+      status, category, brand, search,
       minPrice, maxPrice, minBSR, maxBSR, minLQS, maxLQS,
       scrapeStatus, buyBoxWin, hasAplus, priceDispute,
       page = 1, limit = 50, sortBy = 'CreatedAt', sortOrder = 'DESC'
     } = req.query;
+
+    // Support fallback to params in case Express query object is immutable
+    const seller = req.query.seller || req.params.sellerId;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -171,8 +174,13 @@ exports.getAsins = async (req, res) => {
         return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0 } });
       }
       
-      if (seller && allowedSellerIds.includes(seller)) {
-        whereClause += ' AND a.SellerId = @seller';
+      if (seller) {
+        const matchedSellerId = allowedSellerIds.find(id => id.toLowerCase() === seller.toLowerCase());
+        if (matchedSellerId) {
+          whereClause += ' AND a.SellerId = @seller';
+        } else {
+          return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } });
+        }
       } else {
         whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
       }
@@ -880,9 +888,14 @@ exports.getAsinStats = async (req, res) => {
 
     if (!isGlobalUser) {
       const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
-      if (seller && allowedSellerIds.includes(seller)) {
-        whereClause += ' AND SellerId = @seller';
-        request.input('seller', sql.VarChar, seller);
+      if (seller) {
+        const matchedSellerId = allowedSellerIds.find(id => id.toLowerCase() === seller.toLowerCase());
+        if (matchedSellerId) {
+          whereClause += ' AND SellerId = @seller';
+          request.input('seller', sql.VarChar, seller);
+        } else {
+          whereClause += ' AND 1=0';
+        }
       } else if (allowedSellerIds.length > 0) {
         whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
       } else {
@@ -1260,9 +1273,14 @@ exports.searchAsins = async (req, res) => {
 
     if (!isGlobalUser) {
       const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
-      if (seller && allowedSellerIds.includes(seller)) {
-        whereClause += ' AND SellerId = @seller';
-        request.input('seller', sql.VarChar, seller);
+      if (seller) {
+        const matchedSellerId = allowedSellerIds.find(id => id.toLowerCase() === seller.toLowerCase());
+        if (matchedSellerId) {
+          whereClause += ' AND SellerId = @seller';
+          request.input('seller', sql.VarChar, seller);
+        } else {
+          whereClause += ' AND 1=0';
+        }
       } else {
         whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
       }
@@ -1735,8 +1753,6 @@ exports.getAllAsinsWithHistory = async (req, res) => {
  * Get ASINs by Seller (SQL Version)
  */
 exports.getAsinsBySeller = async (req, res) => {
-  const { sellerId } = req.params;
-  req.query.seller = sellerId;
   return exports.getAsins(req, res);
 };
 

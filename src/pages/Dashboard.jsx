@@ -50,6 +50,12 @@ import ErrorState from '../components/common/ErrorState';
 import { useAuth } from '../contexts/AuthContext';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { useRefresh } from '../contexts/RefreshContext';
+import {
+  Table, Button, Progress, ConfigProvider, Tag, Space,
+  Typography, Tooltip, Empty, Avatar
+} from 'antd';
+
+const { Text } = Typography;
 
 // Animation Variants
 const containerVariants = {
@@ -163,6 +169,72 @@ const PremiumStatCard = ({ label, value, trend, trendType, icon: Icon, index, co
 };
 
 const Dashboard = () => {
+  // Antd Table Columns Config
+  const tableColumns = useMemo(() => [
+    {
+      title: 'RANK',
+      dataIndex: 'rank',
+      key: 'rank',
+      width: 80,
+      render: (text, record, index) => (
+        <span style={{ fontSize: '12px', fontWeight: 800, color: index < 3 ? '#4f46e5' : '#94a3b8' }}>
+          #{text || index + 1}
+        </span>
+      ),
+    },
+    {
+      title: 'INTELLIGENCE OBJECT',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text, record) => (
+        <div className="d-flex flex-column">
+          <Text strong style={{ fontSize: '13px', color: '#0f172a', maxWidth: '320px' }} ellipsis={{ tooltip: text }}>
+            {text}
+          </Text>
+          <span className="font-monospace text-slate-400" style={{ fontSize: '10px', fontWeight: 600 }}>
+            {record.asin} | {record.sku}
+          </span>
+        </div>
+      ),
+    },
+    {
+      title: 'SECTOR',
+      dataIndex: 'category',
+      key: 'category',
+      render: (text) => (
+        <Tag color="default" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', borderRadius: '6px', border: 'none', backgroundColor: '#f1f5f9', color: '#475569' }}>
+          {text}
+        </Tag>
+      ),
+    },
+    {
+      title: 'VELOCITY',
+      dataIndex: 'units',
+      key: 'units',
+      align: 'right',
+      sorter: (a, b) => (a.units || 0) - (b.units || 0),
+      render: (text) => <span className="fw-bold text-slate-700" style={{ fontSize: '13px' }}>{Number(text || 0).toLocaleString()}</span>,
+    },
+    {
+      title: 'YIELD',
+      dataIndex: 'revenue',
+      key: 'revenue',
+      align: 'right',
+      sorter: (a, b) => (a.revenue || 0) - (b.revenue || 0),
+      render: (text) => <span className="fw-bold" style={{ fontSize: '13px', color: '#059669' }}>₹{Number(text || 0).toLocaleString()}</span>,
+    },
+    {
+      title: 'ACOS',
+      dataIndex: 'acos',
+      key: 'acos',
+      align: 'right',
+      render: (text) => {
+        const isHigh = text && text !== '0.0%' && parseFloat(text) > 30;
+        return <span className="fw-bold" style={{ fontSize: '13px', color: isHigh ? '#ef4444' : '#64748b' }}>{text}</span>;
+      }
+    }
+  ], []);
+
   const { user, isGlobalUser, isAdmin } = useAuth();
   const { startDate, endDate, rangeType } = useDateRange();
   const { refreshCount } = useRefresh();
@@ -459,52 +531,44 @@ const Dashboard = () => {
         </div>
 
         <div className="d-flex align-items-center gap-2">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="btn btn-sm btn-white border shadow-sm d-flex align-items-center justify-content-center"
-            style={{ width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#ffffff' }}
-            onClick={loadDashboardData}
-          >
-            <RefreshCw size={14} className={loading ? 'spin text-primary' : 'text-slate-500'} />
-          </motion.button>
+          <Tooltip title="Refresh Data">
+            <Button
+              type="text"
+              shape="circle"
+              icon={<RefreshCw size={14} className={loading ? 'spin text-primary' : 'text-slate-500'} />}
+              onClick={loadDashboardData}
+              style={{ border: '1px solid #e2e8f0', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              loading={loading}
+            />
+          </Tooltip>
 
           {isGlobalUser && (
-            <>
-              <motion.button
-                whileHover={{ y: -2, boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.08)' }}
+            <Space size="small">
+              <Button
+                icon={<Upload size={14} />}
                 onClick={() => window.location.href = '/ads-report'}
-                className="btn btn-sm px-3 fw-bold d-flex align-items-center gap-2 border"
-                style={{
-                  height: '36px',
-                  borderRadius: '10px',
-                  fontSize: '11px',
-                  backgroundColor: '#ffffff',
-                  color: '#334155',
-                  border: '1px solid #e2e8f0'
-                }}
+                style={{ fontWeight: 700, fontSize: '11px', borderRadius: '10px', height: '36px' }}
               >
-                <Upload size={14} /> IMPORT ADS
-              </motion.button>
+                IMPORT ADS
+              </Button>
 
-              <motion.button
-                whileHover={{ y: -2, boxShadow: '0 4px 12px -2px rgba(79, 70, 229, 0.3)' }}
+              <Button
+                type="primary"
+                icon={!seeding ? <Sparkles size={14} fill="currentColor" /> : null}
                 onClick={handleSeedDemoData}
-                className="btn btn-sm px-3 fw-bold d-flex align-items-center gap-2 text-white"
+                loading={seeding}
                 style={{
-                  height: '36px',
-                  borderRadius: '10px',
+                  fontWeight: 700,
                   fontSize: '11px',
-                  backgroundColor: '#4f46e5',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #4f46e5, #6366f1)'
+                  borderRadius: '10px',
+                  height: '36px',
+                  background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                  border: 'none'
                 }}
-                disabled={seeding}
               >
-                {seeding ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} fill="currentColor" />}
                 {seeding ? 'SYNCING...' : 'RUN SIMULATION'}
-              </motion.button>
-            </>
+              </Button>
+            </Space>
           )}
         </div>
       </div>
@@ -592,7 +656,7 @@ const Dashboard = () => {
             <div className="p-4 d-flex flex-column justify-content-center align-items-center flex-grow-1" style={{ minHeight: '260px' }}>
               <Suspense fallback={<SkeletonChart height={200} />}>
                 {data.categoryData.length > 0 ? (
-                  <Chart 
+                  <Chart
                     options={{
                       ...donutChartOptions,
                       plotOptions: {
@@ -609,11 +673,11 @@ const Dashboard = () => {
                           }
                         }
                       }
-                    }} 
-                    series={data.categoryData.map(c => c.data[0])} 
-                    type="donut" 
-                    width="100%" 
-                    height={240} 
+                    }}
+                    series={data.categoryData.map(c => c.data[0])}
+                    type="donut"
+                    width="100%"
+                    height={240}
                   />
                 ) : (
                   <div className="text-center text-slate-400 py-4">
@@ -731,11 +795,14 @@ const Dashboard = () => {
                     <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>{data.userStats?.total || 0} tasks</span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '3px', height: '8px', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f1f5f9', marginBottom: '16px' }}>
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.userStats?.completed / data.userStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#10b981' }} />
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.userStats?.inProgress / data.userStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#3b82f6' }} />
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.userStats?.pending / data.userStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#cbd5e1' }} />
-                  </div>
+                  <Progress
+                    percent={Math.round(((data.userStats?.completed + (data.userStats?.inProgress || 0)) / (data.userStats?.total || 1)) * 100) || 0}
+                    success={{ percent: Math.round((data.userStats?.completed / (data.userStats?.total || 1)) * 100) || 0 }}
+                    strokeColor="#3b82f6"
+                    trailColor="#f1f5f9"
+                    showInfo={false}
+                    style={{ marginBottom: '16px' }}
+                  />
 
                   <div className="d-flex justify-content-between align-items-center">
                     <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
@@ -761,11 +828,14 @@ const Dashboard = () => {
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '3px', height: '8px', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f1f5f9', marginBottom: '16px' }}>
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.teamStats?.completed / data.teamStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#059669' }} />
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.teamStats?.inProgress / data.teamStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#0ea5e9' }} />
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(data.teamStats?.pending / data.teamStats?.total) * 100 || 0}%` }} style={{ height: '100%', backgroundColor: '#cbd5e1' }} />
-                  </div>
+                  <Progress
+                    percent={Math.round(((data.teamStats?.completed + (data.teamStats?.inProgress || 0)) / (data.teamStats?.total || 1)) * 100) || 0}
+                    success={{ percent: Math.round((data.teamStats?.completed / (data.teamStats?.total || 1)) * 100) || 0 }}
+                    strokeColor="#0ea5e9"
+                    trailColor="#f1f5f9"
+                    showInfo={false}
+                    style={{ marginBottom: '16px' }}
+                  />
 
                   <div className="d-flex justify-content-between align-items-center">
                     <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
@@ -888,14 +958,17 @@ const Dashboard = () => {
                     { name: 'Rules Evaluator engine', status: 'SyncComplete', p: 100, color: '#10b981' },
                     { name: 'Ads Reporting Pipeline', status: 'Active', p: 30, color: '#3b82f6' },
                   ].map((op, i) => (
-                    <div key={i} style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '10px' }}>
+                    <div key={i} style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '10px' }}>
                       <div className="d-flex justify-content-between align-items-center mb-1">
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#334155' }}>{op.name}</span>
-                        <span style={{ fontSize: '9px', fontWeight: 800, color: op.color }}>{op.p}%</span>
+                        <Text strong style={{ fontSize: '11px', color: '#334155' }}>{op.name}</Text>
                       </div>
-                      <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
-                        <motion.div initial={{ width: 0 }} animate={{ width: `${op.p}%` }} style={{ height: '100%', background: op.color }} />
-                      </div>
+                      <Progress
+                        percent={op.p}
+                        strokeColor={op.color}
+                        size={[null, 4]}
+                        showInfo={true}
+                        format={p => <span style={{ fontSize: '9px', fontWeight: 800, color: op.color }}>{p}%</span>}
+                      />
                     </div>
                   ))}
                 </div>
@@ -915,55 +988,28 @@ const Dashboard = () => {
                 <h6 className="mb-0 fw-bold text-slate-800" style={{ fontSize: '14px' }}>ASIN Velocity Grid</h6>
               </div>
             </div>
-            <div className="p-0">
-              <div className="table-responsive">
-                <table className="table table-hover table-borderless mb-0 align-middle">
-                  <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                    <tr>
-                      <th className="px-4 py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>RANK</th>
-                      <th className="py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>INTELLIGENCE OBJECT</th>
-                      <th className="py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>SECTOR</th>
-                      <th className="text-end py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>VELOCITY</th>
-                      <th className="text-end py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>YIELD</th>
-                      <th className="text-end px-4 py-3" style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em' }}>ACOS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.topProducts?.length > 0 ? data.topProducts.map((p, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
-                        <td className="px-4 py-3" style={{ fontSize: '12px', fontWeight: 800, color: idx < 3 ? '#4f46e5' : '#94a3b8' }}>#{p.rank || idx + 1}</td>
-                        <td className="py-3">
-                          <div className="d-flex flex-column">
-                            <span className="fw-bold text-truncate" style={{ fontSize: '13px', color: '#0f172a', maxWidth: '320px' }}>{p.title}</span>
-                            <span className="font-monospace text-slate-400" style={{ fontSize: '10px', fontWeight: 600 }}>{p.asin} | {p.sku}</span>
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <span className="badge" style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', background: '#f1f5f9', color: '#475569', padding: '4px 8px', borderRadius: '6px' }}>
-                            {p.category}
-                          </span>
-                        </td>
-                        <td className="text-end py-3 fw-bold text-slate-700" style={{ fontSize: '13px' }}>{Number(p.units || 0).toLocaleString()}</td>
-                        <td className="text-end py-3 fw-bold" style={{ fontSize: '13px', color: '#059669' }}>₹{Number(p.revenue || 0).toLocaleString()}</td>
-                        <td className="text-end px-4 py-3 fw-bold" style={{ fontSize: '13px', color: p.acos && p.acos !== '0.0%' && parseFloat(p.acos) > 30 ? '#ef4444' : '#64748b' }}>{p.acos}</td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan="6" className="text-center py-5 text-slate-400">
-                          <Package size={32} strokeWidth={1.5} className="mb-2 opacity-30 mx-auto" />
-                          <div style={{ fontWeight: 600, fontSize: '13px' }}>Grid structure awaiting throughput</div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+            <div className="p-0 custom-antd-table-container">
+              <Table
+                columns={tableColumns}
+                dataSource={data.topProducts}
+                rowKey={(record) => record.asin + record.sku}
+                pagination={{ pageSize: 5, hideOnSinglePage: true, size: 'small' }}
+                size="middle"
+                locale={{
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={<span style={{ fontWeight: 600, fontSize: '13px', color: '#94a3b8' }}>Grid structure awaiting throughput</span>}
+                    />
+                  )
+                }}
+              />
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Inline Styles for Pulse Animation */}
+      {/* Inline Styles for Pulse Animation and Antd overrides */}
       <style>{`
         .pulse-dot {
           animation: pulse-red 2s infinite;
@@ -972,6 +1018,16 @@ const Dashboard = () => {
           0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
           70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
           100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .custom-antd-table-container .ant-table-thead .ant-table-cell {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          padding-top: 12px;
+          padding-bottom: 12px;
+        }
+        .custom-antd-table-container .ant-table {
+          border-radius: 0 0 20px 20px;
         }
       `}</style>
     </motion.div>

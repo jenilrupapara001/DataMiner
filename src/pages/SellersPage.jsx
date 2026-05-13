@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
-import DataTable from '../components/DataTable';
-import ListView from '../components/common/ListView';
-import ProgressBar from '../components/common/ProgressBar';
-import KPICard from '../components/KPICard';
-import EmptyState from '../components/common/EmptyState';
-import BulkImportModal from '../components/asins/BulkImportModal';
 import { sellerApi, asinApi, authApi, userApi, marketSyncApi } from '../services/api';
+import {
+  Table, Button, Input, Segmented, Select, Space, Tag, Typography, Tooltip, Avatar,
+  Modal, Empty, message
+} from 'antd';
 import {
   CheckCircle2,
   PauseCircle,
@@ -56,15 +54,18 @@ const AddSellerModal = lazy(() => import('../components/sellers/AddSellerModal')
 const ImportSellerModal = lazy(() => import('../components/sellers/ImportSellerModal'));
 const SellerAsinsModal = lazy(() => import('../components/sellers/SellerAsinsModal'));
 const PoolManagementModal = lazy(() => import('../components/sellers/PoolManagementModal'));
+const BulkImportModal = lazy(() => import('../components/asins/BulkImportModal'));
+
+const { Text, Title } = Typography;
 
 const GRADIENTS = [
-  'linear-gradient(135deg, #4f46e5, #7c3aed)', // Indigo-Violet
-  'linear-gradient(135deg, #2563eb, #3b82f6)', // Blue
-  'linear-gradient(135deg, #059669, #10b981)', // Emerald
-  'linear-gradient(135deg, #ea580c, #f97316)', // Orange
-  'linear-gradient(135deg, #db2777, #ec4899)', // Pink
-  'linear-gradient(135deg, #1e1b4b, #312e81)', // Slate
-  'linear-gradient(135deg, #0f766e, #14b8a6)', // Teal
+  'linear-gradient(135deg, #4f46e5, #7c3aed)',
+  'linear-gradient(135deg, #2563eb, #3b82f6)',
+  'linear-gradient(135deg, #059669, #10b981)',
+  'linear-gradient(135deg, #ea580c, #f97316)',
+  'linear-gradient(135deg, #db2777, #ec4899)',
+  'linear-gradient(135deg, #1e1b4b, #312e81)',
+  'linear-gradient(135deg, #0f766e, #14b8a6)',
 ];
 
 const getStoreGradient = (str = '') => {
@@ -91,7 +92,9 @@ const formatTimeAgo = (dateString) => {
 
 const SellersPage = () => {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
-  const isBrandManager = (currentUser?.role?.name || '').toString().toLowerCase() === 'brand manager' || (currentUser?.role?.displayName || '').toString().toLowerCase() === 'brand manager';
+  const isBrandManager = (currentUser?.role?.name || '').toString().toLowerCase() === 'brand manager' ||
+    (currentUser?.role?.displayName || '').toString().toLowerCase() === 'brand manager';
+
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -136,7 +139,6 @@ const SellersPage = () => {
     setPage(1);
   }, [activeTab, marketplaceFilter, statusFilter, debouncedSearchQuery]);
 
-
   const fetchPoolStats = useCallback(async () => {
     try {
       const response = await marketSyncApi.getPoolStatus();
@@ -165,7 +167,6 @@ const SellersPage = () => {
       if (response) {
         if (response.success && response.data) {
           extractedSellers = response.data.sellers || (Array.isArray(response.data) ? response.data : []);
-          // Support both backend formats (paginated and legacy)
           total = response.data.pagination?.total || response.data.total || extractedSellers.length;
         } else if (response.sellers && Array.isArray(response.sellers)) {
           extractedSellers = response.sellers;
@@ -217,7 +218,6 @@ const SellersPage = () => {
       totalResults: totalItems || 0
     };
   }, [sellers, totalItems]);
-
 
   const handleAddSeller = useCallback(async (sellerData) => {
     try {
@@ -303,8 +303,11 @@ const SellersPage = () => {
     setSelectedSeller(seller);
     setShowAsinModal(true);
     setLoadingAsins(true);
+    if (pageNum === 1) {
+      setSellerAsins([]); // Clear stale ASIN data immediately to prevent flicker
+    }
     try {
-      const result = await asinApi.getBySeller(seller._id, { page: pageNum, limit: 50 });
+      const result = await asinApi.getBySeller(seller._id || seller.id, { page: pageNum, limit: 50 });
       if (pageNum === 1) {
         setSellerAsins(result.asins || []);
       } else {
@@ -325,7 +328,6 @@ const SellersPage = () => {
     }
   }, [asinPagination, loadingAsins, selectedSeller, handleViewAsins]);
 
-
   const handleAddAsin = useCallback(async (asinData) => {
     try {
       await asinApi.create({
@@ -341,7 +343,6 @@ const SellersPage = () => {
       const result = await asinApi.getBySeller(selectedSeller._id, { page: 1, limit: 50 });
       setSellerAsins(result.asins);
       setAsinPagination(result.pagination);
-
       await loadSellers();
     } catch (error) {
       addToast({
@@ -358,7 +359,6 @@ const SellersPage = () => {
       const result = await asinApi.getBySeller(selectedSeller._id, { page: 1, limit: 50 });
       setSellerAsins(result.asins);
       setAsinPagination(result.pagination);
-
       await loadSellers();
     } catch (error) {
       addToast({
@@ -376,7 +376,6 @@ const SellersPage = () => {
       const result = await asinApi.getBySeller(selectedSeller._id, { page: 1, limit: 50 });
       setSellerAsins(result.asins);
       setAsinPagination(result.pagination);
-
       await loadSellers();
     } catch (error) {
       addToast({
@@ -410,7 +409,6 @@ const SellersPage = () => {
       const result = await asinApi.getBySeller(selectedSeller._id, { page: 1, limit: 50 });
       setSellerAsins(result.asins);
       setAsinPagination(result.pagination);
-
       await loadSellers();
     } catch (error) {
       addToast({
@@ -474,7 +472,6 @@ const SellersPage = () => {
     let errorCount = 0;
 
     try {
-      // Sync all selected sellers concurrently
       await Promise.all(
         selectedSellerIds.map(async (sellerId) => {
           try {
@@ -524,72 +521,77 @@ const SellersPage = () => {
     }
   }, [addToast]);
 
-  const getStatusBadge = useCallback((status, lastScraped) => {
+  const getStatusBadge = useCallback((status) => {
     const isActive = status === 'Active';
     return (
-      <span
-        className="badge fw-bold shadow-sm d-inline-flex align-items-center justify-content-center"
+      <Tag
+        color={isActive ? 'green' : 'default'}
         style={{
-          fontSize: '10px',
-          padding: '4px 10px',
-          borderRadius: '6px',
-          backgroundColor: isActive ? '#10b981' : '#6b7280',
-          color: '#ffffff',
-          letterSpacing: '0.03em',
+          fontWeight: 700,
           textTransform: 'uppercase',
-          minWidth: '64px',
-          border: 'none'
+          fontSize: 10,
+          borderRadius: 6,
+          padding: '0 8px',
+          lineHeight: '18px',
         }}
       >
         {status?.toUpperCase() || 'UNKNOWN'}
-      </span>
+      </Tag>
     );
   }, []);
 
   const getMarketplaceBadge = useCallback((marketplace) => {
     const market = marketplace?.toLowerCase();
-    const isIN = market === 'amazon.in';
-    const isAjio = market === 'ajio';
-    const isMyntra = market === 'myntra';
+    let color, bg, border, logo;
 
-    let baseStyle = { backgroundColor: '#f4f4f5', color: '#52525b', borderColor: '#e4e4e7' };
-    let logo = null;
-
-    if (isIN) {
-      baseStyle = { backgroundColor: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' };
+    if (market === 'amazon.in') {
+      color = '#1d4ed8';
+      bg = '#eff6ff';
+      border = '#bfdbfe';
       logo = "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg";
-    } else if (isAjio) {
-      baseStyle = { backgroundColor: '#f5f3ff', color: '#6d28d9', borderColor: '#ddd6fe' };
+    } else if (market === 'ajio') {
+      color = '#6d28d9';
+      bg = '#f5f3ff';
+      border = '#ddd6fe';
       logo = "https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160";
-    } else if (isMyntra) {
-      baseStyle = { backgroundColor: '#fdf2f8', color: '#be185d', borderColor: '#fbcfe8' };
+    } else if (market === 'myntra') {
+      color = '#be185d';
+      bg = '#fdf2f8';
+      border = '#fbcfe8';
       logo = "https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492";
+    } else {
+      color = '#52525b';
+      bg = '#f4f4f5';
+      border = '#e4e4e7';
+      logo = null;
     }
 
     return (
       <span
-        className="px-2 py-1 smallest fw-bold d-inline-flex align-items-center gap-2 border shadow-sm"
         style={{
-          letterSpacing: '0.02em',
-          fontSize: '10px',
-          borderRadius: '6px',
-          height: '24px',
-          ...baseStyle
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '0 8px',
+          height: 24,
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          borderRadius: 6,
+          color,
+          background: bg,
+          border: `1px solid ${border}`,
+          letterSpacing: '0.03em',
         }}
       >
         {logo && (
           <img
             src={logo}
-            style={{
-              height: '11px',
-              width: 'auto',
-              objectFit: 'contain',
-              filter: isMyntra ? 'none' : 'none'
-            }}
+            style={{ height: 11, width: 'auto', objectFit: 'contain' }}
             alt=""
           />
         )}
-        <span style={{ textTransform: 'uppercase' }}>{marketplace}</span>
+        {marketplace}
       </span>
     );
   }, []);
@@ -599,219 +601,281 @@ const SellersPage = () => {
 
     if (isBrandManager) {
       return (
-        <div className="d-flex align-items-center justify-content-end gap-1.5 w-100">
-          <button
-            className="btn-white-icon border shadow-sm"
-            onClick={() => handleViewAsins(seller)}
-            title="View ASINs"
-          >
-            <Package size={15} className="text-zinc-600" />
-          </button>
-        </div>
+        <Space size={6}>
+          <Tooltip title="View ASINs">
+            <Button
+              type="text"
+              icon={<Package size={14} />}
+              onClick={() => handleViewAsins(seller)}
+              style={{ color: '#52525b' }}
+            />
+          </Tooltip>
+        </Space>
       );
     }
     return (
-      <div className="d-flex align-items-center justify-content-end gap-1.5 w-100">
+      <Space size={6}>
         {isGlobalUser && (
-          <button
-            className="btn-white-icon shadow-sm border-zinc-200"
-            onClick={() => handleEditSeller(seller)}
-            title="Edit Details"
-          >
-            <Edit3 size={14} className="text-zinc-600" />
-          </button>
+          <Tooltip title="Edit Details">
+            <Button
+              type="text"
+              icon={<Edit3 size={14} />}
+              onClick={() => handleEditSeller(seller)}
+              style={{ color: '#52525b' }}
+            />
+          </Tooltip>
         )}
-
-        <button
-          className="btn-white-icon shadow-sm border-zinc-200"
-          onClick={() => handleViewAsins(seller)}
-          title="Manage Catalog"
-        >
-          <Package size={14} className="text-zinc-600" />
-        </button>
-
-        <button
-          className="btn-white-icon shadow-sm border-zinc-200"
-          onClick={() => handleSyncSeller(seller._id)}
-          title="Sync Store"
-        >
-          <RefreshCw size={14} className="text-zinc-600" />
-        </button>
-
-        <button
-          className={`d-flex align-items-center justify-content-center shadow-sm border transition-all ${isActive ? 'bg-white text-zinc-600 border-zinc-200' : 'text-white border-0'}`}
-          onClick={() => handleToggleStatus(seller._id)}
-          title={isActive ? 'Pause Store' : 'Resume Store'}
-          style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            backgroundColor: isActive ? '#ffffff' : '#10b981',
-            color: isActive ? '#52525b' : '#ffffff'
-          }}
-        >
-          {isActive ? <Pause size={14} /> : <Play size={14} style={{ fill: 'currentColor' }} />}
-        </button>
-
-        {hasPermission('sellers_delete') && (
-          <button
-            className="d-flex align-items-center justify-content-center shadow-sm border border-danger-subtle transition-all hover-bg-danger-subtle"
-            onClick={() => handleDeleteSeller(seller._id)}
-            title="Delete Store"
+        <Tooltip title="Manage Catalog">
+          <Button
+            type="text"
+            icon={<Package size={14} />}
+            onClick={() => handleViewAsins(seller)}
+            style={{ color: '#52525b' }}
+          />
+        </Tooltip>
+        <Tooltip title="Sync Store">
+          <Button
+            type="text"
+            icon={<RefreshCw size={14} />}
+            onClick={() => handleSyncSeller(seller._id)}
+            style={{ color: '#52525b' }}
+          />
+        </Tooltip>
+        <Tooltip title={isActive ? 'Pause Store' : 'Resume Store'}>
+          <Button
+            type={isActive ? 'default' : 'primary'}
+            icon={isActive ? <Pause size={14} /> : <Play size={14} />}
+            onClick={() => handleToggleStatus(seller._id)}
+            danger={!isActive}
             style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: '#ffffff',
-              color: '#ef4444'
+              borderColor: isActive ? undefined : '#10b981',
+              backgroundColor: isActive ? undefined : '#10b981',
+              color: isActive ? '#52525b' : '#fff',
             }}
-          >
-            <Trash2 size={14} />
-          </button>
+          />
+        </Tooltip>
+        {hasPermission('sellers_delete') && (
+          <Tooltip title="Delete Store">
+            <Button
+              type="text"
+              danger
+              icon={<Trash2 size={14} />}
+              onClick={() => handleDeleteSeller(seller._id)}
+              style={{ color: '#ef4444' }}
+            />
+          </Tooltip>
         )}
-      </div>
+      </Space>
     );
   }, [isBrandManager, handleEditSeller, handleViewAsins, handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission, isGlobalUser]);
 
-  const listViewColumns = useMemo(() => [
+  // Column definitions for Ant Design Table (with grouping handled separately)
+  const columns = useMemo(() => [
     {
-      label: 'Store Details',
+      title: 'Store Details',
+      dataIndex: 'name',
       key: 'name',
-      // Width omitted to allow flexible collapse and absorb remaining width
-      render: (_, seller) => (
-        <div className="d-flex align-items-center gap-3 py-1">
-          <div
-            className="seller-avatar d-flex align-items-center justify-content-center fw-bold shadow-sm"
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: getStoreGradient(seller.name || ''),
-              color: '#fff',
-              fontSize: '11px',
-              letterSpacing: '0.05em'
-            }}
-          >
-            {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
-          </div>
-          <div>
-            <div className="fw-bold text-zinc-900 d-flex align-items-center gap-2" style={{ fontSize: '13px' }}>
-              {seller.name}
+      render: (_, seller) => {
+        if (seller?.isGroupHeader) {
+          // Render marketplace group header
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {getMarketplaceBadge(seller.marketplace)}
+              <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
+                {seller.count} STORES
+              </Text>
             </div>
-            {seller.sellerId && (
-              <div className="text-zinc-500 d-flex align-items-center gap-1" style={{ fontSize: '11px', marginTop: '2px' }}>
-                <span className="font-monospace opacity-75">{seller.sellerId}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )
-    },
-    {
-      label: 'Account Manager',
-      key: 'managers',
-      width: '16%',
-      render: (managers) => (
-        <div className="d-flex flex-column gap-1">
-          {managers?.length > 0 ? (
-            managers.map((m) => (
-              <div key={m._id} className="d-flex align-items-center gap-2">
-                <div
-                  className="rounded-circle border border-white shadow-sm d-flex align-items-center justify-content-center bg-zinc-100 text-zinc-900 fw-bold"
-                  style={{ width: '22px', height: '22px', flexShrink: 0, fontSize: '9px' }}
-                >
-                  {m.firstName?.charAt(0)}{m.lastName?.charAt(0)}
-                </div>
-                <span className="text-zinc-700 fw-medium" style={{ fontSize: '11px' }}>
-                  {m.firstName} {m.lastName}
-                </span>
-              </div>
-            ))
-          ) : (
-            <span className="text-zinc-400 smallest italic opacity-50">Unassigned</span>
-          )}
-        </div>
-      )
-    },
-    {
-      label: 'Inventory',
-      key: 'totalAsins',
-      width: '14%',
-      render: (total, seller) => (
-        <div className="d-flex align-items-center justify-content-between group pe-2">
-          <div className="d-flex align-items-center gap-2 cursor-pointer" onClick={() => handleViewAsins(seller)}>
+          );
+        }
+        return (
+          <div className="d-flex align-items-center gap-3">
             <div
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: '#f4f4f5',
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: getStoreGradient(seller.name || ''),
+                color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#71717a'
+                fontWeight: 700,
+                fontSize: 12,
+                letterSpacing: '0.05em',
+                flexShrink: 0,
               }}
-              className="group-hover:bg-primary-50 group-hover:text-primary transition-colors"
             >
-              <Package size={16} />
+              {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
             </div>
             <div>
-              <div className="fw-bold text-zinc-900" style={{ fontSize: '12px' }}>{total || 0} Total</div>
-              <div className="text-zinc-500 smallest d-flex align-items-center gap-1" style={{ fontSize: '10px' }}>
-                <div className="bg-success rounded-circle" style={{ width: '4px', height: '4px' }}></div>
+              <Text strong style={{ fontSize: 13 }}>{seller.name}</Text>
+              {seller.sellerId && (
+                <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>
+                  <Text code style={{ fontSize: 11 }}>{seller.sellerId}</Text>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+    },
+    {
+      title: 'Account Manager',
+      dataIndex: 'managers',
+      key: 'managers',
+      render: (managers, record) => {
+        if (record?.isGroupHeader) return null;
+        if (!managers?.length) {
+          return <Text type="secondary" italic style={{ fontSize: 10 }}>Unassigned</Text>;
+        }
+        return (
+          <Space wrap size={4}>
+            {managers.map((m) => (
+              <span key={m._id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Avatar
+                  size={20}
+                  style={{
+                    backgroundColor: '#f4f4f5',
+                    color: '#18181b',
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  {m.firstName?.charAt(0)}{m.lastName?.charAt(0)}
+                </Avatar>
+                <Text style={{ fontSize: 11 }}>{m.firstName} {m.lastName}</Text>
+              </span>
+            ))}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Inventory',
+      dataIndex: 'totalAsins',
+      key: 'totalAsins',
+      render: (total, seller) => {
+        if (seller?.isGroupHeader) return null;
+        return (
+          <Button
+            type="link"
+            onClick={() => handleViewAsins(seller)}
+            style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 8, color: '#18181b' }}
+          >
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              backgroundColor: '#f4f4f5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Package size={16} color="#71717a" />
+            </div>
+            <div>
+              <Text strong style={{ fontSize: 12 }}>{total || 0} Total</Text>
+              <div style={{ fontSize: 10, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  display: 'inline-block',
+                }} />
                 {seller.activeAsins || 0} Active
               </div>
             </div>
-          </div>
-          {!isBrandManager && (
-            <div className="d-flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-              <button
-                className="btn btn-xs btn-white border border-zinc-200 shadow-sm d-flex align-items-center gap-1 hover:bg-zinc-50"
-                onClick={(e) => { e.stopPropagation(); handleViewAsins(seller); }}
-                title="Quick Add ASIN"
-                style={{ fontSize: '10px', height: '26px' }}
-              >
-                <Plus size={12} className="text-zinc-600" />
-              </button>
-            </div>
-          )}
-        </div>
-      )
+          </Button>
+        );
+      },
     },
     {
-      label: 'Last Activity',
+      title: 'Last Activity',
+      dataIndex: 'lastScraped',
       key: 'lastScraped',
-      width: '14%',
-      render: (lastScraped) => (
-        <div className="d-flex flex-column gap-0.5">
-          <div className="text-zinc-700 fw-semibold d-flex align-items-center gap-1" style={{ fontSize: '11px' }}>
-            <Clock size={12} className="text-zinc-400" />
-            {formatTimeAgo(lastScraped)}
-          </div>
-          {lastScraped && (
-            <div className="text-zinc-400 smallest" style={{ fontSize: '10px', paddingLeft: '16px' }}>
-              {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+      render: (lastScraped, record) => {
+        if (record?.isGroupHeader) return null;
+        return (
+          <div>
+            <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={12} style={{ color: '#a1a1aa' }} />
+              {formatTimeAgo(lastScraped)}
             </div>
-          )}
-        </div>
-      )
+            {lastScraped && (
+              <div style={{ fontSize: 10, color: '#a1a1aa', paddingLeft: 16 }}>
+                {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
-      label: 'Status',
+      title: 'Status',
+      dataIndex: 'status',
       key: 'status',
-      width: '12%',
-      render: (status, seller) => getStatusBadge(status, seller.lastScraped)
-    }
-  ], [handleViewAsins, getStatusBadge, isBrandManager]);
+      align: 'center',
+      render: (status, record) => {
+        if (record?.isGroupHeader) return null;
+        return getStatusBadge(status);
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      fixed: 'right',
+      width: 200,
+      render: (_, seller) => {
+        if (seller?.isGroupHeader) return null;
+        return renderActions(seller);
+      },
+    },
+  ], [handleViewAsins, getStatusBadge, getMarketplaceBadge, renderActions]);
 
-  const renderGroupHeader = useCallback(({ group, rows }) => (
-    <div className="d-flex align-items-center gap-2">
-      {getMarketplaceBadge(group)}
-      <span className="text-muted smallest fw-bold">{rows.length} STORES</span>
-    </div>
-  ), [getMarketplaceBadge]);
+  // Group sellers by marketplace for the table dataSource (client-side grouping)
+  const groupedDataSource = useMemo(() => {
+    const grouped = {};
+    paginatedSellers.forEach(seller => {
+      const market = seller.marketplace || 'Unknown';
+      if (!grouped[market]) grouped[market] = [];
+      grouped[market].push(seller);
+    });
 
-  if (loading && sellers.length === 0) { return <PageLoader message="Loading Sellers..." />; }
+    const data = [];
+    Object.entries(grouped).forEach(([market, sellersInGroup]) => {
+      data.push({
+        // Group header row
+        _id: `group-${market}`,
+        marketplace: market,
+        count: sellersInGroup.length,
+        isGroupHeader: true,
+      });
+      data.push(...sellersInGroup);
+    });
+    return data;
+  }, [paginatedSellers]);
+
+  const rowSelection = {
+    selectedRowKeys: selectedSellerIds,
+    onChange: (selectedRowKeys) => {
+      setSelectedSellerIds(selectedRowKeys);
+    },
+    getCheckboxProps: (record) => ({
+      disabled: record.isGroupHeader,
+      name: record.name,
+    }),
+  };
+
+  // Clear selection when data changes (page, filters)
+  useEffect(() => {
+    setSelectedSellerIds([]);
+  }, [page, activeTab, marketplaceFilter, debouncedSearchQuery]);
+
+  if (loading && sellers.length === 0) {
+    return <PageLoader message="Loading Sellers..." />;
+  }
 
   return (
     <>
@@ -820,208 +884,202 @@ const SellersPage = () => {
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
-      <div className="page-header border-bottom bg-white" style={{ padding: '16px 24px' }}>
-        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-          <div>
-            <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-              <span>Global</span> <ChevronRight size={12} /> <span className="text-dark fw-semibold">Sellers</span>
-            </div>
-            <h1 className="page-title mb-0 fw-bold text-dark tracking-tight" style={{ fontSize: '1.35rem' }}>Seller Management</h1>
-          </div>
-          <div className="d-flex align-items-center gap-2">
-            {isGlobalUser && (
-              <>
-                <button
-                  className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 px-3 hover-up-mild"
-                  onClick={() => setShowPoolModal(true)}
-                  style={{ height: '34px', borderRadius: '6px', fontSize: '11px' }}
-                >
-                  <LayoutGrid size={14} className="text-zinc-500" />
-                  <span className="fw-bold text-zinc-700">Octoparse Pool ({poolStats.available})</span>
-                </button>
-                <button
-                  className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 px-3 hover-up-mild"
-                  onClick={handleIngestAll}
-                  disabled={loading}
-                  title="Force check all Octoparse tasks for results"
-                  style={{ height: '34px', borderRadius: '6px', fontSize: '11px' }}
-                >
-                  <RefreshCw size={14} className={`text-primary ${loading ? 'spin' : ''}`} />
-                  <span className="fw-bold text-zinc-700">{loading ? 'Syncing...' : 'Fetch Latest'}</span>
-                </button>
-              </>
-            )}
-            {!isBrandManager && (
-              <>
-                <button
-                  className="btn btn-primary btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-3 hover-up-mild"
-                  onClick={() => setShowBulkImportModal(true)}
-                  style={{ height: '34px', borderRadius: '6px', fontSize: '11px', backgroundColor: '#4f46e5' }}
-                >
-                  <Upload size={14} />
-                  <span className="fw-bold">Bulk Import</span>
-                </button>
-                <button
-                  className="btn btn-white btn-sm shadow-sm border border-zinc-200 d-flex align-items-center gap-2 px-3 hover-up-mild"
-                  onClick={() => setShowImportModal(true)}
-                  style={{ height: '34px', borderRadius: '6px', fontSize: '11px' }}
-                >
-                  <FileUp size={14} className="text-zinc-500" />
-                  <span className="fw-bold text-zinc-700">CSV</span>
-                </button>
-                <button
-                  className="btn btn-zinc-900 btn-sm shadow-sm border-0 d-flex align-items-center gap-2 px-3 hover-up-mild"
-                  onClick={() => setShowAddModal(true)}
-                  style={{ height: '34px', borderRadius: '6px', fontSize: '11px', backgroundColor: '#18181b', color: '#fff' }}
-                >
-                  <Plus size={14} />
-                  <span className="fw-bold">Add Store</span>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="page-content">
 
-        <div className="bg-white border border-zinc-200 rounded-4 shadow-sm mb-4 overflow-hidden">
-          <div className="bg-zinc-900 text-white px-4 py-2 d-flex align-items-center justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="smallest fw-bold text-zinc-400 text-uppercase tracking-widest">Global Cache</div>
-              <div className="smallest fw-black">{sellers.length} records found</div>
-              <div className="smallest text-zinc-500 font-monospace">|</div>
-              <div className="smallest fw-black">{totalResults} shown</div>
-            </div>
-            <div className="d-flex align-items-center gap-3">
-              <button
-                className="btn btn-sm btn-link text-zinc-400 smallest p-0 fw-bold hover-text-white border-0 shadow-none"
-                onClick={() => {
-                  setActiveTab('all');
-                  setMarketplaceFilter('all');
-                  setStatusFilter('all');
-                  setSearchQuery('');
-                }}
+      {/* Page Header */}
+      <div style={{ padding: '16px 24px', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
+        <Space direction="vertical" size={0}>
+          <Space size={4} style={{ color: '#8c8c8c', fontSize: 12 }}>
+            <Text type="secondary">Global</Text>
+            <ChevronRight size={12} />
+            <Text strong>Sellers</Text>
+          </Space>
+          <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            Seller Management
+          </Title>
+        </Space>
+        <Space style={{ marginTop: 12 }}>
+          {isGlobalUser && (
+            <>
+              <Button
+                onClick={() => setShowPoolModal(true)}
+                icon={<LayoutGrid size={14} />}
               >
-                Emergency Reset Filters
-              </button>
-              <button className="btn btn-sm btn-zinc-800 py-1 px-3 rounded-pill smallest fw-bold" onClick={loadSellers}>
-                Force Refresh
-              </button>
-            </div>
-          </div>
+                Octoparse Pool ({poolStats.available})
+              </Button>
+              <Button
+                onClick={handleIngestAll}
+                loading={loading}
+                icon={<RefreshCw size={14} />}
+              >
+                {loading ? 'Syncing...' : 'Fetch Latest'}
+              </Button>
+            </>
+          )}
+          {!isBrandManager && (
+            <>
+              <Button
+                type="primary"
+                icon={<Upload size={14} />}
+                onClick={() => setShowBulkImportModal(true)}
+                style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
+              >
+                Bulk Import
+              </Button>
+              <Button
+                icon={<FileUp size={14} />}
+                onClick={() => setShowImportModal(true)}
+              >
+                CSV
+              </Button>
+              <Button
+                type="primary"
+                icon={<Plus size={14} />}
+                onClick={() => setShowAddModal(true)}
+                style={{ background: '#18181b', borderColor: '#18181b' }}
+              >
+                Add Store
+              </Button>
+            </>
+          )}
+        </Space>
+      </div>
 
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 border-bottom border-zinc-100" style={{ padding: '12px 24px', backgroundColor: '#ffffff' }}>
-            <div className="d-flex align-items-center gap-3 flex-wrap">
-              {/* STATUS PILLS */}
-              <div className="bg-light p-1 rounded-3 border d-flex" style={{ height: '36px' }}>
-                {['all', 'Active', 'Paused'].map(tab => (
-                  <button
-                    key={tab}
-                    className={`btn btn-sm px-3 rounded-2 border-0 transition-all fw-bold smallest ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-zinc-500'}`}
-                    style={{ fontSize: '11px' }}
-                    onClick={() => {
-                      setActiveTab(tab);
-                      setStatusFilter('all');
-                    }}
-                  >
-                    {tab === 'all' ? 'All Stores' : tab}
-                  </button>
-                ))}
-              </div>
-
-              {/* MARKETPLACE SWITCHER */}
-              <div className="bg-light p-1 rounded-3 border d-flex" style={{ height: '36px' }}>
-                <button
-                  type="button"
-                  onClick={() => setMarketplaceFilter('all')}
-                  className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${marketplaceFilter === 'all' ? 'bg-white text-dark shadow-sm' : 'text-zinc-500'}`}
-                  style={{ fontSize: '11px' }}
-                >
-                  Markets
-                </button>
-                {canAccessAmazon && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setMarketplaceFilter('amazon.in')}
-                      className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'amazon.in' ? 'bg-white text-primary shadow-sm' : 'text-zinc-500'}`}
-                      style={{ fontSize: '11px' }}
-                    >
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', marginRight: '5px', filter: marketplaceFilter === 'amazon.in' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="IN" />
-
-                    </button>
-                  </>
-                )}
-                {canAccessAjio && (
-                  <button
-                    type="button"
-                    onClick={() => setMarketplaceFilter('ajio')}
-                    className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white text-purple-600 shadow-sm' : 'text-zinc-500'}`}
-                    style={{ fontSize: '11px' }}
-                  >
-                    <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '10px', width: 'auto', objectFit: 'contain', marginRight: '6px', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
-
-                  </button>
-                )}
-                {canAccessMyntra && (
-                  <button
-                    type="button"
-                    onClick={() => setMarketplaceFilter('myntra')}
-                    className={`btn btn-sm px-3 border-0 fw-bold rounded-2 d-flex align-items-center transition-all ${marketplaceFilter === 'myntra' ? 'bg-white text-pink-600 shadow-sm' : 'text-zinc-500'}`}
-                    style={{ fontSize: '11px' }}
-                  >
-                    <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '12px', width: 'auto', objectFit: 'contain', marginRight: '5px', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
-
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="d-flex align-items-center gap-2">
-              <div className="position-relative">
-                <Search className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" size={14} />
-                <input
-                  type="text"
-                  className="form-control form-control-sm ps-5 bg-white border border-zinc-200 shadow-sm rounded-3 fw-medium"
-                  placeholder="Search storefronts..."
-                  style={{ width: '280px', height: '36px', fontSize: '12px' }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-body p-0 min-h-400 position-relative">
-          <ListView
-            columns={listViewColumns}
-            rows={paginatedSellers}
-            loading={loading && sellers.length === 0}
-            groupBy="marketplace"
-            rowKey="_id"
-            options={{ selectable: true }}
-            renderGroupHeader={renderGroupHeader}
-            actions={renderActions}
-            actionWidth="220px"
-            pagination={{
-              page,
-              limit,
-              total: totalResults,
-              onPageChange: setPage,
-              onLimitChange: (newLimit) => {
-                setLimit(newLimit);
-                setPage(1);
-              }
+      {/* Filters & Search Bar */}
+      <div style={{ padding: '12px 24px', background: '#fff', borderBottom: '1px solid #f0f0f0', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+        <Space wrap>
+          <Segmented
+            options={[
+              { label: 'All Stores', value: 'all' },
+              { label: 'Active', value: 'Active' },
+              { label: 'Paused', value: 'Paused' },
+            ]}
+            value={activeTab}
+            onChange={(value) => {
+              setActiveTab(value);
+              setStatusFilter('all'); // reset status filter when using main tabs
             }}
-            emptyState={{
-              icon: Store,
-              title: 'No sellers yet',
-              description: 'Add your first Amazon seller account to start tracking performance.',
-              action: { label: 'Add Seller', onClick: () => setShowAddModal(true) }
-            }}
+            style={{ fontWeight: 600, fontSize: 11 }}
           />
+          <Select
+            value={marketplaceFilter}
+            onChange={setMarketplaceFilter}
+            style={{ width: 160 }}
+            options={[
+              { label: 'All Markets', value: 'all' },
+              ...(canAccessAmazon ? [{ label: 'Amazon.in', value: 'amazon.in' }] : []),
+              ...(canAccessAjio ? [{ label: 'Ajio', value: 'ajio' }] : []),
+              ...(canAccessMyntra ? [{ label: 'Myntra', value: 'myntra' }] : []),
+            ]}
+          />
+        </Space>
+        <Input.Search
+          placeholder="Search storefronts..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ width: 280 }}
+          allowClear
+        />
+      </div>
+
+      {/* Global Cache / Stats Bar */}
+      <div style={{ padding: '8px 24px', background: '#18181b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space>
+          <Text style={{ color: '#a1a1aa', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Global Cache</Text>
+          <Text strong style={{ fontSize: 12, color: '#fff' }}>{sellers.length} records found</Text>
+          <Text style={{ color: '#a1a1aa', fontSize: 12 }}>|</Text>
+          <Text strong style={{ fontSize: 12, color: '#fff' }}>{totalResults} shown</Text>
+        </Space>
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            style={{ color: '#a1a1aa', fontSize: 10, fontWeight: 700, padding: 0 }}
+            onClick={() => {
+              setActiveTab('all');
+              setMarketplaceFilter('all');
+              setStatusFilter('all');
+              setSearchQuery('');
+            }}
+          >
+            Emergency Reset Filters
+          </Button>
+          <Button size="small" onClick={() => loadSellers()}>
+            Force Refresh
+          </Button>
+        </Space>
+      </div>
+
+      {/* Bulk Action Bar (when selection is active) */}
+      {selectedSellerIds.length > 0 && (
+        <div style={{
+          padding: '8px 24px',
+          background: '#18181b',
+          color: '#fff',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <Text strong style={{ color: '#fff', fontSize: 12 }}>
+            {selectedSellerIds.length} selected
+          </Text>
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              icon={<RefreshCw size={14} />}
+              onClick={handleBulkSync}
+              loading={loading}
+            >
+              Sync Selected
+            </Button>
+            <Button size="small" onClick={() => setSelectedSellerIds([])}>
+              Clear
+            </Button>
+          </Space>
         </div>
+      )}
+
+      <div style={{ padding: 24 }}>
+        <Table
+          columns={columns}
+          dataSource={groupedDataSource}
+          rowKey="_id"
+          loading={loading}
+          rowSelection={rowSelection}
+          pagination={{
+            current: page,
+            pageSize: limit,
+            total: totalResults,
+            showSizeChanger: true,
+            pageSizeOptions: ['25', '50', '100'],
+            onChange: (page, pageSize) => {
+              setPage(page);
+              setLimit(pageSize);
+            },
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} stores`,
+          }}
+          scroll={{ x: 900 }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <span style={{ fontWeight: 600, color: '#94a3b8' }}>
+                    No sellers yet — add your first store to begin tracking.
+                  </span>
+                }
+              />
+            ),
+          }}
+          onRow={(record) => {
+            if (record.isGroupHeader) {
+              return {
+                style: { background: '#fafafa', fontWeight: 600 },
+              };
+            }
+            return {};
+          }}
+        />
       </div>
 
       <Suspense fallback={null}>
@@ -1049,7 +1107,7 @@ const SellersPage = () => {
             onClose={() => {
               setShowAsinModal(false);
               setSelectedSeller(null);
-              loadSellers(true); // Silent update on close
+              loadSellers(true);
             }}
             onAddAsin={handleAddAsin}
             onDeleteAsin={handleDeleteAsin}
@@ -1060,7 +1118,7 @@ const SellersPage = () => {
             isGlobalUser={isGlobalUser}
             onRefresh={() => {
               handleViewAsins(selectedSeller, 1);
-              loadSellers(true); // Silent update on internal changes
+              loadSellers(true);
             }}
             pagination={asinPagination}
             onLoadMore={handleLoadMoreAsins}
