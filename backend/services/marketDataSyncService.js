@@ -1756,35 +1756,60 @@ class MarketDataSyncService {
             const isAjio = asin.sellerMarketplace && asin.sellerMarketplace.toLowerCase() === 'ajio';
 
             if (isAjio) {
-                // --- Ajio Specific Parsing Logic ---
-                const rawPrice = rawData.ASP || rawData.asp || '';
-                price = rawPrice ? parseFloat(rawPrice.replace(/[^0-9.]/g, '')) : 0;
-                
-                const rawMrp = rawData.MRP || rawData.mrp || '';
-                mrp = rawMrp ? parseFloat(rawMrp.replace(/[^0-9.]/g, '')) : 0;
+                // --- Ajio Specific Parsing Logic (Robust Mode) ---
+                price = this._cleanPrice(this._getFromRaw(rawData, ['ASP', 'asp', 'price', 'currentPrice'], 0));
+                mrp = this._cleanPrice(this._getFromRaw(rawData, ['MRP', 'mrp', 'listPrice'], 0));
                 if (!mrp) mrp = price;
 
-                title = (rawData.title || rawData.Title || asin.Title || '').trim();
+                // Discount & Deal Details
+                dealBadge = this._getFromRaw(rawData, ['off_percent', 'offPercent', 'discountPercentage', 'deal_badge', 'deal'], 'No deal found');
+                if (dealBadge !== 'No deal found' && dealBadge.toString().match(/\d+/)) {
+                    priceType = 'Discounted Price';
+                } else {
+                    priceType = 'Standard Price';
+                }
 
-                // Category Node parsing
-                if (rawData.category_node) {
-                    category = rawData.category_node.split('\n').map(s => s.trim()).filter(Boolean).join(' > ');
+                title = (this._getFromRaw(rawData, ['title', 'Title'], asin.Title || '')).trim();
+                brand = (this._getFromRaw(rawData, ['brand_name', 'brand', 'Brand', 'brandName'], asin.Brand || '')).trim();
+
+                // Category hierarchy
+                const rawCat = this._getFromRaw(rawData, ['category_node', 'Category', 'category'], '');
+                if (rawCat) {
+                    category = rawCat.split(/[\n\r\/\\>]+/).map(s => s.trim()).filter(Boolean).join(' > ');
                 } else {
                     category = asin.Category || '';
                 }
 
-                // Images extraction from HTML slick-list
-                if (rawData.img_count && typeof rawData.img_count === 'string') {
-                    const matches = rawData.img_count.match(/src=["']([^"']+)["']/g);
+                // Advanced Rank Detection (if available in scraper)
+                const bsrData = this._parseBSR(rawData);
+                bsr = bsrData.main;
+                sub = bsrData.sub;
+                subBsr = bsrData.subBsrString || bsrData.sub;
+                subBSRs = bsrData.allRanks;
+
+                // Images extraction
+                const rawImgField = this._getFromRaw(rawData, ['Image_count', 'image_count', 'img_count', 'imgCount'], '');
+                if (rawImgField && typeof rawImgField === 'string') {
+                    const matches = rawImgField.match(/src=["']([^"']+)["']/g);
                     if (matches) {
-                        images = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com'));
+                        images = matches.map(m => m.replace(/src=["']|["']/g, '')).filter(src => src.includes('ajio.com') || src.includes('jiocdn.ajio.com') || src.includes('assets-jiocdn.ajio.com'));
                     }
                 }
                 imagesCount = images.length;
-                mainImageUrl = images[0] || asin.ImageUrl || '';
+                mainImageUrl = images[0] || this._getFromRaw(rawData, ['Main_Image', 'mainImage', 'imageUrl'], asin.ImageUrl || '');
 
-                // Availability check based on Button_text
-                let buttonText = (rawData.Button_text || rawData.button_text || '').trim();
+                // Product attributes / Bullet points
+                const bulletHtml = this._getFromRaw(rawData, ['bp_all', 'bullet_points', 'Product_Details', 'details'], '');
+                if (bulletHtml && typeof bulletHtml === 'string' && bulletHtml.trim().length > 5) {
+                    bulletPointsText = this._parseBulletPoints(bulletHtml);
+                    if (bulletPointsText.length === 0) {
+                        bulletPointsText = bulletHtml.split(/[\n\r•]+/).map(s => s.trim()).filter(s => s.length > 3);
+                    }
+                    bulletPointsCount = bulletPointsText.length;
+                }
+
+                // Availability & Stock Level
+                let buttonText = (this._getFromRaw(rawData, ['Button_text', 'button_text', 'availability'], '')).trim();
                 if (!buttonText) {
                     if (price === 0) {
                         buttonText = 'OUT OF STOCK';
@@ -1794,16 +1819,35 @@ class MarketDataSyncService {
                 }
                 availabilityStatus = buttonText;
 
+                // Stock level extraction
+                const lowerAvail = availabilityStatus.toLowerCase();
+                if (lowerAvail.includes('left') || lowerAvail.includes('only')) {
+                    stockLevel = this._cleanStock(availabilityStatus);
+                } else if (lowerAvail.includes('out of stock') || lowerAvail.includes('unavailable')) {
+                    stockLevel = 0;
+                } else if (price > 0) {
+                    stockLevel = 10; // Default baseline for in-stock items
+                }
+
                 soldBy = asin.sellerName || '';
                 buyBoxWin = true;
-                brand = (rawData.brand_name || rawData.brand || rawData.Brand || asin.Brand || '').trim();
 
-                // Rating and Review Count extraction
-                const rawRating = rawData.Rating || rawData.rating || rawData.avg_rating || '';
+                // A+ content (if rich description present)
+                hasAplus = this._detectAplusContent(rawData);
+                if (hasAplus) {
+                    aplusPresentSince = aplusPresentSince || now;
+                    aplusAbsentSince = null;
+                } else {
+                    aplusAbsentSince = aplusAbsentSince || now;
+                    aplusPresentSince = null;
+                }
+
+                // Rating & Reviews
+                const rawRating = this._getFromRaw(rawData, ['Rating', 'rating', 'avg_rating'], 0);
                 rating = parseFloat(rawRating);
                 if (isNaN(rating)) rating = 0;
 
-                const rawReviews = rawData.Review_count || rawData.review_count || rawData.ReviewCount || '';
+                const rawReviews = this._getFromRaw(rawData, ['Review_count', 'review_count', 'ReviewCount', 'rating_count'], 0);
                 reviewCount = this._cleanReviewCount(rawReviews) || 0;
 
                 if (soldBy) {
