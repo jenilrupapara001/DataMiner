@@ -1821,7 +1821,7 @@ const AsinManagerPage = () => {
         placement="right"
         onClose={() => setFilterPanelOpen(false)}
         open={filterPanelOpen}
-        width={window.innerWidth < 576 ? '100%' : 420}
+        size={window.innerWidth < 576 ? '100%' : 420}
         styles={{
           header: { background: '#18181b', borderBottom: 'none', padding: '16px 24px' },
           body: { padding: 0, display: 'flex', flexDirection: 'column', background: '#ffffff' }
@@ -2119,7 +2119,7 @@ const AsinManagerPage = () => {
 
       {/* ANALYTICS MODULE AREA - RECTANGULAR PILLS STYLE */}
       <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
-        <div className="px-4 pt-2 pb-3 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
+        <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {kpis.map((kpi, idx) => (
             <div
               key={idx}
@@ -2171,7 +2171,7 @@ const AsinManagerPage = () => {
         </div>
       )}
 
-      <div className="page-content flex-grow-1 d-flex flex-column overflow-hidden px-4 py-3" style={{ minHeight: 0 }}>
+      <div className="page-content flex-grow-1 d-flex flex-column overflow-hidden px-3 pt-1 pb-3" style={{ minHeight: 0 }}>
         {/* Alerts & Errors row */}
         {error && (
           <div className="alert alert-danger border-0 shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2" role="alert">
@@ -2258,7 +2258,7 @@ const AsinManagerPage = () => {
                     justify-content: space-between;
                     flex-shrink: 0;
                     gap: 16px;
-                    padding: 12px 24px;
+                    padding: 10px 16px;
                   }
                   .asin-toolbar-left {
                     display: flex;

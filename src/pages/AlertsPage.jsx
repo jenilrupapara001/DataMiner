@@ -1,363 +1,598 @@
 import React, { useState, useEffect } from 'react';
-import { Alert } from 'reactstrap';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import { Bell, CheckCircle, AlertTriangle, Info, XCircle, Check, Search as SearchIcon, RefreshCw, Loader2, MessageSquare } from 'lucide-react';
+import { 
+    Card, 
+    Button, 
+    Row, 
+    Col, 
+    Statistic, 
+    Segmented, 
+    Input, 
+    List, 
+    Typography, 
+    Space, 
+    Popconfirm, 
+    Modal, 
+    Empty, 
+    Tag, 
+    message, 
+    Spin,
+    Avatar,
+    Tooltip,
+    ConfigProvider
+} from 'antd';
+import { 
+    Bell, 
+    CheckCircle, 
+    AlertTriangle, 
+    Info, 
+    XCircle, 
+    Check, 
+    Search, 
+    RefreshCw, 
+    MessageSquare, 
+    Trash2, 
+    BellRing,
+    ShieldAlert,
+    Calendar
+} from 'lucide-react';
 import api from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
-import EmptyState from '../components/common/EmptyState';
-import './Alerts.css';
-import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
-import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+
+const { Title, Text, Paragraph } = Typography;
 
 const AlertsPage = () => {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    total: 0,
-    critical: 0,
-    warning: 0,
-    success: 0,
-    info: 0,
-    unreadCount: 0
-  });
-  const [filters, setFilters] = useState({
-    unreadOnly: false,
-    searchTerm: '',
-    type: 'all'
-  });
-  const socket = useSocket();
-
-  if (loading && notifications.length === 0) {
-    return <PageLoader message="Loading Alerts..." />;
-  }
-
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      const response = await api.notificationApi.getNotifications({
-        unreadOnly: filters.unreadOnly,
-        limit: 50
-      });
-      if (response.success) {
-        setNotifications(response.data);
-        // Calculate frontend stats based on fetched data
-        const data = response.data;
-        setStats({
-          total: response.pagination.total,
-          critical: data.filter(n => n.type === 'ALERT').length, // Maps to ALERT in DB
-          warning: data.filter(n => n.type === 'SYSTEM').length,
-          success: data.filter(n => n.type === 'ACTION_ASSIGNED').length,
-          info: data.filter(n => n.type === 'CHAT_MESSAGE' || n.type === 'CHAT_MENTION').length,
-          unreadCount: response.unreadCount
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [filters.unreadOnly]);
-
-  useEffect(() => {
-    if (!socket) return;
-    socket.on('new-notification', (data) => {
-      setNotifications(prev => [data.notification, ...prev].slice(0, 50));
-      setStats(prev => ({
-        ...prev,
-        total: prev.total + 1,
-        unreadCount: data.unreadCount
-      }));
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [stats, setStats] = useState({
+        total: 0,
+        critical: 0,
+        warning: 0,
+        success: 0,
+        info: 0,
+        unreadCount: 0
     });
-    return () => socket.off('new-notification');
-  }, [socket]);
+    const [filters, setFilters] = useState({
+        unreadOnly: false,
+        searchTerm: '',
+        type: 'all'
+    });
+    const socket = useSocket();
 
-  const acknowledgeNotification = async (id) => {
-    try {
-      const response = await api.notificationApi.markAsRead(id);
-      if (response.success) {
-        setNotifications(notifications.map(n =>
-          n._id === id ? { ...n, isRead: true } : n
-        ));
-        setStats(prev => ({ ...prev, unreadCount: Math.max(0, prev.unreadCount - 1) }));
-      }
-    } catch (err) {
-      console.error('Failed to acknowledge notification:', err);
-    }
-  };
+    // SQL vs Mongo Robust Casing Normalizer
+    const normalize = (n) => {
+        if (!n) return {};
+        return {
+            id: n.Id || n._id || n.id,
+            type: (n.Type || n.type || 'INFO').toUpperCase(),
+            message: n.Message || n.message || 'No telemetry payload',
+            isRead: n.IsRead === 1 || n.IsRead === true || n.isRead === 1 || n.isRead === true,
+            createdAt: n.CreatedAt || n.createdAt,
+            referenceId: n.ReferenceId || n.referenceId
+        };
+    };
 
-  const acknowledgeAll = async () => {
-    if (window.confirm('Mark all notifications as read?')) {
-      try {
-        const response = await api.notificationApi.markAllAsRead();
-        if (response.success) {
-          setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-          setStats(prev => ({ ...prev, unreadCount: 0 }));
+    const calculateStats = (rawList, responseUnread) => {
+        const normalized = rawList.map(normalize);
+        setStats({
+            total: normalized.length,
+            critical: normalized.filter(n => n.type === 'ALERT').length,
+            warning: normalized.filter(n => n.type === 'SYSTEM').length,
+            success: normalized.filter(n => n.type === 'ACTION_ASSIGNED').length,
+            info: normalized.filter(n => n.type === 'CHAT_MESSAGE' || n.type === 'CHAT_MENTION').length,
+            unreadCount: typeof responseUnread === 'number' ? responseUnread : normalized.filter(n => !n.isRead).length
+        });
+    };
+
+    const fetchNotifications = async (showSpinner = true) => {
+        try {
+            if (showSpinner) setLoading(true);
+            const response = await api.notificationApi.getNotifications({
+                unreadOnly: filters.unreadOnly,
+                limit: 100
+            });
+            if (response && response.success) {
+                const records = response.data || [];
+                setNotifications(records);
+                calculateStats(records, response.unreadCount);
+            }
+        } catch (err) {
+            if (err.message && !err.message.includes('404')) {
+                console.error('Alerts Sector sync error:', err);
+                message.error('Operational grid sync error.');
+            }
+        } finally {
+            if (showSpinner) setLoading(false);
         }
-      } catch (err) {
-        console.error('Failed to mark all as read:', err);
-      }
-    }
-  };
-
-  // Permanently delete (dismiss) an alert — won't reappear after refresh
-  const dismissAlert = async (id) => {
-    const wasUnread = !notifications.find(n => n._id === id)?.isRead;
-    // Optimistically remove from UI right away
-    setNotifications(prev => prev.filter(n => n._id !== id));
-    if (wasUnread) {
-      setStats(prev => ({ ...prev, unreadCount: Math.max(0, prev.unreadCount - 1) }));
-    }
-    try {
-      await api.delete(`/notifications/${id}`);
-    } catch (err) {
-      console.error('Dismiss failed — refreshing:', err);
-      fetchNotifications(); // restore accuracy if backend call fails
-    }
-  };
-
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case 'ALERT': return <XCircle className="text-danger" />;
-      case 'SYSTEM': return <Info className="text-info" />;
-      case 'ACTION_ASSIGNED': return <CheckCircle className="text-success" />;
-      case 'CHAT_MESSAGE':
-      case 'CHAT_MENTION': return <MessageSquare className="text-primary" />;
-      default: return <Bell className="text-secondary" />;
-    }
-  };
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case 'ALERT': return 'danger';
-      case 'SYSTEM': return 'info';
-      case 'ACTION_ASSIGNED': return 'success';
-      case 'CHAT_MESSAGE':
-      case 'CHAT_MENTION': return 'primary';
-      default: return 'secondary';
-    }
-  };
-
-  const getSeverityClass = (severity) => {
-    const classes = {
-      critical: 'alert-item-critical',
-      warning: 'alert-item-warning',
-      success: 'alert-item-success',
-      info: 'alert-item-info'
     };
-    return classes[severity] || 'alert-item-info';
-  };
 
-  const getSeverityIcon = (severity) => {
-    const icons = {
-      critical: <XCircle style={{ width: '20px', height: '20px' }} />,
-      warning: <AlertTriangle style={{ width: '20px', height: '20px' }} />,
-      success: <CheckCircle style={{ width: '20px', height: '20px' }} />,
-      info: <Info style={{ width: '20px', height: '20px' }} />
+    useEffect(() => {
+        fetchNotifications(true);
+    }, [filters.unreadOnly]);
+
+    // Real-time socket sync
+    useEffect(() => {
+        if (!socket) return;
+        
+        const handleNewNotification = (data) => {
+            if (!data.notification) return;
+            const normMsg = normalize(data.notification).message;
+            setNotifications(prev => {
+                const updated = [data.notification, ...prev].slice(0, 100);
+                calculateStats(updated, data.unreadCount);
+                return updated;
+            });
+            message.info({
+                content: `Incoming: ${normMsg.substring(0, 50)}${normMsg.length > 50 ? '...' : ''}`,
+                icon: <BellRing size={16} style={{ color: '#1890ff' }} />,
+                duration: 3
+            });
+        };
+
+        socket.on('new-notification', handleNewNotification);
+        return () => socket.off('new-notification', handleNewNotification);
+    }, [socket]);
+
+    const acknowledgeNotification = async (id) => {
+        try {
+            const response = await api.notificationApi.markAsRead(id);
+            if (response && response.success) {
+                setNotifications(prev => {
+                    const updated = prev.map(n => {
+                        const current = normalize(n);
+                        if (current.id === id) {
+                            // Preserve case structure based on what was returned from server
+                            if ('IsRead' in n) return { ...n, IsRead: 1 };
+                            return { ...n, isRead: true, IsRead: 1 };
+                        }
+                        return n;
+                    });
+                    calculateStats(updated, Math.max(0, stats.unreadCount - 1));
+                    return updated;
+                });
+                message.success('Broadcast acknowledged.');
+            }
+        } catch (err) {
+            console.error('Write fail acknowledge:', err);
+        }
     };
-    return icons[severity] || <Bell style={{ width: '20px', height: '20px' }} />;
-  };
 
-  const handleFilterChange = (newFilters) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  };
+    const acknowledgeAll = () => {
+        Modal.confirm({
+            title: 'Acknowledge Notification Grid',
+            content: 'Are you sure you want to clear the active unread queue?',
+            okText: 'Acknowledge All',
+            cancelText: 'Cancel',
+            okButtonProps: { type: 'primary', danger: false, style: { borderRadius: 6 } },
+            cancelButtonProps: { style: { borderRadius: 6 } },
+            icon: <CheckCircle style={{ color: '#52c41a', marginRight: 8 }} size={22} />,
+            async onOk() {
+                try {
+                    setActionLoading(true);
+                    const response = await api.notificationApi.markAllAsRead();
+                    if (response && response.success) {
+                        setNotifications(prev => {
+                            const updated = prev.map(n => {
+                                if ('IsRead' in n) return { ...n, IsRead: 1 };
+                                return { ...n, isRead: true, IsRead: 1 };
+                            });
+                            calculateStats(updated, 0);
+                            return updated;
+                        });
+                        message.success('Grid successfully acknowledged.');
+                    }
+                } catch (err) {
+                    console.error('Mass acknowledge command aborted:', err);
+                } finally {
+                    setActionLoading(false);
+                }
+            }
+        });
+    };
 
-  return (
-    <>
-      <div className="container-fluid py-5 min-vh-100" style={{ backgroundColor: 'var(--bg-primary)' }}>
-        {loading && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-            <LoadingIndicator type="line-simple" size="md" />
-          </div>
-        )}
-        <div className="row justify-content-center">
-          <div className="col-lg-10 col-xl-9">
+    const dismissAlert = async (id) => {
+        try {
+            await api.delete(`/notifications/${id}`);
+            setNotifications(prev => {
+                const updated = prev.filter(n => normalize(n).id !== id);
+                // Recount
+                const wasUnread = !normalize(prev.find(n => normalize(n).id === id))?.isRead;
+                calculateStats(updated, wasUnread ? Math.max(0, stats.unreadCount - 1) : stats.unreadCount);
+                return updated;
+            });
+            message.success('Broadcast purged.');
+        } catch (err) {
+            console.error('Purge abort, syncing:', err);
+            fetchNotifications(false);
+        }
+    };
 
-            <div className="d-flex justify-content-between align-items-end mb-4 px-2">
-              <div>
-                <h1 className="fw-bold text-zinc-900 mb-0 d-flex align-items-center gap-2" style={{ letterSpacing: '-0.02em', fontSize: '2rem' }}>
-                  <Bell className="text-zinc-400" size={28} />
-                  Operational <span className="text-zinc-400">Alerts</span>
-                </h1>
-                <p className="text-zinc-500 small mb-0 mt-1 fw-500">Stay updated with system activities & market triggers</p>
-              </div>
-              <div className="d-flex gap-3">
-                <button
-                  className="btn btn-white border border-zinc-200 shadow-sm rounded-pill px-3 d-flex align-items-center gap-2 fw-bold text-zinc-700"
-                  onClick={fetchNotifications}
-                  disabled={loading}
-                >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} className="text-zinc-400" />}
-                  Sync
-                </button>
-                <button
-                  className="btn btn-zinc-900 text-white rounded-pill px-4 fw-bold shadow-sm border-0"
-                  style={{ backgroundColor: '#18181B' }}
-                  onClick={acknowledgeAll}
-                  disabled={stats.unreadCount === 0}
-                >
-                  Mark All Read
-                </button>
-              </div>
-            </div>
+    const getTypeIcon = (type) => {
+        switch (type) {
+            case 'ALERT': return <XCircle size={16} />;
+            case 'SYSTEM': return <ShieldAlert size={16} />;
+            case 'ACTION_ASSIGNED': return <CheckCircle size={16} />;
+            case 'CHAT_MESSAGE':
+            case 'CHAT_MENTION': return <MessageSquare size={16} />;
+            default: return <Info size={16} />;
+        }
+    };
 
-            {/* iOS Widgets Style Stats */}
-            <div className="row g-3 mb-5">
-              {[
-                { label: 'Unread', value: stats.unreadCount, icon: Bell, color: '#007aff' },
-                { label: 'Alerts', value: stats.critical, icon: XCircle, color: '#ff3b30' },
-                { label: 'Updates', value: stats.success, icon: CheckCircle, color: '#34c759' },
-                { label: 'System', value: stats.warning, icon: Info, color: '#5856d6' }
-              ].map((stat, i) => (
-                <div key={i} className="col-6 col-md-3">
-                  <div className="surface-card p-4 rounded-xl text-center border border-zinc-200 bg-white shadow-sm animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
-                    <div className="mb-2 d-inline-block p-2 rounded-circle border border-zinc-100" style={{ backgroundColor: `${stat.color}08`, color: stat.color }}>
-                      <stat.icon size={20} />
+    const getTypeColor = (type) => {
+        switch (type) {
+            case 'ALERT': return '#ef4444'; // red
+            case 'SYSTEM': return '#f59e0b'; // amber
+            case 'ACTION_ASSIGNED': return '#10b981'; // green
+            case 'CHAT_MESSAGE':
+            case 'CHAT_MENTION': return '#8b5cf6'; // purple
+            default: return '#3b82f6'; // blue
+        }
+    };
+
+    const getTypeLabel = (type) => {
+        switch (type) {
+            case 'ALERT': return 'ALERT';
+            case 'SYSTEM': return 'SYSTEM';
+            case 'ACTION_ASSIGNED': return 'TASK';
+            case 'CHAT_MESSAGE':
+            case 'CHAT_MENTION': return 'CHAT';
+            default: return 'INFO';
+        }
+    };
+
+    // Client filters on normalized schema
+    const displayList = notifications
+        .map(n => ({ ...normalize(n), _raw: n }))
+        .filter(n => {
+            const matchesType = 
+                filters.type === 'all' ||
+                n.type === filters.type ||
+                (filters.type === 'CHAT_MESSAGE' && (n.type === 'CHAT_MESSAGE' || n.type === 'CHAT_MENTION'));
+                
+            const matchesSearch = 
+                filters.searchTerm === '' ||
+                n.message.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+                n.type.toLowerCase().includes(filters.searchTerm.toLowerCase());
+                
+            return matchesType && matchesSearch;
+        });
+
+    // Formatter
+    const formatTimestamp = (dateString) => {
+        if (!dateString) return '--';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '--';
+        
+        return d.toLocaleString([], { 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+    };
+
+    return (
+        <ConfigProvider
+            theme={{
+                token: {
+                    borderRadius: 8,
+                    colorPrimary: '#1e293b'
+                }
+            }}
+        >
+            <div style={{ padding: '24px 20px', maxWidth: 1200, margin: '0 auto', minHeight: '100vh', backgroundColor: '#fcfcfd' }}>
+                {/* Dash Indicator */}
+                {loading && (
+                    <div style={{ 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 0, 
+                        width: '100%', 
+                        height: '3px', 
+                        zIndex: 9999, 
+                        backgroundColor: '#e2e8f0'
+                    }}>
+                        <div className="sync-bar-pulse" />
                     </div>
-                    <div className="text-zinc-500 smallest fw-bold text-uppercase" style={{ letterSpacing: '0.05em' }}>{stat.label}</div>
-                    <div className="h3 fw-bold mb-0 mt-1 text-zinc-900">{stat.value}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-4">
-              {/* Read / Unread toggle */}
-              <div className="d-flex gap-2 p-1 bg-zinc-100 border border-zinc-200 rounded-pill d-inline-flex mb-3">
-                  <button
-                    className={`btn btn-sm rounded-pill px-4 fw-bold border-0 transition-all ${!filters.unreadOnly ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
-                    style={!filters.unreadOnly ? { backgroundColor: '#18181B' } : {}}
-                    onClick={() => setFilters({ ...filters, unreadOnly: false })}
-                  >
-                    Recent
-                  </button>
-                <button
-                  className={`btn btn-sm rounded-pill px-4 fw-bold border-0 transition-all ${filters.unreadOnly ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
-                  style={filters.unreadOnly ? { backgroundColor: '#18181B' } : {}}
-                  onClick={() => setFilters({ ...filters, unreadOnly: true })}
-                >
-                  Unread
-                </button>
-              </div>
-
-              {/* Type filter */}
-              <div className="d-flex gap-2 flex-wrap mb-3">
-                {[
-                  { id: 'all', label: 'All Types' },
-                  { id: 'ALERT', label: '🔴 Alerts' },
-                  { id: 'SYSTEM', label: '🔵 System' },
-                  { id: 'ACTION_ASSIGNED', label: '🟢 Updates' },
-                  { id: 'CHAT_MESSAGE', label: '💬 Chat' },
-                ].map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setFilters(prev => ({ ...prev, type: t.id }))}
-                    className={`btn btn-sm rounded-pill fw-bold border border-zinc-200 px-3 shadow-none transition-all ${filters.type === t.id ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm' : 'bg-white text-zinc-500'
-                    }`}
-                    style={filters.type === t.id ? { backgroundColor: '#18181B' } : {}}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Search */}
-              <div className="input-group ios-search-pill rounded-pill px-3 py-1 shadow-sm mb-4">
-                <span className="input-group-text bg-transparent border-0 p-0 me-2 text-muted">
-                  <SearchIcon size={18} />
-                </span>
-                <input
-                  type="text"
-                  className="form-control bg-transparent border-0 p-0 shadow-none"
-                  placeholder="Search notifications…"
-                  value={filters.searchTerm}
-                  onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-                />
-                {filters.searchTerm && (
-                  <button
-                    className="btn btn-link p-0 text-muted"
-                    onClick={() => setFilters(prev => ({ ...prev, searchTerm: '' }))}
-                  >
-                    ✕
-                  </button>
                 )}
-              </div>
-            </div>
 
-            <div className="notifications-stack">
-              {notifications.length === 0 ? (
-                <EmptyState
-                  icon={Bell}
-                  title="All caught up!"
-                  description="No new notifications. System events and alerts will appear here."
-                  action={null}
-                />
-              ) : (
-                <div className="d-flex flex-column gap-2">
-                  {notifications
-                    .filter(n =>
-                      (filters.type === 'all' ||
-                        n.type === filters.type ||
-                        (filters.type === 'CHAT_MESSAGE' && (n.type === 'CHAT_MESSAGE' || n.type === 'CHAT_MENTION'))) &&
-                      (filters.searchTerm === '' ||
-                        n.message.toLowerCase().includes(filters.searchTerm.toLowerCase()))
-                    )
-                    .map((notification, idx) => (
-                      <Alert
-                        key={notification._id}
-                        color={getTypeColor(notification.type)}
-                        isOpen={true}
-                        toggle={() => dismissAlert(notification._id)}
-                        className={`mb-0 border border-zinc-200 shadow-sm animate-fade-in ${!notification.isRead ? 'fw-semibold bg-white' : 'bg-zinc-50'}`}
-                        style={{ animationDelay: `${idx * 0.05}s`, borderRadius: 12 }}
-                      >
-                        <div className="d-flex align-items-center gap-2">
-                          {getTypeIcon(notification.type)}
-                          <div className="flex-grow-1">
-                            <div className="d-flex justify-content-between">
-                              <small className="text-uppercase fw-bold" style={{ letterSpacing: '0.05em', opacity: 0.7 }}>
-                                {notification.type.replace(/_/g, ' ')}
-                              </small>
-                              <small className="opacity-75">
-                                {new Date(notification.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </small>
-                            </div>
-                            <div className="mt-1">{notification.message}</div>
-                          </div>
-                          {!notification.isRead && (
-                            <button
-                              className="btn btn-link p-0 ms-2"
-                              title="Mark as read"
-                              onClick={() => acknowledgeNotification(notification._id)}
-                            >
-                              <Check size={18} />
-                            </button>
-                          )}
-                        </div>
-                      </Alert>
-                    ))}
+                {/* Top Header Segment */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+                    <div>
+                        <Title level={2} style={{ margin: 0, fontWeight: 750, letterSpacing: '-0.03em', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Bell style={{ color: '#475569' }} size={26} />
+                            Operational Alerts
+                        </Title>
+                        <Text style={{ fontSize: 14, color: '#64748b', fontWeight: 450 }}>
+                            Real-time monitoring array mapping system triggers, background tasks, and chat notifications.
+                        </Text>
+                    </div>
+                    
+                    <Space size="middle">
+                        <Button 
+                            onClick={() => fetchNotifications(true)} 
+                            icon={<RefreshCw size={14} className={loading ? 'animate-spin' : ''} />}
+                            disabled={loading}
+                            style={{ borderRadius: 6, height: 36, fontWeight: 600, color: '#475569' }}
+                        >
+                            Sync Data
+                        </Button>
+                        <Button 
+                            type="primary" 
+                            onClick={acknowledgeAll} 
+                            disabled={stats.unreadCount === 0 || actionLoading}
+                            style={{ borderRadius: 6, height: 36, fontWeight: 600, backgroundColor: '#0f172a', border: 'none' }}
+                        >
+                            Mark All As Read
+                        </Button>
+                    </Space>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <style>{`
-          .smallest { font-size: 0.65rem; }
-          .transition-all { transition: all 0.2s ease; }
-          .text-truncate-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-          }
-        `}</style>
-    </>
-  );
+                {/* Professional Scoreboard KPIs */}
+                <Row gutter={[16, 16]} style={{ marginBottom: 28 }}>
+                    {[
+                        { label: 'Unread Buffer', value: stats.unreadCount, icon: Bell, color: '#2563eb', bgColor: '#eff6ff' },
+                        { label: 'Critical Incidents', value: stats.critical, icon: XCircle, color: '#dc2626', bgColor: '#fef2f2' },
+                        { label: 'Completed Operations', value: stats.success, icon: CheckCircle, color: '#16a34a', bgColor: '#f0fdf4' },
+                        { label: 'System Invocations', value: stats.warning, icon: ShieldAlert, color: '#d97706', bgColor: '#fef3c7' }
+                    ].map((stat, idx) => (
+                        <Col xs={12} md={6} key={idx}>
+                            <Card bordered={false} style={{ 
+                                borderRadius: 12, 
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06)',
+                                border: '1px solid #e2e8f0',
+                                backgroundColor: '#fff'
+                            }} bodyStyle={{ padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: 4 }}>
+                                            {stat.label}
+                                        </div>
+                                        <Statistic 
+                                            value={stat.value}
+                                            valueStyle={{ fontWeight: 800, fontSize: 28, color: '#0f172a', lineHeight: 1 }}
+                                        />
+                                    </div>
+                                    <div style={{ 
+                                        width: 42, 
+                                        height: 42, 
+                                        borderRadius: 8, 
+                                        backgroundColor: stat.bgColor, 
+                                        color: stat.color,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <stat.icon size={20} strokeWidth={2.2} />
+                                    </div>
+                                </div>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+
+                {/* Filtering Workspace Panel */}
+                <Card bordered={false} style={{ 
+                    borderRadius: 12, 
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)', 
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    marginBottom: 16
+                }} bodyStyle={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                        <Space size="middle" style={{ flexWrap: 'wrap' }}>
+                            <Segmented
+                                options={[
+                                    { label: 'Recent Logs', value: false },
+                                    { label: 'Unread Only', value: true }
+                                ]}
+                                value={filters.unreadOnly}
+                                onChange={(v) => setFilters(prev => ({ ...prev, unreadOnly: v }))}
+                                style={{ borderRadius: 6, padding: 2, backgroundColor: '#f1f5f9' }}
+                            />
+
+                            <Segmented
+                                options={[
+                                    { label: 'All Buffers', value: 'all' },
+                                    { label: 'Alerts', value: 'ALERT' },
+                                    { label: 'System', value: 'SYSTEM' },
+                                    { label: 'Tasks', value: 'ACTION_ASSIGNED' },
+                                    { label: 'Chats', value: 'CHAT_MESSAGE' }
+                                ]}
+                                value={filters.type}
+                                onChange={(v) => setFilters(prev => ({ ...prev, type: v }))}
+                                style={{ borderRadius: 6, padding: 2, backgroundColor: '#f1f5f9' }}
+                            />
+                        </Space>
+
+                        <Input 
+                            placeholder="Query tracking buffer..." 
+                            prefix={<Search size={16} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                            allowClear
+                            value={filters.searchTerm}
+                            onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                            style={{ width: 260, borderRadius: 6, height: 36 }}
+                        />
+                    </div>
+                </Card>
+
+                {/* Main Broadcast Stack */}
+                <Spin spinning={loading}>
+                    <Card bordered={false} style={{ 
+                        borderRadius: 12, 
+                        border: '1px solid #e2e8f0', 
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)', 
+                        backgroundColor: '#fff' 
+                    }} bodyStyle={{ padding: 0 }}>
+                        {displayList.length === 0 ? (
+                            <div style={{ padding: '60px 0', textAlign: 'center' }}>
+                                <Empty 
+                                    image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                                    description={
+                                        <div style={{ marginTop: 8 }}>
+                                            <Text strong style={{ color: '#475569', fontSize: 15 }}>Static Matrix Channel</Text>
+                                            <Paragraph style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0 0' }}>
+                                                No active incident logs detected inside selected metrics.
+                                            </Paragraph>
+                                        </div>
+                                    }
+                                />
+                            </div>
+                        ) : (
+                            <List
+                                itemLayout="horizontal"
+                                dataSource={displayList}
+                                split={true}
+                                renderItem={(item) => (
+                                    <List.Item 
+                                        key={item.id}
+                                        style={{ 
+                                            padding: '16px 24px',
+                                            backgroundColor: item.isRead ? 'transparent' : 'rgba(239, 246, 255, 0.4)',
+                                            transition: 'all 0.2s',
+                                            borderBottom: '1px solid #f1f5f9'
+                                        }}
+                                        className="broadcast-row-interactive"
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, width: '100%' }}>
+                                            {/* Left Status Indicator Icon */}
+                                            <Avatar 
+                                                size={40}
+                                                style={{ 
+                                                    backgroundColor: `${getTypeColor(item.type)}10`, 
+                                                    color: getTypeColor(item.type),
+                                                    border: `1px solid ${getTypeColor(item.type)}25`,
+                                                    flexShrink: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    marginTop: 2
+                                                }}
+                                                icon={getTypeIcon(item.type)}
+                                            />
+
+                                            {/* Center Telemetry Summary */}
+                                            <div style={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Space size="small">
+                                                        <Tag color={getTypeColor(item.type)} style={{ 
+                                                            borderRadius: 4, 
+                                                            fontSize: 10, 
+                                                            fontWeight: 850, 
+                                                            letterSpacing: '0.04em',
+                                                            border: 'none',
+                                                            padding: '0px 8px',
+                                                            lineHeight: '20px'
+                                                        }}>
+                                                            {getTypeLabel(item.type)}
+                                                        </Tag>
+                                                        {!item.isRead && (
+                                                            <Badge status="processing" style={{ marginLeft: 4 }} text={
+                                                                <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>NEW</span>
+                                                            } />
+                                                        )}
+                                                    </Space>
+                                                    
+                                                    <Space size={4} style={{ color: '#94a3b8', fontSize: 12 }}>
+                                                        <Calendar size={12} />
+                                                        <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>
+                                                            {formatTimestamp(item.createdAt)}
+                                                        </Text>
+                                                    </Space>
+                                                </div>
+                                                
+                                                <Text 
+                                                    strong={!item.isRead} 
+                                                    style={{ 
+                                                        fontSize: 14, 
+                                                        color: item.isRead ? '#475569' : '#0f172a',
+                                                        fontWeight: item.isRead ? 450 : 600,
+                                                        lineHeight: 1.5,
+                                                        wordBreak: 'break-word',
+                                                        marginTop: 2
+                                                    }}
+                                                >
+                                                    {item.message}
+                                                </Text>
+                                            </div>
+
+                                            {/* Action Module Controls */}
+                                            <div style={{ flexShrink: 0, marginLeft: 12, alignSelf: 'center' }}>
+                                                <Space size="small">
+                                                    {!item.isRead && (
+                                                        <Tooltip title="Mark As Read">
+                                                            <Button 
+                                                                type="text" 
+                                                                size="middle"
+                                                                onClick={() => acknowledgeNotification(item.id)}
+                                                                icon={<Check size={16} style={{ color: '#16a34a' }} />}
+                                                                style={{ 
+                                                                    backgroundColor: '#f0fdf4', 
+                                                                    border: '1px solid #dcfce7',
+                                                                    borderRadius: 6 
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                    <Popconfirm
+                                                        title="Purge this broadcast?"
+                                                        description="Proceed to erase from logging queue?"
+                                                        okText="Purge"
+                                                        cancelText="Cancel"
+                                                        okButtonProps={{ danger: true, style: { borderRadius: 4 } }}
+                                                        cancelButtonProps={{ style: { borderRadius: 4 } }}
+                                                        onConfirm={() => dismissAlert(item.id)}
+                                                        placement="left"
+                                                    >
+                                                        <Tooltip title="Purge Trace">
+                                                            <Button 
+                                                                type="text" 
+                                                                size="middle"
+                                                                danger
+                                                                icon={<Trash2 size={15} />}
+                                                                style={{ 
+                                                                    backgroundColor: '#fef2f2', 
+                                                                    border: '1px solid #fee2e2',
+                                                                    borderRadius: 6 
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    </Popconfirm>
+                                                </Space>
+                                            </div>
+                                        </div>
+                                    </List.Item>
+                                )}
+                            />
+                        )}
+                    </Card>
+                </Spin>
+
+                <style>{`
+                    .animate-spin {
+                        animation: spin 1.2s linear infinite;
+                    }
+                    @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                    }
+                    .sync-bar-pulse {
+                        width: 30%;
+                        height: 100%;
+                        background-color: #0f172a;
+                        animation: pulse-bar 1.6s infinite ease-in-out;
+                    }
+                    @keyframes pulse-bar {
+                        0% { margin-left: -30%; }
+                        100% { margin-left: 100%; }
+                    }
+                    .broadcast-row-interactive:hover {
+                        background-color: #f8fafc !important;
+                    }
+                `}</style>
+            </div>
+        </ConfigProvider>
+    );
 };
 
 export default AlertsPage;

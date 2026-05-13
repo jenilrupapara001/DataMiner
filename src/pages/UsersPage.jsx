@@ -3,13 +3,24 @@ import { userApi, roleApi } from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
 import {
     Users, Shield, UserPlus, Search, Pencil, Trash2, Mail, Phone,
-    Clock, CheckCircle2, XCircle, Info, UserCheck, RefreshCw, X, Store, Check,
-    ChevronDown, ChevronRight, SlidersHorizontal, Lock, Plus, ArrowRight, User, AlertCircle
+    Clock, CheckCircle2, XCircle, Info, UserCheck, RefreshCw, Store, Check,
+    SlidersHorizontal, Lock, Plus, ArrowRight, User, AlertCircle
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
+import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { 
+    Space, Button, Segmented, Table, Modal, Card, Statistic, Input, Row, Col, 
+    Typography, Tag, Tooltip, Form, Select, Switch, Avatar, Badge, Divider, notification, message as antdMessage 
+} from 'antd';
+
+const { Title, Text, Paragraph } = Typography;
+const { Option } = Select;
+const { TextArea } = Input;
 
 const UsersPage = () => {
     const socket = useSocket();
+    const [messageApi, messageContextHolder] = antdMessage.useMessage();
+    const [notificationApi, notificationContextHolder] = notification.useNotification();
 
     // Tab Management
     const [activeTab, setActiveTab] = useState('users'); // 'users' or 'roles'
@@ -31,9 +42,6 @@ const UsersPage = () => {
     // Filters and Pagination
     const [filters, setFilters] = useState({ search: '', role: '', isActive: '' });
     const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
-
-    // Collapsible Categories in Matrix
-    const [collapsedCategories, setCollapsedCategories] = useState({});
 
     // Search inside Permissions Matrix
     const [permissionSearch, setPermissionSearch] = useState('');
@@ -69,7 +77,7 @@ const UsersPage = () => {
     });
 
     // --- CONDITIONALS FOR MEMBER MANAGEMENT ---
-    const selectedRoleObj = roles.find(r => (r._id || r.id) === userFormData.role);
+    const selectedRoleObj = useMemo(() => roles.find(r => (r._id || r.id) === userFormData.role), [roles, userFormData.role]);
     const roleName = selectedRoleObj?.name?.toLowerCase() || '';
     const roleDisplayName = selectedRoleObj?.displayName?.toLowerCase() || '';
     const isListingTeam = roleName === 'listing_team' || roleDisplayName === 'listing team';
@@ -87,6 +95,10 @@ const UsersPage = () => {
         });
     }, [sellers, managers, userFormData.brandManagers]);
 
+    // Derived Stats for KPI Header
+    const activeCount = useMemo(() => users.filter(u => u.isActive).length, [users]);
+    const totalRecordCount = useMemo(() => pagination.total || users.length, [pagination.total, users]);
+
     // --- REFRESH / DATA FETCH ---
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -97,7 +109,7 @@ const UsersPage = () => {
                 ...filters,
             };
             const response = await userApi.getAll(params);
-if (response.success) {
+            if (response.success) {
                  setUsers(response.data.users || []);
                  setPagination(prev => ({
                      ...prev,
@@ -107,9 +119,10 @@ if (response.success) {
              }
         } catch (error) {
             console.error('Failed to load users:', error);
+            messageApi.error('Failed to load team roster.');
         }
         setLoading(false);
-    }, [pagination.page, pagination.limit, filters]);
+    }, [pagination.page, pagination.limit, filters, messageApi]);
 
     const loadRolesAndPerms = useCallback(async () => {
         try {
@@ -187,23 +200,36 @@ if (response.success) {
     const handleToggleStatus = async (userId) => {
         try {
             await userApi.toggleStatus(userId);
+            messageApi.success('User status updated successfully.');
             loadUsers();
         } catch (error) {
             console.error('Failed to toggle status:', error);
-            alert(error.message || 'Failed to toggle status');
+            messageApi.error(error.message || 'Failed to toggle status.');
         }
     };
 
     // Delete User
-    const handleDeleteUser = async (userId) => {
-        if (!window.confirm('Are you sure you want to delete this user? This cannot be undone.')) return;
-        try {
-            await userApi.delete(userId);
-            loadUsers();
-        } catch (error) {
-            console.error('Failed to delete user:', error);
-            alert(error.message || 'Failed to delete user');
-        }
+    const handleDeleteUser = (userId) => {
+        Modal.confirm({
+            title: 'Delete Team Member?',
+            icon: <AlertCircle className="text-rose-500" size={20} />,
+            content: 'Are you sure you want to delete this user? This operation is permanent and cannot be recovered.',
+            okText: 'Permanently Delete',
+            okType: 'danger',
+            cancelText: 'Cancel',
+            centered: true,
+            maskClosable: true,
+            onOk: async () => {
+                try {
+                    await userApi.delete(userId);
+                    messageApi.success('Member successfully removed from organization.');
+                    loadUsers();
+                } catch (error) {
+                    console.error('Failed to delete user:', error);
+                    messageApi.error(error.message || 'Failed to delete user.');
+                }
+            }
+        });
     };
 
     // --- DYNAMIC USER MODAL ACTIONS ---
@@ -266,7 +292,6 @@ if (response.success) {
     const handleUserRoleChange = (roleId) => {
         const selectedRole = roles.find(r => r._id === roleId || r.id === roleId);
         const isBM = selectedRole?.name === 'brand_manager' || selectedRole?.displayName === 'Brand Manager';
-        const isLT = selectedRole?.name === 'listing_team' || selectedRole?.displayName === 'Listing Team';
 
         setUserFormData(prev => ({
             ...prev,
@@ -278,7 +303,7 @@ if (response.success) {
 
     const handleSaveUser = async () => {
         if (!userFormData.firstName || !userFormData.lastName || !userFormData.email || !userFormData.role) {
-            alert('Please fill in all required fields (First Name, Last Name, Email, and Access Role).');
+            messageApi.warning('Please complete all required basic fields (First/Last Name, Email, and Role).');
             return;
         }
         try {
@@ -286,7 +311,6 @@ if (response.success) {
             const roleName = selectedRole?.name?.toLowerCase() || '';
             const roleDisplayName = selectedRole?.displayName?.toLowerCase() || '';
             const isListingTeam = roleName === 'listing_team' || roleDisplayName === 'listing team';
-            const isCatalogManager = roleName === 'catalog_manager' || roleDisplayName === 'catalog manager' || roleName === 'catalogue_manager' || roleDisplayName === 'catalogue manager';
 
             let finalSellers = userFormData.assignedSellers;
             if (isListingTeam) {
@@ -315,14 +339,16 @@ if (response.success) {
 
             if (editingUser) {
                 await userApi.update(editingUser._id || editingUser.id, data);
+                messageApi.success('Member profile successfully updated.');
             } else {
                 await userApi.create(data);
+                messageApi.success('New team member registered and invitation pending.');
             }
             setShowUserModal(false);
             loadUsers();
         } catch (error) {
             console.error('Failed to save user:', error);
-            alert(error.message || 'Failed to save user');
+            messageApi.error(error.message || 'System failure while saving organization profile.');
         }
     };
 
@@ -358,11 +384,16 @@ if (response.success) {
                 }
             }
             setMatrixSuccess(true);
+            notificationApi.success({
+                message: 'Permissions Matrix Synchronized',
+                description: 'All configured access control levels and permission policies are now active and deployed system-wide.',
+                placement: 'topRight'
+            });
             setTimeout(() => setMatrixSuccess(false), 4000);
             await loadRolesAndPerms();
         } catch (error) {
             console.error('Failed to sync matrix permissions:', error);
-            alert(error.message || 'Failed to sync permissions');
+            messageApi.error(error.message || 'Matrix synchronization failed.');
         } finally {
             setMatrixSaving(false);
         }
@@ -393,7 +424,7 @@ if (response.success) {
 
     const handleSaveRole = async () => {
         if (!roleFormData.displayName) {
-            alert('Please specify a Display Name for this role.');
+            messageApi.warning('Display Label is required.');
             return;
         }
         try {
@@ -405,34 +436,39 @@ if (response.success) {
 
             if (editingRole) {
                 await roleApi.update(editingRole._id || editingRole.id, data);
+                messageApi.success('Role specifications configured successfully.');
             } else {
                 await roleApi.create(data);
+                messageApi.success('New custom workspace role initialized.');
             }
             setShowRoleModal(false);
             loadRolesAndPerms();
         } catch (error) {
             console.error('Failed to save role:', error);
-            alert(error.message || 'Failed to save role');
+            messageApi.error(error.message || 'Failed to deploy custom role.');
         }
     };
 
-    const handleDeleteRole = async (roleId) => {
-        if (!window.confirm('Are you sure you want to delete this role? Users assigned to this role will lose access.')) return;
-        try {
-            await roleApi.delete(roleId);
-            setShowRoleModal(false);
-            loadRolesAndPerms();
-        } catch (error) {
-            console.error('Failed to delete role:', error);
-            alert(error.message || 'Failed to delete role');
-        }
-    };
-
-    const toggleCategoryCollapse = (category) => {
-        setCollapsedCategories(prev => ({
-            ...prev,
-            [category]: !prev[category]
-        }));
+    const handleDeleteRole = (roleId) => {
+        Modal.confirm({
+            title: 'Retire Access Role?',
+            icon: <AlertCircle className="text-rose-500" size={20} />,
+            content: 'Caution: All members utilizing this role will immediate experience downgraded capabilities. This deletion cannot be reverted.',
+            okText: 'Confirm Deletion',
+            okType: 'danger',
+            centered: true,
+            maskClosable: true,
+            onOk: async () => {
+                try {
+                    await roleApi.delete(roleId);
+                    messageApi.success('Role retired and removed from active catalog.');
+                    loadRolesAndPerms();
+                } catch (error) {
+                    console.error('Failed to delete role:', error);
+                    messageApi.error(error.message || 'Role decommissioning failed.');
+                }
+            }
+        });
     };
 
     // Filter permissions by search query
@@ -451,442 +487,499 @@ if (response.success) {
         return result;
     }, [groupedPermissions, permissionSearch]);
 
-    // Helpers to render Initials for Avatars
+    // Helper to render Initials
     const renderInitials = (firstName, lastName) => {
         const f = firstName ? firstName[0].toUpperCase() : '';
         const l = lastName ? lastName[0].toUpperCase() : '';
         return `${f}${l}` || 'U';
     };
 
+    // AntD Table Columns - Members Tab
+    const columns = [
+        {
+            title: 'Member Name',
+            key: 'name',
+            width: 300,
+            render: (_, record) => {
+                const initials = renderInitials(record.firstName, record.lastName);
+                const roleId = record.role?._id || record.role?.id || record.role;
+                const resolvedRole = roles.find(r => (r._id || r.id) === roleId) || (typeof record.role === 'object' ? record.role : null);
+                const roleColor = resolvedRole?.color || '#6366f1';
+                
+                return (
+                    <Space size={12}>
+                        <Avatar 
+                            style={{ 
+                                backgroundColor: `${roleColor}15`, 
+                                color: roleColor, 
+                                fontWeight: 700, 
+                                fontSize: 13,
+                                border: `1px solid ${roleColor}25`
+                            }}
+                        >
+                            {initials}
+                        </Avatar>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <Text strong style={{ fontSize: 13, color: '#1e293b', letterSpacing: '-0.01em' }}>
+                                {record.firstName} {record.lastName}
+                            </Text>
+                            <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <Mail size={11} /> {record.email}
+                                </span>
+                                {record.phone && (
+                                    <span style={{ fontSize: 11, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <Phone size={11} /> {record.phone}
+                                    </span>
+                                )}
+                            </Space>
+                        </div>
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Access Role',
+            key: 'role',
+            width: 220,
+            render: (_, record) => {
+                const roleId = record.role?._id || record.role?.id || record.role;
+                const resolvedRole = roles.find(r => (r._id || r.id) === roleId) || (typeof record.role === 'object' ? record.role : null);
+                
+                const color = resolvedRole?.color || '#6366f1';
+                const displayName = resolvedRole?.displayName || 'Standard Role';
+                
+                return (
+                    <Tag 
+                        bordered={false} 
+                        style={{ 
+                            backgroundColor: `${color}12`, 
+                            color: color, 
+                            borderRadius: '8px', 
+                            fontWeight: '800', 
+                            fontSize: '11px',
+                            letterSpacing: '0.02em',
+                            padding: '5px 14px',
+                            textTransform: 'uppercase',
+                            border: `1.5px solid ${color}25`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: `0 2px 4px ${color}08`
+                        }}
+                        icon={<Shield size={11} style={{ strokeWidth: 2.5 }} />}
+                    >
+                        {displayName}
+                    </Tag>
+                );
+            }
+        },
+        {
+            title: 'Supervisors',
+            key: 'supervisors',
+            width: 180,
+            render: (_, record) => {
+                const list = record.supervisors || [];
+                if (list.length === 0) return <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
+                return (
+                    <Avatar.Group maxCount={3} size="small" maxStyle={{ color: '#f56a00', backgroundColor: '#fde3cf' }}>
+                        {list.map((s, idx) => (
+                            <Tooltip key={idx} title={`${s.firstName} ${s.lastName} (${s.email})`}>
+                                <Avatar style={{ backgroundColor: '#4f46e5', fontSize: 9 }}>
+                                    {renderInitials(s.firstName, s.lastName)}
+                                </Avatar>
+                            </Tooltip>
+                        ))}
+                    </Avatar.Group>
+                );
+            }
+        },
+        {
+            title: 'Status',
+            dataIndex: 'isActive',
+            key: 'isActive',
+            width: 130,
+            render: (isActive, record) => (
+                <Space size={8}>
+                    <Switch 
+                        size="small" 
+                        checked={isActive} 
+                        onChange={() => handleToggleStatus(record._id || record.id)} 
+                        style={{ backgroundColor: isActive ? '#10b981' : '#cbd5e1' }}
+                    />
+                    <Text style={{ fontSize: 11.5, fontWeight: 600, color: isActive ? '#059669' : '#64748b' }}>
+                        {isActive ? 'ACTIVE' : 'INACTIVE'}
+                    </Text>
+                </Space>
+            )
+        },
+        {
+            title: 'Actions',
+            key: 'actions',
+            fixed: 'right',
+            width: 110,
+            align: 'right',
+            render: (_, record) => (
+                <Space size={4}>
+                    <Tooltip title="Configure Workspace Profile">
+                        <Button 
+                            type="text" 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleOpenUserModal(record)}
+                            icon={<Pencil size={13} className="text-indigo-600" />} 
+                        />
+                    </Tooltip>
+                    <Tooltip title="Retire Member Profile">
+                        <Button 
+                            type="text" 
+                            danger 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleDeleteUser(record._id || record.id)}
+                            icon={<Trash2 size={13} />} 
+                        />
+                    </Tooltip>
+                </Space>
+            )
+        }
+    ];
+
     return (
-        <div className="users-container p-4 min-vh-100" style={{ backgroundColor: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>
+        <div className="users-page-container">
+            {messageContextHolder}
+            {notificationContextHolder}
+            {loading && users.length === 0 && <PageLoader message="Fetching Access Configurations..." />}
+
             <style>{`
-                /* Beautiful glassmorphism effects and modern styling */
-                .glass-card {
+                .users-page-container {
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 100vh;
+                    background-color: #f8fafc;
+                    margin: -1.5rem -2rem;
+                }
+                .users-header {
+                    flex-shrink: 0;
+                    background: #ffffff;
+                    padding: 16px 24px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    z-index: 10;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+                }
+                .users-scroll-content {
+                    padding: 24px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                }
+                .kpi-stat-card {
+                    border-radius: 16px !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.01) !important;
+                    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+                }
+                .kpi-stat-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 16px -4px rgba(0,0,0,0.04) !important;
+                }
+                .icon-wrapper {
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+                .segmented-users .ant-segmented-item-selected {
+                    background-color: #0f172a !important;
+                    color: #ffffff !important;
+                    font-weight: 650 !important;
+                }
+                .matrix-table-panel {
                     background: #ffffff;
                     border: 1px solid #e2e8f0;
                     border-radius: 16px;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.025);
-                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                    overflow: hidden;
+                    margin-bottom: 24px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
                 }
-                .glass-card:hover {
-                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+                .matrix-table-panel .ant-table-thead > tr > th {
+                    background: #fcfdfe !important;
+                    font-weight: 700 !important;
+                    color: #475569 !important;
+                    font-size: 12.5px !important;
+                    border-bottom: 1.5px solid #f1f5f9 !important;
                 }
-                .nav-tab-btn {
-                    border: none;
-                    background: transparent;
-                    padding: 10px 20px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #64748b;
-                    position: relative;
-                    transition: all 0.2s;
-                }
-                .nav-tab-btn.active {
-                    color: #1e293b;
-                }
-                .nav-tab-btn.active::after {
-                    content: '';
-                    position: absolute;
-                    bottom: 0;
-                    left: 20px;
-                    right: 20px;
-                    height: 3px;
-                    background: #0f172a;
-                    border-radius: 10px;
-                }
-                .table-modern th {
-                    font-weight: 600;
-                    font-size: 12px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    color: #64748b;
-                    background-color: #f8fafc;
-                    border-bottom: 1px solid #e2e8f0;
-                    padding: 16px 20px;
-                }
-                .table-modern td {
-                    padding: 16px 20px;
-                    vertical-align: middle;
-                    border-bottom: 1px solid #f1f5f9;
-                    font-size: 14px;
-                    color: #334155;
-                }
-                .table-modern tr:hover td {
-                    background-color: #f8fafc;
-                }
-                .badge-role {
-                    font-size: 11px;
-                    font-weight: 600;
-                    padding: 4px 10px;
-                    border-radius: 9999px;
+                .matrix-cell-check {
                     display: inline-flex;
-                    align-items: center;
-                    gap: 4px;
-                }
-                .avatar-circle {
-                    width: 38px;
-                    height: 38px;
-                    border-radius: 9999px;
-                    font-weight: 700;
-                    font-size: 13px;
-                    display: flex;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 7px;
+                    border: 2px solid #cbd5e1;
                     align-items: center;
                     justify-content: center;
-                }
-                .btn-icon-modern {
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 1px solid #e2e8f0;
-                    background: #ffffff;
-                    color: #64748b;
-                    transition: all 0.15s;
-                }
-                .btn-icon-modern:hover {
-                    background: #f1f5f9;
-                    color: #0f172a;
-                    border-color: #cbd5e1;
-                }
-                .btn-icon-modern.text-danger:hover {
-                    background: #fef2f2;
-                    color: #ef4444;
-                    border-color: #fca5a5;
-                }
-                .status-toggle {
-                    width: 36px;
-                    height: 20px;
-                    border-radius: 10px;
-                    background: #cbd5e1;
-                    position: relative;
                     cursor: pointer;
-                    transition: all 0.2s;
+                    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
                 }
-                .status-toggle.active {
-                    background: #10b981;
+                .matrix-cell-check.assigned {
+                    background-color: #10b981;
+                    border-color: #10b981;
+                    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.25);
                 }
-                .status-toggle-circle {
-                    width: 14px;
-                    height: 14px;
-                    border-radius: 50%;
-                    background: white;
-                    position: absolute;
-                    top: 3px;
-                    left: 3px;
-                    transition: all 0.2s;
+                .matrix-cell-check.assigned:hover {
+                    transform: scale(1.05);
                 }
-                .status-toggle.active .status-toggle-circle {
-                    left: 19px;
+                .glass-modal .ant-modal-content {
+                    border-radius: 20px !important;
+                    overflow: hidden !important;
                 }
-                .matrix-cell-cb {
+                .glass-modal .ant-modal-header {
+                    background: #f8fafc !important;
+                    border-bottom: 1px solid #f1f5f9 !important;
+                    padding: 16px 24px !important;
+                }
+                .glass-modal .ant-modal-footer {
+                    background: #f8fafc !important;
+                    border-top: 1px solid #f1f5f9 !important;
+                    padding: 16px 24px !important;
+                }
+                .selection-item-card {
+                    background: #ffffff;
+                    border: 1.5px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 10px 12px;
+                    transition: all 0.2s ease;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                }
+                .selection-item-card:hover {
+                    border-color: #cbd5e1;
+                    background: #f8fafc;
+                }
+                .selection-item-card.selected {
+                    border-color: #4f46e5;
+                    background: #f5f3ff;
+                    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.08);
+                }
+                .selection-item-card.selected-green {
+                    border-color: #10b981;
+                    background: #f0fdf4;
+                    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.08);
+                }
+                .selection-checkbox {
                     width: 18px;
                     height: 18px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    accent-color: #0f172a;
-                }
-                .perm-cat-header {
-                    background-color: #f1f5f9 !important;
-                    cursor: pointer;
-                    user-select: none;
-                }
-                .perm-cat-header:hover {
-                    background-color: #e2e8f0 !important;
-                }
-                .pill-btn {
-                    border: 1px solid #e2e8f0;
-                    background: white;
-                    padding: 6px 12px;
-                    border-radius: 8px;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: #475569;
-                    cursor: pointer;
+                    border-radius: 50%;
+                    border: 2px solid #cbd5e1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                     transition: all 0.15s;
                 }
-                .pill-btn:hover {
-                    background: #f8fafc;
-                    border-color: #cbd5e1;
+                .selection-checkbox.active {
+                    background-color: #4f46e5;
+                    border-color: #4f46e5;
                 }
-                .pill-btn.active {
-                    background: #0f172a;
-                    color: white;
-                    border-color: #0f172a;
+                .selection-checkbox.active-green {
+                    background-color: #10b981;
+                    border-color: #10b981;
                 }
-                .role-row-name:hover .role-actions-hover {
-                    opacity: 1 !important;
+                @media (max-width: 768px) {
+                    .users-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 12px;
+                    }
+                    .users-page-container {
+                        margin: -0.75rem;
+                        height: auto;
+                        overflow: visible;
+                    }
                 }
             `}</style>
 
-            {/* Header Section */}
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+            {/* 1. TOP HEADER AREA */}
+            <div className="users-header">
                 <div>
-                    <h3 className="fw-bold text-slate-900 mb-1 d-flex align-items-center gap-2">
-                        <Users size={24} className="text-slate-700" /> Team & Permissions
-                    </h3>
-                    <p className="text-muted mb-0 small">Control access levels and assign roles to your team.</p>
+                    <Space align="center" size={10}>
+                        <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 8, borderRadius: 10, display: 'flex' }}>
+                            <Users size={20} />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18, letterSpacing: '-0.02em' }}>Organization & Permissions</h3>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Deploy roles, manage access control lists, and audit members.</Text>
+                        </div>
+                    </Space>
                 </div>
-                <div className="d-flex gap-2">
-                    <button className="btn btn-white border glass-card d-flex align-items-center gap-2 px-3 py-2 fw-semibold" style={{ fontSize: '13px' }} onClick={() => loadUsers()}>
-                        <RefreshCw size={14} /> Refresh Data
-                    </button>
+                <Space size={8}>
+                    <Button 
+                        icon={<RefreshCw size={14} />} 
+                        shape="round"
+                        style={{ fontWeight: 600, fontSize: 12.5, color: '#475569' }}
+                        onClick={() => loadUsers()}
+                    >
+                        Sync Engine
+                    </Button>
                     {activeTab === 'users' ? (
-                        <button className="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3 shadow" onClick={() => handleOpenUserModal()}>
-                            <UserPlus size={16} /> Add Member
-                        </button>
+                        <Button 
+                            type="primary" 
+                            icon={<UserPlus size={14} />} 
+                            shape="round"
+                            style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
+                            onClick={() => handleOpenUserModal()}
+                        >
+                            Register Member
+                        </Button>
                     ) : (
-                        <button className="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3 shadow" onClick={() => handleOpenRoleModal()}>
-                            <Plus size={16} /> Create Role
-                        </button>
+                        <Button 
+                            type="primary" 
+                            icon={<Plus size={14} />} 
+                            shape="round"
+                            style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
+                            onClick={() => handleOpenRoleModal()}
+                        >
+                            Deploy Role
+                        </Button>
                     )}
-                </div>
+                </Space>
             </div>
 
-            {/* Tabbed Navigation */}
-            <div className="border-bottom mb-4 d-flex align-items-center justify-content-between">
-                <div className="d-flex">
-                    <button className={`nav-tab-btn ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
-                        👥 Members & Teams
-                    </button>
-                    <button className={`nav-tab-btn ${activeTab === 'roles' ? 'active' : ''}`} onClick={() => setActiveTab('roles')}>
-                        🔒 Roles & Permissions Grid
-                    </button>
-                </div>
-            </div>
+            {/* 2. SCROLLABLE WORKSPACE */}
+            <div className="users-scroll-content">
+                
 
-            {/* Loading Indicator */}
-            {loading && users.length === 0 && <PageLoader message="Loading workspace components..." />}
+                {/* Primary Controller Strip */}
+                <Card bordered={false} styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                        <Segmented
+                            className="segmented-users"
+                            size="large"
+                            value={activeTab}
+                            onChange={v => setActiveTab(v)}
+                            style={{ background: '#f1f5f9', borderRadius: 10, padding: 3 }}
+                            options={[
+                                { label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}><Users size={13} /> <span>Members & Teams</span></div>, value: 'users' },
+                                { label: <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}><Lock size={13} /> <span>Access Matrix</span></div>, value: 'roles' }
+                            ]}
+                        />
 
-            {/* TAB 1: MEMBERS */}
-            {activeTab === 'users' && (
-                <>
-                    {/* Filters Header */}
-                    <div className="glass-card bg-white p-3 mb-4 border-0">
-                        <div className="row g-3 align-items-center">
-                            <div className="col-md-5">
-                                <div className="position-relative">
-                                    <Search size={16} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                                    <input 
-                                        type="text" 
-                                        className="form-control ps-5 border-0 bg-light" 
-                                        style={{ height: '42px', borderRadius: '10px', fontSize: '14px' }}
-                                        placeholder="Search by name, email..." 
-                                        value={filters.search}
-                                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <div className="col-md-3">
-                                <select 
-                                    className="form-select border-0 bg-light"
-                                    style={{ height: '42px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}
-                                    value={filters.role}
-                                    onChange={(e) => handleFilterChange('role', e.target.value)}
+                        {activeTab === 'users' ? (
+                            <div style={{ flex: 1, display: 'flex', gap: 8, maxWidth: 650, justifyContent: 'flex-end' }}>
+                                <Input 
+                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />} 
+                                    placeholder="Filter profile directory..." 
+                                    allowClear
+                                    value={filters.search}
+                                    onChange={e => handleFilterChange('search', e.target.value)}
+                                    style={{ width: 240, borderRadius: 8 }}
+                                />
+                                <Select 
+                                    placeholder="Select Role" 
+                                    allowClear 
+                                    value={filters.role || undefined}
+                                    onChange={v => handleFilterChange('role', v || '')}
+                                    style={{ width: 160 }}
+                                    dropdownStyle={{ borderRadius: 10 }}
                                 >
-                                    <option value="">All Access Roles</option>
-                                    {roles.map(r => <option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</option>)}
-                                </select>
-                            </div>
-                            <div className="col-md-3">
-                                <select 
-                                    className="form-select border-0 bg-light"
-                                    style={{ height: '42px', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}
-                                    value={filters.isActive}
-                                    onChange={(e) => handleFilterChange('isActive', e.target.value)}
+                                    {roles.map(r => <Option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</Option>)}
+                                </Select>
+                                <Select 
+                                    placeholder="Status" 
+                                    allowClear 
+                                    value={filters.isActive || undefined}
+                                    onChange={v => handleFilterChange('isActive', v !== undefined ? v : '')}
+                                    style={{ width: 120 }}
                                 >
-                                    <option value="">All Statuses</option>
-                                    <option value="true">Active</option>
-                                    <option value="false">Inactive</option>
-                                </select>
+                                    <Option value="true">Active</Option>
+                                    <Option value="false">Inactive</Option>
+                                </Select>
+                                <Tooltip title="Wipe Query">
+                                    <Button icon={<Trash2 size={13} />} onClick={resetFilters} style={{ borderRadius: 8 }} />
+                                </Tooltip>
                             </div>
-                            <div className="col-md-1">
-                                <button className="btn btn-light w-100 d-flex align-items-center justify-content-center" style={{ height: '42px', borderRadius: '10px' }} onClick={resetFilters} title="Clear Filters">
-                                    <X size={18} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Table View */}
-                    <div className="glass-card bg-white border-0 overflow-hidden">
-                        <div className="table-responsive">
-                            <table className="table table-modern mb-0 align-middle">
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: '40px' }}><input type="checkbox" className="form-check-input" /></th>
-                                        <th>Member Name</th>
-                                        <th>Access Role</th>
-                                        <th>Supervisors (Managers)</th>
-                                        <th>Status</th>
-                                        <th className="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.length > 0 ? (
-                                        users.map((user) => {
-                                            const roleColor = user.role?.color || '#64748b';
-                                            const initials = renderInitials(user.firstName, user.lastName);
-                                            return (
-                                                <tr key={user._id || user.id}>
-                                                    <td><input type="checkbox" className="form-check-input" /></td>
-                                                    <td>
-                                                        <div className="d-flex align-items-center gap-3">
-                                                            <div className="avatar-circle" style={{ backgroundColor: `${roleColor}15`, color: roleColor }}>
-                                                                {initials}
-                                                            </div>
-                                                            <div>
-                                                                <div className="fw-bold text-slate-800" style={{ fontSize: '14px' }}>
-                                                                    {user.firstName} {user.lastName}
-                                                                </div>
-                                                                <div className="text-muted d-flex align-items-center gap-3 mt-0.5" style={{ fontSize: '12px' }}>
-                                                                    <span className="d-flex align-items-center gap-1"><Mail size={12} /> {user.email}</span>
-                                                                    {user.phone && <span className="d-flex align-items-center gap-1"><Phone size={12} /> {user.phone}</span>}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span className="badge rounded-pill px-2.5 py-1 text-white fw-bold d-inline-flex align-items-center gap-1.5 shadow-sm" style={{ backgroundColor: roleColor, fontSize: '11px' }}>
-                                                            <Shield size={11} /> {user.role?.displayName || 'Custom Role'}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <div className="d-flex flex-wrap gap-1 align-items-center">
-                                                            {user.supervisors && user.supervisors.length > 0 ? (
-                                                                user.supervisors.map((s, idx) => (
-                                                                    <span key={idx} className="badge bg-light text-slate-700 border px-2 py-1 rounded-pill d-flex align-items-center gap-1.5" style={{ fontSize: '11px', fontWeight: '500' }}>
-                                                                        <div className="avatar-circle" style={{ width: '16px', height: '16px', fontSize: '8px', backgroundColor: '#e2e8f0', color: '#475569' }}>
-                                                                            {renderInitials(s.firstName, s.lastName)}
-                                                                        </div>
-                                                                        {s.firstName} {s.lastName ? s.lastName.charAt(0) + '.' : ''}
-                                                                    </span>
-                                                                ))
-                                                            ) : (
-                                                                <span className="text-muted" style={{ fontSize: '12px' }}>-</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <div className={`status-toggle ${user.isActive ? 'active' : ''}`} onClick={() => handleToggleStatus(user._id || user.id)}>
-                                                                <div className="status-toggle-circle"></div>
-                                                            </div>
-                                                            <span className="small fw-semibold" style={{ color: user.isActive ? '#10b981' : '#64748b', fontSize: '12px' }}>
-                                                                {user.isActive ? 'Active' : 'Inactive'}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="d-flex gap-1 justify-content-end">
-                                                            <button className="btn-icon-modern" onClick={() => handleOpenUserModal(user)} title="Edit Member">
-                                                                <Pencil size={14} />
-                                                            </button>
-                                                            <button className="btn-icon-modern text-danger" onClick={() => handleDeleteUser(user._id || user.id)} title="Delete Member">
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="6" className="text-center py-5">
-                                                <Users size={32} className="text-muted mb-2 mx-auto" />
-                                                <p className="mb-0 text-muted small">No organization members found matching criteria.</p>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination Footer */}
-                        {pagination.total > 0 && (
-                            <div className="d-flex justify-content-between align-items-center px-4 py-3 border-top bg-light">
-                                <span className="text-muted small">Showing {users.length} of {pagination.total} users (Page {pagination.page} of {pagination.totalPages})</span>
-                                <div className="btn-group">
-                                    <button className="btn btn-sm btn-white border px-3" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>
-                                        Previous
-                                    </button>
-                                    <button className="btn btn-sm btn-white border px-3" disabled={pagination.page === pagination.totalPages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}>
-                                        Next
-                                    </button>
-                                </div>
+                        ) : (
+                            <div style={{ flex: 1, display: 'flex', gap: 8, maxWidth: 650, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <Input 
+                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />} 
+                                    placeholder="Filter system capabilities..." 
+                                    allowClear
+                                    value={permissionSearch}
+                                    onChange={e => setPermissionSearch(e.target.value)}
+                                    style={{ width: 240, borderRadius: 8 }}
+                                />
+                                <Button 
+                                    type="primary"
+                                    icon={<CheckCircle2 size={14} />}
+                                    loading={matrixSaving}
+                                    onClick={handleSaveMatrixPermissions}
+                                    style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700, borderRadius: 8 }}
+                                >
+                                    Commit & Sync Matrix
+                                </Button>
                             </div>
                         )}
                     </div>
-                </>
-            )}
+                </Card>
 
-            {/* TAB 2: ROLES & PERMISSIONS MATRIX */}
-            {activeTab === 'roles' && (
-                <>
-                    {/* Matrix Actions */}
-                    <div className="glass-card bg-white p-3 mb-4 border-0 d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-3">
-                        <div className="position-relative flex-grow-1" style={{ maxWidth: '400px' }}>
-                            <Search size={16} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
-                            <input 
-                                type="text" 
-                                className="form-control ps-5 border-0 bg-light" 
-                                style={{ height: '40px', borderRadius: '10px', fontSize: '13px' }}
-                                placeholder="Filter permissions by name..." 
-                                value={permissionSearch}
-                                onChange={(e) => setPermissionSearch(e.target.value)}
-                            />
-                        </div>
-                        <div className="d-flex flex-wrap align-items-center gap-3 justify-content-end">
-                            <span className="small text-slate-500 font-monospace">{matrixRoles.length} Active Roles Configured</span>
-                            
-                            <button 
-                                className="btn btn-sm d-flex align-items-center gap-2 fw-bold text-white px-4 py-2" 
-                                style={{ 
-                                    backgroundColor: '#10b981', 
-                                    border: 'none', 
-                                    borderRadius: '10px', 
-                                    boxShadow: '0 4px 12px rgba(16,185,129,0.2)',
-                                    transition: 'all 0.2s' 
-                                }}
-                                onClick={handleSaveMatrixPermissions}
-                                disabled={matrixSaving}
-                            >
-                                <RefreshCw size={14} className={matrixSaving ? 'spin' : ''} /> 
-                                {matrixSaving ? 'Saving & Direct Applying...' : 'Apply & Sync to Database'}
-                            </button>
-
-                            <button className="btn btn-dark btn-sm rounded-3 px-3 py-2 d-flex align-items-center gap-1.5 fw-bold" onClick={() => handleOpenRoleModal()}>
-                                <Plus size={14} /> Add Custom Role
-                            </button>
-                        </div>
-                    </div>
-
-                    {matrixSuccess && (
-                        <div className="alert alert-success d-flex align-items-center gap-3 p-3.5 mb-4 shadow-sm" style={{ borderRadius: 12, background: '#ecfdf5', border: '1px solid #10b981' }}>
-                            <CheckCircle2 size={20} style={{ color: '#059669' }} />
-                            <div>
-                                <h6 className="fw-bold mb-0.5" style={{ color: '#065f46', fontSize: '13.5px' }}>Direct Matrix Applied Successfully!</h6>
-                                <p className="mb-0 small" style={{ color: '#047857', fontSize: '12px' }}>All permissions have been directly saved in the database and instantly applied across all system components.</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Permission Category Blocks (Taskora UI Grid) */}
-                    <div className="d-flex flex-column gap-4">
+                {/* 3. TAB CONTENT SWITCHING */}
+                {activeTab === 'users' ? (
+                    <Card bordered={false} styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                        <Table 
+                            columns={columns}
+                            dataSource={users.map(u => ({ ...u, key: u._id || u.id }))}
+                            loading={loading}
+                            pagination={{
+                                current: pagination.page,
+                                pageSize: pagination.limit,
+                                total: pagination.total,
+                                showSizeChanger: true,
+                                pageSizeOptions: ['10', '20', '50', '100'],
+                                showTotal: (total, range) => `Showing ${range[0]}-${range[1]} of ${total} team members`,
+                                onChange: (page, pageSize) => setPagination(p => ({ ...p, page, limit: pageSize || p.limit }))
+                            }}
+                            scroll={{ x: 1000 }}
+                            className="custom-table"
+                        />
+                    </Card>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         {Object.entries(filteredGroupedPermissions).map(([category, perms]) => (
-                            <div key={category} className="glass-card bg-white border-0 overflow-hidden shadow-sm" style={{ borderRadius: '14px' }}>
-                                <div className="table-responsive">
-                                    <table className="table mb-0 align-middle">
+                            <div key={category} className="matrix-table-panel">
+                                <div style={{ 
+                                    background: '#fcfdfe', 
+                                    padding: '12px 20px', 
+                                    borderBottom: '1.5px solid #f1f5f9',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8
+                                }}>
+                                    <div style={{ background: '#e0e7ff', padding: 6, borderRadius: 8, display: 'flex', color: '#4f46e5' }}>
+                                        <Shield size={14} />
+                                    </div>
+                                    <span style={{ fontWeight: 800, color: '#1e293b', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                        {category} Rules Catalog
+                                    </span>
+                                    <Badge count={perms.length} showZero style={{ backgroundColor: '#f1f5f9', color: '#64748b', boxShadow: 'none', fontSize: 10, fontWeight: 700, marginLeft: 4 }} />
+                                </div>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
-                                            <tr style={{ backgroundColor: '#fcfdfe', borderBottom: '1.5px solid #f1f5f9' }}>
-                                                <th style={{ width: '280px', padding: '16px 24px', fontSize: '14px', fontWeight: '700', color: '#1e293b', textTransform: 'capitalize' }}>
-                                                    {category}
+                                            <tr style={{ borderBottom: '1.5px solid #f1f5f9' }}>
+                                                <th style={{ width: '240px', padding: '14px 20px', fontSize: '12px', fontWeight: 700, color: '#475569', textAlign: 'left', background: '#f8fafc' }}>
+                                                    Organizational Role
                                                 </th>
                                                 {perms.map((perm) => (
-                                                    <th key={perm._id || perm.id} className="text-center" style={{ padding: '16px', fontSize: '12.5px', fontWeight: '600', color: '#475569', minWidth: '130px' }}>
-                                                        {perm.displayName}
+                                                    <th key={perm._id || perm.id} style={{ padding: '12px', fontSize: '11.5px', fontWeight: 700, color: '#475569', textAlign: 'center', minWidth: '130px', borderLeft: '1px solid #f1f5f9' }}>
+                                                        <Tooltip title={perm.name}>
+                                                            {perm.displayName}
+                                                        </Tooltip>
                                                     </th>
                                                 ))}
                                             </tr>
@@ -896,23 +989,32 @@ if (response.success) {
                                                 const roleColor = role.color || '#4F46E5';
                                                 const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
                                                 return (
-                                                    <tr key={role._id || role.id} className="role-matrix-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                        <td style={{ padding: '16px 24px', fontWeight: '600', fontSize: '13.5px', color: '#334155' }} className="position-relative role-row-name">
-                                                            <div className="d-flex align-items-center justify-content-between">
-                                                                <div className="d-flex align-items-center gap-2">
-                                                                    <div className="avatar-circle" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: roleColor }}></div>
+                                                    <tr key={role._id || role.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'all 0.15s' }}>
+                                                        <td style={{ padding: '12px 20px', fontWeight: 600, fontSize: '13px', color: '#334155', background: '#fcfdfe' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <Space size={8}>
+                                                                    <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: roleColor }}></div>
                                                                     <span>{role.displayName}</span>
-                                                                </div>
-                                                                <div className="role-actions-hover d-flex gap-2 opacity-0 transition-all">
-                                                                    <button className="btn btn-link p-0 text-decoration-none text-slate-400 hover-dark" onClick={() => handleOpenRoleModal(role)} title="Edit Role">
-                                                                        <Pencil size={12} />
-                                                                    </button>
+                                                                </Space>
+                                                                <Space size={6}>
+                                                                    <Button 
+                                                                        type="text" 
+                                                                        size="small" 
+                                                                        shape="circle"
+                                                                        onClick={() => handleOpenRoleModal(role)}
+                                                                        icon={<Pencil size={11} style={{ color: '#64748b' }} />}
+                                                                    />
                                                                     {role.name !== 'super_admin' && (
-                                                                        <button className="btn btn-link p-0 text-decoration-none text-danger" onClick={() => handleDeleteRole(role._id || role.id)} title="Delete Role">
-                                                                            <Trash2 size={12} />
-                                                                        </button>
+                                                                        <Button 
+                                                                            type="text" 
+                                                                            danger 
+                                                                            size="small" 
+                                                                            shape="circle"
+                                                                            onClick={() => handleDeleteRole(role._id || role.id)}
+                                                                            icon={<Trash2 size={11} />}
+                                                                        />
                                                                     )}
-                                                                </div>
+                                                                </Space>
                                                             </div>
                                                         </td>
                                                         {perms.map((perm) => {
@@ -923,34 +1025,19 @@ if (response.success) {
                                                             ].includes(perm.name || perm.id || perm._id);
 
                                                             return (
-                                                                <td key={perm._id || perm.id} className="text-center" style={{ padding: '16px' }}>
-                                                                    <div className="d-flex justify-content-center">
-                                                                        {isRestrictedForOpManager ? (
-                                                                            <span 
-                                                                                className="badge text-uppercase fw-bold bg-danger" 
-                                                                                style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, cursor: 'not-allowed', backgroundColor: '#ef4444' }}
-                                                                                title="System/User settings restricted for Operational Manager"
-                                                                            >
-                                                                                Restricted
-                                                                            </span>
-                                                                        ) : (
-                                                                            <div 
-                                                                                className="d-inline-flex align-items-center justify-content-center cursor-pointer transition-all"
-                                                                                style={{ 
-                                                                                    width: '20px', 
-                                                                                    height: '20px', 
-                                                                                    borderRadius: '6px', 
-                                                                                    border: isAssigned ? '1.5px solid #10b981' : '1.5px solid #cbd5e1', 
-                                                                                    backgroundColor: isAssigned ? '#10b981' : 'transparent',
-                                                                                    boxShadow: isAssigned ? '0 2px 4px rgba(16, 185, 129, 0.2)' : 'none',
-                                                                                    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                                                }}
-                                                                                onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
-                                                                            >
-                                                                                {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                <td key={perm._id || perm.id} style={{ padding: '12px', textAlign: 'center', borderLeft: '1px solid #f1f5f9' }}>
+                                                                    {isRestrictedForOpManager ? (
+                                                                        <Tag color="error" style={{ fontSize: 9, fontWeight: 700, margin: 0, borderRadius: 6, padding: '1px 6px' }}>
+                                                                            LOCKED
+                                                                        </Tag>
+                                                                    ) : (
+                                                                        <div 
+                                                                            className={`matrix-cell-check ${isAssigned ? 'assigned' : ''}`}
+                                                                            onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
+                                                                        >
+                                                                            {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
+                                                                        </div>
+                                                                    )}
                                                                 </td>
                                                             );
                                                         })}
@@ -963,577 +1050,425 @@ if (response.success) {
                             </div>
                         ))}
                     </div>
-                </>
-            )}
+                )}
+            </div>
 
-            {/* ===== DYNAMIC CREATE / EDIT MEMBER MODAL ===== */}
-            {showUserModal && (
-                    <div 
-                        className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-                        style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
-                        onClick={(e) => { if (e.target === e.currentTarget) setShowUserModal(false); }}
+            {/* 4. DYNAMIC CREATE / EDIT MEMBER MODAL */}
+            <Modal
+                title={
+                    <Space align="center" size={10}>
+                        <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
+                            <UserCheck size={16} />
+                        </div>
+                        <span style={{ fontWeight: 800 }}>{editingUser ? 'Configure Member Protocol' : 'Initialize Workspace Pilot'}</span>
+                    </Space>
+                }
+                open={showUserModal}
+                onCancel={() => setShowUserModal(false)}
+                centered
+                destroyOnClose
+                width={780}
+                className="glass-modal"
+                footer={[
+                    <Button key="back" shape="round" onClick={() => setShowUserModal(false)}>
+                        Discard
+                    </Button>,
+                    <Button 
+                        key="submit" 
+                        type="primary" 
+                        shape="round" 
+                        onClick={handleSaveUser}
+                        style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700 }}
                     >
-                        <div 
-                            className="bg-white shadow-2xl overflow-hidden"
-                            style={{ width: '95%', maxWidth: '780px', maxHeight: '90vh', borderRadius: '24px', display: 'flex', flexDirection: 'column', border: '1px solid #e2e8f0' }}
+                        {editingUser ? 'Save Profile' : 'Register Member'}
+                    </Button>
+                ]}
+            >
+                <div style={{ padding: '8px 0', maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    
+                    {/* Basic Details Block */}
+                    <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                        <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <User size={13} /> Basic Registry Information
+                        </div>
+                        <Row gutter={[12, 12]}>
+                            <Col span={12}>
+                                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>FIRST NAME *</label>
+                                <Input 
+                                    placeholder="John" 
+                                    value={userFormData.firstName}
+                                    onChange={e => setUserFormData({ ...userFormData, firstName: e.target.value })}
+                                    style={{ borderRadius: 8 }}
+                                />
+                            </Col>
+                            <Col span={12}>
+                                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>LAST NAME *</label>
+                                <Input 
+                                    placeholder="Doe" 
+                                    value={userFormData.lastName}
+                                    onChange={e => setUserFormData({ ...userFormData, lastName: e.target.value })}
+                                    style={{ borderRadius: 8 }}
+                                />
+                            </Col>
+                            <Col span={12}>
+                                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>EMAIL ADDRESS *</label>
+                                <Input 
+                                    type="email"
+                                    disabled={!!editingUser}
+                                    placeholder="pilot@retailops.com" 
+                                    value={userFormData.email}
+                                    onChange={e => setUserFormData({ ...userFormData, email: e.target.value })}
+                                    style={{ borderRadius: 8 }}
+                                />
+                            </Col>
+                            <Col span={12}>
+                                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>PHONE NUMBER</label>
+                                <Input 
+                                    placeholder="+91 98765 43210" 
+                                    value={userFormData.phone}
+                                    onChange={e => setUserFormData({ ...userFormData, phone: e.target.value })}
+                                    style={{ borderRadius: 8 }}
+                                />
+                            </Col>
+                            {!editingUser && (
+                                <Col span={24}>
+                                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>TEMPORARY GATEWAY PASSWORD *</label>
+                                    <Input 
+                                        type="password"
+                                        placeholder="Minimum 6 alphanumeric characters..." 
+                                        value={userFormData.password}
+                                        onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
+                                        style={{ borderRadius: 8 }}
+                                    />
+                                </Col>
+                            )}
+                        </Row>
+                    </Card>
+
+                    {/* Roles Block */}
+                    <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                        <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Shield size={13} /> Organization Security Protocol
+                        </div>
+                        <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>ACCESS PRIVILEGE ROLE *</label>
+                        <Select 
+                            style={{ width: '100%' }}
+                            placeholder="Configure Authorization Level"
+                            value={userFormData.role || undefined}
+                            onChange={handleUserRoleChange}
+                            dropdownStyle={{ borderRadius: 10 }}
                         >
-                            {/* Header */}
-                            <div className="px-4 py-3.5 border-bottom d-flex justify-content-between align-items-center bg-light">
-                                <div className="d-flex align-items-center gap-3">
-                                <div className="p-2 bg-white text-primary rounded-3 shadow-sm border">
-                                    <UserCheck size={20} className="text-indigo-600" />
+                            {roles.map(r => <Option key={r._id || r.id} value={r._id || r.id}>{r.displayName}</Option>)}
+                        </Select>
+                    </Card>
+
+                    {/* Supervisors Selection Panel */}
+                    {!isBrandManager && (
+                        <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <UserCheck size={13} className="text-indigo-500" /> Map Direct Supervisors
                                 </div>
-                                <div>
-                                    <h5 className="mb-0 fw-bold text-slate-900" style={{ letterSpacing: '-0.02em' }}>
-                                        {editingUser ? 'Edit Organization Member' : 'Add New Member'}
-                                    </h5>
-                                    <p className="text-muted small mb-0" style={{ fontSize: '11.5px' }}>
-                                        {editingUser ? 'Modify member profile, assigned supervisors, and brand associations' : 'Register a new member, select access roles, and assign permissions'}
-                                    </p>
+                                <Badge count={`${userFormData.supervisors.length} Selected`} style={{ backgroundColor: '#4f46e5', fontWeight: 700, fontSize: 10 }} />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                                <Input 
+                                    prefix={<Search size={12} />} 
+                                    size="small"
+                                    placeholder="Query supervisors catalogue..." 
+                                    value={modalSearchSupervisor}
+                                    onChange={e => setModalSearchSupervisor(e.target.value)}
+                                    style={{ borderRadius: 6 }}
+                                />
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, supervisors: managers.map(m => m._id || m.id) })} style={{ fontSize: 11, fontWeight: 600 }}>All</Button>
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, supervisors: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Wipe</Button>
+                            </div>
+
+                            <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
+                                <Row gutter={[8, 8]}>
+                                    {(() => {
+                                        const filtered = managers.filter(m => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchSupervisor.toLowerCase()));
+                                        if (filtered.length === 0) return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No active accounts found.</div></Col>;
+                                        return filtered.map(m => {
+                                            const isChecked = userFormData.supervisors.includes(m._id || m.id);
+                                            return (
+                                                <Col key={m._id || m.id} span={12}>
+                                                    <div 
+                                                        className={`selection-item-card ${isChecked ? 'selected' : ''}`}
+                                                        onClick={() => {
+                                                            const updated = isChecked 
+                                                                ? userFormData.supervisors.filter(id => id !== (m._id || m.id))
+                                                                : [...userFormData.supervisors, (m._id || m.id)];
+                                                            setUserFormData({ ...userFormData, supervisors: updated });
+                                                        }}
+                                                    >
+                                                        <Space size={8}>
+                                                            <Avatar size="small" style={{ backgroundColor: isChecked ? '#4f46e5' : '#e2e8f0', fontSize: 10, fontWeight: 700 }}>
+                                                                {renderInitials(m.firstName, m.lastName)}
+                                                            </Avatar>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                                                                <span style={{ fontWeight: 700, fontSize: 12, color: '#334155' }}>{m.firstName} {m.lastName}</span>
+                                                                <span style={{ fontSize: 10, color: '#64748b' }}>{m.role?.displayName || 'SuperAdmin'}</span>
+                                                            </div>
+                                                        </Space>
+                                                        <div className={`selection-checkbox ${isChecked ? 'active' : ''}`}>
+                                                            {isChecked && <Check size={10} className="text-white" strokeWidth={3} />}
+                                                        </div>
+                                                    </div>
+                                                </Col>
+                                            );
+                                        });
+                                    })()}
+                                </Row>
+                            </div>
+                        </Card>
+                    )}
+
+                    {/* Listing Team Manager Mapping Panel */}
+                    {isListingTeam && (
+                        <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <UserCheck size={13} className="text-emerald-500" /> Assign Brand Managers
+                                </div>
+                                <Badge count={`${userFormData.brandManagers.length} Linked`} style={{ backgroundColor: '#10b981', fontWeight: 700, fontSize: 10 }} />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                                <Input 
+                                    prefix={<Search size={12} />} 
+                                    size="small"
+                                    placeholder="Query brand commanders..." 
+                                    value={modalSearchBrandManager}
+                                    onChange={e => setModalSearchBrandManager(e.target.value)}
+                                    style={{ borderRadius: 6 }}
+                                />
+                                <Button size="small" onClick={() => {
+                                    const bmUsers = managers.filter(m => m.role?.name?.toLowerCase() === 'brand_manager' || m.role?.displayName?.toLowerCase() === 'brand manager');
+                                    setUserFormData({ ...userFormData, brandManagers: bmUsers.map(m => m._id || m.id) });
+                                }} style={{ fontSize: 11, fontWeight: 600 }}>Select All</Button>
+                            </div>
+
+                            <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
+                                <Row gutter={[8, 8]}>
+                                    {(() => {
+                                        const bmUsers = managers.filter(m => m.role?.name?.toLowerCase() === 'brand_manager' || m.role?.displayName?.toLowerCase() === 'brand manager');
+                                        const filtered = bmUsers.filter(m => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchBrandManager.toLowerCase()));
+                                        if (filtered.length === 0) return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No matched brand managers available.</div></Col>;
+                                        return filtered.map(m => {
+                                            const isChecked = userFormData.brandManagers.includes(m._id || m.id);
+                                            return (
+                                                <Col key={m._id || m.id} span={12}>
+                                                    <div 
+                                                        className={`selection-item-card ${isChecked ? 'selected-green' : ''}`}
+                                                        onClick={() => {
+                                                            const updated = isChecked 
+                                                                ? userFormData.brandManagers.filter(id => id !== (m._id || m.id))
+                                                                : [...userFormData.brandManagers, (m._id || m.id)];
+                                                            setUserFormData({ ...userFormData, brandManagers: updated });
+                                                        }}
+                                                    >
+                                                        <Space size={8}>
+                                                            <Avatar size="small" style={{ backgroundColor: isChecked ? '#10b981' : '#e2e8f0', fontSize: 10, fontWeight: 700 }}>
+                                                                {renderInitials(m.firstName, m.lastName)}
+                                                            </Avatar>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                                                                <span style={{ fontWeight: 700, fontSize: 12, color: '#334155' }}>{m.firstName} {m.lastName}</span>
+                                                                <span style={{ fontSize: 10, color: '#64748b' }}>{m.email}</span>
+                                                            </div>
+                                                        </Space>
+                                                        <div className={`selection-checkbox ${isChecked ? 'active-green' : ''}`}>
+                                                            {isChecked && <Check size={10} className="text-white" strokeWidth={3} />}
+                                                        </div>
+                                                    </div>
+                                                </Col>
+                                            );
+                                        });
+                                    })()}
+                                </Row>
+                            </div>
+                        </Card>
+                    )}
+
+                    {/* Brands Association Grid */}
+                    <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Store size={13} className="text-emerald-500" /> Client Brands Association
+                            </div>
+                            <Badge count={`${isListingTeam ? inheritedSellers.length : userFormData.assignedSellers.length} Associated`} style={{ backgroundColor: '#059669', fontWeight: 700, fontSize: 10 }} />
+                        </div>
+
+                        {isListingTeam && (
+                            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 8 }}>
+                                <Info size={14} className="text-blue-600" style={{ marginTop: 2, flexShrink: 0 }} />
+                                <div style={{ fontSize: 11.5, color: '#1e40af', fontWeight: 500 }}>
+                                    <strong>Brand Inheritance Protocol:</strong> Access rights are dynamic and derived automatically from assigned brand commanders.
                                 </div>
                             </div>
-                            <button className="btn btn-link p-1 text-slate-400 border-0 hover-dark" onClick={() => setShowUserModal(false)}>
-                                <X size={20} />
-                            </button>
-                        </div>
+                        )}
 
-                        {/* Scrollable Form Body */}
-                        <div className="flex-grow-1 overflow-auto p-4 bg-slate-50/50">
-                            <div className="d-flex flex-column gap-4">
-                                
-                                {/* BASIC DETAILS */}
-                                <div className="bg-white p-4 rounded-4 border shadow-sm">
-                                    <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                        <User size={14} className="text-muted" /> Basic Information
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">First Name *</label>
-                                            <input 
-                                                type="text" 
-                                                className="form-control rounded-3 border-slate-200" 
-                                                placeholder="John" 
-                                                value={userFormData.firstName}
-                                                onChange={(e) => setUserFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                                            />
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">Last Name *</label>
-                                            <input 
-                                                type="text" 
-                                                className="form-control rounded-3 border-slate-200" 
-                                                placeholder="Doe" 
-                                                value={userFormData.lastName}
-                                                onChange={(e) => setUserFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                                            />
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">Email Address *</label>
-                                            <input 
-                                                type="email" 
-                                                className="form-control rounded-3 border-slate-200" 
-                                                placeholder="john@retailops.com" 
-                                                value={userFormData.email}
-                                                onChange={(e) => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
-                                                disabled={!!editingUser}
-                                            />
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">Phone Number</label>
-                                            <input 
-                                                type="text" 
-                                                className="form-control rounded-3 border-slate-200" 
-                                                placeholder="+1 (555) 123-4567" 
-                                                value={userFormData.phone}
-                                                onChange={(e) => setUserFormData(prev => ({ ...prev, phone: e.target.value }))}
-                                            />
-                                        </div>
-                                        {!editingUser && (
-                                            <div className="col-md-12">
-                                                <label className="form-label text-slate-600 small fw-semibold">Temporary Password *</label>
-                                                <input 
-                                                    type="password" 
-                                                    className="form-control rounded-3 border-slate-200" 
-                                                    placeholder="Must be at least 6 characters" 
-                                                    value={userFormData.password}
-                                                    onChange={(e) => setUserFormData(prev => ({ ...prev, password: e.target.value }))}
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
+                        {isCatalogManager && (
+                            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 8 }}>
+                                <AlertCircle size={14} className="text-amber-600" style={{ marginTop: 2, flexShrink: 0 }} />
+                                <div style={{ fontSize: 11.5, color: '#92400e', fontWeight: 500 }}>
+                                    <strong>Catalog Access Layer:</strong> Read-only access configured. Brand association parameters cannot be modified.
                                 </div>
-
-                                {/* ROLE AND SCHEMES */}
-                                <div className="bg-white p-4 rounded-4 border shadow-sm">
-                                    <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 mb-3 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                        <Shield size={14} className="text-muted" /> Access & Permission Level
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-md-12">
-                                            <label className="form-label text-slate-600 small fw-semibold">Access Role *</label>
-                                            <select 
-                                                className="form-select rounded-3 border-slate-200" 
-                                                value={userFormData.role}
-                                                onChange={(e) => handleUserRoleChange(e.target.value)}
-                                            >
-                                                <option value="">Select Role</option>
-                                                {roles.map(r => <option key={r._id || r.id} value={r._id || r.id}>{r.displayName}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/***** SUPERVISORS SELECTION PANEL *****/}
-                                {!isBrandManager && (
-                                    <div className="bg-white p-4 rounded-4 border shadow-sm">
-                                        <div className="d-flex align-items-center justify-content-between mb-3">
-                                            <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                                <UserCheck size={14} className="text-indigo-500" /> Supervisors (Super Admins, Operational Managers, etc.)
-                                            </div>
-                                            <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#4f46e5' }}>
-                                                {userFormData.supervisors.length} Selected
-                                            </span>
-                                        </div>
-
-                                        {/* Panel Actions */}
-                                        <div className="d-flex gap-2 mb-3">
-                                            <div className="position-relative flex-grow-1">
-                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
-                                                <input 
-                                                    type="text" 
-                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
-                                                    style={{ fontSize: '12px' }}
-                                                    placeholder="Search supervisors..." 
-                                                    value={modalSearchSupervisor}
-                                                    onChange={(e) => setModalSearchSupervisor(e.target.value)}
-                                                />
-                                            </div>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => {
-                                                    const allIds = managers.map(m => m._id || m.id);
-                                                    setUserFormData(prev => ({ ...prev, supervisors: allIds }));
-                                                }}
-                                            >
-                                                Select All
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => setUserFormData(prev => ({ ...prev, supervisors: [] }))}
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-
-                                        {/* Supervisors List Grid */}
-                                        <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                                            <div className="row g-2">
-                                                {(() => {
-                                                    const filtered = managers.filter(m => 
-                                                        `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchSupervisor.toLowerCase())
-                                                    );
-                                                    if (filtered.length === 0) {
-                                                        return (
-                                                            <div className="col-12 py-4 text-center text-muted small">
-                                                                No supervisors found matching "{modalSearchSupervisor}"
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return filtered.map((m) => {
-                                                        const isChecked = userFormData.supervisors.includes(m._id || m.id);
-                                                        return (
-                                                            <div key={m._id || m.id} className="col-md-6">
-                                                                <div 
-                                                                    className={`p-2.5 rounded-3 border cursor-pointer transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-primary shadow-sm' : 'border-slate-200 hover-slate-50'}`}
-                                                                    style={{ 
-                                                                        borderWidth: isChecked ? '2px' : '1px',
-                                                                        borderColor: isChecked ? '#4f46e5' : '#e2e8f0'
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        setUserFormData(prev => {
-                                                                            const isSel = prev.supervisors.includes(m._id || m.id);
-                                                                            return {
-                                                                                ...prev,
-                                                                                supervisors: isSel
-                                                                                    ? prev.supervisors.filter(id => id !== (m._id || m.id))
-                                                                                    : [...prev.supervisors, (m._id || m.id)]
-                                                                            };
-                                                                        });
-                                                                    }}
-                                                                >
-                                                                    <div className="d-flex align-items-center gap-2">
-                                                                        <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#e0e7ff' : '#f1f5f9', color: isChecked ? '#4f46e5' : '#475569', fontWeight: '600' }}>
-                                                                            {renderInitials(m.firstName, m.lastName)}
-                                                                        </div>
-                                                                        <div style={{ minWidth: 0 }}>
-                                                                            <div className="fw-bold text-slate-800 small text-truncate">{m.firstName} {m.lastName}</div>
-                                                                            <div className="text-muted smallest text-truncate">{m.email} <span className="text-indigo-500 fw-semibold text-uppercase font-monospace" style={{ fontSize: '9px' }}>({m.role?.displayName || m.role?.name || 'User'})</span></div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#4f46e5' : 'transparent', borderColor: isChecked ? '#4f46e5' : '#cbd5e1' }}>
-                                                                        {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/***** BRAND MANAGERS SELECTION PANEL *****/}
-                                {isListingTeam && (
-                                    <div className="bg-white p-4 rounded-4 border shadow-sm">
-                                        <div className="d-flex align-items-center justify-content-between mb-3">
-                                            <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                                <UserCheck size={14} className="text-emerald-500" /> Assigned Brand Managers (For Brand Inheritance)
-                                            </div>
-                                            <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#10b981' }}>
-                                                {userFormData.brandManagers.length} Selected
-                                            </span>
-                                        </div>
-
-                                        {/* Panel Actions */}
-                                        <div className="d-flex gap-2 mb-3">
-                                            <div className="position-relative flex-grow-1">
-                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
-                                                <input 
-                                                    type="text" 
-                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
-                                                    style={{ fontSize: '12px' }}
-                                                    placeholder="Search brand managers..." 
-                                                    value={modalSearchBrandManager}
-                                                    onChange={(e) => setModalSearchBrandManager(e.target.value)}
-                                                />
-                                            </div>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => {
-                                                    const bmUsers = managers.filter(m => 
-                                                        m.role?.name?.toLowerCase() === 'brand_manager' || 
-                                                        m.role?.displayName?.toLowerCase() === 'brand manager'
-                                                    );
-                                                    const allIds = bmUsers.map(m => m._id || m.id);
-                                                    setUserFormData(prev => ({ ...prev, brandManagers: allIds }));
-                                                }}
-                                            >
-                                                Select All
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => setUserFormData(prev => ({ ...prev, brandManagers: [] }))}
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-
-                                        {/* Brand Managers List Grid */}
-                                        <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                                            <div className="row g-2">
-                                                {(() => {
-                                                    const bmUsers = managers.filter(m => 
-                                                        m.role?.name?.toLowerCase() === 'brand_manager' || 
-                                                        m.role?.displayName?.toLowerCase() === 'brand manager'
-                                                    );
-                                                    const filtered = bmUsers.filter(m => 
-                                                        `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchBrandManager.toLowerCase())
-                                                    );
-                                                    if (filtered.length === 0) {
-                                                        return (
-                                                            <div className="col-12 py-4 text-center text-muted small">
-                                                                No brand managers found matching "{modalSearchBrandManager}"
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return filtered.map((m) => {
-                                                        const isChecked = userFormData.brandManagers.includes(m._id || m.id);
-                                                        return (
-                                                            <div key={m._id || m.id} className="col-md-6">
-                                                                <div 
-                                                                    className={`p-2.5 rounded-3 border cursor-pointer transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-primary shadow-sm' : 'border-slate-200 hover-slate-50'}`}
-                                                                    style={{ 
-                                                                        borderWidth: isChecked ? '2px' : '1px',
-                                                                        borderColor: isChecked ? '#10b981' : '#e2e8f0'
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        setUserFormData(prev => {
-                                                                            const isSel = prev.brandManagers.includes(m._id || m.id);
-                                                                            return {
-                                                                                ...prev,
-                                                                                brandManagers: isSel
-                                                                                    ? prev.brandManagers.filter(id => id !== (m._id || m.id))
-                                                                                    : [...prev.brandManagers, (m._id || m.id)]
-                                                                            };
-                                                                        });
-                                                                    }}
-                                                                >
-                                                                    <div className="d-flex align-items-center gap-2">
-                                                                        <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#d1fae5' : '#f1f5f9', color: isChecked ? '#059669' : '#475569', fontWeight: '600' }}>
-                                                                            {renderInitials(m.firstName, m.lastName)}
-                                                                        </div>
-                                                                        <div style={{ minWidth: 0 }}>
-                                                                            <div className="fw-bold text-slate-800 small text-truncate">{m.firstName} {m.lastName}</div>
-                                                                            <div className="text-muted smallest text-truncate">{m.email}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#10b981' : 'transparent', borderColor: isChecked ? '#10b981' : '#cbd5e1' }}>
-                                                                        {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="bg-white p-4 rounded-4 border shadow-sm">
-                                    <div className="d-flex align-items-center justify-content-between mb-3">
-                                        <div className="d-flex align-items-center gap-2 fw-bold text-slate-800 small text-uppercase" style={{ letterSpacing: '0.05em' }}>
-                                            <Store size={14} className="text-emerald-500" /> Brands & Sellers Association
-                                        </div>
-                                        <span className="badge rounded-pill px-2.5 py-1 fw-bold text-white shadow-sm" style={{ fontSize: '11px', backgroundColor: '#10b981' }}>
-                                            {isListingTeam ? inheritedSellers.length : userFormData.assignedSellers.length} Selected
-                                        </span>
-                                    </div>
-
-                                    {/* Info Alert Banner */}
-                                    {isListingTeam && (
-                                        <div className="alert alert-info border-info/20 bg-info/5 rounded-3 p-3 mb-3 d-flex align-items-start gap-2.5">
-                                            <div style={{ flexShrink: 0 }} className="text-info-600 mt-0.5">
-                                                <Store size={16} />
-                                            </div>
-                                            <div style={{ fontSize: '12px', lineHeight: '1.5' }} className="text-info-800">
-                                                <strong>Listing Team Inheritance:</strong> Sellers are automatically inherited from the selected Brand Managers (Supervisors). Direct selection is locked.
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isCatalogManager && (
-                                        <div className="alert alert-warning border-warning/25 bg-warning/5 rounded-3 p-3 mb-3 d-flex align-items-start gap-2.5">
-                                            <div style={{ flexShrink: 0 }} className="text-warning-600 mt-0.5">
-                                                <Store size={16} />
-                                            </div>
-                                            <div style={{ fontSize: '12px', lineHeight: '1.5' }} className="text-warning-800">
-                                                <strong>Catalog Manager Access:</strong> View-only sellers access enabled. No brand assignments can be modified for this role.
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/***** Panel Actions *****/}
-                                    {!isListingTeam && (
-                                        <div className="d-flex gap-2 mb-3">
-                                            <div className="position-relative flex-grow-1">
-                                                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-muted" />
-                                                <input 
-                                                    type="text" 
-                                                    className="form-control form-control-sm ps-5 rounded-3 border-slate-200" 
-                                                    style={{ fontSize: '12px' }}
-                                                    placeholder="Search brands..." 
-                                                    value={modalSearchSeller}
-                                                    onChange={(e) => setModalSearchSeller(e.target.value)}
-                                                />
-                                            </div>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => {
-                                                    const allIds = sellers.map(s => s._id || s.id);
-                                                    setUserFormData(prev => ({ ...prev, assignedSellers: allIds }));
-                                                }}
-                                            >
-                                                Select All
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                className="btn btn-sm btn-light border rounded-3 text-slate-600 px-3 hover-slate-100 smallest fw-bold"
-                                                onClick={() => setUserFormData(prev => ({ ...prev, assignedSellers: [] }))}
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* Sellers List Grid */}
-                                    <div className="border rounded-3 bg-slate-50/50 p-2.5" style={{ maxHeight: '180px', overflowY: 'auto' }}>
-                                        <div className="row g-2">
-                                            {(() => {
-                                                const listToRender = isListingTeam ? inheritedSellers : sellers;
-                                                const filtered = listToRender.filter(s => 
-                                                    `${s.name} ${s.code || ''}`.toLowerCase().includes(modalSearchSeller.toLowerCase())
-                                                );
-                                                if (filtered.length === 0) {
-                                                    return (
-                                                        <div className="col-12 py-4 text-center text-muted small">
-                                                            {isListingTeam 
-                                                                ? "No inherited sellers found. Try selecting different Supervisors."
-                                                                : `No brands found matching "${modalSearchSeller}"`
-                                                            }
-                                                        </div>
-                                                    );
-                                                }
-                                                return filtered.map((s) => {
-                                                    const isChecked = isListingTeam ? true : userFormData.assignedSellers.includes(s._id || s.id);
-                                                    const isReadOnly = isListingTeam;
-                                                    return (
-                                                        <div key={s._id || s.id} className="col-md-6" style={isReadOnly ? { pointerEvents: 'none' } : {}}>
-                                                            <div 
-                                                                className={`p-2.5 rounded-3 border transition-all d-flex align-items-center justify-content-between gap-2.5 bg-white ${isChecked ? 'border-success shadow-sm' : 'border-slate-200 hover-slate-50'}`}
-                                                                style={{ 
-                                                                    borderWidth: isChecked ? '2px' : '1px',
-                                                                    borderColor: isChecked ? '#10b981' : '#e2e8f0',
-                                                                    opacity: 1
-                                                                }}
-                                                                onClick={() => {
-                                                                    if (isReadOnly) return;
-                                                                    setUserFormData(prev => {
-                                                                        const isSel = prev.assignedSellers.includes(s._id || s.id);
-                                                                        return {
-                                                                            ...prev,
-                                                                            assignedSellers: isSel
-                                                                                ? prev.assignedSellers.filter(id => id !== (s._id || s.id))
-                                                                                : [...prev.assignedSellers, (s._id || s.id)]
-                                                                        };
-                                                                    });
-                                                                }}
-                                                            >
-                                                                <div className="d-flex align-items-center gap-2">
-                                                                    <div className="avatar-circle" style={{ width: '28px', height: '28px', fontSize: '11px', backgroundColor: isChecked ? '#d1fae5' : '#f1f5f9', color: isChecked ? '#10b981' : '#475569', fontWeight: '600' }}>
-                                                                        <Store size={14} />
-                                                                    </div>
-                                                                    <div style={{ minWidth: 0 }}>
-                                                                        <div className="fw-bold text-slate-800 small text-truncate">{s.name}</div>
-                                                                        <div className="text-muted smallest text-truncate">{s.code || s.id || 'Active Store'}</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className={`d-flex align-items-center justify-content-center border rounded-pill`} style={{ width: '18px', height: '18px', backgroundColor: isChecked ? '#10b981' : 'transparent', borderColor: isChecked ? '#10b981' : '#cbd5e1' }}>
-                                                                    {isChecked && <Check size={11} strokeWidth={3} className="text-white" />}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
-                                        </div>
-                                    </div>
-                                </div>
-
                             </div>
-                        </div>
+                        )}
 
-                        {/* Footer */}
-                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-light">
-                            <button className="btn btn-light border px-4 fw-semibold rounded-3" style={{ fontSize: '13px' }} onClick={() => setShowUserModal(false)}>
-                                Discard
-                            </button>
-                            <button className="btn btn-dark px-4 fw-bold rounded-3 shadow-sm" style={{ fontSize: '13px' }} onClick={handleSaveUser}>
-                                {editingUser ? 'Save Updates' : 'Register Member'}
-                            </button>
+                        {!isListingTeam && (
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                                <Input 
+                                    prefix={<Search size={12} />} 
+                                    size="small"
+                                    placeholder="Search active storefronts..." 
+                                    value={modalSearchSeller}
+                                    onChange={e => setModalSearchSeller(e.target.value)}
+                                    style={{ borderRadius: 6 }}
+                                />
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, assignedSellers: sellers.map(s => s._id || s.id) })} style={{ fontSize: 11, fontWeight: 600 }}>Link All</Button>
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, assignedSellers: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Wipe</Button>
+                            </div>
+                        )}
+
+                        <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
+                            <Row gutter={[8, 8]}>
+                                {(() => {
+                                    const listToRender = isListingTeam ? inheritedSellers : sellers;
+                                    const filtered = listToRender.filter(s => `${s.name} ${s.code || ''}`.toLowerCase().includes(modalSearchSeller.toLowerCase()));
+                                    if (filtered.length === 0) {
+                                        return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>
+                                            {isListingTeam ? 'Link brand managers to fetch associations.' : 'No matched brands found.'}
+                                        </div></Col>;
+                                    }
+                                    return filtered.map(s => {
+                                        const isChecked = isListingTeam ? true : userFormData.assignedSellers.includes(s._id || s.id);
+                                        const isReadOnly = isListingTeam;
+                                        return (
+                                            <Col key={s._id || s.id} span={12} style={isReadOnly ? { pointerEvents: 'none' } : {}}>
+                                                <div 
+                                                    className={`selection-item-card ${isChecked ? 'selected-green' : ''}`}
+                                                    onClick={() => {
+                                                        if (isReadOnly) return;
+                                                        const updated = isChecked 
+                                                            ? userFormData.assignedSellers.filter(id => id !== (s._id || s.id))
+                                                            : [...userFormData.assignedSellers, (s._id || s.id)];
+                                                        setUserFormData({ ...userFormData, assignedSellers: updated });
+                                                    }}
+                                                >
+                                                    <Space size={8}>
+                                                        <div style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: isChecked ? '#d1fae5' : '#e2e8f0', color: isChecked ? '#10b981' : '#64748b' }}>
+                                                            <Store size={12} />
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                                                            <span style={{ fontWeight: 700, fontSize: 12, color: '#334155' }}>{s.name}</span>
+                                                            <span style={{ fontSize: 10, color: '#64748b' }}>{s.code || 'Storefront'}</span>
+                                                        </div>
+                                                    </Space>
+                                                    <div className={`selection-checkbox ${isChecked ? 'active-green' : ''}`}>
+                                                        {isChecked && <Check size={10} className="text-white" strokeWidth={3} />}
+                                                    </div>
+                                                </div>
+                                            </Col>
+                                        );
+                                    });
+                                })()}
+                            </Row>
                         </div>
-                    </div>
+                    </Card>
                 </div>
-            )}
+            </Modal>
 
-            {/* ===== ROLE DETAILS MODAL ===== */}
-            {showRoleModal && (
-                <div 
-                    className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-                    style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1050 }}
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowRoleModal(false); }}
-                >
-                    <div 
-                        className="bg-white shadow-2xl overflow-hidden"
-                        style={{ width: '100%', maxWidth: '500px', borderRadius: '24px' }}
+            {/* 5. ROLE SPECIFICATIONS MODAL */}
+            <Modal
+                title={
+                    <Space align="center" size={10}>
+                        <div style={{ background: '#F5F3FF', color: '#8B5CF6', padding: 6, borderRadius: 8, display: 'flex' }}>
+                            <Shield size={16} />
+                        </div>
+                        <span style={{ fontWeight: 800 }}>{editingRole ? 'Configure Role Blueprint' : 'Construct Custom Role'}</span>
+                    </Space>
+                }
+                open={showRoleModal}
+                onCancel={() => setShowRoleModal(false)}
+                centered
+                destroyOnClose
+                width={500}
+                className="glass-modal"
+                footer={[
+                    <Button key="back" shape="round" onClick={() => setShowRoleModal(false)}>
+                        Abort
+                    </Button>,
+                    <Button 
+                        key="submit" 
+                        type="primary" 
+                        shape="round" 
+                        onClick={handleSaveRole}
+                        style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700 }}
                     >
-                        {/* Header */}
-                        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center">
-                            <div className="d-flex align-items-center gap-3">
-                                <div className="p-2 bg-light text-indigo-700 rounded-3" style={{ color: '#4f46e5' }}>
-                                    <Shield size={20} />
-                                </div>
-                                <div>
-                                    <h5 className="mb-0 fw-bold text-slate-900">{editingRole ? 'Edit Role Details' : 'Create Custom Role'}</h5>
-                                    <p className="text-muted small mb-0" style={{ fontSize: '11px' }}>Configure role specifications and aesthetic tags</p>
-                                </div>
-                            </div>
-                            <button className="btn btn-link p-1 text-slate-400 border-0" onClick={() => setShowRoleModal(false)}>
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Body */}
-                        <div className="p-4 bg-light">
-                            <div className="d-flex flex-column gap-3">
-                                <div className="bg-white p-3.5 rounded-3 border-0 shadow-sm">
-                                    <div className="row g-3">
-                                        <div className="col-12">
-                                            <label className="form-label text-slate-600 small fw-semibold">Display Label *</label>
-                                            <input 
-                                                type="text" 
-                                                className="form-control" 
-                                                placeholder="e.g. Listing Team" 
-                                                value={roleFormData.displayName}
-                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                                            />
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">Priority Level (0-100)</label>
-                                            <input 
-                                                type="number" 
-                                                className="form-control" 
-                                                min="0" max="100"
-                                                value={roleFormData.level}
-                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, level: parseInt(e.target.value) || 0 }))}
-                                            />
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label text-slate-600 small fw-semibold">Theme Color</label>
-                                            <div className="d-flex align-items-center gap-2">
-                                                <input 
-                                                    type="color" 
-                                                    className="form-control form-control-color border" 
-                                                    style={{ width: '42px', height: '38px', padding: '4px', cursor: 'pointer' }}
-                                                    value={roleFormData.color}
-                                                    onChange={(e) => setRoleFormData(prev => ({ ...prev, color: e.target.value }))}
-                                                />
-                                                <span className="font-monospace text-slate-500 small">{roleFormData.color}</span>
-                                            </div>
-                                        </div>
-                                        <div className="col-12">
-                                            <label className="form-label text-slate-600 small fw-semibold">Description</label>
-                                            <textarea 
-                                                className="form-control" 
-                                                rows="3"
-                                                placeholder="Briefly summarize duties assigned to this role..."
-                                                value={roleFormData.description}
-                                                onChange={(e) => setRoleFormData(prev => ({ ...prev, description: e.target.value }))}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="px-4 py-3 border-top d-flex justify-content-end gap-2 bg-white">
-                            <button className="btn btn-light px-4 fw-semibold" style={{ fontSize: '13px' }} onClick={() => setShowRoleModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-dark px-4 fw-bold" style={{ fontSize: '13px' }} onClick={handleSaveRole}>
-                                {editingRole ? 'Save Changes' : 'Create Role'}
-                            </button>
-                        </div>
-                    </div>
+                        {editingRole ? 'Update Access' : 'Deploy Role'}
+                    </Button>
+                ]}
+            >
+                <div style={{ padding: '8px 0' }}>
+                    <Form layout="vertical">
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Technical Reference Name</span>}>
+                            <Input 
+                                disabled={!!editingRole}
+                                placeholder="e.g. analyst_l2" 
+                                value={roleFormData.name}
+                                onChange={e => setRoleFormData({ ...roleFormData, name: e.target.value })}
+                                style={{ borderRadius: 8 }}
+                            />
+                        </Form.Item>
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Display Interface Label *</span>} required>
+                            <Input 
+                                placeholder="e.g. Senior Operations Analyst" 
+                                value={roleFormData.displayName}
+                                onChange={e => setRoleFormData({ ...roleFormData, displayName: e.target.value })}
+                                style={{ borderRadius: 8 }}
+                            />
+                        </Form.Item>
+                        <Row gutter={12}>
+                            <Col span={12}>
+                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Hierarchy Level (0-100)</span>}>
+                                    <Input 
+                                        type="number" 
+                                        min={0} max={100}
+                                        value={roleFormData.level}
+                                        onChange={e => setRoleFormData({ ...roleFormData, level: parseInt(e.target.value) || 0 })}
+                                        style={{ borderRadius: 8 }}
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col span={12}>
+                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Interface Theme Color</span>}>
+                                    <Space size={8} style={{ width: '100%' }}>
+                                        <Input 
+                                            type="color" 
+                                            value={roleFormData.color}
+                                            onChange={e => setRoleFormData({ ...roleFormData, color: e.target.value })}
+                                            style={{ width: 44, height: 36, padding: '4px 6px', cursor: 'pointer' }}
+                                        />
+                                        <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b' }}>{roleFormData.color}</span>
+                                    </Space>
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Strategy Description</span>}>
+                            <TextArea 
+                                rows={3}
+                                placeholder="Define access boundary scopes for this custom role..."
+                                value={roleFormData.description}
+                                onChange={e => setRoleFormData({ ...roleFormData, description: e.target.value })}
+                                style={{ borderRadius: 8 }}
+                            />
+                        </Form.Item>
+                    </Form>
                 </div>
-            )}
+            </Modal>
         </div>
     );
 };

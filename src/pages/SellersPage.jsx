@@ -1030,7 +1030,7 @@ const SellersPage = () => {
             </Text>
             {(activeTab !== 'all' || marketplaceFilter !== 'all' || searchQuery) && (
               <>
-                <Divider type="vertical" />
+                <Divider orientation="vertical" />
                 <Button 
                   type="link" 
                   size="small" 

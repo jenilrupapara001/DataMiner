@@ -2,24 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import { 
+    Card, 
+    Input, 
+    Button, 
+    Row, 
+    Col, 
+    Typography, 
+    Avatar, 
+    Badge, 
+    Tag, 
+    Divider, 
+    Modal, 
+    Timeline, 
+    Tooltip, 
+    Space, 
+    message, 
+    notification,
+    Descriptions
+} from 'antd';
 import {
     User, Mail, Shield, Calendar, Camera, Edit2, Loader2,
     Smartphone, Briefcase, Clock, LogOut, Key, CheckCircle2,
     XCircle, Info, ChevronRight, ArrowRight, ShieldCheck,
-    Fingerprint, Settings, Bell, Lock, Activity, AlertCircle, X
+    Fingerprint, Settings, Bell, Lock, Activity, AlertCircle, X,
+    ShieldAlert
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
-import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+
+const { Title, Text, Paragraph } = Typography;
 
 const ProfilePage = () => {
     const { id } = useParams();
     const { user: currentUser, refreshUser, logout: authLogout } = useAuth();
+    
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [saving, setSaving] = useState(false);
+    
     const [pwdData, setPwdData] = useState({ current: '', new: '', confirm: '' });
     const [formData, setFormData] = useState({
         firstName: '',
@@ -28,6 +51,9 @@ const ProfilePage = () => {
         phone: ''
     });
 
+    const [messageApi, messageContextHolder] = message.useMessage();
+    const [notificationApi, notificationContextHolder] = notification.useNotification();
+
     useEffect(() => {
         const fetchUser = async () => {
             try {
@@ -35,7 +61,7 @@ const ProfilePage = () => {
                 const targetId = id || currentUser?._id;
 
                 if (!targetId) {
-                    setError('User not found');
+                    setError('User identifier could not be parsed.');
                     return;
                 }
 
@@ -57,11 +83,11 @@ const ProfilePage = () => {
                         phone: normalizedUser.phone
                     });
                 } else {
-                    setError('Failed to fetch user data');
+                    setError('Critical: User dataset not located on active cluster.');
                 }
             } catch (err) {
                 console.error('Error fetching profile:', err);
-                setError(err.message || 'Error loading profile');
+                setError(err.message || 'Network cluster retrieval failed.');
             } finally {
                 setLoading(false);
             }
@@ -71,6 +97,10 @@ const ProfilePage = () => {
     }, [id, currentUser?._id]);
 
     const handleSave = async () => {
+        if (!formData.firstName || !formData.lastName) {
+            messageApi.warning('Profile metadata cannot be empty.');
+            return;
+        }
         try {
             setSaving(true);
             const response = await api.userApi.update(user._id, formData);
@@ -81,35 +111,65 @@ const ProfilePage = () => {
                 if (currentUser?._id === user._id) {
                     refreshUser(updatedUser);
                 }
-                // Custom success notification would be better than alert
+                notificationApi.success({
+                    message: 'Identity Synced',
+                    description: 'Standard profile attributes updated across core databases.',
+                    placement: 'topRight'
+                });
             }
         } catch (err) {
-            console.error('Error updating profile:', err);
+            notificationApi.error({
+                message: 'Sync Rejected',
+                description: err.message || 'Data rejected during pipeline transmission.',
+                placement: 'topRight'
+            });
         } finally {
             setSaving(false);
         }
     };
 
     const handlePasswordChange = async () => {
-        if (pwdData.new !== pwdData.confirm) return;
+        if (pwdData.new !== pwdData.confirm) {
+            messageApi.error('Rotation error: Confirm credentials match rejected.');
+            return;
+        }
         try {
             setSaving(true);
             const response = await api.authApi.changePassword(pwdData.current, pwdData.new);
             if (response.success) {
                 setShowPasswordModal(false);
                 setPwdData({ current: '', new: '', confirm: '' });
+                notificationApi.success({
+                    message: 'Security Keys Rotated',
+                    description: 'Your cryptographic login sequence is now active. Previous keys invalidated.',
+                    placement: 'topRight'
+                });
+            } else {
+                throw new Error(response.message || 'Access control verification failed.');
             }
         } catch (err) {
-            console.error('Error changing password:', err);
+            notificationApi.error({
+                message: 'Key Rotation Failed',
+                description: err.message || 'Core systems rejected rotation payload.',
+                placement: 'topRight'
+            });
         } finally {
             setSaving(false);
         }
     };
 
     const handleLogout = () => {
-        if (window.confirm('Are you sure you want to log out?')) {
-            authLogout();
-        }
+        Modal.confirm({
+            title: 'Sign Out Confirmation',
+            content: 'Are you sure you want to terminate the active operational session?',
+            okText: 'Sign Out',
+            okType: 'danger',
+            cancelText: 'Cancel',
+            centered: true,
+            onOk: () => {
+                authLogout();
+            }
+        });
     };
 
     const formatDate = (dateString) => {
@@ -119,632 +179,455 @@ const ProfilePage = () => {
         });
     };
 
-    if (loading && !user) return <PageLoader message="Initializing Experience..." />;
+    if (loading && !user) return <PageLoader message="Initializing Identity Vault..." />;
 
-    const roleDisplay = user?.role?.displayName || user?.role?.name || 'User Member';
-    const lastLogin = user?.lastLogin ? formatDate(user.lastLogin) : 'Just now';
+    const roleDisplay = user?.role?.displayName || user?.role?.name || 'Operator Member';
+    const lastLogin = user?.lastLogin ? formatDate(user.lastLogin) : 'Online Now';
 
     return (
-        <div className="profile-luxury-container pb-5">
-            <div className="dynamic-mesh-bg"></div>
-
-            <div className="container-fluid py-5 px-lg-5 position-relative">
-                {/* Upper Navigation/Breadcrumb */}
-                <div className="d-flex justify-content-between align-items-center mb-5 px-3">
-                    <div>
-                        <h4 className="fw-black mb-0 tracking-tight text-zinc-900">MY IDENTITY</h4>
-                        <p className="text-zinc-500 smallest fw-medium opacity-75">MANAGE PERSONAL ECOSYSTEM & ACCESS</p>
-                    </div>
-                    <div>
-                        <button
-                            className="btn-logout-luxury d-flex align-items-center gap-2"
-                            onClick={handleLogout}
-                        >
-                            <LogOut size={16} />
-                            <span>SIGN OUT</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div className="row g-5">
-                    {/* LEFT PANEL: Identity Hub */}
-                    <div className="col-xl-4">
-                        <div className="luxury-glass-card identity-card sticky-top" style={{ top: '100px' }}>
-                            <div className="card-header-aura"></div>
-                            <div className="p-5 text-center">
-                                <div className="avatar-composition mb-4 mx-auto">
-                                    <div className="avatar-ring-outer"></div>
-                                    <div className="avatar-ring-inner"></div>
-                                    <div className="avatar-image-container shadow-2xl">
-                                        <img
-                                            src={`https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=18181b&color=fff&size=200&bold=true`}
-                                            alt="Profile"
-                                        />
-                                        <div className="avatar-badge">
-                                            <ShieldCheck size={14} className="text-white" />
-                                        </div>
-                                    </div>
-                                    <button className="avatar-upload-btn shadow-sm">
-                                        <Camera size={16} />
-                                    </button>
-                                </div>
-
-                                <div className="mb-4">
-                                    <h2 className="fw-black text-zinc-900 mb-1">{user?.firstName} {user?.lastName}</h2>
-                                    <div className="d-flex align-items-center justify-content-center gap-2">
-                                        <div className="role-tag d-flex align-items-center gap-2">
-                                            <div className="pulse-dot"></div>
-                                            <span>{roleDisplay}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="identity-stats d-flex justify-content-center gap-4 py-4 border-y border-zinc-100/50">
-                                    <div className="stat-item">
-                                        <div className="stat-label">Member Since</div>
-                                        <div className="stat-value">{formatDate(user?.createdAt).split(',')[0]}</div>
-                                    </div>
-                                    <div className="stat-item border-start border-zinc-100 ps-4">
-                                        <div className="stat-label">Last Active</div>
-                                        <div className="stat-value">{lastLogin}</div>
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 d-grid gap-3">
-                                    <button
-                                        className={`btn-luxury-action ${isEditing ? 'active' : ''}`}
-                                        onClick={() => setIsEditing(!isEditing)}
-                                    >
-                                        <Edit2 size={18} />
-                                        <span>{isEditing ? 'Discard Changes' : 'Refine Identity'}</span>
-                                    </button>
-                                    <button
-                                        className="btn-luxury-outline"
-                                        onClick={() => setShowPasswordModal(true)}
-                                    >
-                                        <Lock size={18} />
-                                        <span>Security Keys</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* RIGHT PANEL: Data Core */}
-                    <div className="col-xl-8">
-                        <div className="d-flex flex-column gap-5">
-                            {/* Personal Nexus Card */}
-                            <div className="luxury-glass-card overflow-hidden">
-                                <div className="px-5 py-4 border-bottom border-zinc-100/50 d-flex justify-content-between align-items-center bg-white/20">
-                                    <div className="d-flex align-items-center gap-3">
-                                        <div className="icon-box-luxury">
-                                            <User size={20} className="text-zinc-600" />
-                                        </div>
-                                        <h5 className="fw-black mb-0 text-zinc-900">Personal Nexus</h5>
-                                    </div>
-                                    {isEditing && (
-                                        <button
-                                            className="btn btn-dark rounded-pill px-5 py-2 fw-bold shadow-lg hover-up transition-all"
-                                            onClick={handleSave}
-                                            disabled={saving}
-                                        >
-                                            {saving ? <Loader2 size={18} className="animate-spin" /> : 'Sync Profile'}
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="p-5">
-                                    <div className="row g-4">
-                                        <div className="col-md-6">
-                                            <div className="data-tile-luxury">
-                                                <label>First Name</label>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        value={formData.firstName}
-                                                        onChange={e => setFormData({ ...formData, firstName: e.target.value })}
-                                                    />
-                                                ) : (
-                                                    <div className="value-display">{user?.firstName || '—'}</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <div className="data-tile-luxury">
-                                                <label>Last Name</label>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        value={formData.lastName}
-                                                        onChange={e => setFormData({ ...formData, lastName: e.target.value })}
-                                                    />
-                                                ) : (
-                                                    <div className="value-display">{user?.lastName || '—'}</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="col-12">
-                                            <div className="data-tile-luxury email-tile">
-                                                <label>Restricted Email Address</label>
-                                                <div className="d-flex align-items-center justify-content-between">
-                                                    <div className="value-display text-zinc-400">
-                                                        <Mail size={16} className="me-2 opacity-50" />
-                                                        {user?.email || '—'}
-                                                    </div>
-                                                    <div className="security-tag">
-                                                        <Fingerprint size={12} className="me-1" /> Verified
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <div className="data-tile-luxury">
-                                                <label>Mobile Comms</label>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="tel"
-                                                        value={formData.phone}
-                                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                                        placeholder="+1 000 000 0000"
-                                                    />
-                                                ) : (
-                                                    <div className="value-display">
-                                                        <Smartphone size={16} className="me-2 opacity-30" />
-                                                        {user?.phone || 'Unlinked'}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <div className="data-tile-luxury">
-                                                <label>Role Clearance</label>
-                                                <div className="value-display text-primary fw-black uppercase tracking-wider small">
-                                                    {roleDisplay}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Security & Activity Stats */}
-                            <div className="row g-4">
-                                <div className="col-md-6">
-                                    <div className="luxury-glass-card h-100 overflow-hidden">
-                                        <div className="p-4 border-bottom border-zinc-100/50 bg-white/20 d-flex align-items-center gap-3">
-                                            <div className="icon-box-luxury sm">
-                                                <Lock size={16} className="text-zinc-600" />
-                                            </div>
-                                            <h6 className="fw-black mb-0 text-zinc-900 small uppercase tracking-widest">Multi-Factor Intel</h6>
-                                        </div>
-                                        <div className="p-4">
-                                            <div className={`mfa-status-banner ${user?.twoFactorEnabled ? 'secure' : 'warning'} mb-4`}>
-                                                <div className="d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        <div className="status-title">{user?.twoFactorEnabled ? 'SHIELD ACTIVE' : 'SHIELD DISABLED'}</div>
-                                                        <div className="status-desc">
-                                                            {user?.twoFactorEnabled ? 'Enforced system-wide' : 'Account is vulnerable'}
-                                                        </div>
-                                                    </div>
-                                                    <div className="status-icon">
-                                                        {user?.twoFactorEnabled ? <ShieldCheck size={24} /> : <AlertCircle size={24} />}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="small-info d-flex align-items-center gap-2 text-zinc-500">
-                                                <Info size={14} />
-                                                <span className="smallest fw-medium">Last pass rotation: 4 months ago</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="col-md-6">
-                                    <div className="luxury-glass-card h-100 overflow-hidden">
-                                        <div className="p-4 border-bottom border-zinc-100/50 bg-white/20 d-flex align-items-center gap-3">
-                                            <div className="icon-box-luxury sm">
-                                                <Activity size={16} className="text-zinc-600" />
-                                            </div>
-                                            <h6 className="fw-black mb-0 text-zinc-900 small uppercase tracking-widest">Recent Activity</h6>
-                                        </div>
-                                        <div className="p-4 d-flex flex-column gap-3">
-                                            <div className="activity-item d-flex align-items-center gap-3">
-                                                <div className="activity-dot"></div>
-                                                <div className="flex-grow-1">
-                                                    <div className="activity-text text-zinc-700 smallest fw-bold">Login from Chrome on MacOS</div>
-                                                    <div className="activity-time text-zinc-400 smallest uppercase">Today, 2:45 PM</div>
-                                                </div>
-                                            </div>
-                                            <div className="activity-item d-flex align-items-center gap-3 opacity-50">
-                                                <div className="activity-dot"></div>
-                                                <div className="flex-grow-1">
-                                                    <div className="activity-text text-zinc-700 smallest fw-bold">Profile Update Sync</div>
-                                                    <div className="activity-time text-zinc-400 smallest uppercase">Yesterday, 11:20 AM</div>
-                                                </div>
-                                            </div>
-                                            <button className="btn-view-all text-primary small fw-black tracking-widest mt-2">
-                                                VIEW AUDIT LOG <ArrowRight size={12} className="ms-1" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Premium Password Modal */}
-            {showPasswordModal && (
-                <div className="modal-luxury-overlay">
-                    <div className="luxury-glass-card modal-container animate-slide-up shadow-2xl">
-                        <div className="modal-inner p-5">
-                            <div className="d-flex justify-content-between align-items-center mb-5">
-                                <div>
-                                    <h4 className="fw-black text-zinc-900 mb-1">Key Management</h4>
-                                    <p className="text-zinc-500 small mb-0">Rotate your access credentials regularly</p>
-                                </div>
-                                <button className="btn-close-luxury" onClick={() => setShowPasswordModal(false)}>
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            <div className="d-flex flex-column gap-4 mb-5">
-                                <div className="data-tile-luxury">
-                                    <label>Current Credentials</label>
-                                    <input
-                                        type="password"
-                                        value={pwdData.current}
-                                        onChange={e => setPwdData({ ...pwdData, current: e.target.value })}
-                                        placeholder="••••••••••••"
-                                    />
-                                </div>
-                                <div className="row g-4">
-                                    <div className="col-md-6">
-                                        <div className="data-tile-luxury">
-                                            <label>New Passkey</label>
-                                            <input
-                                                type="password"
-                                                value={pwdData.new}
-                                                onChange={e => setPwdData({ ...pwdData, new: e.target.value })}
-                                                placeholder="••••••••••••"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="data-tile-luxury">
-                                            <label>Verify Rotation</label>
-                                            <input
-                                                type="password"
-                                                value={pwdData.confirm}
-                                                onChange={e => setPwdData({ ...pwdData, confirm: e.target.value })}
-                                                placeholder="••••••••••••"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="d-flex gap-3">
-                                <button
-                                    className="btn btn-zinc-100 rounded-pill px-5 py-3 fw-bold flex-grow-1"
-                                    onClick={() => setShowPasswordModal(false)}
-                                >
-                                    Cancel Rotation
-                                </button>
-                                <button
-                                    className="btn btn-primary rounded-pill px-5 py-3 fw-black flex-grow-1 shadow-lg hover-up"
-                                    onClick={handlePasswordChange}
-                                    disabled={saving || !pwdData.current || !pwdData.new || (pwdData.new !== pwdData.confirm)}
-                                >
-                                    {saving ? <Loader2 className="animate-spin" /> : 'Confirm New Keys'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+        <div className="luxury-profile-wrapper">
+            {messageContextHolder}
+            {notificationContextHolder}
 
             <style>{`
-                .profile-luxury-container {
+                .luxury-profile-wrapper {
                     min-height: 100vh;
-                    background-color: #fafafa;
-                    font-family: 'Inter', sans-serif;
+                    background-color: #f8fafc;
+                    margin: -1.5rem -2rem;
+                    padding: 32px;
+                    position: relative;
+                    overflow: hidden;
                 }
-
-                .dynamic-mesh-bg {
-                    position: fixed;
-                    top: 0;
-                    right: 0;
-                    width: 70%;
-                    height: 100%;
-                    background: radial-gradient(circle at 100% 0%, rgba(79, 70, 229, 0.08) 0%, rgba(124, 58, 237, 0.05) 30%, transparent 60%);
+                .luxury-profile-bg-flare {
+                    position: absolute;
+                    top: -200px;
+                    right: -200px;
+                    width: 600px;
+                    height: 600px;
+                    background: radial-gradient(circle, rgba(37, 99, 235, 0.05) 0%, rgba(255,255,255,0) 70%);
                     z-index: 0;
                     pointer-events: none;
                 }
-
-                .tracking-tight { letter-spacing: -0.04em; }
-
-                /* Glass Card System */
-                .luxury-glass-card {
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(12px) saturate(180%);
-                    -webkit-backdrop-filter: blur(12px) saturate(180%);
-                    border: 1px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 32px;
-                    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+                .profile-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 32px;
                     position: relative;
+                    z-index: 1;
                 }
-
-                .card-header-aura {
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    height: 4px;
-                    background: linear-gradient(90deg, #4f46e5, #7c3aed);
-                    border-radius: 32px 32px 0 0;
-                    opacity: 0.1;
-                }
-
-                /* Avatar Composition */
-                .avatar-composition {
-                    width: 140px;
-                    height: 140px;
+                .profile-grid {
                     position: relative;
+                    z-index: 1;
                 }
-
-                .avatar-ring-outer {
-                    position: absolute;
-                    top: -10px;
-                    left: -10px;
-                    right: -10px;
-                    bottom: -10px;
-                    border: 1px solid rgba(79, 70, 229, 0.1);
-                    border-radius: 50%;
-                }
-
-                .avatar-ring-inner {
-                    position: absolute;
-                    top: -5px;
-                    left: -5px;
-                    right: -5px;
-                    bottom: -5px;
-                    border: 2px solid #fff;
-                    border-radius: 50%;
-                    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
-                }
-
-                .avatar-image-container {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 50%;
+                .profile-master-card {
+                    border-radius: 20px !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
                     overflow: hidden;
+                }
+                .avatar-ring-base {
                     position: relative;
-                    z-index: 2;
+                    display: inline-block;
+                    padding: 8px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+                    margin-bottom: 16px;
                 }
-
-                .avatar-image-container img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                }
-
-                .avatar-badge {
+                .avatar-edit-overlay {
                     position: absolute;
-                    bottom: 15px;
-                    right: 0;
-                    background: #4f46e5;
-                    border: 3px solid #fff;
-                    width: 28px;
-                    height: 28px;
+                    bottom: 10px;
+                    right: 10px;
+                    width: 32px;
+                    height: 32px;
                     border-radius: 50%;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    z-index: 3;
+                    cursor: pointer;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                    transition: all 0.2s ease;
+                    color: #64748b;
                 }
-
-                .avatar-upload-btn {
-                    position: absolute;
-                    bottom: -5px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #fff;
-                    border: none;
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 4;
-                    color: #666;
-                    transition: all 0.3s ease;
+                .avatar-edit-overlay:hover {
+                    background: #1e293b;
+                    color: #ffffff;
+                    transform: translateY(-1px);
                 }
-
-                .avatar-upload-btn:hover { background: #18181b; color: #fff; transform: translateX(-50%) translateY(-2px); }
-
-                /* Role Tag & Info */
-                .role-tag {
-                    background: rgba(79, 70, 229, 0.05);
-                    padding: 4px 12px;
-                    border-radius: 100px;
-                    font-size: 10px;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    color: #4f46e5;
-                    letter-spacing: 0.1em;
-                }
-
-                .pulse-dot {
-                    width: 6px;
-                    height: 6px;
-                    background: #4f46e5;
-                    border-radius: 50%;
-                    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
-                    animation: pulse 2s infinite;
-                }
-
-                @keyframes pulse {
-                    0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
-                    70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
-                }
-
-                .identity-stats .stat-label { font-size: 9px; text-transform: uppercase; font-weight: 800; color: #999; margin-bottom: 2px; }
-                .identity-stats .stat-value { font-size: 12px; font-weight: 800; color: #18181b; }
-
-                /* Custom Buttons */
-                .btn-logout-luxury {
-                    background: transparent;
-                    border: 1px solid rgba(0, 0, 0, 0.1);
-                    color: #666;
-                    padding: 8px 16px;
-                    border-radius: 100px;
-                    font-size: 10px;
-                    font-weight: 800;
-                    letter-spacing: 0.1em;
-                    transition: all 0.3s ease;
-                }
-                .btn-logout-luxury:hover { background: #fef2f2; color: #dc2626; border-color: #fee2e2; }
-
-                .btn-luxury-action {
-                    background: #18181b;
-                    color: #fff;
-                    border: none;
-                    padding: 14px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 12px;
-                    font-weight: 800;
-                    font-size: 14px;
-                    transition: all 0.3s ease;
-                }
-                .btn-luxury-action:hover { transform: translateY(-2px); box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.3); }
-                .btn-luxury-action.active { background: #ef4444; }
-
-                .btn-luxury-outline {
-                    background: transparent;
-                    border: 1.5px solid rgba(0, 0, 0, 0.05);
-                    color: #333;
-                    padding: 14px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 12px;
-                    font-weight: 800;
-                    font-size: 14px;
-                    transition: all 0.3s ease;
-                }
-                .btn-luxury-outline:hover { background: #fafafa; border-color: rgba(0,0,0,0.1); }
-
-                /* Data Core Tiles */
-                .icon-box-luxury {
-                    width: 40px;
-                    height: 40px;
-                    background: #fff;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.03);
-                }
-                .icon-box-luxury.sm { width: 32px; height: 32px; border-radius: 10px; }
-
-                .data-tile-luxury {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 6px;
-                }
-                .data-tile-luxury label {
-                    font-size: 9px;
-                    font-weight: 800;
-                    color: #999;
-                    text-transform: uppercase;
-                    letter-spacing: 0.1em;
-                    margin-left: 4px;
-                }
-                .data-tile-luxury .value-display {
-                    background: rgba(255, 255, 255, 0.9);
-                    padding: 16px 20px;
-                    border-radius: 16px;
+                .form-block-label {
+                    font-size: 12px;
                     font-weight: 700;
-                    color: #18181b;
-                    font-size: 15px;
-                    border: 1px solid rgba(0, 0, 0, 0.03);
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                    color: #94a3b8;
+                    margin-bottom: 6px;
+                    display: block;
                 }
-                .data-tile-luxury input {
-                    background: #fff;
-                    padding: 16px 20px;
-                    border-radius: 16px;
-                    font-weight: 700;
-                    color: #18181b;
-                    font-size: 15px;
-                    border: 2px solid #4f46e5;
-                    outline: none;
-                }
-
-                .email-tile .value-display { background: rgba(244, 244, 245, 0.5); border-style: dashed; }
-                .security-tag {
-                    font-size: 9px;
-                    font-weight: 800;
-                    background: #fff;
-                    padding: 4px 10px;
-                    border-radius: 100px;
-                    color: #10b981;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-                }
-
-                .mfa-status-banner {
-                    padding: 20px;
-                    border-radius: 20px;
-                    border: 1px solid transparent;
-                }
-                .mfa-status-banner.secure { background: #ecfdf5; border-color: #d1fae5; color: #065f46; }
-                .mfa-status-banner.warning { background: #fff7ed; border-color: #ffedd5; color: #9a3412; }
-                
-                .mfa-status-banner .status-title { font-size: 10px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 2px; }
-                .mfa-status-banner .status-desc { font-size: 12px; font-weight: 600; opacity: 0.7; }
-
-                .activity-dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid #4f46e5; flex-shrink: 0; }
-                .btn-view-all { background: none; border: none; padding: 0; }
-
-                /* Modal Luxury Overlays */
-                .modal-luxury-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(9, 9, 11, 0.8);
-                    backdrop-filter: blur(20px);
+                .read-only-pane {
+                    background: #f1f5f9;
+                    padding: 14px 16px;
+                    border-radius: 10px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    font-size: 14.5px;
+                    border: 1px solid #e2e8f0;
                     display: flex;
                     align-items: center;
-                    justify-content: center;
-                    z-index: 10000;
-                    padding: 20px;
+                    gap: 10px;
                 }
-                .modal-container { background: #fff; width: 100%; max-width: 600px; border-radius: 40px; overflow: hidden; }
-                .btn-close-luxury { background: #f4f4f5; border: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
-                .btn-close-luxury:hover { background: #ef4444; color: #fff; transform: rotate(90deg); }
-
-                /* Hover States & Transitions */
-                .hover-up:hover { transform: translateY(-4px); }
-                .animate-slide-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-                @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-                .animate-spin { animation: spin 1s linear infinite; }
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-                /* Responsive Adjustments */
-                @media (max-width: 991.98px) {
-                    .container-fluid { padding-left: 20px !important; padding-right: 20px !important; }
-                    .identity-card { position: relative !important; top: 0 !important; margin-bottom: 30px; }
-                    .px-5 { padding-left: 30px !important; padding-right: 30px !important; }
+                .read-only-pane-email {
+                    background: #ffffff;
+                    border-style: dashed;
+                }
+                .security-banner {
+                    border-radius: 14px;
+                    padding: 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+                .security-banner.active {
+                    background: #f0fdf4;
+                    border: 1px solid #dcfce7;
+                    color: #15803d;
+                }
+                .security-banner.inactive {
+                    background: #fef2f2;
+                    border: 1px solid #fee2e2;
+                    color: #b91c1c;
                 }
             `}</style>
+
+            <div className="luxury-profile-bg-flare" />
+
+            {/* 1. HEADER NAVIGATION */}
+            <div className="profile-header">
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Tag color="blue" style={{ textTransform: 'uppercase', borderRadius: 6, fontWeight: 700 }}>ACTIVE SESSION</Tag>
+                    </div>
+                    <Title level={3} style={{ margin: 0, fontWeight: 850, letterSpacing: '-0.03em' }}>My Digital Identity</Title>
+                    <Text type="secondary" style={{ fontSize: 13.5 }}>Analyze personal infrastructure allocation and cryptographic keys.</Text>
+                </div>
+                <Button 
+                    danger 
+                    icon={<LogOut size={15} />} 
+                    onClick={handleLogout}
+                    style={{ borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                >
+                    Sign Out
+                </Button>
+            </div>
+
+            {/* 2. RESPONSIVE GRID */}
+            <Row gutter={[24, 24]} className="profile-grid">
+                
+                {/* Left Profile Dashboard Card */}
+                <Col xs={24} lg={8}>
+                    <Card className="profile-master-card" style={{ textAlign: 'center', padding: '24px 0 12px' }}>
+                        <div className="avatar-ring-base">
+                            <Avatar 
+                                size={120} 
+                                src={`https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=1e293b&color=fff&size=240&bold=true`}
+                                style={{ border: '4px solid #ffffff', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}
+                            />
+                            <div className="avatar-edit-overlay">
+                                <Camera size={14} />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                            <Title level={4} style={{ margin: 0, fontWeight: 800 }}>{user?.firstName} {user?.lastName}</Title>
+                            <div style={{ marginTop: 6 }}>
+                                <Tag color="processing" style={{ borderRadius: 20, padding: '2px 12px', fontWeight: 700, border: 'none' }}>
+                                    {roleDisplay.toUpperCase()}
+                                </Tag>
+                            </div>
+                        </div>
+
+                        <Divider style={{ margin: '20px 0' }} />
+
+                        <div style={{ display: 'flex', justifyContent: 'space-around', padding: '0 16px' }}>
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Enlisted</div>
+                                <div style={{ fontWeight: 700, fontSize: 13.5, color: '#334155', marginTop: 2 }}>{formatDate(user?.createdAt)}</div>
+                            </div>
+                            <div style={{ width: 1, backgroundColor: '#f1f5f9' }} />
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Presence</div>
+                                <div style={{ fontWeight: 700, fontSize: 13.5, color: '#334155', marginTop: 2 }}>{lastLogin}</div>
+                            </div>
+                        </div>
+
+                        <Divider style={{ margin: '20px 0' }} />
+
+                        <div style={{ padding: '0 24px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <Button 
+                                type={isEditing ? "dashed" : "primary"} 
+                                danger={isEditing}
+                                block
+                                size="large"
+                                icon={isEditing ? <X size={16} /> : <Edit2 size={15} />}
+                                onClick={() => setIsEditing(!isEditing)}
+                                style={{ borderRadius: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                            >
+                                {isEditing ? 'Discard Edits' : 'Modify Identity Parameters'}
+                            </Button>
+                            <Button 
+                                block 
+                                size="large"
+                                icon={<Lock size={15} />} 
+                                onClick={() => setShowPasswordModal(true)}
+                                style={{ borderRadius: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                            >
+                                Rotate Passkeys
+                            </Button>
+                        </div>
+                    </Card>
+                </Col>
+
+                {/* Right Configuration and Log Panes */}
+                <Col xs={24} lg={16}>
+                    <Space direction="vertical" size={24} style={{ width: '100%' }}>
+                        
+                        {/* Central Attribute Vault */}
+                        <Card 
+                            className="profile-master-card"
+                            title={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 800, fontSize: 15, color: '#1e293b' }}>
+                                    <User size={18} style={{ color: '#3b82f6' }} />
+                                    <span>Personal Attribute Vault</span>
+                                </div>
+                            }
+                            extra={isEditing && (
+                                <Button 
+                                    type="primary" 
+                                    loading={saving} 
+                                    onClick={handleSave} 
+                                    icon={<CheckCircle2 size={15} />}
+                                    style={{ borderRadius: 6, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+                                >
+                                    Sync Changes
+                                </Button>
+                            )}
+                        >
+                            <Row gutter={[20, 20]}>
+                                <Col xs={24} md={12}>
+                                    <span className="form-block-label">Legal First Name</span>
+                                    {isEditing ? (
+                                        <Input 
+                                            size="large"
+                                            value={formData.firstName} 
+                                            onChange={e => setFormData({...formData, firstName: e.target.value})}
+                                            style={{ borderRadius: 10 }}
+                                        />
+                                    ) : (
+                                        <div className="read-only-pane">{user?.firstName || '—'}</div>
+                                    )}
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <span className="form-block-label">Legal Last Name</span>
+                                    {isEditing ? (
+                                        <Input 
+                                            size="large"
+                                            value={formData.lastName} 
+                                            onChange={e => setFormData({...formData, lastName: e.target.value})}
+                                            style={{ borderRadius: 10 }}
+                                        />
+                                    ) : (
+                                        <div className="read-only-pane">{user?.lastName || '—'}</div>
+                                    )}
+                                </Col>
+                                <Col span={24}>
+                                    <span className="form-block-label">Registered Node Mailbox</span>
+                                    <div className="read-only-pane read-only-pane-email" style={{ justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <Mail size={15} style={{ color: '#94a3b8' }} />
+                                            <span style={{ color: '#64748b' }}>{user?.email || '—'}</span>
+                                        </div>
+                                        <Tag color="success" icon={<Fingerprint size={11} style={{ marginBottom: -2, marginRight: 2 }} />} style={{ margin: 0, borderRadius: 6, fontWeight: 650 }}>VERIFIED</Tag>
+                                    </div>
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <span className="form-block-label">Mobile Relay Connection</span>
+                                    {isEditing ? (
+                                        <Input 
+                                            size="large"
+                                            placeholder="+1 000 000 0000"
+                                            prefix={<Smartphone size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                                            value={formData.phone} 
+                                            onChange={e => setFormData({...formData, phone: e.target.value})}
+                                            style={{ borderRadius: 10 }}
+                                        />
+                                    ) : (
+                                        <div className="read-only-pane">
+                                            <Smartphone size={15} style={{ color: '#94a3b8' }} />
+                                            <span>{user?.phone || 'Unlinked'}</span>
+                                        </div>
+                                    )}
+                                </Col>
+                                <Col xs={24} md={12}>
+                                    <span className="form-block-label">System Clearance Scope</span>
+                                    <div className="read-only-pane" style={{ background: '#eff6ff', border: '1px solid #dbeafe', color: '#2563eb' }}>
+                                        <Shield size={15} />
+                                        <span style={{ textTransform: 'uppercase', fontSize: 13, letterSpacing: 0.5 }}>{roleDisplay}</span>
+                                    </div>
+                                </Col>
+                            </Row>
+                        </Card>
+
+                        <Row gutter={[24, 24]}>
+                            {/* Security Metrics Panel */}
+                            <Col xs={24} md={12}>
+                                <Card 
+                                    className="profile-master-card"
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 800, color: '#334155' }}>
+                                            <ShieldCheck size={16} style={{ color: '#10b981' }} />
+                                            <span>Multi-Factor Shield</span>
+                                        </div>
+                                    }
+                                >
+                                    <div className={`security-banner ${user?.twoFactorEnabled ? 'active' : 'inactive'}`}>
+                                        <div>
+                                            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{user?.twoFactorEnabled ? 'Shield Synced' : 'Shield Disabled'}</div>
+                                            <div style={{ fontSize: 12.5, marginTop: 2, opacity: 0.9 }}>{user?.twoFactorEnabled ? 'Encrypted Session Enforced' : 'Vulnerable To Infiltration'}</div>
+                                        </div>
+                                        {user?.twoFactorEnabled ? <ShieldCheck size={24} /> : <ShieldAlert size={24} />}
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748b', fontSize: 12.5 }}>
+                                        <Info size={14} />
+                                        <span>Last security sweep: Today, automatic.</span>
+                                    </div>
+                                </Card>
+                            </Col>
+
+                            {/* Activity Stream Card */}
+                            <Col xs={24} md={12}>
+                                <Card 
+                                    className="profile-master-card"
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 800, color: '#334155' }}>
+                                            <Activity size={16} style={{ color: '#f59e0b' }} />
+                                            <span>Deployment Stream</span>
+                                        </div>
+                                    }
+                                >
+                                    <Timeline 
+                                        mode="left"
+                                        style={{ marginTop: 8, marginBottom: -12 }}
+                                        items={[
+                                            {
+                                                color: 'blue',
+                                                children: (
+                                                    <div>
+                                                        <div style={{ fontWeight: 700, fontSize: 12.5, color: '#1e293b' }}>Session Established</div>
+                                                        <div style={{ fontSize: 11, color: '#64748b' }}>Today, 2:45 PM (Chrome / Mac)</div>
+                                                    </div>
+                                                ),
+                                            },
+                                            {
+                                                color: 'gray',
+                                                children: (
+                                                    <div>
+                                                        <div style={{ fontWeight: 600, fontSize: 12.5, color: '#64748b' }}>Pipeline Context Refreshed</div>
+                                                        <div style={{ fontSize: 11, color: '#94a3b8' }}>Yesterday, 11:20 AM</div>
+                                                    </div>
+                                                ),
+                                            },
+                                        ]}
+                                    />
+                                </Card>
+                            </Col>
+                        </Row>
+                    </Space>
+                </Col>
+            </Row>
+
+            {/* DYNAMIC KEY ROTATION MODAL */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: '#0f172a' }}>
+                        <Key size={18} style={{ color: '#4f46e5' }} />
+                        <span>Access Key Rotation</span>
+                    </div>
+                }
+                open={showPasswordModal}
+                onCancel={() => {
+                    setShowPasswordModal(false);
+                    setPwdData({ current: '', new: '', confirm: '' });
+                }}
+                footer={[
+                    <Button 
+                        key="cancel" 
+                        onClick={() => setShowPasswordModal(false)}
+                        style={{ borderRadius: 6 }}
+                    >
+                        Abort Rotation
+                    </Button>,
+                    <Button 
+                        key="confirm" 
+                        type="primary" 
+                        loading={saving}
+                        disabled={!pwdData.current || !pwdData.new || (pwdData.new !== pwdData.confirm)}
+                        onClick={handlePasswordChange}
+                        style={{ borderRadius: 6, fontWeight: 600 }}
+                    >
+                        Commit New Keys
+                    </Button>
+                ]}
+                centered
+                width={450}
+            >
+                <div style={{ padding: '12px 0' }}>
+                    <Paragraph type="secondary" style={{ fontSize: 12.5, marginBottom: 20 }}>
+                        Cycle your administrative passkeys. Ensure the confirmation vector matches to commit encryption nodes.
+                    </Paragraph>
+
+                    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                        <div>
+                            <span className="form-block-label">Current Vector Token</span>
+                            <Input.Password 
+                                size="large"
+                                placeholder="••••••••"
+                                value={pwdData.current}
+                                onChange={e => setPwdData({...pwdData, current: e.target.value})}
+                                style={{ borderRadius: 8 }}
+                                prefix={<Lock size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                            />
+                        </div>
+                        <Divider style={{ margin: '4px 0' }} />
+                        <div>
+                            <span className="form-block-label">Target Rotation Passkey</span>
+                            <Input.Password 
+                                size="large"
+                                placeholder="••••••••"
+                                value={pwdData.new}
+                                onChange={e => setPwdData({...pwdData, new: e.target.value})}
+                                style={{ borderRadius: 8 }}
+                                prefix={<Key size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                            />
+                        </div>
+                        <div>
+                            <span className="form-block-label">Confirm Verification Payload</span>
+                            <Input.Password 
+                                size="large"
+                                placeholder="••••••••"
+                                value={pwdData.confirm}
+                                onChange={e => setPwdData({...pwdData, confirm: e.target.value})}
+                                style={{ borderRadius: 8 }}
+                                status={pwdData.confirm && pwdData.new !== pwdData.confirm ? "error" : ""}
+                                prefix={<ShieldCheck size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                            />
+                        </div>
+                    </Space>
+                </div>
+            </Modal>
+
         </div>
     );
 };

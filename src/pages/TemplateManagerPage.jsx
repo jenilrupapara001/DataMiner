@@ -1,12 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../services/db';
 import {
-    Plus, Edit2, Trash2, Search, Clock, Check, Loader2, Tag, Zap, Sparkles, Target, Settings, LayoutTemplate
+    Plus, Edit2, Trash2, Search, Clock, Check, Loader2, Zap, Sparkles, Target, Settings, LayoutTemplate, BarChart2
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { 
+    Space, Button, Segmented, Table, Modal, Card, Statistic, Input, Row, Col, 
+    Typography, Tag, Tooltip, Form, InputNumber, Select, Divider, message as antdMessage 
+} from 'antd';
+
+const { Title, Text } = Typography;
+const { Option, OptGroup } = Select;
+const { TextArea } = Input;
 
 const TemplateManagerPage = () => {
+    const [messageApi, contextHolder] = antdMessage.useMessage();
+
     // Shared State
     const [activeTab, setActiveTab] = useState('task'); // 'task' or 'goal'
     const [loading, setLoading] = useState(true);
@@ -54,50 +64,33 @@ const TemplateManagerPage = () => {
     const [aiSuggestions, setAiSuggestions] = useState(null);
     const [error, setError] = useState(null);
 
-    // Data Fetching
-    useEffect(() => {
-        const fetchTemplates = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const [taskRes, goalRes] = await Promise.all([
-                    db.getTaskTemplates(),
-                    db.getGoalTemplates()
-                ]);
-                
-                // Handle both direct array or wrapped {success, data} response
-                const taskData = Array.isArray(taskRes) ? taskRes : (taskRes?.data || []);
-                const goalData = Array.isArray(goalRes) ? goalRes : (goalRes?.data || []);
-                
-                setTaskTemplates(taskData);
-                setGoalTemplates(goalData);
-            } catch (err) {
-                console.error('Failed to fetch templates:', err);
-                setError('Failed to load templates. Please refresh.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        
-        fetchTemplates();
+    // Data Fetching - defined at component scope to fix scoping runtime error
+    const fetchTemplates = useCallback(async (showIndicator = true) => {
+        if (showIndicator) setLoading(true);
+        setError(null);
+        try {
+            const [taskRes, goalRes] = await Promise.all([
+                db.getTaskTemplates(),
+                db.getGoalTemplates()
+            ]);
+            
+            // Handle both direct array or wrapped {success, data} response
+            const taskData = Array.isArray(taskRes) ? taskRes : (taskRes?.data || []);
+            const goalData = Array.isArray(goalRes) ? goalRes : (goalRes?.data || []);
+            
+            setTaskTemplates(taskData);
+            setGoalTemplates(goalData);
+        } catch (err) {
+            console.error('Failed to fetch templates:', err);
+            setError('Failed to load templates. Please refresh.');
+        } finally {
+            if (showIndicator) setLoading(false);
+        }
     }, []);
 
-    // Show page loader when loading
-    if (loading) {
-        return <PageLoader message="Loading Templates..." />;
-    }
-
-    // Show error state
-    if (error) {
-        return (
-            <div className="container-fluid py-4 text-center">
-                <div className="alert alert-danger">{error}</div>
-                <button className="btn btn-primary" onClick={() => window.location.reload()}>
-                    Refresh Page
-                </button>
-            </div>
-        );
-    }
+    useEffect(() => {
+        fetchTemplates(true);
+    }, [fetchTemplates]);
 
     // Task Modal Handlers
     const handleOpenTaskModal = (template = null) => {
@@ -111,28 +104,39 @@ const TemplateManagerPage = () => {
     };
 
     const handleTaskSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         setIsSubmitting(true);
         try {
             if (currentTaskTemplate) await db.updateTemplate(currentTaskTemplate._id, taskFormData);
             else await db.createTemplate(taskFormData);
-            await fetchTemplates();
+            await fetchTemplates(false);
             setShowTaskModal(false);
+            messageApi.success(`Task template ${currentTaskTemplate ? 'updated' : 'created'} successfully`);
         } catch (error) {
-            alert('Failed to save task template.');
+            messageApi.error('Failed to save task template.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleDeleteTask = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this task template?')) return;
-        try {
-            await db.deleteTemplate(id);
-            await fetchTemplates();
-        } catch (error) {
-            alert('Failed to delete task template.');
-        }
+    const handleDeleteTask = (id) => {
+        Modal.confirm({
+            title: 'Delete Task Template',
+            content: 'Are you sure you want to delete this task template? This action cannot be undone.',
+            okText: 'Delete',
+            okType: 'danger',
+            cancelText: 'Cancel',
+            centered: true,
+            onOk: async () => {
+                try {
+                    await db.deleteTemplate(id);
+                    await fetchTemplates(false);
+                    messageApi.success('Task template deleted successfully');
+                } catch (error) {
+                    messageApi.error('Failed to delete task template.');
+                }
+            }
+        });
     };
 
     // Goal Modal Handlers
@@ -147,7 +151,7 @@ const TemplateManagerPage = () => {
     };
 
     const handleGoalSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         setIsSubmitting(true);
         try {
             const cleanedGoals = goalFormData.goals.filter(g => g.title.trim() !== '');
@@ -155,23 +159,34 @@ const TemplateManagerPage = () => {
 
             if (currentGoalTemplate) await db.updateGoalTemplate(currentGoalTemplate._id, payload);
             else await db.createGoalTemplate(payload);
-            await fetchTemplates();
+            await fetchTemplates(false);
             setShowGoalModal(false);
+            messageApi.success(`Goal roadmap ${currentGoalTemplate ? 'updated' : 'published'} successfully`);
         } catch (error) {
-            alert('Failed to save goal template.');
+            messageApi.error('Failed to save goal template.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleDeleteGoal = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this goal template?')) return;
-        try {
-            await db.deleteGoalTemplate(id);
-            await fetchTemplates();
-        } catch (error) {
-            alert('Failed to delete goal template.');
-        }
+    const handleDeleteGoal = (id) => {
+        Modal.confirm({
+            title: 'Delete Goal Template',
+            content: 'Are you sure you want to delete this goal roadmap template? This action cannot be undone.',
+            okText: 'Delete',
+            okType: 'danger',
+            cancelText: 'Cancel',
+            centered: true,
+            onOk: async () => {
+                try {
+                    await db.deleteGoalTemplate(id);
+                    await fetchTemplates(false);
+                    messageApi.success('Goal template deleted successfully');
+                } catch (error) {
+                    messageApi.error('Failed to delete goal template.');
+                }
+            }
+        });
     };
 
     // AI Generation Handlers
@@ -180,19 +195,19 @@ const TemplateManagerPage = () => {
         setAiGenerating(true);
         try {
             // Re-using the strategy/goals/ai-preview endpoint 
-            // Note: In a production app, we might want a specific template suggestion endpoint
             const data = await db.request('/strategy/goals/ai-preview', {
                 method: 'POST',
                 body: JSON.stringify({ intent: aiPrompt })
             });
             if (data.success) {
                 setAiSuggestions(data.data);
+                messageApi.success('AI Strategy generated successfully!');
             } else {
-                alert(data.message || 'AI failed to generate suggestions.');
+                messageApi.error(data.message || 'AI failed to generate suggestions.');
             }
         } catch (error) {
             console.error('AI Generation Error:', error);
-            alert('Failed to connect to AI engine.');
+            messageApi.error('Failed to connect to AI engine.');
         } finally {
             setAiGenerating(false);
         }
@@ -224,12 +239,13 @@ const TemplateManagerPage = () => {
                     });
                 }
             }
-            await fetchTemplates();
+            await fetchTemplates(false);
             setShowAiModal(false);
             setAiSuggestions(null);
             setAiPrompt('');
+            messageApi.success('AI Generated templates adopted successfully');
         } catch (error) {
-            alert('Failed to save AI suggestions.');
+            messageApi.error('Failed to adopt AI suggestions.');
         } finally {
             setIsSubmitting(false);
         }
@@ -271,462 +287,847 @@ const TemplateManagerPage = () => {
     };
 
     // Search Filtering
-    const filteredTasks = taskTemplates.filter(t => t.title?.toLowerCase().includes(searchTerm.toLowerCase()) || t.category?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const filteredGoals = goalTemplates.filter(t => t.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredTasks = useMemo(() => 
+        taskTemplates.filter(t => 
+            t.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            t.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        ), [taskTemplates, searchTerm]
+    );
 
-    const getPriorityBadge = (p) => {
-        switch (p) {
-            case 'URGENT': return { bg: '#fee2e2', color: '#ef4444' };
-            case 'HIGH': return { bg: '#fef3c7', color: '#f59e0b' };
-            case 'MEDIUM': return { bg: '#dbeafe', color: '#3b82f6' };
-            default: return { bg: '#f3f4f6', color: '#6b7280' };
+    const filteredGoals = useMemo(() => 
+        goalTemplates.filter(t => 
+            t.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        ), [goalTemplates, searchTerm]
+    );
+
+    const getPriorityColor = (p) => {
+        switch (String(p).toUpperCase()) {
+            case 'URGENT': return 'red';
+            case 'HIGH': return 'orange';
+            case 'MEDIUM': return 'blue';
+            case 'LOW': return 'default';
+            default: return 'default';
         }
     };
 
+    // Table columns for Task mode
+    const taskColumns = [
+        {
+            title: 'Task Details',
+            dataIndex: 'title',
+            key: 'title',
+            render: (title, record) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Text strong style={{ fontSize: '13px', color: '#1e293b', letterSpacing: '-0.01em' }}>{title}</Text>
+                    <Text type="secondary" ellipsis={{ tooltip: record.description }} style={{ fontSize: '11.5px', maxWidth: 400, marginTop: 2 }}>
+                        {record.description || 'No workflow guidelines configured.'}
+                    </Text>
+                </div>
+            ),
+            sorter: (a, b) => a.title.localeCompare(b.title),
+        },
+        {
+            title: 'Process Type',
+            dataIndex: 'type',
+            key: 'type',
+            width: 180,
+            render: (type) => {
+                const label = taskTypes.find(t => t.value === type)?.label || type;
+                return (
+                    <Space size={6} style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+                        <Settings size={13} className="text-slate-400" />
+                        <span>{label}</span>
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Target Category',
+            dataIndex: 'category',
+            key: 'category',
+            width: 180,
+            render: (category) => (
+                <Tag color="purple" bordered={false} style={{ borderRadius: 6, fontWeight: 600, fontSize: 10.5, padding: '1px 8px' }}>
+                    {category}
+                </Tag>
+            )
+        },
+        {
+            title: 'Priority',
+            dataIndex: 'priority',
+            key: 'priority',
+            width: 120,
+            render: (priority) => (
+                <Tag color={getPriorityColor(priority)} style={{ borderRadius: 10, fontWeight: 700, fontSize: 9.5, padding: '0 8px', textTransform: 'uppercase' }}>
+                    {priority}
+                </Tag>
+            )
+        },
+        {
+            title: 'Actions',
+            key: 'actions',
+            fixed: 'right',
+            align: 'right',
+            width: 110,
+            render: (_, record) => (
+                <Space size={4}>
+                    <Tooltip title="Edit Template">
+                        <Button 
+                            type="text" 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleOpenTaskModal(record)} 
+                            icon={<Edit2 size={13} className="text-indigo-600" />} 
+                        />
+                    </Tooltip>
+                    <Tooltip title="Delete Template">
+                        <Button 
+                            type="text" 
+                            danger 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleDeleteTask(record._id)} 
+                            icon={<Trash2 size={13} />} 
+                        />
+                    </Tooltip>
+                </Space>
+            )
+        }
+    ];
+
+    // Table columns for Goal mode
+    const goalColumns = [
+        {
+            title: 'Roadmap Blueprint',
+            dataIndex: 'name',
+            key: 'name',
+            render: (name, record) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Text strong style={{ fontSize: '13px', color: '#1e293b', letterSpacing: '-0.01em' }}>{name}</Text>
+                    <Text type="secondary" ellipsis={{ tooltip: record.description }} style={{ fontSize: '11.5px', maxWidth: 450, marginTop: 2 }}>
+                        {record.description || 'No blueprint roadmap overview defined.'}
+                    </Text>
+                </div>
+            ),
+            sorter: (a, b) => a.name.localeCompare(b.name),
+        },
+        {
+            title: 'Metrics Pipeline',
+            dataIndex: 'goals',
+            key: 'goals',
+            render: (goals = []) => {
+                if (!goals?.length) return <Text type="secondary" italic style={{ fontSize: 11 }}>No metrics mapped</Text>;
+                return (
+                    <Space wrap size={4}>
+                        {goals.slice(0, 3).map((g, idx) => (
+                            <Tag key={idx} bordered={false} color="blue" style={{ borderRadius: 6, fontWeight: 600, fontSize: 10 }}>
+                                {String(g.metric || 'GMS').replace('_', ' ')}
+                            </Tag>
+                        ))}
+                        {goals.length > 3 && (
+                            <Tag bordered={false} style={{ borderRadius: 6, fontWeight: 700, fontSize: 10, color: '#64748b', background: '#f1f5f9' }}>
+                                +{goals.length - 3}
+                            </Tag>
+                        )}
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Actions',
+            key: 'actions',
+            fixed: 'right',
+            align: 'right',
+            width: 110,
+            render: (_, record) => (
+                <Space size={4}>
+                    <Tooltip title="Edit Roadmap">
+                        <Button 
+                            type="text" 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleOpenGoalModal(record)} 
+                            icon={<Edit2 size={13} className="text-indigo-600" />} 
+                        />
+                    </Tooltip>
+                    <Tooltip title="Delete Roadmap">
+                        <Button 
+                            type="text" 
+                            danger 
+                            shape="circle" 
+                            size="small" 
+                            onClick={() => handleDeleteGoal(record._id)} 
+                            icon={<Trash2 size={13} />} 
+                        />
+                    </Tooltip>
+                </Space>
+            )
+        }
+    ];
+
+    // Show page loader when loading
+    if (loading && taskTemplates.length === 0 && goalTemplates.length === 0) {
+        return <PageLoader message="Loading Automation Templates..." />;
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+                {contextHolder}
+                <div style={{ textAlign: 'center', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
+                    <Title level={4} style={{ color: '#ef4444' }}>Configuration Error</Title>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 20 }}>{error}</Text>
+                    <Button type="primary" size="large" shape="round" onClick={() => fetchTemplates(true)}>Refresh Interface</Button>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="container-fluid py-4 min-vh-100" style={{ backgroundColor: '#f8fafc' }}>
-      {loading && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-          <LoadingIndicator type="line-simple" size="md" />
-        </div>
-      )}
-             {/* Action Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <div className="d-flex align-items-center gap-3">
-                    <div className="p-2 rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)', color: 'white' }}>
-                        <LayoutTemplate size={24} />
+        <div className="templates-page-container">
+            {contextHolder}
+            {loading && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
+                    <LoadingIndicator type="line-simple" size="md" />
+                </div>
+            )}
+            <style>{`
+                .templates-page-container {
+                    display: flex;
+                    flex-direction: column;
+                    height: calc(100vh - 60px);
+                    overflow: hidden;
+                    background-color: #f8fafc;
+                    margin: -1.5rem -2rem;
+                }
+                .templates-header {
+                    flex-shrink: 0;
+                    background: #ffffff;
+                    padding: 16px 24px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    z-index: 10;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+                }
+                .templates-scroll-content {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 24px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 24px;
+                }
+                .metric-stat-card {
+                    border-radius: 16px !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.01) !important;
+                    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+                }
+                .metric-stat-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05) !important;
+                }
+                .card-accent-icon {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+                .segmented-templates .ant-segmented-item-selected {
+                    background-color: #4f46e5 !important;
+                    color: #ffffff !important;
+                    font-weight: 650 !important;
+                }
+                .custom-glass-modal .ant-modal-content {
+                    border-radius: 20px !important;
+                    overflow: hidden !important;
+                }
+                .custom-glass-modal .ant-modal-header {
+                    background: #f8fafc !important;
+                    border-bottom: 1px solid #f1f5f9 !important;
+                    padding: 16px 24px !important;
+                    margin: 0 !important;
+                }
+                .custom-glass-modal .ant-modal-footer {
+                    background: #f8fafc !important;
+                    border-top: 1px solid #f1f5f9 !important;
+                    padding: 16px 24px !important;
+                    margin: 0 !important;
+                }
+                
+                .metric-form-row {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 12px;
+                    margin-bottom: 10px;
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+                    transition: all 0.2s ease;
+                }
+                .metric-form-row:hover {
+                    border-color: #cbd5e1;
+                    box-shadow: 0 3px 6px rgba(0,0,0,0.03);
+                }
+
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-up {
+                    animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                }
+                
+                @media (max-width: 768px) {
+                    .templates-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 12px;
+                    }
+                    .templates-page-container {
+                        margin: -0.75rem;
+                        height: auto;
+                        overflow: visible;
+                    }
+                }
+            `}</style>
+
+            {/* Dynamic Header Area */}
+            <div className="templates-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ padding: '8px', background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)', borderRadius: '10px', color: '#fff', display: 'flex' }}>
+                        <LayoutTemplate size={22} />
                     </div>
                     <div>
-                        <h4 className="fw-bold text-dark mb-0" style={{ letterSpacing: '-0.02em' }}>Template Manager</h4>
-                        <p className="text-muted small mb-0 mt-1">Configure automated workflows, actions, and roadmaps.</p>
+                        <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                            Template <span style={{ color: '#4F46E5' }}>Manager</span>
+                        </Title>
+                        <Text type="secondary" style={{ fontSize: '13px' }}>Configure automated workflows, actions, and roadmaps.</Text>
                     </div>
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                    <button
-                        className="btn btn-outline-primary d-flex align-items-center gap-2 rounded-pill px-4 fw-bold"
+
+                <Space size={8} wrap>
+                    <Button 
                         onClick={() => setShowAiModal(true)}
-                        style={{ borderColor: '#6366F1', color: '#4F46E5', backgroundColor: '#EEF2FF' }}
+                        icon={<Sparkles size={14} />}
+                        shape="round"
+                        style={{ 
+                            borderColor: '#6366F1', 
+                            color: '#4F46E5', 
+                            backgroundColor: '#EEF2FF', 
+                            fontWeight: 700,
+                            height: 38,
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
                     >
-                        <Sparkles size={16} />
-                        AI Generate
-                    </button>
-                    <button
-                        className="btn btn-primary d-flex align-items-center gap-2 shadow-sm rounded-pill px-4 fw-bold"
-                        onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()}
-                        style={{ background: '#4F46E5', border: 'none' }}
+                        AI Builder
+                    </Button>
+                    <Button 
+                        type="primary" 
+                        onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()} 
+                        icon={<Plus size={15} />}
+                        shape="round"
+                        style={{ 
+                            height: 38, 
+                            backgroundColor: '#4F46E5', 
+                            borderColor: '#4F46E5', 
+                            fontWeight: 700,
+                            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
                     >
-                        <Plus size={16} />
-                        {activeTab === 'task' ? 'Create Task Outline' : 'Create Roadmap'}
-                    </button>
-                </div>
+                        {activeTab === 'task' ? 'New Task Outline' : 'New Roadmap'}
+                    </Button>
+                </Space>
             </div>
 
-            {/* Quick Stats / Overview row */}
-            <div className="row g-3 mb-4">
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '16px' }}>
-                        <div className="card-body p-4 d-flex align-items-center gap-3">
-                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px', backgroundColor: '#eef2ff', color: '#4f46e5' }}>
-                                <Zap size={20} />
-                            </div>
-                            <div>
-                                <h3 className="fw-bold mb-0 text-dark">{taskTemplates.length}</h3>
-                                <p className="text-muted small fw-medium mb-0 text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '10px' }}>Task Templates</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '16px' }}>
-                        <div className="card-body p-4 d-flex align-items-center gap-3">
-                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px', backgroundColor: '#ecfdf5', color: '#10b981' }}>
-                                <Target size={20} />
-                            </div>
-                            <div>
-                                <h3 className="fw-bold mb-0 text-dark">{goalTemplates.length}</h3>
-                                <p className="text-muted small fw-medium mb-0 text-uppercase" style={{ letterSpacing: '0.05em', fontSize: '10px' }}>Goal Roadmaps</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Tabs & Search integration */}
-                <div className="col-md-6">
-                    <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '16px' }}>
-                        <div className="card-body p-3 d-flex flex-column justify-content-center">
-                            <div className="d-flex align-items-center justify-content-between p-1 bg-light rounded-pill mb-3">
-                                <button
-                                    onClick={() => setActiveTab('task')}
-                                    className={`btn rounded-pill flex-fill fw-bold border-0 ${activeTab === 'task' ? 'bg-white shadow-sm text-primary' : 'text-muted'}`}
-                                    style={{ fontSize: '13px', padding: '8px 16px', transition: 'all 0.2s' }}
-                                >
-                                    Task Templates
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('goal')}
-                                    className={`btn rounded-pill flex-fill fw-bold border-0 ${activeTab === 'goal' ? 'bg-white shadow-sm text-primary' : 'text-muted'}`}
-                                    style={{ fontSize: '13px', padding: '8px 16px', transition: 'all 0.2s' }}
-                                >
-                                    Goal Roadmaps
-                                </button>
-                            </div>
-
-                            <div className="input-group input-group-sm">
-                                <span className="input-group-text bg-white border-end-0 rounded-start-pill ps-3 text-muted"><Search size={14} /></span>
-                                <input
-                                    type="text"
-                                    className="form-control border-start-0 rounded-end-pill ps-2"
-                                    placeholder={`Search ${activeTab === 'task' ? 'task models' : 'presets'}...`}
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    style={{ boxShadow: 'none', fontSize: '13px', backgroundColor: '#fff' }}
+            {/* Scrollable Body */}
+            <div className="templates-scroll-content animate-fade-up">
+                
+                {/* KPI Banner Section */}
+                <Row gutter={[16, 16]}>
+                    <Col xs={24} sm={12} md={6}>
+                        <Card className="metric-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div className="card-accent-icon" style={{ backgroundColor: '#EEF2FF', color: '#4F46E5' }}>
+                                    <Zap size={22} />
+                                </div>
+                                <Statistic 
+                                    title={<Text strong style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Templates</Text>}
+                                    value={taskTemplates.length}
+                                    styles={{ content: { fontSize: 28, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' } }}
                                 />
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </Card>
+                    </Col>
+                    
+                    <Col xs={24} sm={12} md={6}>
+                        <Card className="metric-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div className="card-accent-icon" style={{ backgroundColor: '#ECFDF5', color: '#10B981' }}>
+                                    <Target size={22} />
+                                </div>
+                                <Statistic 
+                                    title={<Text strong style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goal Roadmaps</Text>}
+                                    value={goalTemplates.length}
+                                    styles={{ content: { fontSize: 28, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' } }}
+                                />
+                            </div>
+                        </Card>
+                    </Col>
+
+                    {/* Unified Controller Card */}
+                    <Col xs={24} md={12}>
+                        <Card className="metric-stat-card" styles={{ body: { padding: '12px 16px' } }} style={{ height: '100%' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', height: '100%' }}>
+                                <Segmented 
+                                    className="segmented-templates"
+                                    size="large"
+                                    value={activeTab}
+                                    onChange={setActiveTab}
+                                    style={{ padding: 4, fontWeight: 600 }}
+                                    options={[
+                                        { label: <Space size={6}><Zap size={13} /><span>Tasks</span></Space>, value: 'task' },
+                                        { label: <Space size={6}><Target size={13} /><span>Roadmaps</span></Space>, value: 'goal' }
+                                    ]}
+                                />
+                                <div style={{ flex: 1, minWidth: 180 }}>
+                                    <Input 
+                                        size="large"
+                                        placeholder={`Search ${activeTab === 'task' ? 'models' : 'roadmaps'}...`}
+                                        prefix={<Search size={14} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        allowClear
+                                        style={{ borderRadius: 30, backgroundColor: '#f8fafc' }}
+                                    />
+                                </div>
+                            </div>
+                        </Card>
+                    </Col>
+                </Row>
+
+                {/* Content Table Grid */}
+                <Card 
+                    styles={{ body: { padding: 0 } }}
+                    style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}
+                >
+                    <Table 
+                        dataSource={activeTab === 'task' ? filteredTasks : filteredGoals}
+                        columns={activeTab === 'task' ? taskColumns : goalColumns}
+                        rowKey="_id"
+                        pagination={{
+                            pageSize: 12,
+                            showTotal: (total, range) => <span style={{ fontSize: 11, color: '#64748b' }}>Viewing {range[0]}-{range[1]} of {total} templates</span>,
+                            position: ['bottomRight']
+                        }}
+                        scroll={{ x: 900, y: 'calc(100vh - 370px)' }}
+                        size="middle"
+                        className="custom-table-ant"
+                    />
+                </Card>
             </div>
 
-            {/* Content Table */}
-            <div className="card border-0 shadow-sm overflow-hidden" style={{ borderRadius: '16px' }}>
-                <div className="table-responsive">
-                    <table className="table table-hover align-middle mb-0" style={{ minWidth: '800px' }}>
-                        <thead style={{ backgroundColor: '#f9fafb' }}>
-                            <tr>
-                                {activeTab === 'task' ? (
-                                    <>
-                                        <th style={headerStyle}>Task Details</th>
-                                        <th style={headerStyle}>Process Type</th>
-                                        <th style={headerStyle}>Target Category</th>
-                                        <th style={headerStyle}>Priority</th>
-                                        <th style={headerStyle} className="text-end pe-4">Manage</th>
-                                    </>
-                                ) : (
-                                    <>
-                                        <th style={headerStyle}>Roadmap Details</th>
-                                        <th style={headerStyle}>Metrics Tracked</th>
-                                        <th style={headerStyle} className="text-end pe-4">Manage</th>
-                                    </>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white border-top-0">
-                            {activeTab === 'task' ? (
-                                 filteredTasks.length === 0 ? <tr><td colSpan="5" className="text-center py-5 text-muted small">No task configurations found.</td></tr> :
-                                     filteredTasks.map(t => {
-                                         const priorityRender = getPriorityBadge(t.priority);
-                                         return (
-                                             <tr key={t._id}>
-                                                 <td className="ps-4 py-3 border-light opacity-75">
-                                                     <div className="fw-bold text-dark fs-6" style={{ letterSpacing: '-0.01em' }}>{t.title}</div>
-                                                     <div className="small text-muted text-truncate mt-1" style={{ maxWidth: '350px' }}>{t.description || 'No description provided'}</div>
-                                                 </td>
-                                                 <td className="py-3 border-light">
-                                                     <div className="d-flex align-items-center gap-2 small fw-medium" style={{ color: '#4b5563' }}>
-                                                         <Settings size={14} />
-                                                         {taskTypes.find(type => type.value === t.type)?.label || t.type}
-                                                     </div>
-                                                 </td>
-                                                 <td className="py-3 border-light">
-                                                     <span className="badge rounded-pill fw-medium" style={{ backgroundColor: '#f1f5f9', color: '#64748b', fontSize: '11px', border: '1px solid #e2e8f0' }}>
-                                                         {t.category}
-                                                     </span>
-                                                 </td>
-                                                 <td className="py-3 border-light">
-                                                     <span className="badge rounded-pill" style={{ backgroundColor: priorityRender.bg, color: priorityRender.color, fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>
-                                                         {t.priority}
-                                                     </span>
-                                                 </td>
-                                                 <td className="py-3 text-end pe-4 border-light">
-                                                     <div className="d-flex justify-content-end gap-2">
-                                                         <button className="btn btn-sm btn-light rounded-circle shadow-sm" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleOpenTaskModal(t)}>
-                                                             <Edit2 size={14} className="text-primary" />
-                                                         </button>
-                                                         <button className="btn btn-sm btn-light rounded-circle shadow-sm text-danger" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteTask(t._id)}>
-                                                             <Trash2 size={14} />
-                                                         </button>
-                                                     </div>
-                                                 </td>
-                                             </tr>
-                                         )
-                                     })
-                             ) : (
-                                 filteredGoals.length === 0 ? <tr><td colSpan="3" className="text-center py-5 text-muted small">No roadmaps created yet.</td></tr> :
-                                     filteredGoals.map(t => (
-                                         <tr key={t._id}>
-                                             <td className="ps-4 py-3 border-light">
-                                                 <div className="fw-bold text-dark fs-6" style={{ letterSpacing: '-0.01em' }}>{t.name}</div>
-                                                 <div className="small text-muted text-truncate mt-1" style={{ maxWidth: '450px' }}>{t.description || 'No description provided'}</div>
-                                             </td>
-                                             <td className="py-3 border-light">
-                                                 <div className="d-flex flex-wrap gap-1">
-                                                     {t.goals?.slice(0, 3).map((g, i) => (
-                                                         <span key={i} className="badge rounded-pill bg-light text-dark fw-medium" style={{ fontSize: '11px' }}>
-                                                             {g.metric.replace('_', ' ')}
-                                                         </span>
-                                                     ))}
-                                                     {t.goals?.length > 3 && (
-                                                         <span className="badge rounded-pill bg-light text-muted fw-bold" style={{ fontSize: '11px' }}>
-                                                             +{t.goals.length - 3} more
-                                                         </span>
-                                                     )}
-                                                 </div>
-                                             </td>
-                                             <td className="py-3 text-end pe-4 border-light">
-                                                 <div className="d-flex justify-content-end gap-2">
-                                                     <button className="btn btn-sm btn-light rounded-circle shadow-sm" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleOpenGoalModal(t)}>
-                                                         <Edit2 size={14} className="text-primary" />
-                                                     </button>
-                                                     <button className="btn btn-sm btn-light rounded-circle shadow-sm text-danger" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDeleteGoal(t._id)}>
-                                                         <Trash2 size={14} />
-                                                     </button>
-                                                 </div>
-                                             </td>
-                                         </tr>
-                                     ))
-                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            {/* ==================== MODAL CONTEXTS ==================== */}
 
-            {/* Task Template Modal */}
-            {showTaskModal && (
-                <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
-                        <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-                            <div className="modal-header bg-light border-0 px-4 py-3">
-                                <h5 className="modal-title fw-bold text-dark" style={{ fontSize: '1.1rem' }}>
-                                    {currentTaskTemplate ? 'Edit Task Process' : 'New Task Process'}
-                                </h5>
-                                <button onClick={() => setShowTaskModal(false)} className="btn-close shadow-none"></button>
-                            </div>
-                            <form onSubmit={handleTaskSubmit}>
-                                <div className="modal-body p-4 bg-white">
-                                    <div className="mb-3">
-                                        <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Task Name</label>
-                                        <input type="text" className="form-control" style={{ borderRadius: '10px' }} value={taskFormData.title} onChange={(e) => setTaskFormData({ ...taskFormData, title: e.target.value })} required />
-                                    </div>
-                                    <div className="mb-4">
-                                        <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Process Steps / Guidelines</label>
-                                        <textarea className="form-control" rows="3" style={{ borderRadius: '10px' }} value={taskFormData.description} onChange={(e) => setTaskFormData({ ...taskFormData, description: e.target.value })} required></textarea>
-                                    </div>
-                                    <div className="row g-3 mb-3">
-                                        <div className="col-md-6">
-                                            <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Department/Category</label>
-                                            <select className="form-select" style={{ borderRadius: '10px' }} value={taskFormData.category} onChange={(e) => setTaskFormData({ ...taskFormData, category: e.target.value })}>
-                                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Action Type</label>
-                                            <select className="form-select" style={{ borderRadius: '10px' }} value={taskFormData.type} onChange={(e) => setTaskFormData({ ...taskFormData, type: e.target.value })}>
-                                                {taskTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="row g-3">
-                                        <div className="col-md-6">
-                                            <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Initial Priority</label>
-                                            <select className="form-select" style={{ borderRadius: '10px' }} value={taskFormData.priority} onChange={(e) => setTaskFormData({ ...taskFormData, priority: e.target.value })}>
-                                                {priorities.map(p => <option key={p} value={p}>{p}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="col-md-6">
-                                            <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Estimate (Minutes)</label>
-                                            <div className="input-group">
-                                                <input type="number" className="form-control" style={{ borderStartStartRadius: '10px', borderEndStartRadius: '10px' }} value={taskFormData.estimatedMinutes} onChange={(e) => setTaskFormData({ ...taskFormData, estimatedMinutes: parseInt(e.target.value) || 0 })} />
-                                                <span className="input-group-text bg-light text-muted" style={{ borderStartEndRadius: '10px', borderEndEndRadius: '10px' }}><Clock size={16} /></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="modal-footer bg-light border-0 px-4 py-3">
-                                    <button type="button" className="btn btn-outline-secondary rounded-pill px-4" onClick={() => setShowTaskModal(false)}>Cancel</button>
-                                    <button type="submit" className="btn btn-primary rounded-pill px-4 border-0 d-flex align-items-center gap-2" style={{ background: '#4F46E5' }} disabled={isSubmitting}>
-                                        {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
-                                        {currentTaskTemplate ? 'Update Process' : 'Save Process'}
-                                    </button>
-                                </div>
-                            </form>
+            {/* 1. Task Creation / Edit Modal */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
+                            <Zap size={16} />
                         </div>
+                        <span style={{ fontWeight: 700 }}>{currentTaskTemplate ? 'Edit Task Protocol' : 'New Task Protocol'}</span>
+                    </div>
+                }
+                open={showTaskModal}
+                onCancel={() => setShowTaskModal(false)}
+                centered
+                destroyOnHidden
+                width={580}
+                className="custom-glass-modal"
+                footer={[
+                    <Button key="back" shape="round" onClick={() => setShowTaskModal(false)}>
+                        Cancel
+                    </Button>,
+                    <Button 
+                        key="submit" 
+                        type="primary" 
+                        shape="round" 
+                        loading={isSubmitting}
+                        onClick={handleTaskSubmit}
+                        style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
+                    >
+                        {currentTaskTemplate ? 'Save Protocol' : 'Create Protocol'}
+                    </Button>
+                ]}
+            >
+                <Form layout="vertical" style={{ padding: '12px 0' }} onFinish={handleTaskSubmit}>
+                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Protocol Title</span>} required>
+                        <Input 
+                            size="large"
+                            placeholder="e.g. Frontpage SEO Content Alignment" 
+                            value={taskFormData.title}
+                            onChange={e => setTaskFormData({ ...taskFormData, title: e.target.value })}
+                            style={{ borderRadius: 10 }}
+                        />
+                    </Form.Item>
+
+                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Workflow Guidelines</span>} required>
+                        <TextArea 
+                            rows={4}
+                            placeholder="Outline the execution instructions and acceptance criteria..."
+                            value={taskFormData.description}
+                            onChange={e => setTaskFormData({ ...taskFormData, description: e.target.value })}
+                            style={{ borderRadius: 10 }}
+                        />
+                    </Form.Item>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Operational Area</span>}>
+                                <Select 
+                                    size="large"
+                                    value={taskFormData.category}
+                                    onChange={v => setTaskFormData({ ...taskFormData, category: v })}
+                                    style={{ width: '100%' }}
+                                >
+                                    {categories.map(c => <Option key={c} value={c}>{c}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Process Type</span>}>
+                                <Select 
+                                    size="large"
+                                    value={taskFormData.type}
+                                    onChange={v => setTaskFormData({ ...taskFormData, type: v })}
+                                    style={{ width: '100%' }}
+                                >
+                                    {taskTypes.map(t => <Option key={t.value} value={t.value}>{t.label}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Static Priority</span>}>
+                                <Select 
+                                    size="large"
+                                    value={taskFormData.priority}
+                                    onChange={v => setTaskFormData({ ...taskFormData, priority: v })}
+                                    style={{ width: '100%' }}
+                                >
+                                    {priorities.map(p => <Option key={p} value={p}>{p}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Estimated Depth</span>}>
+                                <InputNumber 
+                                    size="large"
+                                    min={1}
+                                    addonAfter={<span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> min</span>}
+                                    value={taskFormData.estimatedMinutes}
+                                    onChange={v => setTaskFormData({ ...taskFormData, estimatedMinutes: v || 0 })}
+                                    style={{ width: '100%' }}
+                                />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                </Form>
+            </Modal>
+
+            {/* 2. Goal Roadmap Creation / Edit Modal */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ background: '#ECFDF5', color: '#10B981', padding: 6, borderRadius: 8, display: 'flex' }}>
+                            <Target size={16} />
+                        </div>
+                        <span style={{ fontWeight: 700 }}>{currentGoalTemplate ? 'Configure Roadmap Blueprint' : 'New Roadmap Blueprint'}</span>
+                    </div>
+                }
+                open={showGoalModal}
+                onCancel={() => setShowGoalModal(false)}
+                centered
+                destroyOnHidden
+                width={760}
+                className="custom-glass-modal"
+                footer={[
+                    <Button key="back" shape="round" onClick={() => setShowGoalModal(false)}>
+                        Cancel
+                    </Button>,
+                    <Button 
+                        key="submit" 
+                        type="primary" 
+                        shape="round" 
+                        loading={isSubmitting}
+                        onClick={handleGoalSubmit}
+                        style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
+                    >
+                        {currentGoalTemplate ? 'Save Blueprint' : 'Deploy Blueprint'}
+                    </Button>
+                ]}
+            >
+                <div style={{ padding: '12px 0' }}>
+                    <Form layout="vertical">
+                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Roadmap Blueprint Name</span>} required>
+                            <Input 
+                                size="large"
+                                placeholder="e.g. High Velocity Q3 Acceleration Roadmap" 
+                                value={goalFormData.name}
+                                onChange={e => setGoalFormData({ ...goalFormData, name: e.target.value })}
+                                style={{ borderRadius: 10 }}
+                            />
+                        </Form.Item>
+
+                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Strategy Synopsis</span>}>
+                            <TextArea 
+                                rows={2}
+                                placeholder="Document executive strategy objectives..."
+                                value={goalFormData.description}
+                                onChange={e => setGoalFormData({ ...goalFormData, description: e.target.value })}
+                                style={{ borderRadius: 10 }}
+                            />
+                        </Form.Item>
+                    </Form>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 4 }}>
+                        <Text strong style={{ fontSize: 13, color: '#334155', letterSpacing: '-0.01em' }}>Pipeline Performance Triggers</Text>
+                        <Button 
+                            size="small" 
+                            shape="round" 
+                            icon={<Plus size={13} />} 
+                            onClick={addSubGoal}
+                            style={{ fontSize: 11, fontWeight: 600 }}
+                        >
+                            Add Metric Trigger
+                        </Button>
+                    </div>
+
+                    <div style={{ 
+                        maxHeight: 300, 
+                        overflowY: 'auto', 
+                        padding: 12, 
+                        background: '#f8fafc', 
+                        borderRadius: 16, 
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        {goalFormData.goals.map((g, idx) => (
+                            <div key={idx} className="metric-form-row">
+                                <div style={{ flex: 3 }}>
+                                    <Input 
+                                        placeholder="Measurement Objective" 
+                                        value={g.title} 
+                                        onChange={e => updateSubGoal(idx, 'title', e.target.value)}
+                                        style={{ border: 'none', background: '#f1f5f9', borderRadius: 8 }}
+                                    />
+                                </div>
+                                <div style={{ flex: 2 }}>
+                                    <Select 
+                                        style={{ width: '100%' }} 
+                                        value={g.metric} 
+                                        onChange={v => updateSubGoal(idx, 'metric', v)}
+                                        popupClassName="custom-dropdown-render"
+                                    >
+                                        <Option value="NONE">Metric Pipeline</Option>
+                                        <OptGroup label="Revenue Hub">
+                                            <Option value="GMS">GMS (₹)</Option>
+                                            <Option value="ORDER_COUNT">Order Volume</Option>
+                                            <Option value="CONVERSION_RATE">Conv. Rate %</Option>
+                                        </OptGroup>
+                                        <OptGroup label="Paid Acquisition">
+                                            <Option value="ACOS">ACOS %</Option>
+                                            <Option value="ADS_SPEND">Ads Spend (₹)</Option>
+                                            <Option value="ROI">ROI Multipier</Option>
+                                        </OptGroup>
+                                        <OptGroup label="Catalog Index">
+                                            <Option value="LISTING">Listing Opt. %</Option>
+                                            <Option value="PRODUCTS_TO_LIST">Products Scale</Option>
+                                            <Option value="LQS">Quality Index</Option>
+                                        </OptGroup>
+                                        <OptGroup label="Fulfillment & Margin">
+                                            <Option value="PROFIT">Margin (₹)</Option>
+                                            <Option value="PO_FULFILLMENT">PO Velocity %</Option>
+                                        </OptGroup>
+                                    </Select>
+                                </div>
+                                <div style={{ flex: 2 }}>
+                                    <Input 
+                                        type="number"
+                                        placeholder="Baseline Goal" 
+                                        value={g.targetValue || ''} 
+                                        onChange={e => updateSubGoal(idx, 'targetValue', e.target.value)}
+                                        style={{ border: 'none', background: '#f1f5f9', borderRadius: 8 }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                    <Button 
+                                        type="text" 
+                                        danger 
+                                        icon={<Trash2 size={15} />} 
+                                        onClick={() => removeSubGoal(idx)} 
+                                    />
+                                </div>
+                            </div>
+                        ))}
+
+                        {goalFormData.goals.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
+                                <BarChart2 size={24} style={{ opacity: 0.5, marginBottom: 8 }} />
+                                <div style={{ fontSize: 12, fontWeight: 500 }}>Establish roadmap metrics to evaluate execution baseline.</div>
+                            </div>
+                        )}
                     </div>
                 </div>
-            )}
+            </Modal>
 
-            {/* Goal Template Modal */}
-            {showGoalModal && (
-                <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(2px)' }}>
-                    <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-                            <div className="modal-header bg-light border-0 px-4 py-3">
-                                <h5 className="modal-title fw-bold text-dark" style={{ fontSize: '1.1rem' }}>
-                                    {currentGoalTemplate ? 'Edit Roadmap' : 'New Roadmap Settings'}
-                                </h5>
-                                <button onClick={() => setShowGoalModal(false)} className="btn-close shadow-none"></button>
-                            </div>
-                            <form onSubmit={handleGoalSubmit}>
-                                <div className="modal-body p-4 bg-white">
-                                    <div className="mb-3">
-                                        <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Roadmap Title</label>
-                                        <input type="text" className="form-control" style={{ borderRadius: '10px' }} placeholder="e.g. Q4 Elite Growth Protocol" value={goalFormData.name} onChange={(e) => setGoalFormData({ ...goalFormData, name: e.target.value })} required />
-                                    </div>
-                                    <div className="mb-4">
-                                        <label className="form-label small fw-bold text-uppercase text-muted" style={{ letterSpacing: '0.05em', fontSize: '11px' }}>Executive Summary</label>
-                                        <textarea className="form-control" rows="2" style={{ borderRadius: '10px' }} placeholder="Outline the success criteria..." value={goalFormData.description} onChange={(e) => setGoalFormData({ ...goalFormData, description: e.target.value })}></textarea>
-                                    </div>
+            {/* 3. AI Generation Workbench Modal */}
+            <Modal
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
+                            <Sparkles size={16} fill="currentColor" />
+                        </div>
+                        <span style={{ fontWeight: 700 }}>AI Strategy Workbench</span>
+                    </div>
+                }
+                open={showAiModal}
+                onCancel={() => {
+                    setShowAiModal(false);
+                    setAiSuggestions(null);
+                    setAiPrompt('');
+                }}
+                centered
+                destroyOnHidden
+                width={700}
+                className="custom-glass-modal"
+                footer={null}
+            >
+                <div style={{ padding: '12px 0' }}>
+                    <div style={{ marginBottom: 20 }}>
+                        <Text type="secondary" style={{ display: 'block', fontSize: '12.5px' }}>
+                            Formulate automated blueprint pipelines instantly. Input your desired scaling intent (e.g., "Aggressive electronics expansion for festive quarter") and watch Antigravity draft the roadmap.
+                        </Text>
+                    </div>
 
-                                    <div className="d-flex justify-content-between align-items-center mb-3">
-                                        <h6 className="fw-bold mb-0 text-dark">Trackable Metrics & Goals</h6>
-                                        <button type="button" className="btn btn-sm btn-light fw-medium d-flex align-items-center gap-1 rounded-pill px-3 shadow-sm border" onClick={addSubGoal}>
-                                            <Plus size={14} /> Add Metric
-                                        </button>
-                                    </div>
-
-                                    <div className="bg-light p-3 border" style={{ borderRadius: '12px' }}>
-                                        {goalFormData.goals.map((g, idx) => (
-                                            <div key={idx} className="row g-2 mb-2 align-items-center bg-white p-2 rounded border shadow-sm mx-0">
-                                                <div className="col-md-5">
-                                                    <input type="text" className="form-control form-control-sm border-0 bg-light" placeholder="Measurement Title" value={g.title} onChange={(e) => updateSubGoal(idx, 'title', e.target.value)} required />
-                                                </div>
-                                                <div className="col-md-3">
-                                                    <select className="form-select form-select-sm border-0 bg-light fw-medium text-muted" value={g.metric} onChange={(e) => updateSubGoal(idx, 'metric', e.target.value)}>
-                                                        <option value="NONE">Metric Type</option>
-                                                        <optgroup label="Sales">
-                                                            <option value="GMS">GMS (₹)</option>
-                                                            <option value="ORDER_COUNT">Orders</option>
-                                                            <option value="CONVERSION_RATE">Conv. %</option>
-                                                        </optgroup>
-                                                        <optgroup label="Ads">
-                                                            <option value="ACOS">ACOS %</option>
-                                                            <option value="ADS_SPEND">Spend (₹)</option>
-                                                            <option value="ROI">ROI %</option>
-                                                        </optgroup>
-                                                        <optgroup label="Content">
-                                                            <option value="LISTING">Listing %</option>
-                                                            <option value="PRODUCTS_TO_LIST">Products</option>
-                                                            <option value="LQS">LQS</option>
-                                                        </optgroup>
-                                                        <optgroup label="Ops">
-                                                            <option value="PROFIT">Profit (₹)</option>
-                                                            <option value="PO_FULFILLMENT">PO %</option>
-                                                        </optgroup>
-                                                    </select>
-                                                </div>
-                                                <div className="col-md-3">
-                                                    <input type="number" className="form-control form-control-sm border-0 bg-light" placeholder="Baseline Target" value={g.targetValue || ''} onChange={(e) => updateSubGoal(idx, 'targetValue', e.target.value)} />
-                                                </div>
-                                                <div className="col-md-1 text-center">
-                                                    <button type="button" className="btn btn-icon btn-sm text-danger" onClick={() => removeSubGoal(idx)}><Trash2 size={16} /></button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {goalFormData.goals.length === 0 && (
-                                            <div className="text-center text-muted small py-4 fw-medium">
-                                                Start adding focus areas to build out your roadmap.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="modal-footer bg-light border-0 px-4 py-3">
-                                    <button type="button" className="btn btn-outline-secondary rounded-pill px-4" onClick={() => setShowGoalModal(false)}>Cancel</button>
-                                    <button type="submit" className="btn btn-primary rounded-pill px-4 border-0 d-flex align-items-center gap-2" style={{ background: '#4F46E5' }} disabled={isSubmitting}>
-                                        {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
-                                        {currentGoalTemplate ? 'Save Changes' : 'Publish Roadmap'}
-                                    </button>
-                                </div>
-                            </form>
+                    <div style={{ 
+                        background: '#f8fafc', 
+                        border: '1px solid #e2e8f0', 
+                        borderRadius: 20, 
+                        padding: 8, 
+                        display: 'flex', 
+                        flexDirection: 'column',
+                        transition: 'all 0.3s',
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.01)'
+                    }}>
+                        <TextArea 
+                            rows={3} 
+                            placeholder="Define operational blueprint parameters..."
+                            value={aiPrompt}
+                            onChange={e => setAiPrompt(e.target.value)}
+                            style={{ border: 'none', background: 'transparent', boxShadow: 'none', resize: 'none' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 4 }}>
+                            <Button 
+                                type="primary" 
+                                icon={aiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} 
+                                disabled={aiGenerating || !aiPrompt.trim()} 
+                                onClick={handleAiGenerate}
+                                shape="round"
+                                style={{ 
+                                    background: '#4F46E5', 
+                                    borderColor: '#4F46E5', 
+                                    fontWeight: 700,
+                                    fontSize: 12,
+                                    letterSpacing: '0.02em'
+                                }}
+                            >
+                                Draft Pipeline
+                            </Button>
                         </div>
                     </div>
-                </div>
-            )}
-            {/* AI Generation Modal */}
-            {showAiModal && (
-                <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)' }}>
-                    <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content border-0 shadow-2xl" style={{ borderRadius: '24px', overflow: 'hidden' }}>
-                            <div className="modal-header border-0 px-4 pt-4 pb-0 bg-white">
-                                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 mb-2">
-                                    <Sparkles size={24} />
+
+                    {aiSuggestions && (
+                        <div style={{ 
+                            marginTop: 24, 
+                            background: '#ffffff', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: 20, 
+                            padding: 20,
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.03)',
+                            animation: 'fadeInUp 0.4s ease-out forwards'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                                <div style={{ flex: 1, paddingRight: 16 }}>
+                                    <Tag color="indigo" style={{ borderRadius: 6, fontWeight: 700, fontSize: 9, marginBottom: 8 }}>STRATEGIC BLUEPRINT</Tag>
+                                    <h4 style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', margin: '0 0 4px 0' }}>{aiSuggestions.name}</h4>
+                                    <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{aiSuggestions.strategy}</p>
                                 </div>
-                                <button onClick={() => setShowAiModal(false)} className="btn-close shadow-none position-absolute top-0 end-0 m-4"></button>
+                                <Button 
+                                    type="primary" 
+                                    shape="round" 
+                                    loading={isSubmitting} 
+                                    onClick={() => handleAcceptSuggestion(aiSuggestions)}
+                                    style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12 }}
+                                >
+                                    Adopt Blueprint
+                                </Button>
                             </div>
-                            <div className="modal-body p-4 bg-white">
-                                <div className="mb-4">
-                                    <h4 className="fw-black text-slate-900 tracking-tight mb-2">AI Strategy Workbench</h4>
-                                    <p className="text-slate-500 small">Enter your growth intent (e.g., "Increase sales for Electronics in Q4") and let our AI engine draft your strategy templates.</p>
-                                </div>
 
-                                <div className="mb-4">
-                                    <div className="input-group bg-slate-50 border border-slate-200 rounded-3xl p-2 transition-all focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/5">
-                                        <textarea 
-                                            className="form-control border-0 bg-transparent shadow-none" 
-                                            rows="3" 
-                                            placeholder="What is your current mission?"
-                                            value={aiPrompt}
-                                            onChange={(e) => setAiPrompt(e.target.value)}
-                                            style={{ resize: 'none' }}
-                                        />
-                                        <button 
-                                            className="btn btn-indigo shadow-lg shadow-indigo-200 rounded-2xl px-4 align-self-end fw-black text-uppercase tracking-widest"
-                                            style={{ background: '#4F46E5', color: 'white', fontSize: '11px', height: '40px', marginBottom: '8px', marginRight: '8px' }}
-                                            onClick={handleAiGenerate}
-                                            disabled={aiGenerating || !aiPrompt.trim()}
-                                        >
-                                            {aiGenerating ? <Loader2 className="animate-spin" size={16} /> : 'Think'}
-                                        </button>
-                                    </div>
-                                </div>
+                            <Divider style={{ margin: '16px 0' }} />
 
-                                {aiSuggestions && (
-                                    <div className="bg-slate-50 rounded-3xl p-6 border border-slate-200 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <div className="d-flex justify-content-between align-items-start mb-6">
-                                            <div>
-                                                <span className="badge bg-indigo-100 text-indigo-600 rounded-pill px-3 py-2 mb-2 fw-bold" style={{ fontSize: '10px' }}>STRATEGIC DRAFT</span>
-                                                <h5 className="fw-black text-slate-900 mb-1">{aiSuggestions.name}</h5>
-                                                <p className="text-slate-500 small mb-0">{aiSuggestions.strategy}</p>
-                                            </div>
-                                            <button 
-                                                className="btn btn-dark rounded-pill px-4 fw-bold" 
-                                                onClick={() => handleAcceptSuggestion(aiSuggestions)}
-                                                disabled={isSubmitting}
-                                            >
-                                                {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Save as Template'}
-                                            </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {(aiSuggestions.milestones || []).map((m, idx) => (
+                                    <div key={idx} style={{ 
+                                        background: '#f8fafc', 
+                                        border: '1px solid #f1f5f9', 
+                                        borderRadius: 12, 
+                                        padding: '12px 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 12
+                                    }}>
+                                        <div style={{ 
+                                            width: 24, 
+                                            height: 24, 
+                                            background: '#e2e8f0', 
+                                            borderRadius: '50%', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            color: '#475569'
+                                        }}>
+                                            {idx + 1}
                                         </div>
-
-                                        <div className="space-y-3">
-                                            {aiSuggestions.milestones?.map((m, i) => (
-                                                <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 d-flex align-items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black">{i + 1}</div>
-                                                    <div className="flex-1">
-                                                        <h6 className="fw-bold text-slate-900 mb-0 small">{m.objective}</h6>
-                                                        <p className="text-slate-400 mb-0" style={{ fontSize: '11px' }}>Strategic focus for this phase</p>
-                                                    </div>
-                                                    <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full fw-bold" style={{ fontSize: '10px' }}>AUTO</div>
-                                                </div>
-                                            ))}
+                                        <div style={{ flex: 1 }}>
+                                            <h6 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: 12.5 }}>{m.objective}</h6>
                                         </div>
+                                        <Tag color="emerald" bordered={false} style={{ borderRadius: 6, fontWeight: 800, fontSize: 9 }}>AUTOMATED</Tag>
                                     </div>
-                                )}
+                                ))}
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
-            )}
+            </Modal>
+
         </div>
     );
-};
-
-const headerStyle = {
-    color: '#64748b',
-    fontWeight: 700,
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    padding: '12px 16px',
-    borderBottom: '2px solid #e2e8f0',
-    borderTop: 'none'
 };
 
 export default TemplateManagerPage;

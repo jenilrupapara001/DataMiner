@@ -30,7 +30,8 @@ import {
     ChevronRight,
     LogOut,
     ListTodo,
-    CheckCircle
+    CheckCircle,
+    Bell
 } from 'lucide-react';
 import { RetailOpsWordmark, RetailOpsMark } from './BrandLogo';
 import './Sidebar.css';
@@ -95,6 +96,7 @@ const Sidebar = () => {
                 { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'asintracker_view' },
                 // NOTE: "Scrape Tasks" has been removed for now as requested
                 { label: 'Scheduled Runs', icon: Clock, to: '/scheduled-runs', permission: 'scraping_view' },
+                { label: 'Alert Board', icon: Bell, to: '/alerts', permission: 'dashboard_view' },
             ],
         },
         {

@@ -34,7 +34,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
       ]}
       width={940}
       centered
-      destroyOnClose
+      destroyOnHidden
       styles={{
         body: { padding: '20px 24px', backgroundColor: '#ffffff' },
         footer: { padding: '12px 24px', borderTop: '1px solid #f1f5f9', background: '#fff', margin: 0 }

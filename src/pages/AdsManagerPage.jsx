@@ -39,6 +39,9 @@ import EmptyState from '../components/common/EmptyState';
 import AdsImportModal from '../components/ads/AdsImportModal';
 import Chart from 'react-apexcharts';
 import { CHART_COLORS, areaChartOptions } from '../utils/chartTheme';
+import DateRangePicker from '../components/common/DateRangePicker';
+import { useDateRange } from '../contexts/DateRangeContext';
+import { format } from 'date-fns';
 
 // Define canonical metrics dictionary for custom dashboard selector from screenshot
 const METRIC_MAP = {
@@ -311,6 +314,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
 };
 
 export default function AdsManagerPage() {
+  const { startDate, endDate, updateDateRange } = useDateRange();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
 
@@ -371,7 +375,6 @@ export default function AdsManagerPage() {
   // Filtering and Grouping States
   const [groupBy, setGroupBy] = useState('asin');
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
@@ -445,8 +448,8 @@ export default function AdsManagerPage() {
         search: searchQuery
       };
       if (selectedSeller) params.sellerId = selectedSeller;
-      if (dateRange.start) params.startDate = dateRange.start;
-      if (dateRange.end) params.endDate = dateRange.end;
+      if (startDate) params.startDate = format(startDate, 'yyyy-MM-dd');
+      if (endDate) params.endDate = format(endDate, 'yyyy-MM-dd');
 
       const res = await adsApi.getAdsManagerData(params);
       if (res.success) {
@@ -458,7 +461,7 @@ export default function AdsManagerPage() {
     } finally {
       setLoading(false);
     }
-  }, [groupBy, searchQuery, dateRange, selectedSeller]);
+  }, [groupBy, searchQuery, startDate, endDate, selectedSeller]);
 
   useEffect(() => {
     fetchAdsData();
@@ -774,13 +777,12 @@ export default function AdsManagerPage() {
             />
           </div>
 
-          {/* Elegant Inline Date Inputs */}
-          <div className="d-flex align-items-center gap-1 border bg-white rounded-2 px-2 shadow-sm" style={{ height: '32px', border: '1px solid #d9d9d9' }}>
-            <Calendar size={13} className="text-secondary" />
-            <input type="date" className="border-0 bg-transparent small fw-bold text-dark py-0" style={{ outline: 'none', fontSize: '11px', width: '105px' }} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} />
-            <span className="text-muted px-1" style={{ fontSize: '10px' }}>—</span>
-            <input type="date" className="border-0 bg-transparent small fw-bold text-dark py-0" style={{ outline: 'none', fontSize: '11px', width: '105px' }} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} />
-          </div>
+          {/* Elegant Shared DateRangePicker from Header */}
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onDateChange={(type, s, e) => updateDateRange({ startDate: s, endDate: e, rangeType: type })}
+          />
 
           <Button 
             onClick={fetchAdsData} 
@@ -803,92 +805,78 @@ export default function AdsManagerPage() {
         </div>
       </div>
 
-      {/* MAIN DASHBOARD BODY (KPI + CHART WRAPPER) */}
-      <div className="flex-shrink-0 overflow-auto custom-scrollbar bg-light" style={{ maxHeight: showDashboardCharts ? '500px' : '0px', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-        <div className="p-4 d-flex flex-column gap-4">
-          {/* KPI GRID SECTION - PREMIUM RE-DESIGN */}
-          <Row gutter={[16, 16]}>
-            {[
-              { label: 'Total Ad Spend', key: 'spend', icon: <BarChart3 /> },
-              { label: 'Ad Sales', key: 'sales', icon: <FileBarChart /> },
-              { label: 'Total Sales (Ad+Org)', key: 'totalSales', icon: <Layers /> },
-              { label: 'ACOS', key: 'acos', icon: <Target /> },
-              { label: 'ROAS', key: 'roas', icon: <Activity /> },
-              { label: 'Orders', key: 'orders', icon: <TrendingUp /> },
-              { label: 'CPC', key: 'cpc', icon: <TrendingDown /> },
-              { label: 'CVR %', key: 'cvr', icon: <TrendingUp /> }
-            ].map((kpi, idx) => {
-              const meta = METRIC_MAP[kpi.key] || {};
-              const val = summaryData[kpi.key] || 0;
-              const isCurr = meta.type === 'currency';
-              const isPct = meta.type === 'percent';
-              const isRatio = meta.type === 'ratio';
+      {/* ANALYTICS MODULE AREA - COMPACT RECTANGULAR PILLS STYLE */}
+      <div className="flex-shrink-0 overflow-hidden bg-light" style={{ maxHeight: showDashboardCharts ? '48px' : '0px', transition: 'all 0.3s ease', opacity: showDashboardCharts ? 1 : 0 }}>
+        <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
+          {[
+            { label: 'Ad Spend', key: 'spend', color: '#4F46E5' },
+            { label: 'Ad Sales', key: 'sales', color: '#16a34a' },
+            { label: 'Total Sales', key: 'totalSales', color: '#0284c7' },
+            { label: 'ACOS', key: 'acos', color: '#dc2626' },
+            { label: 'ROAS', key: 'roas', color: '#d97706' },
+            { label: 'Orders', key: 'orders', color: '#9333EA' },
+            { label: 'CPC', key: 'cpc', color: '#ea580c' },
+            { label: 'CVR %', key: 'cvr', color: '#0d9488' }
+          ].map((kpi, idx) => {
+            const meta = METRIC_MAP[kpi.key] || {};
+            const val = summaryData[kpi.key] || 0;
+            const isCurr = meta.type === 'currency';
+            const isPct = meta.type === 'percent';
+            const isRatio = meta.type === 'ratio';
+            const formattedVal = isCurr ? '₹' + formatCompact(val) : isRatio ? val.toFixed(2) : isPct ? val.toFixed(1) + '%' : formatCompact(val);
 
-              const cardStyles = [
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)', iconColor: '#4F46E5', iconBg: '#EEF2FF', border: '#e2e8f0' }, // indigo
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)', iconColor: '#16a34a', iconBg: '#DCFCE7', border: '#bbf7d0' }, // emerald
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)', iconColor: '#0284c7', iconBg: '#E0F2FE', border: '#bae6fd' }, // blue
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #fef2f2 100%)', iconColor: '#dc2626', iconBg: '#FEE2E2', border: '#fecaca' }, // rose
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)', iconColor: '#d97706', iconBg: '#FEF3C7', border: '#fde68a' }, // amber
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)', iconColor: '#9333EA', iconBg: '#F3E8FF', border: '#e9d5ff' }, // purple
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #fff7ed 100%)', iconColor: '#ea580c', iconBg: '#FFEDD5', border: '#fed7aa' }, // orange
-                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%)', iconColor: '#0d9488', iconBg: '#CCFBF1', border: '#99f6e4' }  // teal
-              ];
-              const theme = cardStyles[idx % cardStyles.length];
+            return (
+              <div
+                key={idx}
+                className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild"
+                style={{
+                  height: '32px',
+                  minWidth: 'max-content',
+                  flexShrink: 0,
+                  borderRadius: '6px',
+                  borderColor: '#e4e4e7'
+                }}
+              >
+                <div
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: kpi.color,
+                    flexShrink: 0
+                  }}
+                />
+                <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
+                  {kpi.label}
+                </span>
+                <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
+                  {formattedVal}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-              return (
-                <Col xs={24} sm={12} md={6} key={idx}>
-                  <Card 
-                    variant="outlined" 
-                    className="hover-up-mild" 
-                    styles={{ body: { padding: '20px' } }}
-                    style={{ 
-                      background: theme.bg, 
-                      border: `1px solid ${theme.border}`, 
-                      borderRadius: '16px',
-                      boxShadow: '0 4px 12px -2px rgba(0,0,0,0.04)',
-                      height: '100%'
-                    }}
-                  >
-                    <div className="d-flex justify-content-between align-items-start mb-3">
-                      <Text strong style={{ color: '#64748b', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{kpi.label}</Text>
-                      <div className="d-flex align-items-center justify-content-center rounded-3" style={{ width: '32px', height: '32px', background: theme.iconBg, color: theme.iconColor }}>
-                        {React.cloneElement(kpi.icon, { size: 16 })}
-                      </div>
-                    </div>
-                    <Statistic 
-                      value={val} 
-                      formatter={(v) => {
-                        return isCurr ? '₹' + formatCompact(v) : isRatio ? v.toFixed(2) : isPct ? v.toFixed(1) + '%' : formatCompact(v);
-                      }}
-                      styles={{ content: { fontWeight: 800, fontSize: '22px', letterSpacing: '-0.02em', color: '#0f172a' } }}
-                    />
-                    <div className="mt-3 pt-2 border-top d-flex align-items-center gap-1 text-success fw-bold" style={{ fontSize: '11px', borderColor: 'rgba(0,0,0,0.05)' }}>
-                      <TrendingUp size={12} /> <span style={{ color: '#16a34a' }}>+2.4% vs Prev.</span>
-                    </div>
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-
-          {/* ADVANCED CHART MODULE - PREMIUM CARD CONTEXT */}
+      {/* CHART WRAPPER - COMPACT VERTICAL FOOTPRINT */}
+      <div className="flex-shrink-0 overflow-hidden bg-light" style={{ maxHeight: showDashboardCharts ? '420px' : '0px', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', opacity: showDashboardCharts ? 1 : 0 }}>
+        <div className="px-3 py-2">
           <Card 
-            styles={{ body: { padding: '12px' } }}
-            style={{ borderRadius: '16px', boxShadow: '0 4px 16px -4px rgba(0,0,0,0.05)', overflow: 'hidden' }}
+            styles={{ body: { padding: '10px 12px 12px 12px' } }}
+            style={{ borderRadius: '12px', boxShadow: '0 4px 12px -2px rgba(0,0,0,0.04)', overflow: 'hidden' }}
           >
-            <div className="px-2 py-2 d-flex align-items-center justify-content-between border-bottom mb-2">
+            <div className="px-1 py-1 d-flex align-items-center justify-content-between border-bottom mb-2">
               <div className="d-flex align-items-center gap-2">
-                <div style={{ width: '4px', height: '18px', background: '#4F46E5', borderRadius: '4px' }}></div>
-                <Text strong style={{ color: '#1e293b', fontSize: '14px' }}>Campaign Trends & Breakdown</Text>
+                <div style={{ width: '4px', height: '14px', background: '#4F46E5', borderRadius: '4px' }}></div>
+                <Text strong style={{ color: '#1e293b', fontSize: '13px' }}>Campaign Trends & Breakdown</Text>
               </div>
 
-              {/* PREMIUM NATIVE METRIC SELECTOR */}
               <Select
                 mode="multiple"
                 value={chartConfigMetrics}
                 onChange={(val) => setChartConfigMetrics(val)}
-                style={{ minWidth: 240, maxWidth: 350 }}
+                style={{ minWidth: 220, maxWidth: 320 }}
+                size="small"
                 placeholder="Select active metrics"
                 maxTagCount="responsive"
                 classNames={{ popup: { root: "premium-chart-dropdown" } }}
@@ -899,7 +887,7 @@ export default function AdsManagerPage() {
               />
             </div>
 
-            <div style={{ height: '300px' }}>
+            <div style={{ height: '320px' }}>
               {dynamicChartState.series.length > 0 ? (
                 <Chart
                   height="100%"
@@ -932,8 +920,8 @@ export default function AdsManagerPage() {
                       labels: { style: { colors: '#64748b', fontWeight: 600, fontSize: '10px' } }
                     },
                     yaxis: dynamicChartState.yaxis,
-                    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { top: 10, right: 20, bottom: 0, left: 20 } },
-                    legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '11px', markers: { radius: 12 } },
+                    grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { top: 5, right: 15, bottom: 10, left: 15 } },
+                    legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '10px', markers: { radius: 12 }, height: 25 },
                     tooltip: { shared: true, intersect: false, theme: 'light' }
                   }}
                 />
@@ -946,7 +934,7 @@ export default function AdsManagerPage() {
       </div>
 
       {/* TABULAR / DASHBOARD TOGGLE CONTROLS */}
-      <div className="bg-white border-top border-bottom px-4 py-3 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+      <div className="bg-white border-top border-bottom px-3 py-2 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
         <div className="d-flex align-items-center gap-3">
           <Button
             type={showDashboardCharts ? 'primary' : 'default'}
@@ -1158,7 +1146,7 @@ export default function AdsManagerPage() {
         </div>
 
         {/* Table Footer / Meta Status & PAGINATION */}
-        <div className="bg-white border-top px-4 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
+        <div className="bg-white border-top px-3 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
           <div className="d-flex align-items-center gap-3">
             <span className="smallest fw-bold text-zinc-500">
               TOTAL {data.length.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
@@ -1293,7 +1281,7 @@ export default function AdsManagerPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 12px 24px;
+          padding: 10px 16px;
           z-index: 20;
         }
         .ads-header-left {

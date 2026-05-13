@@ -1,528 +1,778 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    Card, 
+    Input, 
+    InputNumber, 
+    Switch, 
+    TimePicker, 
+    Button, 
+    Typography, 
+    Space, 
+    Row, 
+    Col, 
+    Select, 
+    Tooltip, 
+    message, 
+    notification, 
+    Divider, 
+    Alert, 
+    Progress, 
+    List,
+    Badge,
+    Form,
+    Modal,
+    Tag
+} from 'antd';
+import { 
+    Cloud, Mail, Clock, Sliders, Bell, 
+    User, HelpCircle, CheckCircle2, Info, 
+    AlertTriangle, Terminal, Save, Send, 
+    RefreshCw, Link2, ExternalLink, Settings,
+    Lock, AlertOctagon, Cpu
+} from 'lucide-react';
 import { db } from '../services/db';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
-import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(customParseFormat);
+
+const { Title, Text, Paragraph } = Typography;
+const { Option } = Select;
 
 const SettingsPage = () => {
-  const [settings, setSettings] = useState({
-    octoparseApiKey: '',
-    octoparseTaskId: '',
-    scrapePollInterval: '300000',
-    smtpHost: '',
-    smtpPort: '',
-    smtpUser: '',
-    smtpPass: '',
-    smtpSecure: 'tls',
-    notifications: true,
-    emailReports: false,
-    minLqsScore: 80,
-    minTitleLength: 80,
-    minImageCount: 7,
-    minDescLength: 1000,
-    AUTOMATION_SCHEDULE_TIME: '11:20',
-    AUTOMATION_AJIO_SCHEDULE_TIME: '12:00',
-    AUTOMATION_ENABLED: true,
-  });
-  const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
-  const [testingOctoparse, setTestingOctoparse] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+    const [settings, setSettings] = useState({
+        octoparseApiKey: '',
+        octoparseTaskId: '',
+        scrapePollInterval: '300000',
+        smtpHost: '',
+        smtpPort: '',
+        smtpUser: '',
+        smtpPass: '',
+        smtpSecure: 'tls',
+        notifications: true,
+        emailReports: false,
+        minLqsScore: 80,
+        minTitleLength: 80,
+        minImageCount: 7,
+        minDescLength: 1000,
+        AUTOMATION_SCHEDULE_TIME: '11:20',
+        AUTOMATION_AJIO_SCHEDULE_TIME: '12:00',
+        AUTOMATION_ENABLED: true,
+    });
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [testingOctoparse, setTestingOctoparse] = useState(false);
+    const [testResult, setTestResult] = useState(null);
+    
+    // Test Email Modal states
+    const [emailModalVisible, setEmailModalVisible] = useState(false);
+    const [testTargetEmail, setTestTargetEmail] = useState('');
+    const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
-  const loadSettings = async () => {
-    setLoading(true);
-    try {
-      const dbSettings = await db.getSettings();
-      if (dbSettings && Object.keys(dbSettings).length > 0) {
+    const [messageApi, messageContextHolder] = message.useMessage();
+    const [notificationApi, notificationContextHolder] = notification.useNotification();
+
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    useEffect(() => {
+        if (settings.smtpUser) {
+            setTestTargetEmail(settings.smtpUser);
+        }
+    }, [settings.smtpUser]);
+
+    const loadSettings = async () => {
+        setLoading(true);
+        try {
+            const dbSettings = await db.getSettings();
+            if (dbSettings && Object.keys(dbSettings).length > 0) {
+                setSettings(prev => ({
+                    ...prev,
+                    ...dbSettings
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            messageApi.error('Failed to load configurations');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFieldChange = (name, value) => {
         setSettings(prev => ({
-          ...prev,
-          ...dbSettings
+            ...prev,
+            [name]: value
         }));
-      }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    } finally {
-      setLoading(false);
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await db.updateSettings(settings);
+            notificationApi.success({
+                message: 'Configuration Synchronized',
+                description: 'System parameters have been updated and applied across the automation node.',
+                placement: 'topRight',
+                icon: <CheckCircle2 size={20} style={{ color: '#10b981' }} />
+            });
+        } catch (error) {
+            notificationApi.error({
+                message: 'Save Error',
+                description: error.message || 'Failed to commit configuration changes.',
+                placement: 'topRight'
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleTestOctoparse = async () => {
+        setTestingOctoparse(true);
+        setTestResult(null);
+
+        // Simulate Octoparse API test
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        if (settings.octoparseApiKey && settings.octoparseTaskId) {
+            setTestResult({ success: true, message: 'Octoparse API handshake verified successfully!' });
+            messageApi.success('API connection verified!');
+        } else {
+            setTestResult({ success: false, message: 'Connection failed: Verify your API Key and Task ID.' });
+            messageApi.error('Invalid API details.');
+        }
+        setTestingOctoparse(false);
+    };
+
+    const handleSendTestEmail = async () => {
+        if (!testTargetEmail) {
+            messageApi.warning('Please enter an email address.');
+            return;
+        }
+        setSendingTestEmail(true);
+        try {
+            const res = await db.request('/settings/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: testTargetEmail })
+            });
+            if (res?.success) {
+                notificationApi.success({
+                    message: 'Test Email Sent',
+                    description: `Test broadcast dispatched to ${testTargetEmail} successfully!`,
+                    placement: 'topRight'
+                });
+                setEmailModalVisible(false);
+            } else {
+                throw new Error(res?.message || 'Gateway rejected dispatch packet');
+            }
+        } catch (err) {
+            notificationApi.error({
+                message: 'SMTP Broadcast Failed',
+                description: err.message,
+                placement: 'topRight'
+            });
+        } finally {
+            setSendingTestEmail(false);
+        }
+    };
+
+    const xpathsHelp = [
+        { title: 'Title', xpath: '//*[@id="productTitle"]' },
+        { title: 'Price', xpath: '//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[3]' },
+        { title: 'Rating', xpath: '//*[@id="averageCustomerReviews"]' },
+        { title: 'Rank', xpath: '//*[@id="detailBullets_feature_div"]/ul/li[15]/span' },
+        { title: 'Reviews', xpath: '//*[@id="cm_cr_dp_d_rating_histogram"]' },
+    ];
+
+    if (loading) {
+        return <PageLoader message="Loading System Core Environment..." />;
     }
-  };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
+    return (
+        <div className="settings-page-container">
+            {messageContextHolder}
+            {notificationContextHolder}
 
-  const handleSave = async () => {
-    try {
-      await db.updateSettings(settings);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      alert('Failed to save settings: ' + error.message);
-    }
-  };
+            <style>{`
+                .settings-page-container {
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 100vh;
+                    background-color: #f8fafc;
+                    margin: -1.5rem -2rem;
+                }
+                .settings-header {
+                    background: #ffffff;
+                    padding: 20px 32px;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+                }
+                .settings-content {
+                    padding: 32px;
+                }
+                .settings-card {
+                    border-radius: 16px !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+                    overflow: hidden;
+                }
+                .settings-card .ant-card-head {
+                    background-color: #fafafa !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    padding: 16px 24px !important;
+                }
+                .settings-card-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-weight: 700 !important;
+                    font-size: 15px !important;
+                    color: #1e293b;
+                }
+                .form-section-title {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #64748b;
+                    margin-bottom: 8px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.02em;
+                }
+                .glass-card {
+                    background: #ffffff !important;
+                }
+                .xpath-code {
+                    background: #f1f5f9;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                    font-family: SFMono-Regular, Consolas, Menlo, monospace;
+                    font-size: 11.5px;
+                    color: #ef4444;
+                    border: 1px solid #e2e8f0;
+                }
+                .help-link {
+                    color: #475569;
+                    font-weight: 500;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px;
+                    border-radius: 8px;
+                }
+                .help-link:hover {
+                    background: #f1f5f9;
+                    color: #2563eb;
+                }
+            `}</style>
 
-  const handleTestOctoparse = async () => {
-    setTestingOctoparse(true);
-    setTestResult(null);
-
-    // Simulate Octoparse API test
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    if (settings.octoparseApiKey && settings.octoparseTaskId) {
-      setTestResult({ success: true, message: 'Octoparse API connection successful!' });
-    } else {
-      setTestResult({ success: false, message: 'Please enter both API Key and Task ID' });
-    }
-
-    setTestingOctoparse(false);
-  };
-
-  return (
-    <>
-      {loading && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #4F46E5, #10B981)', zIndex: 9999 }}>
-        </div>
-      )}
-      <div className="page-header">
-        <h1 className="page-title"><i className="bi bi-gear"></i>Settings</h1>
-      </div>
-      <div className="page-content">
-        <div className="row">
-          <div className="col-lg-8">
-            <div className="settings-section">
-
-              {/* Octoparse API Settings */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-cloud"></i>Cloud API</h5>
+            {/* 1. STICKY HEADER */}
+            <div className="settings-header">
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                        <div style={{ background: '#EFF6FF', color: '#2563EB', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Settings size={18} />
+                        </div>
+                        <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>System Configuration</Title>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 13 }}>Deploy environment variables, dispatch endpoints, and automation time intervals.</Text>
                 </div>
-                <div className="card-body">
-                  <p className="text-muted mb-3">
-                    Configure Octoparse Cloud API for Amazon product data scraping.
-                    Get your API key from <a href="https://www.octoparse.com" target="_blank" rel="noopener noreferrer">octoparse.com</a>
-                  </p>
-                  <div className="mb-3">
-                    <label className="form-label">API Key</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      name="octoparseApiKey"
-                      value={settings.octoparseApiKey}
-                      onChange={handleChange}
-                      placeholder="Enter your Octoparse API key"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Task ID</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="octoparseTaskId"
-                      value={settings.octoparseTaskId}
-                      onChange={handleChange}
-                      placeholder="Enter your Octoparse Task ID"
-                    />
-                    <div className="form-text">The Task ID from your Octoparse Cloud Amazon scraping task</div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Poll Interval (ms)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      name="scrapePollInterval"
-                      value={settings.scrapePollInterval}
-                      onChange={handleChange}
-                      placeholder="300000"
-                    />
-                    <div className="form-text">How often to check scrape status (default: 300000 = 5 minutes)</div>
-                  </div>
-                  <div className="d-flex gap-2">
-                    <button
-                      className="btn btn-outline-primary"
-                      onClick={handleTestOctoparse}
-                      disabled={testingOctoparse}
+                <Button 
+                    type="primary" 
+                    icon={<Save size={16} />} 
+                    onClick={handleSave} 
+                    loading={saving}
+                    style={{ height: 40, borderRadius: 8, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px' }}
+                >
+                    Commit Changes
+                </Button>
+            </div>
+
+            {/* 2. CONTENT GRID */}
+            <div className="settings-content">
+                <Row gutter={[24, 24]}>
+                    {/* Left Column - Configuration Forms */}
+                    <Col xs={24} lg={16}>
+                        <Space direction="vertical" size={24} style={{ width: '100%' }}>
+                            
+                            {/* Octoparse API */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <Cloud size={18} style={{ color: '#3B82F6' }} />
+                                        <span>Scraper Engine Integration</span>
+                                    </div>
+                                }
+                            >
+                                <Alert
+                                    message="Cloud Integration Layer"
+                                    description={<span>Connect to the Octoparse cluster for real-time scraping of Amazon ASIN structures. Obtain your token from <a href="https://www.octoparse.com" target="_blank" rel="noreferrer" style={{fontWeight: 600}}>octoparse.com</a>.</span>}
+                                    type="info"
+                                    showIcon
+                                    style={{ marginBottom: 24, borderRadius: 10 }}
+                                    icon={<Info size={16} />}
+                                />
+                                
+                                <Row gutter={[20, 20]}>
+                                    <Col span={24}>
+                                        <div className="form-section-title">API Security Token</div>
+                                        <Input.Password 
+                                            placeholder="Enter Octoparse API Key"
+                                            value={settings.octoparseApiKey}
+                                            onChange={e => handleFieldChange('octoparseApiKey', e.target.value)}
+                                            prefix={<Lock size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Active Task ID</div>
+                                        <Input 
+                                            placeholder="e.g. e8266a91-..."
+                                            value={settings.octoparseTaskId}
+                                            onChange={e => handleFieldChange('octoparseTaskId', e.target.value)}
+                                            prefix={<Terminal size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                        <Text type="secondary" style={{ fontSize: 11.5, display: 'block', marginTop: 6 }}>The specific crawling node identifier.</Text>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Status Check Interval (ms)</div>
+                                        <InputNumber 
+                                            placeholder="300000"
+                                            value={settings.scrapePollInterval}
+                                            onChange={val => handleFieldChange('scrapePollInterval', val)}
+                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
+                                            min={60000}
+                                        />
+                                        <Text type="secondary" style={{ fontSize: 11.5, display: 'block', marginTop: 6 }}>Interval for backend cron checks (Min: 60000ms).</Text>
+                                    </Col>
+                                    <Col span={24}>
+                                        <Divider style={{ margin: '12px 0' }} />
+                                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                            <Button 
+                                                icon={<RefreshCw size={14} />} 
+                                                loading={testingOctoparse} 
+                                                onClick={handleTestOctoparse}
+                                                style={{ borderRadius: 8, fontWeight: 500 }}
+                                            >
+                                                Verify Node Link
+                                            </Button>
+                                            {testResult && (
+                                                <Tag color={testResult.success ? 'success' : 'error'} style={{ borderRadius: 6, padding: '4px 12px', border: 'none', fontWeight: 500 }}>
+                                                    {testResult.message}
+                                                </Tag>
+                                            )}
+                                        </div>
+                                    </Col>
+                                </Row>
+                            </Card>
+
+                            {/* SMTP Gateway */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <Mail size={18} style={{ color: '#ec4899' }} />
+                                        <span>SMTP Dispatch Gateway</span>
+                                    </div>
+                                }
+                            >
+                                <Paragraph style={{ color: '#64748b', marginBottom: 20 }}>
+                                    Assign transport relay hosts to empower direct outbound alerting, daily PDF digests, and security notices.
+                                </Paragraph>
+
+                                <Row gutter={[20, 20]}>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Relay Host</div>
+                                        <Input 
+                                            placeholder="smtp.mail.com"
+                                            value={settings.smtpHost}
+                                            onChange={e => handleFieldChange('smtpHost', e.target.value)}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                    </Col>
+                                    <Col xs={12} md={6}>
+                                        <div className="form-section-title">Port</div>
+                                        <Input 
+                                            placeholder="587"
+                                            value={settings.smtpPort}
+                                            onChange={e => handleFieldChange('smtpPort', e.target.value)}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                    </Col>
+                                    <Col xs={12} md={6}>
+                                        <div className="form-section-title">Crypt Mode</div>
+                                        <Select 
+                                            value={settings.smtpSecure} 
+                                            onChange={val => handleFieldChange('smtpSecure', val)}
+                                            style={{ width: '100%', height: 42 }}
+                                            dropdownStyle={{ borderRadius: 8 }}
+                                        >
+                                            <Option value="tls">STARTTLS</Option>
+                                            <Option value="ssl">Implicit SSL</Option>
+                                        </Select>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Transport User</div>
+                                        <Input 
+                                            placeholder="relayer@corp.com"
+                                            value={settings.smtpUser}
+                                            onChange={e => handleFieldChange('smtpUser', e.target.value)}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Transport Password</div>
+                                        <Input.Password 
+                                            placeholder="🔑 Enter password"
+                                            value={settings.smtpPass}
+                                            onChange={e => handleFieldChange('smtpPass', e.target.value)}
+                                            style={{ height: 42, borderRadius: 8 }}
+                                        />
+                                    </Col>
+                                    <Col span={24}>
+                                        <Divider style={{ margin: '8px 0' }} />
+                                        <Button 
+                                            icon={<Send size={14} />} 
+                                            onClick={() => setEmailModalVisible(true)}
+                                            style={{ borderRadius: 8, fontWeight: 500 }}
+                                        >
+                                            Fire Test Broadcast
+                                        </Button>
+                                    </Col>
+                                </Row>
+                            </Card>
+
+                            {/* Pipeline Automation */}
+                            <Card 
+                                className="settings-card glass-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <Clock size={18} style={{ color: '#f59e0b' }} />
+                                        <span>Background Pipeline Schedules</span>
+                                    </div>
+                                }
+                                extra={
+                                    <Space size={12}>
+                                        <Text style={{ fontSize: 12.5, color: '#64748b', fontWeight: 500 }}>Automation Stack:</Text>
+                                        <Switch 
+                                            checked={settings.AUTOMATION_ENABLED === true || settings.AUTOMATION_ENABLED === 'true'}
+                                            onChange={checked => handleFieldChange('AUTOMATION_ENABLED', checked)}
+                                            checkedChildren="ON"
+                                            unCheckedChildren="OFF"
+                                        />
+                                    </Space>
+                                }
+                            >
+                                <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: 12, padding: '16px', marginBottom: 24, display: 'flex', gap: 12 }}>
+                                    <div style={{ color: '#D97706', flexShrink: 0 }}><Cpu size={18} /></div>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: '#92400E', fontSize: 13 }}>Pipeline Cron Scheduler</div>
+                                        <div style={{ color: '#B45309', fontSize: 12.5 }}>Trigger synchronized automatic data mining across global store clusters. Adjust slot buffers to avoid node throttle.</div>
+                                    </div>
+                                </div>
+
+                                <Row gutter={[24, 24]}>
+                                    <Col xs={24} md={12}>
+                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                                <Badge color="#FF9900" />
+                                                <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Amazon Scheduler</div>
+                                            </div>
+                                            <div className="form-section-title">Routine Dispatch Lock</div>
+                                            <TimePicker 
+                                                format="HH:mm"
+                                                style={{ width: '100%', height: 42, borderRadius: 8 }}
+                                                value={settings.AUTOMATION_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_SCHEDULE_TIME, 'HH:mm') : null}
+                                                onChange={(time, timeStr) => handleFieldChange('AUTOMATION_SCHEDULE_TIME', timeStr)}
+                                                allowClear={false}
+                                            />
+                                            <Text type="secondary" style={{ display: 'block', fontSize: 11.5, marginTop: 8 }}>Routine launch slot for all Amazon catalog pipelines.</Text>
+                                        </div>
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                                <Badge color="#06B6D4" />
+                                                <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Ajio Scheduler</div>
+                                            </div>
+                                            <div className="form-section-title">Routine Dispatch Lock</div>
+                                            <TimePicker 
+                                                format="HH:mm"
+                                                style={{ width: '100%', height: 42, borderRadius: 8 }}
+                                                value={settings.AUTOMATION_AJIO_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_AJIO_SCHEDULE_TIME, 'HH:mm') : null}
+                                                onChange={(time, timeStr) => handleFieldChange('AUTOMATION_AJIO_SCHEDULE_TIME', timeStr)}
+                                                allowClear={false}
+                                            />
+                                            <Text type="secondary" style={{ display: 'block', fontSize: 11.5, marginTop: 8 }}>Routine launch slot for Ajio infrastructure indexes.</Text>
+                                        </div>
+                                    </Col>
+                                </Row>
+                            </Card>
+
+                            {/* Catalog Tuning Rules */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <Sliders size={18} style={{ color: '#8b5cf6' }} />
+                                        <span>Catalog Optimization Limits</span>
+                                    </div>
+                                }
+                            >
+                                <Paragraph style={{ color: '#64748b', marginBottom: 24 }}>
+                                    Design thresholds utilized by the Listing Quality Score (LQS) engine. ASINs that drop below these boundaries trigger dynamic correction tickets automatically.
+                                </Paragraph>
+
+                                <Row gutter={[20, 20]}>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Minimum Target LQS</div>
+                                        <InputNumber 
+                                            value={settings.minLqsScore}
+                                            onChange={v => handleFieldChange('minLqsScore', v)}
+                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
+                                            min={0}
+                                            max={100}
+                                        />
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Minimum Title Chars</div>
+                                        <InputNumber 
+                                            value={settings.minTitleLength}
+                                            onChange={v => handleFieldChange('minTitleLength', v)}
+                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
+                                            min={0}
+                                        />
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Minimum Gallery Photos</div>
+                                        <InputNumber 
+                                            value={settings.minImageCount}
+                                            onChange={v => handleFieldChange('minImageCount', v)}
+                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
+                                            min={0}
+                                        />
+                                    </Col>
+                                    <Col xs={24} md={12}>
+                                        <div className="form-section-title">Min Description Length</div>
+                                        <InputNumber 
+                                            value={settings.minDescLength}
+                                            onChange={v => handleFieldChange('minDescLength', v)}
+                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
+                                            min={0}
+                                        />
+                                    </Col>
+                                </Row>
+                            </Card>
+
+                            {/* Notification Subscriptions */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <Bell size={18} style={{ color: '#10B981' }} />
+                                        <span>Broadcasting & Notices</span>
+                                    </div>
+                                }
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13.5 }}>Interactive Application Signals</div>
+                                            <div style={{ color: '#64748b', fontSize: 12 }}>Receive slide-ins and audio notifications inside the main app dashboard.</div>
+                                        </div>
+                                        <Switch 
+                                            checked={settings.notifications}
+                                            onChange={checked => handleFieldChange('notifications', checked)}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13.5 }}>Daily Execution Logs (PDF)</div>
+                                            <div style={{ color: '#64748b', fontSize: 12 }}>Collect raw scraper execution sheets via scheduled secure email.</div>
+                                        </div>
+                                        <Switch 
+                                            checked={settings.emailReports}
+                                            onChange={checked => handleFieldChange('emailReports', checked)}
+                                        />
+                                    </div>
+                                </div>
+                            </Card>
+
+                        </Space>
+                    </Col>
+
+                    {/* Right Column - Info & Helpers */}
+                    <Col xs={24} lg={8}>
+                        <Space direction="vertical" size={24} style={{ width: '100%' }}>
+                            
+                            {/* Allocation Details */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <User size={16} />
+                                        <span>Licensing & Allocation</span>
+                                    </div>
+                                }
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                                    <div>
+                                        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Tier Level</Text>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                                            <span style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Enterprise Pro</span>
+                                            <Tag color="blue" style={{ border: 'none', borderRadius: 6, fontWeight: 700, padding: '2px 10px' }}>ACTIVE</Tag>
+                                        </div>
+                                    </div>
+                                    
+                                    <Divider style={{ margin: '4px 0' }} />
+                                    
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>API LIMITS TODAY</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>0 / 10 Nodes</Text>
+                                        </div>
+                                        <Progress percent={0} strokeColor="#2563eb" showInfo={false} strokeWidth={8} style={{ margin: 0 }} />
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>ACTIVE CATALOG ASINS</Text>
+                                            <Text style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>6 / 1000 Items</Text>
+                                        </div>
+                                        <Progress percent={0.6} strokeColor="#10b981" showInfo={false} strokeWidth={8} style={{ margin: 0 }} />
+                                    </div>
+                                </div>
+                            </Card>
+
+                            {/* XPath Guides */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <HelpCircle size={16} />
+                                        <span>Scrape Pattern Blueprint</span>
+                                    </div>
+                                }
+                            >
+                                <Paragraph style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+                                    Apply the following precise XPaths inside your Octoparse Cloud extraction node to ensure accurate attribute mapping:
+                                </Paragraph>
+                                <List
+                                    dataSource={xpathsHelp}
+                                    renderItem={item => (
+                                        <List.Item style={{ padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                            <div style={{ width: '100%' }}>
+                                                <div style={{ fontWeight: 600, color: '#334155', fontSize: 12.5, marginBottom: 4 }}>{item.title}</div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <code className="xpath-code">{item.xpath}</code>
+                                                    <Tooltip title="Copy Path">
+                                                        <Button 
+                                                            type="text" 
+                                                            size="small" 
+                                                            icon={<Link2 size={13} style={{ color: '#94a3b8' }} />} 
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(item.xpath);
+                                                                messageApi.success(`${item.title} XPath copied!`);
+                                                            }}
+                                                            style={{ height: 24, width: 24, padding: 0 }}
+                                                        />
+                                                    </Tooltip>
+                                                </div>
+                                            </div>
+                                        </List.Item>
+                                    )}
+                                />
+                            </Card>
+
+                            {/* Platform Support */}
+                            <Card 
+                                className="settings-card" 
+                                bordered={false}
+                                title={
+                                    <div className="settings-card-title">
+                                        <HelpCircle size={16} />
+                                        <span>Resource Hub</span>
+                                    </div>
+                                }
+                                styles={{ body: { padding: '12px' } }}
+                            >
+                                <a href="#" className="help-link">
+                                    <Terminal size={16} />
+                                    <span style={{ fontSize: 13.5 }}>API Specifications</span>
+                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                                </a>
+                                <a href="#" className="help-link">
+                                    <Info size={16} />
+                                    <span style={{ fontSize: 13.5 }}>Service Matrix Support</span>
+                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                                </a>
+                                <a href="https://www.octoparse.com" target="_blank" rel="noopener noreferrer" className="help-link">
+                                    <Cloud size={16} />
+                                    <span style={{ fontSize: 13.5 }}>Octoparse Panel</span>
+                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                                </a>
+                            </Card>
+
+                        </Space>
+                    </Col>
+                </Row>
+            </div>
+
+            {/* SMTP TEST EMAIL MODAL */}
+            <Modal
+                title={<div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}><Send size={16} style={{ color: '#4f46e5' }} /> <span>Test SMTP Handshake</span></div>}
+                open={emailModalVisible}
+                onCancel={() => setEmailModalVisible(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setEmailModalVisible(false)} style={{ borderRadius: 6 }}>Cancel</Button>,
+                    <Button 
+                        key="send" 
+                        type="primary" 
+                        loading={sendingTestEmail} 
+                        onClick={handleSendTestEmail}
+                        style={{ borderRadius: 6, fontWeight: 600 }}
                     >
-                      {testingOctoparse ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2"></span>
-                          Testing...
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-plug me-1"></i>Test Connection
-                        </>
-                      )}
-                    </button>
-                    {testResult && (
-                      <div className={`alert ${testResult.success ? 'alert-success' : 'alert-danger'} mb-0 py-2 px-3`}>
-                        {testResult.message}
-                      </div>
-                    )}
-                  </div>
-                  <div className="alert alert-info mt-3">
-                    <i className="bi bi-info-circle me-2"></i>
-                    Octoparse Cloud API is used to scrape Amazon product pages for prices, rankings, reviews, and more.
-                  </div>
-                </div>
-              </div>
-
-              {/* SMTP Settings */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-envelope"></i> Email Notification Settings (SMTP)</h5>
-                </div>
-                <div className="card-body">
-                  <p className="text-muted mb-3">
-                    Configure SMTP settings for email notifications and reports.
-                  </p>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">SMTP Host</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="smtpHost"
-                        value={settings.smtpHost}
-                        onChange={handleChange}
-                        placeholder="smtp.example.com"
-                      />
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label">Port</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="smtpPort"
-                        value={settings.smtpPort}
-                        onChange={handleChange}
-                        placeholder="587"
-                      />
-                    </div>
-                    <div className="col-md-3 mb-3">
-                      <label className="form-label">Security</label>
-                      <select
-                        className="form-select"
-                        name="smtpSecure"
-                        value={settings.smtpSecure}
-                        onChange={handleChange}
-                      >
-                        <option value="tls">TLS (STARTTLS)</option>
-                        <option value="ssl">SSL (Implicit)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Username</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      name="smtpUser"
-                      value={settings.smtpUser}
-                      onChange={handleChange}
-                      placeholder="your@email.com"
+                        Launch Broadcast
+                    </Button>
+                ]}
+                width={400}
+                centered
+            >
+                <div style={{ padding: '12px 0' }}>
+                    <Paragraph type="secondary" style={{ fontSize: 12.5, marginBottom: 16 }}>
+                        Fires a test dispatch packet over the current relay transport configurations to verify handshake parameters.
+                    </Paragraph>
+                    <div className="form-section-title">Destination Email</div>
+                    <Input 
+                        placeholder="your@email.com" 
+                        value={testTargetEmail} 
+                        onChange={e => setTestTargetEmail(e.target.value)}
+                        style={{ height: 40, borderRadius: 8 }}
+                        prefix={<Mail size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
                     />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Password</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      name="smtpPass"
-                      value={settings.smtpPass}
-                      onChange={handleChange}
-                      placeholder="Enter email password"
-                    />
-                    <div className="form-text">For Gmail, use a 16-character App Password.</div>
-                  </div>
-                  <button
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={async () => {
-                      const email = prompt("Enter email to send test to:", settings.smtpUser);
-                      if (email) {
-                        try {
-                          const res = await db.request('/settings/test-email', {
-                            method: 'POST',
-                            body: JSON.stringify({ to: email })
-                          });
-                          alert(res?.success ? "Test email sent successfully!" : "Failed to send test email: " + res?.message);
-                        } catch (err) {
-                          alert("Error: " + err.message);
-                        }
-                      }
-                    }}
-                  >
-                    <i className="bi bi-send me-1"></i> Send Test Email
-                  </button>
                 </div>
-              </div>
+            </Modal>
 
-              {/* Background Automation Schedules */}
-              <div className="card mb-4" style={{
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                background: 'rgba(30, 30, 38, 0.6)',
-                backdropFilter: 'blur(12px)',
-                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
-              }}>
-                <div className="card-header d-flex justify-content-between align-items-center" style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderTopLeftRadius: '16px',
-                  borderTopRightRadius: '16px'
-                }}>
-                  <h5 className="mb-0 text-white"><i className="bi bi-clock-history text-primary me-2"></i>Automation Schedules</h5>
-                  <div className="form-check form-switch m-0">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="AUTOMATION_ENABLED"
-                      name="AUTOMATION_ENABLED"
-                      checked={settings.AUTOMATION_ENABLED === true || settings.AUTOMATION_ENABLED === 'true'}
-                      onChange={(e) => {
-                        setSettings(prev => ({
-                          ...prev,
-                          AUTOMATION_ENABLED: e.target.checked
-                        }));
-                      }}
-                    />
-                    <label className="form-check-label text-muted ms-1" htmlFor="AUTOMATION_ENABLED" style={{ fontSize: '0.85rem' }}>Enabled</label>
-                  </div>
-                </div>
-                <div className="card-body">
-                  <p className="text-muted small mb-4">
-                    Configure independent automatic synchronization times for Amazon and Ajio background pipeline tasks. All active store ASINs are queued dynamically at these configured slots.
-                  </p>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label text-white d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                        <i className="bi bi-amazon text-warning me-2"></i> Amazon Schedule Time
-                      </label>
-                      <input
-                        type="time"
-                        className="form-control"
-                        name="AUTOMATION_SCHEDULE_TIME"
-                        value={settings.AUTOMATION_SCHEDULE_TIME || '11:20'}
-                        onChange={handleChange}
-                        style={{
-                          background: 'rgba(20, 20, 25, 0.5)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '8px',
-                          color: '#fff'
-                        }}
-                      />
-                      <div className="form-text text-muted small mt-1">Daily cron schedule slot for Amazon storefronts</div>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label text-white d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                        <i className="bi bi-bag-check text-info me-2"></i> Ajio Schedule Time
-                      </label>
-                      <input
-                        type="time"
-                        className="form-control"
-                        name="AUTOMATION_AJIO_SCHEDULE_TIME"
-                        value={settings.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00'}
-                        onChange={handleChange}
-                        style={{
-                          background: 'rgba(20, 20, 25, 0.5)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '8px',
-                          color: '#fff'
-                        }}
-                      />
-                      <div className="form-text text-muted small mt-1">Daily cron schedule slot for Ajio storefronts</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ASIN Optimization Rules */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-sliders"></i> ASIN Optimization Rules (Bulk Actions)</h5>
-                </div>
-                <div className="card-body">
-                  <p className="text-muted mb-3">
-                    Set the threshold requirements for auto-generating optimization tasks for your ASINs. Any ASIN falling below these targets will be flagged for tasks.
-                  </p>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Minimum Target LQS Score</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="minLqsScore"
-                        value={settings.minLqsScore}
-                        onChange={handleChange}
-                        placeholder="80"
-                        min="0"
-                        max="100"
-                      />
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Minimum Title Length</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="minTitleLength"
-                        value={settings.minTitleLength}
-                        onChange={handleChange}
-                        placeholder="100"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Minimum Image Count</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="minImageCount"
-                        value={settings.minImageCount}
-                        onChange={handleChange}
-                        placeholder="7"
-                        min="0"
-                      />
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Minimum Description Length</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="minDescLength"
-                        value={settings.minDescLength}
-                        onChange={handleChange}
-                        placeholder="500"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notification Preferences */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-bell"></i> Notification Preferences</h5>
-                </div>
-                <div className="card-body">
-                  <div className="form-check form-switch mb-3">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="notifications"
-                      name="notifications"
-                      checked={settings.notifications}
-                      onChange={handleChange}
-                    />
-                    <label className="form-check-label" htmlFor="notifications">
-                      Enable in-app notifications
-                    </label>
-                  </div>
-                  <div className="form-check form-switch mb-3">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="emailReports"
-                      name="emailReports"
-                      checked={settings.emailReports}
-                      onChange={handleChange}
-                    />
-                    <label className="form-check-label" htmlFor="emailReports">
-                      Receive daily email reports
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Save Button */}
-              <div className="d-flex justify-content-end">
-                {saved && (
-                  <div className="alert alert-success me-3 mb-0 d-flex align-items-center">
-                    <i className="bi bi-check-circle me-2"></i>
-                    Settings saved successfully!
-                  </div>
-                )}
-                <button className="btn btn-primary" onClick={handleSave}>
-                  <i className="bi bi-check-lg me-2"></i>
-                  Save Settings
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-lg-4">
-              {/* Account Info */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-person-badge"></i> Account</h5>
-                </div>
-                <div className="card-body">
-                  <div className="mb-3">
-                    <label className="text-muted">Plan</label>
-                    <div className="fw-semibold">Pro</div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="text-muted">Scrape Tasks Today</label>
-                    <div className="fw-semibold">0 / 10</div>
-                    <div className="progress mt-1" style={{ height: '6px' }}>
-                      <div className="progress-bar" style={{ width: '0%' }}></div>
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="text-muted">ASINs Tracked</label>
-                    <div className="fw-semibold">6 / 1000</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Octoparse Task Setup */}
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-question-circle"></i> Task Setup Help</h5>
-                </div>
-                <div className="card-body">
-                  <p className="text-muted small mb-2">Create an Octoparse task with these XPaths:</p>
-                  <div className="list-group list-group-flush small">
-                    <div className="list-group-item">Title: <code>//*[@id="productTitle"]</code></div>
-                    <div className="list-group-item">Price: <code>//*[@id="corePriceDisplay_desktop_feature_div"]/div[1]/span[3]</code></div>
-                    <div className="list-group-item">Rating: <code>//*[@id="averageCustomerReviews"]</code></div>
-                    <div className="list-group-item">Rank: <code>//*[@id="detailBullets_feature_div"]/ul/li[15]/span</code></div>
-                    <div className="list-group-item">Reviews: <code>//*[@id="cm_cr_dp_d_rating_histogram"]</code></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Help */}
-              <div className="card">
-                <div className="card-header">
-                  <h5 className="mb-0"><i className="bi bi-life-preserver"></i> Support</h5>
-                </div>
-                <div className="card-body">
-                  <div className="list-group list-group-flush">
-                    <a href="#" className="list-group-item list-group-item-action">
-                      <i className="bi bi-book me-2"></i> Documentation
-                    </a>
-                    <a href="#" className="list-group-item list-group-item-action">
-                      <i className="bi bi-chat-dots me-2"></i> Contact Support
-                    </a>
-                    <a href="https://www.octoparse.com" target="_blank" rel="noopener noreferrer" className="list-group-item list-group-item-action">
-                      <i className="bi bi-cloud me-2"></i> Octoparse Dashboard
-                    </a>
-                  </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
-    </>
-  );
+    );
 };
 
 export default SettingsPage;

@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { Plus, Search, Filter, Play, FileText, CheckCircle, Clock, Check, X as CloseIcon, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Plus, Search, Play, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ActionModal from '../components/actions/ActionModal';
 import CompletionModal from '../components/actions/CompletionModal';
 import ReviewModal from '../components/actions/ReviewModal';
 import { useNavigate } from 'react-router-dom';
-import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
-import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { 
+  Table, Button, Input, Select, Space, Tag, 
+  Tooltip, Avatar, Spin, Card, Typography, 
+  message as antdMessage 
+} from 'antd';
+
+const { Text, Title } = Typography;
 
 const TasksOperationsPage = ({ isEmbedded = false }) => {
     const [actions, setActions] = useState([]);
@@ -23,18 +28,6 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
     const [asins, setAsins] = useState([]);
     const navigate = useNavigate();
     const currentUser = db.getUser();
-
-    if (loading && actions.length === 0) {
-        return isEmbedded ? (
-            <div className="text-center py-5">
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading Operations...</span>
-                </div>
-            </div>
-        ) : (
-            <PageLoader message="Loading Tasks Operations..." />
-        );
-    }
 
     const loadTasks = async () => {
         setLoading(true);
@@ -79,13 +72,16 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
         try {
             if (data._id || data.id) {
                 await db.updateAction(data._id || data.id, data);
+                antdMessage.success('Task updated successfully');
             } else {
                 await db.createAction(data);
+                antdMessage.success('Task created successfully');
             }
             setIsActionModalOpen(false);
             loadTasks();
         } catch (error) {
             console.error('Failed to save action', error);
+            antdMessage.error('Failed to save action');
         }
     };
 
@@ -94,9 +90,11 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
         try {
             setLoading(true);
             await db.startAction(id);
+            antdMessage.success('Task started successfully');
             loadTasks();
         } catch (err) {
             console.error("Failed to start task:", err);
+            antdMessage.error('Failed to start task');
         } finally {
             setLoading(false);
         }
@@ -112,15 +110,17 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
             setLoading(true);
             if (data.stage === 'REVIEW') {
                 await db.submitActionForReview(actionId, data);
+                antdMessage.success('Task submitted for review');
             } else {
                 await db.completeAction(actionId, data);
+                antdMessage.success('Task completed successfully');
             }
             setIsCompletionModalOpen(false);
             setCompletingAction(null);
             loadTasks();
         } catch (err) {
             console.error("Failed to process task completion:", err);
-            alert("Action failed. Please try again.");
+            antdMessage.error("Action failed. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -133,10 +133,11 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
             setLoading(true);
             await db.reviewAction(action._id || action.id, { decision, comments });
             await loadTasks();
+            antdMessage.success(`Task successfully ${decision === 'APPROVE' ? 'approved' : 'rejected'}`);
             return true;
         } catch (error) {
             console.error('Failed to review action:', error);
-            alert('Review failed. Please try again.');
+            antdMessage.error('Review failed. Please try again.');
             throw error;
         } finally {
             setLoading(false);
@@ -148,200 +149,244 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
         setIsReviewModalOpen(true);
     };
 
-    const getStatusDot = (status) => {
-        if (status === 'COMPLETED') return <span className="status-dot status-dot-green"></span>;
-        if (status === 'IN_PROGRESS') return <span className="status-dot status-dot-yellow"></span>;
-        if (status === 'REVIEW') return <span className="status-dot status-dot-purple"></span>;
-        if (status === 'PENDING') return <span className="status-dot status-dot-gray"></span>;
-        return <span className="status-dot status-dot-red"></span>;
+    const getStatusTag = (status) => {
+        const s = String(status || 'PENDING').toUpperCase();
+        if (s === 'COMPLETED') return <Tag color="success" style={{ borderRadius: '12px', fontWeight: 600 }}>COMPLETED</Tag>;
+        if (s === 'IN_PROGRESS') return <Tag color="processing" style={{ borderRadius: '12px', fontWeight: 600 }}>IN PROGRESS</Tag>;
+        if (s === 'REVIEW') return <Tag color="magenta" style={{ borderRadius: '12px', fontWeight: 600 }}>REVIEW</Tag>;
+        if (s === 'PENDING') return <Tag color="warning" style={{ borderRadius: '12px', fontWeight: 600 }}>PENDING</Tag>;
+        return <Tag color="error" style={{ borderRadius: '12px', fontWeight: 600 }}>{s}</Tag>;
     };
 
-    return (
-        <div className={isEmbedded ? "" : "container-fluid p-4"}>
-            {loading && !isEmbedded && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-                    <LoadingIndicator type="line-simple" size="md" />
-                </div>
-            )}
-            {!isEmbedded && (
-                <header className="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h1 className="fw-bold h2 mb-1">Task Operations</h1>
-                        <p className="text-muted small">Flat execution view for all tactical actions</p>
+    const columns = [
+        {
+            title: 'Action',
+            key: 'action',
+            render: (_, record) => (
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Text strong style={{ color: '#1e293b' }}>{record.title}</Text>
                     </div>
-                    <button
-                        className="btn btn-primary rounded-pill px-4 d-flex align-items-center gap-2"
-                        onClick={() => { setEditingAction(null); setIsActionModalOpen(true); }}
-                    >
-                        <Plus size={18} /> Create Task
-                    </button>
-                </header>
-            )}
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden', maxWidth: '300px' }}>
+                        {record.description}
+                    </div>
+                </div>
+            )
+        },
+        {
+            title: 'Type',
+            dataIndex: 'type',
+            key: 'type',
+            render: (type) => (
+                <Tag style={{ textTransform: 'capitalize', borderRadius: '4px', background: '#f1f5f9', color: '#475569', border: 'none' }}>
+                    {type?.toLowerCase().replace('_', ' ')}
+                </Tag>
+            )
+        },
+        {
+            title: 'Seller',
+            key: 'seller',
+            render: (_, record) => (
+                <div>
+                    <div style={{ fontWeight: 600, color: '#334155' }}>{record.sellerId?.name || '--'}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{record.sellerId?.marketplace}</div>
+                </div>
+            )
+        },
+        {
+            title: 'Linked ASINs',
+            dataIndex: 'asins',
+            key: 'asins',
+            render: (asinsList) => {
+                if (!asinsList || asinsList.length === 0) return <Text type="secondary">--</Text>;
+                return (
+                    <Space size={4} wrap>
+                        {asinsList.slice(0, 2).map((asin, i) => (
+                            <Tag key={asin._id || asin.id || i} style={{ margin: 0, fontSize: '11px', borderRadius: '4px' }}>
+                                {asin.asinCode || asin.asin || asin}
+                            </Tag>
+                        ))}
+                        {asinsList.length > 2 && (
+                            <Tooltip title={asinsList.slice(2).map(a => a.asinCode || a.asin || a).join(', ')}>
+                                <Tag style={{ cursor: 'help', margin: 0, fontSize: '11px', borderRadius: '4px' }}>+{asinsList.length - 2}</Tag>
+                            </Tooltip>
+                        )}
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Assignee',
+            key: 'assignee',
+            render: (_, record) => {
+                const firstName = record.assignedTo?.firstName;
+                const lastName = record.assignedTo?.lastName;
+                if (!firstName) return <Text type="secondary">Unassigned</Text>;
+                return (
+                    <Space size={8}>
+                        <Avatar size={24} style={{ backgroundColor: '#3b82f6', fontSize: '11px' }}>
+                            {firstName.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <span>{firstName} {lastName}</span>
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Status',
+            dataIndex: 'status',
+            key: 'status',
+            render: (status) => getStatusTag(status)
+        },
+        {
+            title: 'Activity',
+            key: 'activity',
+            align: 'right',
+            render: (_, record) => {
+                const isPending = record.status === 'PENDING';
+                const isInProgress = record.status === 'IN_PROGRESS';
+                const isReview = record.status === 'REVIEW';
+                
+                const canReview = ((currentUser?.role === 'admin' || currentUser?.role?.name === 'admin') ||
+                    ((currentUser?.role === 'manager' || currentUser?.role?.name === 'manager') &&
+                        (record.assignedTo?._id || record.assignedTo) !== currentUser?._id));
 
-            <div className="card border-0 shadow-sm mb-4" style={{ borderRadius: '16px' }}>
-                <div className="card-body">
-                    <div className="row g-3">
-                        <div className="col-md-8">
-                            <div className="position-relative">
-                                <Search className="position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#6b7280' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Search tasks, sellers, or descriptions..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="form-control ps-5 border-0 bg-light"
-                                    style={{ borderRadius: '10px' }}
+                return (
+                    <Space size={8} onClick={(e) => e.stopPropagation()}>
+                        {isPending && (
+                            <Tooltip title="Start Task">
+                                <Button 
+                                    shape="circle" 
+                                    icon={<Play size={12} />} 
+                                    onClick={(e) => { e.stopPropagation(); handleStartTask(record); }} 
+                                    type="primary" 
+                                    ghost 
                                 />
-                            </div>
-                        </div>
-                        <div className="col-md-4">
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="form-select border-0 bg-light"
-                                style={{ borderRadius: '10px' }}
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="PENDING">Pending</option>
-                                <option value="IN_PROGRESS">In Progress</option>
-                                <option value="REVIEW">Review</option>
-                                <option value="COMPLETED">Completed</option>
-                            </select>
-                        </div>
+                            </Tooltip>
+                        )}
+                        {isInProgress && (
+                            <Tooltip title="Submit for Review">
+                                <Button 
+                                    shape="circle" 
+                                    icon={<FileText size={12} />} 
+                                    onClick={(e) => { e.stopPropagation(); handleSubmitForReview(record); }} 
+                                    type="primary"
+                                />
+                            </Tooltip>
+                        )}
+                        {isReview && canReview && (
+                            <>
+                                <Tooltip title="Approve">
+                                    <Button 
+                                        shape="circle" 
+                                        icon={<ThumbsUp size={12} />} 
+                                        onClick={(e) => { e.stopPropagation(); openReviewModal(record); }} 
+                                        style={{ color: '#10b981', borderColor: '#10b981' }} 
+                                    />
+                                </Tooltip>
+                                <Tooltip title="Reject">
+                                    <Button 
+                                        shape="circle" 
+                                        icon={<ThumbsDown size={12} />} 
+                                        onClick={(e) => { e.stopPropagation(); openReviewModal(record); }} 
+                                        danger 
+                                    />
+                                </Tooltip>
+                            </>
+                        )}
+                        <Tooltip title="Edit Details">
+                            <Button 
+                                shape="circle" 
+                                icon={<Plus size={12} style={{ transform: 'rotate(45deg)' }} />} 
+                                onClick={(e) => { e.stopPropagation(); handleEditAction(record); }} 
+                            />
+                        </Tooltip>
+                    </Space>
+                );
+            }
+        }
+    ];
+
+    if (loading && actions.length === 0) {
+        return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', flex: 1 }}>
+                <Spin size="large" description="Loading Operations..." />
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            {!isEmbedded && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', padding: '24px 24px 0 24px' }}>
+                    <div>
+                        <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Task Operations</Title>
+                        <Text type="secondary">Flat execution view for all tactical actions</Text>
                     </div>
+                    <Button
+                        type="primary"
+                        shape="round"
+                        size="large"
+                        onClick={() => { setEditingAction(null); setIsActionModalOpen(true); }}
+                        icon={<Plus size={16} />}
+                        style={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}
+                    >
+                        Create Task
+                    </Button>
                 </div>
+            )}
+
+            {/* Filtering & Controls */}
+            <Card 
+                styles={{ body: { padding: '16px' } }} 
+                bordered={false} 
+                style={{ marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', borderRadius: '12px' }}
+            >
+                <Space size={16} style={{ width: '100%' }}>
+                    <Input
+                        placeholder="Search tasks, sellers, or descriptions..."
+                        prefix={<Search size={16} style={{ color: '#94a3b8' }} />}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{ width: 350, borderRadius: '8px' }}
+                        size="large"
+                        allowClear
+                    />
+                    <Select
+                        value={filterStatus}
+                        onChange={setFilterStatus}
+                        style={{ width: 200 }}
+                        size="large"
+                        placeholder="Filter Status"
+                        options={[
+                            { value: '', label: 'All Statuses' },
+                            { value: 'PENDING', label: 'Pending' },
+                            { value: 'IN_PROGRESS', label: 'In Progress' },
+                            { value: 'REVIEW', label: 'Review' },
+                            { value: 'COMPLETED', label: 'Completed' }
+                        ]}
+                    />
+                </Space>
+            </Card>
+
+            {/* Responsive Operational Datatable */}
+            <div className="card border-0 shadow-sm overflow-hidden flex-fill" style={{ borderRadius: '16px', background: '#ffffff' }}>
+                <Table
+                    dataSource={filteredActions}
+                    columns={columns}
+                    rowKey={(record) => record._id || record.id}
+                    loading={loading}
+                    pagination={{ pageSize: 10, showSizeChanger: true }}
+                    scroll={{ x: 'max-content' }}
+                    onRow={(record) => ({
+                        onClick: () => handleEditAction(record),
+                        style: { cursor: 'pointer' }
+                    })}
+                    className="antd-ops-table"
+                />
             </div>
 
-            <div className="card border-0 shadow-sm overflow-hidden" style={{ borderRadius: '16px' }}>
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-hover align-middle mb-0" style={{ fontSize: '13px' }}>
-                            <thead className="table-light text-muted text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>
-                                <tr>
-                                    <th className="ps-4">Action</th>
-                                    <th>Type</th>
-                                    <th>Seller</th>
-                                    <th>Linked ASINs</th>
-                                    <th>Assignee</th>
-                                    <th>Status</th>
-                                    <th className="text-end pe-4">Activity</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredActions.length > 0 ? (
-                                    filteredActions.map(action => (
-                                        <tr key={action._id} onClick={() => handleEditAction(action)} style={{ cursor: 'pointer' }}>
-                                            <td className="ps-4">
-                                                <div className="d-flex align-items-center gap-2">
-                                                    {getStatusDot(action.status)}
-                                                    <span className="fw-bold text-dark">{action.title}</span>
-                                                </div>
-                                                <div className="text-muted smallest mt-1 text-truncate" style={{ maxWidth: '250px' }}>
-                                                    {action.description}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className="badge bg-secondary-subtle text-secondary border-secondary-subtle capitalize">
-                                                    {action.type?.toLowerCase().replace('_', ' ')}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="fw-medium">{action.sellerId?.name || '--'}</div>
-                                                <div className="smallest text-muted">{action.sellerId?.marketplace}</div>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex flex-wrap gap-1">
-                                                    {action.asins?.slice(0, 3).map((asin, i) => (
-                                                        <span key={asin._id || asin.id || i} className="badge bg-light text-dark border fw-normal" style={{ fontSize: '10px' }}>
-                                                            {asin.asinCode || asin.asin || asin}
-                                                        </span>
-                                                    ))}
-                                                    {action.asins?.length > 3 && <span className="text-muted small">+{action.asins.length - 3}</span>}
-                                                    {(!action.asins || action.asins.length === 0) && '--'}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="d-flex align-items-center gap-2">
-                                                    <div className="avatar-initial bg-primary-subtle text-primary rounded-circle small" style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
-                                                        {(action.assignedTo?.firstName || 'U').charAt(0)}
-                                                    </div>
-                                                    <span>{action.assignedTo?.firstName ? `${action.assignedTo.firstName} ${action.assignedTo.lastName}` : 'Unassigned'}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${action.status === 'COMPLETED' ? 'bg-success-subtle text-success' :
-                                                    action.status === 'IN_PROGRESS' ? 'bg-primary-subtle text-primary' :
-                                                    action.status === 'REVIEW' ? 'bg-info-subtle text-info' :
-                                                        'bg-warning-subtle text-warning-emphasis'
-                                                }`}>
-                                                    {action.status?.replace('_', ' ')}
-                                                </span>
-                                            </td>
-                                            <td className="text-end pe-4">
-                                                <div className="d-flex gap-2 justify-content-end">
-                                                    {action.status === 'PENDING' && (
-                                                        <button
-                                                            className="btn btn-sm btn-outline-primary rounded-circle"
-                                                            title="Start Task"
-                                                            onClick={(e) => { e.stopPropagation(); handleStartTask(action); }}
-                                                        >
-                                                            <Play size={14} />
-                                                        </button>
-                                                    )}
-                                                    {action.status === 'IN_PROGRESS' && (
-                                                        <button
-                                                            className="btn btn-sm btn-outline-info rounded-circle"
-                                                            title="Submit for Review"
-                                                            onClick={(e) => { e.stopPropagation(); handleSubmitForReview(action); }}
-                                                        >
-                                                            <FileText size={14} />
-                                                        </button>
-                                                    )}
-                                                    {action.status === 'REVIEW' && (
-                                                        <>
-                                                            {/* Admin can review all, Manager can review if not owner */}
-                                                            {((currentUser?.role === 'admin' || currentUser?.role?.name === 'admin') ||
-                                                                ((currentUser?.role === 'manager' || currentUser?.role?.name === 'manager') &&
-                                                                    (action.assignedTo?._id || action.assignedTo) !== currentUser?._id)) && (
-                                                                    <>
-                                                                        <button
-                                                                            className="btn btn-sm btn-outline-success rounded-circle"
-                                                                            title="Approve"
-                                                                            onClick={(e) => { e.stopPropagation(); openReviewModal(action); }}
-                                                                        >
-                                                                            <ThumbsUp size={14} />
-                                                                        </button>
-                                                                        <button
-                                                                            className="btn btn-sm btn-outline-danger rounded-circle"
-                                                                            title="Reject"
-                                                                            onClick={(e) => { e.stopPropagation(); openReviewModal(action); }}
-                                                                        >
-                                                                            <ThumbsDown size={14} />
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                        </>
-                                                    )}
-                                                    <button className="btn btn-sm btn-icon btn-light rounded-circle" onClick={(e) => { e.stopPropagation(); handleEditAction(action); }} title="Edit">
-                                                        <Plus size={14} style={{ transform: 'rotate(45deg)' }} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="7" className="text-center py-5 text-muted">
-                                            No tasks found matching your filters.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
+            {/* Overlays */}
             <ActionModal
                 isOpen={isActionModalOpen}
                 onClose={() => { setIsActionModalOpen(false); setEditingAction(null); }}

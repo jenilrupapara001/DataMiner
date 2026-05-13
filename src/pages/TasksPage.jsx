@@ -5,12 +5,19 @@ import ActionModal from '../components/actions/ActionModal';
 import ObjectiveManager from '../components/actions/ObjectiveManager';
 import CompletionModal from '../components/actions/CompletionModal';
 import ReviewModal from '../components/actions/ReviewModal';
-import { Plus, CheckCircle, Clock, Calendar, AlertTriangle, List, BarChart2, TrendingUp, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Plus, Calendar, AlertTriangle, List, BarChart2, TrendingUp } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import TasksOperationsPage from './TasksOperationsPage';
+import { 
+  Space, Button, Segmented, Modal, Divider, 
+  message as antdMessage, Typography, Spin
+} from 'antd';
+
+const { Title, Text } = Typography;
 
 const TasksPage = () => {
+  const [messageApi, contextHolder] = antdMessage.useMessage();
   const { user: currentUser } = useAuth();
   const [objectives, setObjectives] = useState([]);
   const [allActions, setAllActions] = useState([]); // Flatted actions for KPIs
@@ -25,7 +32,7 @@ const TasksPage = () => {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState('STRATEGIC');
   const [searchParams, setSearchParams] = useSearchParams();
-  const [toasts, setToasts] = useState([]);
+  
   const activeFilter = searchParams.get('filter') || 'ALL';
   const searchQuery = searchParams.get('q') || '';
   const selectedKeyResultIdFromUrl = searchParams.get('krId');
@@ -91,11 +98,11 @@ const TasksPage = () => {
   };
 
   const addToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
+    if (type === 'danger' || type === 'error') {
+      messageApi.error(message);
+    } else {
+      messageApi.success(message);
+    }
   };
 
   const calculateKPIs = (objs, directActions = []) => {
@@ -194,7 +201,7 @@ const TasksPage = () => {
       setEditingObjective(item);
       setIsObjectiveModalOpen(true);
     } else if (type === 'KR') {
-      // For now, toggle simple prompt or implementation later
+      // Use simple prompt
       const newTitle = prompt('Update Key Result Title:', item.title);
       if (newTitle) {
         db.updateKeyResult(item._id || item.id, { title: newTitle }).then(() => loadData());
@@ -202,43 +209,58 @@ const TasksPage = () => {
     }
   };
 
-  const handleDelete = async (id, type = 'ACTION') => {
-    if (!window.confirm(`Are you sure you want to delete this ${type.toLowerCase()}? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      if (type === 'ACTION') {
-        await db.deleteAction(id);
-      } else if (type === 'OBJECTIVE') {
-        await db.deleteObjective(id);
-      } else if (type === 'KR') {
-        await db.deleteKeyResult(id);
+  const handleDelete = (id, type = 'ACTION') => {
+    Modal.confirm({
+      title: `Delete this ${type.toLowerCase()}?`,
+      content: `Are you sure you want to delete this ${type.toLowerCase()}? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          if (type === 'ACTION') {
+            await db.deleteAction(id);
+          } else if (type === 'OBJECTIVE') {
+            await db.deleteObjective(id);
+          } else if (type === 'KR') {
+            await db.deleteKeyResult(id);
+          }
+          loadData();
+          addToast(`${type} deleted successfully`, 'success');
+        } catch (error) {
+          console.error(`Failed to delete ${type}`, error);
+          addToast(`Failed to delete ${type}`, 'danger');
+        }
       }
-      loadData();
-    } catch (error) {
-      console.error(`Failed to delete ${type}`, error);
-    }
+    });
   };
 
-  const handleDeleteAll = async () => {
+  const handleDeleteAll = () => {
     const totalObjectives = objectives.length;
-    if (!window.confirm(`⚠️ This will permanently delete ALL ${totalObjectives} objectives, their key results, and ALL actions from the database. This cannot be undone. Continue?`)) {
-      return;
-    }
-    try {
-      await db.deleteAllObjectives();
-      addToast(`All objectives, key results, and actions deleted successfully`, 'success');
-      loadData();
-    } catch (error) {
-      console.error('Failed to delete all data', error);
-      addToast('Failed to delete all data', 'danger');
-    }
+    Modal.confirm({
+      title: '⚠️ Permanent Deletion Prompt',
+      content: `This will permanently delete ALL ${totalObjectives} objectives, their key results, and ALL actions from the database. This cannot be undone. Continue?`,
+      okText: 'Delete All Data',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await db.deleteAllObjectives();
+          addToast(`All objectives, key results, and actions deleted successfully`, 'success');
+          loadData();
+        } catch (error) {
+          console.error('Failed to delete all data', error);
+          addToast('Failed to delete all data', 'danger');
+        }
+      }
+    });
   };
 
   const handleAddActionForKR = (krId) => {
     setSelectedKeyResultId(krId);
-    setEditingAction(null); // Ensure we are creating new
+    setEditingAction(null); 
     setIsActionModalOpen(true);
   };
 
@@ -250,24 +272,13 @@ const TasksPage = () => {
         await db.createAction(data);
       }
       setIsActionModalOpen(false);
-      loadData(); // Reload to refresh KPIs and hierarchy
-      setSelectedKeyResultId(null); // Reset
+      loadData(); 
+      setSelectedKeyResultId(null); 
+      addToast('Action saved successfully', 'success');
     } catch (error) {
       console.error('Failed to save action', error);
+      addToast('Failed to save action', 'danger');
     }
-  };
-
-  const handleDeleteAction = async (id) => {
-    if (confirm('Delete this action?')) {
-      await db.deleteAction(id);
-      loadData();
-    }
-  };
-
-  // Forward start/complete handlers to ActionListEnhanced (which handles API calls generally, but here likely needs reload)
-  // Actually ActionListEnhanced has handlers, but we might want to refresh KPIs after status change
-  const refreshData = () => {
-    loadData();
   };
 
   const handleStartTask = async (action) => {
@@ -275,8 +286,10 @@ const TasksPage = () => {
     try {
       await db.startAction(id);
       loadData();
+      addToast('Task marked as in progress', 'success');
     } catch (error) {
       console.error('Failed to start task:', error);
+      addToast('Failed to start task', 'danger');
     }
   };
 
@@ -288,8 +301,10 @@ const TasksPage = () => {
       setIsCompletionModalOpen(false);
       setCompletingAction(null);
       loadData();
+      addToast('Task completed successfully', 'success');
     } catch (error) {
       console.error('Failed to complete task:', error);
+      addToast('Failed to complete task', 'danger');
     } finally {
       setLoading(false);
     }
@@ -304,11 +319,12 @@ const TasksPage = () => {
     try {
       setLoading(true);
 
-      // Distinguish between direct completion and review submission based on modal data
       if (data.stage === 'REVIEW') {
         await db.submitActionForReview(actionId, data);
+        addToast('Submitted for review', 'success');
       } else {
         await db.completeAction(actionId, data);
+        addToast('Task completed successfully', 'success');
       }
 
       setIsCompletionModalOpen(false);
@@ -316,7 +332,7 @@ const TasksPage = () => {
       loadData();
     } catch (error) {
       console.error('Failed to process task completion:', error);
-      alert('Action failed. Please try again.');
+      messageApi.error('Action failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -373,10 +389,11 @@ const TasksPage = () => {
 
         await Promise.all(taskPromises);
         loadData(); // Reload to show new tasks
+        messageApi.success('AI Suggestions generated successfully');
       }
     } catch (error) {
       console.error('AI Suggestion failed', error);
-      alert('AI Suggestion failed. Please ensure your API key is configured.');
+      messageApi.error('AI Suggestion failed. Please check your configuration.');
     } finally {
       setLoading(false);
     }
@@ -405,227 +422,286 @@ const TasksPage = () => {
     });
   };
 
+  // Pill options mapping
+  const filterPills = [
+    { type: 'ALL', label: 'All', count: kpis.all, color: '#64748b', activeStyle: { background: '#3b82f6', color: '#ffffff', borderColor: '#3b82f6' } },
+    { type: 'TODO', label: 'To Do', count: kpis.todo, color: '#3b82f6', activeStyle: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#3b82f6' } },
+    { type: 'OVERDUE', label: 'Overdue', count: kpis.overdue, color: '#ef4444', activeStyle: { background: '#fef2f2', color: '#b91c1c', borderColor: '#ef4444' } },
+    { type: 'TOMORROW', label: 'Tomorrow', count: kpis.tomorrow, color: '#f59e0b', activeStyle: { background: '#fffbeb', color: '#b45309', borderColor: '#f59e0b' } },
+    { type: 'UPCOMING', label: 'Upcoming', count: kpis.upcoming, color: '#06b6d4', activeStyle: { background: '#ecfeff', color: '#0e7490', borderColor: '#06b6d4' } },
+    { isDivider: true },
+    { type: 'PENDING', label: 'Pending', count: kpis.status.pending, color: '#f59e0b', activeStyle: { background: '#fffbeb', color: '#b45309', borderColor: '#f59e0b' } },
+    { type: 'IN_PROGRESS', label: 'In Progress', count: kpis.status.inProgress, color: '#3b82f6', activeStyle: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#3b82f6' } },
+    { type: 'REVIEW', label: 'Review', count: kpis.status.review, color: '#06b6d4', activeStyle: { background: '#ecfeff', color: '#0e7490', borderColor: '#06b6d4' } },
+    { type: 'REJECTED', label: 'Rejected', count: kpis.status.rejected, color: '#ef4444', activeStyle: { background: '#fef2f2', color: '#b91c1c', borderColor: '#ef4444' } },
+    { type: 'COMPLETED', label: 'Completed', count: kpis.status.completed, color: '#10b981', activeStyle: { background: '#f0fdf4', color: '#047857', borderColor: '#10b981' } },
+  ];
 
   return (
-    <div className="container-fluid p-0">
+    <div className="tasks-page-container">
+      {contextHolder}
+      <style>{`
+        .tasks-page-container {
+          display: flex;
+          flex-direction: column;
+          height: calc(100vh - 60px);
+          overflow: hidden;
+          background-color: #f8fafc;
+          margin: -1.5rem -2rem;
+        }
+        .tasks-header {
+          flex-shrink: 0;
+          background: #ffffff;
+          padding: 16px 24px;
+          border-bottom: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          z-index: 10;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+        }
+        .tasks-scroll-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+        }
+        
+        /* Modern Filter Pills */
+        .filter-pill-container {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 24px;
+          align-items: center;
+        }
+        .filter-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 24px;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          color: #64748b;
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.01);
+          user-select: none;
+        }
+        .filter-pill:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+          border-color: #cbd5e1;
+        }
+        .filter-pill:active {
+          transform: scale(0.97);
+        }
+        .filter-pill.active {
+          box-shadow: 0 3px 8px rgba(0,0,0,0.04);
+        }
+        .pill-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          transition: all 0.2s ease;
+        }
+
+        .segmented-tasks .ant-segmented-item-selected {
+          background-color: #3b82f6 !important;
+          color: #ffffff !important;
+          font-weight: 650 !important;
+        }
+
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+          animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @media (max-width: 992px) {
+          .tasks-page-container {
+            margin: -0.75rem;
+            height: auto;
+            overflow: visible;
+          }
+          .tasks-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 16px;
+          }
+        }
+      `}</style>
+
       {/* Header Area */}
-      <div className="d-flex justify-content-between align-items-center mb-5 mt-4">
+      <div className="tasks-header">
         <div>
-          <h1 className="fw-700 mb-1" style={{ fontSize: '2rem', letterSpacing: '-0.02em', color: '#1e293b' }}>
-            Optimization <span className="text-primary">Tasks</span> Hub
-          </h1>
-          <p className="text-muted mb-0">Strategic Performance & Tactical Oversight</p>
+          <Title level={3} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
+            Optimization <span style={{ color: '#3b82f6' }}>Tasks</span> Hub
+          </Title>
+          <Text type="secondary" style={{ fontSize: '13px' }}>Strategic Performance & Tactical Oversight</Text>
         </div>
 
+        <Space size={12} wrap>
+          <Segmented
+            className="segmented-tasks"
+            size="large"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { label: <Space size={6}><TrendingUp size={14} /><span>Strategic</span></Space>, value: 'STRATEGIC' },
+              { label: <Space size={6}><List size={14} /><span>Operations</span></Space>, value: 'OPERATIONS' }
+            ]}
+          />
 
-        <div className="d-flex align-items-center gap-3">
-          <div className="btn-group p-1 bg-white border shadow-sm rounded-pill">
-            <button
-              onClick={() => setViewMode('STRATEGIC')}
-              className={`btn btn-sm px-3 rounded-pill border-0 transition-all ${viewMode === 'STRATEGIC' ? 'btn-primary shadow-sm' : 'text-muted hover-bg-light'}`}
-              style={{ fontSize: '12px', fontWeight: '600' }}
-            >
-              <TrendingUp size={14} className="me-1" /> Strategic
-            </button>
-            <button
-              onClick={() => setViewMode('OPERATIONS')}
-              className={`btn btn-sm px-3 rounded-pill border-0 transition-all ${viewMode === 'OPERATIONS' ? 'btn-primary shadow-sm' : 'text-muted hover-bg-light'}`}
-              style={{ fontSize: '12px', fontWeight: '600' }}
-            >
-              <List size={14} className="me-1" /> Operations
-            </button>
-          </div>
+          <Divider orientation="vertical" style={{ height: 32, margin: '0 4px' }} />
 
-          <div className="vr mx-1 opacity-25" style={{ height: '32px' }}></div>
-
-          <button onClick={handleCreateAction} className="btn btn-light d-flex align-items-center gap-2 rounded-pill px-3 shadow-sm border-0">
-            <Plus size={18} /> Quick Task
-          </button>
-          <button onClick={handleCreateObjective} className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4 shadow-sm">
-            <BarChart2 size={18} /> New Project
-          </button>
-          {currentUser?.role?.name === 'admin' || currentUser?.role === 'admin' ? (
-            <button onClick={handleDeleteAll} className="btn btn-outline-danger d-flex align-items-center gap-2 rounded-pill px-3" title="Admin: Delete all actions from database">
-              <AlertTriangle size={16} /> Clear All
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* KPI Dashboard - Compact Dot Badges */}
-      <div className="d-flex flex-wrap gap-2 mb-4">
-        <div
-          onClick={() => handleFilterClick('ALL')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'ALL' ? 'bg-primary text-white border-primary' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: activeFilter === 'ALL' ? 'white' : '#6c757d' }}></div>
-          <span className={activeFilter === 'ALL' ? 'text-white' : 'text-muted text-uppercase'} style={{ fontSize: '11px', letterSpacing: '0.05em' }}>All</span>
-          <span className="fw-bold">{kpis.all}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('TODO')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'TODO' ? 'bg-primary-subtle border-primary' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }}></div>
-          <span className="text-muted text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>To Do</span>
-          <span className="fw-bold">{kpis.todo}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('OVERDUE')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'OVERDUE' ? 'bg-danger-subtle border-danger' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#dc3545' }}></div>
-          <span className="text-danger text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Overdue</span>
-          <span className="fw-bold text-danger">{kpis.overdue}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('TOMORROW')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'TOMORROW' ? 'bg-warning-subtle border-warning' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ffc107' }}></div>
-          <span className="text-warning-emphasis text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Tomorrow</span>
-          <span className="fw-bold">{kpis.tomorrow}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('UPCOMING')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'UPCOMING' ? 'bg-info-subtle border-info' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0dcaf0' }}></div>
-          <span className="text-info-emphasis text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Upcoming</span>
-          <span className="fw-bold">{kpis.upcoming}</span>
-        </div>
-
-        <div className="mx-1 border-end" style={{ height: '24px' }}></div>
-
-        <div
-          onClick={() => handleFilterClick('PENDING')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'PENDING' ? 'bg-warning-subtle border-warning' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ffc107' }}></div>
-          <span className="text-warning-emphasis text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Pending</span>
-          <span className="fw-bold">{kpis.status.pending}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('IN_PROGRESS')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'IN_PROGRESS' ? 'bg-primary-subtle border-primary' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0d6efd' }}></div>
-          <span className="text-primary text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>In Progress</span>
-          <span className="fw-bold">{kpis.status.inProgress}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('REVIEW')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'REVIEW' ? 'bg-info-subtle border-info' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0dcaf0' }}></div>
-          <span className="text-info text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Review</span>
-          <span className="fw-bold">{kpis.status.review}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('REJECTED')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'REJECTED' ? 'bg-danger-subtle border-danger' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#dc3545' }}></div>
-          <span className="text-danger text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Rejected</span>
-          <span className="fw-bold">{kpis.status.rejected}</span>
-        </div>
-
-        <div
-          onClick={() => handleFilterClick('COMPLETED')}
-          className={`d-flex align-items-center gap-2 px-3 py-1 rounded-pill border cursor-pointer transition-all ${activeFilter === 'COMPLETED' ? 'bg-success-subtle border-success' : 'bg-white border-light-subtle shadow-sm'}`}
-          style={{ fontSize: '13px', fontWeight: '500' }}
-        >
-          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#198754' }}></div>
-          <span className="text-success text-uppercase" style={{ fontSize: '11px', letterSpacing: '0.05em' }}>Completed</span>
-          <span className="fw-bold">{kpis.status.completed}</span>
-        </div>
-
-        <div className="ms-auto">
-          <button
-            onClick={() => navigate('/actions/achievement-report')}
-            className="btn btn-sm btn-outline-primary rounded-pill px-3 d-flex align-items-center gap-2"
-            style={{ fontSize: '12px', fontWeight: '600' }}
+          <Button 
+            type="default" 
+            onClick={handleCreateAction} 
+            shape="round" 
+            icon={<Plus size={15} />} 
+            style={{ height: '40px', display: 'flex', alignItems: 'center', fontWeight: 600 }}
           >
-            <TrendingUp size={14} /> Performance Report
-          </button>
-        </div>
+            Quick Task
+          </Button>
+          
+          <Button 
+            type="primary" 
+            onClick={handleCreateObjective} 
+            shape="round" 
+            style={{ height: '40px', display: 'flex', alignItems: 'center', backgroundColor: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600 }} 
+            icon={<BarChart2 size={15} />}
+          >
+            New Project
+          </Button>
+
+          {(currentUser?.role?.name === 'admin' || currentUser?.role === 'admin') && (
+            <Button 
+              danger 
+              type="dashed"
+              onClick={handleDeleteAll} 
+              shape="round" 
+              style={{ height: '40px', display: 'flex', alignItems: 'center', fontWeight: 600 }} 
+              icon={<AlertTriangle size={15} />}
+              title="Admin: Delete all actions from database"
+            >
+              Clear All
+            </Button>
+          )}
+        </Space>
       </div>
 
+      {/* Main Scrollable Body */}
+      <div className="tasks-scroll-content animate-fade-up">
+        
+        {/* Modern KPI Filter Pills Strip */}
+        <div className="filter-pill-container">
+          {filterPills.map((pill, idx) => {
+            if (pill.isDivider) {
+              return <Divider orientation="vertical" key={`div-${idx}`} style={{ height: 24, margin: '0 6px' }} />;
+            }
 
-      {/* Strategic Objectives List */}
-      {
-        loading ? (
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Loading...</span>
-            </div>
+            const isActive = activeFilter === pill.type;
+            const activeStyles = isActive ? pill.activeStyle : {};
+            const dotBg = (isActive && pill.type === 'ALL') ? '#ffffff' : pill.color;
+
+            return (
+              <div
+                key={pill.type}
+                onClick={() => handleFilterClick(pill.type)}
+                className={`filter-pill ${isActive ? 'active' : ''}`}
+                style={{ ...activeStyles }}
+              >
+                <div className="pill-dot" style={{ backgroundColor: dotBg }}></div>
+                <span className="text-uppercase" style={{ fontSize: '10.5px', letterSpacing: '0.05em' }}>{pill.label}</span>
+                <span style={{ fontWeight: 800 }}>{pill.count}</span>
+              </div>
+            );
+          })}
+
+          <div style={{ marginLeft: 'auto' }}>
+            <Button 
+              type="link" 
+              onClick={() => navigate('/actions/achievement-report')} 
+              icon={<TrendingUp size={14} />}
+              className="fw-bold"
+            >
+              Performance Report
+            </Button>
+          </div>
+        </div>
+
+        {/* Strategic Objectives / Operations Switchable Content */}
+        {loading ? (
+          <div style={{ display: 'flex', flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+            <Spin size="large" description="Syncing Dashboard..." />
           </div>
         ) : viewMode === 'OPERATIONS' ? (
           <TasksOperationsPage isEmbedded={true} />
         ) : (
-          <ActionListEnhanced
-            objectives={objectives}
-            actions={allActions}
-            standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
-            loading={loading}
-            activeFilter={activeFilter}
-            searchQuery={searchQuery}
-            currentUser={currentUser}
-            onSearchChange={handleSearchChange}
-            onEdit={handleEdit}
-            onAddAction={handleAddActionForKR}
-            onAISuggest={handleAISuggest}
-            onDelete={handleDelete}
-            onStartTask={handleStartTask}
-            onCompleteTask={handleCompleteTask}
-            onSubmitForReview={handleSubmitForReview}
-            onReviewAction={(action) => openReviewModal(action)}
-            viewMode={viewMode}
-          />
-        )
-      }
-
-      {/* Modals */}
-      {
-        isObjectiveModalOpen && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-              <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '16px' }}>
-                <ObjectiveManager
-                  objective={editingObjective}
-                  users={users}
-                  onClose={() => {
-                    setIsObjectiveModalOpen(false);
-                    setEditingObjective(null);
-                  }}
-                  onObjectiveCreated={() => {
-                    setIsObjectiveModalOpen(false);
-                    setEditingObjective(null);
-                    loadData();
-                  }}
-                />
-              </div>
-            </div>
+          <div style={{ flex: 1 }}>
+            <ActionListEnhanced
+              objectives={objectives}
+              actions={allActions}
+              standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
+              loading={loading}
+              activeFilter={activeFilter}
+              searchQuery={searchQuery}
+              currentUser={currentUser}
+              onSearchChange={handleSearchChange}
+              onEdit={handleEdit}
+              onAddAction={handleAddActionForKR}
+              onAISuggest={handleAISuggest}
+              onDelete={handleDelete}
+              onStartTask={handleStartTask}
+              onCompleteTask={handleCompleteTask}
+              onSubmitForReview={handleSubmitForReview}
+              onReviewAction={(action) => openReviewModal(action)}
+              viewMode={viewMode}
+            />
           </div>
-        )
-      }
+        )}
 
+      </div>
+
+      {/* ================= ANT DESIGN MODALS ================= */}
+
+      {/* Objective Creation Modal Overlay */}
+      <Modal
+        open={isObjectiveModalOpen}
+        onCancel={() => {
+          setIsObjectiveModalOpen(false);
+          setEditingObjective(null);
+        }}
+        footer={null}
+        closable={false}
+        styles={{ body: { padding: 0 } }}
+        width={800}
+        centered
+        destroyOnHidden
+      >
+        <ObjectiveManager
+          objective={editingObjective}
+          users={users}
+          onClose={() => {
+            setIsObjectiveModalOpen(false);
+            setEditingObjective(null);
+          }}
+          onObjectiveCreated={() => {
+            setIsObjectiveModalOpen(false);
+            setEditingObjective(null);
+            loadData();
+          }}
+        />
+      </Modal>
+
+      {/* Tasks Editor Overlay Container */}
       <ActionModal
         isOpen={isActionModalOpen}
         onClose={() => {
@@ -642,6 +718,7 @@ const TasksPage = () => {
         initialKeyResultId={selectedKeyResultId}
       />
 
+      {/* Action Review Overlay Container */}
       <ReviewModal
         isOpen={isReviewModalOpen}
         action={reviewingAction}
@@ -652,6 +729,7 @@ const TasksPage = () => {
         onReview={handleReviewAction}
       />
 
+      {/* Completing Tasks Multi-Step Modal Container */}
       {isCompletionModalOpen && completingAction && (
         <CompletionModal
           isOpen={isCompletionModalOpen}
@@ -663,42 +741,7 @@ const TasksPage = () => {
           onComplete={handleCompletionSubmit}
         />
       )}
-
-      {/* Toast Container */}
-      <div className="toast-container position-fixed bottom-0 end-0 p-4" style={{ zIndex: 2000 }}>
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`toast show align-items-center text-white bg-${toast.type} border-0 mb-2 shadow-lg animate-slide-in`}
-            role="alert"
-            aria-live="assertive"
-            aria-atomic="true"
-            style={{ borderRadius: '12px', minWidth: '300px' }}
-          >
-            <div className="d-flex">
-              <div className="toast-body d-flex align-items-center gap-3 py-3">
-                {toast.type === 'success' ? <ThumbsUp size={18} /> : <AlertTriangle size={18} />}
-                <span className="fw-medium">{toast.message}</span>
-              </div>
-              <button
-                type="button"
-                className="btn-close btn-close-white me-2 m-auto"
-                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              ></button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <style>{`
-        .animate-slide-in {
-          animation: slideIn 0.3s ease-out forwards;
-        }
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
+      
     </div>
   );
 };

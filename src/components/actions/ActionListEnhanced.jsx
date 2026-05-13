@@ -125,6 +125,7 @@ const ActionList = ({
     onSubmitForReview,
     onReviewAction,
     onSyncGoal, // New prop
+    onViewAction, // Add missing prop
     viewMode = 'STRATEGIC' // STRATEGIC or OPERATIONS
 }) => {
     const [filterStatus, setFilterStatus] = useState('');

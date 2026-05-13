@@ -799,7 +799,7 @@ const Dashboard = () => {
                     percent={Math.round(((data.userStats?.completed + (data.userStats?.inProgress || 0)) / (data.userStats?.total || 1)) * 100) || 0}
                     success={{ percent: Math.round((data.userStats?.completed / (data.userStats?.total || 1)) * 100) || 0 }}
                     strokeColor="#3b82f6"
-                    trailColor="#f1f5f9"
+                    railColor="#f1f5f9"
                     showInfo={false}
                     style={{ marginBottom: '16px' }}
                   />
@@ -832,7 +832,7 @@ const Dashboard = () => {
                     percent={Math.round(((data.teamStats?.completed + (data.teamStats?.inProgress || 0)) / (data.teamStats?.total || 1)) * 100) || 0}
                     success={{ percent: Math.round((data.teamStats?.completed / (data.teamStats?.total || 1)) * 100) || 0 }}
                     strokeColor="#0ea5e9"
-                    trailColor="#f1f5f9"
+                    railColor="#f1f5f9"
                     showInfo={false}
                     style={{ marginBottom: '16px' }}
                   />
