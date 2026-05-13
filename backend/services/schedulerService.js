@@ -50,17 +50,20 @@ class SchedulerService {
         let scheduleTime = process.env.AUTOMATION_SCHEDULE_TIME || '11:20';
         let ajioScheduleTime = process.env.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00';
         let automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
+        let automationTimezone = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata'; // Align with IST by default
 
         console.log('--------------------------------------------------------');
         console.log('📡 [SCHEDULER CONFIG LOADED FROM ENV]');
         console.log(`⏰ ENV -> Amazon Nightly Schedule: ${scheduleTime}`);
         console.log(`⏰ ENV -> Ajio Nightly Schedule  : ${ajioScheduleTime}`);
-        console.log(`⚙️  ENV -> Automation Status       : ${process.env.AUTOMATION_ENABLED === 'true' ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`🌍 ENV -> Scheduler Timezone   : ${automationTimezone}`);
+        console.log(`⚙️  ENV -> Automation Status       : ${automationEnabled ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`📅 Server Internal System Time  : ${new Date().toString()}`);
         console.log('--------------------------------------------------------');
 
         try {
             const pool = await getPool();
-            const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED')");
+            const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED', 'AUTOMATION_TIMEZONE')");
             const settingsMap = {};
             settingsResult.recordset.forEach(s => {
                 settingsMap[s.Key] = s.Value;
@@ -73,6 +76,10 @@ class SchedulerService {
             if (settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] && settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] !== ajioScheduleTime) {
                 console.log(`📌 [Scheduler DB Override] Ajio Nightly Schedule overridden by Database  : ${ajioScheduleTime} -> ${settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME']}`);
                 ajioScheduleTime = settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'];
+            }
+            if (settingsMap['AUTOMATION_TIMEZONE'] && settingsMap['AUTOMATION_TIMEZONE'] !== automationTimezone) {
+                console.log(`📌 [Scheduler DB Override] Timezone overridden by Database              : ${automationTimezone} -> ${settingsMap['AUTOMATION_TIMEZONE']}`);
+                automationTimezone = settingsMap['AUTOMATION_TIMEZONE'];
             }
             if (settingsMap['AUTOMATION_ENABLED'] !== undefined) {
                 const dbEnabled = settingsMap['AUTOMATION_ENABLED'] === 'true';
@@ -90,34 +97,39 @@ class SchedulerService {
             return;
         }
 
+        const cronOptions = {
+            scheduled: true,
+            timezone: automationTimezone
+        };
+
         // 1. Amazon Enterprise Octoparse Pipeline
         const [scheduleHour, scheduleMinute] = scheduleTime.split(':');
         const cronExpr = `${scheduleMinute || 0} ${scheduleHour || 0} * * *`;
         this.jobs.enterprisePipeline = cron.schedule(cronExpr, async () => {
-            console.log('⏰ Running scheduled Amazon Enterprise Pipeline...');
+            console.log(`⏰ [${new Date().toLocaleTimeString()}] Running scheduled Amazon Enterprise Pipeline (${automationTimezone})...`);
             await this.runEnterprisePipeline('amazon');
-        });
-        console.log(`🏢 Amazon Enterprise Pipeline scheduled at ${scheduleTime} (${cronExpr})`);
+        }, cronOptions);
+        console.log(`🏢 Amazon Enterprise Pipeline scheduled at ${scheduleTime} in ${automationTimezone} (${cronExpr})`);
 
         // 2. Ajio Enterprise Octoparse Pipeline
         const [ajioHour, ajioMinute] = ajioScheduleTime.split(':');
         const ajioCronExpr = `${ajioMinute || 0} ${ajioHour || 0} * * *`;
         this.jobs.enterpriseAjioPipeline = cron.schedule(ajioCronExpr, async () => {
-            console.log('⏰ Running scheduled Ajio Enterprise Pipeline...');
+            console.log(`⏰ [${new Date().toLocaleTimeString()}] Running scheduled Ajio Enterprise Pipeline (${automationTimezone})...`);
             await this.runEnterprisePipeline('ajio');
-        });
-        console.log(`🏢 Ajio Enterprise Pipeline scheduled at ${ajioScheduleTime} (${ajioCronExpr})`);
+        }, cronOptions);
+        console.log(`🏢 Ajio Enterprise Pipeline scheduled at ${ajioScheduleTime} in ${automationTimezone} (${ajioCronExpr})`);
 
         // 3. Database Integrity Repair (Every 6 hours)
         this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
             console.log('ℹ️ Repair task skipped (Refactoring in progress)');
-        });
+        }, cronOptions);
 
         // 4. Daily Age Tag Refresh (Every day at 2 AM)
         this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {
             await this.refreshAgeTags();
-        });
+        }, cronOptions);
     }
 
     async reschedule() {
