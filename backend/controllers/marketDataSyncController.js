@@ -3,6 +3,56 @@ const marketDataSyncService = require('../services/marketDataSyncService');
 const { updateSellerAsinCount } = require('./asinController');
 
 /**
+ * Helper to validate identifiers and generate correct marketplace URLs,
+ * filtering out mismatched cross-market patterns to protect tracker pipelines.
+ */
+const generateAndValidateMarketplaceUrls = (asins, seller) => {
+    const isAjio = seller.Marketplace && seller.Marketplace.toLowerCase() === 'ajio';
+    const urls = [];
+    let skipped = 0;
+
+    for (const a of asins) {
+        const rawCode = (a.AsinCode || '').trim();
+        if (!rawCode) continue;
+
+        const isUrl = rawCode.startsWith('http://') || rawCode.startsWith('https://');
+        let skip = false;
+
+        if (isAjio) {
+            if (isUrl && (rawCode.includes('amazon') || rawCode.includes('/dp/'))) {
+                skip = true;
+            } else if (!isUrl) {
+                // Amazon ASIN pattern (usually starts with B)
+                if (/^B[0-9A-Z]{9}$/i.test(rawCode)) {
+                    skip = true;
+                }
+            }
+        } else {
+            if (isUrl && rawCode.includes('ajio')) {
+                skip = true;
+            } else if (!isUrl) {
+                // Ajio numeric identifier pattern (12 digits)
+                if (/^\d{12}$/.test(rawCode)) {
+                    skip = true;
+                }
+            }
+        }
+
+        if (skip) {
+            skipped++;
+            continue;
+        }
+
+        if (isUrl) {
+            urls.push(rawCode);
+        } else {
+            urls.push(isAjio ? `https://www.ajio.com/p/${rawCode}` : `https://www.amazon.in/dp/${rawCode}`);
+        }
+    }
+    return { urls, skipped, isAjio };
+};
+
+/**
  * Controller for discreet Market Data Synchronization.
  */
 exports.syncAsin = async (req, res) => {
@@ -427,9 +477,13 @@ exports.setupSellerTask = async (req, res) => {
         
         const asins = asinsResult.recordset;
         if (asins.length > 0) {
-            const asinUrls = asins.map(a => `https://www.amazon.in/dp/${a.AsinCode}`);
-            await marketDataSyncService.updateTaskUrlsWithFile(newTaskId, asinUrls);
-            console.log(`✅ Injected ${asinUrls.length} ASIN URLs into new task: ${newTaskId}`);
+            const { urls, skipped, isAjio } = generateAndValidateMarketplaceUrls(asins, seller);
+            if (urls.length > 0) {
+                await marketDataSyncService.updateTaskUrlsWithFile(newTaskId, urls, isAjio);
+                console.log(`✅ Injected ${urls.length} marketplace URLs into new task: ${newTaskId}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+            } else {
+                console.warn(`⚠️ No valid identifiers aligned with marketplace for ${seller.Name} during initial injection.`);
+            }
         }
 
         res.json({
@@ -638,7 +692,7 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
         const { sellerIds } = req.body;
         const pool = await getPool();
 
-        let query = "SELECT Id, Name, OctoparseId FROM Sellers";
+        let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers";
         if (sellerIds && Array.isArray(sellerIds) && sellerIds.length > 0) {
             const sellerIdsStr = sellerIds.map(id => `'${id}'`).join(',');
             query += ` WHERE Id IN (${sellerIdsStr})`;
@@ -676,9 +730,13 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
                 let injectStatus = 'No ASINs';
                 
                 if (asins.length > 0) {
-                    const asinUrls = asins.map(a => `https://www.amazon.in/dp/${a.AsinCode}`);
-                    await marketDataSyncService.updateTaskUrlsWithFile(newTaskId, asinUrls);
-                    injectStatus = 'Success';
+                    const { urls, skipped, isAjio } = generateAndValidateMarketplaceUrls(asins, seller);
+                    if (urls.length > 0) {
+                        await marketDataSyncService.updateTaskUrlsWithFile(newTaskId, urls, isAjio);
+                        injectStatus = `Success (${urls.length} injected${skipped > 0 ? `, ${skipped} skipped` : ''})`;
+                    } else {
+                        injectStatus = 'Skipped (Mismatched identifiers)';
+                    }
                 }
 
                 summary.push({ seller: seller.Name, taskId: newTaskId, status: 'Created', injection: injectStatus });
@@ -731,7 +789,7 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
         const { sellerIds } = req.body;
         const pool = await getPool();
 
-        let query = "SELECT Id, Name, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
+        let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
         if (sellerIds && Array.isArray(sellerIds) && sellerIds.length > 0) {
             const sellerIdsStr = sellerIds.map(id => `'${id}'`).join(',');
             query += ` AND Id IN (${sellerIdsStr})`;
@@ -760,14 +818,25 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
                     continue;
                 }
 
-                const asinUrls = asins.map(a => `https://www.amazon.in/dp/${a.AsinCode}`);
-                await marketDataSyncService.updateTaskUrlsWithFile(seller.OctoparseId, asinUrls);
+                const { urls, skipped, isAjio } = generateAndValidateMarketplaceUrls(asins, seller);
+                
+                if (urls.length === 0) {
+                    summary.push({ 
+                        seller: seller.Name, 
+                        status: 'Skipped (Mismatched identifiers)', 
+                        count: 0,
+                        skipped
+                    });
+                    continue;
+                }
+
+                await marketDataSyncService.updateTaskUrlsWithFile(seller.OctoparseId, urls, isAjio);
 
                 summary.push({ 
                     seller: seller.Name, 
                     taskId: seller.OctoparseId, 
-                    status: 'Success', 
-                    asinCount: asins.length
+                    status: skipped > 0 ? `Success (with ${skipped} skipped)` : 'Success', 
+                    asinCount: urls.length
                 });
 
             } catch (err) {

@@ -163,7 +163,7 @@ class MarketDataSyncService {
     isConfigured() {
         const username = process.env.MARKET_SYNC_USERNAME;
         const password = process.env.MARKET_SYNC_PASSWORD;
-        
+
         // Strictly use username/password flow for generating Access Tokens
         return !!(username && password &&
             username !== 'demo-provider' &&
@@ -225,7 +225,7 @@ class MarketDataSyncService {
      * @param {string} taskId The task ID to update
      * @param {string[]} urls Array of full URLs to inject
      */
-    async updateTaskUrlsWithFile(taskId, items, retryCount = 0) {
+    async updateTaskUrlsWithFile(taskId, items, isAjio = false, retryCount = 0) {
         if (!taskId) throw new Error('Task ID is required for URL injection');
         if (!items || items.length === 0) return true;
 
@@ -234,13 +234,13 @@ class MarketDataSyncService {
         const token = await this.authenticate();
 
         // 1. Normalize and clean input (strictly one URL per line, no duplicates)
-        // Correctly formats ASINs to full Amazon.in URLs if they aren't already
+        // Correctly formats identifiers dynamically based on seller marketplace
         const uniqueUrls = [...new Set(items.map(item => {
             if (typeof item !== 'string') return '';
             const t = item.trim();
             if (t.startsWith('http')) return t;
-            if (t.length === 10) return `https://www.amazon.in/dp/${t}`;
-            return t;
+            // Dynamic format assignment
+            return isAjio ? `https://www.ajio.com/p/${t}` : `https://www.amazon.in/dp/${t}`;
         }).filter(Boolean))];
 
         try {
@@ -281,13 +281,13 @@ class MarketDataSyncService {
                 errorData?.message === 'FileProcessing' ||
                 errorData?.code === 'TaskExecuting' ||
                 error.message.includes('400')) && retryCount < 4) {
-                
+
                 console.warn(`⏳ Task ${taskId} is active or busy (${provError.code || errorData?.message}). Forcing STOP and retrying in 20s... (Attempt ${retryCount + 1}/4)`);
-                
+
                 // Force stop again just in case ensureTaskStopped failed to catch a transition
-                await this.stopSync(taskId).catch(() => {});
+                await this.stopSync(taskId).catch(() => { });
                 await this.wait(20000);
-                
+
                 return this.updateTaskUrlsWithFile(taskId, items, retryCount + 1); // Retry with count
             }
 
@@ -340,14 +340,14 @@ class MarketDataSyncService {
      */
     async duplicateTask(taskName, isAjio = false) {
         const token = await this.authenticate();
-        const masterTaskId = isAjio 
-            ? process.env.OCTOPARSE_AJIO_MASTER_TASK_ID 
+        const masterTaskId = isAjio
+            ? process.env.OCTOPARSE_AJIO_MASTER_TASK_ID
             : process.env.OCTOPARSE_MASTER_TASK_ID;
-        let groupId = isAjio 
-            ? process.env.OCTOPARSE_AJIO_GROUP_ID 
+        let groupId = isAjio
+            ? process.env.OCTOPARSE_AJIO_GROUP_ID
             : process.env.OCTOPARSE_GROUP_ID;
-        const groupName = isAjio 
-            ? process.env.OCTOPARSE_AJIO_GROUP_NAME 
+        const groupName = isAjio
+            ? process.env.OCTOPARSE_AJIO_GROUP_NAME
             : process.env.OCTOPARSE_GROUP_NAME;
 
         if (!masterTaskId) throw new Error(`${isAjio ? 'OCTOPARSE_AJIO_MASTER_TASK_ID' : 'OCTOPARSE_MASTER_TASK_ID'} is not configured in .env`);
@@ -772,7 +772,7 @@ class MarketDataSyncService {
         const token = await this.authenticate();
         try {
             console.log(`🧹 [Octoparse] Clearing all previous data for task: ${taskId}...`);
-            const response = await axios.post(`${this.baseUrl}/data/remove`, 
+            const response = await axios.post(`${this.baseUrl}/data/remove`,
                 { taskId },
                 { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
             );
@@ -809,7 +809,7 @@ class MarketDataSyncService {
                     // Check status first to avoid unnecessary stop calls
                     const status = await this.getStatus(seller.OctoparseId);
                     const taskStatus = typeof status?.status === 'string' ? status.status.toLowerCase() : status?.status;
-                    
+
                     // 1: Running, 2: Finished, 3: Stopped
                     if (taskStatus === 'running' || taskStatus === 1 || taskStatus === '1') {
                         console.log(`🛑 Stopping running task for ${seller.Name}...`);
@@ -821,7 +821,7 @@ class MarketDataSyncService {
                     return { name: seller.Name, success: false };
                 }
             }));
-            
+
             console.log(`✅ [Octoparse] Bulk stop cycle completed.`);
             return true;
         } catch (error) {
@@ -1286,7 +1286,7 @@ class MarketDataSyncService {
                     console.log(`📥 Trying data path: ${path} with taskId: ${currentId} (size: ${currentSize}, attempt: ${attempt}/${maxAttempts})`);
                     response = await axios.get(`${this.baseUrl}${path}`, {
                         params,
-                        headers: { 
+                        headers: {
                             'Authorization': `Bearer ${token}`,
                             'Accept-Encoding': 'gzip,deflate,compress'
                         },
@@ -1357,7 +1357,7 @@ class MarketDataSyncService {
                         console.log(`📥 Retry with original UUID: ${taskId}`);
                         const response = await axios.get(`${this.baseUrl}${path}`, {
                             params: { taskId, size, offset, executionId },
-                            headers: { 
+                            headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Accept-Encoding': 'gzip,deflate,compress'
                             },
@@ -1558,7 +1558,7 @@ class MarketDataSyncService {
                 }
                 await this.markDataAsExported(taskId);
                 console.log(`🧹 [Pre-Sync] Clearing task data in Octoparse cloud for task ${taskId}...`);
-                await this.clearTaskData(taskId).catch(() => {});
+                await this.clearTaskData(taskId).catch(() => { });
                 console.log(`✅ [Pre-Sync] Cleanup complete for task ${taskId}.`);
             } catch (cleanupErr) {
                 console.warn(`⚠️ [Pre-Sync] Cleanup warning (continuing sync): ${cleanupErr.message}`);
@@ -1571,13 +1571,13 @@ class MarketDataSyncService {
             // 3. Get ASINs for this seller from database
             console.log(`📊 Fetching ASINs from database for seller ${sellerId}...`);
             let asins;
-            
+
             if (options.targetAsins && Array.isArray(options.targetAsins)) {
                 console.log(`🎯 [TargetedSync] Using ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
                 asins = options.targetAsins.map(a => ({ AsinCode: a }));
             } else {
                 let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
-                
+
                 if (options.onlyMissing) {
                     console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);
                     asinQuery += " AND (Title IS NULL OR Title = '' OR CurrentPrice IS NULL OR CurrentPrice = 0 OR ImageUrl IS NULL OR ImageUrl = '')";
@@ -1605,16 +1605,62 @@ class MarketDataSyncService {
             const sellerObj = sellerQuery.recordset[0];
             const isAjio = sellerObj && sellerObj.Marketplace && sellerObj.Marketplace.toLowerCase() === 'ajio';
 
-            // Create URLs from ASINs
-            const asinCodes = asins.map(a => a.AsinCode);
-            const urls = asinCodes.map(code => {
-                if (code.startsWith('http://') || code.startsWith('https://')) return code;
-                return isAjio ? `https://www.ajio.com/p/${code}` : `https://www.amazon.in/dp/${code}`;
+            // Create and VALIDATE URLs from ASINs based on marketplace
+            const urls = [];
+            let invalidCount = 0;
+
+            asins.forEach(a => {
+                const rawCode = (a.AsinCode || '').trim();
+                if (!rawCode) return;
+
+                const isUrl = rawCode.startsWith('http://') || rawCode.startsWith('https://');
+                let isValid = true;
+
+                if (isAjio) {
+                    // For Ajio, block Amazon URLs and alphanumeric ASINs starting with B
+                    if (isUrl && (rawCode.includes('amazon') || rawCode.includes('/dp/'))) {
+                        isValid = false;
+                    } else if (!isUrl) {
+                        if (/^B[0-9A-Z]{9}$/i.test(rawCode)) {
+                            isValid = false;
+                        }
+                    }
+                } else {
+                    // For Amazon, block Ajio URLs and numeric-only strings (Ajio codes)
+                    if (isUrl && rawCode.includes('ajio')) {
+                        isValid = false;
+                    } else if (!isUrl) {
+                        if (/^\d{12}$/.test(rawCode)) {
+                            isValid = false;
+                        }
+                    }
+                }
+
+                if (!isValid) {
+                    invalidCount++;
+                    return;
+                }
+
+                if (isUrl) {
+                    urls.push(rawCode);
+                } else {
+                    urls.push(isAjio ? `https://www.ajio.com/p/${rawCode}` : `https://www.amazon.in/dp/${rawCode}`);
+                }
             });
+
+            if (invalidCount > 0) {
+                console.warn(`⚠️ Filtered out ${invalidCount} mismatched identifiers for ${isAjio ? 'Ajio' : 'Amazon'} task.`);
+            }
+
+            if (urls.length === 0) {
+                console.warn(`🚫 ALL ${asins.length} identifiers were mismatched. Aborting injection.`);
+                this.syncLocks.delete(sellerId.toString());
+                return { success: true, count: 0, asinsCount: 0 };
+            }
 
             // 4. PERSIST metadata to Database
             await pool.request()
-                .input('totalAsins', sql.Int, asins.length)
+                .input('totalAsins', sql.Int, urls.length)
                 .input('sellerId', sql.VarChar, sellerId)
                 .query('UPDATE Sellers SET ScrapeUsed = @totalAsins, UpdatedAt = GETDATE() WHERE Id = @sellerId');
 
@@ -1624,7 +1670,7 @@ class MarketDataSyncService {
 
             // 5. Update task URLs (using FILE endpoint)
             try {
-                await this.updateTaskUrlsWithFile(taskId, urls);
+                await this.updateTaskUrlsWithFile(taskId, urls, isAjio);
             } catch (injectionError) {
                 console.error(`❌ File-based injection failed for task ${taskId}: ${injectionError.message}`);
                 throw injectionError;
@@ -1944,14 +1990,14 @@ class MarketDataSyncService {
                     for (const offer of secondBuyboxData.offers) {
                         const offerSeller = (offer.seller || '').trim();
                         const isSameAsPrimary = offerSeller.toLowerCase() === soldBy.toLowerCase();
-                        
+
                         if (!isSameAsPrimary && offerSeller.length > 0) {
                             if (!foundSecondary) {
                                 secondAsp = offer.price || secondAsp;
                                 soldBySec = offerSeller;
                                 foundSecondary = true;
                             }
-                            
+
                             allOffers.push({
                                 seller: offerSeller,
                                 price: offer.price || 0,
@@ -1962,10 +2008,10 @@ class MarketDataSyncService {
                 } else {
                     const rawSecondAsp = this._cleanPrice(rawData.second_asp || '');
                     const rawSoldBySec = (rawData.Sold_by_sec || rawData.soldBySec || '').trim();
-                    
+
                     if (rawSecondAsp > 0 || rawSoldBySec.length > 0) {
                         secondAsp = rawSecondAsp || secondAsp;
-                        
+
                         if (rawSoldBySec && rawSoldBySec.toLowerCase() !== soldBy.toLowerCase()) {
                             soldBySec = rawSoldBySec;
                             allOffers.push({
@@ -1987,7 +2033,7 @@ class MarketDataSyncService {
 
                 let rawAvailability = this._getFromRaw(rawData, ['unavilable', 'unavailable', 'availability', 'availabilityStatus', 'status', 'Field16', 'Field15', 'stock', 'inventory'], '');
                 const activePrice = price > 0 ? price : (asin.CurrentPrice || 0);
-                
+
                 if (rawAvailability && typeof rawAvailability === 'string' && rawAvailability.trim().length > 0) {
                     const lowerAvail = rawAvailability.toLowerCase().trim();
                     if (lowerAvail.includes('unavailable') || lowerAvail.includes('out of stock') || lowerAvail.includes('currently unavailable') || lowerAvail.includes('off shelf') || lowerAvail.includes('temporarily out of stock')) {
@@ -2069,7 +2115,7 @@ class MarketDataSyncService {
             // User requested: If deal badge is present, it's NOT a price dispute
             const hasDeal = dealBadge && dealBadge !== 'No deal found';
             const isDisputed = uploadedPrice > 0 && Math.abs(uploadedPrice - currentPrice) > 0.01 && !hasDeal;
-            
+
             // Handle Tags
             let currentTags = [];
             try {
@@ -2092,16 +2138,16 @@ class MarketDataSyncService {
             const calculateTrend = (current, history, field, threshold = 0.05, isAbsolute = false, invert = false) => {
                 // history here is uniqueHistory which includes current point at the end
                 if (!history || !Array.isArray(history) || history.length < 2) return 'Stable';
-                
+
                 // Filter out zero values for average calculation to avoid skewing
                 const prevPoints = history.slice(0, -1).filter(item => item && typeof item === 'object' && (item[field] || 0) > 0);
                 // Use the most recent previous valid point as baseline ("last data" as requested)
                 const lastPoint = prevPoints.length > 0 ? prevPoints[prevPoints.length - 1] : null;
                 if (!lastPoint || typeof lastPoint !== 'object') return 'Stable';
                 const baseline = lastPoint[field] || 0;
-                
+
                 if (baseline === 0) return 'Stable';
-                
+
                 if (isAbsolute) {
                     // Absolute comparison (e.g. Rating: 4.5 -> 4.4 is down 0.1)
                     if (current <= baseline - threshold + 0.001) return 'Down';
@@ -2109,7 +2155,7 @@ class MarketDataSyncService {
                     return 'Stable';
                 } else {
                     const diffPercent = (current - baseline) / baseline;
-                    
+
                     if (invert) {
                         // For BSR, a DECREASE in number (-%) is GOOD (Grow)
                         if (diffPercent < -threshold) return 'Grow';
@@ -2247,7 +2293,7 @@ class MarketDataSyncService {
                     if (match) {
                         const rank = parseInt(match[1].replace(/,/g, ''));
                         const category = match[2].trim();
-                        
+
                         try {
                             await pool.request()
                                 .input('asinId', sql.VarChar, asinId)
@@ -2763,10 +2809,10 @@ class MarketDataSyncService {
      */
     _isBuyBoxWinner(sellerName, extraTrustedSellers = []) {
         if (!sellerName) return false;
-        
+
         // Convert extraTrustedSellers to array if it's a string
         const extra = Array.isArray(extraTrustedSellers) ? extraTrustedSellers : [extraTrustedSellers].filter(Boolean);
-        
+
         // Use the centralized buyBoxUtils helper which includes the full list of variations
         return isBuyBoxWinner(sellerName, extra);
     }
@@ -3211,7 +3257,7 @@ class MarketDataSyncService {
      */
     async resolveTaskIdToInteger(uuid, groupId = null) {
         if (!uuid) return null;
-        
+
         // 0. Check Cache First
         if (this.taskIdCache.has(uuid)) {
             return this.taskIdCache.get(uuid);
@@ -3225,7 +3271,7 @@ class MarketDataSyncService {
                 for (let offset = 0; offset <= 200; offset += 50) {
                     // Small delay to prevent burst
                     await this.wait(500);
-                    
+
                     const response = await axios.get(`${this.baseUrl}/task/search`, {
                         params: { taskGroupId: groupId, size: 50, offset },
                         headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
@@ -3250,7 +3296,7 @@ class MarketDataSyncService {
 
                 for (let offset = 0; offset <= 200; offset += 50) {
                     await this.wait(800); // More aggressive delay for global search
-                    
+
                     const tasksResponse = await axios.get(`${this.baseUrl}/task/search`, {
                         params: { taskGroupId: id, size: 50, offset },
                         headers: { 'Authorization': `Bearer ${await this.authenticate()}` }
@@ -3312,7 +3358,7 @@ class MarketDataSyncService {
      */
     async syncMarketData(asinCodes, options = {}) {
         if (!asinCodes || asinCodes.length === 0) return;
-        
+
         try {
             const pool = await getPool();
             const result = await pool.request().query(`
@@ -3320,15 +3366,15 @@ class MarketDataSyncService {
                 FROM Asins 
                 WHERE AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})
             `);
-            
+
             const sellerIds = result.recordset.map(r => r.SellerId);
-            
+
             for (const sellerId of sellerIds) {
                 const sellerAsins = (await pool.request()
                     .input('sellerId', sql.VarChar, sellerId)
                     .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})`))
                     .recordset.map(r => r.AsinCode);
-                
+
                 await this.syncSellerAsinsToOctoparse(sellerId, { ...options, targetAsins: sellerAsins });
             }
         } catch (error) {
