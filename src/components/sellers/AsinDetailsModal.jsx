@@ -1,214 +1,358 @@
 import React from 'react';
-import { Package, Zap, MoreHorizontal, CheckCircle2, AlertCircle, Store, ExternalLink } from 'lucide-react';
+import { Package, Zap, Store, ExternalLink, CheckCircle2, AlertCircle, Tag as TagIcon, BarChart } from 'lucide-react';
+import { Modal, Row, Col, Typography, Tag, Image, Space, Divider, Button, Statistic, Badge } from 'antd';
+
+const { Title, Text } = Typography;
 
 const AsinDetailsModal = ({ asin, onClose }) => {
   if (!asin) return null;
 
+  // Calculate discount safely
+  const discountPct = asin.currentPrice && asin.mrp ? Math.round((1 - asin.currentPrice / asin.mrp) * 100) : 0;
+
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.8)', backdropFilter: 'blur(8px)', zIndex: 1100 }}>
-      <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div className="modal-content border-0 shadow-2xl overflow-hidden" style={{ borderRadius: '24px', backgroundColor: '#fff' }}>
-
-          {/* Header */}
-          <div className="px-5 py-4 border-bottom border-zinc-100 d-flex justify-content-between align-items-center bg-white sticky-top">
-            <div className="d-flex align-items-center gap-4">
-              <div className="p-3 bg-zinc-900 rounded-4 shadow-xl border border-zinc-800 rotate-hover">
-                <Package size={28} className="text-white" />
-              </div>
-              <div>
-                <div className="d-flex align-items-center gap-3 mb-1">
-                  <h3 className="fw-black text-zinc-900 mb-0 tracking-tight" style={{ fontSize: '24px' }}>{asin.asinCode}</h3>
-                  <span className={`badge rounded-pill ${asin.status === 'Active' ? 'bg-success-subtle text-success' : 'bg-zinc-100 text-zinc-500'} px-2 py-1`}>
-                    {asin.status}
-                  </span>
-                  {asin.priceType === 'Deal Price' && (
-                    <span className="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                      <Zap size={10} className="me-1" /> DEAL
-                    </span>
-                  )}
-                </div>
-                <div className="text-muted smallest fw-semibold uppercase tracking-wider d-flex align-items-center gap-2">
-                  <span>{asin.category || 'Uncategorized'}</span>
-                  <span className="opacity-30">•</span>
-                  <span>SKU: {asin.sku || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-            <button className="btn btn-icon btn-light rounded-circle" onClick={onClose}>
-              <MoreHorizontal size={20} />
-            </button>
+    <Modal
+      open={!!asin}
+      onCancel={onClose}
+      footer={[
+        <Button 
+          key="close" 
+          type="primary" 
+          onClick={onClose}
+          style={{ 
+            backgroundColor: '#0f172a', 
+            borderColor: '#0f172a', 
+            borderRadius: '10px', 
+            fontWeight: 700,
+            padding: '0 24px',
+            height: '40px',
+            boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)'
+          }}
+        >
+          Close Pipeline Intel
+        </Button>
+      ]}
+      width={940}
+      centered
+      destroyOnClose
+      styles={{
+        body: { padding: '20px 24px', backgroundColor: '#ffffff' },
+        footer: { padding: '12px 24px', borderTop: '1px solid #f1f5f9', background: '#fff', margin: 0 }
+      }}
+      maskStyle={{
+        backdropFilter: 'blur(6px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.3)'
+      }}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ padding: '8px', background: 'linear-gradient(135deg, #1e293b, #0f172a)', borderRadius: '10px', color: '#fff', display: 'flex' }}>
+            <Package size={18} />
           </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Text strong style={{ fontSize: '16px', color: '#0f172a', fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
+                {asin.asinCode}
+              </Text>
+              <Tag color={asin.status === 'Active' ? 'success' : 'default'} bordered={false} style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px' }}>
+                {asin.status?.toUpperCase() || 'INACTIVE'}
+              </Tag>
+              {asin.priceType === 'Deal Price' && (
+                <Tag color="error" bordered={false} style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <Zap size={10} fill="currentColor" /> DEAL
+                </Tag>
+              )}
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <style>{`
+        .ant-modal-content {
+          border-radius: 20px !important;
+          overflow: hidden !important;
+          box-shadow: 0 20px 40px -8px rgba(0,0,0,0.12) !important;
+        }
+        .ant-modal-header {
+          padding: 14px 24px !important;
+          border-bottom: 1px solid #f1f5f9 !important;
+          margin-bottom: 0 !important;
+        }
+        .dense-scrollbox::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        .dense-scrollbox::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+        }
+        .dense-scrollbox::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .sub-img-grid {
+          width: 46px;
+          height: 46px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+          background: #fff;
+        }
+        .sub-img-grid:hover {
+          border-color: #4f46e5;
+          transform: translateY(-2px);
+        }
+        .compact-kpi-container {
+          display: flex;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .compact-kpi-item {
+          flex: 1;
+          padding: 12px 16px;
+          border-right: 1px solid #e2e8f0;
+          transition: background 0.2s;
+        }
+        .compact-kpi-item:last-child {
+          border-right: none;
+        }
+        .compact-kpi-item:hover {
+          background: #fafafa;
+        }
+      `}</style>
 
-          <div className="modal-body p-0">
-            <div className="row g-0">
-
-              {/* Left Column: Visuals & Gallery */}
-              <div className="col-lg-5 p-4 border-end border-zinc-100 bg-white">
-                <div className="position-relative mb-4 bg-zinc-50 rounded-4 p-4 border border-zinc-100 overflow-hidden text-center">
-                  <img
-                    src={asin.mainImageUrl || asin.imageUrl || 'https://via.placeholder.com/400x400?text=No+Image'}
-                    alt={asin.title}
-                    className="img-fluid rounded-3"
-                    style={{ maxHeight: '350px', objectFit: 'contain' }}
-                  />
-                  <div className="position-absolute top-0 end-0 p-3">
-                    <div className="bg-white/80 backdrop-blur rounded-pill px-3 py-1 border border-zinc-200 shadow-sm smallest fw-bold">
-                      {asin.images?.length || 0} Images
-                    </div>
-                  </div>
-                </div>
-
-                {/* Gallery Grid */}
+      <Row gutter={[24, 24]}>
+        {/* Sidebar Column (Left) */}
+        <Col xs={24} md={8}>
+          <div style={{ 
+            background: '#f8fafc', 
+            borderRadius: '16px', 
+            padding: '16px', 
+            border: '1px solid #f1f5f9',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            height: '100%'
+          }}>
+            {/* Main Image Box */}
+            <div style={{ 
+              padding: '12px', 
+              background: '#fff', 
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '220px'
+            }}>
+              <Image.PreviewGroup>
+                <Image
+                  src={asin.mainImageUrl || asin.imageUrl || 'https://via.placeholder.com/400x400?text=No+Image'}
+                  alt={asin.title}
+                  style={{ maxHeight: '180px', objectFit: 'contain' }}
+                  fallback="https://via.placeholder.com/400x400?text=No+Image"
+                />
+                
+                {/* Dense Gallery Row */}
                 {asin.images?.length > 0 && (
-                  <div className="row g-2">
-                    {asin.images.slice(0, 8).map((img, idx) => (
-                      <div key={idx} className="col-3">
-                        <div className="ratio ratio-1x1 bg-zinc-50 rounded-3 border border-zinc-100 overflow-hidden cursor-pointer hover-scale transition-all">
-                          <img src={img} alt={`Gallery ${idx}`} style={{ objectFit: 'cover' }} />
-                        </div>
+                  <div style={{ 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: '6px', 
+                    marginTop: '12px', 
+                    justifyContent: 'center',
+                    maxHeight: '60px',
+                    overflowY: 'auto'
+                  }} className="dense-scrollbox">
+                    {asin.images.slice(0, 6).map((img, idx) => (
+                      <div key={idx} className="sub-img-grid">
+                        <Image src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                     ))}
                   </div>
                 )}
+              </Image.PreviewGroup>
+            </div>
 
-                {/* Rating Summary */}
-                <div className="mt-5 p-4 bg-zinc-900 rounded-4 text-white shadow-lg">
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <div className="smallest fw-bold uppercase opacity-60">Customer Sentiment</div>
-                    <div className="d-flex align-items-center gap-1">
-                      <div className="text-warning"><Zap size={14} fill="currentColor" /></div>
-                      <span className="fw-black">
-                        {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '0.0')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="h4 fw-bold mb-1">{asin.reviewCount?.toLocaleString() || '0'} Reviews</div>
-                  <div className="smallest opacity-80">Based on global marketplace feedback</div>
+            {/* Tech Specs Directory */}
+            <div style={{ background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '10px' }}>
+                Catalog Directory
+              </Text>
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><Store size={12} /> Sold By</Text>
+                  <Text strong style={{ fontSize: '11px', color: '#334155', maxWidth: '130px' }} ellipsis>{asin.soldBy || 'N/A'}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><TagIcon size={12} /> Category</Text>
+                  <Text strong style={{ fontSize: '11px', color: '#334155', maxWidth: '130px' }} ellipsis title={asin.category}>{asin.category || 'N/A'}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><Package size={12} /> Local SKU</Text>
+                  <Text strong style={{ fontSize: '11px', color: '#334155', fontFamily: 'monospace' }}>{asin.sku || 'N/A'}</Text>
+                </div>
+              </Space>
+            </div>
+
+            {/* Dense Sentiment Block */}
+            <div style={{ 
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', 
+              borderRadius: '12px', 
+              padding: '14px',
+              color: '#fff'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <Text style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer Feedback</Text>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', background: 'rgba(250, 204, 21, 0.15)', color: '#facc15', padding: '2px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+                  <Zap size={10} fill="currentColor" /> {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '0.0')}
                 </div>
               </div>
-
-              {/* Right Column: Intelligence & Data */}
-              <div className="col-lg-7 p-4 bg-zinc-50/30">
-
-                {/* Title Section */}
-                <div className="mb-5">
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <label className="smallest fw-bold uppercase text-muted tracking-widest">Product Title</label>
-                    <span className={`badge rounded-pill ${asin.titleLength > 150 ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'} px-2 fw-bold`}>
-                      {asin.titleLength || 0} Chars
-                    </span>
-                  </div>
-                  <h5 className="lh-base text-zinc-900 fw-bold">{asin.title || 'Product title not yet synced.'}</h5>
-                </div>
-
-                {/* KPI Grid */}
-                <div className="row g-3 mb-5">
-                  <div className="col-md-4">
-                    <div className="bg-white p-4 rounded-4 shadow-sm border border-zinc-100 h-100">
-                      <div className="smallest fw-bold uppercase text-muted mb-2">Pricing Intel</div>
-                      <div className="d-flex align-items-end gap-2 mb-1">
-                        <div className="h3 fw-black text-zinc-900 mb-0">₹{asin.currentPrice?.toLocaleString() || '0'}</div>
-                        <div className="text-muted text-decoration-line-through mb-1">₹{asin.mrp?.toLocaleString() || '0'}</div>
-                      </div>
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="smallest fw-bold text-success">
-                          {asin.currentPrice && asin.mrp ? Math.round((1 - asin.currentPrice / asin.mrp) * 100) : 0}% Off
-                        </span>
-                        <span className="opacity-20">•</span>
-                        <span className="smallest fw-medium text-muted">{asin.priceType || 'Standard'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="bg-white p-4 rounded-4 shadow-sm border border-zinc-100 h-100">
-                      <div className="smallest fw-bold uppercase text-muted mb-2">Core Visibility</div>
-                      <div className="h3 fw-black text-primary mb-0">#{asin.bsr?.toLocaleString() || '---'}</div>
-                      <div className="smallest fw-medium text-muted mt-1">Main Category BSR</div>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="bg-white p-4 rounded-4 shadow-sm border border-zinc-100 h-100">
-                      <div className="smallest fw-bold uppercase text-muted mb-2">Stock Inventory</div>
-                      <div className={`h3 fw-black mb-0 ${asin.stockLevel > 10 ? 'text-success' : 'text-danger'}`}>
-                        {asin.stockLevel || 0}
-                      </div>
-                      <div className="smallest fw-medium text-muted mt-1">Units Available</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sub BSRs */}
-                {asin.subBSRs?.length > 0 && (
-                  <div className="mb-5">
-                    <label className="smallest fw-bold uppercase text-muted tracking-widest mb-3 d-block">Sub-Category Ranks</label>
-                    <div className="d-flex flex-wrap gap-2">
-                      {asin.subBSRs.map((rank, idx) => (
-                        <div key={idx} className="bg-white border border-zinc-200 rounded-pill px-3 py-1 smallest fw-bold shadow-sm d-flex align-items-center gap-2">
-                          <div className="bg-primary rounded-circle" style={{ width: '6px', height: '6px' }}></div>
-                          {rank}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bullet Points */}
-                <div className="mb-5">
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <label className="smallest fw-bold uppercase text-muted tracking-widest">Enhanced bullet points</label>
-                    <span className="smallest fw-black text-zinc-400">{asin.bulletPointsList?.length || 0} Points</span>
-                  </div>
-                  <div className="bg-white rounded-4 border border-zinc-100 p-4 shadow-sm">
-                    {asin.bulletPointsList?.length > 0 ? (
-                      <ul className="list-unstyled mb-0 d-flex flex-column gap-3">
-                        {asin.bulletPointsList.map((point, idx) => (
-                          <li key={idx} className="d-flex gap-3">
-                            <div className="flex-shrink-0 mt-1">
-                              <CheckCircle2 size={16} className="text-success" />
-                            </div>
-                            <span className="smallest fw-medium text-zinc-600 lh-sm">{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-center py-3">
-                        <AlertCircle size={24} className="text-zinc-200 mb-2" />
-                        <div className="smallest text-muted italic">No bullet points extracted yet.</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Secondary Intel */}
-                <div className="row g-4">
-                  <div className="col-md-6">
-                    <div className="d-flex align-items-center gap-3">
-                      <div className="p-2 bg-zinc-100 rounded-3"><Store size={18} className="text-zinc-600" /></div>
-                      <div>
-                        <div className="smallest fw-bold text-muted uppercase">Sold By</div>
-                        <div className="fw-bold text-zinc-900">{asin.soldBy || 'Unknown Seller'}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6 text-end">
-                    <a href={asin.pageUrl || (asin.marketplace === 'ajio' ? `https://www.ajio.com/p/${asin.asinCode}` : asin.marketplace === 'myntra' ? `https://www.myntra.com` : `https://amazon.in/dp/${asin.asinCode}`)} target="_blank" rel="noreferrer" className="btn btn-white btn-sm rounded-pill border border-zinc-200 shadow-sm px-4 fw-bold text-zinc-700">
-                      View Live <ExternalLink size={14} className="ms-1" />
-                    </a>
-                  </div>
-                </div>
-
-              </div>
+              <Text strong style={{ color: '#ffffff', fontSize: '16px', display: 'block', lineHeight: 1 }}>
+                {asin.reviewCount?.toLocaleString() || '0'} Reviews
+              </Text>
             </div>
           </div>
+        </Col>
 
-          <div className="modal-footer border-0 p-4 bg-zinc-50/50">
-            <button className="btn btn-zinc-900 rounded-pill px-5 py-2 fw-black shadow-xl" onClick={onClose} style={{ backgroundColor: '#18181B', color: '#fff' }}>
-              Close Pipeline Intel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+        {/* Content Column (Right) */}
+        <Col xs={24} md={16}>
+          <Space orientation="vertical" size={18} style={{ width: '100%' }}>
+            
+            {/* Title Block */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <Tag color={asin.titleLength > 150 ? 'success' : 'warning'} bordered={false} style={{ fontWeight: 700, fontSize: '10px', borderRadius: '4px' }}>
+                  {asin.titleLength || 0} CHARS
+                </Tag>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<ExternalLink size={12} />}
+                  href={asin.pageUrl || (asin.marketplace === 'ajio' ? `https://www.ajio.com/p/${asin.asinCode}` : asin.marketplace === 'myntra' ? `https://www.myntra.com` : `https://amazon.in/dp/${asin.asinCode}`)}
+                  target="_blank"
+                  style={{ padding: 0, fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', height: 'auto' }}
+                >
+                  Open Marketplace
+                </Button>
+              </div>
+              <Title level={5} style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: '14px', lineHeight: 1.4 }}>
+                {asin.title || 'Listing title pending ingestion...'}
+              </Title>
+            </div>
+
+            {/* Integrated Segmented KPI Container */}
+            <div className="compact-kpi-container">
+              <div className="compact-kpi-item">
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pricing</Text>}
+                  value={asin.currentPrice || 0}
+                  prefix="₹"
+                  styles={{ content: { color: '#0f172a', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  {discountPct > 0 && (
+                    <>
+                      <Text type="secondary" delete style={{ fontSize: '10px' }}>₹{asin.mrp || 0}</Text>
+                      <span style={{ color: '#10b981', fontWeight: 700, fontSize: '10px' }}>-{discountPct}%</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="compact-kpi-item">
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>BSR Rank</Text>}
+                  value={asin.bsr || 0}
+                  formatter={(val) => `#${val?.toLocaleString() || '—'}`}
+                  styles={{ content: { color: '#4f46e5', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
+                />
+                <Text type="secondary" style={{ fontSize: '10px', display: 'block', marginTop: '2px' }}>Category Tier</Text>
+              </div>
+
+              <div className="compact-kpi-item">
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stock Levels</Text>}
+                  value={asin.stockLevel || 0}
+                  styles={{ content: { color: (asin.stockLevel || 0) > 10 ? '#10b981' : '#ef4444', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  <Badge status={(asin.stockLevel || 0) > 10 ? 'success' : 'error'} />
+                  <Text type="secondary" style={{ fontSize: '10px' }}>Units</Text>
+                </div>
+              </div>
+            </div>
+
+            {/* Compact Sub BSR Layout */}
+            {asin.subBSRs?.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+                  <BarChart size={11} style={{ color: '#64748b' }} />
+                  <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sub-Category Segments</Text>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {asin.subBSRs.map((rank, idx) => (
+                    <Tag key={idx} bordered={false} style={{ 
+                      background: '#f1f5f9', 
+                      padding: '2px 8px', 
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      fontSize: '10px',
+                      color: '#475569',
+                      margin: 0
+                    }}>
+                      {rank}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Highly Compact Feature Bullet Points Box */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Enhanced Bullets</Text>
+                <Text type="secondary" style={{ fontSize: '10px', fontWeight: 600, color: '#94a3b8' }}>{asin.bulletPointsList?.length || 0} Total</Text>
+              </div>
+              <div 
+                style={{ 
+                  maxHeight: '180px', 
+                  overflowY: 'auto', 
+                  background: '#f8fafc', 
+                  border: '1px solid #e2e8f0', 
+                  borderRadius: '12px', 
+                  padding: '12px' 
+                }} 
+                className="dense-scrollbox"
+              >
+                {asin.bulletPointsList?.length > 0 ? (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {asin.bulletPointsList.map((point, idx) => (
+                      <li key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <CheckCircle2 size={12} style={{ color: '#10b981', flexShrink: 0, marginTop: '2px' }} />
+                        <Text style={{ color: '#475569', fontSize: '11px', lineHeight: 1.4 }}>{point}</Text>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '16px 0', color: '#94a3b8' }}>
+                    <AlertCircle size={16} style={{ marginBottom: '4px' }} />
+                    <Text type="secondary" style={{ display: 'block', fontSize: '11px', fontStyle: 'italic' }}>No structured bullet descriptions available.</Text>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </Space>
+        </Col>
+      </Row>
+
+    </Modal>
   );
 };
 

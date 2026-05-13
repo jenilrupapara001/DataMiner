@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
+import { 
+  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic 
+} from 'antd';
+const { Title, Text } = Typography;
 import axios from 'axios';
 import {
   Package,
@@ -137,7 +140,7 @@ const MiniSpark = ({ data, color }) => {
 // Analytics History Modal for viewing full historical breakdown
 // ---------------------------------------------------------
 const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
-  if (!isOpen || !rowData) return null;
+  if (!rowData) return null;
 
   // Sort history descending (newest first)
   const fullHistory = [...(rowData.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -148,37 +151,39 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
     .ah-tr:hover td { background-color: #f8fafc; }
   `;
 
-  return createPortal(
-    <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', zIndex: 99999 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  return (
+    <Modal
+      open={isOpen}
+      onCancel={onClose}
+      footer={null}
+      width={1100}
+      centered
+      style={{ top: 20 }}
+      styles={{
+        content: { borderRadius: '16px', padding: 0, overflow: 'hidden' },
+        body: { padding: 0 }
+      }}
+    >
       <style>{modalCss}</style>
-
-      <div className="bg-white rounded-3 shadow-lg d-flex flex-column animate__animated animate__fadeInUp animate__faster"
-        style={{ width: '90%', maxWidth: '1100px', height: '80vh', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-
+      <div className="d-flex flex-column" style={{ height: '80vh', overflow: 'hidden' }}>
         {/* Modal Header */}
         <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
           <div className="d-flex align-items-center gap-3">
             {rowData.imageUrl ? (
-              <img src={rowData.imageUrl} alt="" className="rounded-2 border object-fit-contain bg-white" style={{ width: '45px', height: '45px' }} />
+              <img src={rowData.imageUrl} alt="" className="rounded-3 border object-fit-contain bg-white" style={{ width: '48px', height: '48px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }} />
             ) : (
-              <div className="rounded-2 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '45px', height: '45px' }}>
+              <div className="rounded-3 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '48px', height: '48px' }}>
                 <ImageIcon size={20} />
               </div>
             )}
             <div>
               <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-zinc-900 text-white fw-bold px-2" style={{ fontSize: '11px' }}>{rowData.asin || rowData.id}</span>
+                <span className="badge bg-zinc-900 text-white fw-bold px-2 rounded-2" style={{ fontSize: '11px' }}>{rowData.asin || rowData.id}</span>
                 {rowData.sku && <span className="text-zinc-500 fw-medium" style={{ fontSize: '12px' }}>SKU: {rowData.sku}</span>}
               </div>
-              <h6 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '600px', fontSize: '14px' }}>{rowData.title || 'Detailed Advertisement Timeline'}</h6>
+              <h6 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '700px', fontSize: '15px' }}>{rowData.title || 'Detailed Advertisement Timeline'}</h6>
             </div>
           </div>
-
-          <button className="btn btn-light border p-2 rounded-circle d-flex align-items-center justify-content-center text-zinc-500 hover:bg-zinc-100" onClick={onClose}>
-            <X size={18} />
-          </button>
         </div>
 
         {/* Modal Sub-stats Summary */}
@@ -295,13 +300,13 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 py-2 border-top bg-light d-flex justify-content-end shrink-0">
-          <button className="btn btn-dark btn-sm px-4 fw-bold" style={{ fontSize: '12px' }} onClick={onClose}>Close Window</button>
+        <div className="px-4 py-3 border-top bg-light d-flex justify-content-end gap-2 shrink-0">
+          <Button onClick={onClose} type="default" size="middle" className="fw-bold">
+            Close Window
+          </Button>
         </div>
-
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };
 
@@ -311,7 +316,6 @@ export default function AdsManagerPage() {
 
   // State for dynamic multi-metric chart customization from screenshot
   const [chartConfigMetrics, setChartConfigMetrics] = useState(['spend', 'sales', 'acos']);
-  const [metricDropdownOpen, setMetricDropdownOpen] = useState(false);
 
   // Seller selection state
   const [selectedSeller, setSelectedSeller] = useState(() => localStorage.getItem('selectedSeller') || '');
@@ -371,16 +375,6 @@ export default function AdsManagerPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
-
-  // Ref tracking for dropdown cleanup
-  const metricRef = useRef(null);
-  useEffect(() => {
-    const handleOutside = (e) => {
-      if (metricRef.current && !metricRef.current.contains(e.target)) setMetricDropdownOpen(false);
-    };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, []);
 
   // Aggregate timeseries history across all loaded items for global chart
   const globalChartData = useMemo(() => {
@@ -579,7 +573,7 @@ export default function AdsManagerPage() {
         <th style={{ ...thStyle, width: '68px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
         <th style={{ ...thStyle, width: '52px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
         {isExpanded && activeDates.map(d => (
-          <th key={d.raw} style={{ ...thStyle, width: '50px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
+          <th key={d.raw} className="dynamic-col-cell premium-ads-th" style={{ ...thStyle, width: '50px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
             {d.label}
           </th>
         ))}
@@ -642,6 +636,7 @@ export default function AdsManagerPage() {
           return (
             <td
               key={d.raw}
+              className="dynamic-col-cell"
               style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', background: '#fcfcfc', color: '#64748b', cursor: 'pointer' }}
               onClick={() => setActiveHistoryRow(row)}
               title="Click to view full history"
@@ -728,14 +723,7 @@ export default function AdsManagerPage() {
   }, [chartConfigMetrics, globalChartData]);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: 'calc(100vh - 60px)',
-      overflow: 'hidden',
-      backgroundColor: '#f4f7fe', // Sleek subtle background from references
-      margin: '-1.5rem -2rem' // Cancel outer shell padding to lock layout
-    }}>
+    <div className="ads-page-container">
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
@@ -750,62 +738,76 @@ export default function AdsManagerPage() {
         }}
       />
 
-      {/* PRECISE ADBREW BREADCRUMB BAR / DASHBOARD HEADER */}
-      <div className="px-4 py-3 d-flex align-items-center justify-content-between bg-white border-bottom shadow-sm" style={{ zIndex: 20 }}>
-        <div className="d-flex align-items-center gap-3">
-          <div className="p-2 bg-indigo-subtle rounded-3 text-indigo-700 shadow-sm"><Activity size={18} /></div>
+      {/* PREMIUM MODERN BREADCRUMB BAR / DASHBOARD HEADER */}
+      <div className="ads-top-header bg-white border-bottom shadow-sm">
+        <div className="ads-header-left">
+          <div className="p-2 bg-indigo-50 rounded-3 text-indigo-600 shadow-sm d-flex align-items-center justify-content-center" style={{ border: '1px solid #e0e7ff' }}>
+            <Activity size={18} />
+          </div>
           <div>
             <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-              <span>Marketing</span> <ChevronRight size={12} /> <span className="text-dark fw-semibold">Ads Manager</span>
+              <span style={{ fontSize: '11px' }}>Marketing</span> <ChevronRight size={11} /> <span className="text-dark fw-semibold" style={{ fontSize: '11px' }}>Ads Manager</span>
             </div>
-            <h4 className="mb-0 fw-bold text-dark tracking-tight" style={{ fontSize: '1.2rem' }}>Performance Dashboard</h4>
+            <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>Performance Dashboard</Title>
           </div>
         </div>
 
-        <div className="d-flex align-items-center gap-3">
-          {/* View Mode Toggle (Mock Tabs) */}
-          <div className="d-flex bg-light p-1 rounded-3 border" style={{ height: '36px' }}>
-            <button onClick={() => setGroupBy('asin')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'asin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{ fontSize: '11px' }}>ASIN Level</button>
-            <button onClick={() => setGroupBy('parent')} className={`btn btn-sm px-3 border-0 fw-bold rounded-2 transition-all ${groupBy === 'parent' ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`} style={{ fontSize: '11px' }}>Parent Level</button>
-          </div>
+        <div className="ads-header-right">
+          {/* Modern Ant Segmented Tab */}
+          <Segmented
+            value={groupBy}
+            onChange={(val) => setGroupBy(val)}
+            options={[
+              { label: 'ASIN Level', value: 'asin' },
+              { label: 'Parent Level', value: 'parent' }
+            ]}
+            style={{ padding: '3px' }}
+          />
 
           {/* Seller Selection */}
-          <div style={{ width: '160px' }}>
+          <div style={{ width: '180px' }}>
             <InfiniteScrollSelect
               fetchData={fetchSellerDropdownData}
               value={selectedSeller}
-              onSelect={(val) => {
-                setSelectedSeller(val);
-                // Force reload is handled by useEffect hook attached to selectedSeller state change automatically
-              }}
+              onSelect={(val) => setSelectedSeller(val)}
               placeholder="All Sellers"
             />
           </div>
 
-          {/* Date Selector */}
-          <div className="d-flex align-items-center gap-2 border bg-white rounded-3 px-2" style={{ height: '36px' }}>
-            <Calendar size={14} className="text-muted" />
-            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} />
-            <span className="text-muted">-</span>
-            <input type="date" className="border-0 small fw-bold text-dark" style={{ outline: 'none', fontSize: '11px' }} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} />
+          {/* Elegant Inline Date Inputs */}
+          <div className="d-flex align-items-center gap-1 border bg-white rounded-2 px-2 shadow-sm" style={{ height: '32px', border: '1px solid #d9d9d9' }}>
+            <Calendar size={13} className="text-secondary" />
+            <input type="date" className="border-0 bg-transparent small fw-bold text-dark py-0" style={{ outline: 'none', fontSize: '11px', width: '105px' }} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} />
+            <span className="text-muted px-1" style={{ fontSize: '10px' }}>—</span>
+            <input type="date" className="border-0 bg-transparent small fw-bold text-dark py-0" style={{ outline: 'none', fontSize: '11px', width: '105px' }} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} />
           </div>
 
-          <button onClick={fetchAdsData} className="btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{ height: '36px', fontSize: '11px' }}>
-            <RefreshCw size={14} className={loading ? 'spin' : ''} /> REFRESH
-          </button>
+          <Button 
+            onClick={fetchAdsData} 
+            icon={<RefreshCw size={14} className={loading ? 'spin' : ''} />} 
+            className="fw-bold" 
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+          >
+            REFRESH
+          </Button>
 
-          <button onClick={() => setShowImportModal(true)} className="btn btn-indigo px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm" style={{ height: '36px', fontSize: '11px' }}>
-            <Download size={14} /> Import Ads Data
-          </button>
+          <Button 
+            type="primary" 
+            onClick={() => setShowImportModal(true)} 
+            icon={<Download size={14} />} 
+            className="fw-bold bg-indigo-600 border-indigo-600" 
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+          >
+            Import Ads Data
+          </Button>
         </div>
       </div>
 
       {/* MAIN DASHBOARD BODY (KPI + CHART WRAPPER) */}
-      {/* Use an internal-scrollbar wrapper so main layout stays fixed */}
-      <div className="flex-shrink-0 overflow-auto custom-scrollbar bg-light" style={{ maxHeight: showDashboardCharts ? '500px' : '0px', transition: 'all 0.3s ease' }}>
+      <div className="flex-shrink-0 overflow-auto custom-scrollbar bg-light" style={{ maxHeight: showDashboardCharts ? '500px' : '0px', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>
         <div className="p-4 d-flex flex-column gap-4">
-          {/* KPI GRID SECTION */}
-          <div className="row g-3">
+          {/* KPI GRID SECTION - PREMIUM RE-DESIGN */}
+          <Row gutter={[16, 16]}>
             {[
               { label: 'Total Ad Spend', key: 'spend', icon: <BarChart3 /> },
               { label: 'Ad Sales', key: 'sales', icon: <FileBarChart /> },
@@ -821,78 +823,83 @@ export default function AdsManagerPage() {
               const isCurr = meta.type === 'currency';
               const isPct = meta.type === 'percent';
               const isRatio = meta.type === 'ratio';
+
+              const cardStyles = [
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)', iconColor: '#4F46E5', iconBg: '#EEF2FF', border: '#e2e8f0' }, // indigo
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)', iconColor: '#16a34a', iconBg: '#DCFCE7', border: '#bbf7d0' }, // emerald
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)', iconColor: '#0284c7', iconBg: '#E0F2FE', border: '#bae6fd' }, // blue
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #fef2f2 100%)', iconColor: '#dc2626', iconBg: '#FEE2E2', border: '#fecaca' }, // rose
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #fffbeb 100%)', iconColor: '#d97706', iconBg: '#FEF3C7', border: '#fde68a' }, // amber
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)', iconColor: '#9333EA', iconBg: '#F3E8FF', border: '#e9d5ff' }, // purple
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #fff7ed 100%)', iconColor: '#ea580c', iconBg: '#FFEDD5', border: '#fed7aa' }, // orange
+                { bg: 'linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%)', iconColor: '#0d9488', iconBg: '#CCFBF1', border: '#99f6e4' }  // teal
+              ];
+              const theme = cardStyles[idx % cardStyles.length];
+
               return (
-                <div className="col-md-3 col-sm-6" key={idx}>
-                  <div className="card border-0 shadow-sm rounded-3 h-100 hover-up-mild" style={{ backgroundColor: '#fff' }}>
-                    <div className="card-body p-3">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <span className="text-uppercase text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{kpi.label}</span>
-                        <div className="p-1.5 bg-light text-indigo-500 rounded-2" style={{ opacity: 0.8 }}>
-                          {React.cloneElement(kpi.icon, { size: 14 })}
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-baseline gap-2">
-                        <h3 className="mb-0 fw-bolder text-dark" style={{ letterSpacing: '-0.03em', fontSize: '1.4rem' }}>
-                          {isCurr ? '₹' + formatCompact(val) : isRatio ? val.toFixed(2) : isPct ? val.toFixed(1) + '%' : formatCompact(val)}
-                        </h3>
-                      </div>
-                      <div className="mt-2 pt-2 border-top d-flex align-items-center gap-1 text-success fw-bold" style={{ fontSize: '11px' }}>
-                        <TrendingUp size={12} /> <span style={{ color: '#059669' }}>+2.4% vs Prev.</span>
+                <Col xs={24} sm={12} md={6} key={idx}>
+                  <Card 
+                    variant="outlined" 
+                    className="hover-up-mild" 
+                    styles={{ body: { padding: '20px' } }}
+                    style={{ 
+                      background: theme.bg, 
+                      border: `1px solid ${theme.border}`, 
+                      borderRadius: '16px',
+                      boxShadow: '0 4px 12px -2px rgba(0,0,0,0.04)',
+                      height: '100%'
+                    }}
+                  >
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <Text strong style={{ color: '#64748b', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{kpi.label}</Text>
+                      <div className="d-flex align-items-center justify-content-center rounded-3" style={{ width: '32px', height: '32px', background: theme.iconBg, color: theme.iconColor }}>
+                        {React.cloneElement(kpi.icon, { size: 16 })}
                       </div>
                     </div>
-                  </div>
-                </div>
+                    <Statistic 
+                      value={val} 
+                      formatter={(v) => {
+                        return isCurr ? '₹' + formatCompact(v) : isRatio ? v.toFixed(2) : isPct ? v.toFixed(1) + '%' : formatCompact(v);
+                      }}
+                      styles={{ content: { fontWeight: 800, fontSize: '22px', letterSpacing: '-0.02em', color: '#0f172a' } }}
+                    />
+                    <div className="mt-3 pt-2 border-top d-flex align-items-center gap-1 text-success fw-bold" style={{ fontSize: '11px', borderColor: 'rgba(0,0,0,0.05)' }}>
+                      <TrendingUp size={12} /> <span style={{ color: '#16a34a' }}>+2.4% vs Prev.</span>
+                    </div>
+                  </Card>
+                </Col>
               );
             })}
-          </div>
+          </Row>
 
-          {/* ADVANCED CHART MODULE */}
-          <div className="card border-0 shadow-sm rounded-3 overflow-hidden" style={{ backgroundColor: '#fff' }}>
-            <div className="card-header bg-white border-bottom-0 pt-3 px-3 d-flex align-items-center justify-content-between">
+          {/* ADVANCED CHART MODULE - PREMIUM CARD CONTEXT */}
+          <Card 
+            styles={{ body: { padding: '12px' } }}
+            style={{ borderRadius: '16px', boxShadow: '0 4px 16px -4px rgba(0,0,0,0.05)', overflow: 'hidden' }}
+          >
+            <div className="px-2 py-2 d-flex align-items-center justify-content-between border-bottom mb-2">
               <div className="d-flex align-items-center gap-2">
-                <div style={{ width: '4px', height: '16px', background: '#6366f1', borderRadius: '2px' }}></div>
-                <h6 className="mb-0 fw-bold text-dark">Campaign Trends & Breakdown</h6>
+                <div style={{ width: '4px', height: '18px', background: '#4F46E5', borderRadius: '4px' }}></div>
+                <Text strong style={{ color: '#1e293b', fontSize: '14px' }}>Campaign Trends & Breakdown</Text>
               </div>
 
-              {/* MULTI-METRIC SELECTOR TOOLBAR */}
-              <div className="d-flex align-items-center gap-3">
-                <div className="position-relative" ref={metricRef}>
-                  <button
-                    onClick={() => setMetricDropdownOpen(!metricDropdownOpen)}
-                    className="btn btn-sm border bg-white rounded-3 fw-bold d-flex align-items-center gap-2 text-dark shadow-sm"
-                    style={{ fontSize: '11px', height: '32px' }}
-                  >
-                    <Filter size={12} />
-                    Metrics ({chartConfigMetrics.length})
-                    <ChevronDown size={12} />
-                  </button>
-                  {metricDropdownOpen && (
-                    <div className="position-absolute end-0 bg-white border shadow-lg rounded-3 p-2 mt-1 custom-scrollbar" style={{ zIndex: 50, width: '180px', maxHeight: '250px', overflowY: 'auto' }}>
-                      {Object.keys(METRIC_MAP).map(k => {
-                        const isSel = chartConfigMetrics.includes(k);
-                        return (
-                          <div
-                            key={k}
-                            className="d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-light"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setChartConfigMetrics(prev =>
-                                isSel ? prev.filter(i => i !== k) : [...prev, k]
-                              )
-                            }}
-                          >
-                            <span className="small fw-semibold" style={{ fontSize: '11px' }}>{METRIC_MAP[k].label}</span>
-                            {isSel ? <CheckSquare size={14} className="text-indigo-600" /> : <Square size={14} className="text-muted" />}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* PREMIUM NATIVE METRIC SELECTOR */}
+              <Select
+                mode="multiple"
+                value={chartConfigMetrics}
+                onChange={(val) => setChartConfigMetrics(val)}
+                style={{ minWidth: 240, maxWidth: 350 }}
+                placeholder="Select active metrics"
+                maxTagCount="responsive"
+                classNames={{ popup: { root: "premium-chart-dropdown" } }}
+                options={Object.keys(METRIC_MAP).map(k => ({
+                  label: METRIC_MAP[k].label,
+                  value: k
+                }))}
+              />
             </div>
 
-            <div className="card-body p-2" style={{ height: '300px' }}>
+            <div style={{ height: '300px' }}>
               {dynamicChartState.series.length > 0 ? (
                 <Chart
                   height="100%"
@@ -931,39 +938,40 @@ export default function AdsManagerPage() {
                   }}
                 />
               ) : (
-                <div className="h-100 d-flex align-items-center justify-content-center text-muted fw-bold small">SELECT METRICS TO VIEW CHART</div>
+                <div className="h-100 d-flex align-items-center justify-content-center text-muted fw-bold small bg-light rounded-3">SELECT METRICS TO VIEW CHART</div>
               )}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
       {/* TABULAR / DASHBOARD TOGGLE CONTROLS */}
-      <div className="bg-white border-top border-bottom px-4 py-2.5 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0 }}>
+      <div className="bg-white border-top border-bottom px-4 py-3 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
         <div className="d-flex align-items-center gap-3">
-          <button
+          <Button
+            type={showDashboardCharts ? 'primary' : 'default'}
+            icon={showDashboardCharts ? <ChevronUp size={14} /> : <BarChart3 size={14} />}
             onClick={() => setShowDashboardCharts(!showDashboardCharts)}
-            className={`btn btn-sm border-0 fw-bold rounded-3 d-flex align-items-center gap-2 transition-all ${showDashboardCharts ? 'text-indigo-700 bg-indigo-50' : 'text-secondary bg-light'}`}
-            style={{ fontSize: '11px' }}
+            className="fw-bold d-flex align-items-center justify-content-center gap-1.5"
+            style={showDashboardCharts ? { background: '#4F46E5', border: 'none' } : {}}
           >
-            {showDashboardCharts ? <ChevronUp size={14} /> : <BarChart3 size={14} />}
             {showDashboardCharts ? 'HIDE ANALYTICS' : 'VIEW ANALYTICS'}
-          </button>
+          </Button>
 
-          <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb' }}></div>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#f1f5f9' }}></div>
 
-          <div className="d-flex align-items-center gap-2 bg-light rounded-3 px-2 py-1 border" style={{ height: '32px' }}>
-            <Search size={13} className="text-muted" />
-            <input
-              type="text" placeholder="Search product..." className="border-0 bg-transparent shadow-none small fw-bold"
-              style={{ outline: 'none', fontSize: '11px', width: '180px' }}
-              value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
+          <Input
+            placeholder="Search dynamic products..."
+            prefix={<Search size={14} className="text-secondary me-1" />}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: '260px', borderRadius: '8px' }}
+            allowClear
+          />
         </div>
 
-        <div className="small text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
-          Showing {paginatedData.length} results of {data.length}
+        <div className="small text-muted fw-bold bg-light px-3 py-1 rounded-pill border" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
+          Showing <span className="text-indigo-600 fw-bolder">{paginatedData.length}</span> results of <span className="text-dark fw-bolder">{data.length}</span>
         </div>
       </div>
 
@@ -1216,10 +1224,10 @@ export default function AdsManagerPage() {
 
       <style>{`
         .table-row-hover:hover {
-          background-color: #f1f5f9 !important;
+          background-color: #f8fafc !important;
         }
         .table-row-hover:hover td {
-          background-color: #f1f5f9 !important;
+          background-color: #f8fafc !important;
         }
         .bg-gradient-primary {
           background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
@@ -1234,22 +1242,37 @@ export default function AdsManagerPage() {
           font-size: 0.65rem;
         }
         .hover-up-mild {
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .hover-up-mild:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05) !important;
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px -10px rgba(79,70,229,0.15), 0 4px 6px -2px rgba(0,0,0,0.02) !important;
         }
         .hover-bg-light:hover {
           background-color: #f8fafc !important;
         }
-        /* Custom small scrollbar */
+        .premium-chart-dropdown .ant-select-item-option-selected {
+          background-color: #EEF2FF !important;
+          font-weight: bold;
+        }
+        .premium-ads-th {
+          transition: background-color 0.2s ease, border 0.2s ease;
+        }
+        /* Silky Smooth Fade-In For Expanded Grid Columns */
+        .dynamic-col-cell {
+          animation: slideFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        @keyframes slideFadeIn {
+          from { opacity: 0; transform: translateX(-8px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        /* Custom sleek system scrollbar */
         ::-webkit-scrollbar {
           width: 6px;
           height: 6px;
         }
         ::-webkit-scrollbar-track {
-          background: #f1f5f9;
+          background: #f8fafc;
         }
         ::-webkit-scrollbar-thumb {
           background: #cbd5e1;
@@ -1257,6 +1280,60 @@ export default function AdsManagerPage() {
         }
         ::-webkit-scrollbar-thumb:hover {
           background: #94a3b8;
+        }
+        .ads-page-container {
+          display: flex;
+          flex-direction: column;
+          height: calc(100vh - 60px);
+          overflow: hidden;
+          background-color: #f4f7fe;
+          margin: -1.5rem -2rem;
+        }
+        .ads-top-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 24px;
+          z-index: 20;
+        }
+        .ads-header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .ads-header-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        @media (max-width: 992px) {
+          .ads-page-container {
+            margin: -0.75rem;
+            height: calc(100vh - 60px);
+          }
+          .ads-top-header {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 12px;
+            padding: 12px 16px;
+          }
+          .ads-header-right {
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: space-between;
+          }
+          .ads-header-right > * {
+            flex-grow: 1;
+          }
+        }
+        @media (max-width: 768px) {
+          .ads-header-right {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .ads-header-right > * {
+            width: 100% !important;
+          }
         }
       `}</style>
 

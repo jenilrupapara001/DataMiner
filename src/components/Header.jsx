@@ -58,10 +58,13 @@ const Header = () => {
 
     return (
         <header className="topbar-redesign">
-            {/* Left: Breadcrumb */}
+            {/* Left: Breadcrumb & Mobile Toggle */}
             <div className="topbar-left">
-                <span className="breadcrumb-workspace">Workspace</span>
-                <span className="breadcrumb-separator">›</span>
+                <button className="mobile-hamburger" onClick={toggleMobile} title="Open Menu">
+                    <Menu size={20} />
+                </button>
+                <span className="breadcrumb-workspace d-none d-sm-inline">Workspace</span>
+                <span className="breadcrumb-separator d-none d-sm-inline">›</span>
                 <span className="breadcrumb-page">{pageTitle || 'Dashboard'}</span>
             </div>
 

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
+import { Drawer, Button, Input, Select, Space, Typography, Badge, Segmented, Tooltip, Dropdown, Menu } from 'antd';
+const { Text, Title } = Typography;
 const TablePagination = lazy(() => import('@mui/material/TablePagination'));
 import KPICard from '../components/KPICard';
 import ProgressBar from '../components/common/ProgressBar';
@@ -399,6 +401,8 @@ const AsinManagerPage = () => {
   const [scrapingIds, setScrapingIds] = useState(new Set());
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
+  const [sortBy, setSortBy] = useState('lastScraped');
+  const [sortOrder, setSortOrder] = useState('desc');
   const { setPageTitle } = usePageTitle();
 
   useEffect(() => {
@@ -548,28 +552,46 @@ const AsinManagerPage = () => {
   const visibleLQSCount = useMemo(() => ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore', 'lqs'].filter(isVisible).length, [isVisible]);
   const visiblePriceTrendCount = useMemo(() => {
     if (!isVisible('priceTrend')) return 0;
-    return priceTrendExpanded ? visibleHistoryCols : 1;
-  }, [isVisible, priceTrendExpanded, visibleHistoryCols]);
+    return visibleHistoryCols;
+  }, [isVisible, visibleHistoryCols]);
 
   const visibleBsrTrendCount = useMemo(() => {
     if (!isVisible('bsrTrend')) return 0;
-    return bsrTrendExpanded ? visibleHistoryCols : 1;
-  }, [isVisible, bsrTrendExpanded, visibleHistoryCols]);
+    return visibleHistoryCols;
+  }, [isVisible, visibleHistoryCols]);
 
   const visibleRatingTrendCount = useMemo(() => {
     if (!isVisible('ratingTrend')) return 0;
-    return ratingTrendExpanded ? visibleHistoryCols : 1;
-  }, [isVisible, ratingTrendExpanded, visibleHistoryCols]);
+    return visibleHistoryCols;
+  }, [isVisible, visibleHistoryCols]);
 
   const visibleReviewTrendCount = useMemo(() => {
     if (!isVisible('reviewTrend')) return 0;
-    return reviewTrendExpanded ? visibleHistoryCols : 1;
-  }, [isVisible, reviewTrendExpanded, visibleHistoryCols]);
+    return visibleHistoryCols;
+  }, [isVisible, visibleHistoryCols]);
 
   const visibleImageTrendCount = useMemo(() => {
     if (!isVisible('imageTrend')) return 0;
-    return imageTrendExpanded ? visibleHistoryCols : 1;
-  }, [isVisible, imageTrendExpanded, visibleHistoryCols]);
+    return visibleHistoryCols;
+  }, [isVisible, visibleHistoryCols]);
+
+  const getTransitionStyle = (isExpanded, index, totalCount, baseWidth = '42px') => {
+    const isLast = index === totalCount - 1;
+    const isVisible = isExpanded || isLast;
+    return {
+      width: isVisible ? baseWidth : '0px',
+      minWidth: isVisible ? baseWidth : '0px',
+      maxWidth: isVisible ? baseWidth : '0px',
+      opacity: isVisible ? 1 : 0,
+      padding: isVisible ? '2px 4px' : '0px',
+      borderLeftWidth: isVisible ? '1px' : '0px',
+      borderRightWidth: isVisible ? '1px' : '0px',
+      overflow: 'hidden',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      pointerEvents: isVisible ? 'auto' : 'none',
+      whiteSpace: 'nowrap'
+    };
+  };
 
   const [tagSearch, setTagSearch] = useState('');
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
@@ -1068,8 +1090,8 @@ const AsinManagerPage = () => {
         search: appliedSearchQuery,
         ...appliedFilters,
         historyDays: appliedFilters.historyDays,
-        sortBy: 'lastScraped',
-        sortOrder: 'desc'
+        sortBy,
+        sortOrder
       });
 
       const statsRes = await asinApi.getStats({
@@ -1102,7 +1124,28 @@ const AsinManagerPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters, marketplaceFilter]);
+  }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters, marketplaceFilter, sortBy, sortOrder]);
+
+  const handleSort = (field) => {
+    const nextOrder = sortBy === field && sortOrder === 'desc' ? 'asc' : 'desc';
+    setSortBy(field);
+    setSortOrder(nextOrder);
+    setPagination(p => ({ ...p, page: 1 }));
+  };
+
+  const renderSortableHeader = (label, field, align = 'between') => {
+    const active = sortBy === field;
+    const justify = align === 'right' ? 'justify-content-end' : align === 'center' ? 'justify-content-center' : 'justify-content-between';
+    return (
+      <div className={`d-flex align-items-center ${justify} cursor-pointer`} onClick={() => handleSort(field)} style={{ userSelect: 'none' }}>
+        <span className={justify === 'justify-content-end' ? 'me-1' : ''}>{label}</span>
+        <div className="d-flex flex-column ms-1" style={{ fontSize: '7px', gap: '-3px', opacity: active ? 1 : 0.4, minWidth: '10px' }}>
+          <ChevronUp size={8} strokeWidth={4} style={{ color: active && sortOrder === 'asc' ? '#1890ff' : '#8c8c8c', marginBottom: '-2px' }} />
+          <ChevronDown size={8} strokeWidth={4} style={{ color: active && sortOrder === 'desc' ? '#1890ff' : '#8c8c8c' }} />
+        </div>
+      </div>
+    );
+  };
 
   const handleImportTags = async (e) => {
     const file = e.target.files?.[0];
@@ -1755,14 +1798,7 @@ const AsinManagerPage = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: 'calc(100vh - 60px)',
-      overflow: 'hidden',
-      backgroundColor: '#f4f7fe',
-      margin: '-1.5rem -2rem'
-    }}>
+    <div className="asin-page-container">
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
@@ -1770,336 +1806,314 @@ const AsinManagerPage = () => {
       )}
 
       {/* [Filter Sidebar/Drawer Overlay] — PREMIUM FULL-HEIGHT DRAWER */}
-      {filterPanelOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="position-fixed top-0 start-0 w-100 h-100"
-            style={{
-              zIndex: 2000,
-              backgroundColor: 'rgba(0, 0, 0, 0.45)',
-              backdropFilter: 'blur(4px)',
-              animation: 'fadeIn 0.25s ease-out'
-            }}
-            onClick={() => setFilterPanelOpen(false)}
-          />
-
-          <div
-            className="position-fixed top-0 end-0 h-100 bg-white shadow-2xl d-flex flex-column"
-            style={{
-              width: '420px',
-              zIndex: 2010,
-              animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-              boxShadow: '-10px 0 50px rgba(0,0,0,0.25)'
-            }}
-          >
-            {/* Header */}
-            <div className="p-4 border-bottom d-flex align-items-center justify-content-between bg-zinc-900 text-white">
-              <div className="d-flex align-items-center gap-3">
-                <div className="p-2 bg-zinc-800 rounded-3">
-                  <SlidersHorizontal size={20} className="text-white" />
-                </div>
-                <div>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: '15px', letterSpacing: '0.02em' }}>ADVANCED FILTERS</h5>
-                  <p className="mb-0 text-zinc-400" style={{ fontSize: '11px' }}>Refine your catalog search</p>
-                </div>
-              </div>
-              <button
-                className="btn btn-ghost p-2 rounded-circle hover-bg-zinc-800 text-white opacity-70 hover-opacity-100"
-                onClick={() => setFilterPanelOpen(false)}
-              >
-                <X size={20} />
-              </button>
+      <Drawer
+        title={
+          <div className="d-flex align-items-center gap-3 py-1 text-white">
+            <div className="p-2 bg-zinc-800 rounded-3 d-flex">
+              <SlidersHorizontal size={20} className="text-white" />
             </div>
-
-            {/* Content - Scrollable */}
-            <div className="flex-grow-1 overflow-auto p-4 custom-scrollbar">
-
-              {/* SEARCH & BASIC */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Identity & Search</h6>
-                <div className="d-flex flex-column gap-3">
-                  <div className="filter-group">
-                    <label className="filter-label">SKU</label>
-                    <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.sku} onChange={(e) => setFilters({ ...filters, sku: e.target.value })} placeholder="Enter SKU..." style={{ fontSize: '12px', height: '38px' }} />
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">PARENT ASIN</label>
-                    <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.parentAsin} onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })} placeholder="Enter Parent ASIN..." style={{ fontSize: '12px', height: '38px' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* ATTRIBUTES */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Product Attributes</h6>
-                <div className="d-flex flex-column gap-3">
-                  <div className="filter-group">
-                    <label className="filter-label">SCRAPE STATUS</label>
-                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                      <option value="">All Statuses</option>
-                      <option value="Success">Success</option>
-                      <option value="Failed">Failed</option>
-                      <option value="Pending">Pending</option>
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">BRAND</label>
-                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                      <option value="">All Brands</option>
-                      {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">CATEGORY</label>
-                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                      <option value="">All Categories</option>
-                      {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">SUB BSR CATEGORY</label>
-                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.subBsrCategory || ''} onChange={(e) => setFilters({ ...filters, subBsrCategory: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                      <option value="">All Sub BSR Categories</option>
-                      {filterOptions.subBsrCategories?.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* QUICK FLAGS */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Quick Flags</h6>
-                <div className="row g-2">
-                  <div className="col-6">
-                    <div className="filter-group">
-                      <label className="filter-label">BUYBOX WINNER</label>
-                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.buyBoxWin} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                        <option value="">All</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="filter-group">
-                      <label className="filter-label">A+ CONTENT</label>
-                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasAplus} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                        <option value="">All</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="filter-group">
-                      <label className="filter-label">VIDEO PRESENCE</label>
-                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasVideo} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                        <option value="">All</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="filter-group">
-                      <label className="filter-label">ACTIVE DEAL</label>
-                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasDeal} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                        <option value="">All</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="filter-group">
-                      <label className="filter-label">PRICE DISPUTE</label>
-                      <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.priceDispute} onChange={(e) => setFilters({ ...filters, priceDispute: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                        <option value="">All ASINs</option>
-                        <option value="true">Disputed Only</option>
-                        <option value="false">Non-Disputed</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* TRENDS & HISTORY */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Performance Trends</h6>
-                <div className="d-flex flex-column gap-3">
-                  <div className="row g-2">
-                    <div className="col-6">
-                      <div className="filter-group">
-                        <label className="filter-label">BSR TREND</label>
-                        <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.bsrTrend} onChange={(e) => setFilters({ ...filters, bsrTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                          <option value="">All Trends</option>
-                          <option value="Grow">Growing Only</option>
-                          <option value="Down">Down Only</option>
-                          <option value="Stable">Stable</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="filter-group">
-                        <label className="filter-label">RATING TREND</label>
-                        <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.ratingTrend} onChange={(e) => setFilters({ ...filters, ratingTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                          <option value="">All Trends</option>
-                          <option value="Grow">Growing Only</option>
-                          <option value="Down">Down Only</option>
-                          <option value="Stable">Stable</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">HISTORY DATA RANGE</label>
-                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.historyDays} onChange={(e) => setFilters({ ...filters, historyDays: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
-                      <option value="">Select Range (Default: 14 Days)</option>
-                      <option value="1">Today Only</option>
-                      <option value="7">Last 7 Days</option>
-                      <option value="14">Last 14 Days</option>
-                      <option value="30">Last 30 Days</option>
-                      <option value="90">Last 90 Days</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* RANGES */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Metrics & Ranges</h6>
-                <div className="d-flex flex-column gap-3">
-                  <div className="filter-group">
-                    <label className="filter-label">PRICE RANGE (₹)</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                    </div>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">BSR RANGE</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                      <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                    </div>
-                  </div>
-                  <div className="filter-group">
-                    <label className="filter-label">RATING RANGE</label>
-                    <div className="d-flex gap-2">
-                      <input type="number" placeholder="Min" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minRating || ''} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                      <input type="number" placeholder="Max" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxRating || ''} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* TAGS */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Tags</h6>
-                <div className="filter-group">
-                  <div className="position-relative">
-                    <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-zinc-400" />
-                    <input
-                      type="text"
-                      className="form-control form-control-sm rounded-2 ps-5 border-zinc-200"
-                      placeholder="Search tags..."
-                      value={tagSearch}
-                      onChange={(e) => setTagSearch(e.target.value)}
-                      style={{ fontSize: '12px', height: '38px' }}
-                    />
-                  </div>
-                  <div className="d-flex flex-wrap gap-2 mt-3">
-                    {filterOptions.tags
-                      .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
-                      .map(tag => (
-                        <button
-                          key={tag}
-                          className={`btn btn-xs rounded-pill px-3 py-1.5 transition-all d-flex align-items-center gap-1 ${filters.selectedTags.includes(tag) ? 'bg-zinc-900 text-white shadow-md' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
-                          onClick={() => {
-                            const newTags = filters.selectedTags.includes(tag)
-                              ? filters.selectedTags.filter(t => t !== tag)
-                              : [...filters.selectedTags, tag];
-                            setFilters({ ...filters, selectedTags: newTags });
-                          }}
-                          style={{ fontSize: '11px', fontWeight: 600 }}
-                        >
-                          {tag}
-                          {filters.selectedTags.includes(tag) && <X size={10} />}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* AGE FILTER */}
-              <div className="mb-5">
-                <h6 className="filter-section-title">Listing Age</h6>
-                <div className="filter-group">
-                  <div className="d-flex flex-wrap gap-2">
-                    {[
-                      { label: 'New (<30D)', value: '30' },
-                      { label: '30-60D', value: '60' },
-                      { label: '60-90D', value: '90' },
-                      { label: '90-180D', value: '180' },
-                      { label: '180-365D', value: '365' },
-                      { label: '365+ Days', value: '365+' }
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        className={`btn btn-sm rounded-pill px-3 py-1 transition-all ${filters.ageFilter === opt.value ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
-                        onClick={() => setFilters({ ...filters, ageFilter: filters.ageFilter === opt.value ? '' : opt.value })}
-                        style={{ fontSize: '10px', fontWeight: 600 }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="filter-group mt-4">
-                  <label className="filter-label">RELEASE DATE RANGE</label>
-                  <div className="d-flex gap-2">
-                    <input
-                      type="date"
-                      className="form-control form-control-sm rounded-2 border-zinc-200"
-                      value={filters.minReleaseDate}
-                      onChange={(e) => setFilters({ ...filters, minReleaseDate: e.target.value })}
-                      style={{ fontSize: '12px', height: '38px' }}
-                    />
-                    <input
-                      type="date"
-                      className="form-control form-control-sm rounded-2 border-zinc-200"
-                      value={filters.maxReleaseDate}
-                      onChange={(e) => setFilters({ ...filters, maxReleaseDate: e.target.value })}
-                      style={{ fontSize: '12px', height: '38px' }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-top bg-zinc-50 d-flex gap-3">
-              <button
-                className="btn btn-white flex-grow-1 border-zinc-200 fw-bold rounded-3 py-2.5 shadow-sm hover-bg-zinc-100"
-                onClick={resetAllFilters}
-                style={{ fontSize: '13px' }}
-              >
-                Reset All
-              </button>
-              <button
-                className="btn btn-zinc-900 flex-grow-1 fw-bold rounded-3 py-2.5 shadow-md hover-bg-zinc-800"
-                onClick={handleApplyFilters}
-                style={{ fontSize: '13px', backgroundColor: '#18181B', color: '#fff' }}
-              >
-                Apply Filters
-              </button>
+            <div>
+              <h5 className="mb-0 fw-bold text-white" style={{ fontSize: '15px', letterSpacing: '0.02em' }}>ADVANCED FILTERS</h5>
+              <p className="mb-0 text-zinc-400" style={{ fontSize: '11px' }}>Refine your catalog search</p>
             </div>
           </div>
-        </>
-      )}
+        }
+        placement="right"
+        onClose={() => setFilterPanelOpen(false)}
+        open={filterPanelOpen}
+        width={window.innerWidth < 576 ? '100%' : 420}
+        styles={{
+          header: { background: '#18181b', borderBottom: 'none', padding: '16px 24px' },
+          body: { padding: 0, display: 'flex', flexDirection: 'column', background: '#ffffff' }
+        }}
+        closeIcon={<X size={20} className="text-white" />}
+      >
+        {/* Content - Scrollable */}
+        <div className="flex-grow-1 overflow-auto p-4 custom-scrollbar">
+
+          {/* SEARCH & BASIC */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Identity & Search</h6>
+            <div className="d-flex flex-column gap-3">
+              <div className="filter-group">
+                <label className="filter-label">SKU</label>
+                <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.sku} onChange={(e) => setFilters({ ...filters, sku: e.target.value })} placeholder="Enter SKU..." style={{ fontSize: '12px', height: '38px' }} />
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">PARENT ASIN</label>
+                <input type="text" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.parentAsin} onChange={(e) => setFilters({ ...filters, parentAsin: e.target.value })} placeholder="Enter Parent ASIN..." style={{ fontSize: '12px', height: '38px' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* ATTRIBUTES */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Product Attributes</h6>
+            <div className="d-flex flex-column gap-3">
+              <div className="filter-group">
+                <label className="filter-label">SCRAPE STATUS</label>
+                <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.scrapeStatus} onChange={(e) => setFilters({ ...filters, scrapeStatus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                  <option value="">All Statuses</option>
+                  <option value="Success">Success</option>
+                  <option value="Failed">Failed</option>
+                  <option value="Pending">Pending</option>
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">BRAND</label>
+                <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.brand} onChange={(e) => setFilters({ ...filters, brand: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                  <option value="">All Brands</option>
+                  {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">CATEGORY</label>
+                <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                  <option value="">All Categories</option>
+                  {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">SUB BSR CATEGORY</label>
+                <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.subBsrCategory || ''} onChange={(e) => setFilters({ ...filters, subBsrCategory: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                  <option value="">All Sub BSR Categories</option>
+                  {filterOptions.subBsrCategories?.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* QUICK FLAGS */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Quick Flags</h6>
+            <div className="row g-2">
+              <div className="col-6">
+                <div className="filter-group">
+                  <label className="filter-label">BUYBOX WINNER</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.buyBoxWin} onChange={(e) => setFilters({ ...filters, buyBoxWin: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div className="col-6">
+                <div className="filter-group">
+                  <label className="filter-label">A+ CONTENT</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasAplus} onChange={(e) => setFilters({ ...filters, hasAplus: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div className="col-6">
+                <div className="filter-group">
+                  <label className="filter-label">VIDEO PRESENCE</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasVideo} onChange={(e) => setFilters({ ...filters, hasVideo: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div className="col-6">
+                <div className="filter-group">
+                  <label className="filter-label">ACTIVE DEAL</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.hasDeal} onChange={(e) => setFilters({ ...filters, hasDeal: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div className="col-12">
+                <div className="filter-group">
+                  <label className="filter-label">PRICE DISPUTE</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.priceDispute} onChange={(e) => setFilters({ ...filters, priceDispute: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All ASINs</option>
+                    <option value="true">Disputed Only</option>
+                    <option value="false">Non-Disputed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TRENDS & HISTORY */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Performance Trends</h6>
+            <div className="d-flex flex-column gap-3">
+              <div className="row g-2">
+                <div className="col-6">
+                  <div className="filter-group">
+                    <label className="filter-label">BSR TREND</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.bsrTrend} onChange={(e) => setFilters({ ...filters, bsrTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Trends</option>
+                      <option value="Grow">Growing Only</option>
+                      <option value="Down">Down Only</option>
+                      <option value="Stable">Stable</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="col-6">
+                  <div className="filter-group">
+                    <label className="filter-label">RATING TREND</label>
+                    <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.ratingTrend} onChange={(e) => setFilters({ ...filters, ratingTrend: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                      <option value="">All Trends</option>
+                      <option value="Grow">Growing Only</option>
+                      <option value="Down">Down Only</option>
+                      <option value="Stable">Stable</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">HISTORY DATA RANGE</label>
+                <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.historyDays} onChange={(e) => setFilters({ ...filters, historyDays: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                  <option value="">Select Range (Default: 14 Days)</option>
+                  <option value="1">Today Only</option>
+                  <option value="7">Last 7 Days</option>
+                  <option value="14">Last 14 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* RANGES */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Metrics & Ranges</h6>
+            <div className="d-flex flex-column gap-3">
+              <div className="filter-group">
+                <label className="filter-label">PRICE RANGE (₹)</label>
+                <div className="d-flex gap-2">
+                  <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                  <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                </div>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">BSR RANGE</label>
+                <div className="d-flex gap-2">
+                  <input type="number" placeholder="Min" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minBSR} onChange={(e) => setFilters({ ...filters, minBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                  <input type="number" placeholder="Max" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxBSR} onChange={(e) => setFilters({ ...filters, maxBSR: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                </div>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">RATING RANGE</label>
+                <div className="d-flex gap-2">
+                  <input type="number" placeholder="Min" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.minRating || ''} onChange={(e) => setFilters({ ...filters, minRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                  <input type="number" placeholder="Max" step="0.1" className="form-control form-control-sm rounded-2 border-zinc-200" value={filters.maxRating || ''} onChange={(e) => setFilters({ ...filters, maxRating: e.target.value })} style={{ fontSize: '12px', height: '38px' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TAGS */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Tags</h6>
+            <div className="filter-group">
+              <div className="position-relative">
+                <Search size={14} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-zinc-400" />
+                <input
+                  type="text"
+                  className="form-control form-control-sm rounded-2 ps-5 border-zinc-200"
+                  placeholder="Search tags..."
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  style={{ fontSize: '12px', height: '38px' }}
+                />
+              </div>
+              <div className="d-flex flex-wrap gap-2 mt-3">
+                {filterOptions.tags
+                  .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
+                  .map(tag => (
+                    <button
+                      key={tag}
+                      className={`btn btn-xs rounded-pill px-3 py-1.5 transition-all d-flex align-items-center gap-1 ${filters.selectedTags.includes(tag) ? 'bg-zinc-900 text-white shadow-md' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                      onClick={() => {
+                        const newTags = filters.selectedTags.includes(tag)
+                          ? filters.selectedTags.filter(t => t !== tag)
+                          : [...filters.selectedTags, tag];
+                        setFilters({ ...filters, selectedTags: newTags });
+                      }}
+                      style={{ fontSize: '11px', fontWeight: 600 }}
+                    >
+                      {tag}
+                      {filters.selectedTags.includes(tag) && <X size={10} />}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          {/* AGE FILTER */}
+          <div className="mb-5">
+            <h6 className="filter-section-title">Listing Age</h6>
+            <div className="filter-group">
+              <div className="d-flex flex-wrap gap-2">
+                {[
+                  { label: 'New (<30D)', value: '30' },
+                  { label: '30-60D', value: '60' },
+                  { label: '60-90D', value: '90' },
+                  { label: '90-180D', value: '180' },
+                  { label: '180-365D', value: '365' },
+                  { label: '365+ Days', value: '365+' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    className={`btn btn-sm rounded-pill px-3 py-1 transition-all ${filters.ageFilter === opt.value ? 'bg-zinc-900 text-white shadow-sm' : 'bg-zinc-100 text-zinc-600 border border-zinc-200 hover-bg-zinc-200'}`}
+                    onClick={() => setFilters({ ...filters, ageFilter: filters.ageFilter === opt.value ? '' : opt.value })}
+                    style={{ fontSize: '10px', fontWeight: 600 }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="filter-group mt-4">
+              <label className="filter-label">RELEASE DATE RANGE</label>
+              <div className="d-flex gap-2">
+                <input
+                  type="date"
+                  className="form-control form-control-sm rounded-2 border-zinc-200"
+                  value={filters.minReleaseDate}
+                  onChange={(e) => setFilters({ ...filters, minReleaseDate: e.target.value })}
+                  style={{ fontSize: '12px', height: '38px' }}
+                />
+                <input
+                  type="date"
+                  className="form-control form-control-sm rounded-2 border-zinc-200"
+                  value={filters.maxReleaseDate}
+                  onChange={(e) => setFilters({ ...filters, maxReleaseDate: e.target.value })}
+                  style={{ fontSize: '12px', height: '38px' }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-top bg-zinc-50 d-flex gap-3 mt-auto" style={{ flexShrink: 0 }}>
+          <button
+            className="btn btn-white flex-grow-1 border-zinc-200 fw-bold rounded-3 py-2.5 shadow-sm hover-bg-zinc-100"
+            onClick={resetAllFilters}
+            style={{ fontSize: '13px' }}
+          >
+            Reset All
+          </button>
+          <button
+            className="btn btn-zinc-900 flex-grow-1 fw-bold rounded-3 py-2.5 shadow-md hover-bg-zinc-800"
+            onClick={handleApplyFilters}
+            style={{ fontSize: '13px', backgroundColor: '#18181B', color: '#fff' }}
+          >
+            Apply Filters
+          </button>
+        </div>
+      </Drawer>
 
       {/* Relocated header actions to Table Toolbar for dense view UI */}
 
@@ -2230,11 +2244,80 @@ const AsinManagerPage = () => {
                   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
                     background: #94a3b8;
                   }
+                  .asin-page-container {
+                    display: flex;
+                    flex-direction: column;
+                    height: calc(100vh - 60px);
+                    overflow: hidden;
+                    background-color: #f4f7fe;
+                    margin: -1.5rem -2rem;
+                  }
+                  .asin-toolbar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-shrink: 0;
+                    gap: 16px;
+                    padding: 12px 24px;
+                  }
+                  .asin-toolbar-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                  }
+                  .asin-toolbar-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                  }
+                  .asin-search-input {
+                    width: 230px;
+                  }
+                  .asin-seller-select-wrapper {
+                    width: 160px;
+                  }
+                  @media (max-width: 992px) {
+                    .asin-page-container {
+                      margin: -0.75rem;
+                      height: calc(100vh - 60px);
+                    }
+                  }
+                  @media (max-width: 768px) {
+                    .asin-toolbar {
+                      flex-direction: column;
+                      align-items: stretch;
+                      padding: 12px 16px;
+                      gap: 12px;
+                    }
+                    .asin-toolbar-left {
+                      flex-direction: column;
+                      align-items: stretch;
+                      gap: 12px;
+                    }
+                    .asin-toolbar-left > div {
+                      width: 100%;
+                      justify-content: space-between;
+                    }
+                    .asin-toolbar-right {
+                      justify-content: flex-start;
+                      flex-wrap: wrap;
+                      gap: 8px;
+                    }
+                    .asin-search-input, 
+                    .asin-seller-select-wrapper {
+                      width: 100% !important;
+                      flex: 1;
+                    }
+                    .asin-toolbar-right .btn {
+                      flex-grow: 1;
+                      justify-content: center;
+                    }
+                  }
           `}</style>
 
           {/* Table Toolbar */}
-          <div className="d-flex align-items-center justify-content-between border-bottom bg-white" style={{ flexShrink: 0, gap: '16px', padding: '12px 24px' }}>
-            <div className="d-flex align-items-center gap-3 flex-grow-1">
+          <div className="asin-toolbar border-bottom bg-white">
+            <div className="asin-toolbar-left flex-grow-1">
               <div className="d-flex align-items-center gap-2">
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#27272a', letterSpacing: '0.02em', whiteSpace: 'nowrap' }} className="text-uppercase">
                   Inventory
@@ -2255,68 +2338,54 @@ const AsinManagerPage = () => {
 
               <div className="d-flex align-items-center gap-2">
                 {/* MARKETPLACE SWITCHER - RELOCATED */}
-                <div className="d-flex bg-light p-0.5 rounded-2 border" style={{ height: '32px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMarketplaceFilter('amazon.in');
-                      loadData(1, pagination.limit, selectedSeller, 'amazon.in');
-                    }}
-                    className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'bg-white text-indigo-600 shadow-sm' : 'text-secondary'}`}
-                    style={{ fontSize: '10px' }}
-                  >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: (marketplaceFilter === 'amazon.in') ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Amazon" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMarketplaceFilter('ajio');
-                      loadData(1, pagination.limit, selectedSeller, 'ajio');
-                    }}
-                    className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'ajio' ? 'bg-white text-purple-600 shadow-sm' : 'text-secondary'}`}
-                    style={{ fontSize: '10px' }}
-                  >
-                    <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '9px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Ajio" />
-                  </button>
-                  {canAccessMyntra && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMarketplaceFilter('myntra');
-                        loadData(1, pagination.limit, selectedSeller, 'myntra');
-                      }}
-                      className={`btn btn-sm px-2 border-0 fw-bold rounded-1 d-flex align-items-center transition-all ${marketplaceFilter === 'myntra' ? 'bg-white text-pink-600 shadow-sm' : 'text-secondary'}`}
-                      style={{ fontSize: '10px' }}
-                    >
-                      <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%) opacity(0.6)' }} alt="Myntra" />
-                    </button>
-                  )}
-                </div>
+                <Segmented
+                  size="small"
+                  value={marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'amazon.in' : marketplaceFilter}
+                  onChange={(val) => {
+                    setMarketplaceFilter(val);
+                    loadData(1, pagination.limit, selectedSeller, val);
+                  }}
+                  options={[
+                    {
+                      value: 'amazon.in',
+                      label: (
+                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                          <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'amazon.in' ? 'none' : 'grayscale(100%)' }} alt="Amazon" />
+                        </span>
+                      )
+                    },
+                    {
+                      value: 'ajio',
+                      label: (
+                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                          <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '9px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%)' }} alt="Ajio" />
+                        </span>
+                      )
+                    },
+                    ...(canAccessMyntra ? [{
+                      value: 'myntra',
+                      label: (
+                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                          <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%)' }} alt="Myntra" />
+                        </span>
+                      )
+                    }] : [])
+                  ]}
+                  style={{ background: '#f4f4f5', padding: '2px', borderRadius: '6px' }}
+                />
               </div>
 
               <div className="d-flex align-items-center gap-2">
-                <div className="input-group input-group-sm" style={{ width: '220px' }}>
-                  <span className="input-group-text bg-white border-end-0 text-muted pe-1">
-                    <Search size={13} />
-                  </span>
-                  <input
-                    type="text"
-                    className="form-control border-start-0 shadow-none ps-1 bg-white"
-                    placeholder="Search ASIN, SKU, Title..."
-                    style={{ fontSize: '12px', height: '32px' }}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
-                  />
-                  <button
-                    className="btn btn-dark fw-bold"
-                    style={{ fontSize: '11px', height: '32px' }}
-                    onClick={handleApplySearch}
-                  >
-                    Find
-                  </button>
-                </div>
-                <div style={{ width: '160px' }}>
+                <Input.Search
+                  placeholder="Search ASIN, SKU, Title..."
+                  size="middle"
+                  enterButton="Find"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onSearch={handleApplySearch}
+                  className="antd-dense-search asin-search-input"
+                />
+                <div className="asin-seller-select-wrapper">
                   <InfiniteScrollSelect
                     fetchData={fetchSellerDropdownData}
                     value={selectedSeller}
@@ -2329,19 +2398,13 @@ const AsinManagerPage = () => {
                 </div>
 
                 {/* ACTIONS DROPDOWN - RELOCATED AFTER SELLER */}
-                <div className="position-relative" ref={actionsRef}>
-                  <button
-                    className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
-                    onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-                    style={{ fontSize: '11px', height: '32px', background: '#ffffff' }}
-                  >
-                    <SlidersHorizontal size={13} />
-                    <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
-                    <ChevronDown size={11} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showActionsDropdown && (
-                    <div className="position-absolute start-0 mt-1 bg-white shadow-xl rounded-3 border py-2" style={{ zIndex: 1000, minWidth: '220px' }}>
+                <Dropdown
+                  open={showActionsDropdown}
+                  onOpenChange={setShowActionsDropdown}
+                  trigger={['click']}
+                  placement="bottomLeft"
+                  popupRender={() => (
+                    <div className="bg-white shadow-xl rounded-3 border py-2" style={{ minWidth: '220px', zIndex: 1000 }}>
                       <div className="px-3 py-2 border-bottom mb-1">
                         <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
                       </div>
@@ -2451,7 +2514,16 @@ const AsinManagerPage = () => {
                       </div>
                     </div>
                   )}
-                </div>
+                >
+                  <button
+                    className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
+                    style={{ fontSize: '11px', height: '32px', background: '#ffffff' }}
+                  >
+                    <SlidersHorizontal size={13} />
+                    <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
+                    <ChevronDown size={11} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                </Dropdown>
 
                 {/* Scrape Progress */}
                 {scrapeProgress && (
@@ -2463,7 +2535,7 @@ const AsinManagerPage = () => {
               </div>
             </div>
 
-            <div className="d-flex align-items-center gap-2">
+            <div className="asin-toolbar-right">
               <button
                 className="btn btn-white border d-flex align-items-center gap-2 px-3 shadow-sm fw-bold rounded-3"
                 onClick={handleBulkScrape}
@@ -2646,27 +2718,37 @@ const AsinManagerPage = () => {
                   )}
                   {isVisible('asinCode') && (
                     <th rowSpan={2} style={{ ...thStyle, width: '110px', left: isVisible('checkbox') ? '40px' : '0px', zIndex: 21, background: '#f8fafc', borderRight: '1px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
-                      <div className="d-flex align-items-center justify-content-between">
-                        {marketplaceFilter === 'ajio' ? 'JIOCODE' : 'ASIN ID'}
-                      </div>
+                      {renderSortableHeader(marketplaceFilter === 'ajio' ? 'JIOCODE' : 'ASIN ID', 'asinCode')}
                     </th>
                   )}
-                  {isVisible('releaseDate') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>RELEASED</th>}
+                  {isVisible('releaseDate') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'center', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {renderSortableHeader('RELEASED', 'releaseDate', 'center')}
+                    </th>
+                  )}
                   {isVisible('parentAsin') && (
                     <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                      <div className="d-flex align-items-center justify-content-between">
-                        PARENT ASIN
-                      </div>
+                      {renderSortableHeader('PARENT ASIN', 'parentAsin')}
                     </th>
                   )}
-                  {isVisible('sellerBrand') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>SELLER / BRAND</th>}
-                  {isVisible('sku') && <th rowSpan={2} style={{ ...thStyle, width: '90px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>SKU</th>}
-                  {isVisible('title') && <th rowSpan={2} style={{ ...thStyle, width: '220px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>PRODUCT TITLE</th>}
+                  {isVisible('sellerBrand') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '115px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {renderSortableHeader('SELLER / BRAND', 'sellerBrand')}
+                    </th>
+                  )}
+                  {isVisible('sku') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '95px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {renderSortableHeader('SKU', 'sku')}
+                    </th>
+                  )}
+                  {isVisible('title') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '220px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {renderSortableHeader('PRODUCT TITLE', 'title')}
+                    </th>
+                  )}
                   {isVisible('category') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '130px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                      <div className="d-flex align-items-center justify-content-between">
-                        CATEGORY
-                      </div>
+                    <th rowSpan={2} style={{ ...thStyle, width: '135px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {renderSortableHeader('CATEGORY', 'category')}
                     </th>
                   )}
                   {isVisible('tags') && <th rowSpan={2} style={{ ...thStyle, width: '100px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>TAGS</th>}
@@ -2678,114 +2760,162 @@ const AsinManagerPage = () => {
                   )}
 
                   {/* ===== STATUS & DEAL COLUMNS (Slate Palette) ===== */}
-                  {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>STATUS</th>}
-                  {isVisible('status') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DB STATUS</th>}
+                  {isVisible('status') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>
+                      {renderSortableHeader('STATUS', 'status', 'center')}
+                    </th>
+                  )}
+                  {isVisible('status') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '95px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>
+                      {renderSortableHeader('DB STATUS', 'scrapeStatus', 'center')}
+                    </th>
+                  )}
                   {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>ADS</th>}
                   {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
                   {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
                   {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
 
                   {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
-                  {isVisible('mrp') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>MRP</th>}
-                  {isVisible('price') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>{marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE'}</th>}
-                  {isVisible('discountPercentage') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISCOUNT %</th>}
-                  {isVisible('priceDispute') && <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>DISPUTE</th>}
+                  {isVisible('mrp') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
+                      {renderSortableHeader('MRP', 'mrp', 'right')}
+                    </th>
+                  )}
+                  {isVisible('price') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
+                      {renderSortableHeader(marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE', 'currentPrice', 'right')}
+                    </th>
+                  )}
+                  {isVisible('discountPercentage') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
+                      {renderSortableHeader('DISCOUNT %', 'discountPercentage', 'center')}
+                    </th>
+                  )}
+                  {isVisible('priceDispute') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'center', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
+                      {renderSortableHeader('DISPUTE', 'priceDispute', 'center')}
+                    </th>
+                  )}
                   {visiblePriceTrendCount > 0 && (
                     <th colSpan={visiblePriceTrendCount}
-                      style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', borderBottom: '2px solid #c7d2fe' }}>
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>Price Trend</span>
+                      style={{ ...thStyle, background: '#eef2ff', color: '#4338ca', textAlign: 'center', borderBottom: '2px solid #c7d2fe', transition: 'all 0.3s ease' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span>{priceTrendExpanded ? 'Price Trend' : 'Price'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPriceTrendExpanded(!priceTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#4338ca', cursor: 'pointer' }}
                           title={priceTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
                         >
-                          {priceTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                          {priceTrendExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
                         </button>
                       </div>
                     </th>
                   )}
 
-                  {isVisible('mainBsr') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>MAIN BSR</th>}
-                  {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>SUB BSR</th>}
-                  {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe' }}>BSR TR</th>}
+                  {isVisible('mainBsr') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe', transition: 'all 0.3s ease' }}>
+                      {renderSortableHeader('MAIN BSR', 'bsr', 'center')}
+                    </th>
+                  )}
+                  {isVisible('subBsr') && <th rowSpan={2} style={{ ...thStyle, width: '110px', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe', transition: 'all 0.3s ease' }}>SUB BSR</th>}
+                  {isVisible('bsrTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#f5f3ff', color: '#6d28d9', borderBottom: '2px solid #ddd6fe', transition: 'all 0.3s ease' }}>BSR TR</th>}
                   {visibleBsrTrendCount > 0 && (
                     <th colSpan={visibleBsrTrendCount}
-                      style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', borderBottom: '2px solid #ddd6fe' }}>
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>SUB-BSR TREND</span>
+                      style={{ ...thStyle, background: '#f5f3ff', color: '#6d28d9', textAlign: 'center', borderBottom: '2px solid #ddd6fe', transition: 'all 0.3s ease' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span>{bsrTrendExpanded ? 'SUB-BSR TREND' : 'BSR'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setBsrTrendExpanded(!bsrTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#6d28d9', cursor: 'pointer' }}
                           title={bsrTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
                         >
-                          {bsrTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                          {bsrTrendExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
                         </button>
                       </div>
                     </th>
                   )}
 
                   {/* ===== RATING COLUMNS (Amber Palette) ===== */}
-                  {isVisible('rating') && <th rowSpan={2} style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RT</th>}
-                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>CNT</th>}
-                  {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }}>RATING TR</th>}
+                  {isVisible('rating') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>
+                      {renderSortableHeader('RT', 'rating', 'center')}
+                    </th>
+                  )}
+                  {isVisible('reviewCount') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '65px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>
+                      {renderSortableHeader('CNT', 'reviewCount', 'center')}
+                    </th>
+                  )}
+                  {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>RATING TR</th>}
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
-                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>RATING TREND</span>
+                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span>{ratingTrendExpanded ? 'RATING TREND' : 'RT'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setRatingTrendExpanded(!ratingTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
                           title={ratingTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
                         >
-                          {ratingTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                          {ratingTrendExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
                         </button>
                       </div>
                     </th>
                   )}
-                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a' }} title="Reviews Trend Status">REV TR</th>}
+                  {isVisible('reviewCount') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }} title="Reviews Trend Status">REV TR</th>}
                   {visibleReviewTrendCount > 0 && (
                     <th colSpan={visibleReviewTrendCount}
-                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a' }}>
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>REVIEWS TREND</span>
+                      style={{ ...thStyle, background: '#fffbeb', color: '#b45309', textAlign: 'center', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span>{reviewTrendExpanded ? 'REVIEWS TREND' : 'REV'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setReviewTrendExpanded(!reviewTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer' }}
                           title={reviewTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
                         >
-                          {reviewTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                          {reviewTrendExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
                         </button>
                       </div>
                     </th>
                   )}
 
                   {/* ===== VISUALS & CONTENT COLUMNS (Video, Images, Bullet Points, A+) (Pink Palette) ===== */}
-                  {isVisible('video') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }} title="Video Present">Video</th>}
-                  {isVisible('imagesCount') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>IMG</th>}
+                  {isVisible('video') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '65px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8', transition: 'all 0.3s ease' }} title="Video Present">
+                      {renderSortableHeader('Video', 'videoCount', 'center')}
+                    </th>
+                  )}
+                  {isVisible('imagesCount') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8', transition: 'all 0.3s ease' }}>
+                      {renderSortableHeader('IMG', 'imagesCount', 'center')}
+                    </th>
+                  )}
                   {visibleImageTrendCount > 0 && (
                     <th colSpan={visibleImageTrendCount}
-                      style={{ ...thStyle, background: '#fdf2f8', color: '#db2777', textAlign: 'center', borderBottom: '2px solid #fbcfe8' }}>
-                      <div className="d-flex align-items-center justify-content-center gap-1">
-                        <span>IMG TREND</span>
+                      style={{ ...thStyle, background: '#fdf2f8', color: '#db2777', textAlign: 'center', borderBottom: '2px solid #fbcfe8', transition: 'all 0.3s ease' }}>
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        <span>{imageTrendExpanded ? 'IMG TREND' : 'IMG'}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); setImageTrendExpanded(!imageTrendExpanded); }}
                           className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center"
                           style={{ border: 'none', background: 'none', color: '#db2777', cursor: 'pointer' }}
                           title={imageTrendExpanded ? "Collapse to Latest" : "Expand to 7 Days"}
                         >
-                          {imageTrendExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                          {imageTrendExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
                         </button>
                       </div>
                     </th>
                   )}
                   {isVisible('bulletPoints') && <th rowSpan={2} style={{ ...thStyle, width: '35px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>B</th>}
-                  {isVisible('hasAplus') && <th rowSpan={2} style={{ ...thStyle, width: '40px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>A+</th>}
+                  {isVisible('hasAplus') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '55px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>
+                      {renderSortableHeader('A+', 'hasAplus', 'center')}
+                    </th>
+                  )}
                   {isVisible('aplusDays') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>A+ DAYS</th>}
                 </tr>
                 <tr>
@@ -2796,54 +2926,114 @@ const AsinManagerPage = () => {
                   {isVisible('lqs') && <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>}
 
                   {/* Price Trend Dates */}
-                  {isVisible('priceTrend') && historyStructure.map(week => {
-                    const datesToMap = priceTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                    return datesToMap.map((date, idx) => (
-                      <th key={`p-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#eef2ff', color: '#4338ca' }}>
-                        {date.label}
+                  {isVisible('priceTrend') && historyStructure.map(week => (
+                    week.dates.map((date, idx) => (
+                      <th key={`p-h-${idx}`} style={{
+                        ...thStyle,
+                        ...getTransitionStyle(priceTrendExpanded, idx, week.dates.length),
+                        fontSize: 9,
+                        textAlign: 'center',
+                        background: '#eef2ff',
+                        color: '#4338ca'
+                      }}>
+                        <div style={{
+                          width: (priceTrendExpanded || idx === week.dates.length - 1) ? 'auto' : '0px',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          {date.label}
+                        </div>
                       </th>
-                    ));
-                  })}
+                    ))
+                  ))}
 
                   {/* BSR Trend Dates */}
-                  {isVisible('bsrTrend') && historyStructure.map(week => {
-                    const datesToMap = bsrTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                    return datesToMap.map((date, idx) => (
-                      <th key={`b-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#f5f3ff', color: '#6d28d9' }}>
-                        {date.label}
+                  {isVisible('bsrTrend') && historyStructure.map(week => (
+                    week.dates.map((date, idx) => (
+                      <th key={`b-h-${idx}`} style={{
+                        ...thStyle,
+                        ...getTransitionStyle(bsrTrendExpanded, idx, week.dates.length),
+                        fontSize: 9,
+                        textAlign: 'center',
+                        background: '#f5f3ff',
+                        color: '#6d28d9'
+                      }}>
+                        <div style={{
+                          width: (bsrTrendExpanded || idx === week.dates.length - 1) ? 'auto' : '0px',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          {date.label}
+                        </div>
                       </th>
-                    ));
-                  })}
+                    ))
+                  ))}
 
                   {/* Rating Trend Dates */}
-                  {isVisible('ratingTrend') && historyStructure.map(week => {
-                    const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                    return datesToMap.map((date, idx) => (
-                      <th key={`r-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
-                        {date.label}
+                  {isVisible('ratingTrend') && historyStructure.map(week => (
+                    week.dates.map((date, idx) => (
+                      <th key={`r-h-${idx}`} style={{
+                        ...thStyle,
+                        ...getTransitionStyle(ratingTrendExpanded, idx, week.dates.length),
+                        fontSize: 9,
+                        textAlign: 'center',
+                        background: '#fffbeb',
+                        color: '#b45309'
+                      }}>
+                        <div style={{
+                          width: (ratingTrendExpanded || idx === week.dates.length - 1) ? 'auto' : '0px',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          {date.label}
+                        </div>
                       </th>
-                    ));
-                  })}
+                    ))
+                  ))}
 
                   {/* Review Trend Dates */}
-                  {isVisible('reviewTrend') && historyStructure.map(week => {
-                    const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                    return datesToMap.map((date, idx) => (
-                      <th key={`rev-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fffbeb', color: '#b45309' }}>
-                        {date.label}
+                  {isVisible('reviewTrend') && historyStructure.map(week => (
+                    week.dates.map((date, idx) => (
+                      <th key={`rev-h-${idx}`} style={{
+                        ...thStyle,
+                        ...getTransitionStyle(reviewTrendExpanded, idx, week.dates.length),
+                        fontSize: 9,
+                        textAlign: 'center',
+                        background: '#fffbeb',
+                        color: '#b45309'
+                      }}>
+                        <div style={{
+                          width: (reviewTrendExpanded || idx === week.dates.length - 1) ? 'auto' : '0px',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          {date.label}
+                        </div>
                       </th>
-                    ));
-                  })}
+                    ))
+                  ))}
 
                   {/* Image Trend Dates */}
-                  {isVisible('imageTrend') && historyStructure.map(week => {
-                    const datesToMap = imageTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                    return datesToMap.map((date, idx) => (
-                      <th key={`i-h-${idx}`} style={{ ...thStyle, padding: '2px 4px', fontSize: 9, textAlign: 'center', background: '#fdf2f8', color: '#db2777' }}>
-                        {date.label}
+                  {isVisible('imageTrend') && historyStructure.map(week => (
+                    week.dates.map((date, idx) => (
+                      <th key={`i-h-${idx}`} style={{
+                        ...thStyle,
+                        ...getTransitionStyle(imageTrendExpanded, idx, week.dates.length),
+                        fontSize: 9,
+                        textAlign: 'center',
+                        background: '#fdf2f8',
+                        color: '#db2777'
+                      }}>
+                        <div style={{
+                          width: (imageTrendExpanded || idx === week.dates.length - 1) ? 'auto' : '0px',
+                          overflow: 'hidden',
+                          transition: 'all 0.3s ease'
+                        }}>
+                          {date.label}
+                        </div>
                       </th>
-                    ));
-                  })}
+                    ))
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -3422,21 +3612,32 @@ const AsinManagerPage = () => {
                           </div>
                         </td>
                       )}
-                      {isVisible('priceTrend') && historyStructure.map(week => {
-                        const datesToMap = priceTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                        return datesToMap.map((date, dIdx) => {
+                      {isVisible('priceTrend') && historyStructure.map(week => (
+                        week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewPrice(asin, e)}
                               title="View Price Trend Matrix"
-                              style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 45, cursor: 'pointer' }}>
-                              {wData?.price ? getWeekHistoryBadge(wData.price, 'price', (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? asin.currentPrice : asin.uploadedPrice)) : '-'}
+                              style={{
+                                ...tdStyle,
+                                ...getTransitionStyle(priceTrendExpanded, dIdx, week.dates.length),
+                                textAlign: 'center',
+                                background: '#f5f3ff33',
+                                cursor: 'pointer'
+                              }}>
+                              <div style={{
+                                width: (priceTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {wData?.price ? getWeekHistoryBadge(wData.price, 'price', (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? asin.currentPrice : asin.uploadedPrice)) : '-'}
+                              </div>
                             </td>
                           );
-                        });
-                      })}
+                        })
+                      ))}
                       {isVisible('mainBsr') && (
                         <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
                           onClick={(e) => handleViewBsr(asin, e)}>
@@ -3514,22 +3715,32 @@ const AsinManagerPage = () => {
                           <TrendBadge status={asin.bsrTrend} />
                         </td>
                       )}
-                      {isVisible('bsrTrend') && historyStructure.map(week => {
-                        const datesToMap = bsrTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                        return datesToMap.map((date, dIdx) => {
+                      {isVisible('bsrTrend') && historyStructure.map(week => (
+                        week.dates.map((date, dIdx) => {
                           const hDate = date.raw;
                           const subBsrPoint = asin.subBsrHistory?.find(h => normalizeDateStr(h.date) === hDate);
                           const displayVal = subBsrPoint?.rank ?? asin.subBsr;
-
                           return (
                             <td key={`b-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewBsr(asin, e)}
-                              style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff33', width: 40, cursor: 'pointer' }}>
-                              {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
+                              style={{
+                                ...tdStyle,
+                                ...getTransitionStyle(bsrTrendExpanded, dIdx, week.dates.length),
+                                textAlign: 'center',
+                                background: '#f5f3ff33',
+                                cursor: 'pointer'
+                              }}>
+                              <div style={{
+                                width: (bsrTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
+                              </div>
                             </td>
                           );
-                        });
-                      })}
+                        })
+                      ))}
                       {isVisible('rating') && (
                         <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                           onClick={(e) => handleViewRating(asin, e)}>
@@ -3551,41 +3762,63 @@ const AsinManagerPage = () => {
                           <TrendBadge status={asin.ratingTrend} />
                         </td>
                       )}
-                      {isVisible('ratingTrend') && historyStructure.map(week => {
-                        const datesToMap = ratingTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                        return datesToMap.map((date, dIdx) => {
+                      {isVisible('ratingTrend') && historyStructure.map(week => (
+                        week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           const ratingVal = (wData && wData.rating !== undefined && wData.rating !== null) ? wData.rating : asin.rating;
                           return (
                             <td key={`r-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewRating(asin, e)}
-                              style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
-                              {(ratingVal !== undefined && ratingVal !== null && ratingVal !== '') ? getWeekHistoryBadge(ratingVal, 'rating') : '-'}
+                              style={{
+                                ...tdStyle,
+                                ...getTransitionStyle(ratingTrendExpanded, dIdx, week.dates.length),
+                                textAlign: 'center',
+                                background: '#fffbeb33',
+                                cursor: 'pointer'
+                              }}>
+                              <div style={{
+                                width: (ratingTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {(ratingVal !== undefined && ratingVal !== null && ratingVal !== '') ? getWeekHistoryBadge(ratingVal, 'rating') : '-'}
+                              </div>
                             </td>
                           );
-                        });
-                      })}
+                        })
+                      ))}
                       {isVisible('reviewCount') && (
                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                           <TrendBadge status={getReviewTrendStatus(asin)} />
                         </td>
                       )}
-                      {isVisible('reviewTrend') && historyStructure.map(week => {
-                        const datesToMap = reviewTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                        return datesToMap.map((date, dIdx) => {
+                      {isVisible('reviewTrend') && historyStructure.map(week => (
+                        week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           const reviewsVal = (wData && wData.reviews !== undefined && wData.reviews !== null) ? wData.reviews : (wData?.reviewCount !== undefined && wData?.reviewCount !== null ? wData.reviewCount : asin.reviewCount);
                           return (
                             <td key={`rev-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewRating(asin, e)}
-                              style={{ ...tdStyle, textAlign: 'center', background: '#fffbeb33', width: 40, cursor: 'pointer' }}>
-                              {(reviewsVal !== undefined && reviewsVal !== null && reviewsVal !== '') ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{reviewsVal.toLocaleString()}</span> : '-'}
+                              style={{
+                                ...tdStyle,
+                                ...getTransitionStyle(reviewTrendExpanded, dIdx, week.dates.length),
+                                textAlign: 'center',
+                                background: '#fffbeb33',
+                                cursor: 'pointer'
+                              }}>
+                              <div style={{
+                                width: (reviewTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {(reviewsVal !== undefined && reviewsVal !== null && reviewsVal !== '') ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{reviewsVal.toLocaleString()}</span> : '-'}
+                              </div>
                             </td>
                           );
-                        });
-                      })}
+                        })
+                      ))}
                       {isVisible('video') && (
                         <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
                           <span
@@ -3603,21 +3836,32 @@ const AsinManagerPage = () => {
                       )}
                       {isVisible('imagesCount') && <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>}
 
-                      {isVisible('imageTrend') && historyStructure.map(week => {
-                        const datesToMap = imageTrendExpanded ? week.dates : [week.dates[week.dates.length - 1]];
-                        return datesToMap.map((date, dIdx) => {
+                      {isVisible('imageTrend') && historyStructure.map(week => (
+                        week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           return (
                             <td key={`i-${week.label}-${dIdx}`}
-                              style={{ ...tdStyle, textAlign: 'center', background: '#fdf2f833', width: 40, borderRight: '1px solid #fce7f3' }}>
-                              <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
-                                {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
-                              </span>
+                              style={{
+                                ...tdStyle,
+                                ...getTransitionStyle(imageTrendExpanded, dIdx, week.dates.length),
+                                textAlign: 'center',
+                                background: '#fdf2f833',
+                                borderRight: '1px solid #fce7f3'
+                              }}>
+                              <div style={{
+                                width: (imageTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
+                                  {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
+                                </span>
+                              </div>
                             </td>
                           );
-                        });
-                      })}
+                        })
+                      ))}
 
                       {isVisible('bulletPoints') && (
                         <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>

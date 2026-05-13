@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Layout, Menu, Badge, ConfigProvider } from 'antd';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
 import { asinApi } from '../../services/api';
@@ -8,22 +9,19 @@ import {
     Store,
     Package,
     Activity,
-    Bot,
+    Clock,
     GitBranch,
     LayoutTemplate,
     BarChart2,
     BarChart3,
-    Clock,
     Folder,
     MessageSquare,
     ScanSearch,
     TrendingUp,
     CalendarDays,
-    Megaphone,
     ArrowLeftRight,
     Warehouse,
     Users,
-    ShieldCheck,
     Map,
     Settings,
     KeyRound,
@@ -37,48 +35,38 @@ import {
 import { RetailOpsWordmark, RetailOpsMark } from './BrandLogo';
 import './Sidebar.css';
 
-const NavItem = ({ item, collapsed, active, onClick }) => {
-    const [isHovered, setIsHovered] = useState(false);
-
-    return (
-        <div
-            className={`nav-item ${active ? 'active' : ''}`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={() => onClick(item.to)}
-        >
-            <div className="nav-item-icon">
-                <item.icon size={15} />
-            </div>
-            {!collapsed && (
-                <span className="nav-item-label">{item.label}</span>
-            )}
-            {!collapsed && item.badge && (
-                <div className="nav-item-badge">{item.badge}</div>
-            )}
-            {collapsed && isHovered && (
-                <div className="nav-tooltip">
-                    {item.label}
-                </div>
-            )}
-            {active && !collapsed && <div className="active-indicator" />}
-        </div>
-    );
-};
+const { Sider } = Layout;
 
 const Sidebar = () => {
     const { user, logout, hasPermission } = useAuth();
-    const { collapsed, toggle, isMobile, isOpen, toggleMobile } = useSidebar();
+    const { collapsed, toggle, isMobile, isOpen, toggleMobile, setCollapsed } = useSidebar();
     const navigate = useNavigate();
     const location = useLocation();
     const [asinCount, setAsinCount] = useState('...');
     
-    // Check if user has only ASIN Manager access (no dashboard permission)
+    // Local hover state for auto expand/collapsed logic
+    const [isHovered, setIsHovered] = useState(false);
+    
+    // The actual visual collapsed state of the Sidebar component
+    const visuallyCollapsed = collapsed && !isHovered;
+
+    // Check if user has only ASIN Manager access
     const isAsinManagerOnly = 
         user?.role?.name?.toLowerCase().includes('asin manager') || 
         user?.role?.displayName?.toLowerCase().includes('asin manager') || 
         user?.role?.name?.toLowerCase().includes('listing manager') || 
         user?.role?.displayName?.toLowerCase().includes('listing manager');
+    // Track initial path to determine when the user navigates for the first time
+    const initialPathRef = useRef(location.pathname);
+
+    useEffect(() => {
+        // If user navigates away from their landing route, auto-collapse the sidebar
+        if (location.pathname !== initialPathRef.current) {
+            if (!isMobile && setCollapsed && !collapsed) {
+                setCollapsed(true);
+            }
+        }
+    }, [location.pathname, isMobile, collapsed, setCollapsed]);
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -105,7 +93,7 @@ const Sidebar = () => {
                 { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'asinmanager_view', badge: asinCount },
                 { label: 'Ads Manager', icon: BarChart3, to: '/ads-manager', permission: 'adsreport_view' },
                 { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'asintracker_view' },
-                { label: 'Scrape Tasks', icon: Bot, to: '/scrape-tasks', permission: 'scraping_view' },
+                // NOTE: "Scrape Tasks" has been removed for now as requested
                 { label: 'Scheduled Runs', icon: Clock, to: '/scheduled-runs', permission: 'scraping_view' },
             ],
         },
@@ -130,7 +118,6 @@ const Sidebar = () => {
                 { label: 'SKU Analysis', icon: ScanSearch, to: '/sku-report', permission: 'skureport_view' },
                 { label: 'Parent Trends', icon: TrendingUp, to: '/parent-asin-report', permission: 'parentreport_view' },
                 { label: 'Monthly Recap', icon: CalendarDays, to: '/month-wise-report', permission: 'monthlyreport_view' },
-
                 { label: 'Profit & Loss', icon: ArrowLeftRight, to: '/profit-loss', permission: 'pnlreport_view' },
                 { label: 'Inventory', icon: Warehouse, to: '/inventory', permission: 'inventoryreport_view' },
             ],
@@ -159,90 +146,162 @@ const Sidebar = () => {
 
     const pipelineActive = false; // Mock state
 
+    // Transform sections to Ant Design Menu items format
+    const menuItems = sections.map((section) => {
+        const filteredItems = section.items.filter(
+            (item) => !item.permission || hasPermission(item.permission)
+        ).filter(
+            (item) => {
+                if (isAsinManagerOnly) {
+                    return item.label === 'ASIN Manager';
+                }
+                return true;
+            }
+        );
+
+        if (filteredItems.length === 0) return null;
+
+        return {
+            key: section.id,
+            type: 'group',
+            label: visuallyCollapsed ? null : section.label,
+            children: filteredItems.map((item) => ({
+                key: item.to,
+                icon: React.createElement(item.icon, { size: 16 }),
+                label: (
+                    <div className="d-flex align-items-center justify-content-between w-100">
+                        <span className="menu-label-text">{item.label}</span>
+                        {item.badge && !visuallyCollapsed && (
+                            <Badge 
+                                count={item.badge} 
+                                overflowCount={9999}
+                                style={{ 
+                                    backgroundColor: 'var(--blue-soft)', 
+                                    color: 'var(--blue)', 
+                                    boxShadow: 'none',
+                                    fontSize: '10px',
+                                    fontWeight: 650,
+                                    minWidth: '18px',
+                                    height: '18px',
+                                    lineHeight: '18px',
+                                    border: 'none',
+                                    borderRadius: '12px'
+                                }} 
+                            />
+                        )}
+                    </div>
+                )
+            }))
+        };
+    }).filter(Boolean);
+
+    // Flatten items to find current active menu key
+    const allFlatItems = sections.flatMap(s => s.items);
+    const activeItem = allFlatItems.find(item => 
+        location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
+    );
+    const selectedKeys = activeItem ? [activeItem.to] : [];
+
     return (
-        <aside className={`sidebar-redesign ${collapsed ? 'collapsed' : ''} ${isMobile && !isOpen ? 'mobile-hidden' : ''}`}>
-            {/* Logo Area */}
-            <div className="logo-area">
-                {collapsed ? (
-                    <RetailOpsMark size={28} />
-                ) : (
-                    <RetailOpsWordmark size={28} />
-                )}
-                <button className="sidebar-toggle" onClick={toggle}>
-                    <ChevronLeft size={12} style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }} />
-                </button>
-            </div>
-
-            {/* Nav Body */}
-            <div className="nav-body custom-scrollbar">
-                {sections.map((section) => {
-                    const filteredItems = section.items.filter(
-                        (item) => !item.permission || hasPermission(item.permission)
-                    ).filter(
-                        (item) => {
-                            if (isAsinManagerOnly) {
-                                return item.label === 'ASIN Manager';
-                            }
-                            return true;
-                        }
-                    );
-                    if (filteredItems.length === 0) return null;
-
-                    return (
-                        <div key={section.id} className="nav-section">
-                            {collapsed ? (
-                                <div className="section-divider" />
-                            ) : (
-                                <div className="section-header">{section.label}</div>
-                            )}
-                            {filteredItems.map((item, idx) => (
-                                <NavItem
-                                    key={idx}
-                                    item={item}
-                                    collapsed={collapsed}
-                                    active={location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))}
-                                    onClick={handleNavigate}
-                                />
-                            ))}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Bottom Area */}
-            <div className="bottom-area">
-                {!collapsed && (
-                    <div className="pipeline-row">
-                        <div className={`pipeline-dot ${pipelineActive ? 'active' : 'idle'}`} />
-                        <span className="pipeline-text">
-                            PIPELINE {pipelineActive ? 'ACTIVE' : 'IDLE'}
-                        </span>
-                    </div>
-                )}
-                <div className="user-row" onClick={() => navigate('/profile')}>
-                    <div className="user-avatar">
-                        {initials}
-                    </div>
-                    {!collapsed && (
-                        <>
-                            <div className="user-info">
-                                <div className="user-name">{user?.fullName || 'User'}</div>
-                                <div className="user-role">{user?.role?.displayName || user?.role?.name || 'User'}</div>
-                            </div>
-                            <ChevronRight size={14} className="user-arrow" />
-                        </>
+        <>
+            {isMobile && isOpen && (
+                <div 
+                    className="sidebar-mobile-backdrop" 
+                    onClick={toggleMobile} 
+                />
+            )}
+            <ConfigProvider
+                theme={{
+                    components: {
+                        Menu: {
+                            itemSelectedColor: 'var(--blue)',
+                            itemSelectedBg: 'var(--bg-active-nav)',
+                            itemHoverBg: 'var(--bg-hover)',
+                            itemHoverColor: 'var(--text-primary)',
+                            groupTitleColor: 'var(--text-muted)',
+                            groupTitleFontSize: 10,
+                            itemHeight: 38,
+                            iconSize: 16,
+                            itemPaddingInline: 16,
+                        },
+                    },
+                }}
+            >
+                <Sider
+                width={240}
+                collapsedWidth={70}
+                collapsed={visuallyCollapsed}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                className={`sidebar-sider ${isMobile && !isOpen ? 'mobile-hidden' : ''}`}
+                style={{
+                    height: '100vh',
+                    position: 'relative',
+                    zIndex: 100,
+                    backgroundColor: 'var(--bg-sidebar)',
+                    borderRight: '1px solid var(--border)',
+                }}
+            >
+                {/* Logo Area */}
+                <div className="logo-area">
+                    {visuallyCollapsed ? (
+                        <RetailOpsMark size={28} />
+                    ) : (
+                        <RetailOpsWordmark size={28} />
                     )}
+                    <button className="sidebar-toggle" onClick={toggle} title={collapsed ? "Unlock Sidebar" : "Collapse Sidebar"}>
+                        <ChevronLeft size={12} style={{ transform: collapsed ? 'rotate(180deg)' : 'none' }} />
+                    </button>
                 </div>
-                <button
-                    className="logout-btn"
-                    onClick={logout}
-                    title="Logout"
-                >
-                    <LogOut size={16} />
-                    {!collapsed && <span>Logout</span>}
-                </button>
-            </div>
-        </aside>
+
+                {/* Nav Body - Scrollable Menu Container */}
+                <div className="nav-body custom-scrollbar">
+                    <Menu
+                        mode="inline"
+                        selectedKeys={selectedKeys}
+                        items={menuItems}
+                        onClick={(info) => handleNavigate(info.key)}
+                        style={{ borderRight: 0, background: 'transparent' }}
+                        inlineIndent={14}
+                    />
+                </div>
+
+                {/* Bottom Area */}
+                <div className="bottom-area">
+                    {!visuallyCollapsed && (
+                        <div className="pipeline-row">
+                            <div className={`pipeline-dot ${pipelineActive ? 'active' : 'idle'}`} />
+                            <span className="pipeline-text">
+                                PIPELINE {pipelineActive ? 'ACTIVE' : 'IDLE'}
+                            </span>
+                        </div>
+                    )}
+                    <div className="user-row" onClick={() => navigate('/profile')}>
+                        <div className="user-avatar">
+                            {initials}
+                        </div>
+                        {!visuallyCollapsed && (
+                            <>
+                                <div className="user-info">
+                                    <div className="user-name">{user?.fullName || 'User'}</div>
+                                    <div className="user-role">{user?.role?.displayName || user?.role?.name || 'User'}</div>
+                                </div>
+                                <ChevronRight size={14} className="user-arrow" />
+                            </>
+                        )}
+                    </div>
+                    <button
+                        className="logout-btn"
+                        onClick={logout}
+                        title="Logout"
+                    >
+                        <LogOut size={16} />
+                        {!visuallyCollapsed && <span>Logout</span>}
+                    </button>
+                </div>
+            </Sider>
+        </ConfigProvider>
+        </>
     );
 };
 

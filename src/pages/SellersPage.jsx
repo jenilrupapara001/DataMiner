@@ -3,7 +3,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { sellerApi, asinApi, authApi, userApi, marketSyncApi } from '../services/api';
 import {
   Table, Button, Input, Segmented, Select, Space, Tag, Typography, Tooltip, Avatar,
-  Modal, Empty, message
+  Modal, Empty, message, Divider, Badge
 } from 'antd';
 import {
   CheckCircle2,
@@ -601,56 +601,62 @@ const SellersPage = () => {
 
     if (isBrandManager) {
       return (
-        <Space size={6}>
+        <Space size={4}>
           <Tooltip title="View ASINs">
             <Button
               type="text"
+              size="small"
               icon={<Package size={14} />}
               onClick={() => handleViewAsins(seller)}
-              style={{ color: '#52525b' }}
+              style={{ color: '#64748b' }}
             />
           </Tooltip>
         </Space>
       );
     }
     return (
-      <Space size={6}>
+      <Space size={4}>
         {isGlobalUser && (
           <Tooltip title="Edit Details">
             <Button
               type="text"
+              size="small"
               icon={<Edit3 size={14} />}
               onClick={() => handleEditSeller(seller)}
-              style={{ color: '#52525b' }}
+              style={{ color: '#64748b' }}
             />
           </Tooltip>
         )}
         <Tooltip title="Manage Catalog">
           <Button
             type="text"
+            size="small"
             icon={<Package size={14} />}
             onClick={() => handleViewAsins(seller)}
-            style={{ color: '#52525b' }}
+            style={{ color: '#64748b' }}
           />
         </Tooltip>
         <Tooltip title="Sync Store">
           <Button
             type="text"
+            size="small"
             icon={<RefreshCw size={14} />}
             onClick={() => handleSyncSeller(seller._id)}
-            style={{ color: '#52525b' }}
+            style={{ color: '#64748b' }}
           />
         </Tooltip>
         <Tooltip title={isActive ? 'Pause Store' : 'Resume Store'}>
           <Button
-            type={isActive ? 'default' : 'primary'}
+            type={isActive ? 'text' : 'primary'}
+            size="small"
             icon={isActive ? <Pause size={14} /> : <Play size={14} />}
             onClick={() => handleToggleStatus(seller._id)}
             danger={!isActive}
             style={{
+              borderRadius: '6px',
               borderColor: isActive ? undefined : '#10b981',
               backgroundColor: isActive ? undefined : '#10b981',
-              color: isActive ? '#52525b' : '#fff',
+              color: isActive ? '#64748b' : '#fff',
             }}
           />
         </Tooltip>
@@ -658,6 +664,7 @@ const SellersPage = () => {
           <Tooltip title="Delete Store">
             <Button
               type="text"
+              size="small"
               danger
               icon={<Trash2 size={14} />}
               onClick={() => handleDeleteSeller(seller._id)}
@@ -677,41 +684,43 @@ const SellersPage = () => {
       key: 'name',
       render: (_, seller) => {
         if (seller?.isGroupHeader) {
-          // Render marketplace group header
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {getMarketplaceBadge(seller.marketplace)}
-              <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
+              <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>
                 {seller.count} STORES
               </Text>
             </div>
           );
         }
         return (
-          <div className="d-flex align-items-center gap-3">
+          <div className="d-flex align-items-center gap-2">
             <div
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
+                width: 32,
+                height: 32,
+                borderRadius: 8,
                 background: getStoreGradient(seller.name || ''),
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: 12,
+                fontWeight: 800,
+                fontSize: 10,
                 letterSpacing: '0.05em',
                 flexShrink: 0,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
               }}
             >
               {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
             </div>
-            <div>
-              <Text strong style={{ fontSize: 13 }}>{seller.name}</Text>
+            <div style={{ lineHeight: 1.2 }}>
+              <Text strong style={{ fontSize: '12.5px', color: '#1e293b' }}>{seller.name}</Text>
               {seller.sellerId && (
-                <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>
-                  <Text code style={{ fontSize: 11 }}>{seller.sellerId}</Text>
+                <div style={{ marginTop: 1 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 4px', borderRadius: 4, color: '#64748b' }}>
+                    {seller.sellerId}
+                  </Text>
                 </div>
               )}
             </div>
@@ -730,21 +739,21 @@ const SellersPage = () => {
           return <Text type="secondary" italic style={{ fontSize: 10 }}>Unassigned</Text>;
         }
         return (
-          <Space wrap size={4}>
+          <Space wrap size={2}>
             {managers.map((m) => (
-              <span key={m._id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span key={m._id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f8fafc', padding: '2px 6px', borderRadius: 12, border: '1px solid #f1f5f9' }}>
                 <Avatar
-                  size={20}
+                  size={18}
                   style={{
-                    backgroundColor: '#f4f4f5',
-                    color: '#18181b',
-                    fontSize: 10,
+                    backgroundColor: '#e2e8f0',
+                    color: '#334155',
+                    fontSize: 9,
                     fontWeight: 700,
                   }}
                 >
                   {m.firstName?.charAt(0)}{m.lastName?.charAt(0)}
                 </Avatar>
-                <Text style={{ fontSize: 11 }}>{m.firstName} {m.lastName}</Text>
+                <Text style={{ fontSize: 10.5, color: '#475569' }}>{m.firstName} {m.lastName}</Text>
               </span>
             ))}
           </Space>
@@ -761,25 +770,26 @@ const SellersPage = () => {
           <Button
             type="link"
             onClick={() => handleViewAsins(seller)}
-            style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 8, color: '#18181b' }}
+            style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#1e293b', height: 'auto' }}
           >
             <div style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: '#f4f4f5',
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#f1f5f9',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0
             }}>
-              <Package size={16} color="#71717a" />
+              <Package size={14} color="#64748b" />
             </div>
-            <div>
-              <Text strong style={{ fontSize: 12 }}>{total || 0} Total</Text>
-              <div style={{ fontSize: 10, color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+              <Text strong style={{ fontSize: '11.5px' }}>{total || 0} Total</Text>
+              <div style={{ fontSize: 9, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
                 <span style={{
-                  width: 6,
-                  height: 6,
+                  width: 5,
+                  height: 5,
                   borderRadius: '50%',
                   backgroundColor: '#10b981',
                   display: 'inline-block',
@@ -798,14 +808,14 @@ const SellersPage = () => {
       render: (lastScraped, record) => {
         if (record?.isGroupHeader) return null;
         return (
-          <div>
-            <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Clock size={12} style={{ color: '#a1a1aa' }} />
+          <div style={{ lineHeight: 1.2 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={11} style={{ color: '#94a3b8' }} />
               {formatTimeAgo(lastScraped)}
             </div>
             {lastScraped && (
-              <div style={{ fontSize: 10, color: '#a1a1aa', paddingLeft: 16 }}>
-                {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+              <div style={{ fontSize: 9, color: '#94a3b8', paddingLeft: 15 }}>
+                {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
               </div>
             )}
           </div>
@@ -826,7 +836,7 @@ const SellersPage = () => {
       title: 'Actions',
       key: 'actions',
       fixed: 'right',
-      width: 200,
+      width: 160,
       render: (_, seller) => {
         if (seller?.isGroupHeader) return null;
         return renderActions(seller);
@@ -878,56 +888,79 @@ const SellersPage = () => {
   }
 
   return (
-    <>
+    <div style={{ margin: '-1.5rem -2rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100%' }}>
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
 
-      {/* Page Header */}
-      <div style={{ padding: '16px 24px', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
-        <Space direction="vertical" size={0}>
-          <Space size={4} style={{ color: '#8c8c8c', fontSize: 12 }}>
-            <Text type="secondary">Global</Text>
-            <ChevronRight size={12} />
-            <Text strong>Sellers</Text>
+      {/* Integrated Header Dashboard View */}
+      <div style={{ 
+        padding: '16px 24px', 
+        background: '#ffffff', 
+        borderBottom: '1px solid #f1f5f9',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
+      }}>
+        <div>
+          <Space size={4} style={{ color: '#94a3b8', fontSize: 11, marginBottom: 2 }}>
+            <Text style={{ color: '#94a3b8' }}>Global</Text>
+            <ChevronRight size={10} />
+            <Text strong style={{ color: '#64748b' }}>Sellers</Text>
           </Space>
-          <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            Seller Management
-          </Title>
-        </Space>
-        <Space style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em', color: '#0f172a' }}>
+              Seller Management
+            </Title>
+            <Tag color="blue" style={{ borderRadius: 6, fontWeight: 700, border: 'none', margin: 0, background: '#eff6ff', color: '#1d4ed8' }}>
+              {totalResults} Stores
+            </Tag>
+          </div>
+        </div>
+
+        {/* Action belt */}
+        <Space size={8} wrap>
           {isGlobalUser && (
-            <>
+            <Space size={8}>
               <Button
                 onClick={() => setShowPoolModal(true)}
-                icon={<LayoutGrid size={14} />}
+                icon={<LayoutGrid size={13} />}
+                size="middle"
+                style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}
               >
                 Octoparse Pool ({poolStats.available})
               </Button>
               <Button
                 onClick={handleIngestAll}
                 loading={loading}
-                icon={<RefreshCw size={14} />}
+                icon={<RefreshCw size={13} />}
+                size="middle"
+                style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}
               >
-                {loading ? 'Syncing...' : 'Fetch Latest'}
+                Fetch Latest
               </Button>
-            </>
+            </Space>
           )}
           {!isBrandManager && (
-            <>
+            <Space size={8}>
               <Button
-                type="primary"
-                icon={<Upload size={14} />}
+                type="default"
+                icon={<Upload size={13} />}
                 onClick={() => setShowBulkImportModal(true)}
-                style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
+                size="middle"
+                style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}
               >
                 Bulk Import
               </Button>
               <Button
-                icon={<FileUp size={14} />}
+                icon={<FileUp size={13} />}
                 onClick={() => setShowImportModal(true)}
+                size="middle"
+                style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}
               >
                 CSV
               </Button>
@@ -935,19 +968,37 @@ const SellersPage = () => {
                 type="primary"
                 icon={<Plus size={14} />}
                 onClick={() => setShowAddModal(true)}
-                style={{ background: '#18181b', borderColor: '#18181b' }}
+                size="middle"
+                style={{ 
+                  background: '#0f172a', 
+                  borderColor: '#0f172a', 
+                  fontWeight: 700, 
+                  fontSize: 12,
+                  borderRadius: 8,
+                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.1)'
+                }}
               >
                 Add Store
               </Button>
-            </>
+            </Space>
           )}
         </Space>
       </div>
 
-      {/* Filters & Search Bar */}
-      <div style={{ padding: '12px 24px', background: '#fff', borderBottom: '1px solid #f0f0f0', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Space wrap>
+      {/* Consolidated High-Density Filters Belt */}
+      <div style={{ 
+        padding: '10px 24px', 
+        background: '#fcfcfd', 
+        borderBottom: '1px solid #f1f5f9', 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 12, 
+        alignItems: 'center', 
+        justifyContent: 'space-between' 
+      }}>
+        <Space wrap size={12}>
           <Segmented
+            size="middle"
             options={[
               { label: 'All Stores', value: 'all' },
               { label: 'Active', value: 'Active' },
@@ -956,14 +1007,15 @@ const SellersPage = () => {
             value={activeTab}
             onChange={(value) => {
               setActiveTab(value);
-              setStatusFilter('all'); // reset status filter when using main tabs
+              setStatusFilter('all');
             }}
-            style={{ fontWeight: 600, fontSize: 11 }}
+            style={{ fontWeight: 600, borderRadius: 8, padding: 2 }}
           />
           <Select
             value={marketplaceFilter}
             onChange={setMarketplaceFilter}
-            style={{ width: 160 }}
+            style={{ width: 150 }}
+            size="middle"
             options={[
               { label: 'All Markets', value: 'all' },
               ...(canAccessAmazon ? [{ label: 'Amazon.in', value: 'amazon.in' }] : []),
@@ -971,84 +1023,96 @@ const SellersPage = () => {
               ...(canAccessMyntra ? [{ label: 'Myntra', value: 'myntra' }] : []),
             ]}
           />
+          {/* Inline stats tracker & reset - entirely removing the standalone black cache bar */}
+          <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: 12, height: 16, display: 'flex', alignItems: 'center' }}>
+            <Text type="secondary" style={{ fontSize: 10.5, fontWeight: 500, color: '#94a3b8' }}>
+              Cache: <strong style={{ color: '#475569' }}>{sellers.length}</strong> records | <strong style={{ color: '#475569' }}>{totalResults}</strong> total
+            </Text>
+            {(activeTab !== 'all' || marketplaceFilter !== 'all' || searchQuery) && (
+              <>
+                <Divider type="vertical" />
+                <Button 
+                  type="link" 
+                  size="small" 
+                  style={{ fontSize: 10, padding: 0, height: 'auto', color: '#ef4444', fontWeight: 600 }}
+                  onClick={() => {
+                    setActiveTab('all');
+                    setMarketplaceFilter('all');
+                    setStatusFilter('all');
+                    setSearchQuery('');
+                  }}
+                >
+                  Reset
+                </Button>
+              </>
+            )}
+          </div>
         </Space>
-        <Input.Search
-          placeholder="Search storefronts..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: 280 }}
-          allowClear
-        />
+        <Space size={12}>
+          <Input
+            placeholder="Search storefronts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
+            style={{ width: 240, borderRadius: 8 }}
+            allowClear
+            size="middle"
+          />
+          <Tooltip title="Force synchronization reload">
+            <Button 
+              size="middle" 
+              icon={<RefreshCw size={13} />} 
+              onClick={() => loadSellers()}
+              style={{ borderRadius: 8 }}
+            />
+          </Tooltip>
+        </Space>
       </div>
 
-      {/* Global Cache / Stats Bar */}
-      <div style={{ padding: '8px 24px', background: '#18181b', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Space>
-          <Text style={{ color: '#a1a1aa', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Global Cache</Text>
-          <Text strong style={{ fontSize: 12, color: '#fff' }}>{sellers.length} records found</Text>
-          <Text style={{ color: '#a1a1aa', fontSize: 12 }}>|</Text>
-          <Text strong style={{ fontSize: 12, color: '#fff' }}>{totalResults} shown</Text>
-        </Space>
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            style={{ color: '#a1a1aa', fontSize: 10, fontWeight: 700, padding: 0 }}
-            onClick={() => {
-              setActiveTab('all');
-              setMarketplaceFilter('all');
-              setStatusFilter('all');
-              setSearchQuery('');
-            }}
-          >
-            Emergency Reset Filters
-          </Button>
-          <Button size="small" onClick={() => loadSellers()}>
-            Force Refresh
-          </Button>
-        </Space>
-      </div>
-
-      {/* Bulk Action Bar (when selection is active) */}
+      {/* Bulk Action Bar */}
       {selectedSellerIds.length > 0 && (
         <div style={{
           padding: '8px 24px',
-          background: '#18181b',
+          background: '#0f172a',
           color: '#fff',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          animation: 'slideDown 0.2s ease-out'
         }}>
-          <Text strong style={{ color: '#fff', fontSize: 12 }}>
-            {selectedSellerIds.length} selected
+          <Text strong style={{ color: '#fff', fontSize: 11 }}>
+            <Badge count={selectedSellerIds.length} overflowCount={999} style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none', fontWeight: 800 }} /> Storefronts Selected
           </Text>
-          <Space>
+          <Space size={8}>
             <Button
               size="small"
               type="primary"
-              icon={<RefreshCw size={14} />}
+              icon={<RefreshCw size={12} />}
               onClick={handleBulkSync}
               loading={loading}
+              style={{ borderRadius: 6, fontWeight: 600, background: '#2563eb', borderColor: '#2563eb' }}
             >
               Sync Selected
             </Button>
-            <Button size="small" onClick={() => setSelectedSellerIds([])}>
+            <Button size="small" type="text" onClick={() => setSelectedSellerIds([])} style={{ color: '#cbd5e1', fontSize: 11 }}>
               Clear
             </Button>
           </Space>
         </div>
       )}
 
-      <div style={{ padding: 24 }}>
+      {/* Primary Data Body */}
+      <div style={{ padding: '16px 24px', flex: 1, background: '#f8fafc' }}>
         <Table
           columns={columns}
           dataSource={groupedDataSource}
           rowKey="_id"
           loading={loading}
           rowSelection={rowSelection}
+          size="middle"
           pagination={{
             current: page,
-            pageSize: limit,
+            pageSize: Math.max(limit, groupedDataSource.length),
             total: totalResults,
             showSizeChanger: true,
             pageSizeOptions: ['25', '50', '100'],
@@ -1056,7 +1120,11 @@ const SellersPage = () => {
               setPage(page);
               setLimit(pageSize);
             },
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} stores`,
+            showTotal: (total, range) => (
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Viewing {range[0]}-{range[1]} of {total} items
+              </Text>
+            ),
           }}
           scroll={{ x: 900 }}
           locale={{
@@ -1064,8 +1132,8 @@ const SellersPage = () => {
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span style={{ fontWeight: 600, color: '#94a3b8' }}>
-                    No sellers yet — add your first store to begin tracking.
+                  <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 12 }}>
+                    No storefront entries match your current query.
                   </span>
                 }
               />
@@ -1074,7 +1142,7 @@ const SellersPage = () => {
           onRow={(record) => {
             if (record.isGroupHeader) {
               return {
-                style: { background: '#fafafa', fontWeight: 600 },
+                style: { background: '#f8fafc', fontWeight: 700 },
               };
             }
             return {};
@@ -1140,7 +1208,7 @@ const SellersPage = () => {
           onComplete={() => loadSellers(true)}
         />
       </Suspense>
-    </>
+    </div>
   );
 };
 

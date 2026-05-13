@@ -993,6 +993,7 @@ const Dashboard = () => {
                 columns={tableColumns}
                 dataSource={data.topProducts}
                 rowKey={(record) => record.asin + record.sku}
+                scroll={{ x: 'max-content' }}
                 pagination={{ pageSize: 5, hideOnSinglePage: true, size: 'small' }}
                 size="middle"
                 locale={{

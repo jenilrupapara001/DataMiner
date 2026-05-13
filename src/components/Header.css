@@ -167,3 +167,55 @@
     justify-content: center;
     cursor: pointer;
 }
+
+/* Mobile Hamburger Button Styling */
+.mobile-hamburger {
+    display: none;
+    background: transparent;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    align-items: center;
+    justify-content: center;
+    transition: background 120ms ease;
+}
+
+.mobile-hamburger:hover {
+    background: var(--bg-app);
+    color: var(--blue);
+}
+
+/* Responsive Breakpoints for Topbar */
+@media (max-width: 992px) {
+    .mobile-hamburger {
+        display: flex;
+    }
+    .topbar-redesign {
+        padding: 0 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    .topbar-center {
+        display: none; /* Hide search bar on tablets/mobile to save width */
+    }
+    .topbar-redesign {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 576px) {
+    .breadcrumb-workspace,
+    .breadcrumb-separator {
+        display: none !important;
+    }
+    .breadcrumb-page {
+        font-size: 13px;
+        max-width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}

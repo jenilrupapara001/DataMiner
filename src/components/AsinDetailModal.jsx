@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Package, IndianRupee, Star, Award, Store, Activity, BarChart3, TrendingUp, TrendingDown, Eye, ExternalLink, Calendar, ListChecks, Image, AlertCircle, Trophy, Sparkles, CheckCircle2, AlertTriangle, Loader2, RefreshCcw } from 'lucide-react';
 import { asinApi } from '../services/api';
-import { createPortal } from 'react-dom';
 import Chart from 'react-apexcharts';
-import { subDays, startOfDay, endOfDay, format } from 'date-fns';
+import { subDays, endOfDay, format } from 'date-fns';
 import AdvancedDateRangePicker from '../contexts/DateRangeContext';
 import Popover from './common/Popover';
+import { Modal, Tabs, Card, Row, Col, Progress, Tag, Typography, Button, Divider, Tooltip, Empty, Space } from 'antd';
+
+const { Title, Text, Paragraph } = Typography;
 
 // Helper to get last valid data from history fallback
 const getLastValidData = (asin, field, defaultValue = 0) => {
@@ -39,72 +41,89 @@ const ScoreCard = ({ title, score: rawScore, grade, issues = [], recommendations
                 score >= 7.0 ? '#d97706' : 
                 score >= 5.0 ? '#dc2626' : '#991b1b';
 
+  const gradient = score >= 8.5 ? 'linear-gradient(135deg, #10b981, #059669)' :
+                   score >= 7.0 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+                   'linear-gradient(135deg, #ef4444, #b91c1c)';
+
   return (
-    <div className="bg-white border rounded-2xl p-4 shadow-sm h-100 transition-all hover:shadow-md">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="d-flex align-items-center gap-2">
-          <h6 className="mb-0 fw-bold text-slate-800">{title}</h6>
+    <Card 
+      hoverable 
+      style={{ 
+        height: '100%', 
+        borderRadius: '16px', 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        border: '1px solid #f1f5f9',
+        background: '#fff',
+        overflow: 'hidden'
+      }}
+      styles={{ body: { padding: '20px' } }}
+      className="premium-score-card"
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <Text strong style={{ fontSize: '14px', color: '#334155', letterSpacing: '-0.01em' }}>{title}</Text>
+        <Tag color={color} style={{ borderRadius: '8px', border: 'none', fontWeight: 700, padding: '2px 8px', fontSize: '10px' }}>
+          GRADE {grade || 'N/A'}
+        </Tag>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+        <div style={{ flex: 1 }}>
+          <Progress 
+            percent={score * 10} 
+            showInfo={false} 
+            strokeColor={{ from: color, to: color }}
+            railColor="#f1f5f9"
+            size={[undefined, 6]}
+          />
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <span className="badge rounded-pill px-2 py-1" style={{ backgroundColor: color + '15', color: color, fontWeight: 700, fontSize: '10px' }}>
-            Grade {grade || 'N/A'}
-          </span>
-          <span className="fw-bold text-slate-900" style={{ fontSize: '13px' }}>{score.toFixed(1)}/10</span>
-        </div>
+        <Text strong style={{ fontSize: '15px', color: '#0f172a', minWidth: '42px', textAlign: 'right' }}>{score.toFixed(1)}<span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>/10</span></Text>
       </div>
       
-      <div className="mb-3">
-        <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-          <div style={{ width: `${(score * 10) || 0}%`, height: '100%', background: color, borderRadius: '3px', transition: 'width 0.6s ease' }} />
-        </div>
-      </div>
-      
-      <div className="d-flex flex-column gap-3">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {parsedIssues.length > 0 && (
           <div>
-            <p className="smallest fw-bold text-slate-400 text-uppercase mb-2 tracking-wider d-flex align-items-center gap-1" style={{ fontSize: '9px' }}>
-              <AlertTriangle size={10} className="text-danger" /> Issues Found
-            </p>
-            <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+            <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', marginBottom: '6px' }}>
+              <AlertTriangle size={11} style={{ color: '#ef4444' }} /> Issues Found
+            </Text>
+            <ul style={{ paddingLeft: 0, listStyle: 'none', margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {parsedIssues.slice(0, 3).map((issue, idx) => (
-                <li key={idx} className="d-flex align-items-start gap-2 text-slate-600" style={{ fontSize: '11px', lineHeight: 1.4 }}>
-                  <span className="text-danger mt-1" style={{ fontSize: '8px' }}>●</span>
+                <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '11px', color: '#475569', lineHeight: 1.4 }}>
+                  <span style={{ color: '#ef4444', marginTop: '2px' }}>•</span>
                   <span>{issue}</span>
                 </li>
               ))}
-              {parsedIssues.length > 3 && <li className="smallest text-muted ps-3">+{parsedIssues.length - 3} more issues</li>}
+              {parsedIssues.length > 3 && <li style={{ fontSize: '10px', color: '#94a3b8', paddingLeft: '10px', fontStyle: 'italic' }}>+{parsedIssues.length - 3} more issues</li>}
             </ul>
           </div>
         )}
 
         {parsedRecs.length > 0 ? (
           <div>
-            <p className="smallest fw-bold text-indigo-400 text-uppercase mb-2 tracking-wider d-flex align-items-center gap-1" style={{ fontSize: '9px' }}>
-              <Sparkles size={10} className="text-amber-500" /> Optimization Tasks
-            </p>
-            <ul className="list-unstyled mb-0 d-flex flex-column gap-1">
+            <Text style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', color: '#6366f1', marginBottom: '6px' }}>
+              <Sparkles size={11} style={{ color: '#f59e0b' }} /> Optimization
+            </Text>
+            <ul style={{ paddingLeft: 0, listStyle: 'none', margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {parsedRecs.slice(0, 3).map((rec, idx) => (
-                <li key={idx} className="d-flex align-items-start gap-2 text-slate-700" style={{ fontSize: '11px', lineHeight: 1.4 }}>
-                  <CheckCircle2 size={11} className="text-emerald-500 mt-1 flex-shrink-0" />
-                  <span className="fw-medium">{rec}</span>
+                <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '11px', color: '#334155', lineHeight: 1.4 }}>
+                  <CheckCircle2 size={12} style={{ color: '#10b981', flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontWeight: 500 }}>{rec}</span>
                 </li>
               ))}
-              {parsedRecs.length > 3 && <li className="smallest text-muted ps-4">+{parsedRecs.length - 3} more suggestions</li>}
+              {parsedRecs.length > 3 && <li style={{ fontSize: '10px', color: '#94a3b8', paddingLeft: '18px', fontStyle: 'italic' }}>+{parsedRecs.length - 3} suggestions</li>}
             </ul>
           </div>
         ) : (
-          <div className="py-2 px-3 bg-emerald-50 rounded-xl border border-emerald-100 d-flex align-items-center gap-2">
-            <CheckCircle2 size={14} className="text-emerald-500" />
-            <span className="smallest text-emerald-700 fw-bold">Optimized Perfect!</span>
+          <div style={{ padding: '8px 12px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #dcfce7', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle2 size={14} style={{ color: '#10b981' }} />
+            <Text strong style={{ color: '#15803d', fontSize: '11px' }}>Fully Optimized!</Text>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 };
 
 const AsinDetailModal = ({ asin, isOpen, onClose }) => {
-  const [isClosing, setIsClosing] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [dateRange, setDateRange] = useState({
     start: subDays(endOfDay(new Date()), 7),
@@ -115,11 +134,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
   // Fetch Sub BSR trend data
   useEffect(() => {
-    if (isOpen && asin?.id) {
+    const targetId = asin?._id || asin?.id;
+    if (isOpen && targetId) {
       const fetchSubTrend = async () => {
         setIsLoadingSubTrend(true);
         try {
-          const res = await asinApi.getSubBsrTrend(asin.id, 30);
+          const res = await asinApi.getSubBsrTrend(targetId, 30);
           if (res.success) {
             setSubBsrTrend(res.data);
           }
@@ -131,28 +151,8 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       };
       fetchSubTrend();
     }
-  }, [isOpen, asin?.id]);
+  }, [isOpen, asin?._id, asin?.id]);
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 200);
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        handleClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
-  // All hooks above this line - called unconditionally every render
-  
   // Compute current values with history fallback
   const { currentData, bsrData, ratingData, ratingBreakdownData } = useMemo(() => {
     if (!asin) return { currentData: {}, bsrData: {}, ratingData: {}, ratingBreakdownData: {} };
@@ -191,15 +191,24 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (source === 'current') return null;
     if (source === 'history') {
       return (
-        <span className="badge ms-2 px-2 py-1" style={{ 
-          backgroundColor: '#fef3c7', 
-          color: '#b45309', 
-          fontSize: '10px',
-          fontWeight: 500 
-        }}>
-          <AlertCircle size={10} className="me-1" />
-          From {date ? new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'history'}
-        </span>
+        <Tooltip title={`Loaded from database history Snapshot (${date ? new Date(date).toLocaleDateString('en-IN') : 'N/A'})`}>
+          <Tag 
+            color="warning" 
+            style={{ 
+              marginLeft: '6px', 
+              border: 'none', 
+              fontSize: '9px', 
+              fontWeight: 600, 
+              borderRadius: '6px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px'
+            }}
+          >
+            <AlertCircle size={9} />
+            {date ? new Date(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'HISTORY'}
+          </Tag>
+        </Tooltip>
       );
     }
     return null;
@@ -230,7 +239,8 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     chart: {
       toolbar: { show: false },
       zoom: { enabled: false },
-      background: 'transparent'
+      background: 'transparent',
+      fontFamily: 'Inter, system-ui, sans-serif'
     },
     xaxis: {
       categories: chartCategories,
@@ -247,7 +257,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (!asin || !history) return [];
     let lastValidPrice = null;
     
-    // Find baseline: last valid price before the first filtered date
     if (history.length > 0) {
       const fullHistory = asin.history || asin.weekHistory || [];
       const firstDate = new Date(history[0].date || history[0].week);
@@ -265,7 +274,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
         }
       }
       
-      // If still null, use current data as a coarse fallback only if it's the only data we have
       if (lastValidPrice === null) lastValidPrice = currentData.value;
     }
 
@@ -286,26 +294,26 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
   const priceOptions = {
     ...commonOptions,
-    chart: { ...commonOptions.chart, type: 'area', height: 250 },
+    chart: { ...commonOptions.chart, type: 'area', height: 280 },
     dataLabels: {
-      enabled: history.length <= 15, // Hide labels if too many points
+      enabled: history.length <= 15,
       formatter: (val) => val ? `₹${Number(val).toLocaleString()}` : '',
       offsetY: -10,
-      style: { fontSize: '10px', colors: ['#6366f1'] },
+      style: { fontSize: '10px', colors: ['#4f46e5'], fontWeight: 600 },
       background: { enabled: true, borderWidth: 0, borderRadius: 4, padding: 4, opacity: 0.9 }
     },
-    stroke: { curve: 'smooth', width: 3, colors: ['#6366f1'] },
+    stroke: { curve: 'smooth', width: 3, colors: ['#4f46e5'] },
     fill: {
       type: 'gradient',
       gradient: {
-        shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [20, 100],
-        colorStops: [{ offset: 0, color: '#6366f1', opacity: 0.4 }, { offset: 100, color: '#6366f1', opacity: 0 }]
+        shadeIntensity: 1, opacityFrom: 0.25, opacityTo: 0, stops: [0, 100],
+        colorStops: [{ offset: 0, color: '#4f46e5', opacity: 0.2 }, { offset: 100, color: '#4f46e5', opacity: 0 }]
       }
     },
     yaxis: {
       labels: { style: { fontSize: '10px', colors: '#64748b' }, formatter: (val) => val ? `₹${Number(val).toLocaleString()}` : '' }
     },
-    markers: { size: 4, strokeWidth: 2, strokeColors: '#fff', colors: ['#6366f1'] }
+    markers: { size: 4, strokeWidth: 2, strokeColors: '#fff', colors: ['#4f46e5'] }
   };
 
   // Multi-Category Sub-BSR Trend Chart Config
@@ -313,6 +321,8 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (!subBsrTrend || !subBsrTrend.trends || subBsrTrend.trends.length === 0) {
       return { subBsrSeries: [], subBsrOptions: {} };
     }
+
+    const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6'];
 
     const series = subBsrTrend.trends.map(t => ({
       name: t.category.length > 30 ? t.category.substring(0, 30) + '...' : t.category,
@@ -323,12 +333,13 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     const options = {
       ...commonOptions,
       chart: { ...commonOptions.chart, type: 'line', height: 350 },
+      colors: colors.slice(0, series.length),
       xaxis: {
         categories: subBsrTrend.dates.map(d => format(new Date(d), 'MMM dd')),
         labels: { style: { fontSize: '10px', colors: '#64748b' } }
       },
       yaxis: {
-        reversed: true, // Lower rank is better
+        reversed: true,
         labels: { 
           style: { fontSize: '10px', colors: '#64748b' },
           formatter: (val) => val ? `#${Number(val).toLocaleString()}` : ''
@@ -340,7 +351,9 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
         show: true,
         position: 'bottom',
         fontSize: '11px',
-        offsetY: 10
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 500,
+        itemMargin: { horizontal: 12, vertical: 4 }
       },
       tooltip: {
         y: { formatter: (val) => val ? `#${val.toLocaleString()}` : 'N/A' }
@@ -350,7 +363,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     return { subBsrSeries: series, subBsrOptions: options };
   }, [subBsrTrend, commonOptions]);
 
-  // Rating History Chart Config - Forward fill with last valid rating and star breakdown
+  // Rating History Chart Config
   const { ratingSeries, hasBreakdownHistory } = useMemo(() => {
     if (!asin || !history) return { ratingSeries: [], hasBreakdownHistory: false };
     let lastValidRating = null;
@@ -359,7 +372,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     const fullHistory = asin.history || asin.weekHistory || [];
     const firstDate = history.length > 0 ? new Date(history[0].date || history[0].week) : null;
     
-    // Baselines
     if (firstDate) {
       const beforeHistory = fullHistory
         .filter(h => new Date(h.date || h.week) < firstDate)
@@ -380,7 +392,6 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       }
     }
     
-    // Fallback baselines from current data
     if (lastValidRating === null) lastValidRating = ratingData.value;
     Object.keys(lastValidBreakdown).forEach(key => {
       if (lastValidBreakdown[key] === null) lastValidBreakdown[key] = ratingBreakdownData.data?.[key] || 0;
@@ -394,11 +405,9 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     let foundAnyBreakdown = false;
 
     history.forEach(h => {
-      // Average Rating
       if (h.rating && h.rating > 0) lastValidRating = h.rating;
       avgSeries.push(lastValidRating);
 
-      // Star Breakdown
       if (h.ratingBreakdown) {
         foundAnyBreakdown = true;
         Object.keys(breakdownSeries).forEach(key => {
@@ -438,16 +447,14 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     chart: { 
       ...commonOptions.chart, 
       type: 'line', 
-      height: 300,
-      fontFamily: 'Inter, sans-serif'
+      height: 300
     },
     colors: hasBreakdownHistory 
-      ? ['#f59e0b', '#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444']
+      ? ['#f59e0b', '#10b981', '#84cc16', '#eab308', '#f97316', '#ef4444']
       : ['#f59e0b'],
     stroke: {
       width: hasBreakdownHistory ? [4, 2, 2, 2, 2, 2] : [3],
-      curve: 'smooth',
-      dashArray: hasBreakdownHistory ? [0, 0, 0, 0, 0, 0] : [0]
+      curve: 'smooth'
     },
     dataLabels: {
       enabled: history.length <= 10,
@@ -461,13 +468,13 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       {
         seriesName: 'Avg Rating',
         min: 0, max: 5, tickAmount: 5,
-        title: { text: 'Rating (0-5)', style: { color: '#f59e0b', fontWeight: 600 } },
+        title: { text: 'Avg (1-5)', style: { color: '#f59e0b', fontWeight: 600, fontSize: '11px' } },
         labels: { style: { colors: '#f59e0b', fontWeight: 500 }, formatter: (v) => v?.toFixed(1) }
       },
       {
         opposite: true,
         min: 0, max: 100, tickAmount: 5,
-        title: { text: 'Breakdown (%)', style: { color: '#64748b', fontWeight: 600 } },
+        title: { text: 'Percentage (%)', style: { color: '#64748b', fontWeight: 600, fontSize: '11px' } },
         labels: { style: { colors: '#64748b', fontWeight: 500 }, formatter: (v) => `${v}%` }
       }
     ] : {
@@ -503,568 +510,683 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
   if (!isOpen || !asin) return null;
 
-  return createPortal(
-    <div
-      className={`position-fixed top-0 bottom-0 start-0 end-0 d-flex align-items-center justify-content-center p-4 ${isClosing ? 'fade-out' : 'fade-in'}`}
-      style={{ backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(12px)', zIndex: 9999 }}
-      onClick={(e) => e.target === e.currentTarget && handleClose()}
+  const tabItems = [
+    {
+      key: '1',
+      label: (
+        <Space size={6}>
+          <Package size={16} />
+          <span>Catalog Overview</span>
+        </Space>
+      ),
+      children: (
+        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Product Overview Card */}
+          <Card style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '24px' } }}>
+            <Row gutter={[24, 24]} align="middle">
+              {/* Thumbnail */}
+              <Col xs={24} md={5}>
+                <div style={{ 
+                  width: '100%', 
+                  height: '200px', 
+                  borderRadius: '16px', 
+                  border: '1.5px solid #e0e7ff', 
+                  padding: '8px', 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center',
+                  background: '#fafafa',
+                  overflow: 'hidden' 
+                }}>
+                  {asin.imageUrl ? (
+                    <img src={asin.imageUrl} alt={asin.asinCode} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#cbd5e1' }}>
+                      <Package size={48} />
+                      <Text type="secondary" style={{ fontSize: '11px', marginTop: '8px' }}>NO IMAGE</Text>
+                    </div>
+                  )}
+                </div>
+              </Col>
+              
+              {/* Content Info */}
+              <Col xs={24} md={19}>
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  <div>
+                    <Space wrap size={6} style={{ marginBottom: '8px' }}>
+                      <Tag color="blue" style={{ fontWeight: 700, border: 'none', letterSpacing: '0.03em', fontFamily: 'monospace', fontSize: '12px' }}>
+                        {asin.asinCode}
+                      </Tag>
+                      {asin.category && asin.category.split('›').map((node, i) => (
+                        <Tag key={i} style={{ borderRadius: '6px', fontSize: '10px', background: '#f1f5f9', border: 'none', color: '#475569', fontWeight: 600 }}>
+                          {node.trim()}
+                        </Tag>
+                      ))}
+                    </Space>
+                    <Title level={4} style={{ margin: '0 0 8px 0', fontWeight: 800, color: '#0f172a', lineHeight: 1.3 }}>
+                      {asin.title}
+                    </Title>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <Text type="secondary" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Store size={13} /> Sold By: <strong style={{ color: '#334155' }}>{asin.soldBy || 'Amazon.in'}</strong>
+                      </Text>
+                      <Button 
+                        type="link" 
+                        size="small" 
+                        href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : asin.marketplace === 'myntra' ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
+                        target="_blank"
+                        icon={<ExternalLink size={12} />}
+                        style={{ padding: 0, height: 'auto', fontSize: '12px', fontWeight: 600 }}
+                      >
+                        Open in Marketplace
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Modern Statistics Row */}
+                  <div style={{ 
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: '16px',
+                    marginTop: '16px'
+                  }}>
+                    {/* Stat Card 1 */}
+                    <div style={{ 
+                      background: '#fff', 
+                      padding: '16px 20px', 
+                      borderRadius: '16px', 
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }} className="premium-metric-card">
+                      <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Price</Text>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
+                        <Text strong style={{ fontSize: '18px', color: '#4f46e5' }}>₹{currentData.value?.toLocaleString() || 0}</Text>
+                        <SourceBadge source={currentData.source} date={currentData.date} />
+                      </div>
+                    </div>
+
+                    {/* Stat Card 2 */}
+                    <div style={{ 
+                      background: '#fff', 
+                      padding: '16px 20px', 
+                      borderRadius: '16px', 
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }} className="premium-metric-card">
+                      <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>MRP Reference</Text>
+                      <div style={{ marginTop: '6px' }}>
+                        <Text strong style={{ fontSize: '18px', color: '#64748b' }}>{asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '—'}</Text>
+                      </div>
+                    </div>
+
+                    {/* Stat Card 3 */}
+                    <div style={{ 
+                      background: '#fff', 
+                      padding: '16px 20px', 
+                      borderRadius: '16px', 
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }} className="premium-metric-card">
+                      <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Main BSR Rank</Text>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
+                        <Text strong style={{ fontSize: '18px', color: '#10b981' }}>#{bsrData.value?.toLocaleString() || '—'}</Text>
+                        <SourceBadge source={bsrData.source} date={bsrData.date} />
+                      </div>
+                    </div>
+
+                    {/* Stat Card 4 */}
+                    <div style={{ 
+                      background: '#fff', 
+                      padding: '16px 20px', 
+                      borderRadius: '16px', 
+                      border: '1px solid #f1f5f9',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }} className="premium-metric-card">
+                      <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Buy Box Info</Text>
+                      <div style={{ marginTop: '6px' }}>
+                        <Popover
+                          trigger="click"
+                          placement="bottom"
+                          content={
+                            <div style={{ minWidth: '240px', padding: '4px' }}>
+                              <Text strong style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', display: 'block', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px', marginBottom: '8px' }}>
+                                Offer Hierarchy Map
+                              </Text>
+                              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                                {(asin.allOffers && asin.allOffers.length > 0 ? asin.allOffers : [
+                                  { seller: asin.soldBy, price: currentData.value, isBuyBoxWinner: true },
+                                  { seller: asin.soldBySec, price: asin.secondAsp, isBuyBoxWinner: false }
+                                ].filter(o => o.seller || o.price > 0)).map((offer, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '10px' }}>
+                                    <div>
+                                      <Text strong style={{ fontSize: '12px', color: '#334155', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        {offer.seller || 'Unknown Seller'}
+                                        {offer.isBuyBoxWinner && <Trophy size={11} style={{ color: '#f59e0b' }} />}
+                                      </Text>
+                                      <Text type="secondary" style={{ fontSize: '10px', display: 'block' }}>{offer.isBuyBoxWinner ? 'Winner' : 'Secondary Offer'}</Text>
+                                    </div>
+                                    <Text strong style={{ color: '#4f46e5', fontSize: '13px' }}>₹{offer.price?.toLocaleString()}</Text>
+                                  </div>
+                                ))}
+                              </Space>
+                            </div>
+                          }
+                        >
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 6px', borderRadius: '6px', background: '#fff', border: '1px solid #cbd5e1' }}>
+                            <Store size={12} style={{ color: '#94a3b8' }} />
+                            <Text strong style={{ fontSize: '12px', color: '#334155', maxWidth: '100px' }} ellipsis>{asin.soldBy || 'Amazon.in'}</Text>
+                            {asin.allOffers && asin.allOffers.length > 1 && (
+                              <Tag color="blue" style={{ border: 'none', fontSize: '9px', margin: 0, padding: '0 4px' }}>+{asin.allOffers.length - 1}</Tag>
+                            )}
+                          </div>
+                        </Popover>
+                      </div>
+                    </div>
+                  </div>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
+
+          {/* Bullet Points Cards */}
+          <Card style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '24px' } }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ p: '8px', background: '#ede9fe', color: '#7c3aed', padding: '8px', borderRadius: '10px' }}><ListChecks size={20} /></div>
+              <Text strong style={{ fontSize: '16px', color: '#1e293b' }}>Product Key Features</Text>
+            </div>
+            
+            {(() => {
+              const bullets = (() => {
+                if (Array.isArray(asin.bulletPointsText) && asin.bulletPointsText.length > 0) {
+                  return asin.bulletPointsText.filter(b => typeof b === 'string' && b.trim().length > 0);
+                }
+                if (typeof asin.bulletPointsText === 'string' && asin.bulletPointsText.length > 10) {
+                  try {
+                    const parsed = JSON.parse(asin.bulletPointsText);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      return parsed.filter(b => typeof b === 'string' && b.trim().length > 0);
+                    }
+                  } catch (e) {}
+                  
+                  if (asin.bulletPointsText.includes('<li') || asin.bulletPointsText.includes('<span')) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = asin.bulletPointsText;
+                    const items = Array.from(tempDiv.querySelectorAll('li, .a-list-item'))
+                        .map(el => el.textContent.trim())
+                        .filter(t => t.length > 3);
+                    if (items.length > 0) return items;
+                  }
+                  return [asin.bulletPointsText.replace(/<[^>]+>/g, '').trim()];
+                }
+                if (asin.bulletPointsList && Array.isArray(asin.bulletPointsList)) return asin.bulletPointsList;
+                if (asin.bullets && Array.isArray(asin.bullets)) return asin.bullets;
+                return [];
+              })();
+
+              if (bullets.length > 0) {
+                return (
+                  <Row gutter={[16, 16]}>
+                    {bullets.map((bullet, idx) => (
+                      <Col xs={24} md={12} key={idx}>
+                        <div style={{ 
+                          display: 'flex', 
+                          gap: '12px', 
+                          padding: '16px 20px', 
+                          background: '#fff', 
+                          borderRadius: '16px', 
+                          border: '1px solid #f1f5f9',
+                          borderLeft: '4px solid #6366f1',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                          height: '100%',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }} className="bullet-item-hover">
+                          <div style={{ 
+                            width: '24px', 
+                            height: '24px', 
+                            borderRadius: '50%', 
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)', 
+                            color: '#fff', 
+                            display: 'flex', 
+                            justifyContent: 'center', 
+                            alignItems: 'center',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            flexShrink: 0,
+                            marginTop: '1px'
+                          }}>
+                            {idx + 1}
+                          </div>
+                          <Text style={{ fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>{bullet}</Text>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+                );
+              }
+
+              if (typeof asin.bullet_points === 'string' && asin.bullet_points.length > 20) {
+                return (
+                  <div 
+                    style={{ padding: '20px', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', color: '#334155', fontSize: '13px', lineHeight: '1.6' }}
+                    dangerouslySetInnerHTML={{ __html: asin.bullet_points }} 
+                  />
+                );
+              }
+
+              return (
+                <Empty 
+                  image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                  description={<span style={{ color: '#94a3b8', fontSize: '13px' }}>No product features synced for this listing yet</span>} 
+                />
+              );
+            })()}
+          </Card>
+        </div>
+      )
+    },
+    {
+      key: '2',
+      label: (
+        <Space size={6}>
+          <Activity size={16} />
+          <span>Listing Quality Score (LQS)</span>
+        </Space>
+      ),
+      children: (
+        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Score Header */}
+          {/* Score Header */}
+          {(() => {
+            const lqsScore = typeof asin.lqs === 'number' 
+              ? (asin.lqs > 10 ? asin.lqs / 10 : asin.lqs) 
+              : (parseFloat(asin.lqs || 0) > 10 ? parseFloat(asin.lqs || 0) / 10 : parseFloat(asin.lqs || 0));
+
+            const accentColor = lqsScore >= 8.5 ? '#059669' : 
+                                lqsScore >= 7.0 ? '#d97706' : 
+                                lqsScore >= 5.0 ? '#dc2626' : '#991b1b';
+            
+            const gradientBg = lqsScore >= 8.5 ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' :
+                               lqsScore >= 7.0 ? 'linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)' :
+                               'linear-gradient(90deg, #fef2f2 0%, #ffffff 100%)';
+
+            return (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                background: '#fff', 
+                backgroundImage: gradientBg,
+                padding: '24px 32px', 
+                borderRadius: '20px', 
+                boxShadow: '0 4px 24px rgba(0,0,0,0.03)',
+                border: '1px solid #f1f5f9',
+                borderLeft: `6px solid ${accentColor}`
+              }}>
+                <div>
+                  <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a' }}>Overall Catalog Performance</Title>
+                  <Text type="secondary" style={{ fontSize: '13px' }}>Algorithmic scoring mapped against optimal marketplace benchmarks</Text>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OVERALL SCORE</Text>
+                    <div style={{ 
+                      fontSize: '32px', 
+                      fontWeight: 900, 
+                      marginTop: '2px',
+                      lineHeight: 1,
+                      color: accentColor 
+                    }}>
+                      {lqsScore.toFixed(1)}
+                    </div>
+                  </div>
+                  <div style={{ width: '1px', height: '36px', background: '#e2e8f0' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>QUALITY GRADE</Text>
+                    <div style={{ marginTop: '4px' }}>
+                      <Tag 
+                        style={{ 
+                          fontSize: '11px', 
+                          fontWeight: 800, 
+                          padding: '4px 12px', 
+                          borderRadius: '8px', 
+                          border: 'none',
+                          color: accentColor,
+                          background: lqsScore >= 8.5 ? '#ecfdf5' : lqsScore >= 7.0 ? '#fffbeb' : '#fef2f2'
+                        }}
+                      >
+                        {lqsScore >= 8.5 ? 'EXCELLENT' : lqsScore >= 7.0 ? 'GOOD' : lqsScore >= 5.0 ? 'POOR' : 'CRITICAL'}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Grid cards */}
+          <Row gutter={[20, 20]}>
+            <Col xs={24} sm={12} lg={6}>
+              <ScoreCard 
+                title="Product Title" 
+                score={asin.titleScore} 
+                grade={asin.titleGrade} 
+                issues={asin.titleIssues} 
+                recommendations={asin.titleRecommendations}
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <ScoreCard 
+                title="Bullet Points" 
+                score={asin.bulletScore} 
+                grade={asin.bulletGrade} 
+                issues={asin.bulletIssues} 
+                recommendations={asin.bulletRecommendations}
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <ScoreCard 
+                title="Images & Media" 
+                score={asin.imageScore} 
+                grade={asin.imageGrade} 
+                issues={asin.imageIssues} 
+                recommendations={asin.imageRecommendations}
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <ScoreCard 
+                title="Description / A+" 
+                score={asin.descriptionScore} 
+                grade={asin.descriptionGrade} 
+                issues={asin.descriptionIssues} 
+                recommendations={asin.descriptionRecommendations}
+              />
+            </Col>
+          </Row>
+        </div>
+      )
+    },
+    {
+      key: '3',
+      label: (
+        <Space size={6}>
+          <TrendingUp size={16} />
+          <span>Price & Rank History</span>
+        </Space>
+      ),
+      children: (
+        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Price Chart */}
+          <Card 
+            style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ p: '8px', background: '#ecfdf5', color: '#059669', padding: '6px', borderRadius: '8px' }}><IndianRupee size={16} /></div>
+                <Text strong style={{ fontSize: '15px' }}>Marketplace Pricing Flow</Text>
+              </div>
+            }
+            extra={<Text type="secondary" style={{ fontSize: '11px' }}>Snapshots recorded: <strong>{history.length}</strong></Text>}
+          >
+            <div style={{ minHeight: '280px' }}>
+              <Chart options={priceOptions} series={priceSeries} type="area" height={280} />
+            </div>
+          </Card>
+
+          {/* Detailed Sub-BSR Historical Trends */}
+          <Card 
+            style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ p: '8px', background: '#e0e7ff', color: '#4f46e5', padding: '6px', borderRadius: '8px' }}><TrendingUp size={16} /></div>
+                <Text strong style={{ fontSize: '15px' }}>Sub-BSR Category Performance (30-Day Snapshot)</Text>
+              </div>
+            }
+            extra={<Tag color="blue" style={{ border: 'none', fontWeight: 600, fontSize: '10px' }}>NICHE MONITORING</Tag>}
+          >
+            <div style={{ minHeight: '350px', position: 'relative' }}>
+              {isLoadingSubTrend ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '350px' }}>
+                  <Loader2 size={32} className="animate-spin" style={{ color: '#4f46e5', marginBottom: '12px' }} />
+                  <Text type="secondary" style={{ fontWeight: 500 }}>Running niche data indexing...</Text>
+                </div>
+              ) : subBsrSeries.length > 0 ? (
+                <>
+                  <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                    {subBsrTrend.trends.map((t, i) => (
+                      <Col xs={24} sm={8} key={i}>
+                        <div style={{ 
+                          padding: '14px 18px', 
+                          background: '#f8fafc', 
+                          borderRadius: '16px', 
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div style={{ overflow: 'hidden' }}>
+                            <Text strong type="secondary" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.category}</Text>
+                            <Text strong style={{ fontSize: '16px', color: '#0f172a', marginTop: '2px', display: 'block' }}>#{t.latestRank?.toLocaleString() || '—'}</Text>
+                          </div>
+                          <div style={{ padding: '8px', background: '#fff', borderRadius: '10px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+                            <Trophy size={14} style={{ color: i === 0 ? '#f59e0b' : '#cbd5e1' }} />
+                          </div>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+                  <Chart options={subBsrOptions} series={subBsrSeries} type="line" height={350} />
+                </>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '350px', color: '#94a3b8' }}>
+                  <RefreshCcw size={32} style={{ marginBottom: '8px', opacity: 0.6 }} />
+                  <Text type="secondary" style={{ fontWeight: 500, fontSize: '13px' }}>No historical sub-BSR categorization synchronized yet</Text>
+                  <Text style={{ fontSize: '11px', color: '#cbd5e1' }}>Synchronizing pipeline will populate metrics on next active crawler window.</Text>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )
+    },
+    {
+      key: '4',
+      label: (
+        <Space size={6}>
+          <Star size={16} />
+          <span>Customer Reviews</span>
+        </Space>
+      ),
+      children: (
+        <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Rating Breakdown Card */}
+          <Card 
+            style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ p: '8px', background: '#fffbeb', color: '#d97706', padding: '6px', borderRadius: '8px' }}><Star size={16} /></div>
+                <Text strong style={{ fontSize: '15px' }}>Star Rating Composition</Text>
+                {ratingBreakdownData.date && <SourceBadge source="history" date={ratingBreakdownData.date} />}
+              </div>
+            }
+          >
+            <Row gutter={[32, 20]}>
+              {[
+                { stars: 5, key: 'fiveStar', color: '#10b981' },
+                { stars: 4, key: 'fourStar', color: '#84cc16' },
+                { stars: 3, key: 'threeStar', color: '#f59e0b' },
+                { stars: 2, key: 'twoStar', color: '#f97316' },
+                { stars: 1, key: 'oneStar', color: '#ef4444' }
+              ].map(({ stars, key, color }) => {
+                const percentage = ratingBreakdownData.data?.[key] || asin.ratingBreakdown?.[key] || 0;
+                return (
+                  <Col xs={24} md={12} key={stars}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <Text strong style={{ minWidth: '36px', color: '#475569', fontSize: '13px' }}>{stars} ★</Text>
+                      <div style={{ flex: 1 }}>
+                        <Progress 
+                          percent={percentage} 
+                          strokeColor={color} 
+                          railColor="#f1f5f9" 
+                          size={[undefined, 10]} 
+                          showInfo={false} 
+                        />
+                      </div>
+                      <div style={{ minWidth: '80px', textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+                        <Text strong style={{ fontSize: '13px', color: '#0f172a' }}>{percentage}%</Text>
+                        <Text type="secondary" style={{ fontSize: '10px' }}>
+                          ({Math.round((percentage / 100) * (asin.reviewCount || 0)).toLocaleString()} count)
+                        </Text>
+                      </div>
+                    </div>
+                  </Col>
+                );
+              })}
+            </Row>
+          </Card>
+
+          {/* Rating progression chart */}
+          <Card 
+            style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ p: '8px', background: '#fffbeb', color: '#d97706', padding: '6px', borderRadius: '8px' }}><TrendingUp size={16} /></div>
+                <Text strong style={{ fontSize: '15px' }}>Historic Satisfaction Index</Text>
+              </div>
+            }
+          >
+            <div style={{ minHeight: '300px' }}>
+              <Chart options={ratingOptions} series={ratingSeries} type="line" height={300} />
+            </div>
+          </Card>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <Modal
+      open={isOpen}
+      onCancel={onClose}
+      footer={null}
+      width={1240}
+      centered
+      destroyOnHidden
+      styles={{
+        body: { padding: 0, backgroundColor: '#f8fafc' },
+        mask: {
+          backdropFilter: 'blur(6px)',
+          backgroundColor: 'rgba(15, 23, 42, 0.3)'
+        }
+      }}
     >
       <style>{`
-        .fade-in { animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        .fade-out { animation: fadeOut 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes fadeOut { from { opacity: 1; transform: scale(1) translateY(0); } to { opacity: 0; transform: scale(0.95) translateY(10px); } }
-        
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
-        
-        .filter-btn { border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.75rem; font-weight: 600; padding: 0.5rem 1rem; transition: all 0.2s ease; }
-        .filter-btn:hover { background: #f8fafc; color: #1e293b; }
-        .filter-btn.active { background: #1e293b; color: #fff; border-color: #1e293b; }
-        .filter-btn:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
-        .filter-btn:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
-        
-        .stat-item { padding: 1rem; border-right: 1px solid #f1f5f9; }
-        .stat-item:last-child { border-right: none; }
-        .stat-label { color: #64748b; font-size: 0.75rem; font-weight: 500; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.025em; }
-        .stat-value { font-weight: 700; color: #1e293b; font-size: 1rem; }
-        
-        .truncate-lines-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
+        .ant-modal-content {
+          border-radius: 24px !important;
+          overflow: hidden !important;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+        }
+        .premium-asin-tabs .ant-tabs-nav {
+          background: #fff !important;
+          margin-bottom: 0 !important;
+          padding: 0 32px !important;
+          border-bottom: 1px solid #f1f5f9 !important;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01) !important;
+        }
+        .premium-asin-tabs .ant-tabs-tab {
+          padding: 18px 8px !important;
+          font-weight: 600 !important;
+        }
+        .premium-asin-tabs .ant-tabs-tab-active {
+          font-weight: 700 !important;
+        }
+        .premium-score-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 16px 32px rgba(0, 0, 0, 0.07) !important;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .bullet-item-hover:hover {
+          border-left-color: #4f46e5 !important;
+          background: #fff !important;
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.05) !important;
+          transform: translateY(-3px);
+        }
+        .premium-metric-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04) !important;
+          border-color: #e2e8f0 !important;
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
 
-      <div
-        className="bg-white shadow-2xl overflow-hidden"
-        style={{
-          width: '100%', maxWidth: '1280px', maxHeight: '95vh', borderRadius: '24px', display: 'flex', flexDirection: 'column'
-        }}
-      >
-        {/* Header */}
-        <div className="px-5 py-4 border-bottom bg-white d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-3">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm">
-              <Package size={24} />
-            </div>
-            <div>
-              <div className="d-flex align-items-center gap-2">
-                <h4 className="mb-0 fw-bold text-slate-900">{asin.asinCode}</h4>
-                {(asin.category) && (
-                  <div className="d-flex flex-wrap gap-1 align-items-center mt-2" style={{ fontSize: '11px', color: '#64748b' }}>
-                    {asin.category.split('›').map((node, i, arr) => (
-                      <React.Fragment key={i}>
-                        <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{node.trim()}</span>
-                        {i < arr.length - 1 && <span>›</span>}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
-                {asin.status && !asin.category && (
-                  <span className="badge border rounded-pill px-3 py-2 mt-2"
-                    style={{
-                      backgroundColor: '#f8f9fa',
-                      color: '#374151',
-                      fontSize: '12px',
-                      fontWeight: '500',
-                      border: '1px solid #e5e7eb'
-                    }}
-                  >
-                    {asin.status}
-                  </span>
-                )}
-              </div>
-              <p className="text-secondary small mb-0 d-flex align-items-center gap-1">
-                <Store size={14} /> Sold By: {asin.soldBy || 'Direct Seller'}
-              </p>
+      {/* Modal Sticky Header Top */}
+      <div style={{ 
+        padding: '20px 32px', 
+        background: '#fff', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        borderBottom: '1px solid #f1f5f9'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ p: '12px', background: '#e0e7ff', padding: '10px', borderRadius: '12px', color: '#4f46e5' }}>
+            <Package size={22} />
+          </div>
+          <div>
+            <Title level={5} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.01em' }}>Catalog Specifications</Title>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+              <Text strong style={{ fontSize: '12px', color: '#334155', fontFamily: 'monospace' }}>{asin.asinCode}</Text>
+              <Text type="secondary" style={{ fontSize: '11px' }}>•</Text>
+              <Text type="secondary" style={{ fontSize: '11px' }}>{asin.marketplace === 'ajio' ? 'Ajio IN' : asin.marketplace === 'myntra' ? 'Myntra' : 'Amazon India'}</Text>
             </div>
           </div>
-          <button onClick={handleClose} className="btn btn-light rounded-circle p-2 border-0 hover:bg-slate-100 transition-colors">
-            <X size={24} className="text-slate-400" />
-          </button>
         </div>
-
-        {/* Content Area */}
-        <div className="p-5 overflow-auto bg-slate-50/50" style={{ flex: 1 }}>
-
-          {/* Filters Bar */}
-          <div className="d-flex justify-content-between align-items-center mb-5 bg-white p-3 rounded-2xl border shadow-sm">
-            <div className="d-flex align-items-center gap-2 text-slate-600 fw-medium">
-              <Calendar size={18} className="text-indigo-600" />
-              <span>Historical Range</span>
-            </div>
-            <button
-              className="d-flex align-items-center gap-2 px-3 py-1 border rounded-3"
-              style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0', height: '32px' }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', padding: '6px 12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <Calendar size={14} style={{ color: '#64748b' }} />
+            <Text style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+              {format(dateRange.start, 'MMM dd')} — {format(dateRange.end, 'MMM dd, yyyy')}
+            </Text>
+            <Button 
+              type="text" 
+              size="small" 
               onClick={() => setIsPickerOpen(true)}
+              style={{ height: 'auto', padding: '2px 6px', fontSize: '11px', background: '#fff', fontWeight: 700, color: '#4f46e5', border: '1px solid #dbeafe', marginLeft: '6px' }}
             >
-              <Calendar size={14} className="text-zinc-500" />
-              <span className="small fw-semibold text-zinc-700">
-                {format(dateRange.start, 'MMM dd, yyyy')} - {format(dateRange.end, 'MMM dd, yyyy')}
-              </span>
-            </button>
-            <AdvancedDateRangePicker
-              isOpen={isPickerOpen}
-              onClose={() => setIsPickerOpen(false)}
-              onApply={(range) => {
-                setDateRange({ start: range.startDate, end: range.endDate });
-              }}
-              initialStartDate={dateRange.start}
-              initialEndDate={dateRange.end}
-              initialRangeType="last7"
-            />
+              Change
+            </Button>
           </div>
-
-          {/* Horizontal Product Details Bar */}
-          <div className="bg-white border rounded-3xl p-4 shadow-sm mb-5 d-flex align-items-center gap-4">
-            {/* Product Thumbnail */}
-            <div
-              className="flex-shrink-0"
-              style={{ width: '180px', height: '180px', borderRadius: '20px', border: '1px solid #2547ddff', overflow: 'hidden', backgroundColor: '#f8fafc', }}
-            >
-              {asin.imageUrl ? (
-                <img src={asin.imageUrl} alt={asin.asinCode} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              ) : (
-                <div className="d-flex align-items-center justify-content-center h-100 text-slate-200"><Package size={60} /></div>
-              )}
-            </div>
-
-            {/* Info and Stats */}
-            <div className="flex-grow-1 overflow-hidden">
-              <div className="mb-4">
-                <h5 className="fw-bold text-slate-800 mb-2 truncate-2-lines" style={{ lineHeight: '1.4' }}>{asin.title}</h5>
-                <div className="d-flex align-items-center gap-2">
-                  <span
-                    className="badge px-3 py-2 rounded-lg font-monospace border"
-                    style={{
-                      backgroundColor: '#eef2ff',
-                      color: '#334155',
-                      border: '1px solid #c7d2fe',
-                      fontSize: '0.875rem',
-                      fontWeight: 500,
-                      letterSpacing: '0.025em'
-                    }}
-                  >
-                    {asin.asinCode}
-                  </span>
-                  <a
-                    href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : asin.marketplace === 'myntra' ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-link p-0 text-slate-400 hover:text-indigo-600"
-                    title={asin.marketplace === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
-                  >
-                    <ExternalLink size={16} />
-                  </a>
-                </div>
-              </div>
-
-               {/* Stats Row */}
-               <div className="d-flex bg-slate-50 rounded-2xl border overflow-hidden">
-                 <div className="stat-item flex-fill">
-                   <div className="stat-label">Price</div>
-                   <div className="stat-value text-indigo-600 d-flex align-items-center">
-                     ₹{currentData.value?.toLocaleString() || 0}
-                     <SourceBadge source={currentData.source} date={currentData.date} />
-                   </div>
-                 </div>
-                 <div className="stat-item flex-fill">
-                   <div className="stat-label">MRP</div>
-                   <div className="stat-value text-muted">
-                     {asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '-'}
-                   </div>
-                 </div>
-                  <div className="stat-item flex-fill">
-                    <div className="stat-label">Buy Box</div>
-                    <div className="stat-value">
-                      <Popover
-                        trigger="click"
-                        placement="bottom"
-                        content={
-                          <div style={{ minWidth: '220px' }}>
-                            <div className="text-uppercase smallest fw-bold mb-3 pb-2 border-bottom" style={{ color: '#64748b', letterSpacing: '0.05em' }}>
-                              Seller Hierarchy
-                            </div>
-                            <div className="d-flex flex-column gap-2">
-                              {(asin.allOffers && asin.allOffers.length > 0 ? asin.allOffers : [
-                                { seller: asin.soldBy, price: currentData.value, isBuyBoxWinner: true },
-                                { seller: asin.soldBySec, price: asin.secondAsp, isBuyBoxWinner: false }
-                              ].filter(o => o.seller || o.price > 0)).map((offer, idx) => (
-                                <div key={idx} className="p-2 rounded-xl d-flex justify-content-between align-items-center hover:bg-slate-50" style={{ transition: 'background 0.2s' }}>
-                                  <div className="d-flex flex-column">
-                                    <span className="fw-bold small text-slate-800 d-flex align-items-center">
-                                      {offer.seller || 'Unknown'}
-                                      {offer.isBuyBoxWinner && <Trophy size={11} className="ms-1 text-amber-500" />}
-                                    </span>
-                                    <span className="smallest text-slate-400">{offer.isBuyBoxWinner ? 'Buy Box Winner' : 'Secondary Offer'}</span>
-                                  </div>
-                                  <span className="fw-bold text-indigo-600">₹{offer.price?.toLocaleString()}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        }
-                      >
-                        <div className="d-flex align-items-center cursor-pointer">
-                          <Store size={16} className="text-slate-400 me-2" />
-                          <span className="truncate" style={{ maxWidth: '120px' }}>{asin.soldBy || 'Amazon.in'}</span>
-                          {asin.allOffers && asin.allOffers.length > 1 && (
-                            <span className="badge bg-slate-100 text-slate-500 ms-2" style={{ fontSize: '10px' }}>+{asin.allOffers.length - 1}</span>
-                          )}
-                        </div>
-                      </Popover>
-                    </div>
-                  </div>
-                 <div className="stat-item flex-fill">
-                   <div className="stat-label">Main BSR</div>
-                   <div className="stat-value text-emerald-600 d-flex align-items-center">
-                     #{bsrData.value?.toLocaleString() || '-'}
-                     <SourceBadge source={bsrData.source} date={bsrData.date} />
-                  </div>
-                </div>
-                <div className="stat-item flex-fill">
-                  <div className="stat-label">Rating</div>
-                  <div className="stat-value d-flex align-items-center">
-                    <Star size={16} className="text-amber-400 fill-amber-400 me-1" />
-                    {ratingData.value?.toFixed(1) || 0}
-                    <SourceBadge source={ratingData.source} date={ratingData.date} />
-                  </div>
-                </div>
-                <div className="stat-item flex-fill"><div className="stat-label">Reviews</div><div className="stat-value">{asin.reviewCount?.toLocaleString() || 0}</div></div>
-              </div>
-            </div>
-          </div>
-
-          {/* LQS Detailed Analysis Row */}
-          <div className="mb-5">
-            <div className="d-flex align-items-center justify-content-between mb-4">
-              <div className="d-flex align-items-center gap-3">
-                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-sm"><Activity size={20} /></div>
-                <div>
-                  <h5 className="mb-0 fw-bold text-slate-900">LISTING QUALITY SCORE (LQS)</h5>
-                  <p className="small text-muted mb-0">Deep analysis based on Amazon's listing requirements</p>
-                </div>
-              </div>
-              <div className="d-flex align-items-center gap-4 bg-white px-4 py-2 border rounded-2xl shadow-sm">
-                 <div className="text-center">
-                   <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Overall LQS</div>
-                   <div className="h4 mb-0 fw-bold" style={{ 
-                     color: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' : 
-                            (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' : 
-                            (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b' 
-                   }}>
-                     {typeof asin.lqs === 'number' ? (asin.lqs > 10 ? (asin.lqs/10).toFixed(1) : asin.lqs.toFixed(1)) : (parseFloat(asin.lqs || 0) > 10 ? (parseFloat(asin.lqs || 0)/10).toFixed(1) : parseFloat(asin.lqs || 0).toFixed(1))}
-                   </div>
-                 </div>
-                 <div className="vertical-divider" style={{ width: '1px', height: '30px', backgroundColor: '#e2e8f0' }} />
-                 <div className="text-center">
-                   <div className="smallest fw-bold text-slate-400 text-uppercase tracking-wider">Status</div>
-                   <div className="badge rounded-pill px-3" style={{ 
-                     backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#ecfdf5' : 
-                                     (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#fffbeb' : 
-                                     (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#fef2f2' : '#fef2f2',
-                     color: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' : 
-                            (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' : 
-                            (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
-                     fontWeight: 700,
-                     fontSize: '11px'
-                   }}>
-                     {(asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? 'EXCELLENT' : 
-                      (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? 'GOOD' : 
-                      (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? 'POOR' : 'CRITICAL'}
-                   </div>
-                 </div>
-              </div>
-            </div>
-            
-            <div className="row g-4">
-              <div className="col-md-3">
-                <ScoreCard 
-                  title="Product Title" 
-                  score={asin.titleScore} 
-                  grade={asin.titleGrade} 
-                  issues={asin.titleIssues} 
-                  recommendations={asin.titleRecommendations}
-                />
-              </div>
-              <div className="col-md-3">
-                <ScoreCard 
-                  title="Bullet Points" 
-                  score={asin.bulletScore} 
-                  grade={asin.bulletGrade} 
-                  issues={asin.bulletIssues} 
-                  recommendations={asin.bulletRecommendations}
-                />
-              </div>
-              <div className="col-md-3">
-                <ScoreCard 
-                  title="Images & Video" 
-                  score={asin.imageScore} 
-                  grade={asin.imageGrade} 
-                  issues={asin.imageIssues} 
-                  recommendations={asin.imageRecommendations}
-                />
-              </div>
-              <div className="col-md-3">
-                <ScoreCard 
-                  title="Description / A+" 
-                  score={asin.descriptionScore} 
-                  grade={asin.descriptionGrade} 
-                  issues={asin.descriptionIssues} 
-                  recommendations={asin.descriptionRecommendations}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Visualizations Stack (Full Width) */}
-          <div className="d-flex flex-column gap-5">
-            {/* Bullet Points Cards - Always show if there's data */}
-            <div className="bg-white border p-4 rounded-3xl shadow-sm">
-                <div className="d-flex align-items-center gap-2 mb-3">
-                    <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
-                        <ListChecks size={20} />
-                    </div>
-                    <h6 className="mb-0 fw-bold text-slate-800">
-                        PRODUCT FEATURES ({asin.bulletPoints || asin.bulletPointsText?.length || 0})
-                    </h6>
-                </div>
-                {(() => {
-                    // Determine best source for bullet points
-                    const bullets = (() => {
-                        // If bulletPointsText is an array with strings
-                        if (Array.isArray(asin.bulletPointsText) && asin.bulletPointsText.length > 0) {
-                            return asin.bulletPointsText.filter(b => typeof b === 'string' && b.trim().length > 0);
-                        }
-                        // If bulletPointsText is a string (HTML or single text)
-                        if (typeof asin.bulletPointsText === 'string' && asin.bulletPointsText.length > 10) {
-                            // Try to parse as JSON first
-                            try {
-                                const parsed = JSON.parse(asin.bulletPointsText);
-                                if (Array.isArray(parsed) && parsed.length > 0) {
-                                    return parsed.filter(b => typeof b === 'string' && b.trim().length > 0);
-                                }
-                            } catch (e) {}
-                            
-                            // Check if it's HTML
-                            if (asin.bulletPointsText.includes('<li') || asin.bulletPointsText.includes('<span')) {
-                                // Extract text from HTML
-                                const tempDiv = document.createElement('div');
-                                tempDiv.innerHTML = asin.bulletPointsText;
-                                const items = Array.from(tempDiv.querySelectorAll('li, .a-list-item'))
-                                    .map(el => el.textContent.trim())
-                                    .filter(t => t.length > 3);
-                                if (items.length > 0) return items;
-                            }
-                            
-                            // Return as single item
-                            return [asin.bulletPointsText.replace(/<[^>]+>/g, '').trim()];
-                        }
-                        // Fallback: check legacy fields
-                        if (asin.bulletPointsList && Array.isArray(asin.bulletPointsList)) {
-                            return asin.bulletPointsList;
-                        }
-                        if (asin.bullets && Array.isArray(asin.bullets)) {
-                            return asin.bullets;
-                        }
-                        return [];
-                    })();
-
-                    if (bullets.length > 0) {
-                        return (
-                            <div className="row g-3">
-                                {bullets.map((bullet, idx) => (
-                                    <div key={idx} className="col-md-6">
-                                        <div
-                                            className="d-flex gap-3 p-3 bg-slate-50 rounded-xl border-start border-4 border-indigo-400 hover:border-indigo-600 transition-all"
-                                            style={{ fontSize: '0.85rem', minHeight: '50px' }}
-                                        >
-                                            <div 
-                                                className="d-flex align-items-center justify-content-center flex-shrink-0 rounded-circle"
-                                                style={{ 
-                                                    width: '26px', 
-                                                    height: '26px', 
-                                                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)', 
-                                                    color: '#fff', 
-                                                    fontSize: '11px', 
-                                                    fontWeight: 700 
-                                                }}
-                                            >
-                                                {idx + 1}
-                                            </div>
-                                            <div className="text-slate-700" style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
-                                                {bullet}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    }
-
-                    // Fallback for raw HTML string
-                    if (typeof asin.bullet_points === 'string' && asin.bullet_points.length > 20) {
-                        return (
-                            <div 
-                                className="p-4 bg-slate-50 rounded-2xl border leading-relaxed text-slate-700" 
-                                style={{ fontSize: '0.9rem' }}
-                                dangerouslySetInnerHTML={{ __html: asin.bullet_points }} 
-                            />
-                        );
-                    }
-
-                    return (
-                        <div className="p-5 bg-slate-50 rounded-2xl border border-dashed text-center">
-                            <ListChecks size={32} className="text-slate-300 mb-2" />
-                            <p className="text-muted small mb-0">No bullet points discovered for this listing yet.</p>
-                            <p className="text-muted smallest mt-1">Scrape the ASIN to extract product features.</p>
-                        </div>
-                    );
-                })()}
-            </div>
-
-            {/* Rating Breakdown - Uses fallback from history if current missing */}
-            <div className="bg-white border p-4 rounded-3xl shadow-sm">
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Star size={20} /></div>
-                <h6 className="mb-0 fw-bold text-slate-800">RATING BREAKDOWN</h6>
-                {ratingBreakdownData.date && (
-                  <SourceBadge source="history" date={ratingBreakdownData.date} />
-                )}
-              </div>
-              <div className="row g-3">
-                {[
-                  { stars: 5, key: 'fiveStar', color: '#22c55e' },
-                  { stars: 4, key: 'fourStar', color: '#84cc16' },
-                  { stars: 3, key: 'threeStar', color: '#eab308' },
-                  { stars: 2, key: 'twoStar', color: '#f97316' },
-                  { stars: 1, key: 'oneStar', color: '#ef4444' }
-                ].map(({ stars, key, color }) => {
-                  const percentage = ratingBreakdownData.data?.[key] || asin.ratingBreakdown?.[key] || 0;
-                  return (
-                    <div key={stars} className="col-md-6 col-lg-4">
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="fw-bold text-slate-700" style={{ minWidth: '30px' }}>{stars}★</span>
-                        <div className="flex-grow-1">
-                          <div className="progress rounded-pill" style={{ height: '12px', backgroundColor: '#e2e8f0' }}>
-                            <div
-                              className="progress-bar rounded-pill"
-                              style={{ width: `${percentage}%`, backgroundColor: color }}
-                            />
-                          </div>
-                        </div>
-                        <div className="d-flex flex-column align-items-end" style={{ minWidth: '65px' }}>
-                          <span className="text-slate-600 fw-bold" style={{ fontSize: '0.85rem' }}>{percentage}%</span>
-                          <span className="text-slate-400" style={{ fontSize: '0.7rem' }}>
-                            ({Math.round((percentage / 100) * (asin.reviewCount || 0)).toLocaleString()})
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Price History Chart */}
-            <div className="bg-white border rounded-4 p-4 shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="p-2 bg-emerald-50 rounded-lg">
-                    <IndianRupee size={18} className="text-emerald-600" />
-                  </div>
-                  <h6 className="mb-0 fw-semibold" style={{ color: '#1e293b', fontSize: '0.938rem' }}>
-                    PRICE HISTORY
-                  </h6>
-                </div>
-                <span className="small" style={{ color: '#64748b', fontWeight: 500 }}>
-                  Snapshot Count: {history.length}
-                </span>
-              </div>
-              <div style={{ minHeight: '280px' }}>
-                <Chart options={priceOptions} series={priceSeries} type="line" height={280} />
-              </div>
-            </div>
-            {/* Detailed Sub-BSR Historical Trends */}
-            <div className="bg-white border rounded-4 p-4 shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="p-2 bg-indigo-50 rounded-lg">
-                    <TrendingUp size={18} className="text-indigo-600" />
-                  </div>
-                  <h6 className="mb-0 fw-semibold text-slate-800">SUB-BSR CATEGORY TRENDS (30 DAYS)</h6>
-                </div>
-                <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg" style={{ fontSize: '10px' }}>
-                    <Activity size={10} className="me-1" /> NICHE TRACKING
-                  </span>
-                </div>
-              </div>
-              
-              <div style={{ minHeight: '350px', position: 'relative' }}>
-                {isLoadingSubTrend ? (
-                  <div className="d-flex flex-column align-items-center justify-content-center h-100 py-5">
-                    <Loader2 size={32} className="text-indigo-600 animate-spin mb-3" />
-                    <span className="text-slate-500 fw-medium">Analyzing niche trends...</span>
-                  </div>
-                ) : subBsrSeries.length > 0 ? (
-                  <>
-                    <div className="row g-3 mb-4">
-                      {subBsrTrend.trends.map((t, i) => (
-                        <div key={i} className="col-md-4">
-                          <div className="p-3 bg-slate-50 rounded-2xl border d-flex justify-content-between align-items-center">
-                            <div className="overflow-hidden">
-                              <div className="smallest fw-bold text-slate-400 text-uppercase mb-1 truncate">{t.category}</div>
-                              <div className="h6 mb-0 fw-bold text-slate-800">#{t.latestRank?.toLocaleString() || '-'}</div>
-                            </div>
-                            <div className="p-2 bg-white rounded-xl shadow-xs">
-                              <Trophy size={16} className={i === 0 ? 'text-amber-500' : 'text-slate-300'} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <Chart options={subBsrOptions} series={subBsrSeries} type="line" height={350} />
-                  </>
-                ) : (
-                  <div className="d-flex flex-column align-items-center justify-content-center h-100 py-5 text-muted">
-                    <RefreshCcw size={32} className="mb-2 opacity-50" />
-                    <span className="small fw-medium">No historical sub-BSR data recorded yet</span>
-                    <span className="smallest mt-1">Data will appear after the next daily sync</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Rating History Chart */}
-            <div className="bg-white border rounded-4 p-4 shadow-sm">
-              <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="p-2 bg-amber-50 rounded-lg">
-                    <Star size={18} className="text-amber-600" />
-                  </div>
-                  <h6 className="mb-0 fw-semibold text-slate-800">RATING PROGRESSION</h6>
-                </div>
-                <span className="text-slate-500 small fw-medium">Scale (0 - 5)</span>
-              </div>
-              <div style={{ minHeight: '280px' }}>
-                <Chart options={ratingOptions} series={ratingSeries} type="line" height={280} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-4 bg-white border-top d-flex justify-content-end">
-          <button onClick={handleClose} className="btn btn-dark fw-bold px-5 py-2 rounded-xl transition-all hover:scale-105" style={{ borderRadius: '12px' }}>CLOSE</button>
+          <AdvancedDateRangePicker
+            isOpen={isPickerOpen}
+            onClose={() => setIsPickerOpen(false)}
+            onApply={(range) => {
+              setDateRange({ start: range.startDate, end: range.endDate });
+            }}
+            initialStartDate={dateRange.start}
+            initialEndDate={dateRange.end}
+            initialRangeType="last7"
+          />
         </div>
       </div>
-    </div>,
-    document.body
+
+      {/* Tab Contents */}
+      <div style={{ padding: '0 32px 32px 32px', maxHeight: '80vh', overflowY: 'auto' }}>
+        <Tabs 
+          defaultActiveKey="1" 
+          items={tabItems} 
+          className="premium-asin-tabs"
+          animated={{ inkBar: true, tabPane: true }}
+        />
+      </div>
+    </Modal>
   );
 };
 

@@ -642,6 +642,10 @@ body.chat-page-active .routes-container {
 }
 
 @media (max-width: 768px) {
+  .routes-container {
+    padding: 1rem 0.75rem;
+  }
+
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }

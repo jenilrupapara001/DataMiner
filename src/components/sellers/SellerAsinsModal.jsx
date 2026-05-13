@@ -738,7 +738,7 @@ const SellerAsinsModal = ({
                 >
                   Data Ingest
                 </Button>
-                <Divider type="vertical" />
+                <Divider orientation="vertical" />
                 <Button
                   size="small"
                   icon={<Database size={14} />}

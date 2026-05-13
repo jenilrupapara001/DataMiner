@@ -16,7 +16,7 @@ export const SidebarProvider = ({ children }) => {
     // Check for mobile viewport
     useEffect(() => {
         const checkMobile = () => {
-            const mobile = window.innerWidth < 768;
+            const mobile = window.innerWidth < 992;
             setIsMobile(mobile);
             if (mobile) {
                 setIsOpen(false);
@@ -33,7 +33,7 @@ export const SidebarProvider = ({ children }) => {
     const toggleMobile = () => setIsOpen(o => !o);
 
     return (
-        <SidebarContext.Provider value={{ collapsed, toggle, isOpen, toggleMobile, isMobile }}>
+        <SidebarContext.Provider value={{ collapsed, toggle, isOpen, toggleMobile, isMobile, setCollapsed }}>
             {children}
         </SidebarContext.Provider>
     );

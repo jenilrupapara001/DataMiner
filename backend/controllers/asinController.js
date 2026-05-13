@@ -310,15 +310,32 @@ exports.getAsins = async (req, res) => {
     const total = countResult.recordset[0].total;
 
     // [6] Fetch ASINs
-    // Map sortBy from frontend names to SQL column names if necessary
-    const sortField = sortBy === 'asinCode' ? 'AsinCode' : 
-                      sortBy === 'currentPrice' ? 'CurrentPrice' : 
-                      sortBy === 'uploadedPrice' ? 'UploadedPrice' : 
-                      sortBy === 'bsr' ? 'BSR' : 
-                      sortBy === 'lqs' ? 'LQS' : 
-                      sortBy === 'status' ? 'Status' : 
-                      sortBy === 'priceDispute' ? 'PriceDispute' :
-                      sortBy === 'lastScraped' ? 'LastScrapedAt' : 'CreatedAt';
+    // Map sortBy from frontend names to SQL ORDER BY clause
+    const getOrderBy = () => {
+        const col = sortBy === 'asinCode' ? 'a.AsinCode' : 
+                    sortBy === 'currentPrice' ? 'a.CurrentPrice' : 
+                    sortBy === 'uploadedPrice' ? 'a.UploadedPrice' : 
+                    sortBy === 'bsr' ? 'a.BSR' : 
+                    sortBy === 'lqs' ? 'a.LQS' : 
+                    sortBy === 'status' ? 'a.Status' : 
+                    sortBy === 'scrapeStatus' ? 'a.ScrapeStatus' :
+                    sortBy === 'priceDispute' ? 'a.PriceDispute' :
+                    sortBy === 'releaseDate' ? 'a.ReleaseDate' :
+                    sortBy === 'parentAsin' ? 'a.ParentAsin' :
+                    sortBy === 'sku' ? 'a.Sku' :
+                    sortBy === 'title' ? 'a.Title' :
+                    sortBy === 'category' ? 'a.Category' :
+                    sortBy === 'mrp' ? 'a.Mrp' :
+                    sortBy === 'discountPercentage' ? 'a.DiscountPercentage' :
+                    sortBy === 'rating' ? 'a.Rating' :
+                    sortBy === 'reviewCount' ? 'a.ReviewCount' :
+                    sortBy === 'sellerBrand' ? 's.Name' :
+                    sortBy === 'videoCount' ? 'a.VideoCount' :
+                    sortBy === 'imagesCount' ? 'a.ImagesCount' :
+                    sortBy === 'hasAplus' ? 'a.HasAplus' :
+                    sortBy === 'lastScraped' ? 'a.LastScrapedAt' : 'a.CreatedAt';
+        return `${col} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+    };
     
     const dataRequest = applyInputs(pool.request());
     const asinsResult = await dataRequest
@@ -329,7 +346,7 @@ exports.getAsins = async (req, res) => {
             FROM Asins a
             JOIN Sellers s ON a.SellerId = s.Id
             ${whereClause}
-            ORDER BY a.${sortField} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}
+            ORDER BY ${getOrderBy()}
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `);
 
