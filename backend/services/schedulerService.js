@@ -51,6 +51,13 @@ class SchedulerService {
         let ajioScheduleTime = process.env.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00';
         let automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
 
+        console.log('--------------------------------------------------------');
+        console.log('📡 [SCHEDULER CONFIG LOADED FROM ENV]');
+        console.log(`⏰ ENV -> Amazon Nightly Schedule: ${scheduleTime}`);
+        console.log(`⏰ ENV -> Ajio Nightly Schedule  : ${ajioScheduleTime}`);
+        console.log(`⚙️  ENV -> Automation Status       : ${process.env.AUTOMATION_ENABLED === 'true' ? 'ENABLED' : 'DISABLED'}`);
+        console.log('--------------------------------------------------------');
+
         try {
             const pool = await getPool();
             const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED')");

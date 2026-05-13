@@ -350,8 +350,11 @@ export const scheduledRunsApi = {
     return res.json();
   },
 
-  trigger: async () => {
-    const res = await fetch(`${API_BASE}/scheduled-runs/trigger`, {
+  trigger: async (marketplace) => {
+    const url = marketplace 
+      ? `${API_BASE}/scheduled-runs/trigger?marketplace=${encodeURIComponent(marketplace)}`
+      : `${API_BASE}/scheduled-runs/trigger`;
+    const res = await fetch(url, {
       method: 'POST',
       headers: { ...getAuthHeader() },
     });

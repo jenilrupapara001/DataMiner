@@ -88,16 +88,17 @@ class ScheduledRunController {
      */
     async triggerScheduledRun(req, res) {
         try {
-            console.log('🚀 [MANUAL TRIGGER] Enterprise Pipeline requested by user...');
+            const marketplace = req.query.marketplace || req.body.marketplace || 'amazon';
+            console.log(`🚀 [MANUAL TRIGGER] ${marketplace.toUpperCase()} Enterprise Pipeline requested by user...`);
             
             // Trigger in the background to avoid HTTP timeout
-            SchedulerService.runEnterprisePipeline().catch(err => {
-                console.error('❌ Manual enterprise pipeline failed in background:', err.message);
+            SchedulerService.runEnterprisePipeline(marketplace).catch(err => {
+                console.error(`❌ Manual enterprise pipeline failed in background for ${marketplace}:`, err.message);
             });
 
             res.json({
                 success: true,
-                message: 'Nightly Scheduled pipeline manually triggered in background. Monitor progress below.'
+                message: `${marketplace.toUpperCase()} pipeline manually triggered in background. Monitor progress below.`
             });
         } catch (err) {
             console.error('❌ Failed to trigger scheduled run:', err.message);

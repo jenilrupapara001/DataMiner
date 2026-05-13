@@ -14,7 +14,8 @@ import {
     TrendingUp, 
     Search,
     Pause,
-    PlayCircle
+    PlayCircle,
+    ChevronDown
 } from 'lucide-react';
 import { 
     Layout, 
@@ -34,7 +35,9 @@ import {
     Typography, 
     Popconfirm,
     Tooltip,
-    Divider
+    Divider,
+    Dropdown,
+    Modal
 } from 'antd';
 import { scheduledRunsApi, settingsApi } from '../services/api';
 
@@ -150,21 +153,21 @@ const ScheduledRunsPage = () => {
     };
 
     // Trigger a manual run
-    const handleManualTrigger = async () => {
+    const handleManualTrigger = async (marketplace = 'amazon') => {
         setTriggering(true);
         setMessage(null);
         try {
-            const res = await scheduledRunsApi.trigger();
+            const res = await scheduledRunsApi.trigger(marketplace);
             if (res.success) {
                 setMessage({ 
                     type: 'success', 
-                    text: res.message || 'Nightly pipeline manually triggered successfully in the background.' 
+                    text: res.message || `${marketplace.toUpperCase()} pipeline manually triggered successfully in the background.` 
                 });
                 setTimeout(() => fetchRuns(), 1500);
             }
         } catch (err) {
-            console.error('Failed to trigger run:', err);
-            setMessage({ type: 'danger', text: err.message || 'Failed to trigger enterprise pipeline' });
+            console.error(`Failed to trigger ${marketplace} run:`, err);
+            setMessage({ type: 'danger', text: err.message || `Failed to trigger ${marketplace.toUpperCase()} enterprise pipeline` });
         } finally {
             setTriggering(false);
         }
@@ -278,6 +281,37 @@ const ScheduledRunsPage = () => {
                 if (status === 'COMPLETED') return <Tag icon={<CheckCircle2 size={12} />} color="success" style={{ borderRadius: '12px', fontWeight: 600 }}>COMPLETED</Tag>;
                 if (status === 'FAILED') return <Tag icon={<XCircle size={12} />} color="error" style={{ borderRadius: '12px', fontWeight: 600 }}>FAILED</Tag>;
                 return <Tag>{status}</Tag>;
+            }
+        }
+    ];
+    
+    const pipelineMenuItems = [
+        {
+            key: 'amazon',
+            label: <Text strong style={{ fontSize: 13 }}>Run Amazon Pipeline</Text>,
+            icon: <PlayCircle size={14} style={{ color: '#3b82f6' }} />,
+            onClick: () => {
+                Modal.confirm({
+                    title: 'Launch Amazon Enterprise Pipeline?',
+                    content: 'This triggers synchronous scraping, data cleaning, and indexing for all active Amazon sellers. Active scrapers will be temporarily suspended during injection.',
+                    okText: 'Launch Amazon',
+                    okButtonProps: { style: { backgroundColor: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600 } },
+                    onOk: () => handleManualTrigger('amazon')
+                });
+            }
+        },
+        {
+            key: 'ajio',
+            label: <Text strong style={{ fontSize: 13 }}>Run Ajio Pipeline</Text>,
+            icon: <PlayCircle size={14} style={{ color: '#10b981' }} />,
+            onClick: () => {
+                Modal.confirm({
+                    title: 'Launch Ajio Enterprise Pipeline?',
+                    content: 'This triggers synchronous scraping, data cleaning, and indexing for all active Ajio sellers. Active scrapers will be temporarily suspended during injection.',
+                    okText: 'Launch Ajio',
+                    okButtonProps: { style: { backgroundColor: '#10b981', borderColor: '#10b981', fontWeight: 600 } },
+                    onOk: () => handleManualTrigger('ajio')
+                });
             }
         }
     ];
@@ -516,35 +550,25 @@ const ScheduledRunsPage = () => {
                         Refresh
                     </Button>
 
-                    <Popconfirm
-                        title="Trigger Manual Nightly Pipeline"
-                        description={
-                            <div style={{ maxWidth: 300 }}>
-                                Are you sure you want to stop all active tasks, clear exported data, and trigger the enterprise pipeline?
-                                <div className="mt-1.5 text-zinc-400 small">This will process exactly 5 active sellers concurrently.</div>
-                            </div>
-                        }
-                        okText="Yes, Trigger Pipeline"
-                        cancelText="Cancel"
-                        onConfirm={handleManualTrigger}
-                        okButtonProps={{ danger: false, style: { backgroundColor: '#10b981', borderColor: '#10b981' } }}
-                    >
+                    <Dropdown menu={{ items: pipelineMenuItems }} placement="bottomRight" disabled={triggering || runningRunsCount > 0}>
                         <Button 
                             type="primary"
                             icon={triggering ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
-                            disabled={triggering || runningRunsCount > 0}
                             style={{ 
                                 backgroundColor: '#10b981', 
                                 borderColor: '#10b981', 
                                 color: '#fff', 
                                 fontWeight: 700, 
                                 fontSize: '12px',
-                                borderRadius: '6px'
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
                             }}
                         >
-                            Manual Trigger
+                            Launch Pipeline <ChevronDown size={13} />
                         </Button>
-                    </Popconfirm>
+                    </Dropdown>
                 </div>
             </div>
 
