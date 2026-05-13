@@ -66,14 +66,20 @@ class SchedulerService {
                 settingsMap[s.Key] = s.Value;
             });
 
-            if (settingsMap['AUTOMATION_SCHEDULE_TIME']) {
+            if (settingsMap['AUTOMATION_SCHEDULE_TIME'] && settingsMap['AUTOMATION_SCHEDULE_TIME'] !== scheduleTime) {
+                console.log(`📌 [Scheduler DB Override] Amazon Nightly Schedule overridden by Database: ${scheduleTime} -> ${settingsMap['AUTOMATION_SCHEDULE_TIME']}`);
                 scheduleTime = settingsMap['AUTOMATION_SCHEDULE_TIME'];
             }
-            if (settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME']) {
+            if (settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] && settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] !== ajioScheduleTime) {
+                console.log(`📌 [Scheduler DB Override] Ajio Nightly Schedule overridden by Database  : ${ajioScheduleTime} -> ${settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME']}`);
                 ajioScheduleTime = settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'];
             }
             if (settingsMap['AUTOMATION_ENABLED'] !== undefined) {
-                automationEnabled = settingsMap['AUTOMATION_ENABLED'] === 'true';
+                const dbEnabled = settingsMap['AUTOMATION_ENABLED'] === 'true';
+                if (dbEnabled !== automationEnabled) {
+                    console.log(`📌 [Scheduler DB Override] Automation Status overridden by Database       : ${automationEnabled ? 'ENABLED' : 'DISABLED'} -> ${dbEnabled ? 'ENABLED' : 'DISABLED'}`);
+                    automationEnabled = dbEnabled;
+                }
             }
         } catch (dbErr) {
             console.warn('⚠️ [Scheduler] Could not query SystemSettings, falling back to environment config:', dbErr.message);
