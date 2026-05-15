@@ -329,8 +329,7 @@ const defaultPermissions = [
   { name: 'settings_manage', displayName: 'System Settings: Manage', description: 'Modify global application configurations', category: 'Security', action: 'manage' },
 
   // Tools
-  { name: 'calculator_view', displayName: 'Revenue Calculator: View', description: 'Access the profit and margin calculator', category: 'Tools', action: 'view' },
-  { name: 'calculator_manage', displayName: 'Revenue Calculator: Config', description: 'Modify fee and cost structures', category: 'Tools', action: 'manage' },
+
   
   { name: 'alerts_view', displayName: 'Alerts: View', description: 'View system and performance alerts', category: 'Tools', action: 'view' },
   { name: 'alerts_manage', displayName: 'Alerts: Resolve', description: 'Acknowledge and resolve active alerts', category: 'Tools', action: 'manage' },

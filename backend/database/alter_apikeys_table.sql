@@ -10,8 +10,14 @@ GO
 IF COL_LENGTH('ApiKeys', 'Category') IS NULL
 BEGIN
     ALTER TABLE ApiKeys ADD Category NVARCHAR(50) DEFAULT 'Other';
-    CHECK (Category IN ('Scraping', 'Amazon Data', 'AI', 'Communication', 'Other'));
     PRINT '✅ Added Category column to ApiKeys';
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.check_constraints WHERE name = 'CHK_ApiKeys_Category')
+BEGIN
+    EXEC('ALTER TABLE ApiKeys ADD CONSTRAINT CHK_ApiKeys_Category CHECK (Category IN (''Scraping'', ''Amazon Data'', ''AI'', ''Communication'', ''Other''))');
+    PRINT '✅ Added Category check constraint';
 END
 GO
 

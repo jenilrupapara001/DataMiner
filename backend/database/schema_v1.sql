@@ -69,6 +69,15 @@ CREATE TABLE UserSupervisors (
     CONSTRAINT FK_UserSupervisors_Supervisor FOREIGN KEY (SupervisorId) REFERENCES Users(Id)
 );
 
+IF OBJECT_ID(N'dbo.UserBrandManagers', N'U') IS NULL
+CREATE TABLE UserBrandManagers (
+    UserId VARCHAR(24) NOT NULL,
+    BrandManagerId VARCHAR(24) NOT NULL,
+    PRIMARY KEY (UserId, BrandManagerId),
+    CONSTRAINT FK_UserBrandManagers_User FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_UserBrandManagers_BrandManager FOREIGN KEY (BrandManagerId) REFERENCES Users(Id)
+);
+
 IF OBJECT_ID(N'dbo.Teams', N'U') IS NULL
 CREATE TABLE Teams (
     Id VARCHAR(24) PRIMARY KEY,
@@ -129,6 +138,7 @@ CREATE TABLE Asins (
     Title NVARCHAR(MAX),
     ImageUrl NVARCHAR(MAX),
     CurrentPrice DECIMAL(18, 2),
+    Mrp DECIMAL(18, 2),
     BSR INT,
     Rating DECIMAL(3, 2),
     ReviewCount INT,
@@ -210,7 +220,6 @@ CREATE TABLE MonthlyPerformance (
     OrderedRevenue DECIMAL(18, 2) DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     UpdatedAt DATETIME2 DEFAULT GETDATE(),
-    CONSTRAINT FK_MonthlyPerformance_Asin FOREIGN KEY (Asin) REFERENCES Asins(AsinCode),
     CONSTRAINT UC_MonthlyPerformance_Asin_Month UNIQUE (Asin, Month)
 );
 
