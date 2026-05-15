@@ -418,10 +418,12 @@ const Header = () => {
                         open={popoverOpen}
                         onOpenChange={setPopoverOpen}
                         overlayClassName="global-notification-popover"
-                        overlayInnerStyle={{ 
-                            borderRadius: 12, 
-                            padding: '8px',
-                            boxShadow: '0 10px 32px -4px rgba(0,0,0,0.1)'
+                        styles={{ 
+                            content: { 
+                                borderRadius: 12, 
+                                padding: '8px',
+                                boxShadow: '0 10px 32px -4px rgba(0,0,0,0.1)'
+                            }
                         }}
                     >
                         <button className="icon-button" style={{ position: 'relative' }}>

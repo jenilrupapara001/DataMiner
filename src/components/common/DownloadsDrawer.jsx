@@ -160,9 +160,11 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                 placement="right"
                 onClose={onClose}
                 open={isOpen}
-                width={380}
-                bodyStyle={{ padding: 0, backgroundColor: '#fcfcfd' }}
-                headerStyle={{ borderBottom: '1px solid #f1f5f9' }}
+                size={380}
+                styles={{
+                    body: { padding: 0, backgroundColor: '#fcfcfd' },
+                    header: { borderBottom: '1px solid #f1f5f9' }
+                }}
                 extra={
                     <Space>
                         <Button 

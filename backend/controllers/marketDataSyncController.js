@@ -542,6 +542,29 @@ exports.getPoolStatus = async (req, res) => {
 };
 
 /**
+ * Sync all tasks from Octoparse API to the local task pool.
+ */
+exports.syncTaskPool = async (req, res) => {
+    try {
+        const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
+        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        if (!isGlobalUser) {
+            return res.status(403).json({ success: false, error: 'Unauthorized to sync task pool' });
+        }
+
+        const result = await marketDataSyncService.syncOctoparseTasksToPool();
+        
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Sync Task Pool Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
  * Trigger concurrent recovery for ASINs with missing critical data.
  */
 exports.recoverMissingData = async (req, res) => {

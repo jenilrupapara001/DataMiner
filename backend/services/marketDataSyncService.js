@@ -3183,28 +3183,39 @@ class MarketDataSyncService {
     }
 
     /**
-     * Imports a list of Task IDs into the available pool.
+     * Imports a list of Task IDs into the available pool with metadata.
      */
-    async importTaskPool(taskIds) {
+    async importTaskPool(tasks) {
         try {
             const pool = await getPool();
             let addedCount = 0;
 
-            for (const id of taskIds) {
-                const taskId = id.trim();
+            for (const task of tasks) {
+                const taskId = task.taskId || task;
+                const taskName = task.taskName || 'Unnamed Task';
+                const groupName = task.groupName || 'Default Group';
+
                 if (!taskId) continue;
 
                 const result = await pool.request()
-                    .input('taskId', sql.NVarChar, taskId)
+                    .input('taskId', sql.VarChar, taskId)
+                    .input('taskName', sql.NVarChar, taskName)
+                    .input('groupName', sql.NVarChar, groupName)
                     .input('newId', sql.VarChar, generateId())
                     .query(`
                         IF NOT EXISTS (SELECT 1 FROM OctoTasks WHERE TaskId = @taskId)
                         BEGIN
-                            INSERT INTO OctoTasks (Id, TaskId, IsAssigned, CreatedAt, UpdatedAt)
-                            VALUES (@newId, @taskId, 0, GETDATE(), GETDATE());
+                            INSERT INTO OctoTasks (Id, TaskId, TaskName, GroupName, IsAssigned, CreatedAt, UpdatedAt)
+                            VALUES (@newId, @taskId, @taskName, @groupName, 0, GETDATE(), GETDATE());
                             SELECT 1 as Added;
                         END
-                        ELSE SELECT 0 as Added;
+                        ELSE 
+                        BEGIN
+                            UPDATE OctoTasks 
+                            SET TaskName = @taskName, GroupName = @groupName, UpdatedAt = GETDATE()
+                            WHERE TaskId = @taskId;
+                            SELECT 0 as Added;
+                        END
                     `);
 
                 if (result.recordset[0]?.Added) addedCount++;
@@ -3217,6 +3228,54 @@ class MarketDataSyncService {
             };
         } catch (error) {
             console.error('❌ Import Task Pool Error:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Fetches all tasks from all groups in Octoparse and syncs them to the local pool.
+     */
+    async syncOctoparseTasksToPool() {
+        try {
+            this.log('info', '🔄 Starting Full Octoparse Task Sync...');
+            
+            const groups = await this.getTaskGroupList();
+            if (!groups || groups.length === 0) {
+                throw new Error('No task groups found in Octoparse');
+            }
+
+            let allTasks = [];
+            for (const group of groups) {
+                const groupId = group.categoryId || group.id || group.taskGroupId;
+                const groupName = group.categoryName || group.name || group.taskGroupName;
+                
+                this.log('info', `Fetching tasks for group: ${groupName} (${groupId})`);
+                const tasks = await this.getTasksInGroup(groupId);
+                
+                if (Array.isArray(tasks)) {
+                    tasks.forEach(t => {
+                        allTasks.push({
+                            taskId: t.taskId || t.id,
+                            taskName: t.taskName || t.name,
+                            groupName: groupName
+                        });
+                    });
+                }
+                
+                // Small delay to prevent rate limiting
+                await this.wait(500);
+            }
+
+            this.log('info', `Found total ${allTasks.length} tasks. Syncing to database...`);
+            const result = await this.importTaskPool(allTasks);
+            
+            return {
+                success: true,
+                message: `Successfully synced ${allTasks.length} tasks from Octoparse.`,
+                ...result
+            };
+        } catch (error) {
+            console.error('❌ Sync Octoparse Tasks Error:', error.message);
             throw error;
         }
     }

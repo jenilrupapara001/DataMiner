@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FileUp, X, ExternalLink, ShieldCheck, ChevronRight, RefreshCw, FileCheck } from 'lucide-react';
+import { FileUp, ShieldCheck, ChevronRight, RefreshCw, Inbox } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+import { Modal, Button, Upload, Typography, Space, Result, Alert } from 'antd';
+
+const { Text, Title } = Typography;
+const { Dragger } = Upload;
 
 const ImportSellerModal = ({ onClose, onImport }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -89,85 +93,103 @@ const ImportSellerModal = ({ onClose, onImport }) => {
   };
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.7)', backdropFilter: 'blur(10px)', zIndex: 1070 }}>
-      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '480px' }}>
-        <div className="modal-content overflow-hidden border-0 shadow-2xl rounded-4">
-          <div className="modal-header border-0 px-4 pt-4 pb-2">
-            <h5 className="h5 fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
-              <div className="p-2 bg-zinc-100 rounded-3 border border-zinc-200">
-                <FileUp size={20} className="text-zinc-600" />
-              </div>
-              Bulk Migration Pipeline
-            </h5>
-            <button type="button" className="btn-white-icon border-0 shadow-none" onClick={onClose}>
-              <X size={18} />
-            </button>
+    <Modal
+      open={true}
+      onCancel={onClose}
+      footer={[
+        <Button key="back" onClick={onClose} style={{ borderRadius: 8, fontWeight: 600 }}>
+          Abort
+        </Button>,
+        <Button 
+          key="submit" 
+          type="primary" 
+          disabled={!fileStats || isImporting} 
+          loading={isImporting} 
+          onClick={handleImportComplete}
+          style={{ borderRadius: 8, fontWeight: 700, background: '#0f172a', borderColor: '#0f172a' }}
+        >
+          {isImporting ? 'Syncing...' : 'Confirm Migration'}
+        </Button>
+      ]}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+          <div style={{ padding: '8px', background: '#f1f5f9', color: '#64748b', borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex' }}>
+            <FileUp size={20} />
           </div>
-
-          <div className="modal-body p-4">
-            {!fileStats ? (
-              <div className="text-center py-5 px-4 bg-zinc-50 rounded-4 border-2 border-dashed border-zinc-200">
-                <div className="bg-white p-3 rounded-circle shadow-sm d-inline-flex mb-3 border border-zinc-100">
-                  <FileUp size={32} className="text-primary" />
-                </div>
-                <h6 className="fw-black text-zinc-900 mb-1">Select Inventory Manifest</h6>
-                <p className="text-muted smallest mb-4">Upload a .csv file containing store names, merchant IDs, and assigned managers.</p>
-                <input
-                  type="file"
-                  id="csvUpload"
-                  className="d-none"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                />
-                <label
-                  htmlFor="csvUpload"
-                  className="btn btn-zinc-900 fw-bold px-4 rounded-pill text-white shadow-sm cursor-pointer"
-                  style={{ backgroundColor: '#18181B' }}
-                >
-                  {isUploading ? <RefreshCw size={16} className="spin me-2" /> : <ChevronRight size={16} className="me-2" />}
-                  Browse manifests
-                </label>
-              </div>
-            ) : (
-              <div>
-                <div className="p-4 bg-success-subtle border border-success-subtle rounded-4 mb-4">
-                  <div className="d-flex align-items-center gap-3">
-                    <div className="bg-success text-white p-2 rounded-circle shadow-sm">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <div>
-                      <div className="fw-bold text-success-emphasis">{fileStats.name}</div>
-                      <div className="smallest text-success-emphasis opacity-75">{fileStats.count} Valid store profiles identified</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-zinc-50 p-3 rounded-3 border border-zinc-100 mb-4">
-                  <div className="d-flex align-items-center justify-content-between smallest mb-2">
-                    <span className="fw-bold text-zinc-400 text-uppercase tracking-widest">Target Database</span>
-                    <span className="badge bg-zinc-900 text-white rounded-pill px-2">Live Sync</span>
-                  </div>
-                  <div className="fw-medium text-zinc-600 smallest">Our sync agents will automatically allocate these stores to the respective managers and start scanning ASIN inventory.</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
-            <button className="btn btn-white fw-bold px-4 rounded-pill border border-zinc-200" onClick={onClose}>Abort</button>
-            <button
-              className="btn btn-zinc-900 fw-bold px-4 rounded-pill shadow-xl text-white d-flex align-items-center gap-2"
-              disabled={!fileStats || isImporting}
-              onClick={handleImportComplete}
-              style={{ backgroundColor: '#18181B' }}
-            >
-              {isImporting ? <RefreshCw size={16} className="spin" /> : <ShieldCheck size={16} />}
-              <span>{isImporting ? 'Syncing...' : 'Confirm Migration'}</span>
-            </button>
-          </div>
+          <Title level={5} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.01em' }}>
+            Bulk Migration Pipeline
+          </Title>
         </div>
-      </div>
-    </div>
+      }
+      styles={{
+        content: { borderRadius: 16, padding: '24px' },
+        header: { borderBottom: 'none', marginBottom: 24 },
+        footer: { borderTop: 'none', marginTop: 24, padding: '0 4px' }
+      }}
+      width={480}
+      centered
+    >
+      {!fileStats ? (
+        <Dragger
+          accept=".csv"
+          showUploadList={false}
+          beforeUpload={(file) => {
+            handleFileChange({ target: { files: [file] } });
+            return false;
+          }}
+          style={{ 
+            padding: '32px 24px', 
+            background: '#fafafa', 
+            borderRadius: 16, 
+            border: '2px dashed #e2e8f0' 
+          }}
+        >
+          <p className="ant-upload-drag-icon">
+            <div style={{ width: 64, height: 64, background: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0' }}>
+              <FileUp size={32} style={{ color: '#0f172a' }} />
+            </div>
+          </p>
+          <Text strong style={{ fontSize: 16, display: 'block', marginTop: 16, color: '#0f172a' }}>Select Inventory Manifest</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+            Upload a .csv file containing store names, merchant IDs, and assigned managers.
+          </Text>
+          <Button 
+            style={{ marginTop: 24, borderRadius: 20, fontWeight: 700, padding: '0 24px', background: '#0f172a', color: '#fff' }}
+          >
+            {isUploading ? <RefreshCw size={14} className="spin" /> : <ChevronRight size={14} />}
+            <span style={{ marginLeft: 8 }}>Browse manifests</span>
+          </Button>
+        </Dragger>
+      ) : (
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Alert
+            message={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ padding: '8px', background: '#22c55e', color: '#fff', borderRadius: '50%', display: 'flex' }}>
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <Text strong style={{ color: '#064e3b', display: 'block' }}>{fileStats.name}</Text>
+                  <Text style={{ color: '#064e3b', fontSize: 11, opacity: 0.8 }}>{fileStats.count} Valid store profiles identified</Text>
+                </div>
+              </div>
+            }
+            type="success"
+            style={{ borderRadius: 12, padding: 16, border: 'none', background: '#f0fdf4' }}
+          />
+          
+          <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text strong style={{ fontSize: 10, color: '#94a3b8', letterSpacing: '0.1em' }}>TARGET DATABASE</Text>
+              <Tag color="blue" style={{ borderRadius: 20, border: 'none', fontWeight: 700, fontSize: 10, padding: '0 8px' }}>Live Sync</Tag>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Our sync agents will automatically allocate these stores to the respective managers and start scanning ASIN inventory.
+            </Text>
+          </div>
+        </Space>
+      )}
+    </Modal>
   );
 };
 

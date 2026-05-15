@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
-import { Drawer, Button, Input, Select, Space, Typography, Badge, Segmented, Tooltip, Dropdown, Menu } from 'antd';
+import { Drawer, Button, Input, Select, Space, Typography, Badge, Segmented, Tooltip, Dropdown, Menu, Modal, Form, Tag } from 'antd';
 const { Text, Title } = Typography;
 const TablePagination = lazy(() => import('@mui/material/TablePagination'));
 import KPICard from '../components/KPICard';
@@ -47,11 +47,16 @@ import {
   ExternalLink,
   Video,
   PlayCircle,
+  PauseCircle,
   Award,
   Filter,
-  Tag,
+  Tag as TagIcon,
   SlidersHorizontal,
-  Megaphone
+  Megaphone,
+  MoreVertical,
+  MoreHorizontal,
+  Edit3,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -798,7 +803,7 @@ const AsinManagerPage = () => {
       appliedFilters.selectedTags.forEach(tag => {
         badges.push(
           <div key={`tag-${tag}`} className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4338ca', borderColor: '#c7d2fe', borderRadius: '6px' }}>
-            <Tag size={10} className="opacity-80" />
+            <TagIcon size={10} className="opacity-80" />
             <span className="fw-bold">{tag}</span>
             <button
               type="button"
@@ -2397,132 +2402,125 @@ const AsinManagerPage = () => {
                   />
                 </div>
 
-                {/* ACTIONS DROPDOWN - RELOCATED AFTER SELLER */}
+                {/* MODERNIZED ACTIONS DROPDOWN */}
                 <Dropdown
-                  open={showActionsDropdown}
-                  onOpenChange={setShowActionsDropdown}
+                  menu={{
+                    items: [
+                      {
+                        key: 'filters-grp',
+                        type: 'group',
+                        label: 'QUICK FILTERS',
+                        children: [
+                          {
+                            key: 'price-dispute',
+                            label: appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only',
+                            icon: <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />,
+                            onClick: () => {
+                              const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
+                              setAppliedFilters(newFilters);
+                              setFilters(newFilters);
+                            }
+                          },
+                          {
+                            key: 'bsr-trend',
+                            label: appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR',
+                            icon: <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />,
+                            onClick: () => {
+                              const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
+                              setAppliedFilters(newFilters);
+                              setFilters(newFilters);
+                            }
+                          },
+                          {
+                            key: 'rating-trend',
+                            label: appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings',
+                            icon: <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />,
+                            onClick: () => {
+                              const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
+                              setAppliedFilters(newFilters);
+                              setFilters(newFilters);
+                            }
+                          }
+                        ]
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'views-grp',
+                        type: 'group',
+                        label: 'QUICK VIEWS',
+                        children: [
+                          {
+                            key: 'bsr-matrix',
+                            label: 'BSR Ranking Matrix',
+                            icon: <BarChart2 size={14} className="text-indigo-500" />,
+                            onClick: () => setShowAllBsrHistory(true)
+                          },
+                          {
+                            key: 'rating-analytics',
+                            label: 'Rating Analytics',
+                            icon: <LayoutGrid size={14} className="text-purple-500" />,
+                            onClick: () => setShowAllRatingHistory(true)
+                          }
+                        ]
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'bulk-grp',
+                        type: 'group',
+                        label: (
+                          <div className="d-flex justify-content-between align-items-center w-100">
+                            <span>BULK ACTIONS</span>
+                            {selectedIds.size === 0 && <Tag style={{ fontSize: '9px', borderRadius: '4px' }}>SELECT ROWS</Tag>}
+                          </div>
+                        ),
+                        children: [
+                          {
+                            key: 'mark-dispute',
+                            label: 'Mark as Price Dispute',
+                            icon: <AlertTriangle size={14} className="text-amber-500" />,
+                            disabled: selectedIds.size === 0,
+                            onClick: () => handleBulkPriceDispute(true)
+                          },
+                          {
+                            key: 'resolve-dispute',
+                            label: 'Resolve Dispute',
+                            icon: <RefreshCw size={14} className="text-emerald-500" />,
+                            disabled: selectedIds.size === 0,
+                            onClick: () => handleBulkPriceDispute(false)
+                          },
+                          {
+                            key: 'run-rulesets',
+                            label: 'Run Rulesets on Selected',
+                            icon: <PlayCircle size={14} className="text-indigo-500" />,
+                            disabled: selectedIds.size === 0,
+                            onClick: handleRunRulesets
+                          },
+                          {
+                            key: 'create-task',
+                            label: 'Create Task for Selected',
+                            icon: <PlusCircle size={14} className="text-emerald-500" />,
+                            disabled: selectedIds.size === 0,
+                            onClick: handleOpenTaskModal
+                          }
+                        ]
+                      }
+                    ]
+                  }}
                   trigger={['click']}
-                  placement="bottomLeft"
-                  popupRender={() => (
-                    <div className="bg-white shadow-xl rounded-3 border py-2" style={{ minWidth: '220px', zIndex: 1000 }}>
-                      <div className="px-3 py-2 border-bottom mb-1">
-                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Filters</span>
-                      </div>
-                      <button
-                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
-                          setAppliedFilters(newFilters);
-                          setFilters(newFilters);
-                          setShowActionsDropdown(false);
-                        }}
-                        style={{ fontSize: '12px', fontWeight: 500 }}
-                      >
-                        <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />
-                        {appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only'}
-                      </button>
-                      <button
-                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
-                          setAppliedFilters(newFilters);
-                          setFilters(newFilters);
-                          setShowActionsDropdown(false);
-                        }}
-                        style={{ fontSize: '12px', fontWeight: 500 }}
-                      >
-                        <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />
-                        {appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR'}
-                      </button>
-                      <button
-                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
-                          setAppliedFilters(newFilters);
-                          setFilters(newFilters);
-                          setShowActionsDropdown(false);
-                        }}
-                        style={{ fontSize: '12px', fontWeight: 500 }}
-                      >
-                        <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />
-                        {appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings'}
-                      </button>
-
-                      <div className="px-3 py-2 border-top border-bottom my-1">
-                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Quick Views</span>
-                      </div>
-                      <button
-                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          setShowAllBsrHistory(true);
-                          setShowActionsDropdown(false);
-                        }}
-                        style={{ fontSize: '12px', fontWeight: 500 }}
-                      >
-                        <BarChart2 size={14} className="text-indigo-500" />
-                        BSR Ranking Matrix
-                      </button>
-                      <button
-                        className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          setShowAllRatingHistory(true);
-                          setShowActionsDropdown(false);
-                        }}
-                        style={{ fontSize: '12px', fontWeight: 500 }}
-                      >
-                        <LayoutGrid size={14} className="text-purple-500" />
-                        Rating Analytics
-                      </button>
-
-                      <div className="px-3 py-2 border-top border-bottom my-1 d-flex justify-content-between align-items-center" style={{ background: '#fbfbfb' }}>
-                        <span className="text-zinc-400 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Bulk Actions</span>
-                        {selectedIds.size === 0 && <span className="badge border border-zinc-200 text-zinc-500" style={{ fontSize: '7px', padding: '2px 4px' }}>SELECT ROWS</span>}
-                      </div>
-                      <div style={{ opacity: selectedIds.size === 0 ? 0.6 : 1, pointerEvents: selectedIds.size === 0 ? 'none' : 'auto' }}>
-                        <button
-                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                          onClick={() => { handleBulkPriceDispute(true); setShowActionsDropdown(false); }}
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                        >
-                          <AlertTriangle size={14} className="text-amber-500" />
-                          Mark as Price Dispute
-                        </button>
-                        <button
-                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                          onClick={() => { handleBulkPriceDispute(false); setShowActionsDropdown(false); }}
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                        >
-                          <RefreshCw size={14} className="text-emerald-500" />
-                          Resolve Dispute
-                        </button>
-                        <button
-                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                          onClick={() => { handleRunRulesets(); setShowActionsDropdown(false); }}
-                          style={{ fontSize: '12px', fontWeight: 500, borderTop: '1px solid #f4f4f5' }}
-                        >
-                          <PlayCircle size={14} className="text-indigo-500" />
-                          Run Rulesets on Selected
-                        </button>
-                        <button
-                          className="dropdown-item px-3 py-2 d-flex align-items-center gap-2 text-zinc-700 hover-bg-zinc-50 border-0 bg-transparent w-100 text-start"
-                          onClick={() => { handleOpenTaskModal(); setShowActionsDropdown(false); }}
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                        >
-                          <PlusCircle size={14} className="text-emerald-500" />
-                          Create Task for Selected
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  placement="bottomRight"
                 >
-                  <button
-                    className={`btn btn-white border px-3 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'text-indigo-600' : 'text-dark'}`}
-                    style={{ fontSize: '11px', height: '32px', background: '#ffffff' }}
+                  <Button
+                    icon={<MoreVertical size={14} />}
+                    className={`d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'border-indigo-500 text-indigo-600' : ''}`}
+                    style={{
+                      height: '32px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      borderRadius: '8px'
+                    }}
                   >
-                    <SlidersHorizontal size={13} />
-                    <span>Actions {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}</span>
-                    <ChevronDown size={11} className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`} />
-                  </button>
+                    Actions
+                  </Button>
                 </Dropdown>
 
                 {/* Scrape Progress */}
@@ -2536,41 +2534,58 @@ const AsinManagerPage = () => {
             </div>
 
             <div className="asin-toolbar-right">
-              <button
-                className="btn btn-white border d-flex align-items-center gap-2 px-3 shadow-sm fw-bold rounded-3"
+              <Button
+                icon={<RefreshCw size={14} className={syncing ? 'spin' : ''} />}
                 onClick={handleBulkScrape}
                 disabled={syncing}
-                style={{ fontSize: '11px', height: '32px' }}
+                style={{
+                  height: '32px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '8px'
+                }}
+                className="d-flex align-items-center gap-2 shadow-sm"
               >
-                <RefreshCw size={12} className={`text-secondary ${syncing ? 'spin' : ''}`} />
-                <span>Sync</span>
-              </button>
+                Sync
+              </Button>
 
               {/* FILTERS Button */}
-              <button
+              <Button
                 onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                className={`btn d-flex align-items-center gap-2 fw-bold rounded-3 px-3 shadow-sm border ${filterPanelOpen ? 'btn-dark' : 'btn-white'}`}
-                style={{ fontSize: '11px', height: '32px' }}
+                type={filterPanelOpen ? 'primary' : 'default'}
+                icon={<ListChecks size={14} />}
+                style={{
+                  height: '32px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '8px'
+                }}
+                className="d-flex align-items-center gap-2 shadow-sm"
               >
-                <ListChecks size={14} />
                 {(() => {
                   const count = Object.values(appliedFilters).filter(v =>
                     v !== '' && (!Array.isArray(v) || v.length > 0)
                   ).length;
-                  return <>Filters {count > 0 && `(${count})`}</>;
+                  return `Filters ${count > 0 ? `(${count})` : ''}`;
                 })()}
-              </button>
+              </Button>
 
               {/* ✅ COLUMNS Button */}
               <div className="position-relative">
-                <button
+                <Button
                   onClick={() => setShowColumnPanel(!showColumnPanel)}
-                  className={`btn d-flex align-items-center gap-2 fw-bold rounded-3 px-3 shadow-sm border ${showColumnPanel ? 'btn-dark' : 'btn-white'}`}
-                  style={{ fontSize: '11px', height: '32px' }}
+                  type={showColumnPanel ? 'primary' : 'default'}
+                  icon={<LayoutGrid size={14} />}
+                  style={{
+                    height: '32px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '8px'
+                  }}
+                  className="d-flex align-items-center gap-2 shadow-sm"
                 >
-                  <LayoutGrid size={14} />
-                  <span>Columns</span>
-                </button>
+                  Columns
+                </Button>
 
                 <ColumnVisibilityPanel
                   isOpen={showColumnPanel}
@@ -2591,47 +2606,47 @@ const AsinManagerPage = () => {
 
               <div className="d-flex align-items-center gap-1">
                 {hasPermission('asinmanager_manage') && (
-                  <button
-                    onClick={handleBulkCreateActions}
-                    disabled={asins.length === 0 || syncing}
-                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
-                    style={{ width: '32px', height: '32px' }}
-                    title="Bulk Optimization"
-                  >
-                    <Zap size={14} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />
-                  </button>
+                  <Tooltip title="Bulk Optimization">
+                    <Button
+                      onClick={handleBulkCreateActions}
+                      disabled={asins.length === 0 || syncing}
+                      icon={<Zap size={14} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+                      className="d-flex align-items-center justify-content-center shadow-sm"
+                    />
+                  </Tooltip>
                 )}
 
                 {hasPermission('asinmanager_export') && (
-                  <button
-                    onClick={() => setShowExportModal(true)}
-                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
-                    style={{ width: '32px', height: '32px' }}
-                    title="Export"
-                  >
-                    <Download size={14} className="text-indigo-500" />
-                  </button>
+                  <Tooltip title="Export">
+                    <Button
+                      onClick={() => setShowExportModal(true)}
+                      icon={<Download size={14} className="text-indigo-500" />}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+                      className="d-flex align-items-center justify-content-center shadow-sm"
+                    />
+                  </Tooltip>
                 )}
 
                 {hasPermission('asinmanager_import') && (
-                  <button
-                    onClick={() => setShowBulkImportModal(true)}
-                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm"
-                    style={{ width: '32px', height: '32px' }}
-                    title="Import"
-                  >
-                    <FileUp size={14} className="text-emerald-600" />
-                  </button>
+                  <Tooltip title="Import">
+                    <Button
+                      onClick={() => setShowBulkImportModal(true)}
+                      icon={<FileUp size={14} className="text-emerald-600" />}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+                      className="d-flex align-items-center justify-content-center shadow-sm"
+                    />
+                  </Tooltip>
                 )}
                 {hasPermission('asinmanager_manage') && (
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="btn btn-white border d-flex align-items-center justify-content-center rounded-3 p-0 shadow-sm ms-1"
-                    style={{ width: '32px', height: '32px' }}
-                    title="Add ASIN"
-                  >
-                    <Plus size={14} className="text-indigo-600" />
-                  </button>
+                  <Tooltip title="Add ASIN">
+                    <Button
+                      onClick={() => setShowAddModal(true)}
+                      icon={<Plus size={14} className="text-indigo-600" />}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
+                      className="d-flex align-items-center justify-content-center shadow-sm ms-1"
+                    />
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -2653,7 +2668,7 @@ const AsinManagerPage = () => {
                   onClick={() => setShowBulkTagsModal(true)}
                   style={{ fontSize: '11px' }}
                 >
-                  <Tag size={12} /> Tag
+                  <TagIcon size={12} /> Tag
                 </button>
                 <button
                   className="btn btn-sm btn-white border border-indigo-100 shadow-sm text-indigo-700 fw-bold rounded-2 d-flex align-items-center gap-1.5"
@@ -2917,6 +2932,19 @@ const AsinManagerPage = () => {
                     </th>
                   )}
                   {isVisible('aplusDays') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#fdf2f8', color: '#db2777', borderBottom: '2px solid #fbcfe8' }}>A+ DAYS</th>}
+                  <th rowSpan={2} style={{
+                    ...thStyle,
+                    width: '60px',
+                    textAlign: 'center',
+                    background: '#f8fafc',
+                    position: 'sticky',
+                    right: 0,
+                    zIndex: 25,
+                    borderLeft: '1px solid #e5e7eb',
+                    borderBottom: '2px solid #e2e8f0'
+                  }}>
+                    ACTIONS
+                  </th>
                 </tr>
                 <tr>
                   {isVisible('titleScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>}
@@ -3896,6 +3924,70 @@ const AsinManagerPage = () => {
                             : '-'}
                         </td>
                       )}
+                      {/* ===== ROW ACTIONS ===== */}
+                      <td style={{
+                        ...tdStyle,
+                        width: '60px',
+                        textAlign: 'center',
+                        position: 'sticky',
+                        right: 0,
+                        background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                        zIndex: 6,
+                        borderLeft: '1px solid #e5e7eb',
+                        padding: '4px'
+                      }}>
+                        <Dropdown
+                          menu={{
+                            items: [
+                              {
+                                key: 'view',
+                                label: 'View Details',
+                                icon: <Eye size={14} className="text-blue-500" />,
+                                onClick: () => handleViewAsin(asin)
+                              },
+                              {
+                                key: 'sync',
+                                label: 'Sync Marketplace',
+                                icon: <RefreshCw size={14} className="text-emerald-500" />,
+                                onClick: () => handleSyncAsin(asin._id)
+                              },
+                              {
+                                key: 'edit',
+                                label: 'Edit ASIN',
+                                icon: <Edit3 size={14} className="text-amber-500" />,
+                                onClick: () => {
+                                  setEditingAsin(asin);
+                                  setShowEditModal(true);
+                                }
+                              },
+                              {
+                                key: 'toggle',
+                                label: asin.status === 'Active' ? 'Deactivate' : 'Activate',
+                                icon: asin.status === 'Active' ? <PauseCircle size={14} className="text-zinc-500" /> : <PlayCircle size={14} className="text-emerald-500" />,
+                                onClick: () => handleToggleAsinStatus(asin._id, asin.status)
+                              },
+                              isAdmin ? { type: 'divider' } : null,
+                              isAdmin ? {
+                                key: 'delete',
+                                label: 'Delete ASIN',
+                                icon: <Trash2 size={14} className="text-rose-500" />,
+                                danger: true,
+                                onClick: () => handleDeleteAsin(asin._id)
+                              } : null
+                            ].filter(Boolean)
+                          }}
+                          trigger={['click']}
+                          placement="bottomRight"
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<MoreHorizontal size={16} color="#71717a" />}
+                            className="hover-bg-zinc-100 rounded-circle"
+                            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          />
+                        </Dropdown>
+                      </td>
                     </tr>
                   )))}
               </tbody>
@@ -3964,155 +4056,204 @@ const AsinManagerPage = () => {
           )}
         </Suspense>
 
-        {showAddModal && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)'
-          }}>
-            <div style={{ width: 450, background: '#fff', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between' }}>
-                <h5 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Add New ASINs</h5>
-                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowAddModal(false)} />
-              </div>
-              <div style={{ padding: 20 }}>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>ASIN LIST (COMMA SEPARATED)</label>
-                  <textarea value={newAsin} onChange={(e) => setNewAsin(e.target.value)}
-                    placeholder="B0XXXXXXX, B0YYYYYYY"
-                    style={{ width: '100%', padding: 12, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, height: 80 }} />
-                </div>
-                <div>
-                  <InfiniteScrollSelect
-                    fetchData={fetchSellerDropdownData}
-                    value={selectedSellerId}
-                    onSelect={setSelectedSellerId}
-                    placeholder="Select Seller..."
-                  />
-                </div>
-              </div>
-              <div style={{ padding: '12px 20px', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button onClick={() => setShowAddModal(false)}
-                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff' }}>
-                  Cancel
-                </button>
-                <button onClick={handleSync} disabled={syncing}
-                  style={{ padding: '6px 20px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff' }}>
-                  {syncing ? 'Adding...' : 'Add ASINs'}
-                </button>
-              </div>
+        {/* MODERNIZED ADD ASIN MODAL */}
+        <Modal
+          title={
+            <div className="d-flex align-items-center gap-2">
+              <PlusCircle size={18} className="text-primary" />
+              <span style={{ fontWeight: 700 }}>Add New ASINs</span>
             </div>
+          }
+          open={showAddModal}
+          onCancel={() => setShowAddModal(false)}
+          footer={[
+            <Button key="cancel" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>,
+            <Button
+              key="submit"
+              type="primary"
+              loading={syncing}
+              onClick={handleSync}
+              style={{ fontWeight: 700 }}
+            >
+              {syncing ? 'Adding...' : 'Add ASINs'}
+            </Button>
+          ]}
+          width={480}
+          centered
+          styles={{
+            header: { borderBottom: '1px solid #f0f0f0', paddingBottom: 12 },
+            footer: { borderTop: '1px solid #f0f0f0', paddingTop: 12 }
+          }}
+        >
+          <div className="py-2">
+            <Form layout="vertical">
+              <Form.Item
+                label={<span className="fw-bold text-zinc-600" style={{ fontSize: '11px' }}>ASIN LIST (COMMA SEPARATED)</span>}
+              >
+                <Input.TextArea
+                  value={newAsin}
+                  onChange={(e) => setNewAsin(e.target.value)}
+                  placeholder="B0XXXXXXX, B0YYYYYYY"
+                  rows={4}
+                  style={{ borderRadius: '8px' }}
+                />
+              </Form.Item>
+              <Form.Item
+                label={<span className="fw-bold text-zinc-600" style={{ fontSize: '11px' }}>SELECT SELLER</span>}
+              >
+                <InfiniteScrollSelect
+                  fetchData={fetchSellerDropdownData}
+                  value={selectedSellerId}
+                  onSelect={setSelectedSellerId}
+                  placeholder="Select Seller..."
+                />
+              </Form.Item>
+            </Form>
           </div>
-        )}
+        </Modal>
 
-        {showManualTaskModal && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
-          }}>
-            <div style={{ width: 500, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-              <div style={{ padding: '18px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
-                <div>
-                  <h5 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#18181b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <PlusCircle size={18} className="text-emerald-500" />
-                    Create Task for Selected ASINs
-                  </h5>
-                  <p style={{ margin: '4px 0 0 0', fontSize: 11, color: '#71717a', fontWeight: 500 }}>
-                    Assigning a custom task category-wise for {selectedIds.size} selected ASIN(s)
-                  </p>
-                </div>
-                <X size={20} style={{ cursor: 'pointer', color: '#9ca3af' }} onClick={() => setShowManualTaskModal(false)} />
+        {/* MODERNIZED MANUAL TASK MODAL */}
+        <Modal
+          title={
+            <div>
+              <div className="d-flex align-items-center gap-2">
+                <PlusCircle size={18} className="text-emerald-500" />
+                <span style={{ fontWeight: 800 }}>Create Task for Selected ASINs</span>
               </div>
-              <div style={{ padding: 24 }}>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Title</label>
-                  <input type="text" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="e.g., Update listing bullet points"
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 500, outline: 'none' }} />
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Description</label>
-                  <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)}
-                    placeholder="Describe the steps or requirements for this task..."
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, height: 90, outline: 'none', resize: 'vertical' }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Priority</label>
-                    <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 600, outline: 'none', background: '#fff' }}>
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                      <option value="CRITICAL">Critical</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#3f3f46', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Category</label>
-                    <select value={taskCategory} onChange={(e) => setTaskCategory(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontWeight: 600, outline: 'none', background: '#fff' }}>
-                      <option value="TITLE_OPTIMIZATION">Title Optimization</option>
-                      <option value="IMAGE_OPTIMIZATION">Image Optimization</option>
-                      <option value="DESCRIPTION_OPTIMIZATION">Description Optimization</option>
-                      <option value="A_PLUS_CONTENT">A+ Content Optimization</option>
-                      <option value="GENERAL_OPTIMIZATION">Listing Quality (LQS)</option>
-                      <option value="GENERAL">Custom General Task</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div style={{ padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                <button onClick={() => setShowManualTaskModal(false)}
-                  style={{ padding: '8px 18px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', transition: 'all 0.2s' }}>
-                  Cancel
-                </button>
-                <button onClick={handleCreateManualTask} disabled={loading}
-                  style={{ padding: '8px 24px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: 'none', background: '#10b981', color: '#fff', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)', transition: 'all 0.2s' }}>
-                  {loading ? 'Creating...' : 'Create Task'}
-                </button>
-              </div>
+              <p className="m-0 mt-1 text-zinc-500 fw-medium" style={{ fontSize: '11px' }}>
+                Assigning a custom task category-wise for {selectedIds.size} selected ASIN(s)
+              </p>
             </div>
+          }
+          open={showManualTaskModal}
+          onCancel={() => setShowManualTaskModal(false)}
+          footer={[
+            <Button key="cancel" onClick={() => setShowManualTaskModal(false)}>
+              Cancel
+            </Button>,
+            <Button
+              key="submit"
+              type="primary"
+              loading={loading}
+              onClick={handleCreateManualTask}
+              style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700 }}
+            >
+              {loading ? 'Creating...' : 'Create Task'}
+            </Button>
+          ]}
+          width={540}
+          centered
+          styles={{
+            header: { borderBottom: '1px solid #f0f0f0', paddingBottom: 16 },
+            footer: { borderTop: '1px solid #f0f0f0', paddingTop: 16 }
+          }}
+        >
+          <div className="py-3">
+            <Form layout="vertical">
+              <Form.Item label={<span className="fw-bold text-zinc-600 text-uppercase tracking-wider" style={{ fontSize: '10px' }}>Task Title</span>}>
+                <Input
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  placeholder="e.g., Update listing bullet points"
+                  style={{ borderRadius: '8px', padding: '8px 12px' }}
+                />
+              </Form.Item>
+              <Form.Item label={<span className="fw-bold text-zinc-600 text-uppercase tracking-wider" style={{ fontSize: '10px' }}>Task Description</span>}>
+                <Input.TextArea
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  placeholder="Describe the steps or requirements for this task..."
+                  rows={3}
+                  style={{ borderRadius: '8px' }}
+                />
+              </Form.Item>
+              <div className="row">
+                <div className="col-md-6">
+                  <Form.Item label={<span className="fw-bold text-zinc-600 text-uppercase tracking-wider" style={{ fontSize: '10px' }}>Priority</span>}>
+                    <Select
+                      value={taskPriority}
+                      onChange={setTaskPriority}
+                      style={{ height: '40px' }}
+                    >
+                      <Select.Option value="LOW">Low</Select.Option>
+                      <Select.Option value="MEDIUM">Medium</Select.Option>
+                      <Select.Option value="HIGH">High</Select.Option>
+                      <Select.Option value="CRITICAL">Critical</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </div>
+                <div className="col-md-6">
+                  <Form.Item label={<span className="fw-bold text-zinc-600 text-uppercase tracking-wider" style={{ fontSize: '10px' }}>Task Category</span>}>
+                    <Select
+                      value={taskCategory}
+                      onChange={setTaskCategory}
+                      style={{ height: '40px' }}
+                    >
+                      <Select.Option value="TITLE_OPTIMIZATION">Title Optimization</Select.Option>
+                      <Select.Option value="IMAGE_OPTIMIZATION">Image Optimization</Select.Option>
+                      <Select.Option value="DESCRIPTION_OPTIMIZATION">Description Optimization</Select.Option>
+                      <Select.Option value="A_PLUS_CONTENT">A+ Content Optimization</Select.Option>
+                      <Select.Option value="GENERAL_OPTIMIZATION">Listing Quality (LQS)</Select.Option>
+                      <Select.Option value="GENERAL">Custom General Task</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </div>
+              </div>
+            </Form>
           </div>
-        )}
+        </Modal>
 
-        {showUploadModal && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)'
-          }}>
-            <div style={{ width: 450, background: '#fff', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between' }}>
-                <h5 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Upload CSV</h5>
-                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowUploadModal(false)} />
-              </div>
-              <div style={{ padding: 20 }}>
-                <div style={{ marginBottom: 16 }}>
-                  <InfiniteScrollSelect
-                    fetchData={fetchSellerDropdownData}
-                    value={selectedSellerId}
-                    onSelect={setSelectedSellerId}
-                    placeholder="Select Seller..."
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>CSV FILE</label>
-                  <input type="file" accept=".csv" onChange={handleCsvUpload}
-                    style={{ width: '100%', fontSize: 12 }} />
-                </div>
-              </div>
-              <div style={{ padding: '12px 20px', background: '#f9fafb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button onClick={() => setShowUploadModal(false)}
-                  style={{ padding: '6px 16px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff' }}>
-                  Cancel
-                </button>
-                <button onClick={() => document.querySelector('input[type="file"]')?.click()}
-                  disabled={uploading || !selectedSellerId}
-                  style={{ padding: '6px 20px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none', background: '#16a34a', color: '#fff' }}>
-                  {uploading ? 'Uploading...' : 'Import CSV'}
-                </button>
-              </div>
+        {/* MODERNIZED UPLOAD MODAL */}
+        <Modal
+          title={
+            <div className="d-flex align-items-center gap-2">
+              <Upload size={18} className="text-emerald-600" />
+              <span style={{ fontWeight: 700 }}>Upload CSV</span>
             </div>
+          }
+          open={showUploadModal}
+          onCancel={() => setShowUploadModal(false)}
+          footer={[
+            <Button key="cancel" onClick={() => setShowUploadModal(false)}>
+              Cancel
+            </Button>,
+            <Button
+              key="submit"
+              type="primary"
+              loading={uploading}
+              disabled={!selectedSellerId}
+              onClick={() => document.querySelector('input[type="file"]')?.click()}
+              style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 700 }}
+            >
+              {uploading ? 'Uploading...' : 'Import CSV'}
+            </Button>
+          ]}
+          width={450}
+          centered
+        >
+          <div className="py-3">
+            <Form layout="vertical">
+              <Form.Item label={<span className="fw-bold text-zinc-600" style={{ fontSize: '11px' }}>SELECT SELLER</span>}>
+                <InfiniteScrollSelect
+                  fetchData={fetchSellerDropdownData}
+                  value={selectedSellerId}
+                  onSelect={setSelectedSellerId}
+                  placeholder="Select Seller..."
+                />
+              </Form.Item>
+              <Form.Item label={<span className="fw-bold text-zinc-600" style={{ fontSize: '11px' }}>CSV FILE</span>}>
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCsvUpload}
+                  style={{ borderRadius: '8px' }}
+                />
+              </Form.Item>
+            </Form>
           </div>
-        )}
+        </Modal>
       </div>
 
       {/* [N] Secondary Modals - Lazy Loaded */}

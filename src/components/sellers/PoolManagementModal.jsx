@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Database, RefreshCw } from 'lucide-react';
+import { Modal, Button, Input, Space, Typography, Card, Statistic, Row, Col, Divider, message, Alert } from 'antd';
+import { Database, RefreshCw, Upload, Search, Activity, Trash2 } from 'lucide-react';
 import { marketSyncApi } from '../../services/api';
-import { useToast } from '../../contexts/ToastContext';
+
+const { TextArea } = Input;
+const { Text, Title } = Typography;
 
 const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
-  const { addToast } = useToast();
   const [taskIdsText, setTaskIdsText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleUpload = async () => {
     const ids = taskIdsText.split(/[\n,]+/).map(id => id.trim()).filter(id => id.length > 0);
@@ -16,90 +19,145 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
     try {
       const response = await marketSyncApi.uploadPoolTasks(ids);
       if (response.success) {
-        addToast({
-          title: 'Success',
-          message: response.message,
-          type: 'success'
-        });
+        message.success(`Successfully added ${response.added} tasks to pool.`);
         setTaskIdsText('');
         onRefresh();
       }
     } catch (error) {
-      addToast({
-        title: 'Upload Failed',
-        message: error.message,
-        type: 'error'
-      });
+      message.error(error.message || 'Failed to upload tasks');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}>
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content border-0 shadow-lg rounded-4">
-          <div className="modal-header border-0 p-4 pb-0">
-            <h5 className="fw-bold mb-0 text-zinc-900 d-flex align-items-center gap-2">
-              <div className="p-2 bg-zinc-100 rounded-3 border border-zinc-200">
-                <Database size={20} className="text-zinc-600" />
-              </div>
-              Octoparse Task Pool
-            </h5>
-            <button type="button" className="btn-close" onClick={onClose}></button>
-          </div>
-          <div className="modal-body p-4">
-            <div className="row g-3 mb-4">
-              <div className="col-4">
-                <div className="bg-zinc-50 p-3 rounded-3 border border-zinc-100 text-center">
-                  <div className="smallest text-zinc-400 fw-bold uppercase mb-1">Total</div>
-                  <div className="h4 fw-bold mb-0">{stats.total}</div>
-                </div>
-              </div>
-              <div className="col-4">
-                <div className="bg-success-subtle p-3 rounded-3 border border-success-subtle text-center">
-                  <div className="smallest text-success-emphasis fw-bold uppercase mb-1">Available</div>
-                  <div className="h4 fw-bold mb-0 text-success">{stats.available}</div>
-                </div>
-              </div>
-              <div className="col-4">
-                <div className="bg-zinc-100 p-3 rounded-3 border border-zinc-200 text-center">
-                  <div className="smallest text-zinc-500 fw-bold uppercase mb-1">Assigned</div>
-                  <div className="h4 fw-bold mb-0">{stats.assigned}</div>
-                </div>
-              </div>
-            </div>
+  const handleFullSync = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await marketSyncApi.syncTaskPool();
+      if (response.success) {
+        message.success(response.message || 'Successfully synchronized task pool with Octoparse.');
+        onRefresh();
+      }
+    } catch (error) {
+      message.error(error.message || 'Sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
-            <div className="mb-3">
-              <label className="form-label smallest fw-bold text-muted text-uppercase mb-2">Import New Task IDs</label>
-              <textarea
-                className="form-control form-control-sm border-zinc-200 font-monospace"
-                rows="8"
-                placeholder="c6ebbaff-448f-3c6d-92d2-5caa10ea5db5&#10;74be0547-1adc-4c46-a31d-011d759d672d..."
-                value={taskIdsText}
-                onChange={(e) => setTaskIdsText(e.target.value)}
-                style={{ fontSize: '11px' }}
-              ></textarea>
-              <div className="form-text smallest text-muted mt-2">
-                Paste one or more Octoparse Task IDs (one per line). These will be stored in the pool and automatically allocated to sellers when you click the magic wand.
-              </div>
-            </div>
+  return (
+    <Modal
+      title={
+        <Space>
+          <div style={{ 
+            padding: '8px', 
+            background: '#f8fafc', 
+            borderRadius: '8px', 
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Database size={18} className="text-indigo-600" />
           </div>
-          <div className="modal-footer border-0 p-4 pt-0 gap-2">
-            <button className="btn btn-white fw-bold px-4 border border-zinc-200 rounded-pill" onClick={onClose}>Close</button>
-            <button
-              className="btn btn-zinc-900 fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2"
-              onClick={handleUpload}
-              disabled={isSubmitting || !taskIdsText.trim()}
-              style={{ backgroundColor: '#18181B', color: '#fff' }}
-            >
-              {isSubmitting ? <RefreshCw size={16} className="spin" /> : <Database size={16} />}
-              <span>{isSubmitting ? 'Importing Tasks' : 'Register to Pool'}</span>
-            </button>
+          <Text strong style={{ fontSize: '16px' }}>Octoparse Task Pool Management</Text>
+        </Space>
+      }
+      open={true}
+      onCancel={onClose}
+      footer={[
+        <Button key="close" onClick={onClose} shape="round">
+          Close
+        </Button>,
+        <Button 
+          key="sync" 
+          icon={<RefreshCw size={14} className={isSyncing ? 'spin' : ''} />} 
+          onClick={handleFullSync}
+          loading={isSyncing}
+          shape="round"
+          style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}
+        >
+          Sync from Octoparse
+        </Button>,
+        <Button 
+          key="submit" 
+          type="primary" 
+          icon={<Upload size={14} />} 
+          onClick={handleUpload}
+          loading={isSubmitting}
+          disabled={!taskIdsText.trim()}
+          shape="round"
+          style={{ background: '#18181b', borderColor: '#18181b' }}
+        >
+          Register to Pool
+        </Button>
+      ]}
+      width={600}
+      className="modern-modal"
+    >
+      <div style={{ padding: '8px 0' }}>
+        <Row gutter={16} style={{ marginBottom: '24px' }}>
+          <Col span={8}>
+            <Card bordered={false} style={{ background: '#f8fafc', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+              <Statistic 
+                title={<Text strong style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase' }}>Total Tasks</Text>} 
+                value={stats.total} 
+                valueStyle={{ fontWeight: 800, color: '#1e293b' }}
+              />
+            </Card>
+          </Col>
+          <Col span={8}>
+            <Card bordered={false} style={{ background: '#f0fdf4', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+              <Statistic 
+                title={<Text strong style={{ fontSize: '10px', color: '#166534', textTransform: 'uppercase' }}>Available</Text>} 
+                value={stats.available} 
+                valueStyle={{ fontWeight: 800, color: '#15803d' }}
+              />
+            </Card>
+          </Col>
+          <Col span={8}>
+            <Card bordered={false} style={{ background: '#eff6ff', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+              <Statistic 
+                title={<Text strong style={{ fontSize: '10px', color: '#1e40af', textTransform: 'uppercase' }}>Assigned</Text>} 
+                value={stats.assigned} 
+                valueStyle={{ fontWeight: 800, color: '#2563eb' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        <Alert
+          message="Dynamic Task Discovery"
+          description="Click 'Sync from Octoparse' to automatically fetch and update all task names, groups, and IDs from your Octoparse account. This will populate the local database for automated allocation."
+          type="info"
+          showIcon
+          icon={<Activity size={18} />}
+          style={{ marginBottom: '20px', borderRadius: '12px' }}
+        />
+
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <Text strong style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase' }}>Manual Import Task IDs</Text>
+            <Text style={{ fontSize: '10px', color: '#94a3b8' }}>Supports multi-line paste</Text>
           </div>
+          <TextArea
+            rows={6}
+            placeholder="e.g.&#10;c6ebbaff-448f-3c6d-92d2-5caa10ea5db5&#10;74be0547-1adc-4c46-a31d-011d759d672d"
+            value={taskIdsText}
+            onChange={(e) => setTaskIdsText(e.target.value)}
+            style={{ 
+              borderRadius: '12px', 
+              fontSize: '11px', 
+              fontFamily: 'monospace',
+              border: '1px solid #e2e8f0'
+            }}
+          />
+          <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: '8px' }}>
+            Allocated tasks are automatically linked to new sellers during setup.
+          </Text>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

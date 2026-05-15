@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Store, X, LayoutGrid, Globe, Key, Users } from 'lucide-react';
+import { Store, LayoutGrid, Globe, Key, Users } from 'lucide-react';
 import { userApi } from '../../services/api';
-import { TagPicker } from 'rsuite';
+import { Modal, Form, Input, Select, Button, Space, Typography } from 'antd';
 import { useAuth } from '../../contexts/AuthContext';
+
+const { Text, Title } = Typography;
 
 const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData }) => {
   const { hasPermission } = useAuth();
@@ -28,6 +30,7 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
   });
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
 
   useEffect(() => {
     userApi.getManagers()
@@ -38,131 +41,143 @@ const AddSellerModal = ({ onClose, onSave, isAdmin, isGlobalUser, initialData })
       .catch(() => setManagers([]));
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      await onSave(formData);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (initialData) {
+      form.setFieldsValue(formData);
     }
-  };
+  }, [initialData, form]);
 
   const managerOptions = Array.isArray(managers) ? managers.map(m => ({
     label: `${m.firstName || ''} ${m.lastName || ''} (${m.email || ''})`,
     value: m._id
   })) : [];
 
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+      await onSave({ ...formData, ...values });
+    } catch (error) {
+      console.error('Validation failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(9, 9, 11, 0.6)', backdropFilter: 'blur(12px)', zIndex: 1070 }}>
-      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '520px' }}>
-        <div className="modal-content border border-zinc-200 shadow-2xl" style={{ borderRadius: '16px', background: '#fff' }}>
-          <div className="modal-header border-0 px-4 pt-4 pb-0 d-flex align-items-center justify-content-between">
-            <h5 className="modal-title d-flex align-items-center gap-2 text-zinc-900 fw-bold" style={{ fontSize: '15px' }}>
-              <div className="p-1.5 bg-zinc-900 text-white rounded-2 shadow-sm">
-                <Store size={18} strokeWidth={2.5} />
-              </div>
-              {initialData ? 'Edit Seller Details' : 'Configure New Store'}
-            </h5>
-            <button type="button" className="btn-white-icon border-0 shadow-none" onClick={onClose}>
-              <X size={18} />
-            </button>
+    <Modal
+      open={true}
+      onCancel={onClose}
+      footer={[
+        <Button key="back" onClick={onClose} disabled={loading} style={{ borderRadius: 8, fontWeight: 600 }}>
+          Dismiss
+        </Button>,
+        <Button 
+          key="submit" 
+          type="primary" 
+          loading={loading} 
+          onClick={handleSubmit}
+          style={{ borderRadius: 8, fontWeight: 700, background: '#0f172a', borderColor: '#0f172a' }}
+        >
+          {initialData ? 'Save Changes' : 'Launch Store'}
+        </Button>
+      ]}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+          <div style={{ padding: '8px', background: '#0f172a', color: '#fff', borderRadius: 10, display: 'flex' }}>
+            <Store size={20} strokeWidth={2.5} />
           </div>
-
-          <form onSubmit={handleSubmit}>
-            <div className="modal-body px-4 py-4" style={{ position: 'relative' }}>
-              <div className="mb-4">
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <div className="p-1 bg-zinc-100 rounded text-zinc-500"><LayoutGrid size={12} /></div>
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Brand Name</label>
-                </div>
-                <input
-                  type="text"
-                  className="form-control bg-zinc-50 border-zinc-200 px-3 fw-bold text-zinc-900 shadow-sm focus-border-primary"
-                  placeholder="e.g. RetailOps Storefront"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
-                />
-              </div>
-
-              <div className="row g-3">
-                <div className="col-md-6 mb-3">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Globe size={12} /></div>
-                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">Marketplace</label>
-                  </div>
-                  <select
-                    className="form-select bg-zinc-50 border-zinc-200 px-3 fw-semibold text-zinc-700 shadow-sm"
-                    value={formData.marketplace}
-                    onChange={(e) => setFormData({ ...formData, marketplace: e.target.value })}
-                    style={{ borderRadius: '10px', fontSize: '13px', height: '42px' }}
-                  >
-                    {canAccessAmazon && <option value="amazon.in">Amazon.in</option>}
-                    {canAccessAjio && <option value="ajio">Ajio</option>}
-                    {canAccessMyntra && <option value="myntra">Myntra</option>}
-                  </select>
-                </div>
-                <div className="col-md-6 mb-3">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Key size={12} /></div>
-                    <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">
-                      SELLER ID {(formData.marketplace === 'ajio' || formData.marketplace === 'myntra') && <span className="text-zinc-400 font-normal normal-case ms-1">(Optional)</span>}
-                    </label>
-                  </div>
-                  <input
-                    type="text"
-                    className="form-control bg-zinc-50 border-zinc-200 px-3 font-monospace fw-bold text-primary shadow-sm"
-                    value={formData.sellerId}
-                    onChange={(e) => setFormData({ ...formData, sellerId: e.target.value })}
-                    placeholder={formData.marketplace === 'ajio' || formData.marketplace === 'myntra' ? "Optional for this market" : "Merchant ID"}
-                    required={formData.marketplace === 'amazon.in'}
-                    style={{ borderRadius: '10px', fontSize: '12px', height: '42px' }}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <div className="p-1 bg-zinc-100 rounded text-zinc-500"><Users size={12} /></div>
-                  <label className="form-label smallest fw-bold text-zinc-400 text-uppercase tracking-widest mb-0">BRAND MANAGER</label>
-                </div>
-                <TagPicker
-                  data={managerOptions}
-                  value={formData.assignedUserIds}
-                  onChange={(val) => setFormData({ ...formData, assignedUserIds: val })}
-                  placeholder="— Unassigned (Public Pool) —"
-                  block
-                  className="fw-bold"
-                  placement="bottomStart"
-                  style={{ 
-                    borderRadius: '10px', 
-                    fontSize: '13px',
-                    border: '1px solid #e4e4e7',
-                    backgroundColor: '#fff'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer border-0 px-4 pb-4 pt-1 gap-2">
-              <button type="button" className="btn-prism shadow-none border-0 text-zinc-500" onClick={onClose} disabled={loading}>
-                Dismiss
-              </button>
-              <button
-                type="submit"
-                className="btn-prism btn-prism-primary"
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : initialData ? 'Save Changes' : 'Launch Store'}
-              </button>
-            </div>
-          </form>
+          <Title level={5} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.01em' }}>
+            {initialData ? 'Edit Seller Details' : 'Configure New Store'}
+          </Title>
         </div>
-      </div>
-    </div>
+      }
+      styles={{
+        content: { borderRadius: 16, padding: '24px' },
+        header: { borderBottom: 'none', marginBottom: 24 },
+        footer: { borderTop: 'none', marginTop: 24, padding: '0 4px' }
+      }}
+      width={520}
+      centered
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={formData}
+        onValuesChange={(changedValues) => setFormData(prev => ({ ...prev, ...changedValues }))}
+        requiredMark={false}
+      >
+        <Form.Item
+          name="name"
+          label={
+            <Space size={8} style={{ marginBottom: 4 }}>
+              <LayoutGrid size={14} style={{ color: '#94a3b8' }} />
+              <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>BRAND NAME</Text>
+            </Space>
+          }
+          rules={[{ required: true, message: 'Brand name is required' }]}
+        >
+          <Input 
+            placeholder="e.g. RetailOps Storefront" 
+            style={{ height: 42, borderRadius: 10, fontWeight: 600, fontSize: 13 }}
+          />
+        </Form.Item>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item
+            name="marketplace"
+            label={
+              <Space size={8} style={{ marginBottom: 4 }}>
+                <Globe size={14} style={{ color: '#94a3b8' }} />
+                <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>MARKETPLACE</Text>
+              </Space>
+            }
+          >
+            <Select style={{ height: 42, borderRadius: 10 }}>
+              {canAccessAmazon && <Select.Option value="amazon.in">Amazon.in</Select.Option>}
+              {canAccessAjio && <Select.Option value="ajio">Ajio</Select.Option>}
+              {canAccessMyntra && <Select.Option value="myntra">Myntra</Select.Option>}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="sellerId"
+            label={
+              <Space size={8} style={{ marginBottom: 4 }}>
+                <Key size={14} style={{ color: '#94a3b8' }} />
+                <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>
+                  SELLER ID {(formData.marketplace === 'ajio' || formData.marketplace === 'myntra') && <span style={{ fontWeight: 400, color: '#94a3b8', textTransform: 'none' }}>(Optional)</span>}
+                </Text>
+              </Space>
+            }
+            rules={[{ required: formData.marketplace === 'amazon.in', message: 'Seller ID is required for Amazon' }]}
+          >
+            <Input 
+              placeholder={formData.marketplace === 'amazon.in' ? "Merchant ID" : "Optional"} 
+              style={{ height: 42, borderRadius: 10, fontWeight: 700, fontFamily: 'monospace', color: '#2563eb' }}
+            />
+          </Form.Item>
+        </div>
+
+        <Form.Item
+          name="assignedUserIds"
+          label={
+            <Space size={8} style={{ marginBottom: 4 }}>
+              <Users size={14} style={{ color: '#94a3b8' }} />
+              <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>BRAND MANAGER</Text>
+            </Space>
+          }
+        >
+          <Select
+            mode="multiple"
+            placeholder="— Unassigned (Public Pool) —"
+            style={{ borderRadius: 10 }}
+            options={managerOptions}
+            maxTagCount="responsive"
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 };
 

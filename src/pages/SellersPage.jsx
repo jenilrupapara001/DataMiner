@@ -3,7 +3,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { sellerApi, asinApi, authApi, userApi, marketSyncApi } from '../services/api';
 import {
   Table, Button, Input, Segmented, Select, Space, Tag, Typography, Tooltip, Avatar,
-  Modal, Empty, message, Divider, Badge
+  Modal, Empty, message, Divider, Badge, Card
 } from 'antd';
 import {
   CheckCircle2,
@@ -676,12 +676,13 @@ const SellersPage = () => {
     );
   }, [isBrandManager, handleEditSeller, handleViewAsins, handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission, isGlobalUser]);
 
-  // Column definitions for Ant Design Table (with grouping handled separately)
+  // Column definitions for Ant Design Table
   const columns = useMemo(() => [
     {
-      title: 'Store Details',
+      title: 'STORE DETAILS',
       dataIndex: 'name',
       key: 'name',
+      width: 280,
       render: (_, seller) => {
         if (seller?.isGroupHeader) {
           return (
@@ -730,9 +731,10 @@ const SellersPage = () => {
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
     },
     {
-      title: 'Account Manager',
+      title: 'ACCOUNT MANAGER',
       dataIndex: 'managers',
       key: 'managers',
+      width: 220,
       render: (managers, record) => {
         if (record?.isGroupHeader) return null;
         if (!managers?.length) {
@@ -761,9 +763,10 @@ const SellersPage = () => {
       },
     },
     {
-      title: 'Inventory',
+      title: 'INVENTORY',
       dataIndex: 'totalAsins',
       key: 'totalAsins',
+      width: 140,
       render: (total, seller) => {
         if (seller?.isGroupHeader) return null;
         return (
@@ -802,9 +805,10 @@ const SellersPage = () => {
       },
     },
     {
-      title: 'Last Activity',
+      title: 'LAST ACTIVITY',
       dataIndex: 'lastScraped',
       key: 'lastScraped',
+      width: 150,
       render: (lastScraped, record) => {
         if (record?.isGroupHeader) return null;
         return (
@@ -823,20 +827,22 @@ const SellersPage = () => {
       },
     },
     {
-      title: 'Status',
+      title: 'STATUS',
       dataIndex: 'status',
       key: 'status',
       align: 'center',
+      width: 100,
       render: (status, record) => {
         if (record?.isGroupHeader) return null;
         return getStatusBadge(status);
       },
     },
     {
-      title: 'Actions',
+      title: 'ACTIONS',
       key: 'actions',
       fixed: 'right',
-      width: 160,
+      width: 120,
+      align: 'right',
       render: (_, seller) => {
         if (seller?.isGroupHeader) return null;
         return renderActions(seller);
@@ -1102,53 +1108,72 @@ const SellersPage = () => {
       )}
 
       {/* Primary Data Body */}
-      <div style={{ padding: '16px 24px', flex: 1, background: '#f8fafc' }}>
-        <Table
-          columns={columns}
-          dataSource={groupedDataSource}
-          rowKey="_id"
-          loading={loading}
-          rowSelection={rowSelection}
-          size="middle"
-          pagination={{
-            current: page,
-            pageSize: Math.max(limit, groupedDataSource.length),
-            total: totalResults,
-            showSizeChanger: true,
-            pageSizeOptions: ['25', '50', '100'],
-            onChange: (page, pageSize) => {
-              setPage(page);
-              setLimit(pageSize);
-            },
-            showTotal: (total, range) => (
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                Viewing {range[0]}-{range[1]} of {total} items
-              </Text>
-            ),
-          }}
-          scroll={{ x: 900 }}
-          locale={{
-            emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 12 }}>
-                    No storefront entries match your current query.
-                  </span>
-                }
-              />
-            ),
-          }}
-          onRow={(record) => {
-            if (record.isGroupHeader) {
-              return {
-                style: { background: '#f8fafc', fontWeight: 700 },
-              };
-            }
-            return {};
-          }}
-        />
+      <div style={{ padding: '20px 24px', flex: 1, background: '#fafafa' }}>
+        <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #f0f0f0', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+          <Table
+            columns={columns}
+            dataSource={groupedDataSource}
+            rowKey="_id"
+            loading={loading}
+            rowSelection={rowSelection}
+            size="middle"
+            className="premium-seller-table"
+            pagination={{
+              current: page,
+              pageSize: limit,
+              total: totalResults,
+              showSizeChanger: true,
+              pageSizeOptions: ['25', '50', '100'],
+              onChange: (page, pageSize) => {
+                setPage(page);
+                setLimit(pageSize);
+              },
+              showTotal: (total, range) => (
+                <Text type="secondary" style={{ fontSize: 11, paddingLeft: 16 }}>
+                  Viewing {range[0]}-{range[1]} of {total} items
+                </Text>
+              ),
+            }}
+            scroll={{ x: 1000 }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 12 }}>
+                      No storefront entries match your current query.
+                    </span>
+                  }
+                />
+              ),
+            }}
+            onRow={(record) => {
+              if (record.isGroupHeader) {
+                return {
+                  style: { background: '#f8fafc', fontWeight: 700 },
+                };
+              }
+              return {};
+            }}
+          />
+        </Card>
       </div>
+
+      <style>{`
+        .premium-seller-table .ant-table-thead > tr > th { 
+          background: #fafafa !important; 
+          font-size: 10px !important; 
+          color: #8c8c8c !important; 
+          font-weight: 800 !important; 
+          letter-spacing: 0.1em !important; 
+          padding: 14px 16px !important; 
+          border-bottom: 1px solid #f0f0f0 !important;
+        }
+        .premium-seller-table .ant-table-row:hover > td { background: #fdfdfd !important; }
+        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #f0f0f0 !important; }
+        .premium-seller-table .ant-table-pagination { margin: 16px !important; }
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
 
       <Suspense fallback={null}>
         {showAddModal && (

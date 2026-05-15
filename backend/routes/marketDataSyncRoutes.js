@@ -41,6 +41,7 @@ router.post('/update', authenticate, requirePermission('scraping_manage'), marke
 // Task Pool Management
 router.get('/pool-status', authenticate, requirePermission('scraping_manage'), marketSyncController.getPoolStatus);
 router.post('/pool-tasks', authenticate, requirePermission('scraping_manage'), marketSyncController.uploadTaskPool);
+router.post('/sync-pool', authenticate, requirePermission('scraping_manage'), marketSyncController.syncTaskPool);
 
 // Real-time task status for all sellers
 router.get('/tasks', authenticate, requirePermission('scraping_view'), marketSyncController.getGlobalSyncTasks);

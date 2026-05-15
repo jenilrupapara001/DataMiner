@@ -231,6 +231,18 @@ export const marketSyncApi = {
     return res.json();
   },
 
+  syncTaskPool: async () => {
+    const res = await fetch(`${API_BASE}/market-sync/sync-pool`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to sync task pool');
+    }
+    return res.json();
+  },
+
   ingestAllResults: async () => {
     const res = await fetch(`${API_BASE}/market-sync/ingest-all`, {
       method: 'POST',
