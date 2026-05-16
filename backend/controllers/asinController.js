@@ -1472,11 +1472,11 @@ exports.importFromCsv = async (req, res) => {
         // Robust Header Search
         const keys = Object.keys(jsonData[0]);
         const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-        const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid', 'identifier'];
+        const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid', 'identifier', 'itemcode', 'style'];
         
         if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
           const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-          const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+          const headerIdx = rawRows.slice(0, 30).findIndex(row => 
             Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
           );
           if (headerIdx !== -1) {
@@ -1507,7 +1507,7 @@ exports.importFromCsv = async (req, res) => {
       return undefined;
     };
 
-    const idAliases = ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Identifier', 'asin', 'Asin'];
+    const idAliases = ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Identifier', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code'];
     const skuAliases = ['SKU', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'SkuNumber'];
     const priceAliases = ['MRP', 'mrp', 'List Price', 'Price', 'price', 'ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Selling Price'];
 
@@ -1551,7 +1551,7 @@ exports.importFromCsv = async (req, res) => {
         const mrpRaw = getValue(row, priceAliases);
         const mrp = parseFloat(mrpRaw) || 0;
 
-        if (!identifier || identifier.length < 5) continue;
+        if (!identifier || identifier.length < 3) continue;
 
         const rawStatus = (getValue(row, ['Status', 'ASIN Status', 'State', 'status']) || '').toString().trim();
         let status = 'Active';

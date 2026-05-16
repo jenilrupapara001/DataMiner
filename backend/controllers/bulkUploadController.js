@@ -134,11 +134,11 @@ exports.catalogSync = async (req, res) => {
                 // Robust Header Search
                 const keys = Object.keys(jsonData[0]);
                 const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid'];
+                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid', 'identifier', 'itemcode', 'style'];
                 
                 if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
                     const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                    const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+                    const headerIdx = rawRows.slice(0, 30).findIndex(row => 
                         Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
                     );
                     if (headerIdx !== -1) {
@@ -189,7 +189,7 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref']).toString().trim().toUpperCase();
+                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code']).toString().trim().toUpperCase();
                 const parentAsin = getValue(row, ['Parent ASIN', 'ParentAsin', 'parent_asin', 'Group ID', 'GroupID', 'Parent_Code', 'ParentCode']).toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber']).toString().trim();
                 const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
@@ -250,9 +250,11 @@ exports.catalogSync = async (req, res) => {
 
                 if (!childAsin || !rowSellerId || rowSellerId === 'all') {
                     results.skipped++;
+                    const rowIdx = data.indexOf(row) + 1;
+                    const rowLabel = childAsin || sku || ('Row ' + rowIdx);
                     results.errors.push({ 
-                        asin: childAsin || 'Row ' + (results.total - data.length + data.indexOf(row) + 1), 
-                        reason: !childAsin ? 'Could not find "Article Code Number" or "ASIN" column.' : 'No target seller selected.' 
+                        asin: rowLabel, 
+                        reason: !childAsin ? 'Missing Identifier (Article Code/ASIN/Item Code).' : 'No target seller found for brand.' 
                     });
                     continue;
                 }
@@ -280,14 +282,7 @@ exports.catalogSync = async (req, res) => {
                         mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
                     }
 
-                    await transaction.request()
-                        .input('id', sql.VarChar, existing.Id)
-                        .input('parentAsin', sql.NVarChar, parentAsin || null)
-                        .input('sku', sql.NVarChar, sku || null)
-                        .input('releaseDate', sql.DateTime2, releaseDate)
-                        .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
-                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
-                        .input('brand', sql.NVarChar, brandName || null)
+                        .input('marketplace', sql.NVarChar, rowMarketplace || 'amazon.in')
                         .query(`
                             UPDATE Asins SET 
                                 ParentAsin = CASE WHEN @parentAsin != '' AND @parentAsin IS NOT NULL THEN @parentAsin ELSE ParentAsin END,
@@ -296,7 +291,7 @@ exports.catalogSync = async (req, res) => {
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
                                 Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
-                                Marketplace = CASE WHEN Marketplace IS NULL OR Marketplace = '' THEN (SELECT Marketplace FROM Sellers WHERE Id = @sellerId) ELSE Marketplace END,
+                                Marketplace = @marketplace,
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
@@ -313,9 +308,10 @@ exports.catalogSync = async (req, res) => {
                         .input('tags', sql.NVarChar, JSON.stringify(autoTags))
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .input('brand', sql.NVarChar, brandName || null)
+                        .input('marketplace', sql.NVarChar, rowMarketplace || 'amazon.in')
                         .query(`
                             INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, Marketplace, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, @marketplace, GETDATE(), GETDATE())
                         `);
                     results.created++;
                 }
@@ -395,11 +391,11 @@ exports.ajioBulkImport = async (req, res) => {
                 // Robust Header Search
                 const keys = Object.keys(jsonData[0]);
                 const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid'];
+                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid', 'identifier', 'itemcode', 'style'];
                 
                 if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
                     const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                    const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+                    const headerIdx = rawRows.slice(0, 30).findIndex(row => 
                         Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
                     );
                     if (headerIdx !== -1) {
@@ -434,7 +430,7 @@ exports.ajioBulkImport = async (req, res) => {
         try {
             for (const row of data) {
                 // Robust extraction using expanded aliases
-                const articleCode = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref']).toString().trim().toUpperCase();
+                const articleCode = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code']).toString().trim().toUpperCase();
                 const skuNumber = getValue(row, ['SKU Number', 'SKU', 'Sku', 'sku', 'SKU_Number', 'Seller SKU', 'SkuNumber']).toString().trim();
                 const aspGross = getValue(row, ['ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Price', 'price', 'MRP', 'Selling Price']);
                 
