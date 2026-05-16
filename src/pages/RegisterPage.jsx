@@ -9,8 +9,8 @@ import {
     message
 } from 'antd';
 import { 
-    MailOutlined, 
-    LockOutlined, 
+    Mail, 
+    Lock, 
     User,
     ArrowRight,
     Sparkles,
@@ -96,7 +96,7 @@ const RegisterPage = () => {
                     style={{ marginBottom: 16 }}
                 >
                     <Input 
-                        prefix={<MailOutlined size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Mail size={16} className="text-zinc-400 me-2" />} 
                         placeholder="name@company.com"
                     />
                 </Form.Item>
@@ -111,7 +111,7 @@ const RegisterPage = () => {
                     style={{ marginBottom: 16 }}
                 >
                     <Input.Password 
-                        prefix={<LockOutlined size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Lock size={16} className="text-zinc-400 me-2" />} 
                         placeholder="••••••••"
                     />
                 </Form.Item>
@@ -134,7 +134,7 @@ const RegisterPage = () => {
                     style={{ marginBottom: 24 }}
                 >
                     <Input.Password 
-                        prefix={<LockOutlined size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Lock size={16} className="text-zinc-400 me-2" />} 
                         placeholder="••••••••"
                     />
                 </Form.Item>

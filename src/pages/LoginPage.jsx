@@ -10,8 +10,8 @@ import {
     message
 } from 'antd';
 import { 
-    MailOutlined, 
-    LockOutlined, 
+    Mail, 
+    Lock, 
     ArrowRight,
     LineChart,
     ShieldCheck,
@@ -79,7 +79,7 @@ const LoginPage = () => {
                     style={{ marginBottom: 20 }}
                 >
                     <Input 
-                        prefix={<MailOutlined size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Mail size={16} className="text-zinc-400 me-2" />} 
                         placeholder="admin@retailops.com"
                         autoComplete="email"
                     />
@@ -92,7 +92,7 @@ const LoginPage = () => {
                     style={{ marginBottom: 20 }}
                 >
                     <Input.Password 
-                        prefix={<LockOutlined size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Lock size={16} className="text-zinc-400 me-2" />} 
                         placeholder="••••••••"
                         autoComplete="current-password"
                     />
