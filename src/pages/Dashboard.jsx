@@ -449,7 +449,7 @@ const Dashboard = () => {
           >
             <Row gutter={[12, 12]}>
               <Col span={12}>
-                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} bordered={false}>
+                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} variant="borderless">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                     <Text strong style={{ fontSize: '12px' }}>Node Throughput</Text>
                     <Text type="secondary" style={{ fontSize: '11px' }}>{data.userStats?.completed || 0} / {data.userStats?.total || 0}</Text>
@@ -463,7 +463,7 @@ const Dashboard = () => {
                 </Card>
               </Col>
               <Col span={12}>
-                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} bordered={false}>
+                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} variant="borderless">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                     <Text strong style={{ fontSize: '12px' }}>Network Yield</Text>
                     <Tag color="success" variant="filled" style={{ margin: 0, fontWeight: 800, fontSize: '10px' }}>{data.teamStats?.total ? Math.round((data.teamStats.completed / data.teamStats.total) * 100) : 0}%</Tag>

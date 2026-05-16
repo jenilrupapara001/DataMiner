@@ -431,7 +431,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                           <div className="section-dot" />
                           <Text strong className="section-title">Step 2: Data Fields</Text>
                         </div>
-                        <AntTag color="blue" bordered={false} style={{ borderRadius: '12px', fontSize: '11px', padding: '0 10px' }}>
+                        <AntTag color="blue" variant="filled" style={{ borderRadius: '12px', fontSize: '11px', padding: '0 10px' }}>
                           {selectedFields.length} selected
                         </AntTag>
                       </div>

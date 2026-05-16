@@ -12,6 +12,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const [marketplace, setMarketplace] = useState('amazon'); // 'amazon' | 'ajio'
+    const [allowCreation, setAllowCreation] = useState(true);
 
     useEffect(() => {
         if (isOpen) fetchSellers();
@@ -41,6 +42,11 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
             return;
         }
 
+        if ((activeTab === 'catalog' || activeTab === 'tags' || activeTab === 'octoparse') && !selectedSellerId) {
+            setError('Please select a target seller');
+            return;
+        }
+
         setUploading(true);
         setError(null);
         setResult(null);
@@ -53,6 +59,8 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                 response = await bulkApi.tagsImport(file, selectedSellerId);
             } else if (activeTab === 'global') {
                 response = await asinApi.bulkUploadAllSellers(file);
+            } else if (activeTab === 'octoparse') {
+                response = await bulkApi.octoparseJsonUpload(file, selectedSellerId, allowCreation);
             }
 
             if (response.success) {
@@ -73,6 +81,9 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
         try {
             if (activeTab === 'catalog') {
                 await bulkApi.downloadCatalogTemplate(marketplace);
+            } else if (activeTab === 'octoparse') {
+                // Octoparse JSON doesn't have a template, it's the raw task output
+                alert('Octoparse ingestion uses the raw JSON output from your Octoparse tasks.');
             } else {
                 await asinApi.downloadTagsTemplate(selectedSellerId || undefined);
             }
@@ -94,6 +105,10 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
             global: {
                 ajio: ['Brand Name', 'Jio Code', 'SKU', 'Realeased date', 'Price'],
                 amazon: ['Seller Name', 'ASIN', 'SKU', 'Parent ASIN', 'Release Date', 'Price']
+            },
+            octoparse: {
+                ajio: ['Original_URL', 'Product_ID', 'Price', 'Image_URLs', 'Product_Name'],
+                amazon: ['ASIN', 'Original_URL', 'Sale_Price', 'Main_Image', 'Product_Name']
             }
         };
 
@@ -101,12 +116,19 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
 
         return (
             <div className="bg-blue-50 border border-blue-100 rounded-3 p-3 mb-3" style={{ fontSize: '12px' }}>
-                <span className="fw-bold text-blue-900 d-block mb-2">Required Schema ({marketplace === 'ajio' ? 'Ajio' : 'Amazon'}):</span>
+                <span className="fw-bold text-blue-900 d-block mb-2">
+                    {activeTab === 'octoparse' ? 'Expected JSON Structure (Task Output):' : `Required Schema (${marketplace === 'ajio' ? 'Ajio' : 'Amazon'}):`}
+                </span>
                 <div className="d-flex flex-wrap gap-2">
                     {activeSchema.map(col => (
                         <div key={col} style={{ background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>{col}</div>
                     ))}
                 </div>
+                {activeTab === 'octoparse' && (
+                    <div className="mt-2 text-zinc-500 italic" style={{ fontSize: '10px' }}>
+                        * Platform detection is automatic based on URLs in the JSON.
+                    </div>
+                )}
             </div>
         );
     };
@@ -157,6 +179,13 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                     >
                         Global Upload
                     </button>
+                    <button
+                        className={`flex-grow-1 py-2 border-0 rounded-2 fw-bold transition-all ${activeTab === 'octoparse' ? 'bg-zinc-100 text-zinc-900' : 'bg-transparent text-zinc-400 hover-bg-zinc-50'}`}
+                        onClick={() => { setActiveTab('octoparse'); setFile(null); setResult(null); setError(null); }}
+                        style={{ fontSize: '12px' }}
+                    >
+                        Octoparse JSON
+                    </button>
                 </div>
 
                 <div className="p-4" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
@@ -188,7 +217,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         <div className="mb-3">
                             <label className="fw-bold mb-1 text-zinc-700 d-flex align-items-center gap-1" style={{ fontSize: '12px' }}>
                                 <Store size={14} className="text-zinc-400" /> 
-                                {activeTab === 'catalog' ? 'Target Seller (Fallback)' : 'Filter by Seller'}
+                                {activeTab === 'catalog' ? 'Target Seller (Fallback)' : 'Target Seller'}
                             </label>
                             <select
                                 className="form-select"
@@ -196,13 +225,30 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                                 onChange={(e) => setSelectedSellerId(e.target.value)}
                                 style={{ fontSize: '13px', borderRadius: '8px' }}
                             >
-                                <option value="">
-                                    {activeTab === 'catalog' ? 'Automatic (Mapping from file)' : 'All Sellers'}
-                                </option>
+                                <option value="">Select a seller...</option>
                                 {sellers.map(s => (
                                     <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
                                 ))}
                             </select>
+                        </div>
+                    )}
+
+                    {/* Discovery Toggle for Octoparse */}
+                    {activeTab === 'octoparse' && (
+                        <div className="mb-3 p-3 rounded-3 border bg-zinc-50 d-flex align-items-center justify-content-between">
+                            <div>
+                                <div className="fw-bold text-zinc-900" style={{ fontSize: '13px' }}>Auto-Discovery</div>
+                                <div className="text-zinc-500" style={{ fontSize: '11px' }}>Create new ASINs if not found in database</div>
+                            </div>
+                            <div className="form-check form-switch m-0">
+                                <input 
+                                    className="form-check-input cursor-pointer" 
+                                    type="checkbox" 
+                                    checked={allowCreation}
+                                    onChange={(e) => setAllowCreation(e.target.checked)}
+                                    style={{ width: '36px', height: '18px' }}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -218,7 +264,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                             }}>
                             <input
                                 type="file"
-                                accept=".csv,.xlsx,.xls"
+                                accept={activeTab === 'octoparse' ? ".json" : ".csv,.xlsx,.xls"}
                                 onChange={handleFileChange}
                                 style={{ display: 'none' }}
                                 id="bulk-file-input"
@@ -237,12 +283,13 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                             ) : (
                                 <label htmlFor="bulk-file-input" className="w-100 h-100 cursor-pointer m-0 py-2">
                                     <Upload size={28} className="text-zinc-400 mb-2" />
-                                    <p className="text-zinc-600 mb-0 fw-semibold" style={{ fontSize: '13px' }}>Choose {activeTab} file</p>
-                                    <p className="text-zinc-400 mb-0" style={{ fontSize: '11px' }}>Click or drag file here (CSV, XLSX)</p>
+                                    <p className="text-zinc-600 mb-0 fw-semibold" style={{ fontSize: '13px' }}>Choose {activeTab === 'octoparse' ? 'JSON' : 'Excel/CSV'} file</p>
+                                    <p className="text-zinc-400 mb-0" style={{ fontSize: '11px' }}>Click or drag file here</p>
                                 </label>
                             )}
                         </div>
                     </div>
+
 
                     {/* PROPER SOLID COLOUR BADGES AND ALERTS */}
                     {result && (

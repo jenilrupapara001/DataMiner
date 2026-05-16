@@ -162,7 +162,7 @@ const ColumnVisibilityPanel = ({
           </Space>
         </div>
       }
-      bodyStyle={{ padding: 0, display: 'flex', flexDirection: 'column' }}
+      styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
     >
       <style>{`
         .col-list-item {

@@ -53,11 +53,11 @@ const AsinDetailsModal = ({ asin, onClose }) => {
               <Text strong style={{ fontSize: '16px', color: '#0f172a', fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
                 {asin.asinCode}
               </Text>
-              <Tag color={asin.status === 'Active' ? 'success' : 'default'} bordered={false} style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px' }}>
+              <Tag color={asin.status === 'Active' ? 'success' : 'default'} variant="filled" style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px' }}>
                 {asin.status?.toUpperCase() || 'INACTIVE'}
               </Tag>
               {asin.priceType === 'Deal Price' && (
-                <Tag color="error" bordered={false} style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                <Tag color="error" variant="filled" style={{ borderRadius: '6px', fontWeight: 700, fontSize: '10px', padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                   <Zap size={10} fill="currentColor" /> DEAL
                 </Tag>
               )}
@@ -227,7 +227,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
             {/* Title Block */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <Tag color={asin.titleLength > 150 ? 'success' : 'warning'} bordered={false} style={{ fontWeight: 700, fontSize: '10px', borderRadius: '4px' }}>
+                <Tag color={asin.titleLength > 150 ? 'success' : 'warning'} variant="filled" style={{ fontWeight: 700, fontSize: '10px', borderRadius: '4px' }}>
                   {asin.titleLength || 0} CHARS
                 </Tag>
                 <Button 
@@ -297,7 +297,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {asin.subBSRs.map((rank, idx) => (
-                    <Tag key={idx} bordered={false} style={{ 
+                    <Tag key={idx} variant="filled" style={{ 
                       background: '#f1f5f9', 
                       padding: '2px 8px', 
                       borderRadius: '6px',

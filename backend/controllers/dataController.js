@@ -283,17 +283,96 @@ exports.getSkuReport = async (req, res) => {
 };
 
 /**
- * Get Parent ASIN Report (stub)
+ * Get Parent ASIN Report with aggregated metrics
  */
 exports.getParentAsinReport = async (req, res) => {
-    res.json({ success: true, data: [] });
+    try {
+        const { startDate, endDate, sellerId } = req.query;
+        const pool = await getPool();
+        
+        const request = pool.request();
+        let whereClause = "WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> ''";
+        
+        if (sellerId) {
+            whereClause += " AND a.SellerId = @sellerId";
+            request.input('sellerId', sql.VarChar, sellerId);
+        }
+        
+        if (startDate) {
+            request.input('startDate', sql.Date, startDate);
+        }
+        if (endDate) {
+            request.input('endDate', sql.Date, endDate);
+        }
+
+        // Aggregate metrics by ParentAsin
+        const query = `
+            SELECT 
+                a.ParentAsin as parent_asin,
+                MAX(a.Title) as title,
+                MAX(a.Brand) as brand,
+                COUNT(DISTINCT a.AsinCode) as childCount,
+                SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as total_revenue,
+                CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 
+                     THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) * 100 
+                     ELSE 0 END as acos,
+                CASE WHEN SUM(ISNULL(p.AdSpend, 0)) > 0 
+                     THEN SUM(ISNULL(p.AdSales, 0)) / SUM(ISNULL(p.AdSpend, 0)) 
+                     ELSE 0 END as roas
+            FROM Asins a
+            LEFT JOIN AdsPerformance p ON a.AsinCode = p.Asin 
+                ${startDate ? 'AND p.Date >= @startDate' : ''}
+                ${endDate ? 'AND p.Date <= @endDate' : ''}
+            ${whereClause}
+            GROUP BY a.ParentAsin
+            ORDER BY total_revenue DESC
+        `;
+        
+        const result = await request.query(query);
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('getParentAsinReport error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 };
 
 /**
- * Get Month-wise Report (stub)
+ * Get Month-wise Performance Report
  */
 exports.getMonthWiseReport = async (req, res) => {
-    res.json({ success: true, data: [] });
+    try {
+        const { sellerId, year } = req.query;
+        const pool = await getPool();
+        const request = pool.request();
+        
+        let whereClause = "WHERE 1=1";
+        if (sellerId) {
+            whereClause += " AND a.SellerId = @sellerId";
+            request.input('sellerId', sql.VarChar, sellerId);
+        }
+        
+        const targetYear = year || new Date().getFullYear();
+        request.input('year', sql.Int, targetYear);
+        
+        const query = `
+            SELECT 
+                FORMAT(p.Date, 'MMM yyyy') as month,
+                SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as revenue,
+                SUM(ISNULL(p.AdSpend, 0)) as ad_spend,
+                COUNT(DISTINCT p.Asin) as active_asins
+            FROM AdsPerformance p
+            JOIN Asins a ON p.Asin = a.AsinCode
+            ${whereClause} AND YEAR(p.Date) = @year
+            GROUP BY FORMAT(p.Date, 'MMM yyyy'), MONTH(p.Date)
+            ORDER BY MONTH(p.Date)
+        `;
+        
+        const result = await request.query(query);
+        res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('getMonthWiseReport error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 };
 
 /**

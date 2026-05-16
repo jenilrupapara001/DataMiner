@@ -551,7 +551,7 @@ const UsersPage = () => {
                 
                 return (
                     <Tag 
-                        bordered={false} 
+                        variant="filled" 
                         style={{ 
                             backgroundColor: `${color}12`, 
                             color: color, 
@@ -856,7 +856,7 @@ const UsersPage = () => {
                 
 
                 {/* Primary Controller Strip */}
-                <Card bordered={false} styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
+                <Card variant="borderless" styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                         <Segmented
                             className="segmented-users"
@@ -930,7 +930,7 @@ const UsersPage = () => {
 
                 {/* 3. TAB CONTENT SWITCHING */}
                 {activeTab === 'users' ? (
-                    <Card bordered={false} styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                    <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                         <Table 
                             columns={columns}
                             dataSource={users.map(u => ({ ...u, key: u._id || u.id }))}
@@ -1087,7 +1087,7 @@ const UsersPage = () => {
                 <div style={{ padding: '8px 0', maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 20 }}>
                     
                     {/* Basic Details Block */}
-                    <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                    <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <User size={13} /> Basic Registry Information
                         </div>
@@ -1146,7 +1146,7 @@ const UsersPage = () => {
                     </Card>
 
                     {/* Roles Block */}
-                    <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                    <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <Shield size={13} /> Organization Security Protocol
                         </div>
@@ -1164,7 +1164,7 @@ const UsersPage = () => {
 
                     {/* Supervisors Selection Panel */}
                     {!isBrandManager && (
-                        <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                        <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <UserCheck size={13} className="text-indigo-500" /> Map Direct Supervisors
@@ -1227,7 +1227,7 @@ const UsersPage = () => {
 
                     {/* Listing Team Manager Mapping Panel */}
                     {isListingTeam && (
-                        <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                        <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <UserCheck size={13} className="text-emerald-500" /> Assign Brand Managers
@@ -1292,7 +1292,7 @@ const UsersPage = () => {
                     )}
 
                     {/* Brands Association Grid */}
-                    <Card bordered={false} style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
+                    <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Store size={13} className="text-emerald-500" /> Client Brands Association

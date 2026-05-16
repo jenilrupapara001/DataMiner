@@ -562,8 +562,8 @@ exports.uploadAsinMapping = async (req, res) => {
 
     try {
       for (const row of data) {
-        const parent = findValue(row, ['ParentAsin', 'Parent', 'Parent ASIN']);
-        const child = findValue(row, ['ChildAsin', 'Child', 'Child ASIN', 'ASIN']);
+        const parent = findValue(row, ['ParentAsin', 'Parent', 'Parent ASIN', 'Parent_ASIN', 'ParentASIN', 'Parent_Code', 'ParentCode']);
+        const child = findValue(row, ['ChildAsin', 'Child', 'Child ASIN', 'ASIN', 'asin', 'child_asin', 'asinCode', 'Jio Code', 'jio_code']);
 
         if (!parent || !child) continue;
 

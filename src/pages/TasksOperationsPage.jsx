@@ -339,7 +339,7 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
             {/* Filtering & Controls */}
             <Card 
                 styles={{ body: { padding: '16px' } }} 
-                bordered={false} 
+                variant="borderless" 
                 style={{ marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', borderRadius: '12px' }}
             >
                 <Space size={16} style={{ width: '100%' }}>

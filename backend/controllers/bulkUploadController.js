@@ -22,8 +22,24 @@ const parseFlexibleDate = (val) => {
     
     const str = val.toString().trim();
     if (!str) return null;
-    
-    // 2. Standard ISO Matches (YYYY-MM-DD)
+
+    // 2. Handle DD-MMM-YYYY or MMM-DD-YYYY (e.g. 15-Jan-2025)
+    const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const alphaMatch = str.match(/^(\d{1,2})[-/\s]([a-z]{3,10})[-/\s](\d{2,4})$/i);
+    if (alphaMatch) {
+        const d = parseInt(alphaMatch[1]);
+        const mStr = alphaMatch[2].toLowerCase().substring(0, 3);
+        const yStr = alphaMatch[3];
+        const m = monthNames.indexOf(mStr);
+        if (m !== -1) {
+            let y = parseInt(yStr);
+            if (y < 100) y += (y < 50 ? 2000 : 1900);
+            const dateObj = new Date(y, m, d);
+            if (!isNaN(dateObj.getTime())) return dateObj;
+        }
+    }
+
+    // 3. Standard ISO Matches (YYYY-MM-DD)
     const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (isoMatch) {
         const year = parseInt(isoMatch[1]);
@@ -33,7 +49,7 @@ const parseFlexibleDate = (val) => {
         if (!isNaN(d.getTime())) return d;
     }
     
-    // 3. Generic Delimited Format: DD/MM/YY, MM/DD/YYYY, etc.
+    // 4. Generic Delimited Format: DD/MM/YY, MM/DD/YYYY, etc.
     const match = str.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})/);
     if (match) {
         let part1 = parseInt(match[1]);
@@ -42,11 +58,9 @@ const parseFlexibleDate = (val) => {
         
         let year, month, day;
         
-        // Case A: Year first (e.g., 2023/05/24)
         if (part1 > 31) {
             year = part1; month = part2; day = part3;
         } 
-        // Case B: Year last (Most common: DD/MM/YYYY or MM/DD/YYYY)
         else if (part3 > 31 || match[3].length === 4) {
             year = part3;
             if (part1 > 12) {
@@ -54,11 +68,9 @@ const parseFlexibleDate = (val) => {
             } else if (part2 > 12) {
                 month = part1; day = part2;
             } else {
-                // Ambiguous! Default to Global/Indian preference: DD/MM/YYYY
                 day = part1; month = part2;
             }
         }
-        // Case C: Short year
         else {
             year = part3 < 50 ? 2000 + part3 : 1900 + part3;
             if (part1 > 12) { day = part1; month = part2; }
@@ -150,12 +162,12 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['Child ASIN', 'ASIN', 'asin', 'child_asin', 'asinCode', 'Jio Code', 'jio_code', 'JioCode', 'Jio-code'])
+                const childAsin = getValue(row, ['ASIN', 'Child ASIN', 'asin', 'child_asin', 'asinCode', 'Jio Code', 'jio_code', 'JioCode', 'Jio-code', 'ASIN_Code', 'Product_ID'])
                     .toString().trim().toUpperCase();
-                const parentAsin = getValue(row, ['Parent ASIN', 'parent_asin', 'parentAsin'])
+                const parentAsin = getValue(row, ['PARENT ASIN', 'Parent ASIN', 'parent_asin', 'parentAsin', 'Parent_ASIN', 'ParentASIN', 'Parent_Code', 'ParentCode'])
                     .toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'sku']).toString().trim();
-                const uploadedPrice = parseFloat(getValue(row, ['Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
+                const uploadedPrice = parseFloat(getValue(row, ['PPrice', 'Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
                 const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name']).toString().trim();
 
                 // 1. Resolve Seller ID
@@ -190,7 +202,6 @@ exports.catalogSync = async (req, res) => {
                 // 2. Handle Dates (Fully Dynamic Logic)
                 const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Released Date', 'Realeased date', 'released_date', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
                 let releaseDate = parseFlexibleDate(dateStr);
-                if (!releaseDate) releaseDate = new Date();
 
                 const autoTags = AutoTagService.calculateAgeTags(releaseDate);
 
@@ -204,8 +215,12 @@ exports.catalogSync = async (req, res) => {
 
                 if (existing) {
                     let existingTags = [];
-                    try { existingTags = JSON.parse(existing.tags || '[]'); } catch (e) { }
-                    const mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
+                    try { existingTags = JSON.parse(existing.Tags || '[]'); } catch (e) { }
+                    
+                    let mergedTags = existingTags;
+                    if (releaseDate) {
+                        mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
+                    }
 
                     await transaction.request()
                         .input('id', sql.VarChar, existing.Id)
@@ -219,7 +234,7 @@ exports.catalogSync = async (req, res) => {
                             UPDATE Asins SET 
                                 ParentAsin = CASE WHEN @parentAsin != '' AND @parentAsin IS NOT NULL THEN @parentAsin ELSE ParentAsin END,
                                 Sku = CASE WHEN @sku != '' AND @sku IS NOT NULL THEN @sku ELSE Sku END,
-                                ReleaseDate = @releaseDate,
+                                ReleaseDate = CASE WHEN @releaseDate IS NOT NULL THEN @releaseDate ELSE ReleaseDate END,
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
                                 Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
@@ -408,7 +423,7 @@ exports.tagsImport = async (req, res) => {
  */
 exports.downloadCatalogTemplate = async (req, res) => {
     try {
-        let headers = ['Parent ASIN', 'Child ASIN', 'SKU', 'Release Date', 'Price'];
+        let headers = ['PARENT ASIN', 'ASIN', 'SKU', 'Release Date', 'PPrice'];
         let sampleRow = ['B09XYZ123', 'B0XXX111', 'SKU-001', '2025-01-15', '499.00'];
         let sheetName = 'Catalog Template';
         let filename = 'catalog_template.xlsx';
@@ -442,3 +457,64 @@ exports.downloadCatalogTemplate = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+/**
+ * Handle direct ingestion of Octoparse JSON results file.
+ * POST /api/bulk/octoparse-json
+ */
+exports.octoparseJsonUpload = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+
+        const sellerId = req.body.sellerId;
+        if (!sellerId) {
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
+            return res.status(400).json({ success: false, error: 'Seller ID is required for JSON ingestion' });
+        }
+
+        const allowCreation = req.body.allowCreation === 'true' || req.body.allowCreation === true;
+
+        // 1. Read and parse JSON
+        const filePath = req.file.path;
+        let rawData;
+        try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            rawData = JSON.parse(content);
+        } catch (parseErr) {
+            try { fs.unlinkSync(filePath); } catch (e) { }
+            return res.status(400).json({ success: false, error: 'Invalid JSON file format: ' + parseErr.message });
+        }
+
+        if (!Array.isArray(rawData)) {
+            try { fs.unlinkSync(filePath); } catch (e) { }
+            return res.status(400).json({ success: false, error: 'Expected an array of product objects in the JSON file' });
+        }
+
+        console.log(`🗳️ [BulkUpload] Processing Octoparse JSON: ${req.file.originalname} (${rawData.length} items) for Seller ${sellerId}`);
+
+        // 2. Delegate to marketDataSyncService for robust mapping and chunked processing
+        const service = require('../services/marketDataSyncService');
+        
+        const result = await service.processBatchResults(sellerId, rawData, { allowCreation });
+
+
+        // Cleanup
+        try { fs.unlinkSync(filePath); } catch (e) { }
+
+        res.json({
+            success: true,
+            message: `Successfully processed Octoparse JSON file.`,
+            ...result
+        });
+
+    } catch (error) {
+        console.error('Octoparse JSON Upload Error:', error);
+        if (req.file && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
+        }
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+

@@ -347,7 +347,7 @@ const TemplateManagerPage = () => {
             key: 'category',
             width: 180,
             render: (category) => (
-                <Tag color="purple" bordered={false} style={{ borderRadius: 6, fontWeight: 600, fontSize: 10.5, padding: '1px 8px' }}>
+                <Tag color="purple" variant="filled" style={{ borderRadius: 6, fontWeight: 600, fontSize: 10.5, padding: '1px 8px' }}>
                     {category}
                 </Tag>
             )
@@ -420,12 +420,12 @@ const TemplateManagerPage = () => {
                 return (
                     <Space wrap size={4}>
                         {goals.slice(0, 3).map((g, idx) => (
-                            <Tag key={idx} bordered={false} color="blue" style={{ borderRadius: 6, fontWeight: 600, fontSize: 10 }}>
+                            <Tag key={idx} variant="filled" color="blue" style={{ borderRadius: 6, fontWeight: 600, fontSize: 10 }}>
                                 {String(g.metric || 'GMS').replace('_', ' ')}
                             </Tag>
                         ))}
                         {goals.length > 3 && (
-                            <Tag bordered={false} style={{ borderRadius: 6, fontWeight: 700, fontSize: 10, color: '#64748b', background: '#f1f5f9' }}>
+                            <Tag variant="filled" style={{ borderRadius: 6, fontWeight: 700, fontSize: 10, color: '#64748b', background: '#f1f5f9' }}>
                                 +{goals.length - 3}
                             </Tag>
                         )}
@@ -1117,7 +1117,7 @@ const TemplateManagerPage = () => {
                                         <div style={{ flex: 1 }}>
                                             <h6 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: 12.5 }}>{m.objective}</h6>
                                         </div>
-                                        <Tag color="emerald" bordered={false} style={{ borderRadius: 6, fontWeight: 800, fontSize: 9 }}>AUTOMATED</Tag>
+                                        <Tag color="emerald" variant="filled" style={{ borderRadius: 6, fontWeight: 800, fontSize: 9 }}>AUTOMATED</Tag>
                                     </div>
                                 ))}
                             </div>

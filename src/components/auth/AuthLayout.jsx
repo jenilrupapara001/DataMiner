@@ -85,7 +85,7 @@ const AuthLayout = ({
           style={{ zIndex: 1, width: '100%', maxWidth: 1100 }}
         >
           <Card
-            bordered={false}
+            variant="borderless"
             styles={{ body: { padding: 0 } }}
             style={{
               borderRadius: 24,

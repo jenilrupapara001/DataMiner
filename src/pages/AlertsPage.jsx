@@ -337,12 +337,12 @@ const AlertsPage = () => {
                         { label: 'System Invocations', value: stats.warning, icon: ShieldAlert, color: '#d97706', bgColor: '#fef3c7' }
                     ].map((stat, idx) => (
                         <Col xs={12} md={6} key={idx}>
-                            <Card bordered={false} style={{ 
+                            <Card variant="borderless" style={{ 
                                 borderRadius: 12, 
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06)',
                                 border: '1px solid #e2e8f0',
                                 backgroundColor: '#fff'
-                            }} bodyStyle={{ padding: '20px 24px' }}>
+                            }} styles={{ body: { padding: '20px 24px' } }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                     <div>
                                         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: 4 }}>
@@ -372,13 +372,13 @@ const AlertsPage = () => {
                 </Row>
 
                 {/* Filtering Workspace Panel */}
-                <Card bordered={false} style={{ 
+                <Card variant="borderless" style={{ 
                     borderRadius: 12, 
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)', 
                     border: '1px solid #e2e8f0',
                     backgroundColor: '#ffffff',
                     marginBottom: 16
-                }} bodyStyle={{ padding: '12px 16px' }}>
+                }} styles={{ body: { padding: '12px 16px' } }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                         <Space size="middle" style={{ flexWrap: 'wrap' }}>
                             <Segmented
@@ -418,12 +418,12 @@ const AlertsPage = () => {
 
                 {/* Main Broadcast Stack */}
                 <Spin spinning={loading}>
-                    <Card bordered={false} style={{ 
+                    <Card variant="borderless" style={{ 
                         borderRadius: 12, 
                         border: '1px solid #e2e8f0', 
                         boxShadow: '0 1px 3px rgba(0,0,0,0.02)', 
                         backgroundColor: '#fff' 
-                    }} bodyStyle={{ padding: 0 }}>
+                    }} styles={{ body: { padding: 0 } }}>
                         {displayList.length === 0 ? (
                             <div style={{ padding: '60px 0', textAlign: 'center' }}>
                                 <Empty 

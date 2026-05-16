@@ -307,7 +307,7 @@ const SettingsPage = () => {
                             {/* Octoparse API */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <Cloud size={18} style={{ color: '#3B82F6' }} />
@@ -381,7 +381,7 @@ const SettingsPage = () => {
                             {/* SMTP Gateway */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <Mail size={18} style={{ color: '#ec4899' }} />
@@ -458,7 +458,7 @@ const SettingsPage = () => {
                             {/* Pipeline Automation */}
                             <Card 
                                 className="settings-card glass-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <Clock size={18} style={{ color: '#f59e0b' }} />
@@ -526,7 +526,7 @@ const SettingsPage = () => {
                             {/* Catalog Tuning Rules */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <Sliders size={18} style={{ color: '#8b5cf6' }} />
@@ -582,7 +582,7 @@ const SettingsPage = () => {
                             {/* Notification Subscriptions */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <Bell size={18} style={{ color: '#10B981' }} />
@@ -624,7 +624,7 @@ const SettingsPage = () => {
                             {/* Allocation Details */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <User size={16} />
@@ -664,7 +664,7 @@ const SettingsPage = () => {
                             {/* XPath Guides */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <HelpCircle size={16} />
@@ -705,7 +705,7 @@ const SettingsPage = () => {
                             {/* Platform Support */}
                             <Card 
                                 className="settings-card" 
-                                bordered={false}
+                                variant="borderless"
                                 title={
                                     <div className="settings-card-title">
                                         <HelpCircle size={16} />

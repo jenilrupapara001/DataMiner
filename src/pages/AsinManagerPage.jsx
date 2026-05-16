@@ -1106,19 +1106,6 @@ const AsinManagerPage = () => {
         marketplace: marketplace !== 'all' ? marketplace : undefined
       });
 
-      // 🔍 DEBUG: Log the first ASIN to check allOffers
-      if (asinRes?.asins?.length > 0) {
-        const sample = asinRes.asins[0];
-        console.log('🔍 DEBUG First ASIN:', {
-          asinCode: sample.asinCode,
-          soldBy: sample.soldBy,
-          soldBySec: sample.soldBySec,
-          secondAsp: sample.secondAsp,
-          allOffers: sample.allOffers,
-          allOffersType: typeof sample.allOffers,
-          isArray: Array.isArray(sample.allOffers)
-        });
-      }
 
       setAsins(asinRes?.asins || []);
       setPagination(asinRes?.pagination || { page: 1, limit: limit, total: 0, totalPages: 0 });
@@ -1828,7 +1815,8 @@ const AsinManagerPage = () => {
         placement="right"
         onClose={() => setFilterPanelOpen(false)}
         open={filterPanelOpen}
-        size={window.innerWidth < 576 ? '100%' : 420}
+        width={window.innerWidth < 576 ? '100%' : 420}
+
         styles={{
           header: { background: '#18181b', borderBottom: 'none', padding: '16px 24px' },
           body: { padding: 0, display: 'flex', flexDirection: 'column', background: '#ffffff' }

@@ -2176,6 +2176,9 @@ class MarketDataSyncService {
             const bsrTrend = calculateTrend(currentBSR, uniqueHistory, 'bsr', 0.05, false, true);
             const ratingTrend = calculateTrend(currentRating, uniqueHistory, 'rating', 0.1, true);
 
+            // Extract Parent ASIN if available
+            const parentAsin = this._extractParentAsinFromData(rawData);
+
             const updates = {
                 Title: title,
                 Category: category,
@@ -2246,6 +2249,7 @@ class MarketDataSyncService {
                 AplusPresentSince: aplusPresentSince,
                 AllOffers: JSON.stringify(allOffers),
                 Brand: (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim(),
+                ParentAsin: parentAsin || asin.ParentAsin || null,
                 ScrapeStatus: 'COMPLETED',
                 Status: asin.Status === 'Scraping' ? 'Active' : asin.Status,
                 History: JSON.stringify(uniqueHistory),
@@ -2305,8 +2309,8 @@ class MarketDataSyncService {
                                         UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
                                         WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
                                     ELSE
-                                        INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                        VALUES (SUBSTRING(REPLACE(NEWID(), '-', ''), 1, 20), @asinId, @date, @category, @rank, GETDATE())
+                                        INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                        VALUES (@asinId, @date, @category, @rank, GETDATE())
                                 `);
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
@@ -2359,62 +2363,46 @@ class MarketDataSyncService {
         }
     }
 
-    async processBatchResults(sellerId, rawResults) {
+    async processBatchResults(sellerId, rawResults, options = {}) {
         if (!rawResults || rawResults.length === 0) return 0;
 
-        console.log(`🚀 Memory-safe SQL bulk processing ${rawResults.length} results for seller ${sellerId}...`);
+        const { allowCreation = false } = options;
+        console.log(`🚀 Memory-safe SQL bulk processing ${rawResults.length} results for seller ${sellerId} (Creation: ${allowCreation})...`);
 
         let updatedCount = 0;
+        let createdCount = 0;
         let skippedNoCode = 0;
         let skippedNoMatch = 0;
         const now = new Date();
         const pool = await getPool();
-        const updatedAsinCodes = []; // Track updated ASINs for batch notification
+        const updatedAsinCodes = []; 
 
         const CHUNK_SIZE = 100;
 
         for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
             const chunk = rawResults.slice(chunkStart, chunkStart + CHUNK_SIZE);
-            // console.log(`📦 Processing chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (${chunk.length} items)...`);
 
-            // Extract ASIN codes for this chunk - normalize to uppercase
             const asinCodesToFind = chunk.map(r => this._extractAsinFromData(r))
                 .filter(Boolean)
-                .map(code => code.toUpperCase()); // Normalize to uppercase
+                .map(code => code.toUpperCase());
 
             if (asinCodesToFind.length === 0) {
-                // console.log(`[DEBUG] No ASIN codes found in chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1}`);
                 skippedNoCode += chunk.length;
                 continue;
             }
 
-            // Fetch ASINs for this chunk - use parameterized query for sellerId
             const asinRequest = pool.request();
             asinCodesToFind.forEach((code, i) => asinRequest.input(`code${i}`, code));
             const codeParams = asinCodesToFind.map((_, i) => `@code${i}`).join(', ');
 
-            // FIX: Use parameterized query to prevent SQL injection and ensure proper matching
-            asinRequest.input('sellerId', sellerId.toUpperCase()); // Add sellerId parameter BEFORE query
+            asinRequest.input('sellerId', sellerId.toUpperCase());
             const asinResult = await asinRequest.query(
                 `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
             );
 
-            // console.log(`[DEBUG] Found ${asinResult.recordset.length} ASINs in DB for chunk ${Math.floor(chunkStart / CHUNK_SIZE) + 1} (Seller: ${sellerId})`);
-
-            // Create lookup map with uppercase keys for case-insensitive matching
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
-            // Log which ASIN codes were found vs not found
-            /* 
-            const notFoundCodes = asinCodesToFind.filter(code => !asinMap.has(code));
-            if (notFoundCodes.length > 0) {
-                console.log(`[DEBUG] ASIN codes NOT found in DB:`, notFoundCodes.slice(0, 10));
-                if (notFoundCodes.length > 10) {
-                    console.log(`[DEBUG] ... and ${notFoundCodes.length - 10} more`);
-                }
-            }
-            */
-
+            let processedInChunk = 0;
             for (const rawData of chunk) {
                 const code = this._extractAsinFromData(rawData);
                 if (!code) {
@@ -2426,26 +2414,51 @@ class MarketDataSyncService {
                 let asin = asinMap.get(normalizedCode);
 
                 if (!asin) {
-                    console.log(`[MarketSync] Skipping ASIN ${normalizedCode} as it was not uploaded via files/UI (not found in database for seller ${sellerId}).`);
-                    skippedNoMatch++;
-                    continue;
+                    if (allowCreation) {
+                        try {
+                            const newId = generateId();
+                            // Minimal insert for discovery
+                            await pool.request()
+                                .input('id', sql.VarChar, newId)
+                                .input('asinCode', sql.VarChar, normalizedCode)
+                                .input('sellerId', sql.VarChar, sellerId)
+                                .query(`
+                                    INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, CreatedAt, UpdatedAt)
+                                    VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', GETDATE(), GETDATE())
+                                `);
+                            
+                            // Mock basic object for mapping
+                            asin = { Id: newId, AsinCode: normalizedCode };
+                            createdCount++;
+                        } catch (createErr) {
+                            console.error(`❌ Failed to auto-create ASIN ${normalizedCode}:`, createErr.message);
+                            skippedNoMatch++;
+                            continue;
+                        }
+                    } else {
+                        if (skippedNoMatch < 5) {
+                            console.log(`[MarketSync] Miss: ASIN ${normalizedCode} (Seller: ${sellerId}) not found in DB.`);
+                        }
+                        skippedNoMatch++;
+                        continue;
+                    }
                 }
 
                 try {
                     await this.updateAsinMetrics(asin.Id, rawData);
                     updatedCount++;
-                    updatedAsinCodes.push(asin.AsinCode); // Track for batch notification
+                    processedInChunk++;
+                    updatedAsinCodes.push(asin.AsinCode);
                 } catch (err) {
                     console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);
                 }
             }
+            // console.log(`[MarketSync] Chunk processed: ${processedInChunk} success, ${skippedNoMatch} missed.`);
         }
 
-        // ---- BATCH SOCKET NOTIFICATION (instead of per-ASIN) ----
         if (updatedAsinCodes.length > 0) {
             const io = SocketService.getIo();
             if (io) {
-                // Emit ONE event with all updated ASIN codes
                 io.emit('scrape_batch_complete', {
                     sellerId: sellerId,
                     count: updatedAsinCodes.length,
@@ -2455,10 +2468,11 @@ class MarketDataSyncService {
             }
         }
 
-        console.log(`✅ Bulk processing completed. Updated ${updatedCount} ASINs.`);
+        console.log(`✅ Bulk processing completed. Updated: ${updatedCount}, Created: ${createdCount}, Total: ${rawResults.length}`);
         return {
             success: true,
             updatedCount,
+            createdCount,
             skippedNoCode,
             skippedNoMatch,
             total: rawResults.length
@@ -3096,16 +3110,16 @@ class MarketDataSyncService {
         if (!rawData) return null;
 
         // Direct fields - check common ASIN field names
-        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE', 'jiocode', 'jiocode_code', 'JIOCODE', 'Jiocode'], '');
+        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE', 'jiocode', 'jiocode_code', 'JIOCODE', 'Jiocode', 'Product_ID', 'ID'], '');
         if (direct) {
             const cleaned = direct.toString().trim().toUpperCase();
-            if (/^[A-Z0-9]{10}$/.test(cleaned) || /^\d+$/.test(cleaned)) {
+            if (/^[A-Z0-9]{10,16}$/.test(cleaned) || /^\d+$/.test(cleaned)) {
                 return cleaned;
             }
         }
 
         // URL extraction - check multiple URL field names
-        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url', 'Page_URL', 'Page URL'], '');
+        const urlField = this._getFromRaw(rawData, ['Original_URL', 'Original URL', 'target_url', 'url', 'Url', 'URL', 'ProductURL', 'product_url', 'Page_URL', 'Page URL', 'Product_URL'], '');
         if (urlField && typeof urlField === 'string') {
             // Enhanced regex to match various Amazon URL formats and Ajio format
             const patterns = [
@@ -3133,14 +3147,34 @@ class MarketDataSyncService {
         // Ultimate Fallback: search ALL keys for a value matching a 10-char ASIN regex or numeric jiocode
         for (const key of Object.keys(rawData)) {
             const val = rawData[key];
-            if (val && typeof val === 'string') {
+            if (val && typeof val === 'string' && val.length >= 10) {
                 const cleaned = val.trim().toUpperCase();
+                // Amazon ASIN or 10-15 digit numeric code
                 if (/^B0[A-Z0-9]{8}$/.test(cleaned) || (/^\d{10,15}$/.test(cleaned))) {
                     return cleaned;
                 }
             }
         }
 
+        return null;
+    }
+
+    _extractParentAsinFromData(rawData) {
+        if (!rawData) return null;
+        
+        // Try common field names for Parent ASIN
+        const parent = this._getFromRaw(rawData, [
+            'ParentASIN', 'parent_asin', 'parentasin', 'Parent ASIN', 'Parent_ASIN',
+            'parent_code', 'Parent_Code', 'ParentCode', 'Parent_ID', 'ParentID'
+        ], '');
+        
+        if (parent) {
+            const cleaned = parent.toString().trim().toUpperCase();
+            if (/^[A-Z0-9]{10,16}$/.test(cleaned) || /^\d+$/.test(cleaned)) {
+                return cleaned;
+            }
+        }
+        
         return null;
     }
 

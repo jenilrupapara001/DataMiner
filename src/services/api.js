@@ -1147,7 +1147,15 @@ export const bulkApi = {
     window.URL.revokeObjectURL(url);
     return { success: true };
   },
+  octoparseJsonUpload: async (file, sellerId, allowCreation = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sellerId', sellerId);
+    formData.append('allowCreation', allowCreation);
+    return api.post('/bulk/octoparse-json', formData);
+  },
 };
+
 
 // Generic API Client
 const api = {

@@ -98,7 +98,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
       <div style={{ padding: '8px 0' }}>
         <Row gutter={16} style={{ marginBottom: '24px' }}>
           <Col span={8}>
-            <Card bordered={false} style={{ background: '#f8fafc', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+            <Card variant="borderless" style={{ background: '#f8fafc', textAlign: 'center', borderRadius: '12px' }} styles={{ body: { padding: '16px' } }}>
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase' }}>Total Tasks</Text>} 
                 value={stats.total} 
@@ -107,7 +107,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
             </Card>
           </Col>
           <Col span={8}>
-            <Card bordered={false} style={{ background: '#f0fdf4', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+            <Card variant="borderless" style={{ background: '#f0fdf4', textAlign: 'center', borderRadius: '12px' }} styles={{ body: { padding: '16px' } }}>
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#166534', textTransform: 'uppercase' }}>Available</Text>} 
                 value={stats.available} 
@@ -116,7 +116,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
             </Card>
           </Col>
           <Col span={8}>
-            <Card bordered={false} style={{ background: '#eff6ff', textAlign: 'center', borderRadius: '12px' }} bodyStyle={{ padding: '16px' }}>
+            <Card variant="borderless" style={{ background: '#eff6ff', textAlign: 'center', borderRadius: '12px' }} styles={{ body: { padding: '16px' } }}>
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#1e40af', textTransform: 'uppercase' }}>Assigned</Text>} 
                 value={stats.assigned} 

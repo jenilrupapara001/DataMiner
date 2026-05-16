@@ -488,7 +488,7 @@ const RolesPage = () => {
                 {/* Stats Summary Cards */}
                 <Row gutter={[16, 16]}>
                     <Col xs={12} sm={8}>
-                        <Card className="kpi-stat-card" bordered={false}>
+                        <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
                                 <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Strategic Roles</span>} value={roles.length} valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 22 }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#EEF2FF', color: '#4F46E5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={18} /></div>
@@ -496,7 +496,7 @@ const RolesPage = () => {
                         </Card>
                     </Col>
                     <Col xs={12} sm={8}>
-                        <Card className="kpi-stat-card" bordered={false}>
+                        <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
                                 <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Secured Modules</span>} value={Object.keys(permissionsGrouped).length} valueStyle={{ color: '#8b5cf6', fontWeight: 800, fontSize: 22 }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F5F3FF', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Key size={18} /></div>
@@ -504,7 +504,7 @@ const RolesPage = () => {
                         </Card>
                     </Col>
                     <Col xs={24} sm={8}>
-                        <Card className="kpi-stat-card" bordered={false}>
+                        <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
                                 <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Mapped Capabilities</span>} value={permissions.length} valueStyle={{ color: '#d97706', fontWeight: 800, fontSize: 22 }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={18} /></div>
@@ -514,7 +514,7 @@ const RolesPage = () => {
                 </Row>
 
                 {/* Secondary Nav and Sync Strip */}
-                <Card bordered={false} styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
+                <Card variant="borderless" styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                         <Segmented
                             className="segmented-roles"
@@ -594,7 +594,7 @@ const RolesPage = () => {
                                                     <Card className="role-blueprint-card" styles={{ body: { padding: 20 } }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                                             <Tag 
-                                                                bordered={false} 
+                                                                variant="filled" 
                                                                 style={{ 
                                                                     backgroundColor: `${roleColor}15`, 
                                                                     color: roleColor, 
@@ -787,7 +787,7 @@ const RolesPage = () => {
                 <div style={{ padding: '8px 0', maxHeight: '68vh', overflowY: 'auto', overflowX: 'hidden' }}>
                     
                     {/* Row 1: Core Attributes */}
-                    <Card bordered={false} style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 24 }} styles={{ body: { padding: 16 } }}>
+                    <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 24 }} styles={{ body: { padding: 16 } }}>
                         <Row gutter={[16, 16]}>
                             <Col span={8}>
                                 <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 6 }}>Technical Unique Key</label>

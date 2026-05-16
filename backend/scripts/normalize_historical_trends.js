@@ -92,8 +92,8 @@ async function normalizeHistoricalTrends() {
                         .input('rank', sql.Int, hRank)
                         .query(`
                             IF NOT EXISTS (SELECT 1 FROM SubBsrHistory WHERE AsinId = @asinId AND Date = @date)
-                                INSERT INTO SubBsrHistory (Id, AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                VALUES (@id, @asinId, @date, @category, @rank, GETDATE())
+                                INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                VALUES (@asinId, @date, @category, @rank, GETDATE())
                         `);
                 }
             }
