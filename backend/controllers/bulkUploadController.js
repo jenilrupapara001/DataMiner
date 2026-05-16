@@ -3,6 +3,7 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 const AutoTagService = require('../services/autoTagService');
+const SystemLogService = require('../services/SystemLogService');
 
 // Helper to robustly parse multiple date formats, preferring DD/MM/YYYY as requested
 const parseFlexibleDate = (val) => {
@@ -272,6 +273,25 @@ exports.catalogSync = async (req, res) => {
 
         console.log(`✅ [BulkUpload] Catalog Sync Complete: ${results.updated} updated, ${results.created} created, ${results.skipped} skipped.`);
 
+        // Log the activity
+        await SystemLogService.log({
+            type: 'IMPORT',
+            entityType: 'ASIN',
+            entityId: sellerId === 'all' ? 'GLOBAL' : sellerId,
+            entityTitle: `Catalog Sync: ${req.file.originalname}`,
+            user: req.userId || req.user?.Id || req.user?._id,
+            description: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created.`,
+            metadata: { 
+                filename: req.file.originalname,
+                sellerId,
+                total: data.length,
+                updated: results.updated,
+                created: results.created,
+                skipped: results.skipped,
+                autoTagged: results.autoTagged
+            }
+        });
+
         res.json({
             success: true,
             message: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created, ${results.skipped} skipped.`,
@@ -401,6 +421,21 @@ exports.tagsImport = async (req, res) => {
         }
 
         console.log(`✅ [BulkUpload] Tags Import Complete: ${results.updated} updated, ${results.notFound} not found, ${results.skipped} skipped.`);
+
+        // Log activity
+        await SystemLogService.log({
+            type: 'IMPORT',
+            entityType: 'ASIN',
+            entityTitle: `Tags Import: ${req.file.originalname}`,
+            user: req.userId || req.user?.Id || req.user?._id,
+            description: `Updated tags for ${results.updated} ASINs.`,
+            metadata: { 
+                filename: req.file.originalname,
+                updated: results.updated,
+                notFound: results.notFound,
+                skipped: results.skipped
+            }
+        });
 
         res.json({
             success: true,

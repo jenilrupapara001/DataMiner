@@ -111,6 +111,7 @@ exports.login = async (req, res) => {
       await SystemLogService.log({
         type: 'AUTH_FAILURE',
         entityType: 'USER',
+        entityTitle: email,
         description: `Failed login attempt: User not found (${email})`,
         metadata: { ip: clientIp, email }
       });
@@ -124,6 +125,7 @@ exports.login = async (req, res) => {
         type: 'AUTH_FAILURE',
         entityType: 'USER',
         entityId: user.Id,
+        entityTitle: email,
         user: user.Id,
         description: `Locked login attempt: ${email}`,
         metadata: { ip: clientIp }
@@ -136,6 +138,7 @@ exports.login = async (req, res) => {
         type: 'AUTH_FAILURE',
         entityType: 'USER',
         entityId: user.Id,
+        entityTitle: email,
         user: user.Id,
         description: `Deactivated account login attempt: ${email}`,
         metadata: { ip: clientIp }
@@ -161,6 +164,7 @@ exports.login = async (req, res) => {
         type: 'AUTH_FAILURE',
         entityType: 'USER',
         entityId: user.Id,
+        entityTitle: email,
         user: user.Id,
         description: `Password mismatch. Attempt: ${attempts}`,
         metadata: { ip: clientIp, attempts }
@@ -186,6 +190,7 @@ exports.login = async (req, res) => {
       type: 'AUTH_SUCCESS',
       entityType: 'USER',
       entityId: user.Id,
+      entityTitle: `${resolvedUser.FirstName} ${resolvedUser.LastName}`,
       user: user.Id,
       description: `${resolvedUser.FirstName} ${resolvedUser.LastName} logged in`,
       metadata: { ip: clientIp }
@@ -234,6 +239,7 @@ exports.logout = async (req, res) => {
         type: 'AUTH_LOGOUT',
         entityType: 'USER',
         entityId: req.userId,
+        entityTitle: 'User Session',
         user: req.userId,
         description: 'User logged out'
       });

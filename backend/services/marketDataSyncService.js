@@ -9,6 +9,7 @@ const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
 const { calculateLQS, calculateCDQ, getGrade, getCDQBreakdown } = require('../utils/lqs');
 const listingQualityService = require('./listingQualityService');
+const SystemLogService = require('./SystemLogService');
 
 // Amazon India Top-Level Categories for BSR classification
 const AMAZON_TOP_LEVEL_CATEGORIES = [
@@ -1697,6 +1698,15 @@ class MarketDataSyncService {
             }
 
             console.log(`✅ syncSellerAsinsToOctoparse completed for seller ${sellerId}`);
+
+            await SystemLogService.log({
+                type: 'UPDATE',
+                entityType: 'SELLER',
+                entityId: sellerId,
+                entityTitle: `Marketplace Sync: Seller ${sellerId}`,
+                description: `Successfully synchronized marketplace data for seller ${sellerId}.`,
+                metadata: { sellerId, options }
+            });
             return true;
         } catch (error) {
             console.error(`❌ Sync Error for seller ${sellerId}:`, error.message);
