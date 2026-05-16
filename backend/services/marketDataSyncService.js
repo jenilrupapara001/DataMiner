@@ -1295,10 +1295,15 @@ class MarketDataSyncService {
                     });
                     pathSuccess = true;
                 } catch (err) {
-                    const isTransient = !err.response || err.message?.includes('aborted') || err.message?.includes('timeout') || err.message?.includes('hang up');
-                    console.log(`⚠️ Attempt ${attempt} failed for path ${path}: ${err.message}`);
+                    const isTooLarge = err.response?.status === 400 && 
+                                     (JSON.stringify(err.response.data || '').toLowerCase().includes('too large') || 
+                                      JSON.stringify(err.response.data || '').toLowerCase().includes('permissible limit'));
+                    const isTransient = !err.response || err.message?.includes('aborted') || err.message?.includes('timeout') || err.message?.includes('hang up') || isTooLarge;
+                    
+                    console.log(`⚠️ Attempt ${attempt} failed for path ${path}: ${err.message}${isTooLarge ? ' (Payload too large, will downscale)' : ''}`);
+                    
                     if (isTransient && attempt < maxAttempts) {
-                        currentSize = Math.max(50, Math.floor(currentSize / 2));
+                        currentSize = Math.max(100, Math.floor(currentSize / 2));
                         const delay = attempt * 2000;
                         console.log(`🔄 Transient error. Retrying in ${delay}ms with smaller size: ${currentSize}...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
@@ -1813,7 +1818,7 @@ class MarketDataSyncService {
 
             if (isAjio) {
                 // --- Ajio Specific Parsing Logic (Robust Mode) ---
-                price = this._cleanPrice(this._getFromRaw(rawData, ['ASP', 'asp', 'price', 'currentPrice'], 0));
+                price = this._cleanPrice(this._getFromRaw(rawData, ['ASP (Gross)', 'ASP', 'asp', 'price', 'currentPrice'], 0));
                 mrp = this._cleanPrice(this._getFromRaw(rawData, ['MRP', 'mrp', 'listPrice'], 0));
                 if (!mrp) mrp = price;
 
@@ -1825,8 +1830,8 @@ class MarketDataSyncService {
                     priceType = 'Standard Price';
                 }
 
-                title = (this._getFromRaw(rawData, ['title', 'Title'], asin.Title || '')).trim();
-                brand = (this._getFromRaw(rawData, ['brand_name', 'brand', 'Brand', 'brandName'], asin.Brand || '')).trim();
+                title = (this._getFromRaw(rawData, ['Article Name', 'title', 'Title'], asin.Title || '')).trim();
+                brand = (this._getFromRaw(rawData, ['Brand Name', 'brand_name', 'brand', 'Brand', 'brandName'], asin.Brand || '')).trim();
 
                 // Category hierarchy
                 const rawCat = this._getFromRaw(rawData, ['category_node', 'Category', 'category'], '');
@@ -3120,7 +3125,7 @@ class MarketDataSyncService {
         if (!rawData) return null;
 
         // Direct fields - check common ASIN field names
-        const direct = this._getFromRaw(rawData, ['ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE', 'jiocode', 'jiocode_code', 'JIOCODE', 'Jiocode', 'Product_ID', 'ID'], '');
+        const direct = this._getFromRaw(rawData, ['Article Code Number', 'Article Code', 'ASIN', 'asin', 'asinCode', 'asin_code', 'AsinCode', 'ASIN_CODE', 'jiocode', 'jiocode_code', 'JIOCODE', 'Jiocode', 'Product_ID', 'ID'], '');
         if (direct) {
             const cleaned = direct.toString().trim().toUpperCase();
             if (/^[A-Z0-9]{10,16}$/.test(cleaned) || /^\d+$/.test(cleaned)) {

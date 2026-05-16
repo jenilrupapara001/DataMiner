@@ -175,14 +175,14 @@ const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', in
                 <div className="d-flex border-bottom bg-white p-1">
                     <button
                         className={`flex-grow-1 py-2 border-0 rounded-2 fw-bold transition-all ${activeTab === 'catalog' ? 'bg-zinc-100 text-zinc-900' : 'bg-transparent text-zinc-400 hover-bg-zinc-50'}`}
-                        onClick={() => { setActiveTab('catalog'); setFile(null); setResult(null); setError(null); }}
+                        onClick={() => { setActiveTab('catalog'); setMarketplace('amazon'); setFile(null); setResult(null); setError(null); }}
                         style={{ fontSize: '12px' }}
                     >
                         Catalog Sync
                     </button>
                     <button
                         className={`flex-grow-1 py-2 border-0 rounded-2 fw-bold transition-all ${activeTab === 'ajio_catalog' ? 'bg-zinc-100 text-zinc-900' : 'bg-transparent text-zinc-400 hover-bg-zinc-50'}`}
-                        onClick={() => { setActiveTab('ajio_catalog'); setFile(null); setResult(null); setError(null); setMarketplace('ajio'); }}
+                        onClick={() => { setActiveTab('ajio_catalog'); setMarketplace('ajio'); setFile(null); setResult(null); setError(null); }}
                         style={{ fontSize: '12px' }}
                     >
                         Ajio Catalog
@@ -247,18 +247,28 @@ const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', in
                                 onChange={(e) => setSelectedSellerId(e.target.value)}
                                 style={{ fontSize: '13px', borderRadius: '8px' }}
                             >
-                                <option value="">Select a seller...</option>
+                                <option value="">Select a {marketplace === 'ajio' ? 'Ajio' : 'Amazon'} seller...</option>
                                 {sellers
                                     .filter(s => {
                                         const m = s.marketplace?.toLowerCase();
                                         if (marketplace === 'ajio') return m === 'ajio';
+                                        // Default to amazon.in or amazon or no marketplace for amazon mode
                                         return m === 'amazon.in' || m === 'amazon' || !m;
                                     })
                                     .map(s => (
-                                        <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
+                                        <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId || 'No ID'})</option>
                                     ))
                                 }
                             </select>
+                            {sellers.filter(s => {
+                                const m = s.marketplace?.toLowerCase();
+                                if (marketplace === 'ajio') return m === 'ajio';
+                                return m === 'amazon.in' || m === 'amazon' || !m;
+                            }).length === 0 && (
+                                <div className="mt-1 text-danger" style={{ fontSize: '11px' }}>
+                                    No {marketplace === 'ajio' ? 'Ajio' : 'Amazon'} sellers found. Please check your account.
+                                </div>
+                            )}
                         </div>
                     )}
 

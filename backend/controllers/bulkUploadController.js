@@ -9,6 +9,7 @@ const SystemLogService = require('../services/SystemLogService');
  * Helper to get value from row with multiple possible keys (case-insensitive and space-insensitive)
  */
 const getValue = (row, possibleKeys) => {
+    if (!row) return '';
     const keys = Object.keys(row);
     // Remove all non-alphanumeric characters for comparison
     const normalize = (str) => str.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
@@ -19,7 +20,11 @@ const getValue = (row, possibleKeys) => {
     for (let i = 0; i < targetLower.length; i++) {
         const index = lowerKeys.indexOf(targetLower[i]);
         if (index !== -1) {
-            return row[keys[index]] || '';
+            const val = row[keys[index]];
+            // Skip empty values and continue searching if possible
+            if (val !== undefined && val !== null && val.toString().trim() !== '') {
+                return val.toString().trim();
+            }
         }
     }
     return '';
@@ -189,11 +194,11 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code']).toString().trim().toUpperCase();
+                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'JioCode', 'Jio_Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'Article_Code_Number', 'Article_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code', 'SKU', 'Seller SKU', 'SKU Number', 'SkuNumber', 'sku']).toString().trim().toUpperCase();
                 const parentAsin = getValue(row, ['Parent ASIN', 'ParentAsin', 'parent_asin', 'Group ID', 'GroupID', 'Parent_Code', 'ParentCode']).toString().trim().toUpperCase();
                 const sku = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber']).toString().trim();
                 const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
-                const rawPrice = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'MRP', 'Selling Price', 'Uploaded Price', 'ASP_GROSS', 'asp_gross', 'selling_price']);
+                const rawPrice = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'ASP(GROSS)', 'ASP GROSS', 'ASP_GROSS', 'asp_gross', 'asp (gross)', 'MRP', 'Selling Price', 'Uploaded Price', 'selling_price']);
                 const rawDate = getValue(row, ['Release Date', 'Release_Date', 'Released Date', 'date', 'updated_at', 'Realeased date', 'Launch Date', 'Launch_Date']);
                 
                 const uploadedPrice = parseFloat(rawPrice) || null;
@@ -282,6 +287,15 @@ exports.catalogSync = async (req, res) => {
                         mergedTags = AutoTagService.mergeTags(existingTags, autoTags, true);
                     }
 
+                    const request = transaction.request();
+                    await request
+                        .input('id', sql.VarChar, existing.Id)
+                        .input('parentAsin', sql.VarChar, parentAsin)
+                        .input('sku', sql.VarChar, sku)
+                        .input('releaseDate', sql.DateTime, releaseDate)
+                        .input('uploadedPrice', sql.Decimal(18, 2), uploadedPrice)
+                        .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
+                        .input('brand', sql.NVarChar, brandName)
                         .input('marketplace', sql.NVarChar, rowMarketplace || 'amazon.in')
                         .query(`
                             UPDATE Asins SET 
@@ -298,7 +312,8 @@ exports.catalogSync = async (req, res) => {
                     results.updated++;
                 } else {
                     const newId = generateId();
-                    await transaction.request()
+                    const insertRequest = transaction.request();
+                    await insertRequest
                         .input('id', sql.VarChar, newId)
                         .input('asinCode', sql.VarChar, childAsin)
                         .input('sellerId', sql.VarChar, rowSellerId)
@@ -430,13 +445,15 @@ exports.ajioBulkImport = async (req, res) => {
         try {
             for (const row of data) {
                 // Robust extraction using expanded aliases
-                const articleCode = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code']).toString().trim().toUpperCase();
-                const skuNumber = getValue(row, ['SKU Number', 'SKU', 'Sku', 'sku', 'SKU_Number', 'Seller SKU', 'SkuNumber']).toString().trim();
-                const aspGross = getValue(row, ['ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Price', 'price', 'MRP', 'Selling Price']);
+                const articleCode = getValue(row, ['ASIN', 'Jio Code', 'JioCode', 'Jio_Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'Article_Code_Number', 'Article_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code', 'SKU', 'Seller SKU', 'SKU Number', 'SkuNumber', 'sku']).toString().trim().toUpperCase();
+                const skuNumber = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber']).toString().trim();
+                const aspGross = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'ASP(GROSS)', 'ASP GROSS', 'ASP_GROSS', 'asp_gross', 'asp (gross)', 'MRP', 'Selling Price', 'Uploaded Price', 'selling_price']);
+                
+                const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
                 
                 const uploadedPrice = parseFloat(aspGross) || null;
 
-                if (!articleCode && !skuNumber) continue; // Skip completely empty rows
+                if (!articleCode && !skuNumber && !brandName) continue; // Skip completely empty rows
 
                 if (!articleCode) {
                     results.skipped++;
@@ -456,14 +473,17 @@ exports.ajioBulkImport = async (req, res) => {
                 const existing = existingResult.recordset[0];
 
                 if (existing) {
-                    await transaction.request()
+                    const updateReq = transaction.request();
+                    await updateReq
                         .input('id', sql.VarChar, existing.Id)
                         .input('sku', sql.NVarChar, skuNumber || null)
-                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .input('uploadedPrice', sql.Decimal(18, 2), uploadedPrice)
+                        .input('brand', sql.NVarChar, brandName || null)
                         .query(`
                             UPDATE Asins SET 
                                 Sku = CASE WHEN @sku != '' AND @sku IS NOT NULL THEN @sku ELSE Sku END,
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
+                                Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
                                 Marketplace = 'ajio',
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
@@ -471,15 +491,17 @@ exports.ajioBulkImport = async (req, res) => {
                     results.updated++;
                 } else {
                     const newId = generateId();
-                    await transaction.request()
+                    const insertReq = transaction.request();
+                    await insertReq
                         .input('id', sql.VarChar, newId)
                         .input('asinCode', sql.VarChar, articleCode)
                         .input('sellerId', sql.VarChar, sellerId)
                         .input('sku', sql.NVarChar, skuNumber || null)
-                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .input('uploadedPrice', sql.Decimal(18, 2), uploadedPrice)
+                        .input('brand', sql.NVarChar, brandName || null)
                         .query(`
-                            INSERT INTO Asins (Id, AsinCode, SellerId, Sku, UploadedPrice, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, 'Active', 'PENDING', 'ajio', GETDATE(), GETDATE())
+                            INSERT INTO Asins (Id, AsinCode, SellerId, Sku, UploadedPrice, Brand, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, @brand, 'Active', 'PENDING', 'ajio', GETDATE(), GETDATE())
                         `);
                     results.created++;
                 }
@@ -574,20 +596,6 @@ exports.tagsImport = async (req, res) => {
         };
 
         console.log(`📦 [BulkUpload] Processing Tags Import: ${req.file.originalname} (${data.length} rows)`);
-
-        // Helper for flexible column matching
-        const getValue = (row, possibleKeys) => {
-            const keys = Object.keys(row);
-            const lowerKeys = keys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-            const targetLower = possibleKeys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-
-            for (let i = 0; i < lowerKeys.length; i++) {
-                if (targetLower.includes(lowerKeys[i])) {
-                    return row[keys[i]];
-                }
-            }
-            return '';
-        };
 
         // Build a map of all ASIN codes for this seller
         let asinQuery = 'SELECT Id, AsinCode FROM Asins WHERE 1=1';

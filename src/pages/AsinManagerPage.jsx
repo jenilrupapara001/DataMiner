@@ -388,7 +388,7 @@ const demoAsins = [
   },
 ];
 
-const AsinManagerPage = () => {
+const AsinManagerPage = (props) => {
   const { isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [asins, setAsins] = useState([]);
   const [loading, setLoading] = useState(true);

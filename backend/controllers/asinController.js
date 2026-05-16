@@ -1502,14 +1502,19 @@ exports.importFromCsv = async (req, res) => {
       for (const targetKey of possibleKeys) {
         const cleanTarget = targetKey.toLowerCase().replace(/[^a-z0-9]/g, '');
         const index = rowKeysClean.indexOf(cleanTarget);
-        if (index !== -1) return row[rowKeys[index]];
+        if (index !== -1) {
+            const val = row[rowKeys[index]];
+            if (val !== undefined && val !== null && val.toString().trim() !== '') {
+                return val;
+            }
+        }
       }
       return undefined;
     };
 
-    const idAliases = ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Identifier', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code'];
+    const idAliases = ['ASIN', 'Jio Code', 'JioCode', 'Jio_Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'Article_Code_Number', 'Article_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code', 'SKU', 'Seller SKU', 'SKU Number', 'SkuNumber', 'sku'];
     const skuAliases = ['SKU', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'SkuNumber'];
-    const priceAliases = ['MRP', 'mrp', 'List Price', 'Price', 'price', 'ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Selling Price'];
+    const priceAliases = ['MRP', 'mrp', 'List Price', 'Price', 'price', 'ASP (GROSS)', 'ASP(GROSS)', 'ASP GROSS', 'ASP_GROSS', 'asp_gross', 'asp (gross)', 'Selling Price'];
 
     const pool = await getPool();
 
@@ -1660,7 +1665,12 @@ exports.bulkUploadAllSellers = async (req, res) => {
             for (const k of keys) {
                 const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanK);
-                if (match) return r[match];
+                if (match) {
+                    const val = r[match];
+                    if (val !== undefined && val !== null && val.toString().trim() !== '') {
+                        return val;
+                    }
+                }
             }
             return null;
         };
@@ -1677,7 +1687,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     const sku = getValue(row, ['SKU', 'sku'])?.toString().trim();
                     const parentAsin = getValue(row, ['Parent ASIN', 'Parent'])?.toString().trim().toUpperCase();
                     const releaseDateRaw = getValue(row, ['Release Date', 'Released Date', 'Date', 'First Available']);
-                    const priceRaw = getValue(row, ['Price', 'Uploaded Price', 'Sale Price', 'MRP', 'mrp']);
+                    const priceRaw = getValue(row, ['Price', 'Uploaded Price', 'Sale Price', 'MRP', 'mrp', 'ASP (Gross)', 'ASP(Gross)', 'ASP GROSS', 'ASP_GROSS']);
 
                     if (!asin || !sellerName) continue;
 
