@@ -17,38 +17,44 @@ const AuthLayout = ({
   heroTitle, 
   heroSubtitle, 
   features = [],
-  footerText = "RetailOps. Built for Scale."
+  footerText = "RetailOps. Enterprise Commerce Intelligence."
 }) => {
   return (
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#18181b',
-          borderRadius: 12,
-          fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
+          colorPrimary: '#1C1917',
+          colorInfo: '#CA8A04',
+          borderRadius: 16,
+          fontFamily: "'DM Sans', sans-serif",
           colorBgContainer: '#ffffff',
+          colorLink: '#CA8A04',
+          colorLinkHover: '#A16207',
         },
         components: {
           Button: {
-            controlHeight: 48,
-            fontSize: 15,
-            fontWeight: 600,
-            borderRadius: 10,
+            controlHeight: 52,
+            fontSize: 16,
+            fontWeight: 700,
+            borderRadius: 12,
+            colorPrimary: '#1C1917',
+            colorPrimaryHover: '#2d2a28',
           },
           Input: {
-            controlHeight: 45,
-            borderRadius: 10,
-            colorBgContainer: '#f8fafc',
+            controlHeight: 48,
+            borderRadius: 12,
+            colorBgContainer: '#FAFAF9',
+            activeBorderColor: '#CA8A04',
           },
           Checkbox: {
-            colorPrimary: '#18181b',
+            colorPrimary: '#CA8A04',
           }
         }
       }}
     >
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0a',
+        background: '#0c0a09',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -56,116 +62,152 @@ const AuthLayout = ({
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* Dynamic Background */}
+        {/* Advanced Mesh Background */}
         <div style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.15) 0%, transparent 40%), radial-gradient(circle at 80% 80%, rgba(147, 51, 234, 0.15) 0%, transparent 40%)',
+          background: `
+            radial-gradient(circle at 10% 10%, rgba(202, 138, 4, 0.08) 0%, transparent 40%),
+            radial-gradient(circle at 90% 10%, rgba(28, 25, 23, 0.4) 0%, transparent 50%),
+            radial-gradient(circle at 50% 90%, rgba(202, 138, 4, 0.05) 0%, transparent 40%),
+            radial-gradient(circle at 80% 80%, rgba(68, 64, 60, 0.2) 0%, transparent 50%)
+          `,
           zIndex: 0
         }} />
         
+        {/* Animated Noise/Grain Overlay */}
         <div style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-          zIndex: 0
+          opacity: 0.03,
+          backgroundImage: 'url("https://grainy-gradients.vercel.app/noise.svg")',
+          pointerEvents: 'none',
+          zIndex: 1
         }} />
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          style={{ zIndex: 1, width: '100%', maxWidth: 1100 }}
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          style={{ zIndex: 2, width: '100%', maxWidth: 1200 }}
         >
           <Card
             variant="borderless"
             styles={{ body: { padding: 0 } }}
             style={{
-              borderRadius: 24,
+              borderRadius: 32,
               overflow: 'hidden',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'blur(10px)'
+              boxShadow: '0 40px 100px -20px rgba(0, 0, 0, 0.8)',
+              background: 'rgba(255, 255, 255, 0.01)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backdropFilter: 'blur(24px)'
             }}
           >
-            <Row align="stretch" style={{ minHeight: 680 }}>
-              {/* Left Panel: Hero */}
+            <Row align="stretch" style={{ minHeight: 720 }}>
+              {/* Left Panel: High-Impact Visuals */}
               <Col xs={0} md={11} lg={12} style={{
-                background: 'linear-gradient(135deg, #0f172a 0%, #020617 100%)',
-                padding: '60px',
+                background: '#0c0a09',
+                padding: '80px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 position: 'relative',
-                color: '#fff',
-                borderRight: '1px solid rgba(255, 255, 255, 0.1)'
+                color: '#FAFAF9',
+                borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+                overflow: 'hidden'
               }}>
+                {/* Visual Accent */}
+                <div style={{
+                    position: 'absolute',
+                    top: '-10%',
+                    right: '-10%',
+                    width: '60%',
+                    height: '60%',
+                    background: 'radial-gradient(circle, rgba(202, 138, 4, 0.15) 0%, transparent 70%)',
+                    filter: 'blur(60px)',
+                    zIndex: 0
+                }} />
+
                 <div style={{ zIndex: 1 }}>
-                  <div style={{ filter: 'brightness(0) invert(1)', opacity: 0.9 }}>
-                    <RetailOpsWordmark size={36} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ 
+                        width: 40, 
+                        height: 40, 
+                        background: '#CA8A04', 
+                        borderRadius: 10, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        boxShadow: '0 0 20px rgba(202, 138, 4, 0.3)'
+                    }}>
+                        <RetailOpsWordmark size={24} color="#0c0a09" style={{ filter: 'brightness(0)' }} />
+                    </div>
+                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em' }}>RetailOps<span style={{ color: '#CA8A04' }}>.</span></Text>
                   </div>
                   
-                  <div style={{ marginTop: 60 }}>
+                  <div style={{ marginTop: 80 }}>
                     <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
                     >
                       <Title level={1} style={{ 
-                        color: '#fff', 
-                        fontSize: '2.8rem', 
+                        color: '#FAFAF9', 
+                        fontSize: '3.2rem', 
                         fontWeight: 800, 
-                        lineHeight: 1.1, 
-                        marginBottom: 16,
-                        letterSpacing: '-0.02em'
+                        lineHeight: 1, 
+                        marginBottom: 24,
+                        letterSpacing: '-0.04em'
                       }}>
-                        {heroTitle}
+                        {heroTitle.split(' ').map((word, i) => (
+                            <span key={i} style={{ display: 'inline-block', marginRight: '0.3em' }}>{word}</span>
+                        ))}
                       </Title>
-                      <Text style={{ 
-                        color: 'rgba(255, 255, 255, 0.5)', 
-                        fontSize: '1.1rem', 
-                        display: 'block', 
-                        marginBottom: 48,
-                        maxWidth: '90%'
+                      <Paragraph style={{ 
+                        color: '#A8A29E', 
+                        fontSize: '1.2rem', 
+                        lineHeight: 1.6,
+                        marginBottom: 60,
+                        maxWidth: '90%',
+                        fontWeight: 400
                       }}>
                         {heroSubtitle}
-                      </Text>
+                      </Paragraph>
                     </motion.div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                       {features.map((feature, index) => (
                         <motion.div 
                           key={index}
-                          initial={{ opacity: 0, x: -10 }}
+                          initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.3 + (index * 0.1) }}
-                          style={{ display: 'flex', gap: 16, alignItems: 'center' }}
+                          transition={{ delay: 0.5 + (index * 0.1) }}
+                          style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}
                         >
                           <div style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 12,
-                            background: 'rgba(255, 255, 255, 0.05)',
+                            width: 44,
+                            height: 44,
+                            borderRadius: 14,
+                            background: 'rgba(255, 255, 255, 0.03)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: 18,
-                            color: '#3b82f6',
-                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                            fontSize: 20,
+                            color: '#CA8A04',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05)'
                           }}>
                             {feature.icon}
                           </div>
-                          <div>
-                            <Text strong style={{ color: '#fff', fontSize: 15, display: 'block' }}>{feature.title}</Text>
-                            <Text style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 13 }}>{feature.desc}</Text>
+                          <div style={{ paddingTop: 4 }}>
+                            <Text strong style={{ color: '#FAFAF9', fontSize: 16, display: 'block', marginBottom: 2 }}>{feature.title}</Text>
+                            <Text style={{ color: '#78716C', fontSize: 14 }}>{feature.desc}</Text>
                           </div>
                         </motion.div>
                       ))}
@@ -173,20 +215,21 @@ const AuthLayout = ({
                   </div>
                 </div>
 
-                <div style={{ zIndex: 1, color: 'rgba(255, 255, 255, 0.3)', fontSize: 12, fontWeight: 500 }}>
+                <div style={{ zIndex: 1, color: '#57534E', fontSize: 13, fontWeight: 600, letterSpacing: '0.02em' }}>
                   &copy; 2026 {footerText}
                 </div>
               </Col>
 
-              {/* Right Panel: Content */}
+              {/* Right Panel: The Gateway */}
               <Col xs={24} md={13} lg={12} style={{
-                padding: '60px',
+                padding: '80px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
-                background: '#ffffff'
+                background: '#FAFAF9',
+                position: 'relative'
               }}>
-                <div style={{ maxWidth: 380, width: '100%', margin: '0 auto' }}>
+                <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
                   {children}
                 </div>
               </Col>
@@ -194,6 +237,37 @@ const AuthLayout = ({
           </Card>
         </motion.div>
       </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
+        
+        .ant-btn-primary {
+            box-shadow: 0 4px 14px 0 rgba(28, 25, 23, 0.3) !important;
+            transition: all 0.3s ease !important;
+        }
+        .ant-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(28, 25, 23, 0.4) !important;
+        }
+        .ant-input-affix-wrapper {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+            transition: all 0.3s ease !important;
+            border: 1.5px solid #E7E5E4 !important;
+        }
+        .ant-input-affix-wrapper-focused {
+            border-color: #CA8A04 !important;
+            box-shadow: 0 0 0 4px rgba(202, 138, 4, 0.1) !important;
+            background: #fff !important;
+        }
+        .ant-form-item-label label {
+            color: #44403C !important;
+            font-weight: 700 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px !important;
+        }
+      `}</style>
     </ConfigProvider>
   );
 };

@@ -15,11 +15,12 @@ import {
     ArrowRight,
     Sparkles,
     Users,
-    ShieldCheck
+    ShieldCheck,
+    Contact
 } from 'lucide-react';
 import AuthLayout from '../components/auth/AuthLayout';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 const RegisterPage = () => {
     const navigate = useNavigate();
@@ -36,13 +37,13 @@ const RegisterPage = () => {
             });
 
             if (result.success) {
-                message.success('Account created! Welcome to the team.');
+                message.success('Account created! Welcome to the enterprise network.');
                 navigate('/');
             } else {
-                message.error(result.error || 'Registration failed');
+                message.error(result.error || 'Registration failed. Access denied.');
             }
         } catch (error) {
-            message.error('An unexpected error occurred');
+            message.error('An unexpected error occurred during account creation.');
         } finally {
             setLoading(false);
         }
@@ -53,19 +54,32 @@ const RegisterPage = () => {
             heroTitle="Build your Retail Legacy."
             heroSubtitle="Join thousands of top-tier sellers who trust RetailOps for their mission-critical marketplace operations."
             features={[
-                { icon: <Sparkles size={18} />, title: 'Premium Analytics', desc: 'Enterprise-grade sales tracking' },
-                { icon: <Users size={18} />, title: 'Team Collaboration', desc: 'Multi-user role management' },
-                { icon: <ShieldCheck size={18} />, title: 'Privacy First', desc: 'Secure data isolation' }
+                { icon: <Sparkles size={20} />, title: 'Premium Intelligence', desc: 'Enterprise-grade sales tracking' },
+                { icon: <Users size={20} />, title: 'Team Collaboration', desc: 'Multi-user role management' },
+                { icon: <ShieldCheck size={20} />, title: 'Privacy First', desc: 'Secure data isolation' }
             ]}
             footerText="RetailOps. Start Scaling Today."
         >
-            <div style={{ marginBottom: 32 }}>
-                <Title level={2} style={{ marginBottom: 8, fontWeight: 800, fontSize: '1.8rem', letterSpacing: '-0.01em' }}>
-                    Create Account
+            <div style={{ marginBottom: 40 }}>
+                <div style={{ 
+                    width: 48, 
+                    height: 4, 
+                    background: '#CA8A04', 
+                    borderRadius: 2, 
+                    marginBottom: 24 
+                }} />
+                <Title level={2} style={{ 
+                    marginBottom: 12, 
+                    fontWeight: 800, 
+                    fontSize: '2.4rem', 
+                    letterSpacing: '-0.04em',
+                    color: '#1C1917' 
+                }}>
+                    Register Account
                 </Title>
-                <Text type="secondary" style={{ fontSize: 14 }}>
-                    Fill in your details to get started with RetailOps
-                </Text>
+                <Paragraph style={{ color: '#78716C', fontSize: 16, lineHeight: 1.5 }}>
+                    Enter your professional details to request access to the platform.
+                </Paragraph>
             </div>
 
             <Form
@@ -75,100 +89,118 @@ const RegisterPage = () => {
                 size="large"
             >
                 <Form.Item
-                    label={<Text strong style={{ fontSize: '13px' }}>Full Name</Text>}
+                    label="Full Name"
                     name="name"
                     rules={[{ required: true, message: 'Name is required' }]}
-                    style={{ marginBottom: 16 }}
+                    style={{ marginBottom: 20 }}
                 >
                     <Input 
-                        prefix={<User size={16} className="text-zinc-400 me-2" />} 
-                        placeholder="John Doe"
+                        prefix={<Contact size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        placeholder="e.g. John Doe"
+                        style={{ height: 54, fontSize: 15 }}
                     />
                 </Form.Item>
 
                 <Form.Item
-                    label={<Text strong style={{ fontSize: '13px' }}>Email Address</Text>}
+                    label="Corporate Email"
                     name="email"
                     rules={[
-                        { required: true, message: 'Email is required' },
-                        { type: 'email', message: 'Enter a valid email' }
+                        { required: true, message: 'Corporate email is required' },
+                        { type: 'email', message: 'Enter a valid corporate email' }
                     ]}
-                    style={{ marginBottom: 16 }}
+                    style={{ marginBottom: 20 }}
                 >
                     <Input 
-                        prefix={<Mail size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Mail size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
                         placeholder="name@company.com"
+                        style={{ height: 54, fontSize: 15 }}
                     />
                 </Form.Item>
 
                 <Form.Item
-                    label={<Text strong style={{ fontSize: '13px' }}>Password</Text>}
+                    label="Access Key"
                     name="password"
                     rules={[
                         { required: true, message: 'Password is required' },
-                        { min: 6, message: 'Minimum 6 characters' }
+                        { min: 6, message: 'Security requires at least 6 characters' }
                     ]}
-                    style={{ marginBottom: 16 }}
+                    style={{ marginBottom: 20 }}
                 >
                     <Input.Password 
-                        prefix={<Lock size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Lock size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
                         placeholder="••••••••"
+                        style={{ height: 54, fontSize: 15 }}
                     />
                 </Form.Item>
 
                 <Form.Item
-                    label={<Text strong style={{ fontSize: '13px' }}>Confirm Password</Text>}
+                    label="Verify Access Key"
                     name="confirmPassword"
                     dependencies={['password']}
                     rules={[
-                        { required: true, message: 'Please confirm password' },
+                        { required: true, message: 'Please confirm your password' },
                         ({ getFieldValue }) => ({
                             validator(_, value) {
                                 if (!value || getFieldValue('password') === value) {
                                     return Promise.resolve();
                                 }
-                                return Promise.reject(new Error('Passwords do not match'));
+                                return Promise.reject(new Error('Access keys do not match'));
                             },
                         }),
                     ]}
-                    style={{ marginBottom: 24 }}
+                    style={{ marginBottom: 32 }}
                 >
                     <Input.Password 
-                        prefix={<Lock size={16} className="text-zinc-400 me-2" />} 
+                        prefix={<Lock size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
                         placeholder="••••••••"
+                        style={{ height: 54, fontSize: 15 }}
                     />
                 </Form.Item>
 
-                <Form.Item style={{ marginBottom: 24 }}>
+                <Form.Item style={{ marginBottom: 32 }}>
                     <Button 
                         type="primary" 
                         htmlType="submit" 
                         loading={loading}
                         block
                         style={{ 
-                            height: 48, 
-                            background: '#18181b', 
-                            borderColor: '#18181b',
+                            height: 56, 
+                            background: '#1C1917', 
+                            borderColor: '#1C1917',
+                            fontSize: '16px',
+                            fontWeight: 800,
+                            letterSpacing: '0.02em',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px'
+                            gap: '12px'
                         }}
                     >
-                        Create Account <ArrowRight size={16} />
+                        CREATE ACCOUNT <ArrowRight size={18} />
                     </Button>
                 </Form.Item>
             </Form>
 
-            <div className="text-center mt-5">
-                <Text type="secondary" style={{ fontSize: '13px' }}>
-                    Already have an account? <Link to="/login" className="text-primary fw-bold ms-1">Sign In</Link>
+            <div style={{ textAlign: 'center' }}>
+                <Text style={{ fontSize: '14px', color: '#78716C', fontWeight: 500 }}>
+                    Already have access? <Link to="/login" style={{ color: '#1C1917', fontWeight: 800, marginLeft: '6px', borderBottom: '2px solid #CA8A04' }}>Sign In</Link>
                 </Text>
             </div>
 
-            <div className="mt-5 pt-4 border-top d-flex align-items-center justify-content-center gap-2 text-zinc-400" style={{ fontSize: '11px' }}>
-                <ShieldCheck size={14} />
-                <span>Verified Secure Enterprise Platform</span>
+            <div style={{ 
+                marginTop: 60, 
+                paddingTop: 32, 
+                borderTop: '1px solid #E7E5E4', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '10px', 
+                color: '#A8A29E',
+                fontSize: '12px',
+                fontWeight: 600
+            }}>
+                <ShieldCheck size={16} style={{ color: '#10B981' }} />
+                <span>SECURED BY ENTERPRISE ENCRYPTION</span>
             </div>
         </AuthLayout>
     );
