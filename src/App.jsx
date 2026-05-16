@@ -179,20 +179,19 @@ function App() {
     <CometChatInitializer>
       <RefreshProvider>
         <AuthProvider>
-          <SocketProvider>
-            <SidebarProvider>
-              <DateRangeProvider>
-                <PageTitleProvider>
-                  <ToastProvider>
-                    <OnboardingProvider>
-                      <GlobalNotificationListener />
+          <OnboardingProvider>
+            <SocketProvider>
+              <SidebarProvider>
+                <DateRangeProvider>
+                  <PageTitleProvider>
+                    <ToastProvider>
                       <AppRoutes />
-                    </OnboardingProvider>
-                  </ToastProvider>
-                </PageTitleProvider>
-              </DateRangeProvider>
-            </SidebarProvider>
-          </SocketProvider>
+                    </ToastProvider>
+                  </PageTitleProvider>
+                </DateRangeProvider>
+              </SidebarProvider>
+            </SocketProvider>
+          </OnboardingProvider>
         </AuthProvider>
       </RefreshProvider>
     </CometChatInitializer>

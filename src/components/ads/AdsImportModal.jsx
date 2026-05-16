@@ -53,7 +53,8 @@ const AdsImportModal = ({ isOpen, onClose, onComplete }) => {
             }
         } catch (err) {
             console.error('Ads Upload Error:', err);
-            setError(err.response?.data?.error || err.message || 'Upload execution failure.');
+            const detailMsg = err.response?.data?.details ? `: ${err.response.data.details}` : '';
+            setError((err.response?.data?.error || err.message || 'Upload execution failure.') + detailMsg);
         } finally {
             setUploading(false);
         }

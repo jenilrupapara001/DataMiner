@@ -470,6 +470,7 @@ const AsinManagerPage = () => {
     toggleCategory,
     resetToDefaults,
     selectAll,
+    updateVisibleColumns,
     visibleCount,
     totalCount,
     allColumns,
@@ -642,7 +643,8 @@ const AsinManagerPage = () => {
     priceDispute: '',
     bsrTrend: '',
     ratingTrend: '',
-    historyDays: ''
+    historyDays: '',
+    ads: ''
   });
 
   const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
@@ -688,7 +690,8 @@ const AsinManagerPage = () => {
     priceDispute: '',
     bsrTrend: '',
     ratingTrend: '',
-    historyDays: ''
+    historyDays: '',
+    ads: ''
   });
   const [filterOptions, setFilterOptions] = useState({
     categories: [],
@@ -716,8 +719,7 @@ const AsinManagerPage = () => {
       minTitleScore: '', maxTitleScore: '', minBulletScore: '', maxBulletScore: '',
       minImageScore: '', maxImageScore: '', minDescriptionScore: '', maxDescriptionScore: '',
       minReviewCount: '', maxReviewCount: '', minImagesCount: '', maxImagesCount: '',
-      minBulletPoints: '', maxBulletPoints: '', priceDispute: '',
-      bsrTrend: '', ratingTrend: '', historyDays: ''
+      bsrTrend: '', ratingTrend: '', historyDays: '', ads: ''
     };
     setFilters(resetState);
     setAppliedFilters(resetState);
@@ -1934,6 +1936,16 @@ const AsinManagerPage = () => {
                   </select>
                 </div>
               </div>
+              <div className="col-6">
+                <div className="filter-group">
+                  <label className="filter-label">ADS ACTIVE</label>
+                  <select className="form-select form-select-sm rounded-2 border-zinc-200" value={filters.ads} onChange={(e) => setFilters({ ...filters, ads: e.target.value })} style={{ fontSize: '12px', height: '38px' }}>
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
               <div className="col-12">
                 <div className="filter-group">
                   <label className="filter-label">PRICE DISPUTE</label>
@@ -2591,12 +2603,7 @@ const AsinManagerPage = () => {
                   isOpen={showColumnPanel}
                   onClose={() => setShowColumnPanel(false)}
                   visibleColumns={visibleColumns}
-                  onToggle={toggleColumn}
-                  onToggleCategory={toggleCategory}
-                  onReset={resetToDefaults}
-                  onSelectAll={selectAll}
-                  visibleCount={visibleCount}
-                  totalCount={totalCount}
+                  onApply={updateVisibleColumns}
                   allColumns={allColumns}
                   columnCategories={columnCategories}
                 />

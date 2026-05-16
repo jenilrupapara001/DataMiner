@@ -275,32 +275,39 @@ exports.uploadAdsData = async (req, res) => {
         continue;
       }
 
-      const spend = parseFloat((findValue(row, ['spend', 'Spend', 'ad_spend', 'metrics.spend']) || '0').replace(/,/g, '')) || 0;
-      const sales = parseFloat((findValue(row, ['sales', 'Sales', 'ad_sales', 'metrics.sales']) || '0').replace(/,/g, '')) || 0;
-      const impressions = parseInt((findValue(row, ['impressions', 'Impressions', 'metrics.impressions']) || '0').replace(/,/g, '')) || 0;
-      const clicks = parseInt((findValue(row, ['clicks', 'Clicks', 'metrics.clicks']) || '0').replace(/,/g, '')) || 0;
-      const orders = parseInt((findValue(row, ['orders', 'Orders', 'metrics.orders']) || '0').replace(/,/g, '')) || 0;
+      const parseNum = (val) => {
+        if (!val) return 0;
+        const cleaned = val.toString().replace(/[^0-9.-]/g, '');
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : parsed;
+      };
 
-      const conversions = parseInt((findValue(row, ['conversions', 'Conversions', 'metrics.conversions']) || '0').replace(/,/g, '')) || 0;
-      const sameSkuSales = parseFloat((findValue(row, ['same_sku_sales', 'SameSkuSales', 'metrics.same_sku_sales']) || '0').replace(/,/g, '')) || 0;
-      const sameSkuOrders = parseInt((findValue(row, ['same_sku_orders', 'SameSkuOrders', 'metrics.same_sku_orders']) || '0').replace(/,/g, '')) || 0;
-      const dailyBudget = parseFloat((findValue(row, ['daily_budget', 'DailyBudget', 'metrics.daily_budget']) || '0').replace(/,/g, '')) || 0;
-      const totalBudget = parseFloat((findValue(row, ['total_budget', 'TotalBudget', 'metrics.total_budget']) || '0').replace(/,/g, '')) || 0;
-      const maxSpend = parseFloat((findValue(row, ['max_spend', 'MaxSpend', 'metrics.max_spend']) || '0').replace(/,/g, '')) || 0;
-      const avgSpend = parseFloat((findValue(row, ['avg_spend', 'AvgSpend', 'metrics.avg_spend']) || '0').replace(/,/g, '')) || 0;
-      const totalSales = parseFloat((findValue(row, ['total_sales', 'TotalSales', 'metrics.total_sales']) || '0').replace(/,/g, '')) || 0;
-      const totalAcos = parseFloat((findValue(row, ['total_acos', 'TotalAcos', 'metrics.total_acos']) || '0').replace(/,/g, '')) || 0;
-      const totalUnits = parseInt((findValue(row, ['total_units', 'TotalUnits', 'metrics.total_units']) || '0').replace(/,/g, '')) || 0;
-      const organicSales = parseFloat((findValue(row, ['organic_sales', 'OrganicSales', 'metrics.organic_sales']) || '0').replace(/,/g, '')) || 0;
-      const organicOrders = parseInt((findValue(row, ['organic_orders', 'OrganicOrders', 'metrics.organic_orders']) || '0').replace(/,/g, '')) || 0;
-      const pageViews = parseInt((findValue(row, ['page_views', 'PageViews', 'metrics.page_views']) || '0').replace(/,/g, '')) || 0;
-      const adSalesPerc = parseFloat((findValue(row, ['ad_sales_perc', 'AdSalesPerc', 'metrics.ad_sales_perc']) || '0').replace(/,/g, '')) || 0;
-      const tosIs = parseFloat((findValue(row, ['tos_is', 'TosIs', 'metrics.tos_is']) || '0').replace(/,/g, '')) || 0;
-      const aov = parseFloat((findValue(row, ['aov', 'Aov', 'metrics.aov']) || '0').replace(/,/g, '')) || 0;
-      const sessions = parseInt((findValue(row, ['sessions', 'Sessions', 'metrics.sessions']) || '0').replace(/,/g, '')) || 0;
-      const buyBoxPercentage = parseFloat((findValue(row, ['buy_box_percentage', 'BuyBoxPercentage', 'metrics.buy_box_percentage']) || '0').replace(/,/g, '')) || 0;
-      const browserSessions = parseInt((findValue(row, ['browser_sessions', 'BrowserSessions', 'metrics.browser_sessions']) || '0').replace(/,/g, '')) || 0;
-      const mobileAppSessions = parseInt((findValue(row, ['mobile_app_sessions', 'MobileAppSessions', 'metrics.mobile_app_sessions']) || '0').replace(/,/g, '')) || 0;
+      const spend = parseNum(findValue(row, ['spend', 'Spend', 'ad_spend', 'metrics.spend']));
+      const sales = parseNum(findValue(row, ['sales', 'Sales', 'ad_sales', 'metrics.sales']));
+      const impressions = Math.floor(parseNum(findValue(row, ['impressions', 'Impressions', 'metrics.impressions'])));
+      const clicks = Math.floor(parseNum(findValue(row, ['clicks', 'Clicks', 'metrics.clicks'])));
+      const orders = Math.floor(parseNum(findValue(row, ['orders', 'Orders', 'metrics.orders'])));
+
+      const conversions = Math.floor(parseNum(findValue(row, ['conversions', 'Conversions', 'metrics.conversions'])));
+      const sameSkuSales = parseNum(findValue(row, ['same_sku_sales', 'SameSkuSales', 'metrics.same_sku_sales']));
+      const sameSkuOrders = Math.floor(parseNum(findValue(row, ['same_sku_orders', 'SameSkuOrders', 'metrics.same_sku_orders'])));
+      const dailyBudget = parseNum(findValue(row, ['daily_budget', 'DailyBudget', 'metrics.daily_budget']));
+      const totalBudget = parseNum(findValue(row, ['total_budget', 'TotalBudget', 'metrics.total_budget']));
+      const maxSpend = parseNum(findValue(row, ['max_spend', 'MaxSpend', 'metrics.max_spend']));
+      const avgSpend = parseNum(findValue(row, ['avg_spend', 'AvgSpend', 'metrics.avg_spend']));
+      const totalSales = parseNum(findValue(row, ['total_sales', 'TotalSales', 'metrics.total_sales']));
+      const totalAcos = parseNum(findValue(row, ['total_acos', 'TotalAcos', 'metrics.total_acos']));
+      const totalUnits = Math.floor(parseNum(findValue(row, ['total_units', 'TotalUnits', 'metrics.total_units'])));
+      const organicSales = parseNum(findValue(row, ['organic_sales', 'OrganicSales', 'metrics.organic_sales']));
+      const organicOrders = Math.floor(parseNum(findValue(row, ['organic_orders', 'OrganicOrders', 'metrics.organic_orders'])));
+      const pageViews = Math.floor(parseNum(findValue(row, ['page_views', 'PageViews', 'metrics.page_views'])));
+      const adSalesPerc = parseNum(findValue(row, ['ad_sales_perc', 'AdSalesPerc', 'metrics.ad_sales_perc']));
+      const tosIs = parseNum(findValue(row, ['tos_is', 'TosIs', 'metrics.tos_is']));
+      const aov = parseNum(findValue(row, ['aov', 'Aov', 'metrics.aov']));
+      const sessions = Math.floor(parseNum(findValue(row, ['sessions', 'Sessions', 'metrics.sessions'])));
+      const buyBoxPercentage = parseNum(findValue(row, ['buy_box_percentage', 'BuyBoxPercentage', 'metrics.buy_box_percentage']));
+      const browserSessions = Math.floor(parseNum(findValue(row, ['browser_sessions', 'BrowserSessions', 'metrics.browser_sessions'])));
+      const mobileAppSessions = Math.floor(parseNum(findValue(row, ['mobile_app_sessions', 'MobileAppSessions', 'metrics.mobile_app_sessions'])));
 
       const acos = sales > 0 ? (spend / sales) * 100 : 0;
       const roas = spend > 0 ? sales / spend : 0;
@@ -377,12 +384,21 @@ exports.uploadAdsData = async (req, res) => {
           VALUES (${insertColVals}, GETDATE());
       `);
 
-      // Efficiently mark corresponding parent assets active
+      // 3. Mark Asins as having Ads
       await pool.request().query(`
+        -- Update Child ASINs directly advertised
         UPDATE Asins 
         SET Ads = 1 
         WHERE AsinCode IN (SELECT DISTINCT Asin FROM ${tempTableName})
-          AND (Ads IS NULL OR Ads = 0)
+          AND (Ads IS NULL OR Ads = 0);
+
+        -- Update Parent ASINs if any of their children are advertised
+        UPDATE p
+        SET p.Ads = 1
+        FROM Asins p
+        INNER JOIN Asins c ON p.AsinCode = c.ParentAsin
+        WHERE c.AsinCode IN (SELECT DISTINCT Asin FROM ${tempTableName})
+          AND (p.Ads IS NULL OR p.Ads = 0);
       `);
     }
 
@@ -555,10 +571,9 @@ exports.uploadAsinMapping = async (req, res) => {
           .input('parent', sql.VarChar, parent)
           .input('child', sql.VarChar, child)
           .query(`
-            IF EXISTS (SELECT 1 FROM AsinRelations WHERE ChildAsin = @child)
-              UPDATE AsinRelations SET ParentAsin = @parent WHERE ChildAsin = @child
-            ELSE
-              INSERT INTO AsinRelations (ParentAsin, ChildAsin) VALUES (@parent, @child)
+            UPDATE Asins 
+            SET ParentAsin = @parent, UpdatedAt = GETDATE() 
+            WHERE AsinCode = @child
           `);
         inserted++;
       }

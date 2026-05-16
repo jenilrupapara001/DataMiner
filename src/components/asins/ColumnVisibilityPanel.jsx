@@ -1,211 +1,331 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Columns, Check, Eye, EyeOff, RotateCcw, CheckSquare, Square } from 'lucide-react';
-import { ALL_COLUMNS, COLUMN_CATEGORIES } from '../../hooks/useColumnVisibility';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Drawer, 
+  Button, 
+  Input, 
+  Checkbox, 
+  Tag, 
+  Space, 
+  Typography, 
+  Tooltip, 
+  Divider,
+  Badge,
+  Empty
+} from 'antd';
+import { 
+  X, 
+  Columns, 
+  Search, 
+  RotateCcw, 
+  CheckSquare, 
+  Square,
+  Layout,
+  Filter,
+  ArrowRight
+} from 'lucide-react';
+
+const { Text, Title } = Typography;
 
 const ColumnVisibilityPanel = ({ 
   isOpen, 
   onClose, 
-  visibleColumns, 
-  onToggle, 
-  onToggleCategory,
-  onReset,
-  onSelectAll,
-  visibleCount,
-  totalCount,
-  allColumns = ALL_COLUMNS,
-  columnCategories = COLUMN_CATEGORIES
+  visibleColumns: externalVisibleColumns, 
+  onApply,
+  allColumns = [],
+  columnCategories = []
 }) => {
+  const [localVisibleColumns, setLocalVisibleColumns] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const panelRef = useRef(null);
 
+  // Sync with external state when drawer opens
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) {
-        onClose();
-      }
-    };
-    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
+    if (isOpen) {
+      setLocalVisibleColumns([...externalVisibleColumns]);
+    }
+  }, [isOpen, externalVisibleColumns]);
 
-  if (!isOpen) return null;
+  const filteredColumns = useMemo(() => {
+    return allColumns.filter(c => {
+      const matchesCategory = categoryFilter === 'All' || c.category === categoryFilter;
+      const matchesSearch = !search || c.label.toLowerCase().includes(search.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [allColumns, categoryFilter, search]);
 
-  const filteredColumns = allColumns.filter(c => {
-    if (categoryFilter !== 'All' && c.category !== categoryFilter) return false;
-    if (search && !c.label.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const handleToggle = (key) => {
+    const col = allColumns.find(c => c.key === key);
+    if (col?.required) return;
+
+    setLocalVisibleColumns(prev => 
+      prev.includes(key) 
+        ? prev.filter(k => k !== key) 
+        : [...prev, key]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const filteredKeys = filteredColumns.map(c => c.key);
+    setLocalVisibleColumns(prev => [...new Set([...prev, ...filteredKeys])]);
+  };
+
+  const handleDeselectAllFiltered = () => {
+    const filteredKeys = filteredColumns.filter(c => !c.required).map(c => c.key);
+    setLocalVisibleColumns(prev => prev.filter(k => !filteredKeys.includes(k)));
+  };
+
+  const handleReset = () => {
+    const defaults = allColumns.filter(c => c.defaultVisible).map(c => c.key);
+    setLocalVisibleColumns(defaults);
+  };
 
   const isCategoryFullyVisible = (category) => {
-    const categoryColumns = allColumns.filter(c => c.category === category && !c.required);
-    return categoryColumns.every(c => visibleColumns.includes(c.key));
+    const catCols = allColumns.filter(c => c.category === category && !c.required);
+    return catCols.every(c => localVisibleColumns.includes(c.key));
+  };
+
+  const handleToggleCategory = (category) => {
+    const makeVisible = !isCategoryFullyVisible(category);
+    const catKeys = allColumns.filter(c => c.category === category && !c.required).map(c => c.key);
+    
+    if (makeVisible) {
+      setLocalVisibleColumns(prev => [...new Set([...prev, ...catKeys])]);
+    } else {
+      setLocalVisibleColumns(prev => prev.filter(k => !catKeys.includes(k)));
+    }
   };
 
   return (
-    <div 
-      ref={panelRef}
-      className="position-absolute bg-white border rounded-3 shadow-xl d-flex flex-column"
-      style={{ 
-        top: '100%', 
-        right: 0, 
-        zIndex: 1050, 
-        width: '320px',
-        maxHeight: '500px',
-        marginTop: '8px',
-        animation: 'slideDown 0.15s ease-out'
-      }}
+    <Drawer
+      title={
+        <div className="d-flex align-items-center gap-2">
+          <div className="p-2 rounded-3 bg-zinc-100 d-flex align-items-center justify-content-center">
+            <Layout size={18} className="text-zinc-600" />
+          </div>
+          <div>
+            <Title level={5} style={{ margin: 0, fontSize: '16px' }}>Column Visibility</Title>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Configure your dashboard workspace</Text>
+          </div>
+        </div>
+      }
+      placement="right"
+      onClose={onClose}
+      open={isOpen}
+      width={420}
+      extra={
+        <Space>
+          <Tooltip title="Reset to default columns">
+            <Button 
+              type="text" 
+              icon={<RotateCcw size={14} />} 
+              onClick={handleReset}
+              className="text-zinc-500 hover-text-primary"
+            />
+          </Tooltip>
+          <Button 
+            type="text" 
+            icon={<X size={18} />} 
+            onClick={onClose} 
+            className="text-zinc-400"
+          />
+        </Space>
+      }
+      closable={false}
+      footer={
+        <div className="px-3 py-3 d-flex align-items-center justify-content-between bg-zinc-50 rounded-top-4 border-top">
+          <div className="d-flex flex-column">
+            <Text strong style={{ fontSize: '13px' }}>
+              {localVisibleColumns.length} Columns
+            </Text>
+            <Text type="secondary" style={{ fontSize: '11px' }}>selected for display</Text>
+          </div>
+          <Space>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button 
+              type="primary" 
+              icon={<ArrowRight size={14} />} 
+              onClick={() => {
+                onApply(localVisibleColumns);
+                onClose();
+              }}
+              style={{
+                background: '#18181b',
+                borderColor: '#18181b',
+                display: 'flex',
+                alignItems: 'center',
+                flexDirection: 'row-reverse',
+                gap: '8px'
+              }}
+            >
+              Apply Changes
+            </Button>
+          </Space>
+        </div>
+      }
+      bodyStyle={{ padding: 0, display: 'flex', flexDirection: 'column' }}
     >
       <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .col-item {
-          padding: 6px 12px;
+        .col-list-item {
+          padding: 10px 20px;
+          transition: all 0.2s;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 11px;
-          transition: background 0.1s;
-          border-radius: 6px;
-          margin: 1px 4px;
+          border-left: 3px solid transparent;
         }
-        .col-item:hover { background: #f4f4f5; }
-        .col-item.required { opacity: 0.6; cursor: not-allowed; }
-        .col-item.required:hover { background: transparent; }
-        .cat-btn {
-          padding: 4px 10px;
-          font-size: 10px;
-          font-weight: 600;
-          border-radius: 20px;
-          border: 1.5px solid #e5e7eb;
+        .col-list-item:hover {
+          background: #f8fafc;
+          border-left-color: #3b82f6;
+        }
+        .col-list-item.selected {
+          background: #eff6ff;
+        }
+        .category-pill {
+          cursor: pointer;
+          transition: all 0.2s;
+          border-radius: 100px;
+          padding: 4px 12px;
+          border: 1px solid #e2e8f0;
           background: white;
-          color: #71717a;
-          cursor: pointer;
-          transition: all 0.15s;
-          white-space: nowrap;
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 500;
         }
-        .cat-btn:hover { border-color: #18181b; color: #18181b; }
-        .cat-btn.active { background: #18181b; color: white; border-color: #18181b; }
+        .category-pill:hover {
+          border-color: #3b82f6;
+          color: #3b82f6;
+        }
+        .category-pill.active {
+          background: #18181b;
+          border-color: #18181b;
+          color: white;
+        }
+        .search-container {
+          padding: 16px 20px;
+          background: white;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
       `}</style>
 
-      {/* Header */}
-      <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center">
-        <div className="d-flex align-items-center gap-2">
-          <Columns size={16} className="text-zinc-500" />
-          <span className="fw-bold text-zinc-800" style={{ fontSize: '13px' }}>Columns</span>
-          <span className="badge bg-zinc-100 text-zinc-500" style={{ fontSize: '10px' }}>
-            {visibleCount}/{totalCount}
-          </span>
-        </div>
-        <button className="btn btn-ghost p-1 rounded-circle border-0" onClick={onClose}>
-          <X size={16} className="text-zinc-400" />
-        </button>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="px-4 py-2 border-bottom d-flex gap-2">
-        <button 
-          className="btn btn-sm btn-outline-secondary rounded-pill d-flex align-items-center gap-1"
-          onClick={onSelectAll}
-          style={{ fontSize: '10px', padding: '4px 12px' }}
-        >
-          <CheckSquare size={12} /> Select All
-        </button>
-        <button 
-          className="btn btn-sm btn-outline-secondary rounded-pill d-flex align-items-center gap-1"
-          onClick={onReset}
-          style={{ fontSize: '10px', padding: '4px 12px' }}
-        >
-          <RotateCcw size={12} /> Reset
-        </button>
-      </div>
-
-      {/* Category Pills */}
-      <div className="px-3 py-2 d-flex gap-1 flex-wrap" style={{ overflowX: 'auto' }}>
-        <button 
-          className={`cat-btn ${categoryFilter === 'All' ? 'active' : ''}`}
-          onClick={() => setCategoryFilter('All')}
-        >
-          All
-        </button>
-        {columnCategories.map(cat => (
-          <button
-            key={cat}
-            className={`cat-btn ${categoryFilter === cat ? 'active' : ''}`}
-            onClick={() => setCategoryFilter(cat)}
-            onDoubleClick={() => onToggleCategory(cat, !isCategoryFullyVisible(cat))}
-            title={`Double-click to ${isCategoryFullyVisible(cat) ? 'hide' : 'show'} all ${cat} columns`}
-          >
-            {cat}
-            <span className="ms-1 text-zinc-400" style={{ fontSize: '9px' }}>
-              ({allColumns.filter(c => c.category === cat && visibleColumns.includes(c.key)).length}/{allColumns.filter(c => c.category === cat).length})
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="px-3 py-1">
-        <input
-          type="text"
-          className="form-control form-control-sm rounded-2"
-          placeholder="Search columns..."
+      {/* Toolbar */}
+      <div className="search-container border-bottom">
+        <Input
+          prefix={<Search size={14} className="text-zinc-400 me-1" />}
+          placeholder="Search for data fields..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ fontSize: '11px', height: '30px', border: '1.5px solid #e5e7eb' }}
+          allowClear
+          className="rounded-3"
+          style={{ height: '40px' }}
         />
+        
+        <div className="mt-3 d-flex gap-2 overflow-auto pb-1 custom-scrollbar">
+          <div 
+            className={`category-pill ${categoryFilter === 'All' ? 'active' : ''}`}
+            onClick={() => setCategoryFilter('All')}
+          >
+            All Fields
+          </div>
+          {columnCategories.map(cat => (
+            <div
+              key={cat}
+              className={`category-pill ${categoryFilter === cat ? 'active' : ''}`}
+              onClick={() => setCategoryFilter(cat)}
+            >
+              {cat}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Action Header */}
+      <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center justify-content-between">
+        <Text type="secondary" style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {categoryFilter} Fields ({filteredColumns.length})
+        </Text>
+        <Space size={16}>
+          <Button 
+            type="link" 
+            size="small" 
+            onClick={handleSelectAllFiltered}
+            className="p-0 text-primary"
+            style={{ fontSize: '11px' }}
+          >
+            Select All
+          </Button>
+          <Button 
+            type="link" 
+            size="small" 
+            danger
+            onClick={handleDeselectAllFiltered}
+            className="p-0"
+            style={{ fontSize: '11px' }}
+          >
+            Clear All
+          </Button>
+        </Space>
       </div>
 
       {/* Column List */}
-      <div className="flex-grow-1 overflow-auto px-1 py-2" style={{ maxHeight: '300px' }}>
-        {filteredColumns.map(col => {
-          const isVisible = visibleColumns.includes(col.key);
-          const isRequired = col.required;
-          
-          return (
-            <div
-              key={col.key}
-              className={`col-item ${isRequired ? 'required' : ''}`}
-              onClick={() => !isRequired && onToggle(col.key)}
-              title={isRequired ? 'This column is required and cannot be hidden' : `Click to ${isVisible ? 'hide' : 'show'}`}
-            >
-              {/* Checkbox */}
+      <div className="flex-grow-1 overflow-auto">
+        {filteredColumns.length > 0 ? (
+          filteredColumns.map((col, idx) => {
+            const isVisible = localVisibleColumns.includes(col.key);
+            const isRequired = col.required;
+            
+            return (
               <div 
-                style={{
-                  width: '18px', height: '18px', borderRadius: '5px',
-                  border: `2px solid ${isVisible ? '#18181b' : '#d1d5db'}`,
-                  background: isVisible ? '#18181b' : 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, opacity: isRequired ? 0.5 : 1
-                }}
+                key={col.key}
+                className={`col-list-item d-flex align-items-center justify-content-between ${isVisible ? 'selected' : ''}`}
+                onClick={() => handleToggle(col.key)}
               >
-                {isVisible && <Check size={11} color="white" />}
+                <div className="d-flex align-items-center gap-3">
+                  <Checkbox 
+                    checked={isVisible} 
+                    disabled={isRequired}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => handleToggle(col.key)}
+                  />
+                  <div className="d-flex flex-column">
+                    <Text strong={isVisible} style={{ fontSize: '13px', color: isVisible ? '#1e293b' : '#64748b' }}>
+                      {col.label}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: '10px' }}>
+                      {col.category}
+                    </Text>
+                  </div>
+                </div>
+                
+                {isRequired ? (
+                  <Tag color="default" className="m-0 border-0 bg-zinc-200 text-zinc-500" style={{ fontSize: '9px' }}>REQUIRED</Tag>
+                ) : (
+                  <div className="d-flex align-items-center gap-2">
+                    <div style={{ 
+                      width: '8px', 
+                      height: '8px', 
+                      borderRadius: '50%', 
+                      background: isVisible ? '#10b981' : '#e2e8f0' 
+                    }} />
+                  </div>
+                )}
               </div>
-              
-              {/* Label */}
-              <span className={`flex-grow-1 ${isVisible ? 'text-zinc-800 fw-medium' : 'text-zinc-400'}`}>
-                {col.label}
-              </span>
-              
-              {/* Visibility Icon */}
-              {!isRequired && (
-                isVisible ? 
-                  <Eye size={12} className="text-zinc-400" /> : 
-                  <EyeOff size={12} className="text-zinc-300" />
-              )}
-              
-              {/* Required Badge */}
-              {isRequired && (
-                <span className="badge bg-zinc-100 text-zinc-400" style={{ fontSize: '8px' }}>Required</span>
-              )}
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="py-5 px-4 text-center">
+            <Empty 
+              image={Empty.PRESENTED_IMAGE_SIMPLE} 
+              description={
+                <div className="d-flex flex-column gap-1">
+                  <Text type="secondary">No columns matching "{search}"</Text>
+                  <Button type="link" size="small" onClick={() => setSearch('')}>Clear search</Button>
+                </div>
+              }
+            />
+          </div>
+        )}
       </div>
-    </div>
+    </Drawer>
   );
 };
 

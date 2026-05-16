@@ -84,8 +84,8 @@ exports.getAdsReport = async (req, res) => {
             request.input('sellerId', sql.VarChar, sellerId);
         }
 
-        // 1. Fetch relations
-        const relResult = await pool.request().query('SELECT ParentAsin, ChildAsin FROM AsinRelations');
+        // 1. Fetch relations from Asins table instead of non-existent AsinRelations
+        const relResult = await pool.request().query('SELECT AsinCode as ChildAsin, ParentAsin FROM Asins WHERE ParentAsin IS NOT NULL AND ParentAsin <> \'\'');
         const relations = relResult.recordset;
         const childToParent = {};
         relations.forEach(r => { childToParent[r.ChildAsin] = r.ParentAsin; });
@@ -99,7 +99,8 @@ exports.getAdsReport = async (req, res) => {
                 a.Category,
                 a.Brand,
                 a.Sku as MasterSku,
-                a.CreatedAt as AsinCreatedAt
+                a.CreatedAt as AsinCreatedAt,
+                a.ParentAsin as MasterParentAsin
             FROM AdsPerformance p
             LEFT JOIN Asins a ON p.Asin = a.AsinCode
             ${whereClause}
@@ -118,7 +119,7 @@ exports.getAdsReport = async (req, res) => {
                     sku: row.AdvertisedSku || row.MasterSku || 'None',
                     title: row.Title || 'Unknown',
                     imageUrl: row.ImageUrl,
-                    parentAsin: childToParent[row.Asin] || row.Asin, // Use mapping or self
+                    parentAsin: row.MasterParentAsin || childToParent[row.Asin] || row.Asin, // Use master data, mapping or self
                     createdAt: row.AsinCreatedAt,
                     ad_spend: 0, ad_sales: 0, impressions: 0, clicks: 0, orders: 0,
                     conversions: 0, same_sku_sales: 0, same_sku_orders: 0,

@@ -162,6 +162,7 @@ exports.getAsins = async (req, res) => {
         if (priceDispute !== undefined && priceDispute !== '') reqObj.input('priceDispute', sql.Bit, priceDispute === 'true' ? 1 : 0);
         if (req.query.bsrTrend) reqObj.input('bsrTrend', sql.NVarChar, req.query.bsrTrend);
         if (req.query.ratingTrend) reqObj.input('ratingTrend', sql.NVarChar, req.query.ratingTrend);
+        if (req.query.ads !== undefined && req.query.ads !== '') reqObj.input('ads', sql.Bit, req.query.ads === 'true' ? 1 : 0);
         return reqObj;
     };
 
@@ -248,6 +249,9 @@ exports.getAsins = async (req, res) => {
 
     if (req.query.hasVideo !== undefined && req.query.hasVideo !== '') {
       whereClause += ' AND VideoCount ' + (req.query.hasVideo === 'true' ? '> 0' : '= 0');
+    }
+    if (req.query.ads !== undefined && req.query.ads !== '') {
+      whereClause += ' AND a.Ads = @ads';
     }
 
     if (req.query.minTitleScore) {

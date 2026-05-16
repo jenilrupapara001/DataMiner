@@ -41,6 +41,7 @@ import Chart from 'react-apexcharts';
 import { CHART_COLORS, areaChartOptions } from '../utils/chartTheme';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { useDateRange } from '../contexts/DateRangeContext';
+import { usePageTitle } from '../contexts/PageTitleContext';
 import { format } from 'date-fns';
 
 // Define canonical metrics dictionary for custom dashboard selector from screenshot
@@ -315,8 +316,13 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
 
 export default function AdsManagerPage() {
   const { startDate, endDate, updateDateRange } = useDateRange();
+  const { setPageTitle } = usePageTitle();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
+
+  useEffect(() => {
+    setPageTitle('Ads Manager');
+  }, [setPageTitle]);
 
   // State for dynamic multi-metric chart customization from screenshot
   const [chartConfigMetrics, setChartConfigMetrics] = useState(['spend', 'sales', 'acos']);
@@ -741,21 +747,24 @@ export default function AdsManagerPage() {
         }}
       />
 
-      {/* PREMIUM MODERN BREADCRUMB BAR / DASHBOARD HEADER */}
-      <div className="ads-top-header bg-white border-bottom shadow-sm">
-        <div className="ads-header-left">
-          <div className="p-2 bg-indigo-50 rounded-3 text-indigo-600 shadow-sm d-flex align-items-center justify-content-center" style={{ border: '1px solid #e0e7ff' }}>
+      {/* COMPACT DASHBOARD FILTERS HEADER */}
+      <div className="ads-top-header py-2">
+        <div className="d-flex align-items-center gap-3">
+          <h1 className="m-0 fw-bolder text-dark d-none d-md-block" style={{ fontSize: '18px', letterSpacing: '-0.01em' }}>Ads Manager</h1>
+          <div className="p-2 bg-indigo-50 rounded-3 text-indigo-600 shadow-sm d-flex align-items-center justify-content-center" style={{ border: '1px solid #e0e7ff', width: '36px', height: '36px' }}>
             <Activity size={18} />
           </div>
-          <div>
-            <div className="d-flex align-items-center gap-2 text-secondary small fw-medium mb-0.5">
-              <span style={{ fontSize: '11px' }}>Marketing</span> <ChevronRight size={11} /> <span className="text-dark fw-semibold" style={{ fontSize: '11px' }}>Ads Manager</span>
-            </div>
-            <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>Performance Dashboard</Title>
-          </div>
+          <Input.Search
+            placeholder="Search ASIN, SKU or Title..."
+            allowClear
+            onSearch={setSearchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: 240 }}
+            className="modern-search"
+          />
         </div>
 
-        <div className="ads-header-right">
+        <Space className="ads-header-right" size={12}>
           {/* Modern Ant Segmented Tab */}
           <Segmented
             value={groupBy}
@@ -764,7 +773,6 @@ export default function AdsManagerPage() {
               { label: 'ASIN Level', value: 'asin' },
               { label: 'Parent Level', value: 'parent' }
             ]}
-            style={{ padding: '3px' }}
           />
 
           {/* Seller Selection */}
@@ -786,9 +794,9 @@ export default function AdsManagerPage() {
 
           <Button 
             onClick={fetchAdsData} 
-            icon={<RefreshCw size={14} className={loading ? 'spin' : ''} />} 
-            className="fw-bold" 
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+            loading={loading}
+            icon={<RefreshCw size={14} />} 
+            className="fw-bold"
           >
             REFRESH
           </Button>
@@ -797,16 +805,20 @@ export default function AdsManagerPage() {
             type="primary" 
             onClick={() => setShowImportModal(true)} 
             icon={<Download size={14} />} 
-            className="fw-bold bg-indigo-600 border-indigo-600" 
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+            className="fw-bold d-flex align-items-center justify-content-center gap-2"
+            style={{ 
+              backgroundColor: '#4f46e5', 
+              borderColor: '#4f46e5',
+              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)'
+            }}
           >
-            Import Ads Data
+            IMPORT ADS
           </Button>
-        </div>
+        </Space>
       </div>
 
       {/* ANALYTICS MODULE AREA - COMPACT RECTANGULAR PILLS STYLE */}
-      <div className="flex-shrink-0 overflow-hidden bg-light" style={{ maxHeight: showDashboardCharts ? '48px' : '0px', transition: 'all 0.3s ease', opacity: showDashboardCharts ? 1 : 0 }}>
+      <div className="flex-shrink-0 overflow-hidden bg-light border-bottom" style={{ maxHeight: showDashboardCharts ? '48px' : '0px', transition: 'all 0.3s ease', opacity: showDashboardCharts ? 1 : 0 }}>
         <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {[
             { label: 'Ad Spend', key: 'spend', color: '#4F46E5' },
@@ -855,6 +867,8 @@ export default function AdsManagerPage() {
               </div>
             );
           })}
+
+
         </div>
       </div>
 
@@ -945,17 +959,6 @@ export default function AdsManagerPage() {
           >
             {showDashboardCharts ? 'HIDE ANALYTICS' : 'VIEW ANALYTICS'}
           </Button>
-
-          <div style={{ width: '1px', height: '24px', backgroundColor: '#f1f5f9' }}></div>
-
-          <Input
-            placeholder="Search dynamic products..."
-            prefix={<Search size={14} className="text-secondary me-1" />}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{ width: '260px', borderRadius: '8px' }}
-            allowClear
-          />
         </div>
 
         <div className="small text-muted fw-bold bg-light px-3 py-1 rounded-pill border" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
@@ -1272,46 +1275,65 @@ export default function AdsManagerPage() {
         .ads-page-container {
           display: flex;
           flex-direction: column;
-          height: calc(100vh - 60px);
+          flex: 1;
           overflow: hidden;
           background-color: #f4f7fe;
-          margin: -1.5rem -2rem;
+          /* Counteract parent padding (1.5rem top, 2rem sides) from .routes-container in App.css */
+          margin: -1.5rem -2rem -1.5rem -2rem; 
         }
         .ads-top-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 10px 16px;
-          z-index: 20;
+          padding: 10px 2rem;
+          position: sticky;
+          top: -1.5rem; /* Offset the negative margin of container */
+          z-index: 50;
+          background: #fff;
+          border-bottom: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+          flex-shrink: 0;
         }
         .ads-header-left {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 16px;
         }
         .ads-header-right {
           display: flex;
           align-items: center;
           gap: 12px;
+          flex-wrap: nowrap;
+        }
+        @media (max-width: 1200px) {
+          .ads-header-right {
+            gap: 8px;
+          }
+          .ads-header-right > .ant-segmented,
+          .ads-header-right > div:has(input) {
+             display: none; /* Hide less critical items on smaller screens or use a menu */
+          }
         }
         @media (max-width: 992px) {
           .ads-page-container {
-            margin: -0.75rem;
-            height: calc(100vh - 60px);
+            margin: 0;
+            height: auto;
+            min-height: calc(100vh - 60px);
           }
           .ads-top-header {
             flex-direction: column;
             align-items: stretch !important;
             gap: 12px;
-            padding: 12px 16px;
+            padding: 16px;
           }
           .ads-header-right {
             flex-wrap: wrap;
             gap: 8px;
-            justify-content: space-between;
+            justify-content: flex-start;
           }
           .ads-header-right > * {
             flex-grow: 1;
+            min-width: 140px;
           }
         }
         @media (max-width: 768px) {

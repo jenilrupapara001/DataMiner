@@ -179,6 +179,16 @@ export function useColumnVisibility() {
     } catch (e) {}
   }, [isCatalogManager, allowedCategoriesForCatalogManager]);
 
+  const updateVisibleColumns = useCallback((newKeys) => {
+    const requiredKeys = ALL_COLUMNS.filter(c => c.required).map(c => c.key);
+    const finalKeys = [...new Set([...newKeys, ...requiredKeys])];
+    
+    setVisibleColumns(finalKeys);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(finalKeys));
+    } catch (e) {}
+  }, []);
+
   const finalVisibleColumns = useMemo(() => {
     if (isCatalogManager) {
       return visibleColumns.filter(key => {
@@ -196,6 +206,7 @@ export function useColumnVisibility() {
     toggleCategory,
     resetToDefaults,
     selectAll,
+    updateVisibleColumns,
     visibleCount: finalVisibleColumns.length,
     totalCount: filteredAllColumns.length,
     allColumns: filteredAllColumns,
