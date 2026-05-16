@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import { X, Upload, FileDown, FileUp, Store, Check, AlertCircle, RefreshCw, Globe, FileType } from 'lucide-react';
 import { sellerApi, bulkApi, asinApi } from '../../services/api';
 
-const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
-    const [activeTab, setActiveTab] = useState('catalog'); // 'catalog' | 'tags' | 'global'
+const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', initialTab = 'catalog' }) => {
+    const [activeTab, setActiveTab] = useState(initialTab); // 'catalog' | 'tags' | 'global' | 'ajio_catalog'
     const [sellers, setSellers] = useState([]);
-    const [selectedSellerId, setSelectedSellerId] = useState('');
+    const [selectedSellerId, setSelectedSellerId] = useState(initialSellerId);
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [result, setResult] = useState(null);
@@ -15,8 +15,12 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
     const [allowCreation, setAllowCreation] = useState(true);
 
     useEffect(() => {
-        if (isOpen) fetchSellers();
-    }, [isOpen]);
+        if (isOpen) {
+            fetchSellers();
+            if (initialSellerId) setSelectedSellerId(initialSellerId);
+            if (initialTab) setActiveTab(initialTab);
+        }
+    }, [isOpen, initialSellerId, initialTab]);
 
     const fetchSellers = async () => {
         try {
@@ -55,6 +59,8 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
             let response;
             if (activeTab === 'catalog') {
                 response = await bulkApi.catalogSync(file, selectedSellerId);
+            } else if (activeTab === 'ajio_catalog') {
+                response = await bulkApi.ajioCatalogImport(file, selectedSellerId);
             } else if (activeTab === 'tags') {
                 response = await bulkApi.tagsImport(file, selectedSellerId);
             } else if (activeTab === 'global') {
@@ -79,8 +85,8 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
 
     const handleDownloadTemplate = async () => {
         try {
-            if (activeTab === 'catalog') {
-                await bulkApi.downloadCatalogTemplate(marketplace);
+            if (activeTab === 'catalog' || activeTab === 'ajio_catalog') {
+                await bulkApi.downloadCatalogTemplate(activeTab === 'ajio_catalog' ? 'ajio' : marketplace);
             } else if (activeTab === 'octoparse') {
                 // Octoparse JSON doesn't have a template, it's the raw task output
                 alert('Octoparse ingestion uses the raw JSON output from your Octoparse tasks.');
@@ -95,16 +101,20 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
     const renderSchemaGuidance = () => {
         const schemas = {
             catalog: {
-                ajio: ['Jio Code', 'Brand Name', 'SKU', 'Realeased date', 'Price'],
+                ajio: ['Article Code Number', 'SKU Number', 'ASP (GROSS)', 'Jio Code', 'Brand Name'],
                 amazon: ['ASIN', 'SKU', 'Price', 'Parent ASIN', 'Release Date']
+            },
+            ajio_catalog: {
+                ajio: ['Article Code Number', 'SKU Number', 'ASP (GROSS)'],
+                amazon: ['Article Code Number', 'SKU Number', 'ASP (GROSS)']
             },
             tags: {
                 ajio: ['Jio Code', 'Tags'],
                 amazon: ['ASIN', 'Tags']
             },
             global: {
-                ajio: ['Brand Name', 'Jio Code', 'SKU', 'Realeased date', 'Price'],
-                amazon: ['Seller Name', 'ASIN', 'SKU', 'Parent ASIN', 'Release Date', 'Price']
+                ajio: ['Brand Name', 'Jio Code', 'SKU', 'Released Date', 'Price'],
+                amazon: ['Seller Name', 'ASIN', 'SKU', 'Parent ASIN', 'Released Date', 'Price']
             },
             octoparse: {
                 ajio: ['Original_URL', 'Product_ID', 'Price', 'Image_URLs', 'Product_Name'],
@@ -117,13 +127,18 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
         return (
             <div className="bg-blue-50 border border-blue-100 rounded-3 p-3 mb-3" style={{ fontSize: '12px' }}>
                 <span className="fw-bold text-blue-900 d-block mb-2">
-                    {activeTab === 'octoparse' ? 'Expected JSON Structure (Task Output):' : `Required Schema (${marketplace === 'ajio' ? 'Ajio' : 'Amazon'}):`}
+                    {activeTab === 'octoparse' ? 'Expected JSON Structure (Task Output):' : `Required Schema (${marketplace === 'ajio' ? 'Ajio' : 'Amazon Marketplace'}):`}
                 </span>
                 <div className="d-flex flex-wrap gap-2">
                     {activeSchema.map(col => (
                         <div key={col} style={{ background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>{col}</div>
                     ))}
                 </div>
+                {activeTab === 'catalog' && marketplace === 'ajio' && (
+                    <div className="mt-2 text-zinc-500 italic" style={{ fontSize: '10px' }}>
+                        * Supports both standard headers and "Article Code Number" sheets.
+                    </div>
+                )}
                 {activeTab === 'octoparse' && (
                     <div className="mt-2 text-zinc-500 italic" style={{ fontSize: '10px' }}>
                         * Platform detection is automatic based on URLs in the JSON.
@@ -164,6 +179,13 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                         style={{ fontSize: '12px' }}
                     >
                         Catalog Sync
+                    </button>
+                    <button
+                        className={`flex-grow-1 py-2 border-0 rounded-2 fw-bold transition-all ${activeTab === 'ajio_catalog' ? 'bg-zinc-100 text-zinc-900' : 'bg-transparent text-zinc-400 hover-bg-zinc-50'}`}
+                        onClick={() => { setActiveTab('ajio_catalog'); setFile(null); setResult(null); setError(null); setMarketplace('ajio'); }}
+                        style={{ fontSize: '12px' }}
+                    >
+                        Ajio Catalog
                     </button>
                     <button
                         className={`flex-grow-1 py-2 border-0 rounded-2 fw-bold transition-all ${activeTab === 'tags' ? 'bg-zinc-100 text-zinc-900' : 'bg-transparent text-zinc-400 hover-bg-zinc-50'}`}
@@ -226,9 +248,16 @@ const BulkImportModal = ({ isOpen, onClose, onComplete }) => {
                                 style={{ fontSize: '13px', borderRadius: '8px' }}
                             >
                                 <option value="">Select a seller...</option>
-                                {sellers.map(s => (
-                                    <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
-                                ))}
+                                {sellers
+                                    .filter(s => {
+                                        const m = s.marketplace?.toLowerCase();
+                                        if (marketplace === 'ajio') return m === 'ajio';
+                                        return m === 'amazon.in' || m === 'amazon' || !m;
+                                    })
+                                    .map(s => (
+                                        <option key={s.Id || s._id} value={s.Id || s._id}>{s.name} ({s.sellerId})</option>
+                                    ))
+                                }
                             </select>
                         </div>
                     )}

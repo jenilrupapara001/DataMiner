@@ -6,6 +6,7 @@ const { authenticate: protect } = require('../middleware/auth');
 
 const {
     catalogSync,
+    ajioBulkImport,
     tagsImport,
     downloadCatalogTemplate,
     octoparseJsonUpload
@@ -13,6 +14,9 @@ const {
 
 // Catalog sync - upload CSV with Parent ASIN, Child ASIN, SKU
 router.post('/catalog-sync', protect, upload.single('file'), catalogSync);
+
+// Ajio specialized catalog import
+router.post('/ajio-catalog-sync', protect, upload.single('file'), ajioBulkImport);
 
 // Tags import - upload CSV with ASIN codes and tags
 router.post('/tags-import', protect, upload.single('file'), tagsImport);

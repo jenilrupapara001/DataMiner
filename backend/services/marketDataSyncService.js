@@ -2433,8 +2433,8 @@ class MarketDataSyncService {
                                 .input('asinCode', sql.VarChar, normalizedCode)
                                 .input('sellerId', sql.VarChar, sellerId)
                                 .query(`
-                                    INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-                                    VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', GETDATE(), GETDATE())
+                                    INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+                                    VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
                                 `);
                             
                             // Mock basic object for mapping

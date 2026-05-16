@@ -1124,6 +1124,12 @@ export const bulkApi = {
     formData.append('sellerId', sellerId);
     return api.post('/bulk/catalog-sync', formData);
   },
+  ajioCatalogImport: async (file, sellerId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sellerId', sellerId);
+    return api.post('/bulk/ajio-catalog-sync', formData);
+  },
   tagsImport: async (file, sellerId) => {
     const formData = new FormData();
     formData.append('file', file);

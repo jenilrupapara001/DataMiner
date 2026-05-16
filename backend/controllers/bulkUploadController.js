@@ -5,6 +5,26 @@ const path = require('path');
 const AutoTagService = require('../services/autoTagService');
 const SystemLogService = require('../services/SystemLogService');
 
+/**
+ * Helper to get value from row with multiple possible keys (case-insensitive and space-insensitive)
+ */
+const getValue = (row, possibleKeys) => {
+    const keys = Object.keys(row);
+    // Remove all non-alphanumeric characters for comparison
+    const normalize = (str) => str.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    
+    const lowerKeys = keys.map(k => normalize(k));
+    const targetLower = possibleKeys.map(k => normalize(k));
+
+    for (let i = 0; i < targetLower.length; i++) {
+        const index = lowerKeys.indexOf(targetLower[i]);
+        if (index !== -1) {
+            return row[keys[index]] || '';
+        }
+    }
+    return '';
+};
+
 // Helper to robustly parse multiple date formats, preferring DD/MM/YYYY as requested
 const parseFlexibleDate = (val) => {
     if (!val) return null;
@@ -108,10 +128,28 @@ exports.catalogSync = async (req, res) => {
         let data = [];
         for (const sheetName of workbook.SheetNames) {
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+            let jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+            
             if (jsonData.length > 0) {
-                data = jsonData;
-                break;
+                // Robust Header Search
+                const keys = Object.keys(jsonData[0]);
+                const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid'];
+                
+                if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
+                    const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+                        Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
+                    );
+                    if (headerIdx !== -1) {
+                        jsonData = XLSX.utils.sheet_to_json(sheet, { range: headerIdx, defval: '', raw: false });
+                    }
+                }
+                
+                if (jsonData.length > 0) {
+                    data = jsonData;
+                    break;
+                }
             }
         }
 
@@ -139,55 +177,58 @@ exports.catalogSync = async (req, res) => {
         if (sellerId && sellerId !== 'all') {
             const defaultSeller = await pool.request()
                 .input('id', sql.VarChar, sellerId)
-                .query('SELECT Id, Name FROM Sellers WHERE Id = @id');
+                .query('SELECT Id, Name, Marketplace FROM Sellers WHERE Id = @id');
             if (defaultSeller.recordset.length > 0) {
-                sellerMapByBrand.set(defaultSeller.recordset[0].Name.toLowerCase(), sellerId);
+                const s = defaultSeller.recordset[0];
+                sellerMapByBrand.set(s.Name.toLowerCase(), { id: s.Id, marketplace: s.Marketplace });
             }
         }
-
-        const getValue = (row, possibleKeys) => {
-            const keys = Object.keys(row);
-            const lowerKeys = keys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-            const targetLower = possibleKeys.map(k => k.toLowerCase().trim().replace(/[\s_-]/g, ''));
-
-            for (let i = 0; i < lowerKeys.length; i++) {
-                if (targetLower.includes(lowerKeys[i])) {
-                    return row[keys[i]];
-                }
-            }
-            return '';
-        };
 
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['ASIN', 'Child ASIN', 'asin', 'child_asin', 'asinCode', 'Jio Code', 'jio_code', 'JioCode', 'Jio-code', 'ASIN_Code', 'Product_ID'])
-                    .toString().trim().toUpperCase();
-                const parentAsin = getValue(row, ['PARENT ASIN', 'Parent ASIN', 'parent_asin', 'parentAsin', 'Parent_ASIN', 'ParentASIN', 'Parent_Code', 'ParentCode'])
-                    .toString().trim().toUpperCase();
-                const sku = getValue(row, ['SKU', 'sku']).toString().trim();
-                const uploadedPrice = parseFloat(getValue(row, ['PPrice', 'Price', 'price', 'Uploaded Price', 'uploaded_price'])) || null;
-                const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name']).toString().trim();
+                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref']).toString().trim().toUpperCase();
+                const parentAsin = getValue(row, ['Parent ASIN', 'ParentAsin', 'parent_asin', 'Group ID', 'GroupID', 'Parent_Code', 'ParentCode']).toString().trim().toUpperCase();
+                const sku = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber']).toString().trim();
+                const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
+                const rawPrice = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'MRP', 'Selling Price', 'Uploaded Price', 'ASP_GROSS', 'asp_gross', 'selling_price']);
+                const rawDate = getValue(row, ['Release Date', 'Release_Date', 'Released Date', 'date', 'updated_at', 'Realeased date', 'Launch Date', 'Launch_Date']);
+                
+                const uploadedPrice = parseFloat(rawPrice) || null;
 
-                // 1. Resolve Seller ID
+                // 1. Resolve Seller ID & Marketplace
                 let rowSellerId = sellerId;
+                let rowMarketplace = null;
+
+                // Seed from default if available
+                if (sellerId && sellerId !== 'all') {
+                    for (const val of sellerMapByBrand.values()) {
+                        if (val.id === sellerId) {
+                            rowMarketplace = val.marketplace;
+                            break;
+                        }
+                    }
+                }
+
                 if (brandName) {
                     const brandLower = brandName.toLowerCase();
                     if (sellerMapByBrand.has(brandLower)) {
-                        rowSellerId = sellerMapByBrand.get(brandLower);
+                        const sInfo = sellerMapByBrand.get(brandLower);
+                        rowSellerId = sInfo.id;
+                        rowMarketplace = sInfo.marketplace;
                     } else {
                         // Look up seller by name
                         const sellerLookup = await pool.request()
                             .input('name', sql.NVarChar, brandName)
-                            .query('SELECT Id FROM Sellers WHERE Name = @name');
+                            .query('SELECT Id, Marketplace FROM Sellers WHERE Name = @name');
 
                         if (sellerLookup.recordset.length > 0) {
                             rowSellerId = sellerLookup.recordset[0].Id;
-                            sellerMapByBrand.set(brandLower, rowSellerId);
+                            rowMarketplace = sellerLookup.recordset[0].Marketplace;
+                            sellerMapByBrand.set(brandLower, { id: rowSellerId, marketplace: rowMarketplace });
                         } else if (!rowSellerId || rowSellerId === 'all') {
-                            // If no seller found and no default provided, skip this row
                             results.skipped++;
                             results.errors.push({ asin: childAsin, reason: `Seller/Brand "${brandName}" not found in database.` });
                             continue;
@@ -195,8 +236,24 @@ exports.catalogSync = async (req, res) => {
                     }
                 }
 
+                // If we still don't have marketplace, fetch it for the rowSellerId
+                if (rowSellerId && rowSellerId !== 'all' && !rowMarketplace) {
+                    const mLookup = await pool.request()
+                        .input('sid', sql.VarChar, rowSellerId)
+                        .query('SELECT Marketplace FROM Sellers WHERE Id = @sid');
+                    if (mLookup.recordset.length > 0) {
+                        rowMarketplace = mLookup.recordset[0].Marketplace;
+                    }
+                }
+
+                if (!childAsin && !sku && !brandName) continue; // Skip completely empty rows silently
+
                 if (!childAsin || !rowSellerId || rowSellerId === 'all') {
                     results.skipped++;
+                    results.errors.push({ 
+                        asin: childAsin || 'Row ' + (results.total - data.length + data.indexOf(row) + 1), 
+                        reason: !childAsin ? 'Could not find "Article Code Number" or "ASIN" column.' : 'No target seller selected.' 
+                    });
                     continue;
                 }
 
@@ -239,6 +296,7 @@ exports.catalogSync = async (req, res) => {
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Tags = @tags,
                                 Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
+                                Marketplace = CASE WHEN Marketplace IS NULL OR Marketplace = '' THEN (SELECT Marketplace FROM Sellers WHERE Id = @sellerId) ELSE Marketplace END,
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
@@ -256,8 +314,8 @@ exports.catalogSync = async (req, res) => {
                         .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
                         .input('brand', sql.NVarChar, brandName || null)
                         .query(`
-                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, GETDATE(), GETDATE())
+                            INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, Marketplace, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
                         `);
                     results.created++;
                 }
@@ -306,6 +364,174 @@ exports.catalogSync = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+/**
+ * Specialized Ajio Bulk Import Model
+ * Parses: Article Code Number, SKU Number, ASP (GROSS)
+ * Ignores all other headers.
+ */
+exports.ajioBulkImport = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+
+        const sellerId = req.body.sellerId;
+        if (!sellerId) {
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
+            return res.status(400).json({ success: false, error: 'Seller ID is required for Ajio import' });
+        }
+
+        const filePath = req.file.path;
+        const workbook = XLSX.readFile(filePath);
+
+        // 1. Initial attempt to read data
+        let data = [];
+        for (const sheetName of workbook.SheetNames) {
+            const sheet = workbook.Sheets[sheetName];
+            let jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+            
+            if (jsonData.length > 0) {
+                // Robust Header Search
+                const keys = Object.keys(jsonData[0]);
+                const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+                const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid'];
+                
+                if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
+                    const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+                        Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
+                    );
+                    if (headerIdx !== -1) {
+                        jsonData = XLSX.utils.sheet_to_json(sheet, { range: headerIdx, defval: '', raw: false });
+                    }
+                }
+                
+                if (jsonData.length > 0) {
+                    data = jsonData;
+                    break;
+                }
+            }
+        }
+
+        if (data.length === 0) {
+            try { fs.unlinkSync(filePath); } catch (e) { }
+            return res.status(400).json({ success: false, error: 'No data found in file' });
+        }
+
+        const pool = await getPool();
+        const results = {
+            total: data.length,
+            updated: 0,
+            created: 0,
+            skipped: 0,
+            errors: []
+        };
+
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+
+        try {
+            for (const row of data) {
+                // Robust extraction using expanded aliases
+                const articleCode = getValue(row, ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Article_Code_Number', 'Article_Code', 'Jio_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref']).toString().trim().toUpperCase();
+                const skuNumber = getValue(row, ['SKU Number', 'SKU', 'Sku', 'sku', 'SKU_Number', 'Seller SKU', 'SkuNumber']).toString().trim();
+                const aspGross = getValue(row, ['ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Price', 'price', 'MRP', 'Selling Price']);
+                
+                const uploadedPrice = parseFloat(aspGross) || null;
+
+                if (!articleCode && !skuNumber) continue; // Skip completely empty rows
+
+                if (!articleCode) {
+                    results.skipped++;
+                    results.errors.push({ 
+                        asin: 'Row ' + (results.total - data.length + data.indexOf(row) + 1), 
+                        reason: 'Could not find "Article Code Number" or "Jio Code" column.' 
+                    });
+                    continue;
+                }
+
+                // Check for existing
+                const existingResult = await transaction.request()
+                    .input('asin', sql.VarChar, articleCode)
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .query('SELECT Id FROM Asins WHERE AsinCode = @asin AND SellerId = @sellerId');
+
+                const existing = existingResult.recordset[0];
+
+                if (existing) {
+                    await transaction.request()
+                        .input('id', sql.VarChar, existing.Id)
+                        .input('sku', sql.NVarChar, skuNumber || null)
+                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .query(`
+                            UPDATE Asins SET 
+                                Sku = CASE WHEN @sku != '' AND @sku IS NOT NULL THEN @sku ELSE Sku END,
+                                UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
+                                Marketplace = 'ajio',
+                                UpdatedAt = GETDATE()
+                            WHERE Id = @id
+                        `);
+                    results.updated++;
+                } else {
+                    const newId = generateId();
+                    await transaction.request()
+                        .input('id', sql.VarChar, newId)
+                        .input('asinCode', sql.VarChar, articleCode)
+                        .input('sellerId', sql.VarChar, sellerId)
+                        .input('sku', sql.NVarChar, skuNumber || null)
+                        .input('uploadedPrice', sql.Decimal(10, 2), uploadedPrice)
+                        .query(`
+                            INSERT INTO Asins (Id, AsinCode, SellerId, Sku, UploadedPrice, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+                            VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, 'Active', 'PENDING', 'ajio', GETDATE(), GETDATE())
+                        `);
+                    results.created++;
+                }
+            }
+
+            await transaction.commit();
+        } catch (err) {
+            await transaction.rollback();
+            throw err;
+        } finally {
+            if (fs.existsSync(filePath)) {
+                try { fs.unlinkSync(filePath); } catch (e) { }
+            }
+        }
+
+        // Log the activity
+        await SystemLogService.log({
+            type: 'IMPORT',
+            entityType: 'ASIN',
+            entityId: sellerId,
+            entityTitle: `Ajio Catalog Import: ${req.file.originalname}`,
+            user: req.userId || req.user?.Id || req.user?._id,
+            description: `Processed ${data.length} rows using specialized Ajio model: ${results.updated} updated, ${results.created} created.`,
+            metadata: { 
+                filename: req.file.originalname,
+                sellerId,
+                total: data.length,
+                updated: results.updated,
+                created: results.created,
+                skipped: results.skipped
+            }
+        });
+
+        res.json({
+            success: true,
+            message: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created.`,
+            ...results
+        });
+
+    } catch (error) {
+        console.error('Ajio Bulk Import Error:', error);
+        if (req.file && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch (e) { }
+        }
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 
 
 /**
@@ -464,8 +690,8 @@ exports.downloadCatalogTemplate = async (req, res) => {
         let filename = 'catalog_template.xlsx';
 
         if (req.query.marketplace === 'ajio') {
-            headers = ['Jio Code', 'SKU', 'Release Date', 'MRP', 'ASP', 'Brand'];
-            sampleRow = ['703391049004', 'SKU-AJIO-001', '2025-01-15', '2762.00', '1999.00', 'JAAEZAH'];
+            headers = ['Article Code Number', 'SKU Number', 'ASP (GROSS)'];
+            sampleRow = ['703391049004', 'SKU-AJIO-001', '1999.00'];
             sheetName = 'Ajio Catalog Template';
             filename = 'ajio_catalog_template.xlsx';
         }

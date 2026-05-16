@@ -1462,13 +1462,32 @@ exports.importFromCsv = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const workbook = XLSX.readFile(req.file.path);
+    // 1. Initial attempt to read data
     let data = [];
     for (const name of workbook.SheetNames) {
       const sheet = workbook.Sheets[name];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      let jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      
       if (jsonData && jsonData.length > 0) {
-        data = jsonData;
-        break;
+        // Robust Header Search
+        const keys = Object.keys(jsonData[0]);
+        const normalize = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+        const expected = ['asin', 'article', 'code', 'jiocode', 'sku', 'productid', 'identifier'];
+        
+        if (!keys.some(k => expected.some(t => normalize(k).includes(t)))) {
+          const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          const headerIdx = rawRows.slice(0, 15).findIndex(row => 
+            Array.isArray(row) && row.some(cell => cell && typeof cell === 'string' && expected.some(t => normalize(cell).includes(t)))
+          );
+          if (headerIdx !== -1) {
+            jsonData = XLSX.utils.sheet_to_json(sheet, { range: headerIdx, defval: "", raw: false });
+          }
+        }
+        
+        if (jsonData.length > 0) {
+          data = jsonData;
+          break;
+        }
       }
     }
 
@@ -1488,15 +1507,27 @@ exports.importFromCsv = async (req, res) => {
       return undefined;
     };
 
+    const idAliases = ['ASIN', 'Jio Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'JioCode', 'Identifier', 'asin', 'Asin'];
+    const skuAliases = ['SKU', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'SkuNumber'];
+    const priceAliases = ['MRP', 'mrp', 'List Price', 'Price', 'price', 'ASP (GROSS)', 'ASP GROSS', 'ASP_GROSS', 'Selling Price'];
+
+    const pool = await getPool();
+
+    // Get seller marketplace for setting default
+    const sellerResult = await pool.request()
+      .input('sellerId', sql.VarChar, sellerId)
+      .query('SELECT Marketplace FROM Sellers WHERE Id = @sellerId');
+    const marketplace = sellerResult.recordset[0]?.Marketplace || 'amazon.in';
+
     const identifiers = [...new Set(data
-      .map(row => (getValue(row, ['Identifier', 'ASIN', 'jiocode', 'jiocode_code', 'Jio Code']) || '').toString().trim().toUpperCase())
+      .map(row => (getValue(row, idAliases) || '').toString().trim().toUpperCase())
       .filter(id => id.length >= 5)
     )];
 
-    const pool = await getPool();
     const existingCodes = new Map();
 
     if (identifiers.length > 0) {
+      // Chunk identifiers to avoid too long IN clause if needed, but 350 is fine
       const idInClause = identifiers.map(id => `'${id}'`).join(',');
       const existingAsinsResult = await pool.request()
         .input('sellerId', sql.VarChar, sellerId)
@@ -1515,14 +1546,14 @@ exports.importFromCsv = async (req, res) => {
     try {
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const identifier = (getValue(row, ['Identifier', 'ASIN', 'jiocode', 'jiocode_code', 'Jio Code']) || '').toString().trim().toUpperCase();
-        const sku = (getValue(row, ['SKU', 'sku']) || '').toString().trim();
-        const mrpRaw = getValue(row, ['MRP', 'mrp', 'List Price', 'Price']);
+        const identifier = (getValue(row, idAliases) || '').toString().trim().toUpperCase();
+        const sku = (getValue(row, skuAliases) || '').toString().trim();
+        const mrpRaw = getValue(row, priceAliases);
         const mrp = parseFloat(mrpRaw) || 0;
 
         if (!identifier || identifier.length < 5) continue;
 
-        const rawStatus = (getValue(row, ['Status', 'ASIN Status', 'State']) || '').toString().trim();
+        const rawStatus = (getValue(row, ['Status', 'ASIN Status', 'State', 'status']) || '').toString().trim();
         let status = 'Active';
         if (rawStatus && (rawStatus.toLowerCase() === 'inactive' || rawStatus.toLowerCase() === 'false' || rawStatus === '0')) {
           status = 'Inactive';
@@ -1534,7 +1565,8 @@ exports.importFromCsv = async (req, res) => {
             .input('sku', sql.NVarChar, sku)
             .input('status', sql.VarChar, status)
             .input('mrp', sql.Decimal(18, 2), mrp)
-            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, UpdatedAt = GETDATE() WHERE Id = @id');
+            .input('marketplace', sql.VarChar, marketplace)
+            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = GETDATE() WHERE Id = @id');
           updatedCount++;
         } else {
           const id = generateId();
@@ -1545,9 +1577,10 @@ exports.importFromCsv = async (req, res) => {
             .input('sku', sql.NVarChar, sku)
             .input('status', sql.VarChar, status)
             .input('mrp', sql.Decimal(18, 2), mrp)
+            .input('marketplace', sql.VarChar, marketplace)
             .query(`
-              INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, CreatedAt, UpdatedAt)
-              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', GETDATE(), GETDATE())
+              INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, GETDATE(), GETDATE())
             `);
           insertedCount++;
           existingCodes.set(identifier, id); // Add to map to prevent duplicate inserts in this batch

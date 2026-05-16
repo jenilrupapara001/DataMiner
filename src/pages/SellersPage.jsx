@@ -118,6 +118,7 @@ const SellersPage = () => {
   const [asinPagination, setAsinPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [loadingAsins, setLoadingAsins] = useState(false);
   const [selectedSellerIds, setSelectedSellerIds] = useState([]);
+  const [bulkImportConfig, setBulkImportConfig] = useState({ sellerId: '', tab: 'catalog' });
   const { addToast } = useToast();
   const socket = useSocket();
 
@@ -463,6 +464,15 @@ const SellersPage = () => {
     setLoading(false);
   }, [addToast]);
 
+  const handleCatalogSync = useCallback((seller) => {
+    const isAjio = seller.marketplace?.toLowerCase() === 'ajio';
+    setBulkImportConfig({
+      sellerId: seller._id,
+      tab: isAjio ? 'ajio_catalog' : 'catalog'
+    });
+    setShowBulkImportModal(true);
+  }, []);
+
   const handleBulkSync = useCallback(async () => {
     if (selectedSellerIds.length === 0) return;
     if (!window.confirm(`Sync ${selectedSellerIds.length} seller(s) with Octoparse? This will trigger scraping for all ASINs under these sellers.`)) return;
@@ -633,6 +643,15 @@ const SellersPage = () => {
             size="small"
             icon={<Package size={14} />}
             onClick={() => handleViewAsins(seller)}
+            style={{ color: '#64748b' }}
+          />
+        </Tooltip>
+        <Tooltip title="Catalog Sync">
+          <Button
+            type="text"
+            size="small"
+            icon={<FileUp size={14} />}
+            onClick={() => handleCatalogSync(seller)}
             style={{ color: '#64748b' }}
           />
         </Tooltip>
@@ -956,7 +975,10 @@ const SellersPage = () => {
               <Button
                 type="default"
                 icon={<Upload size={13} />}
-                onClick={() => setShowBulkImportModal(true)}
+                onClick={() => {
+                  setBulkImportConfig({ sellerId: '', tab: 'catalog' });
+                  setShowBulkImportModal(true);
+                }}
                 size="middle"
                 style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}
               >
@@ -1230,7 +1252,9 @@ const SellersPage = () => {
         <BulkImportModal
           isOpen={showBulkImportModal}
           onClose={() => setShowBulkImportModal(false)}
-          onComplete={() => loadSellers(true)}
+          onComplete={loadSellers}
+          initialSellerId={bulkImportConfig.sellerId}
+          initialTab={bulkImportConfig.tab}
         />
       </Suspense>
     </div>
