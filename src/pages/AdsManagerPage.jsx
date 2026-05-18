@@ -947,16 +947,6 @@ export default function AdsManagerPage() {
             ]}
           />
 
-          {/* Seller Selection */}
-          <div style={{ width: '180px' }}>
-            <InfiniteScrollSelect
-              fetchData={fetchSellerDropdownData}
-              value={selectedSeller}
-              onSelect={(val) => setSelectedSeller(val)}
-              placeholder="All Sellers"
-            />
-          </div>
-
           {/* Elegant Shared DateRangePicker from Header */}
           <DateRangePicker
             startDate={startDate}
@@ -1162,21 +1152,32 @@ export default function AdsManagerPage() {
                   IMAGE
                 </th>
 
-                {/* --- STICKY CORNER CELL (IDENTIFIER) --- */}
+                {/* --- STICKY CORNER CELL (IDENTIFIER / SELLER DROPDOWN) --- */}
                 <th
                   rowSpan={2}
                   style={{
                     ...thStyle,
-                    width: '130px',
+                    width: '185px',
                     position: 'sticky',
                     left: '60px',
                     top: 0,
                     zIndex: 5,
                     background: '#fff',
                     borderRight: '1px solid #e2e8f0',
+                    padding: '6px 10px',
                   }}
                 >
-                  IDENTIFIER
+                  <div className="d-flex flex-column align-items-stretch gap-1">
+                    <span className="text-zinc-500 smallest fw-bold text-start" style={{ letterSpacing: '0.05em', fontSize: '9px' }}>SELLER ACCOUNT</span>
+                    <div style={{ width: '100%', fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
+                      <InfiniteScrollSelect
+                        fetchData={fetchSellerDropdownData}
+                        value={selectedSeller}
+                        onSelect={(val) => setSelectedSeller(val)}
+                        placeholder="All Sellers"
+                      />
+                    </div>
+                  </div>
                 </th>
 
                 {/* --- REMAINING HEADERS (inherit top via thead sticky) --- */}
