@@ -412,82 +412,64 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
           </Row>
         </div>
 
-        {/* Modal Main Tabbed Content Area */}
-        <div className="flex-grow-1 overflow-auto bg-white p-3">
-          <Tabs defaultActiveKey="table" centered size="middle">
-            {/* Tab 1: Daily timeline table */}
-            <Tabs.TabPane 
-              tab={
-                <span className="d-flex align-items-center gap-2">
-                  <TableIcon size={14} />
-                  Daily Performance
-                </span>
-              } 
-              key="table"
-            >
-              <div className="border rounded-3 overflow-hidden shadow-sm bg-white mt-1">
-                <Table
-                  dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
-                  columns={columns}
-                  pagination={{ 
-                    pageSize: 8, 
-                    showSizeChanger: false, 
-                    size: 'small', 
-                    style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' } 
-                  }}
-                  size="middle"
-                  className="modern-timeline-table"
-                  rowClassName="ah-tr"
-                  scroll={{ x: 'max-content' }}
-                />
-              </div>
-            </Tabs.TabPane>
+        {/* Modal Chart Visualizer (Fixed at 220px to match old design vertical flow) */}
+        {fullHistory.length > 0 && (
+          <div className="px-4 py-2 border-bottom bg-white shrink-0" style={{ height: '220px' }}>
+            <Chart
+              type="area"
+              height="100%"
+              series={[
+                { name: 'Ad Sales', data: [...fullHistory].reverse().map(d => Number(d.sales || 0).toFixed(0)) },
+                { name: 'Ad Spend', data: [...fullHistory].reverse().map(d => Number(d.spend || 0).toFixed(0)) }
+              ]}
+              options={{
+                ...areaChartOptions(val => '₹' + Number(val).toLocaleString('en-IN')),
+                colors: ['#10B981', '#EF4444'], // green for sales, red for spend
+                chart: { ...areaChartOptions().chart, toolbar: { show: false }, sparkline: { enabled: false } },
+                stroke: { curve: 'smooth', width: 2.2 },
+                xaxis: {
+                  categories: [...fullHistory].reverse().map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+                  labels: { style: { fontSize: '9px', fontWeight: 600 } },
+                  axisBorder: { show: false },
+                  axisTicks: { show: false }
+                },
+                yaxis: {
+                  labels: {
+                    style: { fontSize: '9px', fontWeight: 500 },
+                    formatter: (v) => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
+                  }
+                },
+                legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '10px', fontWeight: 700 }
+              }}
+            />
+          </div>
+        )}
 
-            {/* Tab 2: Visualized interactive chart */}
-            {fullHistory.length > 0 && (
-              <Tabs.TabPane 
-                tab={
-                  <span className="d-flex align-items-center gap-2">
-                    <BarChart3 size={14} />
-                    Performance Visualizer
-                  </span>
-                } 
-                key="chart"
-              >
-                <div className="border rounded-3 p-3 bg-white mt-1 shadow-sm">
-                  <div style={{ height: '320px', width: '100%' }}>
-                    <Chart
-                      type="area"
-                      height="100%"
-                      series={[
-                        { name: 'Ad Sales', data: [...fullHistory].reverse().map(d => Number(d.sales || 0).toFixed(0)) },
-                        { name: 'Ad Spend', data: [...fullHistory].reverse().map(d => Number(d.spend || 0).toFixed(0)) }
-                      ]}
-                      options={{
-                        ...areaChartOptions(val => '₹' + Number(val).toLocaleString('en-IN')),
-                        colors: ['#10B981', '#EF4444'], // green for sales, red for spend
-                        chart: { ...areaChartOptions().chart, toolbar: { show: true }, sparkline: { enabled: false } },
-                        stroke: { curve: 'smooth', width: 2.5 },
-                        xaxis: {
-                          categories: [...fullHistory].reverse().map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
-                          labels: { style: { fontSize: '10px', fontWeight: 600 } },
-                          axisBorder: { show: false },
-                          axisTicks: { show: false }
-                        },
-                        yaxis: {
-                          labels: {
-                            style: { fontSize: '10px', fontWeight: 500 },
-                            formatter: (v) => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
-                          }
-                        },
-                        legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '11px', fontWeight: 700 }
-                      }}
-                    />
-                  </div>
-                </div>
-              </Tabs.TabPane>
-            )}
-          </Tabs>
+        {/* Modal Table Body (Scrollable, just like the old design!) */}
+        <div className="flex-grow-1 overflow-auto bg-white position-relative p-3">
+          {fullHistory.length === 0 ? (
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-zinc-400">
+              <Calendar size={48} className="mb-3 opacity-20" />
+              <span className="fw-medium">No historical tracking available for this period.</span>
+            </div>
+          ) : (
+            <div className="border rounded-3 overflow-hidden shadow-sm bg-white">
+              <Table
+                dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
+                columns={columns}
+                pagination={{ 
+                  pageSize: 10, 
+                  showSizeChanger: false, 
+                  size: 'small', 
+                  style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' } 
+                }}
+                size="small"
+                className="modern-timeline-table"
+                rowClassName="ah-tr"
+                scroll={{ x: 'max-content' }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}
