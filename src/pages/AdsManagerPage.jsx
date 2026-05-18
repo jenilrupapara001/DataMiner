@@ -1302,6 +1302,8 @@ export default function AdsManagerPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
           padding: 10px 2rem;
           position: sticky;
           top: -1.5rem; /* Offset the negative margin of container */
@@ -1320,7 +1322,7 @@ export default function AdsManagerPage() {
           display: flex;
           align-items: center;
           gap: 12px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
         }
 
         @media (max-width: 992px) {
