@@ -197,7 +197,7 @@ exports.syncSellerAsins = async (req, res) => {
         // 3. Update ASIN statuses in bulk
         await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND Status = 'Active'");
+            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND Status IN ('Active', 'Error', 'Pending')");
 
         const isConfigured = marketDataSyncService.isConfigured();
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
@@ -259,8 +259,8 @@ exports.syncAllAsins = async (req, res) => {
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
         const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
-        // 1. Fetch Active ASINs for assigned sellers
-        let asinsQuery = "SELECT Id, SellerId FROM Asins WHERE Status = 'Active'";
+        // 1. Fetch Active, Error, Pending ASINs for assigned sellers
+        let asinsQuery = "SELECT Id, SellerId FROM Asins WHERE Status IN ('Active', 'Error', 'Pending')";
         if (!isGlobalUser) {
             const sellerIdsStr = req.user.assignedSellers.map(id => `'${id}'`).join(',');
             if (sellerIdsStr) {
@@ -470,10 +470,10 @@ exports.setupSellerTask = async (req, res) => {
             }
         }
         
-        // 2. Initial URL Injection (Fetch active ASINs)
+        // 2. Initial URL Injection (Fetch active/error/pending ASINs)
         const asinsResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Error', 'Pending')");
         
         const asins = asinsResult.recordset;
         if (asins.length > 0) {
@@ -747,7 +747,7 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
                 // 2. Auto-inject ASINs
                 const asinsResult = await pool.request()
                     .input('sellerId', sql.VarChar, seller.Id)
-                    .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                    .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Error', 'Pending')");
                 
                 const asins = asinsResult.recordset;
                 let injectStatus = 'No ASINs';
@@ -832,7 +832,7 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
             try {
                 const asinsResult = await pool.request()
                     .input('sellerId', sql.VarChar, seller.Id)
-                    .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                    .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Error', 'Pending')");
                 
                 const asins = asinsResult.recordset;
 

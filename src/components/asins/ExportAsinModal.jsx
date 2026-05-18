@@ -263,7 +263,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     <Drawer
       open={isOpen}
       onClose={onClose}
-      width={750}
+      size={750}
       maskClosable={!exporting}
       closable={!exporting}
       className="premium-export-drawer"

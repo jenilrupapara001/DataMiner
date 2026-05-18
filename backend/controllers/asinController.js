@@ -1572,6 +1572,20 @@ exports.importFromCsv = async (req, res) => {
             .input('mrp', sql.Decimal(18, 2), mrp)
             .input('marketplace', sql.VarChar, marketplace)
             .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = GETDATE() WHERE Id = @id');
+          
+          // History tracking for manual import
+          const today = new Date().toISOString().split('T')[0];
+          await transaction.request()
+            .input('asinId', sql.VarChar, existingCodes.get(identifier))
+            .input('date', sql.Date, today)
+            .input('price', sql.Decimal(18, 2), mrp)
+            .query(`
+                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                ELSE
+                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+            `);
+            
           updatedCount++;
         } else {
           const id = generateId();
@@ -1587,6 +1601,20 @@ exports.importFromCsv = async (req, res) => {
               INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
               VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, GETDATE(), GETDATE())
             `);
+            
+          // History tracking for manual import
+          const today = new Date().toISOString().split('T')[0];
+          await transaction.request()
+            .input('asinId', sql.VarChar, id)
+            .input('date', sql.Date, today)
+            .input('price', sql.Decimal(18, 2), mrp)
+            .query(`
+                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                ELSE
+                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+            `);
+
           insertedCount++;
           existingCodes.set(identifier, id); // Add to map to prevent duplicate inserts in this batch
         }
@@ -1731,6 +1759,19 @@ exports.bulkUploadAllSellers = async (req, res) => {
                                 SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = GETDATE()
                                 WHERE Id = @id
                             `);
+                            
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, existingId)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), price)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                            
                         updated++;
                     } else {
                         // Insert
@@ -1749,6 +1790,19 @@ exports.bulkUploadAllSellers = async (req, res) => {
                                 INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
                                 VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, GETDATE(), GETDATE())
                             `);
+                            
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, id)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), price)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                            
                         created++;
                     }
                 }

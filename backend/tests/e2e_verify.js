@@ -45,31 +45,30 @@ const runTests = async () => {
         console.warn('⚠ Seeding might have failed or already done:', e.message);
     }
 
-    // 1. Register User
-    const email = `test_${Date.now()}@example.com`;
-    const password = 'password123';
-    console.log(`\n1. Registering user: ${email}`);
-    let res = await request('/auth/register', 'POST', { firstName: 'Test', lastName: 'User', email, password, role: 'manager' });
-
-    if (res.status !== 201 && res.status !== 200) {
-        console.error('Registration failed:', res.data);
-        // If login endpoint exists and registration fails (maybe user exists?), try login
-        console.log('Trying login...');
-        res = await request('/auth/login', 'POST', { email, password });
-    }
-
-    const token = res.data.token || (res.data.data && res.data.data.accessToken);
-    if (!token) {
-        console.error('Failed to get token:', res.data);
+    // 1. Direct JWT Generation
+    console.log('\n1. Generating JWT token directly from database user...');
+    const { getPool } = require('../database/db');
+    const sql = require('mssql');
+    const jwt = require('jsonwebtoken');
+    const config = require('../config/env');
+    const pool = await getPool();
+    const userRes = await pool.request()
+        .input('email', sql.VarChar, 'admin@gms.com')
+        .query('SELECT Id FROM Users WHERE Email = @email');
+    
+    if (userRes.recordset.length === 0) {
+        console.error('Admin user not found in database to authenticate with');
         process.exit(1);
     }
-    console.log('✓ Token received');
+    const userId = userRes.recordset[0].Id;
+    const token = jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
+    console.log('✓ Token generated successfully for userId:', userId);
 
     // 1.5 Create Seller
     console.log('\n1.5 Creating Seller...');
-    const sellerIdRaw = 'SELLER' + Math.floor(Math.random() * 10000);
+    const sellerIdRaw = 'SELLER' + Math.floor(Math.random() * 1000000);
     res = await request('/sellers', 'POST', {
-        name: 'Test Seller Inc',
+        name: 'Test Seller Inc ' + Date.now(),
         marketplace: 'amazon.in',
         sellerId: sellerIdRaw,
         plan: 'Pro'
@@ -79,8 +78,9 @@ const runTests = async () => {
         console.error('Failed to create Seller:', res.data);
         process.exit(1);
     }
-    const sellerId = res.data._id || res.data.id;
-    console.log(`✓ Seller Created: ${res.data.name} (${sellerId})`);
+    console.log('Seller creation raw response:', res.data);
+    const sellerId = res.data.data?._id || res.data.data?.id || res.data._id || res.data.id;
+    console.log(`✓ Seller Created: ${res.data.data?.name || res.data.name} (${sellerId})`);
 
     // 2. Create ASIN
     console.log('\n2. Creating ASIN...');

@@ -49,10 +49,7 @@ function sendSseEvent(eventName, data) {
 
 // Action routes
 router.get('/', protect, requireAnyPermission(['actions_view', 'actions_manage']), actionController.getActions);
-router.get('/:id', protect, actionController.getAction);
 router.post('/', protect, requireAnyPermission(['actions_create', 'actions_manage']), actionController.createAction);
-router.put('/:id', protect, actionController.updateAction);
-router.delete('/:id', protect, requireRole('admin'), actionController.deleteAction);
 
 // Task Templates
 router.get('/templates', protect, actionController.getTemplates);
@@ -65,7 +62,7 @@ router.get('/goal-templates', protect, actionController.getGoalTemplates);
 router.post('/goal-templates', protect, requireAnyPermission(['actions_manage']), actionController.createGoalTemplate);
 
 // Bulk creation from analysis
-router.post('/bulk-create-from-analysis', protect, requireAnyPermission(['actions_create', 'actions_manage']), actionController.bulkCreateFromAnalysis);
+router.post('/bulk-from-analysis', protect, requireAnyPermission(['actions_create', 'actions_manage']), actionController.bulkCreateFromAnalysis);
 router.post('/bulk', protect, requireAnyPermission(['actions_create', 'actions_manage']), async (req, res) => {
     try {
         const actionsData = req.body.map(a => ({ ...a, createdBy: req.user._id }));
@@ -171,7 +168,8 @@ router.post('/:id/start', protect, requireAnyPermission(['actions_edit', 'action
         try { sendSseEvent('updated', updated.recordset[0]); } catch (e) { }
         res.json({ success: true, data: updated.recordset[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Error in POST /actions/:id/start:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });
 
@@ -717,5 +715,11 @@ router.get('/reports/by-stage', protect, requireAnyPermission(['actions_view', '
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
+// Keep parameterized routes at the bottom
+router.get('/:id/instructions', protect, actionController.getActionInstructions);
+router.get('/:id', protect, actionController.getAction);
+router.put('/:id', protect, actionController.updateAction);
+router.delete('/:id', protect, requireRole('admin'), actionController.deleteAction);
 
 module.exports = router;

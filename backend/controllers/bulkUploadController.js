@@ -194,9 +194,13 @@ exports.catalogSync = async (req, res) => {
 
         try {
             for (const row of data) {
-                const childAsin = getValue(row, ['ASIN', 'Jio Code', 'JioCode', 'Jio_Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'Article_Code_Number', 'Article_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code', 'SKU', 'Seller SKU', 'SKU Number', 'SkuNumber', 'sku']).toString().trim().toUpperCase();
+                let childAsin = getValue(row, ['ASIN', 'Jio Code', 'JioCode', 'Jio_Code', 'Article Code Number', 'Article Code', 'ArticleCode', 'Product ID', 'Article_Code_Number', 'Article_Code', 'Product_ID', 'asin', 'Asin', 'Item Code', 'Style Code', 'Model No', 'Ref No', 'Article No', 'Product No', 'Article', 'Model', 'Ref', 'Product Code', 'Part Number', 'ItemCode', 'ProductCode', 'Style', 'Code', 'SKU', 'Seller SKU', 'SKU Number', 'SkuNumber', 'sku']).toString().trim().toUpperCase();
                 const parentAsin = getValue(row, ['Parent ASIN', 'ParentAsin', 'parent_asin', 'Group ID', 'GroupID', 'Parent_Code', 'ParentCode']).toString().trim().toUpperCase();
-                const sku = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber']).toString().trim();
+                const sku = getValue(row, ['SKU', 'Sku', 'sku', 'SKU Number', 'SKU_Number', 'Seller SKU', 'Seller_SKU', 'SkuNumber', 'Jio Code', 'Article Code Number', 'Article Code', 'Item Code', 'Code']).toString().trim();
+                
+                // Explicit fallback for identifier
+                childAsin = childAsin || sku;
+
                 const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
                 const rawPrice = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'ASP(GROSS)', 'ASP GROSS', 'ASP_GROSS', 'asp_gross', 'asp (gross)', 'MRP', 'Selling Price', 'Uploaded Price', 'selling_price']);
                 const rawDate = getValue(row, ['Release Date', 'Release_Date', 'Released Date', 'date', 'updated_at', 'Realeased date', 'Launch Date', 'Launch_Date']);
@@ -309,6 +313,21 @@ exports.catalogSync = async (req, res) => {
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
+
+                    if (uploadedPrice !== null) {
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, existing.Id)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), uploadedPrice)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                    }
+
                     results.updated++;
                 } else {
                     const newId = generateId();
@@ -328,6 +347,21 @@ exports.catalogSync = async (req, res) => {
                             INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, Marketplace, CreatedAt, UpdatedAt)
                             VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, @marketplace, GETDATE(), GETDATE())
                         `);
+
+                    if (uploadedPrice !== null) {
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, newId)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), uploadedPrice)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                    }
+
                     results.created++;
                 }
                 if (autoTags.length > 0) results.autoTagged++;
@@ -488,6 +522,21 @@ exports.ajioBulkImport = async (req, res) => {
                                 UpdatedAt = GETDATE()
                             WHERE Id = @id
                         `);
+                        
+                    if (uploadedPrice !== null) {
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, existing.Id)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), uploadedPrice)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                    }
+                    
                     results.updated++;
                 } else {
                     const newId = generateId();
@@ -503,6 +552,21 @@ exports.ajioBulkImport = async (req, res) => {
                             INSERT INTO Asins (Id, AsinCode, SellerId, Sku, UploadedPrice, Brand, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
                             VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, @brand, 'Active', 'PENDING', 'ajio', GETDATE(), GETDATE())
                         `);
+                        
+                    if (uploadedPrice !== null) {
+                        const today = new Date().toISOString().split('T')[0];
+                        await transaction.request()
+                            .input('asinId', sql.VarChar, newId)
+                            .input('date', sql.Date, today)
+                            .input('price', sql.Decimal(18, 2), uploadedPrice)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                                    UPDATE AsinHistory SET Price = @price WHERE AsinId = @asinId AND Date = @date
+                                ELSE
+                                    INSERT INTO AsinHistory (AsinId, Date, Price) VALUES (@asinId, @date, @price)
+                            `);
+                    }
+                        
                     results.created++;
                 }
             }

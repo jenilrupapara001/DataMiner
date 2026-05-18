@@ -98,7 +98,7 @@ class OctoparseAutomationService {
             const pool = await getPool();
             const asinsResult = await pool.request()
                 .input('sellerId', sql.VarChar, sellerId)
-                .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Scraping', 'Error', 'Pending')");
 
             const asins = asinsResult.recordset.map(a => a.AsinCode);
             if (asins.length === 0) {

@@ -336,10 +336,48 @@ exports.deleteSeller = async (req, res) => {
     }
 
     const pool = await getPool();
-    // Simplified cascade for this migration step - in production use DB-level cascades
-    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Asins WHERE SellerId = @id');
-    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
-    await pool.request().input('id', sql.VarChar, id).query('DELETE FROM Sellers WHERE Id = @id');
+
+    // 1. Get all ASINs for this seller
+    const asinsResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT Id FROM Asins WHERE SellerId = @id');
+    const asins = asinsResult.recordset;
+
+    // 2. Cascade delete ASIN-related metrics if there are any
+    if (asins.length > 0) {
+      const asinIdsStr = asins.map(a => `'${a.Id}'`).join(',');
+      
+      // Delete historical metrics
+      await pool.request().query(`DELETE FROM AsinHistory WHERE AsinId IN (${asinIdsStr})`);
+      await pool.request().query(`DELETE FROM AsinWeekHistory WHERE AsinId IN (${asinIdsStr})`);
+      await pool.request().query(`DELETE FROM SubBsrHistory WHERE AsinId IN (${asinIdsStr})`);
+      await pool.request().query(`DELETE FROM RevenueCalculators WHERE AsinId IN (${asinIdsStr})`);
+    }
+
+    // 3. Delete related Actions
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Actions WHERE SellerId = @id');
+
+    // 4. Update OctoTasks
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('UPDATE OctoTasks SET SellerId = NULL, IsAssigned = 0, LastAssignedAt = NULL WHERE SellerId = @id');
+
+    // 5. Delete UserSellers mapping
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM UserSellers WHERE SellerId = @id');
+
+    // 6. Delete ASINs
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Asins WHERE SellerId = @id');
+
+    // 7. Delete Seller itself
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Sellers WHERE Id = @id');
 
     res.json({ message: 'Seller deleted successfully' });
 

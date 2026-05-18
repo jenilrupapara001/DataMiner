@@ -140,7 +140,7 @@ class MarketDataSyncService {
 
         const asinsResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Scraping', 'Error', 'Pending')");
 
         if (asinsResult.recordset.length === 0) {
             this.log('warn', `No active ASINs found for seller: ${sellerId}. Proceeding with task duplication anyway.`);
@@ -289,7 +289,7 @@ class MarketDataSyncService {
                 await this.stopSync(taskId).catch(() => { });
                 await this.wait(20000);
 
-                return this.updateTaskUrlsWithFile(taskId, items, retryCount + 1); // Retry with count
+                return this.updateTaskUrlsWithFile(taskId, items, isAjio, retryCount + 1); // Retry with count
             }
 
             console.error('❌ Octoparse File Injection Error:', {
@@ -1582,7 +1582,7 @@ class MarketDataSyncService {
                 console.log(`🎯 [TargetedSync] Using ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
                 asins = options.targetAsins.map(a => ({ AsinCode: a }));
             } else {
-                let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'";
+                let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Scraping', 'Error', 'Pending')";
 
                 if (options.onlyMissing) {
                     console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);

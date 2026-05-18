@@ -111,7 +111,7 @@ const ColumnVisibilityPanel = ({
       placement="right"
       onClose={onClose}
       open={isOpen}
-      width={420}
+      size={420}
       extra={
         <Space>
           <Tooltip title="Reset to default columns">

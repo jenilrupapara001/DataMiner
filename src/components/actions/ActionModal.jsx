@@ -259,14 +259,6 @@ const ActionModal = ({ action, isOpen, onClose, onSave, asins = [], users = [], 
 
     // Status dropdown with colored dots
     const StatusDropdown = () => {
-        const statusColors = {
-            'PENDING': 'var(--color-neutral-500)',
-            'IN_PROGRESS': 'var(--color-brand-500)',
-            'REVIEW': 'var(--color-warning-500)',
-            'COMPLETED': 'var(--color-success-500)',
-            'CANCELLED': 'var(--color-neutral-400)'
-        };
-
         return (
             <select
                 name="status"
@@ -283,13 +275,11 @@ const ActionModal = ({ action, isOpen, onClose, onSave, asins = [], users = [], 
                     color: 'var(--color-text-primary)'
                 }}
             >
-                <option value="PENDING">
-                    <span style={{ color: statusColors.PENDING }}>●</span> Pending
-                </option>
-                <option value="IN_PROGRESS">● In Progress</option>
-                <option value="REVIEW">● Needs Review</option>
-                <option value="COMPLETED">● Completed</option>
-                <option value="CANCELLED">● Cancelled</option>
+                <option value="PENDING">Pending</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="REVIEW">Needs Review</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
             </select>
         );
     };

@@ -3,6 +3,8 @@ const { createNotification } = require('../controllers/notificationController');
 const SocketService = require('../services/socketService');
 const SystemLogService = require('../services/SystemLogService');
 const hierarchyService = require('../services/hierarchyService');
+const AIService = require('../services/AIService');
+
 
 // Expose getPool for route handlers
 exports.getPool = getPool;
@@ -705,10 +707,62 @@ exports.createGoalTemplate = async (req, res) => {
     }
 };
 
-// Other endpoints would follow similar patterns...
-// For brevity, implementing just enough to make the application functional
+exports.getActionInstructions = async (req, res) => {
+    try {
+        console.log('[DEBUG] getActionInstructions - req.params.id:', req.params.id);
+        const pool = await getPool();
+        const actionResult = await pool.request()
+            .input('id', sql.VarChar, req.params.id)
+            .query('SELECT * FROM Actions WHERE Id = @id');
+
+        console.log('[DEBUG] getActionInstructions - found records:', actionResult.recordset.length);
+        if (actionResult.recordset.length === 0) {
+            console.log('[DEBUG] getActionInstructions - returning 404 for ID:', req.params.id);
+            return res.status(404).json({ success: false, message: 'Action not found' });
+        }
+
+        const action = actionResult.recordset[0];
+        
+        let instructions = '';
+        try {
+            // Call the AI Service to generate detailed instructions
+            instructions = await AIService.generateTaskInstructions({
+                title: action.Title,
+                description: action.Description,
+                type: action.Type
+            });
+        } catch (aiError) {
+            console.warn('AI instruction generation failed, using fallback:', aiError.message);
+            // Fallback to structured static instructions
+            instructions = `
+### Task Analysis
+This task requires executing optimization procedures for: **${action.Title || 'Action Item'}**.
+The target domain covers typical retail and listing performance parameters.
+
+### Strategic Solution
+1. **Initial Assessment**: Review existing performance metrics and ASIN histories associated with this task.
+2. **Review Context**: Understand the optimization constraints: *"${action.Description || 'No description provided.'}"*
+3. **Execution Plan**: 
+   - Optimize listing fields (e.g. title lengths, image count, or quality descriptors) in accordance with the task type (**${action.Type || 'GENERAL_OPTIMIZATION'}**).
+   - Ensure proper sync mapping with Amazon Seller Central / Ajio Vendor panel values.
+4. **Verification**: Confirm changes take effect and align with our current inventory ruleset guidelines.
+
+### Key Success Points
+- Focus on accuracy during data synchronization.
+- Maintain complete transaction history date-wise to ensure proper reporting analysis.
+- Follow up on any low listing quality flags immediately.
+            `.trim();
+        }
+
+        res.json({ success: true, data: instructions });
+    } catch (error) {
+        console.error('Error in getActionInstructions:', error);
+        res.status(500).json({ success: false, message: 'Server error generating instructions' });
+    }
+};
 
 module.exports = {
+    getPool: getPool,
     bulkCreateFromAnalysis: exports.bulkCreateFromAnalysis,
     getActions: exports.getActions,
     getAction: exports.getAction,
@@ -727,5 +781,6 @@ module.exports = {
     reviewAction: exports.reviewAction,
     completeTask: exports.completeTask,
     uploadAudio: exports.uploadAudio,
-    getActionHistory: exports.getActionHistory
+    getActionHistory: exports.getActionHistory,
+    getActionInstructions: exports.getActionInstructions
 };
