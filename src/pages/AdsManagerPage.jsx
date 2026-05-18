@@ -315,10 +315,14 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
                 <span className="badge bg-zinc-900 text-white fw-bold px-2 rounded-2" style={{ fontSize: '11px' }}>
                   {rowData.asin || rowData.id}
                 </span>
-                {rowData.sku && (
+                {rowData.sku && rowData.sku !== 'PARENT' ? (
                   <Text type="secondary" style={{ fontSize: '12px', fontWeight: 500 }}>
                     SKU: <span className="font-monospace fw-bold text-zinc-800">{rowData.sku}</span>
                   </Text>
+                ) : (
+                  <span className="badge bg-indigo-50 text-indigo-700 fw-bold px-2 rounded-2" style={{ fontSize: '10px' }}>
+                    PARENT GROUP • {rowData.childCount || 0} CHILDREN
+                  </span>
                 )}
               </div>
               <h5 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '800px', fontSize: '15px', letterSpacing: '-0.01em' }}>
@@ -468,10 +472,28 @@ export default function AdsManagerPage() {
 
   // Filtering and Grouping States
   const [groupBy, setGroupBy] = useState('asin');
+  const [expandedParents, setExpandedParents] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
+
+  const toggleParentExpand = (parentAsin) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev);
+      if (next.has(parentAsin)) {
+        next.delete(parentAsin);
+      } else {
+        next.add(parentAsin);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    setExpandedParents(new Set());
+    setPage(1);
+  }, [groupBy]);
 
   // Aggregate timeseries history across all loaded items for global chart
   const globalChartData = useMemo(() => {
@@ -539,7 +561,7 @@ export default function AdsManagerPage() {
     try {
       setLoading(true);
       const params = {
-        groupBy,
+        groupBy: 'asin', // ALWAYS fetch at ASIN level for high-fidelity client-side tree construction
         search: searchQuery
       };
       if (selectedSeller) params.sellerId = selectedSeller;
@@ -759,13 +781,119 @@ export default function AdsManagerPage() {
     );
   };
 
+  // Construct parent-child tree hierarchy when groupBy is 'parent'
+  const processedData = useMemo(() => {
+    if (groupBy === 'asin') {
+      return data;
+    }
+
+    const parents = {};
+    data.forEach(row => {
+      const pid = row.parentAsin || row.asin;
+      if (!parents[pid]) {
+        parents[pid] = {
+          id: pid,
+          asin: pid,
+          parentAsin: pid,
+          isParent: true,
+          sku: 'PARENT',
+          title: `Parent Group: ${pid}`,
+          imageUrl: row.imageUrl || '',
+          brand: row.brand || '',
+          category: row.category || '',
+          
+          impressions: 0,
+          clicks: 0,
+          spend: 0,
+          sales: 0,
+          orders: 0,
+          conversions: 0,
+          organicSales: 0,
+          organicOrders: 0,
+          pageViews: 0,
+          sessions: 0,
+          
+          children: [],
+          weekHistory: []
+        };
+      }
+      
+      const p = parents[pid];
+      p.children.push(row);
+      p.impressions += Number(row.impressions || 0);
+      p.clicks += Number(row.clicks || 0);
+      p.spend += Number(row.spend || 0);
+      p.sales += Number(row.sales || 0);
+      p.orders += Number(row.orders || 0);
+      p.conversions += Number(row.conversions || 0);
+      p.organicSales += Number(row.organicSales || 0);
+      p.organicOrders += Number(row.organicOrders || 0);
+      p.pageViews += Number(row.pageViews || 0);
+      p.sessions += Number(row.sessions || 0);
+      
+      if (!p.imageUrl && row.imageUrl) p.imageUrl = row.imageUrl;
+      if (!p.brand && row.brand) p.brand = row.brand;
+      if (!p.category && row.category) p.category = row.category;
+    });
+
+    const parentsList = Object.values(parents).map(p => {
+      p.acos = p.sales > 0 ? (p.spend / p.sales) * 100 : 0;
+      p.roas = p.spend > 0 ? (p.sales / p.spend) : 0;
+      p.cvr = p.clicks > 0 ? (p.orders / p.clicks) * 100 : 0;
+      p.ctr = p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0;
+      p.cpc = p.clicks > 0 ? (p.spend / p.clicks) : 0;
+
+      const dailyMap = {};
+      p.children.forEach(child => {
+        const hist = child.weekHistory || child.history || [];
+        hist.forEach(h => {
+          const d = h.date;
+          if (!dailyMap[d]) {
+            dailyMap[d] = {
+              date: d,
+              spend: 0,
+              sales: 0,
+              orders: 0,
+              clicks: 0,
+              impressions: 0,
+              organicSales: 0,
+              pageViews: 0,
+              conversions: 0
+            };
+          }
+          dailyMap[d].spend += Number(h.spend || 0);
+          dailyMap[d].sales += Number(h.sales || 0);
+          dailyMap[d].orders += Number(h.orders || 0);
+          dailyMap[d].clicks += Number(h.clicks || 0);
+          dailyMap[d].impressions += Number(h.impressions || 0);
+          dailyMap[d].organicSales += Number(h.organicSales || 0);
+          dailyMap[d].pageViews += Number(h.pageViews || 0);
+          dailyMap[d].conversions += Number(h.conversions || 0);
+        });
+      });
+      
+      const sortedHistory = Object.values(dailyMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+      sortedHistory.forEach(h => {
+        h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
+        h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
+        h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
+      });
+      
+      p.weekHistory = sortedHistory;
+      p.childCount = p.children.length;
+      return p;
+    });
+
+    return parentsList;
+  }, [data, groupBy]);
+
   // Compute paginated subset for this frame
   const paginatedData = useMemo(() => {
     const startIndex = (page - 1) * pageSize;
-    return data.slice(startIndex, startIndex + pageSize);
-  }, [data, page, pageSize]);
+    return processedData.slice(startIndex, startIndex + pageSize);
+  }, [processedData, page, pageSize]);
 
-  const totalPages = Math.ceil(data.length / pageSize);
+  const totalPages = Math.ceil(processedData.length / pageSize);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -1164,11 +1292,12 @@ export default function AdsManagerPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((row, idx) => {
+                paginatedData.flatMap((row, idx) => {
                   const isAltRow = idx % 2 === 1;
                   const rowBg = isAltRow ? '#f9fafb' : '#ffffff';
+                  const isParentRow = row.isParent === true;
 
-                  return (
+                  const mainRow = (
                     <tr key={row.id || idx} className="table-row-hover" style={{ background: rowBg }}>
                       {/* Identifiers (Sticky) */}
                       {/* IMAGE CELL */}
@@ -1209,19 +1338,37 @@ export default function AdsManagerPage() {
                         onClick={() => setActiveHistoryRow(row)}
                         title="View Detail History"
                       >
-                        <div className="d-flex flex-column gap-0.5">
-                          <span className="fw-bold text-indigo-600 font-monospace" style={{ fontSize: '10px' }}>
-                            {groupBy === 'parent' ? row.parentAsin : row.asin}
-                          </span>
-                          {groupBy === 'parent' && (
-                            <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded smallest fw-bold" style={{ width: 'fit-content', fontSize: '8.5px' }}>
-                              {row.childCount} CHILDREN
-                            </span>
+                        <div className="d-flex align-items-center gap-2">
+                          {isParentRow && (
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleParentExpand(row.asin);
+                              }}
+                              className="d-flex align-items-center justify-content-center bg-zinc-100 hover-bg-zinc-200 rounded text-zinc-600"
+                              style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
+                            >
+                              {expandedParents.has(row.asin) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                            </div>
                           )}
+                          <div className="d-flex flex-column gap-0.5">
+                            <span className="fw-bold text-indigo-600 font-monospace" style={{ fontSize: '10px' }}>
+                              {row.asin}
+                            </span>
+                            {isParentRow && (
+                              <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded smallest fw-bold" style={{ width: 'fit-content', fontSize: '8.5px' }}>
+                                {row.childCount} CHILDREN
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
-                      <td style={{ ...tdStyle, fontWeight: 600, color: '#475569' }}>{row.sku}</td>
+                      <td style={{ ...tdStyle, fontWeight: 600, color: '#475569' }}>
+                        {isParentRow ? (
+                          <span className="badge bg-zinc-100 text-zinc-600 border px-2 py-1 rounded" style={{ fontSize: '9px' }}>GROUP</span>
+                        ) : row.sku}
+                      </td>
 
                       <td style={{ ...tdStyle }}>
                         <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
@@ -1248,6 +1395,91 @@ export default function AdsManagerPage() {
                       {renderCells(row, 'pageViews', 'blue', 'pageViews')}
                     </tr>
                   );
+
+                  if (isParentRow && expandedParents.has(row.asin)) {
+                    const childrenRows = row.children.map((child, cIdx) => {
+                      const childBg = '#fcfdff';
+                      return (
+                        <tr key={`${row.id}-child-${child.id || cIdx}`} className="table-row-hover" style={{ background: childBg, borderLeft: '3px solid #6366f1' }}>
+                          {/* IMAGE CELL */}
+                          <td
+                            style={{
+                              ...tdStyle,
+                              padding: '4px',
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 3,
+                              background: childBg,
+                              borderRight: '1px solid #f1f5f9',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => setActiveHistoryRow(child)}
+                            title="View Detail History"
+                          >
+                            <div style={{ width: '32px', height: '32px', margin: 'auto', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {child.imageUrl ? (
+                                <img src={child.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                              ) : (
+                                <Package size={14} className="text-zinc-300" />
+                              )}
+                            </div>
+                          </td>
+
+                          {/* IDENTIFIER CELL */}
+                          <td
+                            style={{
+                              ...tdStyle,
+                              position: 'sticky',
+                              left: '60px',
+                              zIndex: 3,
+                              background: childBg,
+                              borderRight: '1px solid #f1f5f9',
+                              cursor: 'pointer',
+                              paddingLeft: '16px'
+                            }}
+                            onClick={() => setActiveHistoryRow(child)}
+                            title="View Detail History"
+                          >
+                            <div className="d-flex align-items-center gap-1">
+                              <span className="text-zinc-400 fw-bold font-monospace" style={{ fontSize: '10px' }}>↳</span>
+                              <span className="fw-semibold text-zinc-700 font-monospace" style={{ fontSize: '10px' }}>
+                                {child.asin}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td style={{ ...tdStyle, fontWeight: 600, color: '#475569', fontSize: '9.5px' }}>{child.sku}</td>
+
+                          <td style={{ ...tdStyle }}>
+                            <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
+                              <span className="text-zinc-700 text-truncate" style={{ fontSize: '10px' }} title={child.title}>{child.title}</span>
+                              <span className="smallest text-zinc-400 fw-semibold">{child.brand} • {child.category}</span>
+                            </div>
+                          </td>
+
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>
+                          </td>
+
+                          {/* --- CORE METRIC CELLS --- */}
+                          {renderCells(child, 'totalSales', 'blue', 'totalSales', true)}
+                          {renderCells(child, 'orders', 'pink', 'orders')}
+                          {renderCells(child, 'spend', 'indigo', 'spend', true)}
+                          {renderCells(child, 'clicks', 'cyan', 'clicks')}
+                          {renderCells(child, 'impressions', 'blue', 'impressions')}
+                          {renderCells(child, 'roas', 'amber', 'roas', false, false)}
+                          {renderCells(child, 'acos', 'purple', 'acos', false, true)}
+                          {renderCells(child, 'sales', 'emerald', 'sales', true)}
+                          {renderCells(child, 'cvr', 'slate', 'cvr', false, true)}
+                          {renderCells(child, 'organicSales', 'emerald', 'organicSales', true)}
+                          {renderCells(child, 'pageViews', 'blue', 'pageViews')}
+                        </tr>
+                      );
+                    });
+                    return [mainRow, ...childrenRows];
+                  }
+
+                  return [mainRow];
                 })
               )}
             </tbody>
