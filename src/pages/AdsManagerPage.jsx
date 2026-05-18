@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import { 
-  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic 
+  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag
 } from 'antd';
 const { Title, Text } = Typography;
 import axios from 'axios';
@@ -9,7 +9,7 @@ import {
   Activity,
   TrendingUp,
   TrendingDown,
-  Table,
+  Table as TableIcon,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
@@ -149,163 +149,353 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   // Sort history descending (newest first)
   const fullHistory = [...(rowData.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const modalCss = `
-    .ah-th { background: #f8fafc; color: #475569; font-size: 10px; font-weight: 700; padding: 10px 12px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
-    .ah-td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #000000; font-weight: 500; white-space: nowrap; }
-    .ah-tr:hover td { background-color: #f8fafc; }
-  `;
+  // Compute aggregated stats
+  const totalSpend = Number(rowData.spend || 0);
+  const totalSales = Number(rowData.sales || 0);
+  const totalClicks = Number(rowData.clicks || 0);
+  const totalImpressions = Number(fullHistory.reduce((sum, d) => sum + Number(d.impressions || 0), 0));
+  const totalOrders = Number(rowData.orders || 0);
+  
+  const blendedAcos = totalSales > 0 ? (totalSpend / totalSales) * 100 : 0;
+  const blendedRoas = totalSpend > 0 ? totalSales / totalSpend : 0;
+  const blendedCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const blendedCvr = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
+
+  // Table columns definition for Ant Design Table
+  const columns = [
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date',
+      width: '180px',
+      render: (dateStr) => {
+        const d = new Date(dateStr);
+        return (
+          <div className="d-flex align-items-center gap-2">
+            <Calendar size={13} className="text-indigo-500" />
+            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>
+              {d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+          </div>
+        );
+      },
+      sorter: (a, b) => new Date(a.date) - new Date(b.date),
+    },
+    {
+      title: 'Impressions',
+      dataIndex: 'impressions',
+      key: 'impressions',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.impressions || 0) - Number(b.impressions || 0),
+    },
+    {
+      title: 'Clicks',
+      dataIndex: 'clicks',
+      key: 'clicks',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.clicks || 0) - Number(b.clicks || 0),
+    },
+    {
+      title: 'Spend',
+      dataIndex: 'spend',
+      key: 'spend',
+      align: 'right',
+      render: (val) => (
+        <span style={{ color: '#ef4444', fontWeight: 600 }}>
+          ₹{Number(val || 0).toFixed(2)}
+        </span>
+      ),
+      sorter: (a, b) => Number(a.spend || 0) - Number(b.spend || 0),
+    },
+    {
+      title: 'Ad Sales',
+      dataIndex: 'sales',
+      key: 'sales',
+      align: 'right',
+      render: (val) => (
+        <span style={{ color: '#10b981', fontWeight: 700 }}>
+          ₹{Number(val || 0).toFixed(2)}
+        </span>
+      ),
+      sorter: (a, b) => Number(a.sales || 0) - Number(b.sales || 0),
+    },
+    {
+      title: 'ACOS',
+      dataIndex: 'acos',
+      key: 'acos',
+      align: 'center',
+      render: (val) => {
+        const v = Number(val || 0);
+        let color = 'success';
+        if (v > 50) color = 'error';
+        else if (v > 30) color = 'warning';
+        return (
+          <Tag color={color} style={{ fontWeight: 700, borderRadius: '6px', minWidth: '60px', textAlign: 'center' }}>
+            {v.toFixed(2)}%
+          </Tag>
+        );
+      },
+      sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0),
+    },
+    {
+      title: 'ROAS',
+      dataIndex: 'roas',
+      key: 'roas',
+      align: 'center',
+      render: (val) => {
+        const v = Number(val || 0);
+        let color = 'default';
+        if (v >= 3) color = 'geekblue';
+        else if (v >= 1.5) color = 'blue';
+        return (
+          <Tag color={color} style={{ fontWeight: 600, borderRadius: '4px' }}>
+            {v.toFixed(2)}x
+          </Tag>
+        );
+      },
+      sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0),
+    },
+    {
+      title: 'Orders',
+      dataIndex: 'orders',
+      key: 'orders',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0),
+    },
+    {
+      title: 'CVR',
+      dataIndex: 'cvr',
+      key: 'cvr',
+      align: 'center',
+      render: (val) => (
+        <span style={{ fontWeight: 600, color: '#6366f1' }}>
+          {Number(val || 0).toFixed(2)}%
+        </span>
+      ),
+      sorter: (a, b) => Number(a.cvr || 0) - Number(b.cvr || 0),
+    },
+    {
+      title: 'Page Views',
+      dataIndex: 'pageViews',
+      key: 'pageViews',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.pageViews || 0) - Number(b.pageViews || 0),
+    },
+    {
+      title: 'Organic Sales',
+      dataIndex: 'organicSales',
+      key: 'organicSales',
+      align: 'right',
+      render: (val) => `₹${Number(val || 0).toFixed(2)}`,
+      sorter: (a, b) => Number(a.organicSales || 0) - Number(b.organicSales || 0),
+    }
+  ];
 
   return (
     <Modal
       open={isOpen}
       onCancel={onClose}
       footer={null}
-      width={1100}
+      width={1200}
       centered
       style={{ top: 20 }}
       styles={{
-        content: { borderRadius: '16px', padding: 0, overflow: 'hidden' },
+        content: { borderRadius: '16px', padding: 0, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' },
         body: { padding: 0 }
       }}
     >
-      <style>{modalCss}</style>
-      <div className="d-flex flex-column" style={{ height: '80vh', overflow: 'hidden' }}>
+      <div className="d-flex flex-column" style={{ height: '85vh', overflow: 'hidden' }}>
         {/* Modal Header */}
         <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
           <div className="d-flex align-items-center gap-3">
             {rowData.imageUrl ? (
-              <img src={rowData.imageUrl} alt="" className="rounded-3 border object-fit-contain bg-white" style={{ width: '48px', height: '48px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }} />
+              <img 
+                src={rowData.imageUrl} 
+                alt="" 
+                className="rounded-3 border object-fit-contain bg-white" 
+                style={{ width: '52px', height: '52px', padding: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
+              />
             ) : (
-              <div className="rounded-3 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '48px', height: '48px' }}>
-                <ImageIcon size={20} />
+              <div className="rounded-3 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '52px', height: '52px' }}>
+                <ImageIcon size={22} />
               </div>
             )}
             <div>
               <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-zinc-900 text-white fw-bold px-2 rounded-2" style={{ fontSize: '11px' }}>{rowData.asin || rowData.id}</span>
-                {rowData.sku && <span className="text-zinc-500 fw-medium" style={{ fontSize: '12px' }}>SKU: {rowData.sku}</span>}
+                <Tag color="purple" style={{ fontWeight: 800, borderRadius: '4px', fontSize: '10.5px' }}>
+                  {rowData.asin || rowData.id}
+                </Tag>
+                {rowData.sku && (
+                  <Text type="secondary" style={{ fontSize: '12px', fontWeight: 500 }}>
+                    SKU: <span className="font-monospace fw-bold text-zinc-800">{rowData.sku}</span>
+                  </Text>
+                )}
               </div>
-              <h6 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '700px', fontSize: '15px' }}>{rowData.title || 'Detailed Advertisement Timeline'}</h6>
+              <h5 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '800px', fontSize: '15px', letterSpacing: '-0.01em' }}>
+                {rowData.title || 'Detailed Advertisement Timeline'}
+              </h5>
             </div>
           </div>
         </div>
 
-        {/* Modal Sub-stats Summary */}
-        <div className="px-4 py-3 bg-light border-bottom d-flex gap-5 overflow-auto shrink-0">
-          <div>
-            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Spend</div>
-            <div className="fw-bold text-dark fs-6">₹{(rowData.spend || 0).toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Sales</div>
-            <div className="fw-bold text-success fs-6">₹{(rowData.sales || 0).toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Blended ACOS</div>
-            <div className="fw-bold text-dark fs-6">{(rowData.acos || 0).toFixed(2)}%</div>
-          </div>
-          <div>
-            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Clicks</div>
-            <div className="fw-bold text-dark fs-6">{(rowData.clicks || 0).toLocaleString()}</div>
-          </div>
-          <div>
-            <div className="text-zinc-500 font-monospace" style={{ fontSize: '9px', textTransform: 'uppercase' }}>Total Conversions</div>
-            <div className="fw-bold text-dark fs-6">{(rowData.orders || 0).toLocaleString()}</div>
-          </div>
-          <div className="ms-auto">
-            <div className="badge bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-pill fw-bold" style={{ fontSize: '11px' }}>
-              {fullHistory.length} Days Recorded
-            </div>
-          </div>
+        {/* Modal KPI Stats Bar */}
+        <div className="px-4 py-3 border-bottom bg-slate-50 shrink-0" style={{ backgroundColor: '#f8fafc' }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #ef4444' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Spend</Text>}
+                  value={totalSpend}
+                  precision={2}
+                  prefix="₹"
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: '#ef4444' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #10b981' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Sales</Text>}
+                  value={totalSales}
+                  precision={2}
+                  prefix="₹"
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: '#10b981' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #6366f1' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>ROAS</Text>}
+                  value={blendedRoas}
+                  precision={2}
+                  suffix="x"
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: '#6366f1' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #f59e0b' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>ACOS</Text>}
+                  value={blendedAcos}
+                  precision={2}
+                  suffix="%"
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: blendedAcos > 30 ? '#f59e0b' : '#10b981' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Clicks (CTR)</Text>}
+                  value={totalClicks}
+                  suffix={` (${blendedCtr.toFixed(2)}%)`}
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: '#3b82f6' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Card bordered={false} size="small" className="w-100 shadow-sm" style={{ borderRadius: '8px', borderLeft: '3px solid #8b5cf6' }}>
+                <Statistic
+                  title={<Text type="secondary" style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Orders (CVR)</Text>}
+                  value={totalOrders}
+                  suffix={` (${blendedCvr.toFixed(2)}%)`}
+                  valueStyle={{ fontSize: '14px', fontWeight: 800, color: '#8b5cf6' }}
+                />
+              </Card>
+            </Col>
+          </Row>
         </div>
 
-        {/* Modal Chart Visualizer */}
-        {fullHistory.length > 0 && (
-          <div className="px-4 py-3 border-bottom bg-white" style={{ height: '220px' }}>
-            <Chart
-              type="area"
-              height="100%"
-              series={[
-                { name: 'Ad Sales', data: [...fullHistory].reverse().map(d => Number(d.sales || 0).toFixed(0)) },
-                { name: 'Ad Spend', data: [...fullHistory].reverse().map(d => Number(d.spend || 0).toFixed(0)) }
-              ]}
-              options={{
-                ...areaChartOptions(val => '₹' + Number(val).toLocaleString('en-IN')),
-                colors: ['#10B981', '#EF4444'], // green for sales, red for spend
-                chart: { ...areaChartOptions().chart, toolbar: { show: false }, sparkline: { enabled: false } },
-                stroke: { curve: 'smooth', width: 2 },
-                xaxis: {
-                  categories: [...fullHistory].reverse().map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
-                  labels: { style: { fontSize: '10px', fontWeight: 600 } },
-                  axisBorder: { show: false },
-                  axisTicks: { show: false }
-                },
-                yaxis: {
-                  labels: {
-                    style: { fontSize: '10px', fontWeight: 500 },
-                    formatter: (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
-                  }
-                },
-                legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '10px', fontWeight: 700 }
-              }}
-            />
-          </div>
-        )}
+        {/* Modal Main Tabbed Content Area */}
+        <div className="flex-grow-1 overflow-auto bg-white p-3">
+          <Tabs defaultActiveKey="table" centered size="middle">
+            {/* Tab 1: Daily timeline table */}
+            <Tabs.TabPane 
+              tab={
+                <span className="d-flex align-items-center gap-2">
+                  <TableIcon size={14} />
+                  Daily Performance
+                </span>
+              } 
+              key="table"
+            >
+              <div className="border rounded-3 overflow-hidden shadow-sm bg-white mt-1">
+                <Table
+                  dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
+                  columns={columns}
+                  pagination={{ 
+                    pageSize: 8, 
+                    showSizeChanger: false, 
+                    size: 'small', 
+                    style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' } 
+                  }}
+                  size="middle"
+                  className="modern-timeline-table"
+                  rowClassName="ah-tr"
+                  scroll={{ x: 'max-content' }}
+                />
+              </div>
+            </Tabs.TabPane>
 
-        {/* Modal Table Body */}
-        <div className="flex-grow-1 overflow-auto bg-white position-relative">
-          {fullHistory.length === 0 ? (
-            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-zinc-400">
-              <Calendar size={48} className="mb-3 opacity-20" />
-              <span className="fw-medium">No historical tracking available for this period.</span>
-            </div>
-          ) : (
-            <table className="w-100 border-collapse">
-              <thead>
-                <tr>
-                  <th className="ah-th">Date</th>
-                  <th className="ah-th text-end">Impressions</th>
-                  <th className="ah-th text-end">Clicks</th>
-                  <th className="ah-th text-end">Spend (₹)</th>
-                  <th className="ah-th text-end">Ad Sales (₹)</th>
-                  <th className="ah-th text-end">ACOS (%)</th>
-                  <th className="ah-th text-end">ROAS</th>
-                  <th className="ah-th text-end">Orders</th>
-                  <th className="ah-th text-end">CVR (%)</th>
-                  <th className="ah-th text-end">Page Views</th>
-                  <th className="ah-th text-end">Organic Sales (₹)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fullHistory.map((day, i) => (
-                  <tr key={i} className="ah-tr">
-                    <td className="ah-td text-zinc-600 font-monospace" style={{ fontSize: '11px' }}>
-                      {new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="ah-td text-end">{(day.impressions || 0).toLocaleString()}</td>
-                    <td className="ah-td text-end">{(day.clicks || 0).toLocaleString()}</td>
-                    <td className="ah-td text-end text-danger-emphasis">{(day.spend || 0).toFixed(2)}</td>
-                    <td className="ah-td text-end fw-bold text-success-emphasis">{(day.sales || 0).toFixed(2)}</td>
-                    <td className="ah-td text-end">
-                      <span className={`badge ${(day.acos > 30) ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`} style={{ fontSize: '11px' }}>
-                        {(day.acos || 0).toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="ah-td text-end">{(day.roas || 0).toFixed(2)}</td>
-                    <td className="ah-td text-end">{(day.orders || 0).toLocaleString()}</td>
-                    <td className="ah-td text-end">{(day.cvr || 0).toFixed(2)}%</td>
-                    <td className="ah-td text-end">{(day.pageViews || 0).toLocaleString()}</td>
-                    <td className="ah-td text-end text-zinc-600">{(day.organicSales || 0).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+            {/* Tab 2: Visualized interactive chart */}
+            {fullHistory.length > 0 && (
+              <Tabs.TabPane 
+                tab={
+                  <span className="d-flex align-items-center gap-2">
+                    <BarChart3 size={14} />
+                    Performance Visualizer
+                  </span>
+                } 
+                key="chart"
+              >
+                <div className="border rounded-3 p-3 bg-white mt-1 shadow-sm">
+                  <div style={{ height: '320px', width: '100%' }}>
+                    <Chart
+                      type="area"
+                      height="100%"
+                      series={[
+                        { name: 'Ad Sales', data: [...fullHistory].reverse().map(d => Number(d.sales || 0).toFixed(0)) },
+                        { name: 'Ad Spend', data: [...fullHistory].reverse().map(d => Number(d.spend || 0).toFixed(0)) }
+                      ]}
+                      options={{
+                        ...areaChartOptions(val => '₹' + Number(val).toLocaleString('en-IN')),
+                        colors: ['#10B981', '#EF4444'], // green for sales, red for spend
+                        chart: { ...areaChartOptions().chart, toolbar: { show: true }, sparkline: { enabled: false } },
+                        stroke: { curve: 'smooth', width: 2.5 },
+                        xaxis: {
+                          categories: [...fullHistory].reverse().map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+                          labels: { style: { fontSize: '10px', fontWeight: 600 } },
+                          axisBorder: { show: false },
+                          axisTicks: { show: false }
+                        },
+                        yaxis: {
+                          labels: {
+                            style: { fontSize: '10px', fontWeight: 500 },
+                            formatter: (v) => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
+                          }
+                        },
+                        legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '11px', fontWeight: 700 }
+                      }}
+                    />
+                  </div>
+                </div>
+              </Tabs.TabPane>
+            )}
+          </Tabs>
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 py-3 border-top bg-light d-flex justify-content-end gap-2 shrink-0">
-          <Button onClick={onClose} type="default" size="middle" className="fw-bold">
+        <div className="px-4 py-3 border-top bg-light d-flex justify-content-between align-items-center shrink-0" style={{ backgroundColor: '#f8fafc' }}>
+          <div className="text-zinc-500 font-monospace" style={{ fontSize: '11px', fontWeight: 500 }}>
+            {fullHistory.length} Days Recorded Timeline
+          </div>
+          <Button onClick={onClose} type="primary" style={{ backgroundColor: '#18181b', borderColor: '#18181b', fontWeight: 700, borderRadius: '6px' }}>
             Close Window
           </Button>
         </div>
