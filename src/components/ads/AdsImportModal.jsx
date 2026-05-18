@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Upload, FileDown, Check, AlertCircle, RefreshCw, Calendar, FileType } from 'lucide-react';
 import axios from 'axios';
 
-const AdsImportModal = ({ isOpen, onClose, onComplete }) => {
+const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
     const [marketplace, setMarketplace] = useState('amazon');
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
@@ -33,6 +33,9 @@ const AdsImportModal = ({ isOpen, onClose, onComplete }) => {
             formData.append('file', file);
             formData.append('date', selectedDate);
             formData.append('marketplace', marketplace);
+            if (selectedSeller) {
+                formData.append('sellerId', selectedSeller);
+            }
 
             const backendUrl = `${import.meta.env.VITE_API_URL || '/api'}/upload/upload-ads`;
 

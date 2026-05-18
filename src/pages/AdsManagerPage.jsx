@@ -425,6 +425,7 @@ export default function AdsManagerPage() {
 
   // Visual Collapsible Columns Tracking
   const [expandedCols, setExpandedCols] = useState({
+    totalSales: false,
     impressions: false,
     clicks: false,
     spend: false,
@@ -459,7 +460,19 @@ export default function AdsManagerPage() {
 
       const res = await adsApi.getAdsManagerData(params);
       if (res.success) {
-        setData(res.data || []);
+        const mapped = (res.data || []).map(item => {
+          const totalSales = (item.sales || 0) + (item.organicSales || 0);
+          const weekHistory = (item.weekHistory || []).map(h => ({
+            ...h,
+            totalSales: (h.sales || 0) + (h.organicSales || 0)
+          }));
+          return {
+            ...item,
+            totalSales,
+            weekHistory
+          };
+        });
+        setData(mapped);
         setPage(1); // Reset page on fresh fetch
       }
     } catch (err) {
@@ -741,6 +754,7 @@ export default function AdsManagerPage() {
       <AdsImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
+        selectedSeller={selectedSeller}
         onComplete={() => {
           setShowImportModal(false);
           fetchAdsData();
@@ -1013,13 +1027,14 @@ export default function AdsManagerPage() {
                 <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#fafafa' }}>TARGET</th>
 
                 {/* DYNAMIC ADS COLUMNS */}
-                {renderHeaderGroup('IMPRESSIONS', 'blue', <Eye size={12} />, 'impressions')}
-                {renderHeaderGroup('CLICKS', 'cyan', <TrendUpIcon size={12} />, 'clicks')}
+                {renderHeaderGroup('TOTAL SALES(AD + ORG)', 'blue', <FileBarChart size={12} />, 'totalSales')}
+                {renderHeaderGroup('ORDERED UNITS', 'pink', <Layers size={12} />, 'orders')}
                 {renderHeaderGroup('SPEND', 'indigo', <BarChart3 size={12} />, 'spend')}
-                {renderHeaderGroup('AD SALES', 'emerald', <FileBarChart size={12} />, 'sales')}
-                {renderHeaderGroup('ACOS', 'purple', <Target size={12} />, 'acos')}
+                {renderHeaderGroup('CLICKS', 'cyan', <TrendUpIcon size={12} />, 'clicks')}
+                {renderHeaderGroup('IMPRESSIONS', 'blue', <Eye size={12} />, 'impressions')}
                 {renderHeaderGroup('ROAS', 'amber', <RefreshCw size={12} />, 'roas')}
-                {renderHeaderGroup('ORDERS', 'pink', <Layers size={12} />, 'orders')}
+                {renderHeaderGroup('ACOS', 'purple', <Target size={12} />, 'acos')}
+                {renderHeaderGroup('AD SALES', 'emerald', <FileBarChart size={12} />, 'sales')}
                 {renderHeaderGroup('CVR', 'slate', <Activity size={12} />, 'cvr')}
                 {renderHeaderGroup('ORGANIC SALES', 'emerald', <BarChart3 size={12} />, 'organicSales')}
                 {renderHeaderGroup('PAGE VIEWS', 'blue', <Eye size={12} />, 'pageViews')}
@@ -1027,13 +1042,14 @@ export default function AdsManagerPage() {
 
               {/* ROW 2: Metrics Sub-headers (Avg / Trend / Dates) */}
               <tr>
-                {renderSubHeaders('blue', 'impressions')}
-                {renderSubHeaders('cyan', 'clicks')}
-                {renderSubHeaders('indigo', 'spend')}
-                {renderSubHeaders('emerald', 'sales')}
-                {renderSubHeaders('purple', 'acos')}
-                {renderSubHeaders('amber', 'roas')}
+                {renderSubHeaders('blue', 'totalSales')}
                 {renderSubHeaders('pink', 'orders')}
+                {renderSubHeaders('indigo', 'spend')}
+                {renderSubHeaders('cyan', 'clicks')}
+                {renderSubHeaders('blue', 'impressions')}
+                {renderSubHeaders('amber', 'roas')}
+                {renderSubHeaders('purple', 'acos')}
+                {renderSubHeaders('emerald', 'sales')}
                 {renderSubHeaders('slate', 'cvr')}
                 {renderSubHeaders('emerald', 'organicSales')}
                 {renderSubHeaders('blue', 'pageViews')}
@@ -1130,13 +1146,14 @@ export default function AdsManagerPage() {
                       </td>
 
                       {/* --- CORE METRIC CELLS --- */}
-                      {renderCells(row, 'impressions', 'blue', 'impressions')}
-                      {renderCells(row, 'clicks', 'cyan', 'clicks')}
-                      {renderCells(row, 'spend', 'indigo', 'spend', true)}
-                      {renderCells(row, 'sales', 'emerald', 'sales', true)}
-                      {renderCells(row, 'acos', 'purple', 'acos', false, true)}
-                      {renderCells(row, 'roas', 'amber', 'roas', false, false)}
+                      {renderCells(row, 'totalSales', 'blue', 'totalSales', true)}
                       {renderCells(row, 'orders', 'pink', 'orders')}
+                      {renderCells(row, 'spend', 'indigo', 'spend', true)}
+                      {renderCells(row, 'clicks', 'cyan', 'clicks')}
+                      {renderCells(row, 'impressions', 'blue', 'impressions')}
+                      {renderCells(row, 'roas', 'amber', 'roas', false, false)}
+                      {renderCells(row, 'acos', 'purple', 'acos', false, true)}
+                      {renderCells(row, 'sales', 'emerald', 'sales', true)}
                       {renderCells(row, 'cvr', 'slate', 'cvr', false, true)}
                       {renderCells(row, 'organicSales', 'emerald', 'organicSales', true)}
                       {renderCells(row, 'pageViews', 'blue', 'pageViews')}

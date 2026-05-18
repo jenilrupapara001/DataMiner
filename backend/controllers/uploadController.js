@@ -354,6 +354,51 @@ exports.uploadAdsData = async (req, res) => {
       // Direct Server Memory-to-Memory push
       await pool.request().bulk(table);
 
+      // Resolve targetSellerId to auto-heal missing ASINs in master table
+      let targetSellerId = req.body.sellerId || req.body.selectedSeller || req.body.seller;
+      if (!targetSellerId) {
+        const sellerCheck = await pool.request().query(`
+          SELECT TOP 1 a.SellerId
+          FROM Asins a
+          INNER JOIN (
+            SELECT DISTINCT Asin FROM ${tempTableName}
+          ) t ON a.AsinCode = t.Asin
+          GROUP BY a.SellerId
+          ORDER BY COUNT(*) DESC
+        `);
+        if (sellerCheck.recordset.length > 0) {
+          targetSellerId = sellerCheck.recordset[0].SellerId;
+        } else {
+          const defaultSeller = await pool.request().query("SELECT TOP 1 Id FROM Sellers ORDER BY CreatedAt DESC");
+          if (defaultSeller.recordset.length > 0) {
+            targetSellerId = defaultSeller.recordset[0].Id;
+          }
+        }
+      }
+
+      // Auto-create skeleton rows in Asins for any advertised ASINs not in master table
+      if (targetSellerId) {
+        await pool.request()
+          .input('sellerId', sql.VarChar, targetSellerId)
+          .query(`
+            INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Ads, CreatedAt, UpdatedAt)
+            SELECT 
+              SUBSTRING(LOWER(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', '')), 1, 24) AS Id,
+              t.AsinCode,
+              @sellerId AS SellerId,
+              'Active' AS Status,
+              'Pending' AS ScrapeStatus,
+              1 AS Ads,
+              GETDATE() AS CreatedAt,
+              GETDATE() AS UpdatedAt
+            FROM (
+              SELECT DISTINCT Asin AS AsinCode FROM ${tempTableName}
+            ) t
+            LEFT JOIN Asins existing ON t.AsinCode = existing.AsinCode
+            WHERE existing.AsinCode IS NULL
+          `);
+      }
+
       // Dynamic mapping for MERGE operation to preserve safety against manual mapping drift
       const updateCols = columnsList
         .filter(c => !['Asin', 'Date', 'Month', 'ReportType'].includes(c.name))

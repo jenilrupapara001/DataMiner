@@ -445,7 +445,7 @@ exports.getAdsManagerData = async (req, res) => {
                 a.Category,
                 a.Brand
             FROM AdsPerformance p
-            INNER JOIN Asins a ON p.Asin = a.AsinCode
+            LEFT JOIN Asins a ON p.Asin = a.AsinCode
             ${whereClause}
             ORDER BY p.Date DESC
         `);
