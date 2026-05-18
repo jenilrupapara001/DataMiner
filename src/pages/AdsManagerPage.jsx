@@ -1322,15 +1322,7 @@ export default function AdsManagerPage() {
           gap: 12px;
           flex-wrap: nowrap;
         }
-        @media (max-width: 1200px) {
-          .ads-header-right {
-            gap: 8px;
-          }
-          .ads-header-right > .ant-segmented,
-          .ads-header-right > div:has(input) {
-             display: none; /* Hide less critical items on smaller screens or use a menu */
-          }
-        }
+
         @media (max-width: 992px) {
           .ads-page-container {
             margin: 0;
