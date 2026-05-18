@@ -15,7 +15,7 @@ NC='\033[0m'
 # Config
 VPS_HOST="${VPS_HOST:-data.brandcentral.in}"
 VPS_USER="${VPS_USER:-root}"
-RETAIL_OPS_DIR="/path/to/retail-ops"
+RETAIL_OPS_DIR="/var/www/retail-ops"
 
 # Parse args
 SKIP_PULL=false
@@ -43,22 +43,33 @@ ssh "$VPS_USER@$VPS_HOST" << EOF
     git pull origin main
   
     echo "📦 Installing backend dependencies..."
-    cd backend
+    cd $RETAIL_OPS_DIR/backend
     npm install
   
     echo "📦 Installing frontend dependencies..."
-    cd ../retail-ops
+    cd $RETAIL_OPS_DIR
     npm install --legacy-peer-deps
+
+    echo "⚙️ Building frontend..."
+    npm run build
   fi
   
   echo "🔄 Restarting backend with increased memory..."
   cd $RETAIL_OPS_DIR/backend
   
-  # Check if PM2 process exists
-  if pm2 id retailops-backend > /dev/null 2>&1; then
-    pm2 restart retailops-backend
+  # Check if PM2 process exists for backend
+  if pm2 id retailops-api > /dev/null 2>&1; then
+    pm2 restart retailops-api
   else
-    pm2 start server.js --name retailops-backend -- --max-old-space-size=4096
+    pm2 start server.js --name retailops-api -- --max-old-space-size=4096
+  fi
+
+  # Check if PM2 process exists for frontend
+  echo "🔄 Restarting frontend PM2 process..."
+  if pm2 id retailops-frontend > /dev/null 2>&1; then
+    pm2 restart retailops-frontend
+  else
+    pm2 start npm --name "retailops-frontend" -- run preview -- --host --port 4173
   fi
   
   echo "✅ Deployment complete!"
