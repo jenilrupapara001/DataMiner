@@ -146,8 +146,11 @@ const MiniSpark = ({ data, color }) => {
 const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   if (!rowData) return null;
 
+  // Try to find a valid image in child ASINs if parent doesn't have one
+  const displayImage = rowData.imageUrl || (rowData.children && rowData.children.find(c => c.imageUrl)?.imageUrl);
+
   // Sort history descending (newest first)
-  const fullHistory = [...(rowData.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const fullHistory = [...(rowData.history || rowData.weekHistory || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   // Compute aggregated stats
   const totalSpend = Number(rowData.spend || 0);
@@ -298,9 +301,9 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
         {/* Modal Header */}
         <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
           <div className="d-flex align-items-center gap-3">
-            {rowData.imageUrl ? (
+            {displayImage ? (
               <img 
-                src={rowData.imageUrl} 
+                src={displayImage} 
                 alt="" 
                 className="rounded-3 border object-fit-contain bg-white" 
                 style={{ width: '52px', height: '52px', padding: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
@@ -968,6 +971,7 @@ export default function AdsManagerPage() {
       });
       
       p.weekHistory = sortedHistory;
+      p.history = sortedHistory;
       p.childCount = p.children.length;
       return p;
     });
