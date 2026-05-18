@@ -1302,8 +1302,6 @@ export default function AdsManagerPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 12px;
           padding: 10px 2rem;
           position: sticky;
           top: -1.5rem; /* Offset the negative margin of container */
@@ -1322,39 +1320,7 @@ export default function AdsManagerPage() {
           display: flex;
           align-items: center;
           gap: 12px;
-          flex-wrap: wrap;
-        }
-
-        @media (max-width: 992px) {
-          .ads-page-container {
-            margin: 0;
-            height: auto;
-            min-height: calc(100vh - 60px);
-          }
-          .ads-top-header {
-            flex-direction: column;
-            align-items: stretch !important;
-            gap: 12px;
-            padding: 16px;
-          }
-          .ads-header-right {
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: flex-start;
-          }
-          .ads-header-right > * {
-            flex-grow: 1;
-            min-width: 140px;
-          }
-        }
-        @media (max-width: 768px) {
-          .ads-header-right {
-            flex-direction: column;
-            align-items: stretch !important;
-          }
-          .ads-header-right > * {
-            width: 100% !important;
-          }
+          flex-wrap: nowrap;
         }
       `}</style>
 
