@@ -225,17 +225,10 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       title: 'ACOS',
       dataIndex: 'acos',
       key: 'acos',
-      align: 'center',
+      align: 'right',
       render: (val) => {
         const v = Number(val || 0);
-        let color = 'success';
-        if (v > 50) color = 'error';
-        else if (v > 30) color = 'warning';
-        return (
-          <Tag color={color} style={{ fontWeight: 700, borderRadius: '6px', minWidth: '60px', textAlign: 'center' }}>
-            {v.toFixed(2)}%
-          </Tag>
-        );
+        return `${v.toFixed(2)}%`;
       },
       sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0),
     },
@@ -243,17 +236,10 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       title: 'ROAS',
       dataIndex: 'roas',
       key: 'roas',
-      align: 'center',
+      align: 'right',
       render: (val) => {
         const v = Number(val || 0);
-        let color = 'default';
-        if (v >= 3) color = 'geekblue';
-        else if (v >= 1.5) color = 'blue';
-        return (
-          <Tag color={color} style={{ fontWeight: 600, borderRadius: '4px' }}>
-            {v.toFixed(2)}x
-          </Tag>
-        );
+        return `${v.toFixed(2)}`;
       },
       sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0),
     },
@@ -326,9 +312,9 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
             )}
             <div>
               <div className="d-flex align-items-center gap-2">
-                <Tag color="purple" style={{ fontWeight: 800, borderRadius: '4px', fontSize: '10.5px' }}>
+                <span className="badge bg-zinc-900 text-white fw-bold px-2 rounded-2" style={{ fontSize: '11px' }}>
                   {rowData.asin || rowData.id}
-                </Tag>
+                </span>
                 {rowData.sku && (
                   <Text type="secondary" style={{ fontSize: '12px', fontWeight: 500 }}>
                     SKU: <span className="font-monospace fw-bold text-zinc-800">{rowData.sku}</span>
