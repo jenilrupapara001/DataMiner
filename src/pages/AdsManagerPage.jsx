@@ -1310,6 +1310,11 @@ export default function AdsManagerPage() {
           border-bottom: 1px solid #e2e8f0;
           box-shadow: 0 1px 3px rgba(0,0,0,0.05);
           flex-shrink: 0;
+          overflow-x: auto;
+          scrollbar-width: none; /* Hide scrollbar for Firefox */
+        }
+        .ads-top-header::-webkit-scrollbar {
+          display: none; /* Hide scrollbar for Chrome, Safari, and Opera */
         }
         .ads-header-left {
           display: flex;
