@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Space, Button, Segmented, Modal, Divider, 
-  message as antdMessage, Typography, Spin
+  message as antdMessage, Typography, Spin, Tag, Badge
 } from 'antd';
 
 const { Title, Text } = Typography;
