@@ -105,7 +105,6 @@ const Sidebar = () => {
             items: [
                 { label: 'Workflows', icon: GitBranch, to: '/actions', permission: 'actions_view' },
                 { label: 'Optimization Tasks', icon: ListTodo, to: '/tasks', permission: 'tasks_view' },
-                { label: 'Task Operations', icon: CheckCircle, to: '/tasks-operations', permission: 'tasks_view' },
                 { label: 'Templates', icon: LayoutTemplate, to: '/actions/templates', permission: 'actions_view' },
                 { label: 'Performance', icon: BarChart2, to: '/actions/achievement-report', permission: 'monthlyreport_view' },
                 { label: 'Activity Log', icon: Clock, to: '/activity-log', permission: 'activitylogs_view' },

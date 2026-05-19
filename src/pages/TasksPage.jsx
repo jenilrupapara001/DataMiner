@@ -8,7 +8,6 @@ import ReviewModal from '../components/actions/ReviewModal';
 import { Plus, Calendar, AlertTriangle, List, BarChart2, TrendingUp } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import TasksOperationsPage from './TasksOperationsPage';
 import { 
   Space, Button, Segmented, Modal, Divider, 
   message as antdMessage, Typography, Spin
@@ -548,19 +547,6 @@ const TasksPage = () => {
         </div>
 
         <Space size={12} wrap>
-          <Segmented
-            className="segmented-tasks"
-            size="large"
-            value={viewMode}
-            onChange={setViewMode}
-            options={[
-              { label: <Space size={6}><TrendingUp size={14} /><span>Strategic</span></Space>, value: 'STRATEGIC' },
-              { label: <Space size={6}><List size={14} /><span>Operations</span></Space>, value: 'OPERATIONS' }
-            ]}
-          />
-
-          <Divider orientation="vertical" style={{ height: 32, margin: '0 4px' }} />
-
           <Button 
             type="default" 
             onClick={handleCreateAction} 
@@ -601,27 +587,51 @@ const TasksPage = () => {
       <div className="tasks-scroll-content animate-fade-up">
         
         {/* Modern KPI Filter Pills Strip */}
-        <div className="filter-pill-container">
+        <div className="filter-pill-container" style={{ gap: '6px' }}>
           {filterPills.map((pill, idx) => {
             if (pill.isDivider) {
-              return <Divider orientation="vertical" key={`div-${idx}`} style={{ height: 24, margin: '0 6px' }} />;
+              return <Divider orientation="vertical" key={`div-${idx}`} style={{ height: 20, margin: '0 4px', borderColor: '#cbd5e1' }} />;
             }
 
             const isActive = activeFilter === pill.type;
-            const activeStyles = isActive ? pill.activeStyle : {};
-            const dotBg = (isActive && pill.type === 'ALL') ? '#ffffff' : pill.color;
+            const dotBg = pill.color;
 
             return (
-              <div
+              <Tag
                 key={pill.type}
                 onClick={() => handleFilterClick(pill.type)}
-                className={`filter-pill ${isActive ? 'active' : ''}`}
-                style={{ ...activeStyles }}
+                style={{
+                  cursor: 'pointer',
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s ease',
+                  border: isActive ? `1px solid ${pill.color}` : '1px solid #cbd5e1',
+                  background: isActive ? `${pill.color}15` : '#ffffff',
+                  color: isActive ? pill.color : '#475569',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  userSelect: 'none',
+                  boxShadow: isActive ? `0 2px 6px ${pill.color}25` : 'none',
+                  margin: 0
+                }}
               >
-                <div className="pill-dot" style={{ backgroundColor: dotBg }}></div>
-                <span className="text-uppercase" style={{ fontSize: '10.5px', letterSpacing: '0.05em' }}>{pill.label}</span>
-                <span style={{ fontWeight: 800 }}>{pill.count}</span>
-              </div>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotBg }} />
+                <span style={{ textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '10px' }}>{pill.label}</span>
+                <span style={{
+                  background: isActive ? pill.color : '#f1f5f9',
+                  color: isActive ? '#ffffff' : '#475569',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                  display: 'inline-block'
+                }}>{pill.count}</span>
+              </Tag>
             );
           })}
 
@@ -631,19 +641,18 @@ const TasksPage = () => {
               onClick={() => navigate('/actions/achievement-report')} 
               icon={<TrendingUp size={14} />}
               className="fw-bold"
+              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
             >
               Performance Report
             </Button>
           </div>
         </div>
 
-        {/* Strategic Objectives / Operations Switchable Content */}
+        {/* Strategic Objectives Board directly */}
         {loading ? (
           <div style={{ display: 'flex', flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
             <Spin size="large" description="Syncing Dashboard..." />
           </div>
-        ) : viewMode === 'OPERATIONS' ? (
-          <TasksOperationsPage isEmbedded={true} />
         ) : (
           <div style={{ flex: 1 }}>
             <ActionListEnhanced
@@ -663,7 +672,7 @@ const TasksPage = () => {
               onCompleteTask={handleCompleteTask}
               onSubmitForReview={handleSubmitForReview}
               onReviewAction={(action) => openReviewModal(action)}
-              viewMode={viewMode}
+              viewMode="STRATEGIC"
             />
           </div>
         )}
