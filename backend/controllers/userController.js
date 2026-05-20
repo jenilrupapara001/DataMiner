@@ -756,6 +756,28 @@ exports.getManagers = async (req, res) => {
       WHERE U.IsActive = 1
     `);
 
+    // Fetch assigned sellers for each manager
+    const userIds = result.recordset.map(u => `'${u.Id}'`).join(',');
+    let sellerMap = {};
+    
+    if (userIds.length > 0) {
+      const sellersResult = await pool.request().query(`
+        SELECT US.UserId, S.Id as SellerId, S.Name as SellerName, S.Marketplace
+        FROM UserSellers US
+        JOIN Sellers S ON US.SellerId = S.Id
+        WHERE US.UserId IN (${userIds})
+      `);
+      
+      sellersResult.recordset.forEach(s => {
+        if (!sellerMap[s.UserId]) sellerMap[s.UserId] = [];
+        sellerMap[s.UserId].push({
+          _id: s.SellerId,
+          name: s.SellerName,
+          marketplace: s.Marketplace
+        });
+      });
+    }
+
     res.json({
       success: true,
       data: result.recordset.map(u => ({
@@ -764,7 +786,8 @@ exports.getManagers = async (req, res) => {
         firstName: u.FirstName,
         lastName: u.LastName,
         email: u.Email,
-        role: { name: u.RoleName, displayName: u.RoleDisplayName }
+        role: { name: u.RoleName, displayName: u.RoleDisplayName },
+        assignedSellers: sellerMap[u.Id] || []
       }))
     });
   } catch (error) {

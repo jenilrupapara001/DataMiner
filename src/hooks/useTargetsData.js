@@ -66,6 +66,7 @@ export function useTargetsData(customNotificationApi) {
                 Year: p.year,
                 Month: p.month,
                 TotalTargetValue: p.totalTargetValue,
+                GoalType: p.goalType || 'GMS',
                 overallAchieved: 0,
                 monthlyBreakdown: p.breakdowns,
             });

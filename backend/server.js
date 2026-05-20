@@ -67,7 +67,7 @@ app.use((req, res, next) => {
     const status = res.statusCode;
     const color = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : status >= 300 ? '\x1b[36m' : '\x1b[32m';
     const reset = '\x1b[0m';
-    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.url} ${color}${status}${reset} - ${duration}ms`);
+    console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.originalUrl} ${color}${status}${reset} - ${duration}ms`);
   });
   next();
 });
