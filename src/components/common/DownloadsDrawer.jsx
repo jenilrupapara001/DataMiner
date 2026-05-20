@@ -271,7 +271,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                                                             percent={Math.round(item.progress || 0)} 
                                                             size="small" 
                                                             strokeColor="#2563eb"
-                                                            trailColor="#f1f5f9"
+                                                            railColor="#f1f5f9"
                                                             style={{ margin: 0 }}
                                                         />
                                                     </div>

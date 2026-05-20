@@ -1583,11 +1583,12 @@ export const targetsApi = {
         invalidateCachePattern('targets');
         return res.json();
     },
-    update: async (targetId, totalTargetValue, breakdowns) => {
+    update: async (targetId, totalTargetValue, breakdowns, opts = {}) => {
         const res = await fetch(`${API_BASE}/targets`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-            body: JSON.stringify({ targetId, totalTargetValue, breakdowns })
+            body: JSON.stringify({ targetId, totalTargetValue, breakdowns }),
+            signal: opts.signal
         });
         if (!res.ok) throw new Error('Failed to update target');
         invalidateCachePattern('targets');
