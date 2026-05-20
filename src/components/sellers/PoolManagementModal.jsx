@@ -102,7 +102,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase' }}>Total Tasks</Text>} 
                 value={stats.total} 
-                valueStyle={{ fontWeight: 800, color: '#1e293b' }}
+                styles={{ content: { fontWeight: 800, color: '#1e293b' } }}
               />
             </Card>
           </Col>
@@ -111,7 +111,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#166534', textTransform: 'uppercase' }}>Available</Text>} 
                 value={stats.available} 
-                valueStyle={{ fontWeight: 800, color: '#15803d' }}
+                styles={{ content: { fontWeight: 800, color: '#15803d' } }}
               />
             </Card>
           </Col>
@@ -120,7 +120,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#1e40af', textTransform: 'uppercase' }}>Assigned</Text>} 
                 value={stats.assigned} 
-                valueStyle={{ fontWeight: 800, color: '#2563eb' }}
+                styles={{ content: { fontWeight: 800, color: '#2563eb' } }}
               />
             </Card>
           </Col>

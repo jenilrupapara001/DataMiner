@@ -1,3 +1,5 @@
+import { cachedFetch, invalidateCachePattern } from './apiCache';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Auth helper functions
@@ -480,19 +482,26 @@ export const sellerApi = {
     }, {});
 
     const query = new URLSearchParams(cleanParams).toString();
-    const res = await fetch(`${API_BASE}/sellers?${query}`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch sellers');
-    return res.json();
+    const cacheKey = `sellers:${query}`;
+
+    return cachedFetch(cacheKey, async () => {
+      const res = await fetch(`${API_BASE}/sellers?${query}`, {
+        headers: { ...getAuthHeader() },
+      });
+      if (!res.ok) throw new Error('Failed to fetch sellers');
+      return res.json();
+    }, 5 * 60 * 1000); // 5 min TTL
   },
 
   getById: async (id) => {
-    const res = await fetch(`${API_BASE}/sellers/${id}`, {
-      headers: { ...getAuthHeader() },
-    });
-    if (!res.ok) throw new Error('Failed to fetch seller');
-    return res.json();
+    const cacheKey = `seller:${id}`;
+    return cachedFetch(cacheKey, async () => {
+      const res = await fetch(`${API_BASE}/sellers/${id}`, {
+        headers: { ...getAuthHeader() },
+      });
+      if (!res.ok) throw new Error('Failed to fetch seller');
+      return res.json();
+    }, 1 * 60 * 1000); // 1 min TTL
   },
 
   create: async (data) => {
@@ -505,6 +514,7 @@ export const sellerApi = {
       const error = await res.json();
       throw new Error(error.error || 'Failed to create seller');
     }
+    invalidateCachePattern('sellers:');
     return res.json();
   },
 
@@ -515,6 +525,8 @@ export const sellerApi = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update seller');
+    invalidateCachePattern('sellers:');
+    invalidateCachePattern(`seller:${id}`);
     return res.json();
   },
 
@@ -524,6 +536,8 @@ export const sellerApi = {
       headers: { ...getAuthHeader() }
     });
     if (!res.ok) throw new Error('Failed to delete seller');
+    invalidateCachePattern('sellers:');
+    invalidateCachePattern(`seller:${id}`);
     return res.json();
   },
 
@@ -534,6 +548,7 @@ export const sellerApi = {
       body: JSON.stringify({ sellers }),
     });
     if (!res.ok) throw new Error('Failed to import sellers');
+    invalidateCachePattern('sellers:');
     return res.json();
   },
 
@@ -543,6 +558,7 @@ export const sellerApi = {
       headers: { ...getAuthHeader() }
     });
     if (!res.ok) throw new Error('Failed to seed demo data');
+    invalidateCachePattern('sellers:');
     return res.json();
   },
 };
@@ -1546,5 +1562,64 @@ export const adsApi = {
             return acc;
         }, {});
         return api.get('/data/ads-manager', cleanParams);
+    }
+};
+
+export const targetsApi = {
+    getAll: async () => {
+        return cachedFetch('targets', async () => {
+            const res = await fetch(`${API_BASE}/targets`, { headers: { ...getAuthHeader() } });
+            if (!res.ok) throw new Error('Failed to fetch targets');
+            return res.json();
+        }, 60 * 1000); // 1 min TTL
+    },
+    create: async (targets) => {
+        const res = await fetch(`${API_BASE}/targets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ targets })
+        });
+        if (!res.ok) throw new Error('Failed to save targets');
+        invalidateCachePattern('targets');
+        return res.json();
+    },
+    update: async (targetId, totalTargetValue, breakdowns) => {
+        const res = await fetch(`${API_BASE}/targets`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ targetId, totalTargetValue, breakdowns })
+        });
+        if (!res.ok) throw new Error('Failed to update target');
+        invalidateCachePattern('targets');
+        return res.json();
+    },
+    updateAchievements: async (updates) => {
+        const res = await fetch(`${API_BASE}/targets/achievements`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ updates })
+        });
+        if (!res.ok) throw new Error('Failed to save overrides');
+        invalidateCachePattern('targets');
+        return res.json();
+    },
+    delete: async (id) => {
+        const res = await fetch(`${API_BASE}/targets/${id}`, {
+            method: 'DELETE',
+            headers: { ...getAuthHeader() }
+        });
+        if (!res.ok) throw new Error('Failed to delete target');
+        invalidateCachePattern('targets');
+        return res.json();
+    },
+    deleteBulk: async (ids) => {
+        const res = await fetch(`${API_BASE}/targets/bulk`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ ids })
+        });
+        if (!res.ok) throw new Error('Failed to delete selected targets');
+        invalidateCachePattern('targets');
+        return res.json();
     }
 };

@@ -350,7 +350,7 @@ const AlertsPage = () => {
                                         </div>
                                         <Statistic 
                                             value={stat.value}
-                                            valueStyle={{ fontWeight: 800, fontSize: 28, color: '#0f172a', lineHeight: 1 }}
+                                            styles={{ content: { fontWeight: 800, fontSize: 28, color: '#0f172a', lineHeight: 1 } }}
                                         />
                                     </div>
                                     <div style={{ 

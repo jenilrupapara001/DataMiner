@@ -2,6 +2,29 @@ const { sql, getPool, generateId } = require('../database/db');
 const marketDataSyncService = require('../services/marketDataSyncService');
 const SystemLogService = require('../services/SystemLogService');
 
+// Lightweight in-memory cache registry for sellers to prevent duplicate queries
+const sellerCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache TTL
+
+const getCachedSellers = (key) => {
+  const entry = sellerCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    sellerCache.delete(key);
+    return null;
+  }
+  return entry.data;
+};
+
+const setCachedSellers = (key, data) => {
+  sellerCache.set(key, { data, timestamp: Date.now() });
+};
+
+const clearSellerCache = () => {
+  console.log('[SELLER CACHE] Invalidation triggered - clearing cached sellers.');
+  sellerCache.clear();
+};
+
 /**
  * Enrich sellers with their assigned managers.
  */
@@ -72,6 +95,27 @@ exports.getSellers = async (req, res) => {
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
 
+    // Generate a secure cache key based on query parameters and user's specific access scope
+    const cacheKey = JSON.stringify({
+      status,
+      marketplace,
+      search,
+      page: pageNum,
+      limit: limitNum,
+      roleName,
+      userId: req.user?._id || req.userId,
+      assignedSellers: (req.user?.assignedSellers || []).map(s => (s._id || s).toString())
+    });
+
+    const cachedData = getCachedSellers(cacheKey);
+    if (cachedData) {
+      console.log('[SELLER CACHE] Cache HIT for sellers key:', cacheKey);
+      return res.json({
+        success: true,
+        data: cachedData
+      });
+    }
+
     const pool = await getPool();
     let whereClause = 'WHERE 1=1';
     
@@ -86,7 +130,9 @@ exports.getSellers = async (req, res) => {
     if (!isGlobalUser) {
       const sellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
       if (sellerIds.length === 0) {
-        return res.json({ success: true, data: { sellers: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } } });
+        const emptyResponse = { sellers: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } };
+        setCachedSellers(cacheKey, emptyResponse);
+        return res.json({ success: true, data: emptyResponse });
       }
       whereClause += ` AND Id IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
     }
@@ -143,17 +189,21 @@ exports.getSellers = async (req, res) => {
         throw e;
     }
 
+    const payload = {
+      sellers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
+
+    setCachedSellers(cacheKey, payload);
+
     res.json({
       success: true,
-      data: {
-        sellers,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          totalPages: Math.ceil(total / limitNum),
-        },
-      }
+      data: payload
     });
   } catch (error) {
     console.error('getSellers error:', error.message);
@@ -248,6 +298,7 @@ exports.createSeller = async (req, res) => {
         }
     }
 
+    clearSellerCache();
     res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
 
     // Log Action
@@ -311,6 +362,7 @@ exports.updateSeller = async (req, res) => {
       }
     }
 
+    clearSellerCache();
     res.json({ success: true });
 
     // Log Update
@@ -379,6 +431,7 @@ exports.deleteSeller = async (req, res) => {
       .input('id', sql.VarChar, id)
       .query('DELETE FROM Sellers WHERE Id = @id');
 
+    clearSellerCache();
     res.json({ message: 'Seller deleted successfully' });
 
     // Log Delete

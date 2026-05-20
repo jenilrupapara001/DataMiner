@@ -490,7 +490,7 @@ const RolesPage = () => {
                     <Col xs={12} sm={8}>
                         <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
-                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Strategic Roles</span>} value={roles.length} valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 22 }} />
+                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Strategic Roles</span>} value={roles.length} styles={{ content: { color: '#0f172a', fontWeight: 800, fontSize: 22 } }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#EEF2FF', color: '#4F46E5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={18} /></div>
                             </Space>
                         </Card>
@@ -498,7 +498,7 @@ const RolesPage = () => {
                     <Col xs={12} sm={8}>
                         <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
-                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Secured Modules</span>} value={Object.keys(permissionsGrouped).length} valueStyle={{ color: '#8b5cf6', fontWeight: 800, fontSize: 22 }} />
+                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Secured Modules</span>} value={Object.keys(permissionsGrouped).length} styles={{ content: { color: '#8b5cf6', fontWeight: 800, fontSize: 22 } }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F5F3FF', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Key size={18} /></div>
                             </Space>
                         </Card>
@@ -506,7 +506,7 @@ const RolesPage = () => {
                     <Col xs={24} sm={8}>
                         <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
-                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Mapped Capabilities</span>} value={permissions.length} valueStyle={{ color: '#d97706', fontWeight: 800, fontSize: 22 }} />
+                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Mapped Capabilities</span>} value={permissions.length} styles={{ content: { color: '#d97706', fontWeight: 800, fontSize: 22 } }} />
                                 <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={18} /></div>
                             </Space>
                         </Card>
@@ -579,7 +579,7 @@ const RolesPage = () => {
                                         <PriorityIcon size={16} style={{ color: '#4f46e5', marginRight: 10 }} />
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5 }}>Priority Index {level}</span>
-                                            <Divider type="vertical" style={{ borderColor: '#cbd5e1', margin: 0 }} />
+                                            <Divider orientation="vertical" style={{ borderColor: '#cbd5e1', margin: 0 }} />
                                             <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{getPriorityDescription(levelNum)}</span>
                                         </div>
                                         <Badge count={`${rolesInGroup.length} Roles`} style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', boxShadow: 'none', marginLeft: 'auto', fontWeight: 700, fontSize: 11 }} />
@@ -768,7 +768,7 @@ const RolesPage = () => {
                 open={showRoleModal}
                 onCancel={() => setShowRoleModal(false)}
                 centered
-                destroyOnClose
+                destroyOnHidden
                 width={950}
                 className="glass-modal"
                 footer={[

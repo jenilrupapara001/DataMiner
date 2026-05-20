@@ -888,52 +888,34 @@ const ActionList = ({
 
     const renderFilters = () => {
         return (
-            <div className="card mb-4 border-0 shadow-sm" style={{ borderRadius: '16px' }}>
-                <div className="card-body p-4">
-                    <div className="row g-3 align-items-center">
-                        <div className="col-md-6">
-                            <div className="position-relative">
-                                <Search className="position-absolute" style={{ left: '16px', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: '#94a3b8' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Search initiatives, tasks, or assigned members..."
-                                    value={searchQuery}
-                                    onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-                                    className="form-control ps-5 border-0 bg-slate-50 hover-bg-slate-100 transition-all"
-                                    style={{ borderRadius: '14px', height: '48px', fontSize: '14px' }}
-                                />
-                            </div>
-                        </div>
-                        <div className="col-md-3">
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="form-select border-0 bg-slate-50"
-                                style={{ borderRadius: '12px', height: '48px' }}
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="PENDING">Pending</option>
-                                <option value="IN_PROGRESS">In Progress</option>
-                                <option value="REVIEW">Needs Review</option>
-                                <option value="COMPLETED">Completed</option>
-                            </select>
-                        </div>
-                        <div className="col-md-3">
-                            <select
-                                value={filterPriority}
-                                onChange={(e) => setFilterPriority(e.target.value)}
-                                className="form-select border-0 bg-slate-50"
-                                style={{ borderRadius: '12px', height: '48px' }}
-                            >
-                                <option value="">All Priorities</option>
-                                <option value="LOW">Low</option>
-                                <option value="MEDIUM">Medium</option>
-                                <option value="HIGH">High</option>
-                                <option value="URGENT">Urgent</option>
-                            </select>
-                        </div>
-                    </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 11, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Refine Registry:
                 </div>
+                <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="form-select border shadow-sm bg-white"
+                    style={{ borderRadius: '8px', height: '32px', width: '150px', fontSize: '11px', fontWeight: 600, color: '#334155', padding: '2px 8px' }}
+                >
+                    <option value="">All Statuses</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="REVIEW">Needs Review</option>
+                    <option value="COMPLETED">Completed</option>
+                </select>
+                <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="form-select border shadow-sm bg-white"
+                    style={{ borderRadius: '8px', height: '32px', width: '150px', fontSize: '11px', fontWeight: 600, color: '#334155', padding: '2px 8px' }}
+                >
+                    <option value="">All Priorities</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                </select>
             </div>
         );
     };

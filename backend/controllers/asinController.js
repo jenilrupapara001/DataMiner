@@ -8,6 +8,31 @@ const AsinDataParser = require('../services/asinDataParser');
 const LQS = require('../utils/lqs');
 const SystemLogService = require('../services/SystemLogService');
 
+// Lightweight short-lived in-memory cache for ASIN stats to protect database CPU
+const asinStatsCache = new Map();
+const STATS_CACHE_TTL_MS = 60 * 1000; // 1 minute TTL cache
+
+const getCachedAsinStats = (key) => {
+  const entry = asinStatsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > STATS_CACHE_TTL_MS) {
+    asinStatsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+};
+
+const setCachedAsinStats = (key, data) => {
+  asinStatsCache.set(key, { data, timestamp: Date.now() });
+};
+
+const clearAsinStatsCache = () => {
+  console.log('[STATS CACHE] Invalidation triggered - clearing cached ASIN stats.');
+  asinStatsCache.clear();
+};
+
+exports.clearAsinStatsCache = clearAsinStatsCache;
+
 // Helper to safely parse JSON
 const tryParse = (data, fallback = []) => {
     if (!data) return fallback;
@@ -899,13 +924,28 @@ exports.getAsinTrends = async (req, res) => {
  */
 exports.getAsinStats = async (req, res) => {
   try {
-    const { seller } = req.query;
+    const { seller, marketplace } = req.query;
+    const roleName = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+
+    // Deterministic, secure cache key
+    const cacheKey = JSON.stringify({
+      seller,
+      marketplace,
+      roleName,
+      userId: req.user?._id || req.userId,
+      assignedSellers: (req.user?.assignedSellers || []).map(s => (s._id || s).toString())
+    });
+
+    const cachedData = getCachedAsinStats(cacheKey);
+    if (cachedData) {
+      console.log('[STATS CACHE] Cache HIT for key:', cacheKey);
+      return res.json(cachedData);
+    }
+
     const pool = await getPool();
     const request = pool.request();
     let whereClause = 'WHERE 1=1';
-
-    const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
     if (!isGlobalUser) {
       const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
@@ -1016,7 +1056,7 @@ exports.getAsinStats = async (req, res) => {
       ? (((currentWeekReviews - previousWeekReviews) / previousWeekReviews) * 100).toFixed(1)
       : 0;
 
-    res.json({
+    const statsResponse = {
       success: true,
       total,
       active,
@@ -1045,7 +1085,10 @@ exports.getAsinStats = async (req, res) => {
         previousWeek: previousWeekReviews,
         currentVsPreviousChange: parseFloat(reviewChange),
       }
-    });
+    };
+
+    setCachedAsinStats(cacheKey, statsResponse);
+    res.json(statsResponse);
   } catch (error) {
     console.error('getAsinStats Error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -1058,6 +1101,7 @@ exports.getAsinStats = async (req, res) => {
 async function updateSellerAsinCount(sellerId, io) {
   if (!sellerId) return;
   try {
+    clearAsinStatsCache();
     const pool = await getPool();
     const statsResult = await pool.request()
       .input('sellerId', sql.VarChar, sellerId)
@@ -1217,6 +1261,7 @@ exports.updateAsin = async (req, res) => {
       }
     }
 
+    clearAsinStatsCache();
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

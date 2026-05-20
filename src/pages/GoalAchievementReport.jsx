@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/db';
-import Filters from '../components/Filters';
 import {
-    BarChart2,
     CheckCircle,
     Clock,
     AlertTriangle,
     ArrowLeft,
     Download,
     Calendar,
-    User,
     TrendingUp,
-    Target
+    RotateCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
+import { 
+    Space, Button, Table, Card, Statistic, Progress, Row, Col, Tag, 
+    Typography, Avatar 
+} from 'antd';
+import { usePageTitle } from '../contexts/PageTitleContext';
+import DateRangePicker from '../components/common/DateRangePicker';
+
+const { Text } = Typography;
 
 const GoalAchievementReport = () => {
     const [data, setData] = useState(null);
@@ -26,6 +31,11 @@ const GoalAchievementReport = () => {
         endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
     });
     const navigate = useNavigate();
+    const { setPageTitle } = usePageTitle();
+
+    useEffect(() => {
+        setPageTitle('Task Performance Report');
+    }, [setPageTitle]);
 
     const fetchReport = useCallback(async () => {
         try {
@@ -45,191 +55,338 @@ const GoalAchievementReport = () => {
         fetchReport();
     }, [fetchReport]);
 
+    const handleReset = () => {
+        setFilters({
+            dateRange: 'month',
+            startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+            endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
+        });
+    };
+
     if (loading && !data) {
         return <PageLoader message="Analyzing Performance..." />;
     }
 
     const { metrics = [], summary = {} } = data || {};
 
+    const columns = [
+        {
+            title: 'Task Details',
+            dataIndex: 'title',
+            key: 'title',
+            sorter: (a, b) => a.title.localeCompare(b.title),
+            render: (title, record) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Text strong style={{ fontSize: '13px', color: '#0f172a', letterSpacing: '-0.01em' }}>{title}</Text>
+                    <Text type="secondary" style={{ fontSize: '11px', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Calendar size={11} /> Started: {new Date(record.startedAt).toLocaleDateString()}
+                    </Text>
+                </div>
+            )
+        },
+        {
+            title: 'Assignee',
+            dataIndex: 'assignee',
+            key: 'assignee',
+            sorter: (a, b) => a.assignee.localeCompare(b.assignee),
+            render: (assignee) => (
+                <Space size={8}>
+                    <Avatar 
+                        style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', fontWeight: 700, fontSize: '11px' }} 
+                        size="small"
+                    >
+                        {assignee ? assignee.charAt(0).toUpperCase() : '?'}
+                    </Avatar>
+                    <Text style={{ fontSize: '12.5px', color: '#334155', fontWeight: 500 }}>{assignee}</Text>
+                </Space>
+            )
+        },
+        {
+            title: 'Estimated vs Actual Time',
+            key: 'planVsActual',
+            render: (_, record) => {
+                const percent = record.plannedDuration 
+                    ? Math.min((record.actualDuration / record.plannedDuration) * 100, 100) 
+                    : 100;
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', width: 140 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748b', marginBottom: 2 }}>
+                            <span>Est: {record.plannedDuration || '--'}h</span>
+                            <span>Act: {record.actualDuration}h</span>
+                        </div>
+                        <Progress 
+                            percent={percent} 
+                            strokeColor={record.isOverdue ? '#ef4444' : '#10b981'} 
+                            size={[140, 4]} 
+                            showInfo={false} 
+                        />
+                    </div>
+                );
+            }
+        },
+        {
+            title: 'Duration',
+            dataIndex: 'actualDuration',
+            key: 'actualDuration',
+            sorter: (a, b) => a.actualDuration - b.actualDuration,
+            render: (duration) => <Text style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>{duration}h</Text>
+        },
+        {
+            title: 'Difference',
+            dataIndex: 'variance',
+            key: 'variance',
+            sorter: (a, b) => a.variance - b.variance,
+            render: (variance) => {
+                const isDelay = variance > 0;
+                const isSaving = variance < 0;
+                return (
+                    <Tag 
+                        color={isDelay ? 'error' : isSaving ? 'success' : 'default'} 
+                        style={{ borderRadius: 6, fontWeight: 700, fontSize: '11px', padding: '1px 6px' }}
+                    >
+                        {isDelay ? `+${variance}h delayed` : isSaving ? `${Math.abs(variance)}h early` : 'On track'}
+                    </Tag>
+                );
+            }
+        },
+        {
+            title: 'Status',
+            dataIndex: 'isOverdue',
+            key: 'status',
+            align: 'right',
+            sorter: (a, b) => (a.isOverdue === b.isOverdue ? 0 : a.isOverdue ? 1 : -1),
+            render: (isOverdue) => (
+                <Tag 
+                    color={isOverdue ? 'red' : 'green'} 
+                    variant="filled"
+                    style={{ borderRadius: 8, fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', padding: '2px 8px' }}
+                >
+                    {isOverdue ? 'Overdue' : 'On Time'}
+                </Tag>
+            )
+        }
+    ];
+
+    const successRate = summary.totalCompleted > 0 ? Math.round((summary.onTime / summary.totalCompleted) * 100) : 0;
+
     return (
         <>
-        {loading && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
-                <LoadingIndicator type="line-simple" size="md" />
-            </div>
-        )}
-        <div className="p-4 bg-light min-vh-100">
-            {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <button
-                        onClick={() => navigate('/actions')}
-                        className="btn btn-link p-0 text-muted mb-2 d-flex align-items-center gap-1 text-decoration-none small"
-                    >
-                        <ArrowLeft size={14} /> Back to Actions
-                    </button>
-                    <h1 className="h3 fw-bold mb-0">Goal vs Achievement Analysis</h1>
-                    <p className="text-muted small">Task performance and timing metrics overview</p>
+            {loading && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
+                    <LoadingIndicator type="line-simple" size="md" />
                 </div>
-                <button className="btn btn-outline-primary btn-sm d-flex align-items-center gap-2">
-                    <Download size={16} /> Export Report
-                </button>
-            </div>
+            )}
+            
+            <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: 16 
+            }}>
+                
+                {/* 1. TOP HEADER & INTEGRATED ACTION WORKBENCH */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '10px 16px',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                    flexWrap: 'wrap',
+                    gap: 12
+                }}>
+                    <Space size={12}>
+                        <Button
+                            type="text"
+                            onClick={() => navigate('/actions')}
+                            icon={<ArrowLeft size={14} />}
+                            style={{ 
+                                padding: '4px 8px', 
+                                color: '#475569', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 4,
+                                fontWeight: 700,
+                                fontSize: 12,
+                                height: 32,
+                                borderRadius: 8
+                            }}
+                        >
+                            Back to Actions
+                        </Button>
+                        <div style={{ width: 1, height: 16, background: '#cbd5e1' }} />
+                        <Space size={4}>
+                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reports</Text>
+                            <span style={{ color: '#cbd5e1', fontSize: 11 }}>/</span>
+                            <Text strong style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0f172a' }}>Fulfillment Efficiency</Text>
+                        </Space>
+                    </Space>
 
-            <Filters 
-                filters={filters} 
-                onFilterChange={(newF) => setFilters(prev => ({ ...prev, ...newF }))} 
-                showSearch={false}
-                showCategory={false}
-            />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                        <Text style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginRight: 4 }}>Date Range:</Text>
+                        <DateRangePicker
+                            startDate={filters.startDate ? new Date(filters.startDate) : null}
+                            endDate={filters.endDate ? new Date(filters.endDate) : null}
+                            onDateChange={(mode, start, end) => {
+                                setFilters(prev => ({
+                                    ...prev,
+                                    dateRange: mode,
+                                    startDate: start ? start.toISOString().split('T')[0] : null,
+                                    endDate: end ? end.toISOString().split('T')[0] : null
+                                }));
+                            }}
+                            placeholder="Select date range"
+                            compact={true}
+                        />
+                        <Button 
+                            icon={<RotateCcw size={13} style={{ color: '#64748b' }} />} 
+                            onClick={handleReset}
+                            shape="circle" 
+                            style={{ 
+                                width: 32, 
+                                height: 32, 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                borderColor: '#cbd5e1' 
+                            }} 
+                            title="Reset Dates"
+                        />
+                        <Button 
+                            type="primary" 
+                            shape="round"
+                            icon={<Download size={13} />}
+                            style={{ 
+                                background: '#4f46e5', 
+                                borderColor: '#4f46e5', 
+                                fontWeight: 700,
+                                fontSize: 12,
+                                height: 32,
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}
+                        >
+                            Export
+                        </Button>
+                    </div>
+                </div>
 
-            {/* Stats Overview */}
-            <div className="row g-3 mb-4">
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100 overflow-hidden">
-                        <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                                <div className="p-2 bg-primary-subtle text-primary rounded-3">
-                                    <Target size={20} />
+                {/* 2. PERFORMANCE STATS GRID */}
+                <Row gutter={[16, 16]}>
+                    <Col xs={24} sm={12} md={6}>
+                        <Card 
+                            style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                            styles={{ body: { padding: '16px 20px' } }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>On-Time Rate</div>
+                                    <h2 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{successRate}%</h2>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>Flipped before deadline</Text>
                                 </div>
-                                <span className="badge bg-success-subtle text-success border-success-subtle">Success Rate</span>
+                                <Progress 
+                                    type="circle" 
+                                    percent={successRate} 
+                                    size={45} 
+                                    strokeColor="#4f46e5"
+                                    strokeWidth={11}
+                                />
                             </div>
-                            <h3 className="fw-bold mb-1">{summary.totalCompleted > 0 ? Math.round((summary.onTime / summary.totalCompleted) * 100) : 0}%</h3>
-                            <p className="text-muted small mb-0">Completed On Time</p>
-                        </div>
-                        <div className="bg-primary opacity-10 position-absolute" style={{ bottom: '-10px', right: '-10px', width: '60px', height: '60px', borderRadius: '50%' }}></div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100 overflow-hidden">
-                        <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                                <div className="p-2 bg-success-subtle text-success rounded-3">
-                                    <CheckCircle size={20} />
+                        </Card>
+                    </Col>
+                    
+                    <Col xs={24} sm={12} md={6}>
+                        <Card 
+                            style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                            styles={{ body: { padding: '16px 20px' } }}
+                        >
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                <div style={{ background: '#ecfdf5', color: '#10b981', padding: 10, borderRadius: 10, display: 'flex' }}>
+                                    <CheckCircle size={18} />
                                 </div>
-                            </div>
-                            <h3 className="fw-bold mb-1">{summary.totalCompleted}</h3>
-                            <p className="text-muted small mb-0">Total Completed Actions</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100 overflow-hidden">
-                        <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                                <div className="p-2 bg-warning-subtle text-warning rounded-3">
-                                    <Clock size={20} />
-                                </div>
-                            </div>
-                            <h3 className="fw-bold mb-1">{summary.avgDuration}h</h3>
-                            <p className="text-muted small mb-0">Average Completion Time</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-md-3">
-                    <div className="card border-0 shadow-sm h-100 overflow-hidden">
-                        <div className="card-body p-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                                <div className="p-2 bg-danger-subtle text-danger rounded-3">
-                                    <AlertTriangle size={20} />
+                                <div>
+                                    <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Tasks Completed</div>
+                                    <h2 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{summary.totalCompleted}</h2>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>Successfully finished</Text>
                                 </div>
                             </div>
-                            <h3 className="fw-bold mb-1">{summary.overdue}</h3>
-                            <p className="text-muted small mb-0">Overdue completions</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        </Card>
+                    </Col>
+                    
+                    <Col xs={24} sm={12} md={6}>
+                        <Card 
+                            style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                            styles={{ body: { padding: '16px 20px' } }}
+                        >
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                <div style={{ background: '#fffbeb', color: '#f59e0b', padding: 10, borderRadius: 10, display: 'flex' }}>
+                                    <Clock size={18} />
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Avg. Task Duration</div>
+                                    <h2 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{summary.avgDuration}h</h2>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>Fulfillment speed average</Text>
+                                </div>
+                            </div>
+                        </Card>
+                    </Col>
+                    
+                    <Col xs={24} sm={12} md={6}>
+                        <Card 
+                            style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                            styles={{ body: { padding: '16px 20px' } }}
+                        >
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                <div style={{ 
+                                    background: summary.overdue > 0 ? '#fef2f2' : '#f8fafc', 
+                                    color: summary.overdue > 0 ? '#ef4444' : '#64748b', 
+                                    padding: 10, 
+                                    borderRadius: 10, 
+                                    display: 'flex' 
+                                }}>
+                                    <AlertTriangle size={18} />
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Late Completions</div>
+                                    <h2 style={{ margin: 0, fontWeight: 800, color: summary.overdue > 0 ? '#ef4444' : '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{summary.overdue}</h2>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>Exceeded estimated window</Text>
+                                </div>
+                            </div>
+                        </Card>
+                    </Col>
+                </Row>
 
-            {/* Main Table */}
-            <div className="card border-0 shadow-sm overflow-hidden">
-                <div className="card-header bg-white py-3">
-                    <div className="d-flex justify-content-between align-items-center">
-                        <h5 className="mb-0 fw-bold">Task Performance Metrics</h5>
-                    </div>
-                </div>
-                <div className="card-body p-0">
-                    <div className="table-responsive">
-                        <table className="table table-hover align-middle mb-0" style={{ fontSize: '13px' }}>
-                            <thead className="table-light">
-                                <tr>
-                                    <th className="ps-4">Action Details</th>
-                                    <th>Assignee</th>
-                                    <th>Plan vs Actual</th>
-                                    <th>Duration</th>
-                                    <th>Variance</th>
-                                    <th className="pe-4 text-end">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {metrics.map((m, idx) => (
-                                    <tr key={m.id || idx}>
-                                        <td className="ps-4">
-                                            <div className="fw-bold text-dark">{m.title}</div>
-                                            <div className="text-muted small d-flex align-items-center gap-1 mt-1">
-                                                <Calendar size={12} />
-                                                Started: {new Date(m.startedAt).toLocaleDateString()}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="d-flex align-items-center gap-2">
-                                                <div className="avatar-initial bg-primary-subtle text-primary rounded-circle small" style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
-                                                    {m.assignee.charAt(0)}
-                                                </div>
-                                                <span>{m.assignee}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="d-flex flex-column gap-1" style={{ maxWidth: '120px' }}>
-                                                <div className="text-muted smallest" style={{ fontSize: '10px' }}>
-                                                    Plan: {m.plannedDuration || '--'}h
-                                                </div>
-                                                <div className="progress" style={{ height: '4px' }}>
-                                                    <div
-                                                        className={`progress-bar ${m.isOverdue ? 'bg-danger' : 'bg-success'}`}
-                                                        style={{ width: m.plannedDuration ? `${Math.min((m.actualDuration / m.plannedDuration) * 100, 100)}%` : '100%' }}
-                                                    ></div>
-                                                </div>
-                                                <div className="smallest fw-bold" style={{ fontSize: '10px' }}>
-                                                    Actual: {m.actualDuration}h
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="fw-medium">{m.actualDuration}h</div>
-                                        </td>
-                                        <td>
-                                            <span className={`fw-bold ${m.variance > 0 ? 'text-danger' : m.variance < 0 ? 'text-success' : 'text-muted'}`}>
-                                                {m.variance > 0 ? `+${m.variance}` : m.variance || 0}h
-                                            </span>
-                                        </td>
-                                        <td className="pe-4 text-end">
-                                            {m.isOverdue ? (
-                                                <span className="badge bg-danger-subtle text-danger border-danger-subtle">
-                                                    Overdue
-                                                </span>
-                                            ) : (
-                                                <span className="badge bg-success-subtle text-success border-success-subtle">
-                                                    On Time
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {metrics.length === 0 && (
-                                    <tr>
-                                        <td colSpan="6" className="text-center py-5 text-muted">
-                                            <TrendingUp className="mb-2 opacity-25" size={32} />
-                                            <div>No performance data available yet</div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                {/* 3. PERFORMANCE RECORD MATRIX */}
+                <Card 
+                    title={<span style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, letterSpacing: '-0.01em' }}>Fulfillment Task Performance</span>}
+                    styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '12px 20px' }, body: { padding: 0 } }}
+                    style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
+                >
+                    <Table 
+                        dataSource={metrics}
+                        columns={columns}
+                        rowKey={record => record.id || record._id || record.title}
+                        pagination={{
+                            pageSize: 10,
+                            showTotal: (total, range) => <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Viewing {range[0]}-{range[1]} of {total} records</span>,
+                            position: ['bottomRight']
+                        }}
+                        scroll={{ x: 900, y: 'calc(100vh - 270px)' }}
+                        size="small"
+                        className="custom-table-ant"
+                        locale={{
+                            emptyText: (
+                                <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                                    <TrendingUp className="mb-2 opacity-25" size={32} />
+                                    <div style={{ fontSize: 12, fontWeight: 600 }}>No performance data available yet</div>
+                                </div>
+                            )
+                        }}
+                    />
+                </Card>
+
             </div>
-        </div>
         </>
     );
 };

@@ -523,7 +523,7 @@ const UsersPage = () => {
                             <Text strong style={{ fontSize: 13, color: '#1e293b', letterSpacing: '-0.01em' }}>
                                 {record.firstName} {record.lastName}
                             </Text>
-                            <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+                            <Space size={8} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>
                                 <span style={{ fontSize: 11, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                     <Mail size={11} /> {record.email}
                                 </span>
@@ -582,7 +582,7 @@ const UsersPage = () => {
                 const list = record.supervisors || [];
                 if (list.length === 0) return <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
                 return (
-                    <Avatar.Group maxCount={3} size="small" maxStyle={{ color: '#f56a00', backgroundColor: '#fde3cf' }}>
+                    <Avatar.Group max={{ count: 3, style: { color: '#f56a00', backgroundColor: '#fde3cf' } }} size="small">
                         {list.map((s, idx) => (
                             <Tooltip key={idx} title={`${s.firstName} ${s.lastName} (${s.email})`}>
                                 <Avatar style={{ backgroundColor: '#4f46e5', fontSize: 9 }}>
@@ -886,7 +886,7 @@ const UsersPage = () => {
                                     value={filters.role || undefined}
                                     onChange={v => handleFilterChange('role', v || '')}
                                     style={{ width: 160 }}
-                                    dropdownStyle={{ borderRadius: 10 }}
+                                    styles={{ popup: { root: { borderRadius: 10 } } }}
                                 >
                                     {roles.map(r => <Option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</Option>)}
                                 </Select>
@@ -1066,7 +1066,7 @@ const UsersPage = () => {
                 open={showUserModal}
                 onCancel={() => setShowUserModal(false)}
                 centered
-                destroyOnClose
+                destroyOnHidden
                 width={780}
                 className="glass-modal"
                 footer={[
@@ -1156,7 +1156,7 @@ const UsersPage = () => {
                             placeholder="Configure Authorization Level"
                             value={userFormData.role || undefined}
                             onChange={handleUserRoleChange}
-                            dropdownStyle={{ borderRadius: 10 }}
+                            styles={{ popup: { root: { borderRadius: 10 } } }}
                         >
                             {roles.map(r => <Option key={r._id || r.id} value={r._id || r.id}>{r.displayName}</Option>)}
                         </Select>
@@ -1394,7 +1394,7 @@ const UsersPage = () => {
                 open={showRoleModal}
                 onCancel={() => setShowRoleModal(false)}
                 centered
-                destroyOnClose
+                destroyOnHidden
                 width={500}
                 className="glass-modal"
                 footer={[

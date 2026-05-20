@@ -13,6 +13,7 @@ import {
   Tooltip, Select, Segmented, Modal, Divider, message as antdMessage 
 } from 'antd';
 import { db } from '../services/db';
+import { usePageTitle } from '../contexts/PageTitleContext';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
 const { Title, Text, Paragraph } = Typography;
@@ -59,6 +60,12 @@ const TASK_CATEGORIES = ['SEO & Content', 'Sales & Marketing', 'Operations & Gen
 const ActionsPage = () => {
   const queryClient = useQueryClient();
   const [messageApi, contextHolder] = antdMessage.useMessage();
+  const { setPageTitle } = usePageTitle();
+  
+  useEffect(() => {
+    setPageTitle('Workflows');
+  }, [setPageTitle]);
+
   const [activeView, setActiveView] = useState('okr'); // 'okr' | 'tasks' | 'board' | 'auto'
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -543,24 +550,13 @@ const ActionsPage = () => {
           background-color: #f8fafc;
           margin: -1.5rem -2rem;
         }
-        .actions-header {
-          flex-shrink: 0;
-          background: #ffffff;
-          padding: 16px 24px;
-          border-bottom: 1px solid #e2e8f0;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          z-index: 10;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.01);
-        }
         .actions-main-content {
           flex: 1;
           overflow-y: auto;
-          padding: 24px;
+          padding: 12px 16px;
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 12px;
         }
         
         /* Visual Animations */
@@ -626,105 +622,90 @@ const ActionsPage = () => {
             height: auto;
             overflow: visible;
           }
-          .actions-header {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 16px;
-          }
         }
       `}</style>
-
-      {/* HEADER BAR */}
-      <div className="actions-header">
-        <div>
-          <Title level={3} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.03em' }}>
-            OKR <span style={{ color: '#3b82f6' }}>Command Center</span>
-          </Title>
-          <Paragraph style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>
-            Strategic Objectives, Operational Key Results & Advanced Optimization Tasks
-          </Paragraph>
-        </div>
-        <Space>
-          <Button 
-            onClick={() => { refetchObjectives(); refetchTasks(); }}
-            icon={<RefreshCw size={13} />}
-            className="d-flex align-items-center"
-          >
-            Refresh
-          </Button>
-          <Button 
-            type="default" 
-            style={{ borderColor: '#f59e0b', color: '#d97706', backgroundColor: '#fffbeb' }}
-            icon={<Zap size={13} />} 
-            onClick={() => setShowAutoGenerateModal(true)}
-            className="fw-bold"
-          >
-            Auto-Generate
-          </Button>
-          <Button 
-            type="primary" 
-            style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}
-            icon={<Plus size={14} />} 
-            onClick={() => setShowTaskModal(true)}
-            className="fw-bold"
-          >
-            New Task
-          </Button>
-        </Space>
-      </div>
 
       {/* MAIN CONTENT LAYOUT */}
       <div className="actions-main-content animate-slide-up">
         
-        {/* TOP KPI WIDGETS & VIEW SWITCHER */}
-        <Row gutter={[16, 16]} align="stretch">
-          <Col xs={24} lg={16}>
-            <Card styles={{ body: { padding: 12 } }} style={{ height: '100%', borderRadius: 12 }}>
-              <div className="d-flex justify-content-between align-items-center h-100 flex-wrap gap-3">
-                <Segmented
-                  className="dashboard-segmented"
-                  size="large"
-                  options={[
-                    { label: <Space size={6}><Flag size={14} /><span>OKR Board</span></Space>, value: 'okr' },
-                    { label: <Space size={6}><ListChecks size={14} /><span>All Tasks</span></Space>, value: 'tasks' },
-                    { label: <Space size={6}><LayoutGrid size={14} /><span>Kanban</span></Space>, value: 'board' },
-                    { label: <Space size={6}><Zap size={14} /><span>Auto-Tasks</span></Space>, value: 'auto' }
-                  ]}
-                  value={activeView}
-                  onChange={setActiveView}
-                />
-                
-                <div className="d-flex gap-4 px-2 flex-wrap">
-                  <Statistic title="Objectives" value={stats.objectivesTotal} styles={{ content: { fontSize: 20, fontWeight: 800, color: '#3b82f6' } }} />
-                  <Divider orientation="vertical" style={{ height: 40, alignSelf: 'center' }} />
-                  <Statistic title="Completed" value={stats.completed} styles={{ content: { fontSize: 20, fontWeight: 800, color: '#10b981' } }} />
-                  <Divider orientation="vertical" style={{ height: 40, alignSelf: 'center' }} />
-                  <Statistic title="In Progress" value={stats.inProgress} styles={{ content: { fontSize: 20, fontWeight: 800, color: '#f59e0b' } }} />
-                </div>
-              </div>
+        {/* COMPACT VIEW SWITCHER & ACTION TOOLBAR */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
+          <Segmented
+            className="dashboard-segmented"
+            size="middle"
+            options={[
+              { label: <Space size={6}><Flag size={14} /><span>OKR Board</span></Space>, value: 'okr' },
+              { label: <Space size={6}><ListChecks size={14} /><span>All Tasks</span></Space>, value: 'tasks' },
+              { label: <Space size={6}><LayoutGrid size={14} /><span>Kanban</span></Space>, value: 'board' },
+              { label: <Space size={6}><Zap size={14} /><span>Auto-Tasks</span></Space>, value: 'auto' }
+            ]}
+            value={activeView}
+            onChange={setActiveView}
+          />
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Button 
+              size="middle"
+              onClick={() => { refetchObjectives(); refetchTasks(); }}
+              icon={<RefreshCw size={13} />}
+              style={{ display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
+            >
+              Refresh
+            </Button>
+            <Button 
+              type="default" 
+              size="middle"
+              style={{ borderColor: '#f59e0b', color: '#d97706', backgroundColor: '#fffbeb', display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
+              icon={<Zap size={13} />} 
+              onClick={() => setShowAutoGenerateModal(true)}
+            >
+              Auto-Generate
+            </Button>
+            <Button 
+              type="primary" 
+              size="middle"
+              style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6', display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
+              icon={<Plus size={14} />} 
+              onClick={() => setShowTaskModal(true)}
+            >
+              New Task
+            </Button>
+          </div>
+        </div>
+
+        {/* HIGH-DENSITY KPI CARDS STRIP */}
+        <Row gutter={[10, 10]} align="stretch" style={{ margin: 0, width: '100%' }}>
+          <Col xs={12} sm={6} md={4}>
+            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>Objectives</span>} value={stats.objectivesTotal} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#3b82f6' } }} />
             </Card>
           </Col>
-
-          <Col xs={24} lg={8}>
-            <Card styles={{ body: { padding: 16 } }} style={{ height: '100%', borderRadius: 12 }}>
-              <div className="d-flex align-items-center justify-content-between gap-3 h-100">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="p-2 bg-blue-50 rounded-3" style={{ backgroundColor: '#eff6ff', border: '1px solid #dbeafe' }}>
-                    <TrendingUp size={20} style={{ color: '#2563eb' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>OVERALL TASKS METRIC</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', color: '#0f172a' }}>
-                      {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% Completed
-                    </div>
-                  </div>
+          <Col xs={12} sm={6} md={4}>
+            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>In Progress</span>} value={stats.inProgress} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#f59e0b' } }} />
+            </Card>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>Completed</span>} value={stats.completed} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#10b981' } }} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0', height: '100%', display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '16px', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <TrendingUp size={14} style={{ color: '#2563eb' }} />
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>
+                    Progress
+                  </span>
                 </div>
-                <div style={{ width: '100px', flexGrow: 1, maxWidth: '160px' }}>
+                <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '80%' }}>
                   <Progress 
                     percent={stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0} 
                     size="small" 
                     strokeColor="#10b981" 
                     railColor="#f1f5f9"
+                    style={{ margin: 0 }}
                   />
                 </div>
               </div>

@@ -105,6 +105,7 @@ const listingQualityRoutes = require('./routes/listingQualityRoutes');
 const bulkRoutes = require('./routes/bulkRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const scheduledRunRoutes = require('./routes/scheduledRunRoutes');
+const targetRoutes = require('./routes/targetRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -138,6 +139,7 @@ app.use('/api/listing-quality', listingQualityRoutes);
 app.use('/api/bulk', bulkRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/scheduled-runs', scheduledRunRoutes);
+app.use('/api/targets', targetRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {

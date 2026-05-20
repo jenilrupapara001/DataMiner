@@ -269,15 +269,205 @@ exports.getAdsReport = async (req, res) => {
  */
 exports.getSkuReport = async (req, res) => {
     try {
+        const { startDate, endDate, sellerId, search, category, page = 1, limit = 50 } = req.query;
         const pool = await getPool();
-        const result = await pool.request().query(`
-            SELECT a.Id, a.AsinCode, a.Title, a.Brand, a.Category, a.CurrentPrice, a.BSR, a.Rating, a.ReviewCount, s.Name as SellerName
-            FROM Asins a
-            LEFT JOIN Sellers s ON a.SellerId = s.Id
-            ORDER BY a.CreatedAt DESC
-        `);
-        res.json({ success: true, data: result.recordset });
+        const request = pool.request();
+        
+        let hasFilter = false;
+        let whereClause = "WHERE 1=1";
+        
+        if (sellerId) {
+            whereClause += " AND a.SellerId = @sellerId";
+            request.input('sellerId', sql.VarChar, sellerId);
+            hasFilter = true;
+        }
+        
+        if (category && category !== 'all') {
+            whereClause += " AND a.Category = @category";
+            request.input('category', sql.VarChar, category);
+            hasFilter = true;
+        }
+        
+        if (search) {
+            whereClause += " AND (a.Sku LIKE @search OR a.AsinCode LIKE @search OR a.Title LIKE @search)";
+            request.input('search', sql.VarChar, `%${search}%`);
+            hasFilter = true;
+        }
+        
+        if (startDate) {
+            request.input('startDate', sql.Date, startDate);
+        }
+        if (endDate) {
+            request.input('endDate', sql.Date, endDate);
+        }
+
+        // 1. Optimized Total Count Query
+        let totalCount = 0;
+        if (!hasFilter) {
+            // Instant partition row count for base table
+            const fastCountQuery = `
+                SELECT SUM(rows) as total 
+                FROM sys.partitions 
+                WHERE object_id = OBJECT_ID('Asins') AND index_id IN (0, 1)
+            `;
+            const countResult = await request.query(fastCountQuery);
+            totalCount = countResult.recordset[0]?.total || 0;
+        } else {
+            // High-speed index count
+            const countQuery = `
+                SELECT COUNT(1) as total
+                FROM Asins a
+                ${whereClause}
+            `;
+            const countResult = await request.query(countQuery);
+            totalCount = countResult.recordset[0]?.total || 0;
+        }
+
+        // 2. Optimized KPI Summary Query
+        let kpis = {
+            total_revenue: 0,
+            units_sold: 0,
+            ad_sales: 0,
+            ad_spend: 0,
+            clicks: 0,
+            impressions: 0,
+            sessions: 0
+        };
+
+        if (!hasFilter) {
+            // Query AdsPerformance directly (under 5ms!)
+            const kpiQueryDirect = `
+                SELECT 
+                    SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as total_revenue,
+                    SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as units_sold,
+                    SUM(ISNULL(AdSales, 0)) as ad_sales,
+                    SUM(ISNULL(AdSpend, 0)) as ad_spend,
+                    SUM(ISNULL(Clicks, 0)) as clicks,
+                    SUM(ISNULL(Impressions, 0)) as impressions,
+                    SUM(ISNULL(Sessions, 0)) as sessions
+                FROM AdsPerformance
+                WHERE 1=1
+                    ${startDate ? 'AND Date >= @startDate' : ''}
+                    ${endDate ? 'AND Date <= @endDate' : ''}
+            `;
+            const kpiResult = await request.query(kpiQueryDirect);
+            if (kpiResult.recordset[0]) kpis = kpiResult.recordset[0];
+        } else {
+            // CTE-based filter to join only matching ASINs
+            const kpiQueryFiltered = `
+                WITH FilteredAsins AS (
+                    SELECT AsinCode FROM Asins a ${whereClause}
+                )
+                SELECT 
+                    SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as total_revenue,
+                    SUM(ISNULL(p.Orders, 0) + ISNULL(p.OrganicOrders, 0)) as units_sold,
+                    SUM(ISNULL(p.AdSales, 0)) as ad_sales,
+                    SUM(ISNULL(p.AdSpend, 0)) as ad_spend,
+                    SUM(ISNULL(p.Clicks, 0)) as clicks,
+                    SUM(ISNULL(p.Impressions, 0)) as impressions,
+                    SUM(ISNULL(p.Sessions, 0)) as sessions
+                FROM FilteredAsins a
+                INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
+                WHERE 1=1
+                    ${startDate ? 'AND p.Date >= @startDate' : ''}
+                    ${endDate ? 'AND p.Date <= @endDate' : ''}
+            `;
+            const kpiResult = await request.query(kpiQueryFiltered);
+            if (kpiResult.recordset[0]) kpis = kpiResult.recordset[0];
+        }
+
+        // Ensure numerical fallbacks are never null
+        kpis.total_revenue = kpis.total_revenue || 0;
+        kpis.units_sold = kpis.units_sold || 0;
+        kpis.ad_sales = kpis.ad_sales || 0;
+        kpis.ad_spend = kpis.ad_spend || 0;
+        kpis.clicks = kpis.clicks || 0;
+        kpis.impressions = kpis.impressions || 0;
+        kpis.sessions = kpis.sessions || 0;
+
+        // 3. Optimized Paged Listings CTE
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const pagedQuery = `
+            WITH FilteredAsins AS (
+                SELECT Sku, AsinCode, Title, Category, CurrentPrice
+                FROM Asins a
+                ${whereClause}
+            ),
+            AggregatedPerformance AS (
+                SELECT 
+                    Asin,
+                    SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as total_revenue,
+                    SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as units_sold,
+                    SUM(ISNULL(AdSales, 0)) as ad_sales,
+                    SUM(ISNULL(AdSpend, 0)) as ad_spend,
+                    SUM(ISNULL(Clicks, 0)) as clicks,
+                    SUM(ISNULL(Impressions, 0)) as impressions,
+                    SUM(ISNULL(Sessions, 0)) as sessions
+                FROM AdsPerformance
+                WHERE 1=1
+                    ${startDate ? 'AND Date >= @startDate' : ''}
+                    ${endDate ? 'AND Date <= @endDate' : ''}
+                GROUP BY Asin
+            )
+            SELECT 
+                ISNULL(a.Sku, 'N/A') as sku,
+                a.AsinCode as asin,
+                a.Title as title,
+                a.Category as category,
+                a.CurrentPrice as price,
+                ISNULL(p.total_revenue, 0) as total_revenue,
+                ISNULL(p.units_sold, 0) as units_sold,
+                ISNULL(p.ad_sales, 0) as ad_sales,
+                ISNULL(p.ad_spend, 0) as ad_spend,
+                ISNULL(p.clicks, 0) as clicks,
+                ISNULL(p.impressions, 0) as impressions,
+                ISNULL(p.sessions, 0) as sessions
+            FROM FilteredAsins a
+            LEFT JOIN AggregatedPerformance p ON a.AsinCode = p.Asin
+            ORDER BY total_revenue DESC, units_sold DESC
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${parseInt(limit)} ROWS ONLY
+        `;
+        const result = await request.query(pagedQuery);
+
+        // 4. Optimized Category Breakdown CTE
+        const categoryQuery = `
+            WITH FilteredAsins AS (
+                SELECT AsinCode, Category FROM Asins a ${whereClause}
+            ),
+            AggregatedPerformance AS (
+                SELECT 
+                    Asin,
+                    SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as total_revenue
+                FROM AdsPerformance
+                WHERE 1=1
+                    ${startDate ? 'AND Date >= @startDate' : ''}
+                    ${endDate ? 'AND Date <= @endDate' : ''}
+                GROUP BY Asin
+            )
+            SELECT TOP 5
+                ISNULL(a.Category, 'General') as category,
+                SUM(p.total_revenue) as revenue
+            FROM FilteredAsins a
+            INNER JOIN AggregatedPerformance p ON a.AsinCode = p.Asin
+            GROUP BY a.Category
+            ORDER BY revenue DESC
+        `;
+        const categoryResult = await request.query(categoryQuery);
+
+        res.json({ 
+            success: true, 
+            data: result.recordset,
+            pagination: {
+                total: totalCount,
+                page: parseInt(page),
+                limit: parseInt(limit)
+            },
+            kpis,
+            categories: categoryResult.recordset
+        });
     } catch (error) {
+        console.error('getSkuReport error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

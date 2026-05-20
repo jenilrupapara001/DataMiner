@@ -5,9 +5,10 @@ import ActionModal from '../components/actions/ActionModal';
 import ObjectiveManager from '../components/actions/ObjectiveManager';
 import CompletionModal from '../components/actions/CompletionModal';
 import ReviewModal from '../components/actions/ReviewModal';
-import { Plus, Calendar, AlertTriangle, List, BarChart2, TrendingUp } from 'lucide-react';
+import { Plus, Calendar, AlertTriangle, List, BarChart2, TrendingUp, ClipboardList, Search } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePageTitle } from '../contexts/PageTitleContext';
 import { 
   Space, Button, Segmented, Modal, Divider, 
   message as antdMessage, Typography, Spin, Tag, Badge
@@ -18,6 +19,12 @@ const { Title, Text } = Typography;
 const TasksPage = () => {
   const [messageApi, contextHolder] = antdMessage.useMessage();
   const { user: currentUser } = useAuth();
+  const { setPageTitle } = usePageTitle();
+  
+  useEffect(() => {
+    setPageTitle('Optimization Tasks');
+  }, [setPageTitle]);
+
   const [objectives, setObjectives] = useState([]);
   const [allActions, setAllActions] = useState([]); // Flatted actions for KPIs
   const [loading, setLoading] = useState(true);
@@ -449,72 +456,73 @@ const TasksPage = () => {
           margin: -1.5rem -2rem;
         }
         .tasks-header {
-          flex-shrink: 0;
           background: #ffffff;
-          padding: 16px 24px;
+          padding: 18px 24px;
           border-bottom: 1px solid #e2e8f0;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          z-index: 10;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.01);
+          flex-wrap: wrap;
+          gap: 16px;
         }
         .tasks-scroll-content {
           flex: 1;
           overflow-y: auto;
-          padding: 24px;
+          padding: 20px 24px;
           display: flex;
           flex-direction: column;
         }
-        
-        /* Modern Filter Pills */
-        .filter-pill-container {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 24px;
-          align-items: center;
-        }
-        .filter-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
-          border-radius: 24px;
-          border: 1px solid #e2e8f0;
+        .task-stat-card {
           background: #ffffff;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-          color: #64748b;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 8px 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-width: 100px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
           transition: all 0.2s ease;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.01);
-          user-select: none;
         }
-        .filter-pill:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        .task-stat-card:hover {
           border-color: #cbd5e1;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
         }
-        .filter-pill:active {
-          transform: scale(0.97);
+        .task-stat-card .task-stat-label {
+          font-size: 10px;
+          font-weight: 700;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 2px;
         }
-        .filter-pill.active {
-          box-shadow: 0 3px 8px rgba(0,0,0,0.04);
+        .task-stat-card .task-stat-value {
+          font-size: 18px;
+          font-weight: 800;
         }
-        .pill-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          transition: all 0.2s ease;
+        .task-stat-card.highlight-overdue {
+          background: #fff5f5;
+          border-color: #feb2b2;
         }
-
+        .task-stat-card.highlight-review {
+          background: #fffaf0;
+          border-color: #fbd38d;
+        }
+        .scrollbar-hidden::-webkit-scrollbar {
+          display: none;
+        }
         .segmented-tasks .ant-segmented-item-selected {
           background-color: #3b82f6 !important;
           color: #ffffff !important;
-          font-weight: 650 !important;
+          font-weight: 700 !important;
         }
-
+        .segmented-tasks .ant-segmented-item {
+          font-weight: 600;
+          font-size: 11.5px;
+          color: #475569;
+        }
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
@@ -522,37 +530,131 @@ const TasksPage = () => {
         .animate-fade-up {
           animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
-
         @media (max-width: 992px) {
           .tasks-page-container {
             margin: -0.75rem;
             height: auto;
             overflow: visible;
           }
-          .tasks-header {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 16px;
-          }
         }
       `}</style>
 
-      {/* Header Area */}
+      {/* 1. PREMIUM HEADER PANEL */}
       <div className="tasks-header">
         <div>
-          <Title level={3} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            Optimization <span style={{ color: '#3b82f6' }}>Tasks</span> Hub
-          </Title>
-          <Text type="secondary" style={{ fontSize: '13px' }}>Strategic Performance & Tactical Oversight</Text>
+          <Space align="center" size={12}>
+            <div style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)', color: '#4f46e5', padding: 10, borderRadius: 12, display: 'flex', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.1)' }}>
+              <ClipboardList size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Workspace Operations</div>
+              <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18, letterSpacing: '-0.02em' }}>Strategy Workbench & Task Matrix</h3>
+              <Text type="secondary" style={{ fontSize: 12 }}>Synthesize brand objectives, map key results, and orchestrate optimization protocols.</Text>
+            </div>
+          </Space>
         </div>
 
-        <Space size={12} wrap>
+        {/* Right Side Statistics Panel */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="task-stat-card">
+            <span className="task-stat-label">Initiatives</span>
+            <span className="task-stat-value text-slate-800">{kpis.all}</span>
+          </div>
+          <div className="task-stat-card">
+            <span className="task-stat-label">Outstanding</span>
+            <span className="task-stat-value text-indigo-600">{kpis.todo}</span>
+          </div>
+          {kpis.overdue > 0 && (
+            <div className="task-stat-card highlight-overdue">
+              <span className="task-stat-label">Overdue</span>
+              <span className="task-stat-value text-rose-500">{kpis.overdue}</span>
+            </div>
+          )}
+          {kpis.status.review > 0 && (
+            <div className="task-stat-card highlight-review">
+              <span className="task-stat-label">In Review</span>
+              <span className="task-stat-value text-amber-500">{kpis.status.review}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. DYNAMIC WORKBENCH CONTROL STRIP */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px 24px',
+        background: '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
+        flexWrap: 'wrap',
+        gap: 16
+      }}>
+        {/* Left Side: View Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 750, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>View Mode:</span>
+          <Segmented
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { label: 'Strategic Matrix', value: 'STRATEGIC', icon: <List size={13} style={{ marginRight: 4 }} /> },
+              { label: 'Kanban Desk', value: 'BOARD', icon: <BarChart2 size={13} style={{ marginRight: 4 }} /> },
+              { label: 'Task Registry', value: 'FLAT', icon: <Calendar size={13} style={{ marginRight: 4 }} /> }
+            ]}
+            className="segmented-tasks"
+          />
+        </div>
+
+        {/* Right Side: Search + Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <div style={{ position: 'relative', width: 220 }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input
+              type="text"
+              placeholder="Search current view..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '6px 12px 6px 28px',
+                fontSize: 12,
+                borderRadius: 8,
+                border: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                outline: 'none',
+                transition: 'all 0.2s',
+                fontWeight: 500
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#3b82f6';
+                e.target.style.background = '#ffffff';
+                e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e2e8f0';
+                e.target.style.background = '#f8fafc';
+                e.target.style.boxShadow = 'none';
+              }}
+            />
+          </div>
+
+          <Button 
+            type="text" 
+            onClick={() => navigate('/actions/achievement-report')} 
+            icon={<TrendingUp size={13} />}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, fontSize: 12, color: '#4f46e5', borderRadius: 8 }}
+          >
+            Performance
+          </Button>
+          
+          <Divider orientation="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
+
           <Button 
             type="default" 
             onClick={handleCreateAction} 
             shape="round" 
-            icon={<Plus size={15} />} 
-            style={{ height: '40px', display: 'flex', alignItems: 'center', fontWeight: 600 }}
+            icon={<Plus size={13} />} 
+            style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 12, borderRadius: 8, height: 32 }}
           >
             Quick Task
           </Button>
@@ -561,8 +663,8 @@ const TasksPage = () => {
             type="primary" 
             onClick={handleCreateObjective} 
             shape="round" 
-            style={{ height: '40px', display: 'flex', alignItems: 'center', backgroundColor: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600 }} 
-            icon={<BarChart2 size={15} />}
+            style={{ display: 'flex', alignItems: 'center', backgroundColor: '#3b82f6', borderColor: '#3b82f6', fontWeight: 700, fontSize: 12, borderRadius: 8, height: 32 }} 
+            icon={<BarChart2 size={13} />}
           >
             New Project
           </Button>
@@ -573,24 +675,35 @@ const TasksPage = () => {
               type="dashed"
               onClick={handleDeleteAll} 
               shape="round" 
-              style={{ height: '40px', display: 'flex', alignItems: 'center', fontWeight: 600 }} 
-              icon={<AlertTriangle size={15} />}
-              title="Admin: Delete all actions from database"
+              style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 12, borderRadius: 8, height: 32 }} 
+              icon={<AlertTriangle size={13} />}
+              title="Admin: Delete all actions"
             >
               Clear All
             </Button>
           )}
-        </Space>
+        </div>
       </div>
 
-      {/* Main Scrollable Body */}
-      <div className="tasks-scroll-content animate-fade-up">
-        
-        {/* Modern KPI Filter Pills Strip */}
-        <div className="filter-pill-container" style={{ gap: '6px' }}>
+      {/* 3. SCROLLABLE QUICK FILTERS RIBBON */}
+      <div style={{
+        padding: '10px 24px',
+        background: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        overflowX: 'auto',
+        gap: 6,
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }} className="scrollbar-hidden">
+        <span style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 8, whiteSpace: 'nowrap' }}>
+          Quick Filters:
+        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {filterPills.map((pill, idx) => {
             if (pill.isDivider) {
-              return <Divider orientation="vertical" key={`div-${idx}`} style={{ height: 20, margin: '0 4px', borderColor: '#cbd5e1' }} />;
+              return <Divider orientation="vertical" key={`div-${idx}`} style={{ height: 14, margin: '0 4px', borderColor: '#cbd5e1' }} />;
             }
 
             const isActive = activeFilter === pill.type;
@@ -602,7 +715,7 @@ const TasksPage = () => {
                 onClick={() => handleFilterClick(pill.type)}
                 style={{
                   cursor: 'pointer',
-                  padding: '4px 12px',
+                  padding: '3px 10px',
                   borderRadius: '16px',
                   fontSize: '11px',
                   fontWeight: 600,
@@ -612,46 +725,36 @@ const TasksPage = () => {
                   color: isActive ? pill.color : '#475569',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '5px',
                   userSelect: 'none',
                   boxShadow: isActive ? `0 2px 6px ${pill.color}25` : 'none',
                   margin: 0
                 }}
               >
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: dotBg }} />
-                <span style={{ textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '10px' }}>{pill.label}</span>
+                <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: dotBg }} />
+                <span style={{ textTransform: 'uppercase', letterSpacing: '0.01em', fontSize: '9.5px', whiteSpace: 'nowrap' }}>{pill.label}</span>
                 <span style={{
                   background: isActive ? pill.color : '#f1f5f9',
                   color: isActive ? '#ffffff' : '#475569',
-                  fontSize: '10px',
+                  fontSize: '9.5px',
                   fontWeight: 700,
                   borderRadius: '10px',
-                  padding: '1px 6px',
-                  minWidth: '18px',
+                  padding: '0px 5px',
+                  minWidth: '16px',
                   textAlign: 'center',
                   display: 'inline-block'
                 }}>{pill.count}</span>
               </Tag>
             );
           })}
-
-          <div style={{ marginLeft: 'auto' }}>
-            <Button 
-              type="link" 
-              onClick={() => navigate('/actions/achievement-report')} 
-              icon={<TrendingUp size={14} />}
-              className="fw-bold"
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              Performance Report
-            </Button>
-          </div>
         </div>
+      </div>
 
-        {/* Strategic Objectives Board directly */}
+      {/* 4. DYNAMIC ACTION MATRIX BODY */}
+      <div className="tasks-scroll-content animate-fade-up">
         {loading ? (
           <div style={{ display: 'flex', flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
-            <Spin size="large" description="Syncing Dashboard..." />
+            <Spin size="large" description="Syncing Optimization Matrix..." />
           </div>
         ) : (
           <div style={{ flex: 1 }}>
@@ -672,11 +775,10 @@ const TasksPage = () => {
               onCompleteTask={handleCompleteTask}
               onSubmitForReview={handleSubmitForReview}
               onReviewAction={(action) => openReviewModal(action)}
-              viewMode="STRATEGIC"
+              viewMode={viewMode}
             />
           </div>
         )}
-
       </div>
 
       {/* ================= ANT DESIGN MODALS ================= */}

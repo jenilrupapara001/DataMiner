@@ -716,6 +716,84 @@ router.get('/reports/by-stage', protect, requireAnyPermission(['actions_view', '
     }
 });
 
+// Goal Achievement Analysis Report
+router.get('/reports/goal-achievement', protect, requireAnyPermission(['actions_view', 'actions_manage']), async (req, res) => {
+    try {
+        const pool = await actionController.getPool();
+        const result = await pool.request()
+            .query(`
+                SELECT a.*, ua.FirstName, ua.LastName
+                FROM Actions a
+                LEFT JOIN Users ua ON a.AssignedTo = ua.Id
+                WHERE a.Status = 'COMPLETED'
+            `);
+
+        const actions = result.recordset;
+        const metrics = [];
+        const { startDate, endDate } = req.query;
+
+        const filterStart = startDate ? new Date(startDate) : null;
+        const filterEnd = endDate ? new Date(endDate) : null;
+
+        actions.forEach(a => {
+            let timeTracking = {};
+            if (a.TimeTracking) {
+                try {
+                    timeTracking = JSON.parse(a.TimeTracking);
+                } catch (e) {}
+            }
+
+            const startedAt = timeTracking.startedAt || a.CreatedAt;
+            const completedAt = timeTracking.completedAt || a.UpdatedAt;
+            if (!startedAt || !completedAt) return;
+
+            const compDate = new Date(completedAt);
+            if (filterStart && compDate < filterStart) return;
+            if (filterEnd && compDate > filterEnd) return;
+
+            const start = new Date(startedAt);
+            const end = new Date(completedAt);
+            const plannedStart = timeTracking.startDate || a.CreatedAt;
+            const plannedEnd = timeTracking.deadline || a.DueDate;
+
+            const actualDuration = Math.round((end - start) / (1000 * 60 * 60)); // hours
+            const plannedDuration = (plannedEnd && plannedStart) ? Math.round((new Date(plannedEnd) - new Date(plannedStart)) / (1000 * 60 * 60)) : null;
+
+            const isOverdue = timeTracking.isOverdue || (plannedEnd && compDate > new Date(plannedEnd)) || false;
+
+            metrics.push({
+                id: a.Id,
+                title: a.Title,
+                assignee: a.FirstName ? `${a.FirstName} ${a.LastName}` : 'Unassigned',
+                actualDuration,
+                plannedDuration,
+                isOverdue: !!isOverdue,
+                startedAt,
+                completedAt,
+                variance: plannedDuration ? actualDuration - plannedDuration : null
+            });
+        });
+
+        // Summary Statistics
+        const totalCompleted = metrics.length;
+        const overdue = metrics.filter(m => m.isOverdue).length;
+        const onTime = totalCompleted - overdue;
+        const avgDuration = totalCompleted ? Math.round(metrics.reduce((acc, m) => acc + m.actualDuration, 0) / totalCompleted) : 0;
+
+        const summary = {
+            totalCompleted,
+            onTime,
+            overdue,
+            avgDuration
+        };
+
+        res.json({ success: true, data: { metrics, summary } });
+    } catch (error) {
+        console.error('Goal achievement report error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 // Keep parameterized routes at the bottom
 router.get('/:id/instructions', protect, actionController.getActionInstructions);
 router.get('/:id', protect, actionController.getAction);

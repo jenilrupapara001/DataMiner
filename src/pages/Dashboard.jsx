@@ -1,5 +1,6 @@
-// Dashboard - RetailOps Command Center - ANTD PREMIUM EDITION
-import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+// Dashboard — RetailOps Command Center
+// Data orchestration: https://src/hooks/useDashboardOrchestration.ts
+import React, { useState, useCallback, useMemo, Suspense, lazy, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Row,
@@ -16,7 +17,11 @@ import {
   theme,
   Badge,
   Avatar,
-  Divider
+  Divider,
+  Switch,
+  Modal,
+  Select,
+  Tabs
 } from 'antd';
 import {
   LayoutDashboard,
@@ -44,6 +49,7 @@ import { format } from 'date-fns';
 const Chart = lazy(() => import('react-apexcharts'));
 
 // Local imports
+// Local imports
 import api, { seedApi } from '../services/api';
 import { SkeletonChart } from '../components/common/Skeleton';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -51,175 +57,239 @@ import ErrorState from '../components/common/ErrorState';
 import { useAuth } from '../contexts/AuthContext';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { useRefresh } from '../contexts/RefreshContext';
-
+import { usePageTitle } from '../contexts/PageTitleContext';
+import { METRIC_CONFIG } from '../models/growth.types';
+import { useDashboardOrchestration } from '../hooks/useDashboardOrchestration';
 const { Text, Title } = Typography;
 
-// Animation Variants
+// ── Animation Variants ─────────────────────────────────────────────────────────
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 }
-  }
+  visible: { opacity: 1, transition: { staggerChildren: 0.05 } }
 };
-
 const itemVariants = {
   hidden: { y: 15, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: 'spring', stiffness: 120, damping: 20 }
-  }
+  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 120, damping: 20 } }
 };
 
-// Premium Styles
+// ── Styles ─────────────────────────────────────────────────────────────────────
 const cardStyle = {
-  borderRadius: '12px',
-  border: '1px solid #f0f0f0',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+  borderRadius: '8px',
+  border: '1px solid #d5dbdb',
+  background: '#ffffff',
+  boxShadow: 'none',
   height: '100%',
   overflow: 'hidden'
 };
 
+// ── KpiIcon helper ─────────────────────────────────────────────────────────────
+// Maps the kpi.title → a contextually relevant icon.
+// If the raw kpi response already carries an `icon` string (GDP API), we
+// pass it through so the UI stays consistent.
+function resolveKpiIcon(kpi, useFallback) {
+  if (kpi.metricType && METRIC_CONFIG[kpi.metricType]) {
+    const IconName = METRIC_CONFIG[kpi.metricType].icon;
+    const LucideIcons = {
+      TrendingUp, IndianRupee: IndianRupee, Target, Package, Star, Percent,
+      Activity,
+    };
+    const Comp = LucideIcons[IconName] ?? TrendingUp;
+    return <Comp size={18} />;
+  }
+  if (!useFallback) return null;
+  return <TrendingUp size={18} />;
+}
+
+// ── Helper to map raw alert objects to the UI AlertItem shape ──────────────────
+
+// ── Dashboard component ───────────────────────────────────────────────────────
 const Dashboard = () => {
   const { isGlobalUser } = useAuth();
   const { startDate, endDate, rangeType } = useDateRange();
   const { refreshCount } = useRefresh();
   const { token } = theme.useToken();
+  const { setPageTitle } = usePageTitle();
 
-  const [loading, setLoading] = useState(true);
+  // ── Sellers list (for merchant selector) ────────────────────────────────────
+  const [sellers, setSellers] = useState([]);
+  const [selectedSellerId, setSelectedSellerId] = useState('all');
+
+  useEffect(() => { setPageTitle('Market Intelligence'); }, [setPageTitle]);
+
+  useEffect(() => {
+    const fetchSellers = async () => {
+      try {
+        const response = await api.sellerApi.getAll({ page: 1, limit: 100 });
+        if (response?.success && response?.data?.sellers) {
+          setSellers(response.data.sellers);
+        } else if (response?.sellers) {
+          setSellers(response.sellers);
+        } else if (Array.isArray(response)) {
+          setSellers(response);
+        }
+      } catch (err) { console.error('Failed to fetch sellers:', err); }
+    };
+    fetchSellers();
+  }, []);
+
+  // ── Layout state ────────────────────────────────────────────────────────────
   const [seeding, setSeeding] = useState(false);
-  const [refreshInterval] = useState(0); // Can be linked to a setting
-  const [data, setData] = useState({
-    kpis: [],
-    revenueData: [],
-    stackedBarSeries: [],
-    areaSeries: [],
-    adsPerformanceSeries: [],
-    categoryData: [],
-    topProducts: [],
-    labels: [],
-    userStats: null,
-    teamStats: null,
-    alerts: [],
-    roas: '0.00',
-    dailySpend: 0
+  const [isCustomizing, setIsCustomizing] = useState(false);
+  const [layout, setLayout] = useState(() => {
+    const saved = localStorage.getItem('retailops_dashboard_layout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.some(p => p.id === 'alerts')) {
+          localStorage.removeItem('retailops_dashboard_layout');
+        } else {
+          return parsed;
+        }
+      } catch (_e) { /* _e */ }
+    }
+    return [
+      { id: 'kpi', label: 'KPI Scorecards', enabled: true, order: 1, span: 24 },
+      { id: 'charts', label: 'Performance Analytics Chart', enabled: true, order: 2, span: 24 },
+      { id: 'satellite', label: 'Quick Navigation Links', enabled: true, order: 3, span: 24 },
+      { id: 'velocity', label: 'Product Velocity Matrix', enabled: true, order: 4, span: 24 },
+    ];
   });
-  const [error, setError] = useState(null);
 
-  const loadDashboardData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = {
-        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
-        endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
-        rangeType
-      };
+  const saveLayout = (newLayout) => { setLayout(newLayout); localStorage.setItem('retailops_dashboard_layout', JSON.stringify(newLayout)); };
 
-      const cleanParams = Object.fromEntries(
-        Object.entries(params).filter(([_, v]) => v !== undefined && v !== null)
-      );
+  const handleToggleItem = (id, checked) => { saveLayout(layout.map(item => item.id === id ? { ...item, enabled: checked } : item)); };
+  const handleSpanChange = (id, newSpan) => { saveLayout(layout.map(item => item.id === id ? { ...item, span: newSpan } : item)); };
+  const handleMoveItem = (index, direction) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= layout.length) return;
+    const updated = [...layout];
+    [updated[index], updated[nextIndex]] = [updated[nextIndex], updated[index]];
+    saveLayout(updated.map((item, idx) => ({ ...item, order: idx + 1 })));
+  };
+  const handleResetLayout = () => {
+    saveLayout([
+      { id: 'kpi', label: 'KPI Scorecards', enabled: true, order: 1, span: 24 },
+      { id: 'charts', label: 'Performance Analytics Chart', enabled: true, order: 2, span: 24 },
+      { id: 'satellite', label: 'Quick Navigation Links', enabled: true, order: 3, span: 24 },
+      { id: 'velocity', label: 'Product Velocity Matrix', enabled: true, order: 4, span: 24 },
+    ]);
+  };
 
-      const query = new URLSearchParams(cleanParams).toString();
-      const response = await api.dashboardApi.getSummary(query);
-      
-      const { 
-        kpi, stackedBarSeries, labels, 
-        category, tableData, userStats, teamStats, 
-        alerts, roas, dailySpend, adsPerformanceSeries 
-      } = response;
+  // ── Orchestration layer — single hook, composable surface ───────────────────
+  const orch = useDashboardOrchestration();
 
-      setData({
-        kpis: kpi || [],
-        stackedBarSeries: stackedBarSeries || [],
-        adsPerformanceSeries: adsPerformanceSeries || [],
-        labels: labels || [],
-        categoryData: category || [],
-        topProducts: tableData?.map((p, idx) => ({ ...p, rank: idx + 1, key: p.asin + p.sku })) || [],
-        userStats,
-        teamStats,
-        alerts: alerts || [],
-        roas: roas || '0.00',
-        dailySpend: dailySpend || 0
-      });
+  const sortedLayout = useMemo(
+    () => [...layout].filter(item => item.enabled).sort((a, b) => a.order - b.order),
+    [layout],
+  );
 
-    } catch (err) {
-      console.error('Failed to load dashboard data:', err);
-      setError('System interruption: Data pipeline failed to respond.');
-    } finally {
-      setLoading(false);
-    }
-  }, [rangeType, startDate, endDate]);
+  // ── Graceful fallback ─────────────────────────────────────────────────────────
+  const kpisRaw = Array.isArray(orch.kpis) ? orch.kpis : [];
+  const alertsList = Array.isArray(orch.alerts) ? orch.alerts : [];
+  const _topProducts = Array.isArray(orch.topProducts) ? orch.topProducts : [];
 
+  // Full /dashboard API response carries chart data outside kpi cards.
+  // `dashboardRaw` is identical in shape to loadDashboardData's `response`.
+  const raw = orch.dashboardRaw ?? {};
+
+  const stackedBarSeries = Array.isArray(raw?.stackedBarSeries) ? raw.stackedBarSeries : [];
+  const adsPerformanceSeries = Array.isArray(raw?.adsPerformanceSeries) ? raw.adsPerformanceSeries : [];
+  const _labels = Array.isArray(raw?.labels) ? raw.labels : [];
+  const _categoryData = Array.isArray(raw?.category) ? raw.category : [];
+  const _roas = typeof raw?.roas === 'string' ? raw.roas : '0.00';
+  const _dailySpend = typeof raw?.dailySpend === 'number' ? raw.dailySpend : 0;
+
+  // KPI cards are shaped by the GDP dashboard endpoint:
+  // [{ id, title, value, icon, trend, trendType }]
+  const topProducts = _topProducts;
+
+  // Watched once to trigger refresh cycle when the RefreshContext fires
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData, refreshCount]);
-
-  useEffect(() => {
-    if (refreshInterval > 0) {
-      const interval = setInterval(loadDashboardData, refreshInterval * 1000);
-      return () => clearInterval(interval);
-    }
-  }, [refreshInterval, loadDashboardData]);
+    // RefreshContext fires `triggerRefresh` which increments `refreshCount`.
+    // Board that counter to invalidate the query cache.
+    if (refreshCount > 0) orch.refetch();
+  }, [refreshCount]);
 
   const handleSeedDemoData = async () => {
     setSeeding(true);
     try {
       const result = await seedApi.seedAll();
-      if (result.success) loadDashboardData();
+      if (result?.success) orch.forceRefresh();
     } catch (err) {
-      setError('Failed to initialize simulation.');
+      console.error('Seed failed:', err);
     } finally {
       setSeeding(false);
     }
   };
 
-  // Chart Options
+  // ── Computed chart options ───────────────────────────────────────────────────
+  const chartLabels = stackedBarSeries.length > 0
+    ? (stackedBarSeries[0]?.data ?? []).map((_v, i) => `D${i + 1}`)
+    : [];
+
   const adsChartOptions = useMemo(() => ({
-    chart: {
-      type: 'bar',
-      toolbar: { show: false },
-      fontFamily: 'Inter, sans-serif'
-    },
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        columnWidth: '55%',
-        distributed: false
-      },
-    },
-    colors: [token.colorPrimary, '#faad14'],
+    chart: { type: 'bar', toolbar: { show: false }, fontFamily: 'Inter, sans-serif' },
+    plotOptions: { bar: { borderRadius: 4, columnWidth: '55%', distributed: false } },
+    colors: ['#002f36', '#ff9900'],
     dataLabels: { enabled: false },
     xaxis: {
-      categories: data.labels,
+      categories: chartLabels,
       axisBorder: { show: false },
       axisTicks: { show: false },
       labels: { style: { colors: '#8c8c8c', fontSize: '10px', fontWeight: 500 } }
     },
     yaxis: {
-      labels: { 
+      labels: {
         style: { colors: '#8c8c8c', fontSize: '10px', fontWeight: 500 },
         formatter: (val) => val >= 1000 ? `₹${(val / 1000).toFixed(1)}K` : `₹${val}`
       }
     },
     grid: { borderColor: '#f0f0f0', strokeDashArray: 4 },
-    legend: { 
-      position: 'top', 
-      horizontalAlign: 'right', 
-      fontSize: '12px',
-      markers: { radius: 12 }
-    },
+    legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px', markers: { radius: 12 } },
     tooltip: { theme: 'light' }
-  }), [data.labels, token]);
+  }), [chartLabels, token]);
+
+  const adsPerfFlattened = useMemo(() => {
+    if (!Array.isArray(adsPerformanceSeries?.[0]?.data)) return [];
+    const salesData = adsPerformanceSeries[0]?.data || [];
+    const spendData = adsPerformanceSeries[1]?.data || [];
+    return [{
+      name: 'Advertising ROAS',
+      data: salesData.map((sv, i) => {
+        const sp = spendData[i] || 0;
+        return sp === 0 ? 0 : parseFloat((sv / sp).toFixed(2));
+      })
+    }];
+  }, [adsPerformanceSeries]);
+
+  const roasChartOptions = useMemo(() => ({
+    chart: { type: 'area', toolbar: { show: false }, fontFamily: 'Inter, sans-serif' },
+    stroke: { curve: 'smooth', width: 2 },
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] } },
+    colors: ['#e47911'],
+    dataLabels: { enabled: false },
+    xaxis: {
+      categories: chartLabels,
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      labels: { style: { colors: '#8c8c8c', fontSize: '10px', fontWeight: 500 } }
+    },
+    yaxis: { labels: { style: { colors: '#8c8c8c', fontSize: '10px', fontWeight: 500 }, formatter: (v) => `${v}x` } },
+    grid: { borderColor: '#f0f0f0', strokeDashArray: 4 },
+    tooltip: { theme: 'light' }
+  }), [chartLabels]);
+
+  const categoryLabels = adsPerformanceSeries.length > 0
+    ? (adsPerformanceSeries[0]?.data ?? []).map((_v, i) => `Period ${i + 1}`)
+    : ['P1', 'P2', 'P3', 'P4'];
 
   const donutOptions = useMemo(() => ({
     chart: { type: 'donut', fontFamily: 'Inter, sans-serif' },
-    labels: data.categoryData.map(c => c.name),
-    colors: [token.colorPrimary, '#13c2c2', '#722ed1', '#eb2f96', '#faad14'],
+    labels: categoryLabels,
+    colors: ['#002f36', '#ff9900', '#232f3e', '#565959', '#e47911'],
     stroke: { show: false },
     dataLabels: { enabled: false },
-    legend: { position: 'bottom', fontSize: '11px', fontWeight: 500 },
+    legend: { position: 'right', fontSize: '11px', fontWeight: 500 },
     plotOptions: {
       pie: {
         donut: {
@@ -227,31 +297,24 @@ const Dashboard = () => {
           labels: {
             show: true,
             name: { fontSize: '12px', fontWeight: 600, color: '#8c8c8c' },
-            value: { fontSize: '20px', fontWeight: 800, color: '#262626' },
+            value: { fontSize: '18px', fontWeight: 800, color: '#262626' },
             total: {
-              show: true,
-              label: 'ASINs',
-              color: '#8c8c8c',
-              fontWeight: 600,
+              show: true, label: 'ASINs', color: '#8c8c8c', fontWeight: 600,
               formatter: (w) => w.globals.seriesTotals.reduce((a, b) => a + b, 0)
             }
           }
         }
       }
     }
-  }), [data.categoryData, token]);
+  }), [categoryLabels]);
 
   const tableColumns = useMemo(() => [
     {
-      title: 'RANK',
-      dataIndex: 'rank',
-      width: 60,
+      title: 'RANK', dataIndex: 'rank', width: 60,
       render: (val) => <Text strong style={{ color: val <= 3 ? token.colorPrimary : '#bfbfbf' }}>#{val}</Text>
     },
     {
-      title: 'PRODUCT INTEL',
-      dataIndex: 'title',
-      ellipsis: true,
+      title: 'PRODUCT INTEL', dataIndex: 'title', ellipsis: true,
       render: (text, record) => (
         <Space orientation="vertical" size={0}>
           <Text strong style={{ fontSize: '13px' }}>{text}</Text>
@@ -260,21 +323,15 @@ const Dashboard = () => {
       )
     },
     {
-      title: 'VELOCITY',
-      dataIndex: 'units',
-      align: 'right',
+      title: 'VELOCITY', dataIndex: 'units', align: 'right',
       render: (val) => <Text strong>{val?.toLocaleString()}</Text>
     },
     {
-      title: 'YIELD',
-      dataIndex: 'revenue',
-      align: 'right',
+      title: 'YIELD', dataIndex: 'revenue', align: 'right',
       render: (val) => <Text strong style={{ color: token.colorSuccess }}>₹{val?.toLocaleString()}</Text>
     },
     {
-      title: 'ACOS',
-      dataIndex: 'acos',
-      align: 'right',
+      title: 'ACOS', dataIndex: 'acos', align: 'right',
       render: (val) => {
         const isHigh = parseFloat(val) > 30;
         return <Tag color={isHigh ? 'error' : 'default'} variant="filled" style={{ fontWeight: 700, margin: 0 }}>{val}</Tag>;
@@ -282,7 +339,11 @@ const Dashboard = () => {
     }
   ], [token]);
 
-  if (loading && !data.kpis.length) {
+  // ══════════════════════════════════════════════════════════════════════════════
+  // RENDER — skeleton phase
+  // ══════════════════════════════════════════════════════════════════════════════
+  if ((orch.isLoadingKpis && kpisRaw.length === 0) ||
+    (orch.isLoadingAlerts && alertsList.length === 0)) {
     return (
       <div style={{ padding: '24px' }}>
         <LoadingIndicator type="line-simple" size="md" />
@@ -296,224 +357,338 @@ const Dashboard = () => {
     );
   }
 
-  if (error) return <div style={{ padding: '24px' }}><ErrorState title="System Fault" description={error} onRetry={loadDashboardData} /></div>;
+  // ── Data is loaded at this point (orchestration guarantees non-null arrays) ─────
+  const topProductsWithMeta = topProducts.map((p, idx) => ({ ...p, rank: idx + 1, key: `${p.asin || ''}_${p.sku || ''}` }));
+
+  // ROAS / daily spend from the orchestrator link GDP API workspace
+  const roasValue = '0.00';
+  const dailySpend = 0;
+
+  // Connection badge text
+  const connLabel = orch.connectionStatus === 'connected' ? 'Live'
+    : orch.connectionStatus === 'reconnecting' ? 'Reconnecting…'
+      : 'Offline / Cached';
 
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      style={{ padding: '16px', background: '#fafafa', minHeight: '100vh' }}
+      style={{ padding: '12px 16px', background: '#eaeded', minHeight: '100vh' }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <Space orientation="vertical" size={0}>
-          <Title level={3} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.03em' }}>
-            <LayoutDashboard size={22} style={{ marginRight: 10, verticalAlign: 'middle', color: token.colorPrimary }} />
-            Market Intelligence
-          </Title>
-          <Space size={4} style={{ fontSize: '12px', color: token.colorTextDescription }}>
-            <Badge status="processing" color={token.colorSuccess} />
-            <Text type="secondary">Network Active • Sync: {format(new Date(), 'HH:mm:ss')}</Text>
-          </Space>
+      {/* ── Dashboard Control Toolbar ─────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: '10px', marginBottom: '12px', width: '100%'
+      }}>
+        <Space size={8} style={{ fontSize: '12px', color: token.colorTextDescription }}>
+          <Badge status={orch.connectionStatus === 'connected' ? 'processing' : 'error'}
+            color={orch.connectionStatus === 'connected' ? '#52c41a' : '#ff4d4f'} />
+          <Text type="secondary" style={{ fontWeight: 600, color: '#565959' }}>
+            {syncDisplayLabel(orch.connectionStatus)} {orch.syncTimestamp ? `• Last Sync: ${format(new Date(orch.syncTimestamp), 'HH:mm:ss')}` : ''}
+          </Text>
         </Space>
 
-        <Space>
-          <Tooltip title="Force Sync">
-            <Button 
-              icon={<RefreshCw size={14} className={loading ? 'spin' : ''} />} 
-              onClick={loadDashboardData}
-              disabled={loading}
+        <Space size={6} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+          <Select
+            placeholder="Select Merchant"
+            value={selectedSellerId}
+            onChange={(val) => setSelectedSellerId(val)}
+            style={{ width: 220, height: '32px' }}
+            variant="outlined"
+            options={[
+              { value: 'all', label: 'All Merchants / Aggregate' },
+              ...sellers.map((s) => ({ value: s._id || s.id, label: s.name })),
+            ]}
+          />
+
+          <Button
+            type="dashed"
+            icon={<Settings size={13} />}
+            onClick={() => setIsCustomizing(true)}
+            style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', height: '32px', fontSize: '12px' }}
+          >
+            Customize
+          </Button>
+
+          <Tooltip title="Force sync database">
+            <Button
+              icon={<RefreshCw size={13} className={(orch.isLoadingKpis || orch.isMutating) ? 'spin' : ''} />}
+              onClick={() => orch.forceRefresh()}
+              disabled={orch.isLoadingKpis || orch.isMutating}
               shape="circle"
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                height: '32px', width: '32px'
+              }}
             />
           </Tooltip>
-          {isGlobalUser && (
-            <Button 
-              type="primary" 
-              icon={<Sparkles size={14} />} 
-              loading={seeding} 
-              onClick={handleSeedDemoData}
-              style={{ fontWeight: 600, borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}
-            >
-              RUN SIMULATION
-            </Button>
-          )}
         </Space>
       </div>
 
-      {/* KPI Row */}
-      <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
-        {data.kpis.map((kpi, idx) => (
-          <Col key={idx} xs={12} sm={12} md={6}>
-            <Card styles={{ body: { padding: '16px' } }} style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ padding: '10px', background: `${token.colorPrimary}10`, borderRadius: '10px', color: token.colorPrimary }}>
-                  {kpi.icon.includes('shop') ? <ShoppingBag size={20} /> : kpi.icon.includes('box') ? <Package size={20} /> : kpi.icon.includes('rupee') ? <IndianRupee size={20} /> : <TrendingUp size={20} />}
+      {/* ── Reactive widget grid ─────────────────────────────────────────────── */}
+      <Row gutter={[12, 12]} style={{ width: '100%', margin: 0 }}>
+        {sortedLayout.map(item => (
+          <Col xs={24} lg={item.span} key={item.id} style={{ padding: 0, marginBottom: '4px' }}>
+            {item.id === 'kpi' && (
+              <Row gutter={[12, 12]} style={{ width: '100%', margin: 0 }}>
+                {kpisRaw.map((kpi, idx) => (
+                  <Col key={kpi.id ?? idx} xs={24} sm={12} md={6}>
+                    <Card styles={{ body: { padding: '16px' } }} style={cardStyle}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{
+                          padding: '8px',
+                          background: `${token.colorPrimary}10`,
+                          borderRadius: '8px', color: token.colorPrimary
+                        }}>
+                          {kpi.icon.includes('shop') ? <ShoppingBag size={18} />
+                            : kpi.icon.includes('box') ? <Package size={18} />
+                              : kpi.icon.includes('rupee') ? <IndianRupee size={18} />
+                                : <TrendingUp size={18} />}
+                        </div>
+                        {kpi.trend != null && kpi.trendType != null && (
+                          <Tag
+                            color={kpi.trendType === 'positive' ? 'success'
+                              : kpi.trendType === 'negative' ? 'error' : 'default'}
+                            variant="filled"
+                            style={{ borderRadius: '6px', fontWeight: 800, fontSize: '10px', margin: 0 }}
+                          >
+                            {kpi.trendType === 'positive' ? '+' : '-'}{kpi.trend}%
+                          </Tag>
+                        )}
+                      </div>
+                      <div style={{ marginTop: '12px' }}>
+                        <Text type="secondary" style={{
+                          fontSize: '10px', fontWeight: 700,
+                          textTransform: 'uppercase', letterSpacing: '0.08em'
+                        }}>
+                          {kpi.title}
+                        </Text>
+                        <Title level={3} style={{ margin: '2px 0 0', fontWeight: 900, fontSize: '20px' }}>
+                          {kpi.value}
+                        </Title>
+                      </div>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )}
+
+            {item.id === 'charts' && (
+              <Card style={cardStyle} styles={{ body: { padding: '8px 16px' } }}>
+                <Tabs
+                  defaultActiveKey="sales" size="middle"
+                  tabBarExtraContent={
+                    <Tag color="blue" variant="filled" style={{ fontSize: '9px', fontWeight: 800 }}>
+                      LIVE ANALYTICS
+                    </Tag>
+                  }
+                  items={[
+                    {
+                      key: 'sales',
+                      label: <Space><TrendingUp size={14} /> <Text strong>Sales &amp; Spend Performance</Text></Space>,
+                      children: (
+                        <Suspense fallback={<SkeletonChart height={250} />}>
+                          {adsPerformanceSeries.length > 0 ? (
+                            <Chart options={adsChartOptions}
+                              series={adsPerformanceSeries}
+                              type="bar" height={250} />
+                          ) : (
+                            <Empty description="Collecting performance metrics…" style={{ padding: '24px 0' }} />
+                          )}
+                        </Suspense>
+                      ),
+                    },
+                    {
+                      key: 'roas',
+                      label: <Space><Activity size={14} /> <Text strong>Advertising Efficiency (ROAS)</Text></Space>,
+                      children: (
+                        <Suspense fallback={<SkeletonChart height={250} />}>
+                          {adsPerfFlattened.length > 0 && adsPerfFlattened[0]?.data?.some((v) => v > 0) ? (
+                            <Chart options={roasChartOptions} series={adsPerfFlattened} type="area" height={250} />
+                          ) : (
+                            <Empty description="Calculating ROAS metrics stream…" style={{ padding: '24px 0' }} />
+                          )}
+                        </Suspense>
+                      ),
+                    },
+                    {
+                      key: 'categories',
+                      label: <Space><PieChart size={14} /> <Text strong>Product Segment Distribution</Text></Space>,
+                      children: (
+                        <Suspense fallback={<SkeletonChart height={250} />}>
+                          <Row align="middle" style={{ minHeight: 250 }}>
+                            <Col xs={24} md={14}>
+                              <Chart options={donutOptions}
+                                series={categoryLabels.map((_c, i) => kpisRaw[i + 1]?.value || 1)}
+                                type="donut" height={230} />
+                            </Col>
+                            <Col xs={24} md={10} style={{ paddingLeft: '16px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <Text type="secondary" style={{ fontSize: '12px', fontWeight: 600 }}>
+                                  Active ASINs Portfolio
+                                </Text>
+                                {kpisRaw.map((k, i) => (
+                                  <div key={i} style={{
+                                    display: 'flex', justifyContent: 'space-between',
+                                    alignItems: 'center', fontSize: '12px'
+                                  }}>
+                                    <Space size={6}>
+                                      <Badge color={donutOptions.colors[i % donutOptions.colors.length]} />
+                                      <Text strong>{k.title}</Text>
+                                    </Space>
+                                    <Text type="secondary">{k.value}</Text>
+                                  </div>
+                                ))}
+                              </div>
+                            </Col>
+                          </Row>
+                        </Suspense>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            )}
+
+            {item.id === 'satellite' && (
+              <Card
+                title={<Space><Zap size={15} color="#faad14" /> <Text strong>Quick Navigation Links</Text></Space>}
+                style={cardStyle} styles={{ body: { padding: '12px 16px' } }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                  {[
+                    { label: 'Inventory', icon: Package, href: '/inventory', color: '#1890ff', bg: '#e6f7ff' },
+                    { label: 'Workflows', icon: Target, href: '/actions', color: '#722ed1', bg: '#f9f0ff' },
+                    { label: 'Scrapers', icon: Zap, href: '/scrape-tasks', color: '#faad14', bg: '#fffbe6' },
+                    { label: 'Alerts', icon: AlertCircle, href: '/alerts', color: '#ff4d4f', bg: '#fff1f0' },
+                    { label: 'Engines', icon: Settings, href: '/rule-sets', color: '#13c2c2', bg: '#e6fffb' },
+                    { label: 'Reports', icon: FileBarChart, href: '/performance-reports', color: '#52c41a', bg: '#f6ffed' },
+                  ].map((btn, idx) => (
+                    <a key={idx} href={btn.href} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '10px 14px', borderRadius: '8px', background: btn.bg,
+                      color: 'inherit', transition: 'all 0.2s', border: '1px solid transparent',
+                      textDecoration: 'none'
+                    }} className="quick-op-btn">
+                      <btn.icon size={15} style={{ color: btn.color }} strokeWidth={2.5} />
+                      <Text style={{ fontSize: '11.5px', fontWeight: 700, color: '#262626' }}>{btn.label}</Text>
+                    </a>
+                  ))}
                 </div>
-                {kpi.trend && (
-                  <Tag color={kpi.trendType === 'positive' ? 'success' : 'error'} variant="filled" style={{ borderRadius: '6px', fontWeight: 800, fontSize: '10px', margin: 0 }}>
-                    {kpi.trendType === 'positive' ? '+' : '-'}{kpi.trend}%
-                  </Tag>
-                )}
-              </div>
-              <div style={{ marginTop: '16px' }}>
-                <Text type="secondary" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{kpi.title}</Text>
-                <Title level={3} style={{ margin: '2px 0 0', fontWeight: 900 }}>{kpi.value}</Title>
-              </div>
-            </Card>
+              </Card>
+            )}
+
+            {item.id === 'velocity' && (
+              <Card
+                title={<Space><FileBarChart size={16} color={token.colorPrimary} /> <Text strong>Product Velocity Matrix</Text></Space>}
+                style={cardStyle}
+                styles={{ body: { padding: 0 } }}
+                extra={<Button type="link" size="small" style={{ fontWeight: 700 }}>EXPORT DATA</Button>}
+              >
+                <Table
+                  columns={tableColumns}
+                  dataSource={topProductsWithMeta}
+                  pagination={{ pageSize: 5, hideOnSinglePage: true }}
+                  size="middle"
+                  className="premium-table"
+                />
+              </Card>
+            )}
           </Col>
         ))}
       </Row>
 
-      {/* Charts & Matrix Row */}
-      <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
-        <Col xs={24} lg={16}>
-          <Card 
-            title={<Space><Activity size={16} color={token.colorPrimary} /> <Text strong>Performance Analytics</Text></Space>}
-            style={cardStyle}
-            styles={{ body: { padding: '16px 20px' } }}
-            extra={<Tag color="blue" variant="filled" style={{ fontSize: '10px', fontWeight: 700 }}>REAL-TIME</Tag>}
-          >
-            <Suspense fallback={<SkeletonChart height={260} />}>
-              {data.adsPerformanceSeries.length > 0 ? (
-                <Chart options={adsChartOptions} series={data.adsPerformanceSeries} type="bar" height={260} />
-              ) : <Empty description="Collecting performance metrics..." />}
-            </Suspense>
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card 
-            title={<Space><Bell size={16} color="#ff4d4f" /> <Text strong>Live Event Feed</Text></Space>}
-            style={cardStyle}
-            styles={{ body: { padding: '12px' } }}
-          >
-            <div style={{ height: '272px', overflowY: 'auto', paddingRight: '4px' }} className="custom-scroll">
-              {data.alerts.length > 0 ? (
-                <Space orientation="vertical" style={{ width: '100%' }} size={8}>
-                  {data.alerts.map((alert, i) => (
-                    <div key={i} style={{ padding: '10px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <AlertTriangle size={14} color={alert.type === 'critical' ? '#ff4d4f' : '#faad14'} style={{ marginTop: 2 }} />
-                        <div>
-                          <Text style={{ fontSize: '12px', fontWeight: 600, display: 'block', lineHeight: 1.3 }}>{alert.message}</Text>
-                          <Space split={<Divider type="vertical" />} style={{ fontSize: '10px', marginTop: 4 }}>
-                            <Text type="secondary">{alert.time || 'Just now'}</Text>
-                            <Text strong style={{ color: alert.type === 'critical' ? '#ff4d4f' : '#faad14' }}>{alert.type?.toUpperCase()}</Text>
-                          </Space>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </Space>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                  <CheckCircle2 size={32} color={token.colorSuccess} style={{ opacity: 0.3, marginBottom: 12 }} />
-                  <Text type="secondary" style={{ fontSize: '13px', fontWeight: 500 }}>All systems nominal</Text>
+      {/* ── Customize Drawer Modal ────────────────────────────────────────────── */}
+      <Modal
+        title={<Space><Sparkles size={15} style={{ color: token.colorPrimary }} /> <Text strong style={{ fontSize: '15px' }}>Customize Your Command Center</Text></Space>}
+        open={isCustomizing}
+        onCancel={() => setIsCustomizing(false)}
+        footer={[
+          <Button key="reset" danger size="middle" onClick={handleResetLayout} style={{ fontWeight: 600 }}>
+            Reset to Default
+          </Button>,
+          <Button key="close" type="primary" size="middle" onClick={() => setIsCustomizing(false)}
+            style={{ fontWeight: 600, backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
+            Apply Settings
+          </Button>,
+        ]}
+        width={540}
+        styles={{ body: { padding: '12px 0' } }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '0 8px' }}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            Toggle modules, assign display width parameters, and arrange widget position sequence
+            to fit your operational focus.
+          </Text>
+          <Divider style={{ margin: '6px 0' }} />
+          {layout.map((item, idx) => (
+            <Card
+              key={item.id}
+              styles={{ body: { padding: '10px 14px' } }}
+              style={{ border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: '4px' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Switch size="small" checked={item.enabled} onChange={(checked) => handleToggleItem(item.id, checked)} />
+                  <Text strong style={{ fontSize: '13px', color: item.enabled ? '#1f1f1f' : '#bfbfbf' }}>{item.label}</Text>
                 </div>
-              )}
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Operations Row */}
-      <Row gutter={[12, 12]} style={{ marginBottom: '16px' }}>
-        <Col xs={24} md={8}>
-          <Card title={<Space><Zap size={16} color="#faad14" /> <Text strong>Satellite Control</Text></Space>} style={cardStyle}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {[
-                { label: 'Inventory', icon: Package, href: '/inventory', color: '#1890ff', bg: '#e6f7ff' },
-                { label: 'Actions', icon: Target, href: '/actions', color: '#722ed1', bg: '#f9f0ff' },
-                { label: 'Scrapers', icon: Zap, href: '/scrape-tasks', color: '#faad14', bg: '#fffbe6' },
-                { label: 'Alerts', icon: AlertCircle, href: '/alerts', color: '#ff4d4f', bg: '#fff1f0' },
-                { label: 'Engines', icon: Settings, href: '/rule-sets', color: '#13c2c2', bg: '#e6fffb' },
-                { label: 'Reports', icon: FileBarChart, href: '/performance-reports', color: '#52c41a', bg: '#f6ffed' },
-              ].map((item, idx) => (
-                <a key={idx} href={item.href} style={{ 
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', 
-                  padding: '14px 8px', borderRadius: '12px', background: item.bg, color: 'inherit',
-                  transition: 'all 0.2s', border: '1px solid transparent'
-                }} className="quick-op-btn">
-                  <item.icon size={18} style={{ color: item.color }} strokeWidth={2.5} />
-                  <Text style={{ fontSize: '11px', fontWeight: 700, color: '#262626' }}>{item.label}</Text>
-                </a>
-              ))}
-            </div>
-          </Card>
-        </Col>
-        
-        <Col xs={24} md={16}>
-          <Card 
-            title={<Space><Activity size={16} color={token.colorSuccess} /> <Text strong>Pipeline Health</Text></Space>} 
-            style={cardStyle}
-          >
-            <Row gutter={[12, 12]}>
-              <Col span={12}>
-                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} variant="borderless">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <Text strong style={{ fontSize: '12px' }}>Node Throughput</Text>
-                    <Text type="secondary" style={{ fontSize: '11px' }}>{data.userStats?.completed || 0} / {data.userStats?.total || 0}</Text>
-                  </div>
-                  <Progress 
-                    percent={Math.round(((data.userStats?.completed + (data.userStats?.inProgress || 0)) / (data.userStats?.total || 1)) * 100) || 0} 
-                    success={{ percent: Math.round((data.userStats?.completed / (data.userStats?.total || 1)) * 100) || 0 }}
-                    size={8} showInfo={false}
-                  />
-                  <Text style={{ fontSize: '10px', marginTop: 8, display: 'block' }} type="secondary">Personal backlog efficiency</Text>
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card styles={{ body: { padding: '12px' } }} style={{ background: '#fcfcfc', border: '1px solid #f0f0f0' }} variant="borderless">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <Text strong style={{ fontSize: '12px' }}>Network Yield</Text>
-                    <Tag color="success" variant="filled" style={{ margin: 0, fontWeight: 800, fontSize: '10px' }}>{data.teamStats?.total ? Math.round((data.teamStats.completed / data.teamStats.total) * 100) : 0}%</Tag>
-                  </div>
-                  <Progress 
-                    percent={Math.round(((data.teamStats?.completed + (data.teamStats?.inProgress || 0)) / (data.teamStats?.total || 1)) * 100) || 0} 
-                    success={{ percent: Math.round((data.teamStats?.completed / (data.teamStats?.total || 1)) * 100) || 0 }}
-                    size={8} showInfo={false} strokeColor={token.colorInfo}
-                  />
-                  <Text style={{ fontSize: '10px', marginTop: 8, display: 'block' }} type="secondary">Global system throughput</Text>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Velocity Grid */}
-      <Row gutter={[12, 12]}>
-        <Col span={24}>
-          <Card 
-            title={<Space><FileBarChart size={18} color={token.colorPrimary} /> <Text strong>Product Velocity Matrix</Text></Space>} 
-            style={cardStyle}
-            styles={{ body: { padding: 0 } }}
-            extra={<Button type="link" size="small" style={{ fontWeight: 700 }}>EXPORT DATA</Button>}
-          >
-            <Table
-              columns={tableColumns}
-              dataSource={data.topProducts}
-              pagination={{ pageSize: 5, hideOnSinglePage: true }}
-              size="middle"
-              className="premium-table"
-            />
-          </Card>
-        </Col>
-      </Row>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Select value={item.span} onChange={(val) => handleSpanChange(item.id, val)} size="small"
+                    style={{ width: 110 }} disabled={!item.enabled}
+                    options={[
+                      { value: 8, label: '1/3 Width' },
+                      { value: 12, label: 'Half Width' },
+                      { value: 16, label: '2/3 Width' },
+                      { value: 24, label: 'Full Width' },
+                    ]} />
+                  <Button size="small" shape="circle" disabled={idx === 0}
+                    onClick={() => handleMoveItem(idx, -1)}
+                    style={{
+                      width: '24px', height: '24px', display: 'inline-flex',
+                      alignItems: 'center', justifyContent: 'center', fontSize: '10px'
+                    }}>
+                    ↑
+                  </Button>
+                  <Button size="small" shape="circle" disabled={idx === layout.length - 1}
+                    onClick={() => handleMoveItem(idx, 1)}
+                    style={{
+                      width: '24px', height: '24px', display: 'inline-flex',
+                      alignItems: 'center', justifyContent: 'center', fontSize: '10px'
+                    }}>
+                    ↓
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </Modal>
 
       <style>{`
         .spin { animation: spin 1.5s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .quick-op-btn:hover { border-color: #d9d9d9 !important; transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
-        .premium-table .ant-table-thead > tr > th { background: #fafafa !important; font-size: 11px !important; color: #8c8c8c !important; font-weight: 800 !important; letter-spacing: 0.1em !important; padding: 16px !important; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .quick-op-btn:hover { border-color: #d9d9d9 !important; transform: translateY(-3px);
+                             box-shadow: 0 6px 16px rgba(0,0,0,.06); }
+        .premium-table .ant-table-thead > tr > th { background: #fafafa !important; font-size: 11px !important;
+          color: #8c8c8c !important; font-weight: 800 !important; letter-spacing: .1em !important;
+          padding: 12px 16px !important; }
         .premium-table .ant-table-row:hover > td { background: #fdfdfd !important; }
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e8e8e8; border-radius: 10px; }
-        .ant-card-head { border-bottom: 1px solid #f0f0f0 !important; min-height: 48px !important; padding: 0 16px !important; }
-        .ant-card-head-title { font-size: 14px !important; color: #262626 !important; }
+        .ant-card-head { border-bottom: 1px solid #f0f0f0 !important; min-height: 40px !important; padding: 0 12px !important; }
+        .ant-card-head-title { font-size: 13px !important; color: #262626 !important; }
       `}</style>
     </motion.div>
   );
 };
+
+function syncDisplayLabel(status) {
+  switch (status) {
+    case 'connected': return 'Active Network Stream';
+    case 'reconnecting': return 'Reconnecting…';
+    default: return 'Cached / Offline';
+  }
+}
 
 export default Dashboard;

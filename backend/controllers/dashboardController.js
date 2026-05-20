@@ -26,7 +26,7 @@ const parsePeriod = (period) => {
  */
 exports.getDashboardData = async (req, res) => {
   try {
-    const { period = '30d', startDate: startQuery, endDate: endQuery } = req.query;
+    const { period = '30d', startDate: startQuery, endDate: endQuery, sellerId } = req.query;
     const pool = await getPool();
 
     const roleName = req.user?.role?.name || req.user?.role;
@@ -34,11 +34,24 @@ exports.getDashboardData = async (req, res) => {
     const assignedSellers = req.user?.assignedSellers || [];
     const sellerIds = assignedSellers.map(s => typeof s === 'string' ? s : s._id || s.Id);
 
-    // 1. Base Filters
-    const safeSellerIds = sellerIds.length > 0 ? sellerIds : ['000000000000000000000000']; // Fallback to non-existent ID
-    let sellerFilter = isGlobalUser ? '' : 'WHERE Id IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
-    let asinFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
-    let alertFilter = isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    // 1. Base Filters & Merchant Selection
+    let finalSellerIds = sellerIds;
+    if (sellerId && sellerId !== 'all') {
+      const parsedSellerId = sellerId.trim();
+      if (isGlobalUser || sellerIds.includes(parsedSellerId)) {
+        finalSellerIds = [parsedSellerId];
+      } else {
+        // Unauthorized selected seller fallback
+        finalSellerIds = ['000000000000000000000000'];
+      }
+    }
+
+    const safeSellerIds = finalSellerIds.length > 0 ? finalSellerIds : ['000000000000000000000000'];
+    const useWideFilters = isGlobalUser && (!sellerId || sellerId === 'all');
+
+    let sellerFilter = useWideFilters ? '' : 'WHERE Id IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    let asinFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    let alertFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
 
     // 2. Aggregate Counts
     const sellerCounts = await pool.request().query(`
@@ -159,7 +172,7 @@ exports.getDashboardData = async (req, res) => {
     const asinsGroupedResult = await pool.request().query(`
       SELECT SellerId, COUNT(*) as Count 
       FROM Asins
-      ${isGlobalUser ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')'}
+      ${asinFilter}
       GROUP BY SellerId
     `);
 

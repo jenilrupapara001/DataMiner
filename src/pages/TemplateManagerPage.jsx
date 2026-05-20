@@ -7,8 +7,9 @@ import { PageLoader } from '@/components/application/loading-indicator/PageLoade
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import { 
     Space, Button, Segmented, Table, Modal, Card, Statistic, Input, Row, Col, 
-    Typography, Tag, Tooltip, Form, InputNumber, Select, Divider, message as antdMessage 
+    Typography, Tag, Tooltip, Form, InputNumber, Select, Divider, message as antdMessage, Badge 
 } from 'antd';
+import { usePageTitle } from '../contexts/PageTitleContext';
 
 const { Title, Text } = Typography;
 const { Option, OptGroup } = Select;
@@ -16,6 +17,11 @@ const { TextArea } = Input;
 
 const TemplateManagerPage = () => {
     const [messageApi, contextHolder] = antdMessage.useMessage();
+    const { setPageTitle } = usePageTitle();
+
+    useEffect(() => {
+        setPageTitle('Workflow Templates');
+    }, [setPageTitle]);
 
     // Shared State
     const [activeTab, setActiveTab] = useState('task'); // 'task' or 'goal'
@@ -105,6 +111,14 @@ const TemplateManagerPage = () => {
 
     const handleTaskSubmit = async (e) => {
         if (e) e.preventDefault();
+        if (!taskFormData.title?.trim()) {
+            messageApi.warning('Please enter a protocol title.');
+            return;
+        }
+        if (!taskFormData.description?.trim()) {
+            messageApi.warning('Please enter workflow guidelines.');
+            return;
+        }
         setIsSubmitting(true);
         try {
             if (currentTaskTemplate) await db.updateTemplate(currentTaskTemplate._id, taskFormData);
@@ -152,6 +166,10 @@ const TemplateManagerPage = () => {
 
     const handleGoalSubmit = async (e) => {
         if (e) e.preventDefault();
+        if (!goalFormData.name?.trim()) {
+            messageApi.warning('Please enter a roadmap blueprint name.');
+            return;
+        }
         setIsSubmitting(true);
         try {
             const cleanedGoals = goalFormData.goals.filter(g => g.title.trim() !== '');
@@ -320,14 +338,14 @@ const TemplateManagerPage = () => {
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <Text strong style={{ fontSize: '13px', color: '#1e293b', letterSpacing: '-0.01em' }}>{title}</Text>
                     <Text type="secondary" ellipsis={{ tooltip: record.description }} style={{ fontSize: '11.5px', maxWidth: 400, marginTop: 2 }}>
-                        {record.description || 'No workflow guidelines configured.'}
+                        {record.description || 'No guidelines configured.'}
                     </Text>
                 </div>
             ),
             sorter: (a, b) => a.title.localeCompare(b.title),
         },
         {
-            title: 'Process Type',
+            title: 'Task Type',
             dataIndex: 'type',
             key: 'type',
             width: 180,
@@ -342,7 +360,7 @@ const TemplateManagerPage = () => {
             }
         },
         {
-            title: 'Target Category',
+            title: 'Category',
             dataIndex: 'category',
             key: 'category',
             width: 180,
@@ -398,21 +416,21 @@ const TemplateManagerPage = () => {
     // Table columns for Goal mode
     const goalColumns = [
         {
-            title: 'Roadmap Blueprint',
+            title: 'Roadmap Template',
             dataIndex: 'name',
             key: 'name',
             render: (name, record) => (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <Text strong style={{ fontSize: '13px', color: '#1e293b', letterSpacing: '-0.01em' }}>{name}</Text>
                     <Text type="secondary" ellipsis={{ tooltip: record.description }} style={{ fontSize: '11.5px', maxWidth: 450, marginTop: 2 }}>
-                        {record.description || 'No blueprint roadmap overview defined.'}
+                        {record.description || 'No description defined.'}
                     </Text>
                 </div>
             ),
             sorter: (a, b) => a.name.localeCompare(b.name),
         },
         {
-            title: 'Metrics Pipeline',
+            title: 'Target Metrics',
             dataIndex: 'goals',
             key: 'goals',
             render: (goals = []) => {
@@ -504,45 +522,59 @@ const TemplateManagerPage = () => {
                 .templates-header {
                     flex-shrink: 0;
                     background: #ffffff;
-                    padding: 16px 24px;
+                    padding: 18px 24px;
                     border-bottom: 1px solid #e2e8f0;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     z-index: 10;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.01);
                 }
                 .templates-scroll-content {
                     flex: 1;
                     overflow-y: auto;
-                    padding: 24px;
+                    padding: 20px 24px;
                     display: flex;
                     flex-direction: column;
-                    gap: 24px;
                 }
-                .metric-stat-card {
-                    border-radius: 16px !important;
-                    border: 1px solid #e2e8f0 !important;
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.01) !important;
-                    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-                }
-                .metric-stat-card:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05) !important;
-                }
-                .card-accent-icon {
-                    width: 48px;
-                    height: 48px;
+                .task-stat-card {
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
                     border-radius: 12px;
+                    padding: 8px 16px;
                     display: flex;
+                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    flex-shrink: 0;
+                    min-width: 100px;
+                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+                    transition: all 0.2s ease;
+                }
+                .task-stat-card:hover {
+                    border-color: #cbd5e1;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+                }
+                .task-stat-card .task-stat-label {
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 2px;
+                }
+                .task-stat-card .task-stat-value {
+                    font-size: 18px;
+                    font-weight: 800;
                 }
                 .segmented-templates .ant-segmented-item-selected {
                     background-color: #4f46e5 !important;
                     color: #ffffff !important;
-                    font-weight: 650 !important;
+                    font-weight: 700 !important;
+                }
+                .segmented-templates .ant-segmented-item {
+                    font-weight: 600;
+                    font-size: 11.5px;
+                    color: #475569;
                 }
                 .custom-glass-modal .ant-modal-content {
                     border-radius: 20px !important;
@@ -600,123 +632,109 @@ const TemplateManagerPage = () => {
                 }
             `}</style>
 
-            {/* Dynamic Header Area */}
-            <div className="templates-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ padding: '8px', background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)', borderRadius: '10px', color: '#fff', display: 'flex' }}>
-                        <LayoutTemplate size={22} />
-                    </div>
-                    <div>
-                        <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>
-                            Template <span style={{ color: '#4F46E5' }}>Manager</span>
-                        </Title>
-                        <Text type="secondary" style={{ fontSize: '13px' }}>Configure automated workflows, actions, and roadmaps.</Text>
-                    </div>
+            {/* 1. DYNAMIC WORKSPACE CONTROL STRIP */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 24px',
+                background: '#ffffff',
+                borderBottom: '1px solid #e2e8f0',
+                flexWrap: 'wrap',
+                gap: 16
+            }}>
+                {/* Left Side: Switcher with Badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 11, fontWeight: 750, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Template Type:</span>
+                    <Segmented 
+                        className="segmented-templates"
+                        value={activeTab}
+                        onChange={setActiveTab}
+                        style={{ padding: 3 }}
+                        options={[
+                            { label: <Space size={6}><Zap size={13} /><span>Tasks</span><Badge count={taskTemplates.length} overflowCount={99} style={{ backgroundColor: '#4f46e5', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'task' },
+                            { label: <Space size={6}><Target size={13} /><span>Roadmaps</span><Badge count={goalTemplates.length} overflowCount={99} style={{ backgroundColor: '#10b981', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'goal' }
+                        ]}
+                    />
                 </div>
 
-                <Space size={8} wrap>
+                {/* Right Side: Search + Action Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                    <div style={{ position: 'relative', width: 220 }}>
+                        <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            placeholder={`Search templates...`}
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '6px 12px 6px 28px',
+                                fontSize: 12,
+                                borderRadius: 8,
+                                border: '1px solid #e2e8f0',
+                                background: '#f8fafc',
+                                outline: 'none',
+                                transition: 'all 0.2s',
+                                fontWeight: 500
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = '#4f46e5';
+                                e.target.style.background = '#ffffff';
+                                e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = '#e2e8f0';
+                                e.target.style.background = '#f8fafc';
+                                e.target.style.boxShadow = 'none';
+                            }}
+                        />
+                    </div>
+
                     <Button 
                         onClick={() => setShowAiModal(true)}
-                        icon={<Sparkles size={14} />}
+                        icon={<Sparkles size={13} />}
                         shape="round"
                         style={{ 
-                            borderColor: '#6366F1', 
-                            color: '#4F46E5', 
-                            backgroundColor: '#EEF2FF', 
+                            borderColor: '#6366f1', 
+                            color: '#4f46e5', 
+                            backgroundColor: '#eef2ff', 
                             fontWeight: 700,
-                            height: 38,
+                            fontSize: 12,
+                            borderRadius: 8,
+                            height: 32,
                             display: 'flex',
                             alignItems: 'center'
                         }}
                     >
-                        AI Builder
+                        AI Template Generator
                     </Button>
+
+                    <Divider orientation="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
+
                     <Button 
                         type="primary" 
                         onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()} 
-                        icon={<Plus size={15} />}
+                        icon={<Plus size={13} />}
                         shape="round"
                         style={{ 
-                            height: 38, 
-                            backgroundColor: '#4F46E5', 
-                            borderColor: '#4F46E5', 
+                            backgroundColor: '#4f46e5', 
+                            borderColor: '#4f46e5', 
                             fontWeight: 700,
-                            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)',
+                            fontSize: 12,
+                            borderRadius: 8,
+                            height: 32,
                             display: 'flex',
                             alignItems: 'center'
                         }}
                     >
-                        {activeTab === 'task' ? 'New Task Outline' : 'New Roadmap'}
+                        {activeTab === 'task' ? 'New Task Template' : 'New Roadmap'}
                     </Button>
-                </Space>
+                </div>
             </div>
 
-            {/* Scrollable Body */}
+            {/* 2. SCROLLABLE CONTENT BODY */}
             <div className="templates-scroll-content animate-fade-up">
-                
-                {/* KPI Banner Section */}
-                <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={12} md={6}>
-                        <Card className="metric-stat-card" styles={{ body: { padding: '20px 24px' } }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <div className="card-accent-icon" style={{ backgroundColor: '#EEF2FF', color: '#4F46E5' }}>
-                                    <Zap size={22} />
-                                </div>
-                                <Statistic 
-                                    title={<Text strong style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task Templates</Text>}
-                                    value={taskTemplates.length}
-                                    styles={{ content: { fontSize: 28, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' } }}
-                                />
-                            </div>
-                        </Card>
-                    </Col>
-                    
-                    <Col xs={24} sm={12} md={6}>
-                        <Card className="metric-stat-card" styles={{ body: { padding: '20px 24px' } }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <div className="card-accent-icon" style={{ backgroundColor: '#ECFDF5', color: '#10B981' }}>
-                                    <Target size={22} />
-                                </div>
-                                <Statistic 
-                                    title={<Text strong style={{ fontSize: '11.5px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goal Roadmaps</Text>}
-                                    value={goalTemplates.length}
-                                    styles={{ content: { fontSize: 28, fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' } }}
-                                />
-                            </div>
-                        </Card>
-                    </Col>
-
-                    {/* Unified Controller Card */}
-                    <Col xs={24} md={12}>
-                        <Card className="metric-stat-card" styles={{ body: { padding: '12px 16px' } }} style={{ height: '100%' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', height: '100%' }}>
-                                <Segmented 
-                                    className="segmented-templates"
-                                    size="large"
-                                    value={activeTab}
-                                    onChange={setActiveTab}
-                                    style={{ padding: 4, fontWeight: 600 }}
-                                    options={[
-                                        { label: <Space size={6}><Zap size={13} /><span>Tasks</span></Space>, value: 'task' },
-                                        { label: <Space size={6}><Target size={13} /><span>Roadmaps</span></Space>, value: 'goal' }
-                                    ]}
-                                />
-                                <div style={{ flex: 1, minWidth: 180 }}>
-                                    <Input 
-                                        size="large"
-                                        placeholder={`Search ${activeTab === 'task' ? 'models' : 'roadmaps'}...`}
-                                        prefix={<Search size={14} style={{ color: '#94a3b8', marginRight: 4 }} />}
-                                        value={searchTerm}
-                                        onChange={e => setSearchTerm(e.target.value)}
-                                        allowClear
-                                        style={{ borderRadius: 30, backgroundColor: '#f8fafc' }}
-                                    />
-                                </div>
-                            </div>
-                        </Card>
-                    </Col>
-                </Row>
-
                 {/* Content Table Grid */}
                 <Card 
                     styles={{ body: { padding: 0 } }}
@@ -725,13 +743,13 @@ const TemplateManagerPage = () => {
                     <Table 
                         dataSource={activeTab === 'task' ? filteredTasks : filteredGoals}
                         columns={activeTab === 'task' ? taskColumns : goalColumns}
-                        rowKey="_id"
+                        rowKey={record => record._id || record.id}
                         pagination={{
-                            pageSize: 12,
-                            showTotal: (total, range) => <span style={{ fontSize: 11, color: '#64748b' }}>Viewing {range[0]}-{range[1]} of {total} templates</span>,
+                            pageSize: 10,
+                            showTotal: (total, range) => <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Viewing {range[0]}-{range[1]} of {total} templates</span>,
                             position: ['bottomRight']
                         }}
-                        scroll={{ x: 900, y: 'calc(100vh - 370px)' }}
+                        scroll={{ x: 900, y: 'calc(100vh - 190px)' }}
                         size="middle"
                         className="custom-table-ant"
                     />
@@ -747,7 +765,7 @@ const TemplateManagerPage = () => {
                         <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
                             <Zap size={16} />
                         </div>
-                        <span style={{ fontWeight: 700 }}>{currentTaskTemplate ? 'Edit Task Protocol' : 'New Task Protocol'}</span>
+                        <span style={{ fontWeight: 700 }}>{currentTaskTemplate ? 'Edit Task Template' : 'New Task Template'}</span>
                     </div>
                 }
                 open={showTaskModal}
@@ -768,25 +786,25 @@ const TemplateManagerPage = () => {
                         onClick={handleTaskSubmit}
                         style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
                     >
-                        {currentTaskTemplate ? 'Save Protocol' : 'Create Protocol'}
+                        {currentTaskTemplate ? 'Save Template' : 'Create Template'}
                     </Button>
                 ]}
             >
                 <Form layout="vertical" style={{ padding: '12px 0' }} onFinish={handleTaskSubmit}>
-                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Protocol Title</span>} required>
+                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Task Template Title</span>} required>
                         <Input 
                             size="large"
-                            placeholder="e.g. Frontpage SEO Content Alignment" 
+                            placeholder="e.g. Optimize Amazon Product Title for SEO" 
                             value={taskFormData.title}
                             onChange={e => setTaskFormData({ ...taskFormData, title: e.target.value })}
                             style={{ borderRadius: 10 }}
                         />
                     </Form.Item>
 
-                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Workflow Guidelines</span>} required>
+                    <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Action Guidelines</span>} required>
                         <TextArea 
                             rows={4}
-                            placeholder="Outline the execution instructions and acceptance criteria..."
+                            placeholder="Outline the execution instructions and step-by-step guidelines..."
                             value={taskFormData.description}
                             onChange={e => setTaskFormData({ ...taskFormData, description: e.target.value })}
                             style={{ borderRadius: 10 }}
@@ -795,7 +813,7 @@ const TemplateManagerPage = () => {
 
                     <Row gutter={16}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Operational Area</span>}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Category</span>}>
                                 <Select 
                                     size="large"
                                     value={taskFormData.category}
@@ -807,7 +825,7 @@ const TemplateManagerPage = () => {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Process Type</span>}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Task Type</span>}>
                                 <Select 
                                     size="large"
                                     value={taskFormData.type}
@@ -822,7 +840,7 @@ const TemplateManagerPage = () => {
 
                     <Row gutter={16}>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Static Priority</span>}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Priority</span>}>
                                 <Select 
                                     size="large"
                                     value={taskFormData.priority}
@@ -834,7 +852,7 @@ const TemplateManagerPage = () => {
                             </Form.Item>
                         </Col>
                         <Col span={12}>
-                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Estimated Depth</span>}>
+                            <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Estimated Time</span>}>
                                 <InputNumber 
                                     size="large"
                                     min={1}
@@ -856,7 +874,7 @@ const TemplateManagerPage = () => {
                         <div style={{ background: '#ECFDF5', color: '#10B981', padding: 6, borderRadius: 8, display: 'flex' }}>
                             <Target size={16} />
                         </div>
-                        <span style={{ fontWeight: 700 }}>{currentGoalTemplate ? 'Configure Roadmap Blueprint' : 'New Roadmap Blueprint'}</span>
+                        <span style={{ fontWeight: 700 }}>{currentGoalTemplate ? 'Configure Roadmap Template' : 'New Roadmap Template'}</span>
                     </div>
                 }
                 open={showGoalModal}
@@ -877,26 +895,26 @@ const TemplateManagerPage = () => {
                         onClick={handleGoalSubmit}
                         style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
                     >
-                        {currentGoalTemplate ? 'Save Blueprint' : 'Deploy Blueprint'}
+                        {currentGoalTemplate ? 'Save Template' : 'Deploy Template'}
                     </Button>
                 ]}
             >
                 <div style={{ padding: '12px 0' }}>
                     <Form layout="vertical">
-                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Roadmap Blueprint Name</span>} required>
+                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Roadmap Name</span>} required>
                             <Input 
                                 size="large"
-                                placeholder="e.g. High Velocity Q3 Acceleration Roadmap" 
+                                placeholder="e.g. Q3 Sales Booster Roadmap" 
                                 value={goalFormData.name}
                                 onChange={e => setGoalFormData({ ...goalFormData, name: e.target.value })}
                                 style={{ borderRadius: 10 }}
                             />
                         </Form.Item>
 
-                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Strategy Synopsis</span>}>
+                        <Form.Item label={<span style={{ fontWeight: 700, color: '#334155', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Roadmap Description</span>}>
                             <TextArea 
                                 rows={2}
-                                placeholder="Document executive strategy objectives..."
+                                placeholder="Describe the target goals for this e-commerce roadmap..."
                                 value={goalFormData.description}
                                 onChange={e => setGoalFormData({ ...goalFormData, description: e.target.value })}
                                 style={{ borderRadius: 10 }}
@@ -905,7 +923,7 @@ const TemplateManagerPage = () => {
                     </Form>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 4 }}>
-                        <Text strong style={{ fontSize: 13, color: '#334155', letterSpacing: '-0.01em' }}>Pipeline Performance Triggers</Text>
+                        <Text strong style={{ fontSize: 13, color: '#334155', letterSpacing: '-0.01em' }}>Target Performance Metrics</Text>
                         <Button 
                             size="small" 
                             shape="round" 
@@ -913,7 +931,7 @@ const TemplateManagerPage = () => {
                             onClick={addSubGoal}
                             style={{ fontSize: 11, fontWeight: 600 }}
                         >
-                            Add Metric Trigger
+                            Add Target Metric
                         </Button>
                     </div>
 
@@ -929,7 +947,7 @@ const TemplateManagerPage = () => {
                             <div key={idx} className="metric-form-row">
                                 <div style={{ flex: 3 }}>
                                     <Input 
-                                        placeholder="Measurement Objective" 
+                                        placeholder="e.g. Hit ₹5,00,000 monthly sales" 
                                         value={g.title} 
                                         onChange={e => updateSubGoal(idx, 'title', e.target.value)}
                                         style={{ border: 'none', background: '#f1f5f9', borderRadius: 8 }}
@@ -942,32 +960,32 @@ const TemplateManagerPage = () => {
                                         onChange={v => updateSubGoal(idx, 'metric', v)}
                                         popupClassName="custom-dropdown-render"
                                     >
-                                        <Option value="NONE">Metric Pipeline</Option>
-                                        <OptGroup label="Revenue Hub">
-                                            <Option value="GMS">GMS (₹)</Option>
-                                            <Option value="ORDER_COUNT">Order Volume</Option>
-                                            <Option value="CONVERSION_RATE">Conv. Rate %</Option>
+                                        <Option value="NONE">Select Metric Type</Option>
+                                        <OptGroup label="Sales & Revenue">
+                                            <Option value="GMS">Sales (₹)</Option>
+                                            <Option value="ORDER_COUNT">Orders</Option>
+                                            <Option value="CONVERSION_RATE">Conversion Rate %</Option>
                                         </OptGroup>
-                                        <OptGroup label="Paid Acquisition">
+                                        <OptGroup label="Advertising & ROI">
                                             <Option value="ACOS">ACOS %</Option>
-                                            <Option value="ADS_SPEND">Ads Spend (₹)</Option>
-                                            <Option value="ROI">ROI Multipier</Option>
+                                            <Option value="ADS_SPEND">Ad Spend (₹)</Option>
+                                            <Option value="ROI">ROI Multiplier</Option>
                                         </OptGroup>
-                                        <OptGroup label="Catalog Index">
-                                            <Option value="LISTING">Listing Opt. %</Option>
-                                            <Option value="PRODUCTS_TO_LIST">Products Scale</Option>
-                                            <Option value="LQS">Quality Index</Option>
+                                        <OptGroup label="Product Listing Quality">
+                                            <Option value="LISTING">Listing Optimization Score %</Option>
+                                            <Option value="PRODUCTS_TO_LIST">Products Listed</Option>
+                                            <Option value="LQS">Listing Quality Score</Option>
                                         </OptGroup>
-                                        <OptGroup label="Fulfillment & Margin">
-                                            <Option value="PROFIT">Margin (₹)</Option>
-                                            <Option value="PO_FULFILLMENT">PO Velocity %</Option>
+                                        <OptGroup label="Fulfillment & Profit">
+                                            <Option value="PROFIT">Net Profit Margin (₹)</Option>
+                                            <Option value="PO_FULFILLMENT">Fulfillment Rate %</Option>
                                         </OptGroup>
                                     </Select>
                                 </div>
                                 <div style={{ flex: 2 }}>
                                     <Input 
                                         type="number"
-                                        placeholder="Baseline Goal" 
+                                        placeholder="Target Value" 
                                         value={g.targetValue || ''} 
                                         onChange={e => updateSubGoal(idx, 'targetValue', e.target.value)}
                                         style={{ border: 'none', background: '#f1f5f9', borderRadius: 8 }}
@@ -987,7 +1005,7 @@ const TemplateManagerPage = () => {
                         {goalFormData.goals.length === 0 && (
                             <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>
                                 <BarChart2 size={24} style={{ opacity: 0.5, marginBottom: 8 }} />
-                                <div style={{ fontSize: 12, fontWeight: 500 }}>Establish roadmap metrics to evaluate execution baseline.</div>
+                                <div style={{ fontSize: 12, fontWeight: 500 }}>Add some performance metrics to track this roadmap.</div>
                             </div>
                         )}
                     </div>
@@ -1001,7 +1019,7 @@ const TemplateManagerPage = () => {
                         <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
                             <Sparkles size={16} fill="currentColor" />
                         </div>
-                        <span style={{ fontWeight: 700 }}>AI Strategy Workbench</span>
+                        <span style={{ fontWeight: 700 }}>AI Template Generator</span>
                     </div>
                 }
                 open={showAiModal}
@@ -1019,7 +1037,7 @@ const TemplateManagerPage = () => {
                 <div style={{ padding: '12px 0' }}>
                     <div style={{ marginBottom: 20 }}>
                         <Text type="secondary" style={{ display: 'block', fontSize: '12.5px' }}>
-                            Formulate automated blueprint pipelines instantly. Input your desired scaling intent (e.g., "Aggressive electronics expansion for festive quarter") and watch Antigravity draft the roadmap.
+                            Generate custom task and roadmap templates instantly using AI. Enter your goal (e.g., 'Increase sales for the holiday season') and let AI build the roadmap.
                         </Text>
                     </div>
 
@@ -1035,7 +1053,7 @@ const TemplateManagerPage = () => {
                     }}>
                         <TextArea 
                             rows={3} 
-                            placeholder="Define operational blueprint parameters..."
+                            placeholder="Describe your business goal..."
                             value={aiPrompt}
                             onChange={e => setAiPrompt(e.target.value)}
                             style={{ border: 'none', background: 'transparent', boxShadow: 'none', resize: 'none' }}
@@ -1055,7 +1073,7 @@ const TemplateManagerPage = () => {
                                     letterSpacing: '0.02em'
                                 }}
                             >
-                                Draft Pipeline
+                                Generate Strategy
                             </Button>
                         </div>
                     </div>
@@ -1072,7 +1090,7 @@ const TemplateManagerPage = () => {
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                                 <div style={{ flex: 1, paddingRight: 16 }}>
-                                    <Tag color="indigo" style={{ borderRadius: 6, fontWeight: 700, fontSize: 9, marginBottom: 8 }}>STRATEGIC BLUEPRINT</Tag>
+                                    <Tag color="indigo" style={{ borderRadius: 6, fontWeight: 700, fontSize: 9, marginBottom: 8 }}>SUGGESTED STRATEGY</Tag>
                                     <h4 style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', margin: '0 0 4px 0' }}>{aiSuggestions.name}</h4>
                                     <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{aiSuggestions.strategy}</p>
                                 </div>
@@ -1083,7 +1101,7 @@ const TemplateManagerPage = () => {
                                     onClick={() => handleAcceptSuggestion(aiSuggestions)}
                                     style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12 }}
                                 >
-                                    Adopt Blueprint
+                                    Apply AI Template
                                 </Button>
                             </div>
 
@@ -1117,7 +1135,7 @@ const TemplateManagerPage = () => {
                                         <div style={{ flex: 1 }}>
                                             <h6 style={{ margin: 0, fontWeight: 700, color: '#1e293b', fontSize: 12.5 }}>{m.objective}</h6>
                                         </div>
-                                        <Tag color="emerald" variant="filled" style={{ borderRadius: 6, fontWeight: 800, fontSize: 9 }}>AUTOMATED</Tag>
+                                        <Tag color="emerald" variant="filled" style={{ borderRadius: 6, fontWeight: 800, fontSize: 9 }}>AI GENERATED</Tag>
                                     </div>
                                 ))}
                             </div>

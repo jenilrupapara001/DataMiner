@@ -1142,8 +1142,8 @@ const SellersPage = () => {
             className="premium-seller-table"
             pagination={{
               current: page,
-              pageSize: limit,
-              total: totalResults,
+              pageSize: limit + (groupedDataSource.length - paginatedSellers.length),
+              total: totalResults + (groupedDataSource.length - paginatedSellers.length),
               showSizeChanger: true,
               pageSizeOptions: ['25', '50', '100'],
               onChange: (page, pageSize) => {
