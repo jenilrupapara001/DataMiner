@@ -15,11 +15,11 @@ exports.getObjectives = async (req, res) => {
         const request = pool.request();
 
         if (sellerId) {
-            whereClause += " AND SellerId = @sellerId";
+            whereClause += " AND o.SellerId = @sellerId";
             request.input('sellerId', sql.VarChar, sellerId);
         }
         if (type) {
-            whereClause += " AND Type = @type";
+            whereClause += " AND o.Type = @type";
             request.input('type', sql.NVarChar, type);
         }
 
@@ -34,10 +34,10 @@ exports.getObjectives = async (req, res) => {
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
             let accessFilter = '';
             if (assignedSellerIds.length > 0) {
-                accessFilter = ` OR (SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')}) AND SellerId IS NOT NULL)`;
+                accessFilter = ` OR (o.SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')}) AND o.SellerId IS NOT NULL)`;
             }
 
-            whereClause += ` AND (OwnerId IN (${teamList}) ${accessFilter})`;
+            whereClause += ` AND (o.OwnerId IN (${teamList}) ${accessFilter})`;
         }
 
         const objectivesResult = await request.query(`

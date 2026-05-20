@@ -39,172 +39,205 @@ exports.getTargets = async (req, res) => {
     try {
         const pool = await getPool();
         
-        // 1. Fetch main target records with GoalType
+        // 1. Fetch main target records with GoalType and SellerName
+        const userRole = req.user?.role?.name || req.user?.role || '';
+        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        
+        let whereClause = 'WHERE 1=1';
+        const request = pool.request();
+
+        if (!isGlobalUser && req.user) {
+            const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s.Id || s).toString());
+            const bmName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim();
+            const bmId = req.user.Id || req.user._id;
+
+            const orParts = [];
+            if (assignedSellerIds.length > 0) {
+                const params = assignedSellerIds.map((id, i) => {
+                    request.input(`sid_${i}`, sql.VarChar, id);
+                    return `@sid_${i}`;
+                });
+                orParts.push(`t.SellerId IN (${params.join(',')})`);
+            }
+            if (bmName) {
+                request.input('bmName', sql.NVarChar, bmName);
+                orParts.push(`t.BrandManager = @bmName`);
+            }
+            if (orParts.length > 0) {
+                whereClause += ` AND (${orParts.join(' OR ')})`;
+            }
+        }
+
         const targetsQuery = `
             SELECT 
-                Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt
-            FROM GmsTargets
-            ORDER BY CreatedAt DESC
+                t.Id, t.SellerId, t.BrandManager, t.TargetType, t.Year, t.Month, t.TotalTargetValue, t.GoalType, t.CreatedAt,
+                s.Name AS SellerName
+            FROM GmsTargets t
+            LEFT JOIN Sellers s ON t.SellerId = s.Id
+            ${whereClause}
+            ORDER BY t.CreatedAt DESC
         `;
-        const targetsResult = await pool.request().query(targetsQuery);
+        const targetsResult = await request.query(targetsQuery);
         const targets = targetsResult.recordset;
+
+        if (targets.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        // 2. Fetch all breakdowns for all these targets in a single query
+        const targetIds = targets.map(t => t.Id);
+        const targetIdsPlaceholders = targetIds.map((id, idx) => `@tId_${idx}`);
+        const breakdownsRequest = pool.request();
+        targetIds.forEach((id, idx) => {
+            breakdownsRequest.input(`tId_${idx}`, sql.VarChar, id);
+        });
+
+        const breakdownsResult = await breakdownsRequest.query(`
+            SELECT 
+                Id, TargetId, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue, PercentageContribution
+            FROM GmsTargetBreakdowns
+            WHERE TargetId IN (${targetIdsPlaceholders.join(',')})
+            ORDER BY PeriodType, PeriodValue
+        `);
+        const allBreakdowns = breakdownsResult.recordset;
+
+        // Group breakdowns by targetId in memory
+        const breakdownsByTarget = {};
+        allBreakdowns.forEach(b => {
+            if (!breakdownsByTarget[b.TargetId]) {
+                breakdownsByTarget[b.TargetId] = [];
+            }
+            breakdownsByTarget[b.TargetId].push(b);
+        });
+
+        // 3. Fetch all daily advertising and organic stats for the relevant target sellers and years in a single grouped query
+        const sellerIds = [...new Set(targets.map(t => t.SellerId))];
+        const minYear = Math.min(...targets.map(t => t.Year));
+        const maxYear = Math.max(...targets.map(t => t.Year));
+
+        const dailyStats = {};
+        if (sellerIds.length > 0) {
+            const statsRequest = pool.request();
+            const sellerParams = [];
+            sellerIds.forEach((id, idx) => {
+                statsRequest.input(`sId_${idx}`, sql.NVarChar, id);
+                sellerParams.push(`@sId_${idx}`);
+            });
+            statsRequest.input('minDate', sql.Date, `${minYear}-01-01`);
+            statsRequest.input('maxDate', sql.Date, `${maxYear}-12-31`);
+
+            const dailyQuery = `
+                SELECT a.SellerId, p.Date,
+                       SUM(ISNULL(p.AdSpend, 0)) as AdSpend,
+                       SUM(ISNULL(p.AdSales, 0)) as AdSales,
+                       SUM(ISNULL(p.OrganicSales, 0)) as OrganicSales
+                FROM Asins a
+                INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
+                WHERE a.SellerId IN (${sellerParams.join(',')})
+                  AND p.Date >= @minDate AND p.Date <= @maxDate
+                GROUP BY a.SellerId, p.Date
+            `;
+            const dailyResult = await statsRequest.query(dailyQuery);
+
+            dailyResult.recordset.forEach(row => {
+                const sId = row.SellerId;
+                if (row.Date) {
+                    const dateStr = format(new Date(row.Date), 'yyyy-MM-dd');
+                    if (!dailyStats[sId]) dailyStats[sId] = {};
+                    dailyStats[sId][dateStr] = {
+                        adSpend: parseFloat(row.AdSpend || 0),
+                        adSales: parseFloat(row.AdSales || 0),
+                        organicSales: parseFloat(row.OrganicSales || 0)
+                    };
+                }
+            });
+        }
+
+        // Helper to calculate dynamic achievement from in-memory dailyStats
+        const calculateAchievementInMemory = (sellerId, startDateStr, endDateStr, goalType) => {
+            const sellerData = dailyStats[sellerId];
+            if (!sellerData) return 0;
+
+            let totalAdSpend = 0;
+            let totalAdSales = 0;
+            let totalOrganicSales = 0;
+
+            let curr = new Date(startDateStr);
+            const end = new Date(endDateStr);
+
+            while (curr <= end) {
+                const dateStr = format(curr, 'yyyy-MM-dd');
+                const stats = sellerData[dateStr];
+                if (stats) {
+                    totalAdSpend += stats.adSpend;
+                    totalAdSales += stats.adSales;
+                    totalOrganicSales += stats.organicSales;
+                }
+                curr = addDays(curr, 1);
+            }
+
+            if (goalType === 'ADS') {
+                return totalAdSpend;
+            } else if (goalType === 'ACOS') {
+                return totalAdSales > 0 ? (totalAdSpend / totalAdSales) * 100 : 0;
+            } else {
+                return totalAdSales + totalOrganicSales;
+            }
+        };
+
+        const calculateDayAchievementInMemory = (sellerId, dateStr, goalType) => {
+            const sellerData = dailyStats[sellerId];
+            if (!sellerData) return 0;
+
+            const stats = sellerData[dateStr];
+            if (!stats) return 0;
+
+            if (goalType === 'ADS') {
+                return stats.adSpend;
+            } else if (goalType === 'ACOS') {
+                return stats.adSales > 0 ? (stats.adSpend / stats.adSales) * 100 : 0;
+            } else {
+                return stats.adSales + stats.organicSales;
+            }
+        };
 
         const enrichedTargets = [];
 
         for (const target of targets) {
             const { Id: targetId, SellerId: sellerId, TargetType: targetType, Year: year, Month: targetMonth, GoalType: goalType } = target;
+            const breakdowns = breakdownsByTarget[targetId] || [];
 
-            // 2. Fetch configured breakdowns from GmsTargetBreakdowns
-            const breakdownsQuery = `
-                SELECT 
-                    Id, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue, PercentageContribution
-                FROM GmsTargetBreakdowns
-                WHERE TargetId = @targetId
-                ORDER BY PeriodType, PeriodValue
-            `;
-            const breakdownsResult = await pool.request()
-                .input('targetId', sql.VarChar, targetId)
-                .query(breakdownsQuery);
-            const breakdowns = breakdownsResult.recordset;
-
-            // 3. Separate target breakdowns by PeriodType
             const monthlyBreakdown = breakdowns.filter(b => b.PeriodType === 'MONTH');
             const weeklyBreakdown = breakdowns.filter(b => b.PeriodType === 'WEEK');
             const dailyBreakdown = breakdowns.filter(b => b.PeriodType === 'DAY');
 
-            // 4. Calculate actual achievements from AdsPerformance dynamically based on GoalType
-            // Month level achievements
+            // Dynamic calculation for Month level achievements
             for (const monthItem of monthlyBreakdown) {
                 if (monthItem.AchievedValue === null) {
                     const { startDate, endDate } = getMonthRange(year, monthItem.PeriodValue);
-                    let queryText = '';
-                    
-                    if (goalType === 'ADS') {
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSpend, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    } else if (goalType === 'ACOS') {
-                        queryText = `
-                            SELECT CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 
-                                   THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) * 100 
-                                   ELSE 0 END as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    } else {
-                        // Default to GMS (AdSales + OrganicSales)
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    }
-
-                    const dbAchieved = await pool.request()
-                        .input('sellerId', sql.NVarChar, sellerId)
-                        .input('start', sql.Date, startDate)
-                        .input('end', sql.Date, endDate)
-                        .query(queryText);
-                    monthItem.AchievedValue = dbAchieved.recordset[0]?.achieved || 0;
+                    monthItem.AchievedValue = calculateAchievementInMemory(sellerId, startDate, endDate, goalType);
                 }
             }
 
-            // Week level achievements
+            // Dynamic calculation for Week level achievements
             for (const weekItem of weeklyBreakdown) {
                 if (weekItem.AchievedValue === null) {
                     const actualMonth = targetType === 'MONTHLY' ? targetMonth : Math.floor(weekItem.PeriodValue / 10);
                     const actualWeek = targetType === 'MONTHLY' ? weekItem.PeriodValue : (weekItem.PeriodValue % 10);
-                    
                     const { startDate, endDate } = getWeekRange(year, actualMonth, actualWeek);
-                    let queryText = '';
-
-                    if (goalType === 'ADS') {
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSpend, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    } else if (goalType === 'ACOS') {
-                        queryText = `
-                            SELECT CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 
-                                   THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) * 100 
-                                   ELSE 0 END as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    } else {
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date >= @start AND p.Date <= @end
-                        `;
-                    }
-
-                    const dbAchieved = await pool.request()
-                        .input('sellerId', sql.NVarChar, sellerId)
-                        .input('start', sql.Date, startDate)
-                        .input('end', sql.Date, endDate)
-                        .query(queryText);
-                    weekItem.AchievedValue = dbAchieved.recordset[0]?.achieved || 0;
+                    weekItem.AchievedValue = calculateAchievementInMemory(sellerId, startDate, endDate, goalType);
                 }
             }
 
-            // Day level achievements
+            // Dynamic calculation for Day level achievements
             for (const dayItem of dailyBreakdown) {
                 if (dayItem.AchievedValue === null && dayItem.SpecificDate) {
-                    let queryText = '';
-
-                    if (goalType === 'ADS') {
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSpend, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date = @date
-                        `;
-                    } else if (goalType === 'ACOS') {
-                        queryText = `
-                            SELECT CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 
-                                   THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) * 100 
-                                   ELSE 0 END as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date = @date
-                        `;
-                    } else {
-                        queryText = `
-                            SELECT SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as achieved
-                            FROM Asins a
-                            INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                            WHERE a.SellerId = @sellerId
-                              AND p.Date = @date
-                        `;
-                    }
-
-                    const dbAchieved = await pool.request()
-                        .input('sellerId', sql.NVarChar, sellerId)
-                        .input('date', sql.Date, dayItem.SpecificDate)
-                        .query(queryText);
-                    dayItem.AchievedValue = dbAchieved.recordset[0]?.achieved || 0;
+                    const dateStr = format(new Date(dayItem.SpecificDate), 'yyyy-MM-dd');
+                    dayItem.AchievedValue = calculateDayAchievementInMemory(sellerId, dateStr, goalType);
                 }
             }
 
-            // 5. Total overall achievement
+            // Total overall achievement
             let overallAchieved = 0;
             if (targetType === 'YEARLY') {
                 overallAchieved = monthlyBreakdown.reduce((sum, item) => sum + (item.AchievedValue || 0), 0);

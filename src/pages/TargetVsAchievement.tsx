@@ -117,11 +117,23 @@ const GoalDataRow = memo(({
     const overallPct = total > 0 ? Math.round((overallAch / total) * 100) : 0;
     const tier       = getAchievementTier(overallPct);
 
-    const breakdowns: any[] = (
-        goalRow.monthlyBreakdown ||
-        goalRow.weeklyBreakdown  ||
-        goalRow.breakdowns       || []
-    );
+    const breakdowns: any[] = (() => {
+        const monthly = goalRow.monthlyBreakdown;
+        const weekly  = goalRow.weeklyBreakdown;
+        const generic = goalRow.breakdowns;
+
+        // For MONTHLY plans, always prefer weekly breakdowns
+        if (record.TargetType === 'MONTHLY') {
+            if (Array.isArray(weekly)  && weekly.length  > 0) return weekly;
+            if (Array.isArray(generic) && generic.length > 0) return generic;
+            return [];
+        }
+
+        // For YEARLY plans, prefer monthly breakdowns
+        if (Array.isArray(monthly)  && monthly.length  > 0) return monthly;
+        if (Array.isArray(generic)  && generic.length  > 0) return generic;
+        return [];
+    })();
 
     const cellBg    = isFirst ? '#fff' : '#fafbff';
     const rowBorder = isLast
