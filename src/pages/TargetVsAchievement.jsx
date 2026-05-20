@@ -16,6 +16,10 @@ import { usePageTitle } from '../contexts/PageTitleContext';
 import { sellerApi, targetsApi } from '../services/api';
 import { useTargetsData } from '../hooks/useTargetsData';
 import { SavingIndicator } from '../components/common/SavingIndicator';
+import { useAuth } from '../contexts/AuthContext';
+import { useTargetPermissions } from '../hooks/useTargetPermissions';
+import { PermissionGuard } from '../components/common/PermissionGuard';
+import { ReadOnlyBanner } from '../components/targets/ReadOnlyBanner';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -1357,6 +1361,8 @@ ConnectionBanner.displayName = 'ConnectionBanner';
 // ─── Main Component ───────────────────────────────────────────────────────────
 const TargetVsAchievement = () => {
     const { setPageTitle } = usePageTitle();
+    const { user } = useAuth();
+    const { canView, canCreate, canEdit, canDelete, canExport, isBrandManager, isViewer } = useTargetPermissions();
     const [notificationApi, notificationContextHolder] = notification.useNotification();
 
     const notifRef = useRef(notificationApi);
@@ -1376,6 +1382,20 @@ const TargetVsAchievement = () => {
 
     const [sellers, setSellers]                   = useState([]);
     const [sellersLoading, setSellersLoading]     = useState(true);
+
+    const assignedSellerIds = useMemo(() => {
+        return user?.assignedSellers?.map(s => (s._id || s.id || s).toString().toLowerCase()) || [];
+    }, [user]);
+
+    const filteredSellers = useMemo(() => {
+        if (isBrandManager) {
+            return sellers.filter(s => {
+                const sid = (s.sellerId || s.SellerId || s.Id || s._id || '').toString().toLowerCase();
+                return assignedSellerIds.includes(sid);
+            });
+        }
+        return sellers;
+    }, [sellers, isBrandManager, assignedSellerIds]);
     const [selectedPlanType, setSelectedPlanType] = useState('YEARLY');
     const [selectedRowKeys, setSelectedRowKeys]   = useState([]);
     const [modalVisible, setModalVisible]         = useState(false);
@@ -1450,9 +1470,17 @@ const TargetVsAchievement = () => {
                 ? true
                 : (t.SellerId?.toLowerCase().includes(searchText.toLowerCase()) ||
                    t.BrandManager?.toLowerCase().includes(searchText.toLowerCase()));
+            
+            if (isBrandManager) {
+                const sellerIdLower = (t.SellerId || '').toString().toLowerCase();
+                if (!assignedSellerIds.includes(sellerIdLower)) {
+                    return false;
+                }
+            }
+            
             return matchesPlan && matchesYear && matchesSearch;
         });
-    }, [targets, selectedPlanType, selectedYear, searchText]);
+    }, [targets, selectedPlanType, selectedYear, searchText, isBrandManager, assignedSellerIds]);
 
     // Calculate aggregated statistics for the KPI metrics
     const kpiStats = useMemo(() => {
@@ -2044,24 +2072,28 @@ const TargetVsAchievement = () => {
                 title: 'Actions', key: 'actions', width: 140, align: 'right',
                 render: (_, record) => (
                     <div className="action-buttons-container" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <Tooltip title="Edit Target Allocation">
-                            <Button type="text" shape="circle" size="middle" icon={<Edit3 size={15} style={{ color: '#4f46e5' }} />}
-                                onClick={() => handleStartEdit(record)}
-                                style={{ background: '#f5f3ff', border: '1px solid #ddd6fe' }}
-                            />
-                        </Tooltip>
-                        <Popconfirm
-                            title="Delete target record?"
-                            description="This will permanently delete this target and all its breakdowns."
-                            onConfirm={() => handleDeleteSingle(record.Id)}
-                            okText="Yes, Delete" cancelText="No" okButtonProps={{ danger: true }}
-                        >
-                            <Tooltip title="Delete Target Record">
-                                <Button type="text" danger shape="circle" size="middle" icon={<Trash2 size={15} />}
-                                    style={{ background: '#fef2f2', border: '1px solid #fee2e2' }}
+                        <Tooltip title={canEdit ? "Edit Target Allocation" : "You do not have permission to edit targets"}>
+                            <PermissionGuard allowed={canEdit} mode="disable">
+                                <Button type="text" shape="circle" size="middle" icon={<Edit3 size={15} style={{ color: canEdit ? '#4f46e5' : '#94a3b8' }} />}
+                                    onClick={() => handleStartEdit(record)}
+                                    style={{ background: '#f5f3ff', border: '1px solid #ddd6fe' }}
                                 />
-                            </Tooltip>
-                        </Popconfirm>
+                            </PermissionGuard>
+                        </Tooltip>
+                        <PermissionGuard allowed={canDelete} mode="hide">
+                            <Popconfirm
+                                title="Delete target record?"
+                                description="This will permanently delete this target and all its breakdowns."
+                                onConfirm={() => handleDeleteSingle(record.Id)}
+                                okText="Yes, Delete" cancelText="No" okButtonProps={{ danger: true }}
+                            >
+                                <Tooltip title="Delete Target Record">
+                                    <Button type="text" danger shape="circle" size="middle" icon={<Trash2 size={15} />}
+                                        style={{ background: '#fef2f2', border: '1px solid #fee2e2' }}
+                                    />
+                                </Tooltip>
+                            </Popconfirm>
+                        </PermissionGuard>
                     </div>
                 ),
                 fixed: 'right'
@@ -2069,7 +2101,7 @@ const TargetVsAchievement = () => {
         ];
 
         return [...baseCols, ...periodCols, ...endCols];
-    }, [expandedMonths, expandedWeeks, selectedPlanType, handleStartEdit, handleDeleteSingle, savingIds, errorIds]);
+    }, [expandedMonths, expandedWeeks, selectedPlanType, handleStartEdit, handleDeleteSingle, savingIds, errorIds, canEdit, canDelete]);
 
     // Memoize Table configurations
     const rowSelection = useMemo(() => ({
@@ -2087,6 +2119,7 @@ const TargetVsAchievement = () => {
 
 
     return (
+        <PermissionGuard allowed={canView} mode="lock">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <style>{`
                 .hover-lift {
@@ -2147,6 +2180,8 @@ const TargetVsAchievement = () => {
             `}</style>
 
             <ConnectionBanner targets={targets} />
+
+            {(isViewer || isBrandManager) && <ReadOnlyBanner isBrandManager={isBrandManager} />}
 
             {/* 1. Page Header (Premium Redesigned) */}
             <div className="premium-header" style={{
@@ -2228,17 +2263,19 @@ const TargetVsAchievement = () => {
                         </Button>
                     )}
                     
-                    <Button type="primary" shape="round" icon={<Plus size={16} />} onClick={handleOpenModal}
-                        style={{
-                            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                            borderColor: '#4f46e5',
-                            fontWeight: 700,
-                            height: 40,
-                            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)'
-                        }}
-                    >
-                        Establish Targets
-                    </Button>
+                    <PermissionGuard allowed={canCreate} mode="hide">
+                        <Button type="primary" shape="round" icon={<Plus size={16} />} onClick={handleOpenModal}
+                            style={{
+                                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                                borderColor: '#4f46e5',
+                                fontWeight: 700,
+                                height: 40,
+                                boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)'
+                            }}
+                        >
+                            Establish Targets
+                        </Button>
+                    </PermissionGuard>
                 </Space>
             </div>
 
@@ -2327,25 +2364,29 @@ const TargetVsAchievement = () => {
                         <Text strong style={{ color: '#334155' }}>{selectedRowKeys.length} Target records selected</Text>
                     </Space>
                     <Space size={12}>
-                        <Button type="primary" icon={<Edit3 size={16} />} shape="round"
-                            onClick={() => {
-                                const selectedRecords = targets.filter((t) => selectedRowKeys.includes(t.Id));
-                                handleStartEditBulk(selectedRecords);
-                            }}
-                            style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600 }}
-                        >
-                            Bulk Edit Selected ({selectedRowKeys.length})
-                        </Button>
-                        <Popconfirm
-                            title="Delete Selected Targets?"
-                            description="This will permanently delete all selected targets and their breakdowns."
-                            onConfirm={handleDeleteBulk}
-                            okText="Yes, Delete All" cancelText="No, Keep" okButtonProps={{ danger: true }}
-                        >
-                            <Button type="primary" danger icon={<Trash2 size={16} />} shape="round">
-                                Delete Selected ({selectedRowKeys.length})
+                        <PermissionGuard allowed={canEdit} mode="hide">
+                            <Button type="primary" icon={<Edit3 size={16} />} shape="round"
+                                onClick={() => {
+                                    const selectedRecords = targets.filter((t) => selectedRowKeys.includes(t.Id));
+                                    handleStartEditBulk(selectedRecords);
+                                }}
+                                style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600 }}
+                            >
+                                Bulk Edit Selected ({selectedRowKeys.length})
                             </Button>
-                        </Popconfirm>
+                        </PermissionGuard>
+                        <PermissionGuard allowed={canDelete} mode="hide">
+                            <Popconfirm
+                                title="Delete Selected Targets?"
+                                description="This will permanently delete all selected targets and their breakdowns."
+                                onConfirm={handleDeleteBulk}
+                                okText="Yes, Delete All" cancelText="No, Keep" okButtonProps={{ danger: true }}
+                            >
+                                <Button type="primary" danger icon={<Trash2 size={16} />} shape="round">
+                                    Delete Selected ({selectedRowKeys.length})
+                                </Button>
+                            </Popconfirm>
+                        </PermissionGuard>
                     </Space>
                 </div>
             )}
@@ -2357,7 +2398,7 @@ const TargetVsAchievement = () => {
                     columns={columns}
                     rowKey="Id"
                     loading={loading}
-                    rowSelection={rowSelection}
+                    rowSelection={(canEdit || canDelete) ? rowSelection : undefined}
                     pagination={pagination}
                     scroll={{ x: 1200, y: 520 }}
                     virtual
@@ -2375,7 +2416,7 @@ const TargetVsAchievement = () => {
             <AddTargetModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
-                sellers={sellers}
+                sellers={filteredSellers}
                 onSubmit={handleSubmitTargets}
             />
 
@@ -2392,6 +2433,7 @@ const TargetVsAchievement = () => {
             {notificationContextHolder}
             {targetsContextHolder}
         </div>
+        </PermissionGuard>
     );
 };
 

@@ -55,8 +55,22 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
     }
 
     // Permission check – only runs when permissions are fully loaded
-    if (permission && !hasPermission(permission)) {
-        return <Navigate to="/unauthorized" replace />;
+    if (permission) {
+        const permissionsToCheck = Array.isArray(permission) ? permission : [permission];
+        
+        const roleName = (user?.role?.name || user?.role?.displayName || '').toString().toLowerCase().trim();
+        const isBrandManager = roleName === 'brand manager' || roleName === 'brand_manager';
+        
+        // If checking monthlyreport_view, we also allow access for targets_view
+        if (permissionsToCheck.includes('monthlyreport_view')) {
+            permissionsToCheck.push('targets_view');
+        }
+
+        const hasAccess = permissionsToCheck.some(p => hasPermission(p)) || (isBrandManager && permissionsToCheck.includes('monthlyreport_view'));
+
+        if (!hasAccess) {
+            return <Navigate to="/unauthorized" replace />;
+        }
     }
 
     return children;

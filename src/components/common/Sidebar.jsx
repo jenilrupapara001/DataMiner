@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Badge, ConfigProvider } from 'antd';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSidebar } from '../../contexts/SidebarContext';
-import { asinApi } from '../../services/api';
+import { useNavigationItems } from '../../hooks/useNavigationItems';
 import {
     LayoutDashboard,
     Store,
@@ -40,11 +40,10 @@ import './Sidebar.css';
 const { Sider } = Layout;
 
 const Sidebar = () => {
-    const { user, logout, hasPermission } = useAuth();
+    const { user, logout } = useAuth();
     const { collapsed, toggle, isMobile, isOpen, toggleMobile, setCollapsed } = useSidebar();
     const navigate = useNavigate();
     const location = useLocation();
-    const [asinCount, setAsinCount] = useState('...');
     
     // Local hover state for auto expand/collapsed logic
     const [isHovered, setIsHovered] = useState(false);
@@ -52,12 +51,6 @@ const Sidebar = () => {
     // The actual visual collapsed state of the Sidebar component
     const visuallyCollapsed = collapsed && !isHovered;
 
-    // Check if user has only ASIN Manager access
-    const isAsinManagerOnly = 
-        user?.role?.name?.toLowerCase().includes('asin manager') || 
-        user?.role?.displayName?.toLowerCase().includes('asin manager') || 
-        user?.role?.name?.toLowerCase().includes('listing manager') || 
-        user?.role?.displayName?.toLowerCase().includes('listing manager');
     // Track initial path to determine when the user navigates for the first time
     const initialPathRef = useRef(location.pathname);
 
@@ -70,71 +63,29 @@ const Sidebar = () => {
         }
     }, [location.pathname, isMobile, collapsed, setCollapsed]);
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const res = await asinApi.getStats();
-                if (res && res.total !== undefined) {
-                    setAsinCount(res.total.toString());
-                }
-            } catch (err) {
-                console.error('Failed to fetch ASIN stats for sidebar:', err);
-                setAsinCount('0');
-            }
-        };
-        fetchStats();
-    }, []);
+    // Use our permission-aware navigation hook
+    const navItems = useNavigationItems();
 
     const sections = [
         {
             id: 'MAIN',
             label: 'Main',
-            items: [
-                { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard', permission: 'dashboard_view', hiddenForAsinManager: true },
-                { label: 'Sellers', icon: Store, to: '/sellers', permission: 'seller_view' },
-                { label: 'ASIN Manager', icon: Package, to: '/asin-tracker', permission: 'asinmanager_view', badge: asinCount },
-                { label: 'Ads Manager', icon: BarChart3, to: '/ads-manager', permission: 'adsreport_view' },
-                { label: 'Seller Tracker', icon: Activity, to: '/seller-tracker', permission: 'asintracker_view' },
-                // NOTE: "Scrape Tasks" has been removed for now as requested
-                { label: 'Scheduled Runs', icon: Clock, to: '/scheduled-runs', permission: 'scraping_view' },
-                { label: 'Alert Board', icon: Bell, to: '/alerts', permission: 'dashboard_view' },
-            ],
+            items: navItems.main,
         },
         {
             id: 'ACTIONS',
             label: 'Actions',
-            items: [
-                { label: 'Workflows', icon: GitBranch, to: '/actions', permission: 'actions_view' },
-                { label: 'Optimization Tasks', icon: ListTodo, to: '/tasks', permission: 'tasks_view' },
-                { label: 'Templates', icon: LayoutTemplate, to: '/actions/templates', permission: 'actions_view' },
-                { label: 'Performance', icon: BarChart2, to: '/actions/achievement-report', permission: 'monthlyreport_view' },
-                { label: 'Activity Log', icon: Clock, to: '/activity-log', permission: 'activitylogs_view' },
-                { label: 'File Manager', icon: Folder, to: '/file-manager', permission: 'files_manage' },
-                { label: 'Messaging', icon: MessageSquare, to: '/chat', permission: 'chat_view' },
-            ],
+            items: navItems.actions,
         },
         {
             id: 'INTELLIGENCE',
             label: 'Intelligence',
-            items: [
-                { label: 'SKU Analysis', icon: ScanSearch, to: '/sku-report', permission: 'skureport_view' },
-                { label: 'Target vs Achievement', icon: Target, to: '/target-achievement', permission: 'monthlyreport_view' },
-                { label: 'Parent Trends', icon: TrendingUp, to: '/parent-asin-report', permission: 'parentreport_view' },
-                { label: 'Monthly Recap', icon: CalendarDays, to: '/month-wise-report', permission: 'monthlyreport_view' },
-                { label: 'Profit & Loss', icon: ArrowLeftRight, to: '/profit-loss', permission: 'pnlreport_view' },
-                { label: 'Inventory', icon: Warehouse, to: '/inventory', permission: 'inventoryreport_view' },
-            ],
+            items: navItems.intelligence,
         },
         {
             id: 'SYSTEM',
             label: 'System',
-            items: [
-                { label: 'Users', icon: Users, to: '/users', permission: 'users_view' },
-                { label: 'Team Map', icon: Map, to: '/team-management', permission: 'roles_view' },
-                { label: 'Settings', icon: Settings, to: '/settings', permission: 'settings_manage' },
-                { label: 'API Keys', icon: KeyRound, to: '/api-keys', permission: 'apikeys_manage' },
-                { label: 'Data Migration', icon: Database, to: '/upload-export', permission: 'asinmanager_import' },
-            ],
+            items: navItems.system,
         },
     ];
 
@@ -151,16 +102,7 @@ const Sidebar = () => {
 
     // Transform sections to Ant Design Menu items format
     const menuItems = sections.map((section) => {
-        const filteredItems = section.items.filter(
-            (item) => !item.permission || hasPermission(item.permission)
-        ).filter(
-            (item) => {
-                if (isAsinManagerOnly) {
-                    return item.label === 'ASIN Manager';
-                }
-                return true;
-            }
-        );
+        const filteredItems = section.items;
 
         if (filteredItems.length === 0) return null;
 
@@ -169,7 +111,7 @@ const Sidebar = () => {
             type: 'group',
             label: visuallyCollapsed ? null : section.label,
             children: filteredItems.map((item) => ({
-                key: item.to,
+                key: item.path,
                 icon: React.createElement(item.icon, { size: 16 }),
                 label: (
                     <div className="d-flex align-items-center justify-content-between w-100">
@@ -179,11 +121,12 @@ const Sidebar = () => {
                                 count={item.badge} 
                                 overflowCount={9999}
                                 style={{ 
-                                    backgroundColor: 'var(--blue-soft)', 
-                                    color: 'var(--blue)', 
+                                    backgroundColor: item.badgeColor || 'var(--blue-soft)', 
+                                    color: item.badgeColor === '#f59e0b' ? '#ffffff' : 'var(--blue)', 
                                     boxShadow: 'none',
                                     fontSize: '10px',
                                     fontWeight: 650,
+                                    padding: '0 6px',
                                     minWidth: '18px',
                                     height: '18px',
                                     lineHeight: '18px',
@@ -201,9 +144,9 @@ const Sidebar = () => {
     // Flatten items to find current active menu key
     const allFlatItems = sections.flatMap(s => s.items);
     const activeItem = allFlatItems.find(item => 
-        location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to))
+        location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path))
     );
-    const selectedKeys = activeItem ? [activeItem.to] : [];
+    const selectedKeys = activeItem ? [activeItem.path] : [];
 
     return (
         <>

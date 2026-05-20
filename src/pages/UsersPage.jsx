@@ -4,7 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import {
     Users, Shield, UserPlus, Search, Pencil, Trash2, Mail, Phone,
     Clock, CheckCircle2, XCircle, Info, UserCheck, RefreshCw, Store, Check,
-    SlidersHorizontal, Lock, Plus, ArrowRight, User, AlertCircle
+    SlidersHorizontal, Lock, Plus, ArrowRight, User, AlertCircle, Target
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -39,9 +39,16 @@ const UsersPage = () => {
     // Loading State
     const [loading, setLoading] = useState(true);
 
-    // Filters and Pagination
-    const [filters, setFilters] = useState({ search: '', role: '', isActive: '' });
-    const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+    // Optimized Filters and Local Search States (Strict Debouncing to avoid keypress loops)
+    const [searchText, setSearchText] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [selectedRole, setSelectedRole] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('');
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalRecords, setTotalRecords] = useState(0);
 
     // Search inside Permissions Matrix
     const [permissionSearch, setPermissionSearch] = useState('');
@@ -76,6 +83,15 @@ const UsersPage = () => {
         color: '#4F46E5'
     });
 
+    // Handle standard search input debounce
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(searchText);
+            setCurrentPage(1); // Reset page to 1 on filter/search change
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [searchText]);
+
     // --- CONDITIONALS FOR MEMBER MANAGEMENT ---
     const selectedRoleObj = useMemo(() => roles.find(r => (r._id || r.id) === userFormData.role), [roles, userFormData.role]);
     const roleName = selectedRoleObj?.name?.toLowerCase() || '';
@@ -97,32 +113,32 @@ const UsersPage = () => {
 
     // Derived Stats for KPI Header
     const activeCount = useMemo(() => users.filter(u => u.isActive).length, [users]);
-    const totalRecordCount = useMemo(() => pagination.total || users.length, [pagination.total, users]);
+    const totalRecordCount = useMemo(() => totalRecords || users.length, [totalRecords, users]);
+    const inactiveCount = useMemo(() => Math.max(0, totalRecordCount - activeCount), [totalRecordCount, activeCount]);
 
     // --- REFRESH / DATA FETCH ---
     const loadUsers = useCallback(async () => {
         setLoading(true);
         try {
             const params = {
-                page: pagination.page,
-                limit: pagination.limit,
-                ...filters,
+                page: currentPage,
+                limit: pageSize,
+                search: debouncedSearch,
+                role: selectedRole,
+                isActive: selectedStatus
             };
             const response = await userApi.getAll(params);
             if (response.success) {
                  setUsers(response.data.users || []);
-                 setPagination(prev => ({
-                     ...prev,
-                     total: response.data.pagination?.total || 0,
-                     totalPages: response.data.pagination?.totalPages || response.data.pagination?.pages || 1
-                 }));
+                 setTotalRecords(response.data.pagination?.total || 0);
              }
         } catch (error) {
             console.error('Failed to load users:', error);
             messageApi.error('Failed to load team roster.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
-    }, [pagination.page, pagination.limit, filters, messageApi]);
+    }, [currentPage, pageSize, debouncedSearch, selectedRole, selectedStatus]);
 
     const loadRolesAndPerms = useCallback(async () => {
         try {
@@ -164,6 +180,7 @@ const UsersPage = () => {
         }
     }, []);
 
+    // Core hooks setup
     useEffect(() => {
         loadUsers();
     }, [loadUsers]);
@@ -173,48 +190,61 @@ const UsersPage = () => {
         loadSellersAndManagers();
     }, [loadRolesAndPerms, loadSellersAndManagers]);
 
+    // WebSocket listener setup with strict cleanup and listener reference matching
     useEffect(() => {
         if (!socket) return;
-        socket.on('role_permissions_updated', (updatedRole) => {
+        const handleRolePermissionsUpdated = (updatedRole) => {
             setRoles(prevRoles => prevRoles.map(role => 
                 (role._id === updatedRole._id || role.id === updatedRole.id) ? updatedRole : role
             ));
-        });
+        };
+
+        socket.on('role_permissions_updated', handleRolePermissionsUpdated);
         return () => {
-            socket.off('role_permissions_updated');
+            socket.off('role_permissions_updated', handleRolePermissionsUpdated);
         };
     }, [socket]);
 
-    // Filters Toggle
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-        setPagination(prev => ({ ...prev, page: 1 }));
+    // Dynamic Filter handlers
+    const handleRoleFilterChange = (value) => {
+        setSelectedRole(value || '');
+        setCurrentPage(1);
+    };
+
+    const handleStatusFilterChange = (value) => {
+        setSelectedStatus(value !== undefined ? value : '');
+        setCurrentPage(1);
     };
 
     const resetFilters = () => {
-        setFilters({ search: '', role: '', isActive: '' });
-        setPagination(prev => ({ ...prev, page: 1 }));
+        setSearchText('');
+        setSelectedRole('');
+        setSelectedStatus('');
+        setCurrentPage(1);
     };
 
-    // Toggle User Status
-    const handleToggleStatus = async (userId) => {
+    // Toggle User Status Optimistically to resolve unnecessary full list refetches
+    const handleToggleStatus = useCallback(async (userId) => {
         try {
             await userApi.toggleStatus(userId);
             messageApi.success('User status updated successfully.');
-            loadUsers();
+            // Perform optimistic state update
+            setUsers(prevUsers => prevUsers.map(user => 
+                (user._id === userId || user.id === userId) ? { ...user, isActive: !user.isActive } : user
+            ));
         } catch (error) {
             console.error('Failed to toggle status:', error);
             messageApi.error(error.message || 'Failed to toggle status.');
         }
-    };
+    }, [messageApi]);
 
     // Delete User
-    const handleDeleteUser = (userId) => {
+    const handleDeleteUser = useCallback((userId) => {
         Modal.confirm({
-            title: 'Delete Team Member?',
+            title: 'Remove Team Member?',
             icon: <AlertCircle className="text-rose-500" size={20} />,
-            content: 'Are you sure you want to delete this user? This operation is permanent and cannot be recovered.',
-            okText: 'Permanently Delete',
+            content: 'Are you sure you want to remove this user from the organization? This operation is permanent.',
+            okText: 'Remove Member',
             okType: 'danger',
             cancelText: 'Cancel',
             centered: true,
@@ -223,14 +253,16 @@ const UsersPage = () => {
                 try {
                     await userApi.delete(userId);
                     messageApi.success('Member successfully removed from organization.');
-                    loadUsers();
+                    // Local state update
+                    setUsers(prevUsers => prevUsers.filter(user => user._id !== userId && user.id !== userId));
+                    setTotalRecords(prev => Math.max(0, prev - 1));
                 } catch (error) {
                     console.error('Failed to delete user:', error);
-                    messageApi.error(error.message || 'Failed to delete user.');
+                    messageApi.error(error.message || 'Failed to remove user.');
                 }
             }
         });
-    };
+    }, [messageApi]);
 
     // --- DYNAMIC USER MODAL ACTIONS ---
     const handleOpenUserModal = async (user = null) => {
@@ -342,7 +374,7 @@ const UsersPage = () => {
                 messageApi.success('Member profile successfully updated.');
             } else {
                 await userApi.create(data);
-                messageApi.success('New team member registered and invitation pending.');
+                messageApi.success('New team member registered successfully.');
             }
             setShowUserModal(false);
             loadUsers();
@@ -453,7 +485,7 @@ const UsersPage = () => {
         Modal.confirm({
             title: 'Retire Access Role?',
             icon: <AlertCircle className="text-rose-500" size={20} />,
-            content: 'Caution: All members utilizing this role will immediate experience downgraded capabilities. This deletion cannot be reverted.',
+            content: 'Caution: All members utilizing this role will immediately experience downgraded capabilities. This deletion cannot be reverted.',
             okText: 'Confirm Deletion',
             okType: 'danger',
             centered: true,
@@ -494,8 +526,37 @@ const UsersPage = () => {
         return `${f}${l}` || 'U';
     };
 
-    // AntD Table Columns - Members Tab
-    const columns = [
+    // Memoized filters for direct supervisor assignment (Clean Audit #11)
+    const filteredSupervisors = useMemo(() => {
+        const query = modalSearchSupervisor.toLowerCase();
+        return managers.filter(m => 
+            `${m.firstName || ''} ${m.lastName || ''} ${m.email || ''}`.toLowerCase().includes(query)
+        );
+    }, [managers, modalSearchSupervisor]);
+
+    // Memoized filters for Brand Manager assignment in Listing Team Role (Clean Audit #11)
+    const filteredBrandManagers = useMemo(() => {
+        const query = modalSearchBrandManager.toLowerCase();
+        const bmUsers = managers.filter(m => 
+            m.role?.name?.toLowerCase() === 'brand_manager' || 
+            m.role?.displayName?.toLowerCase() === 'brand manager'
+        );
+        return bmUsers.filter(m => 
+            `${m.firstName || ''} ${m.lastName || ''} ${m.email || ''}`.toLowerCase().includes(query)
+        );
+    }, [managers, modalSearchBrandManager]);
+
+    // Memoized filters for client brands association (Clean Audit #11)
+    const filteredSellers = useMemo(() => {
+        const listToRender = isListingTeam ? inheritedSellers : sellers;
+        const query = modalSearchSeller.toLowerCase();
+        return listToRender.filter(s => 
+            `${s.name || ''} ${s.code || ''}`.toLowerCase().includes(query)
+        );
+    }, [isListingTeam, inheritedSellers, sellers, modalSearchSeller]);
+
+    // AntD Table Columns - Memoized under component scope (Clean Audit #4 and #12)
+    const columns = useMemo(() => [
         {
             title: 'Member Name',
             key: 'name',
@@ -621,7 +682,7 @@ const UsersPage = () => {
             align: 'right',
             render: (_, record) => (
                 <Space size={4}>
-                    <Tooltip title="Configure Workspace Profile">
+                    <Tooltip title="Edit Profile Settings">
                         <Button 
                             type="text" 
                             shape="circle" 
@@ -630,7 +691,7 @@ const UsersPage = () => {
                             icon={<Pencil size={13} className="text-indigo-600" />} 
                         />
                     </Tooltip>
-                    <Tooltip title="Retire Member Profile">
+                    <Tooltip title="Remove Member">
                         <Button 
                             type="text" 
                             danger 
@@ -643,7 +704,7 @@ const UsersPage = () => {
                 </Space>
             )
         }
-    ];
+    ], [roles, handleToggleStatus, handleDeleteUser]);
 
     return (
         <div className="users-page-container">
@@ -680,7 +741,7 @@ const UsersPage = () => {
                     border-radius: 16px !important;
                     border: 1px solid #e2e8f0 !important;
                     box-shadow: 0 1px 2px rgba(0,0,0,0.01) !important;
-                    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+                    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
                 }
                 .kpi-stat-card:hover {
                     transform: translateY(-2px);
@@ -750,10 +811,10 @@ const UsersPage = () => {
                 }
                 .selection-item-card {
                     background: #ffffff;
-                    border: 1.5px solid #e2e8f0;
+                    border: 1.5px solid #f1f5f9;
                     border-radius: 12px;
                     padding: 10px 12px;
-                    transition: all 0.2s ease;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                     cursor: pointer;
                     display: flex;
                     align-items: center;
@@ -791,6 +852,20 @@ const UsersPage = () => {
                     background-color: #10b981;
                     border-color: #10b981;
                 }
+                .custom-table .ant-table-thead > tr > th {
+                    background: #f8fafc !important;
+                    color: #475569 !important;
+                    font-weight: 700 !important;
+                    font-size: 12px !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                }
+                .custom-table .ant-table-tbody > tr > td {
+                    border-bottom: 1px solid #f1f5f9 !important;
+                    padding: 12px 16px !important;
+                }
+                .custom-table .ant-table-row:hover > td {
+                    background: #f8fafc !important;
+                }
                 @media (max-width: 768px) {
                     .users-header {
                         flex-direction: column;
@@ -814,7 +889,7 @@ const UsersPage = () => {
                         </div>
                         <div>
                             <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18, letterSpacing: '-0.02em' }}>Organization & Permissions</h3>
-                            <Text type="secondary" style={{ fontSize: 12 }}>Deploy roles, manage access control lists, and audit members.</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Configure custom workspace roles, manage access control policies, and audit personnel lists.</Text>
                         </div>
                     </Space>
                 </div>
@@ -825,7 +900,7 @@ const UsersPage = () => {
                         style={{ fontWeight: 600, fontSize: 12.5, color: '#475569' }}
                         onClick={() => loadUsers()}
                     >
-                        Sync Engine
+                        Refresh Directory
                     </Button>
                     {activeTab === 'users' ? (
                         <Button 
@@ -835,7 +910,7 @@ const UsersPage = () => {
                             style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
                             onClick={() => handleOpenUserModal()}
                         >
-                            Register Member
+                            Register New Member
                         </Button>
                     ) : (
                         <Button 
@@ -845,7 +920,7 @@ const UsersPage = () => {
                             style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
                             onClick={() => handleOpenRoleModal()}
                         >
-                            Deploy Role
+                            Create Custom Role
                         </Button>
                     )}
                 </Space>
@@ -854,7 +929,6 @@ const UsersPage = () => {
             {/* 2. SCROLLABLE WORKSPACE */}
             <div className="users-scroll-content">
                 
-
                 {/* Primary Controller Strip */}
                 <Card variant="borderless" styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
@@ -874,17 +948,17 @@ const UsersPage = () => {
                             <div style={{ flex: 1, display: 'flex', gap: 8, maxWidth: 650, justifyContent: 'flex-end' }}>
                                 <Input 
                                     prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />} 
-                                    placeholder="Filter profile directory..." 
+                                    placeholder="Filter profiles..." 
                                     allowClear
-                                    value={filters.search}
-                                    onChange={e => handleFilterChange('search', e.target.value)}
+                                    value={searchText}
+                                    onChange={e => setSearchText(e.target.value)}
                                     style={{ width: 240, borderRadius: 8 }}
                                 />
                                 <Select 
                                     placeholder="Select Role" 
                                     allowClear 
-                                    value={filters.role || undefined}
-                                    onChange={v => handleFilterChange('role', v || '')}
+                                    value={selectedRole || undefined}
+                                    onChange={handleRoleFilterChange}
                                     style={{ width: 160 }}
                                     styles={{ popup: { root: { borderRadius: 10 } } }}
                                 >
@@ -893,14 +967,14 @@ const UsersPage = () => {
                                 <Select 
                                     placeholder="Status" 
                                     allowClear 
-                                    value={filters.isActive || undefined}
-                                    onChange={v => handleFilterChange('isActive', v !== undefined ? v : '')}
+                                    value={selectedStatus || undefined}
+                                    onChange={handleStatusFilterChange}
                                     style={{ width: 120 }}
                                 >
                                     <Option value="true">Active</Option>
                                     <Option value="false">Inactive</Option>
                                 </Select>
-                                <Tooltip title="Wipe Query">
+                                <Tooltip title="Clear All">
                                     <Button icon={<Trash2 size={13} />} onClick={resetFilters} style={{ borderRadius: 8 }} />
                                 </Tooltip>
                             </div>
@@ -921,7 +995,7 @@ const UsersPage = () => {
                                     onClick={handleSaveMatrixPermissions}
                                     style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700, borderRadius: 8 }}
                                 >
-                                    Commit & Sync Matrix
+                                    Save Permission Settings
                                 </Button>
                             </div>
                         )}
@@ -930,125 +1004,195 @@ const UsersPage = () => {
 
                 {/* 3. TAB CONTENT SWITCHING */}
                 {activeTab === 'users' ? (
-                    <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                        <Table 
-                            columns={columns}
-                            dataSource={users.map(u => ({ ...u, key: u._id || u.id }))}
-                            loading={loading}
-                            pagination={{
-                                current: pagination.page,
-                                pageSize: pagination.limit,
-                                total: pagination.total,
-                                showSizeChanger: true,
-                                pageSizeOptions: ['10', '20', '50', '100'],
-                                showTotal: (total, range) => `Showing ${range[0]}-${range[1]} of ${total} team members`,
-                                onChange: (page, pageSize) => setPagination(p => ({ ...p, page, limit: pageSize || p.limit }))
-                            }}
-                            scroll={{ x: 1000 }}
-                            className="custom-table"
-                        />
-                    </Card>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                        {/* KPI Cards Row (Wow Aesthetic Header) */}
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} sm={12} lg={6}>
+                                <Card variant="borderless" className="kpi-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div className="icon-wrapper" style={{ background: '#f0fdf4', color: '#10b981' }}>
+                                            <Users size={20} />
+                                        </div>
+                                        <div>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Members</Text>
+                                            <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{totalRecordCount}</Title>
+                                        </div>
+                                    </div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} sm={12} lg={6}>
+                                <Card variant="borderless" className="kpi-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div className="icon-wrapper" style={{ background: '#eff6ff', color: '#3b82f6' }}>
+                                            <UserCheck size={20} />
+                                        </div>
+                                        <div>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Personnel</Text>
+                                            <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{activeCount}</Title>
+                                        </div>
+                                    </div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} sm={12} lg={6}>
+                                <Card variant="borderless" className="kpi-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div className="icon-wrapper" style={{ background: '#fff1f2', color: '#f43f5e' }}>
+                                            <XCircle size={20} />
+                                        </div>
+                                        <div>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inactive/Pending</Text>
+                                            <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{inactiveCount}</Title>
+                                        </div>
+                                    </div>
+                                </Card>
+                            </Col>
+                            <Col xs={24} sm={12} lg={6}>
+                                <Card variant="borderless" className="kpi-stat-card" styles={{ body: { padding: '20px 24px' } }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                        <div className="icon-wrapper" style={{ background: '#f5f3ff', color: '#8b5cf6' }}>
+                                            <Shield size={20} />
+                                        </div>
+                                        <div>
+                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Access Roles</Text>
+                                            <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>{roles.length}</Title>
+                                        </div>
+                                    </div>
+                                </Card>
+                            </Col>
+                        </Row>
+
+                        <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                            <Table 
+                                columns={columns}
+                                dataSource={users.map(u => ({ ...u, key: u._id || u.id }))}
+                                loading={loading}
+                                pagination={{
+                                    current: currentPage,
+                                    pageSize: pageSize,
+                                    total: totalRecords,
+                                    showSizeChanger: true,
+                                    pageSizeOptions: ['10', '20', '50', '100'],
+                                    showTotal: (total, range) => `Showing ${range[0]}-${range[1]} of ${total} team members`,
+                                    onChange: (page, size) => {
+                                        setCurrentPage(page);
+                                        if (size) setPageSize(size);
+                                    }
+                                }}
+                                scroll={{ x: 1000 }}
+                                className="custom-table"
+                            />
+                        </Card>
+                    </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        {Object.entries(filteredGroupedPermissions).map(([category, perms]) => (
-                            <div key={category} className="matrix-table-panel">
-                                <div style={{ 
-                                    background: '#fcfdfe', 
-                                    padding: '12px 20px', 
-                                    borderBottom: '1.5px solid #f1f5f9',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8
-                                }}>
-                                    <div style={{ background: '#e0e7ff', padding: 6, borderRadius: 8, display: 'flex', color: '#4f46e5' }}>
-                                        <Shield size={14} />
+                        {Object.entries(filteredGroupedPermissions).map(([category, perms]) => {
+                            const isTargetsCategory = category.toLowerCase() === 'targets';
+                            return (
+                                <div key={category} className="matrix-table-panel">
+                                    <div style={{ 
+                                        background: '#fcfdfe', 
+                                        padding: '12px 20px', 
+                                        borderBottom: '1.5px solid #f1f5f9',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}>
+                                        <div style={{ 
+                                            background: isTargetsCategory ? '#ecfdf5' : '#e0e7ff', 
+                                            padding: 6, 
+                                            borderRadius: 8, 
+                                            display: 'flex', 
+                                            color: isTargetsCategory ? '#10b981' : '#4f46e5' 
+                                        }}>
+                                            {isTargetsCategory ? <Target size={14} /> : <Shield size={14} />}
+                                        </div>
+                                        <span style={{ fontWeight: 800, color: '#1e293b', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                            {category} Access Policies
+                                        </span>
+                                        <Badge count={perms.length} showZero style={{ backgroundColor: '#f1f5f9', color: '#64748b', boxShadow: 'none', fontSize: 10, fontWeight: 700, marginLeft: 4 }} />
                                     </div>
-                                    <span style={{ fontWeight: 800, color: '#1e293b', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                        {category} Rules Catalog
-                                    </span>
-                                    <Badge count={perms.length} showZero style={{ backgroundColor: '#f1f5f9', color: '#64748b', boxShadow: 'none', fontSize: 10, fontWeight: 700, marginLeft: 4 }} />
-                                </div>
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr style={{ borderBottom: '1.5px solid #f1f5f9' }}>
-                                                <th style={{ width: '240px', padding: '14px 20px', fontSize: '12px', fontWeight: 700, color: '#475569', textAlign: 'left', background: '#f8fafc' }}>
-                                                    Organizational Role
-                                                </th>
-                                                {perms.map((perm) => (
-                                                    <th key={perm._id || perm.id} style={{ padding: '12px', fontSize: '11.5px', fontWeight: 700, color: '#475569', textAlign: 'center', minWidth: '130px', borderLeft: '1px solid #f1f5f9' }}>
-                                                        <Tooltip title={perm.name}>
-                                                            {perm.displayName}
-                                                        </Tooltip>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1.5px solid #f1f5f9' }}>
+                                                    <th style={{ width: '240px', padding: '14px 20px', fontSize: '12px', fontWeight: 700, color: '#475569', textAlign: 'left', background: '#f8fafc' }}>
+                                                        Organizational Role
                                                     </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {matrixRoles.map((role) => {
-                                                const roleColor = role.color || '#4F46E5';
-                                                const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
-                                                return (
-                                                    <tr key={role._id || role.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'all 0.15s' }}>
-                                                        <td style={{ padding: '12px 20px', fontWeight: 600, fontSize: '13px', color: '#334155', background: '#fcfdfe' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                <Space size={8}>
-                                                                    <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: roleColor }}></div>
-                                                                    <span>{role.displayName}</span>
-                                                                </Space>
-                                                                <Space size={6}>
-                                                                    <Button 
-                                                                        type="text" 
-                                                                        size="small" 
-                                                                        shape="circle"
-                                                                        onClick={() => handleOpenRoleModal(role)}
-                                                                        icon={<Pencil size={11} style={{ color: '#64748b' }} />}
-                                                                    />
-                                                                    {role.name !== 'super_admin' && (
+                                                    {perms.map((perm) => (
+                                                        <th key={perm._id || perm.id} style={{ padding: '12px', fontSize: '11.5px', fontWeight: 700, color: '#475569', textAlign: 'center', minWidth: '130px', borderLeft: '1px solid #f1f5f9' }}>
+                                                            <Tooltip title={perm.name}>
+                                                                {perm.displayName}
+                                                            </Tooltip>
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {matrixRoles.map((role) => {
+                                                    const roleColor = role.color || '#4F46E5';
+                                                    const rolePermIds = role.permissions?.map(p => p._id || p.id || p) || [];
+                                                    return (
+                                                        <tr key={role._id || role.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'all 0.15s' }}>
+                                                            <td style={{ padding: '12px 20px', fontWeight: 600, fontSize: '13px', color: '#334155', background: '#fcfdfe' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <Space size={8}>
+                                                                        <div style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: roleColor }}></div>
+                                                                        <span>{role.displayName}</span>
+                                                                    </Space>
+                                                                    <Space size={6}>
                                                                         <Button 
                                                                             type="text" 
-                                                                            danger 
                                                                             size="small" 
                                                                             shape="circle"
-                                                                            onClick={() => handleDeleteRole(role._id || role.id)}
-                                                                            icon={<Trash2 size={11} />}
+                                                                            onClick={() => handleOpenRoleModal(role)}
+                                                                            icon={<Pencil size={11} style={{ color: '#64748b' }} />}
                                                                         />
-                                                                    )}
-                                                                </Space>
-                                                            </div>
-                                                        </td>
-                                                        {perms.map((perm) => {
-                                                            const isAssigned = rolePermIds.includes(perm._id || perm.id);
-                                                            const isOperationalManager = (role.name || '').toLowerCase() === 'operational_manager' || (role.displayName || '').toLowerCase() === 'operational manager';
-                                                            const isRestrictedForOpManager = isOperationalManager && [
-                                                                'settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'
-                                                            ].includes(perm.name || perm.id || perm._id);
+                                                                        {role.name !== 'super_admin' && (
+                                                                            <Button 
+                                                                                type="text" 
+                                                                                danger 
+                                                                                size="small" 
+                                                                                shape="circle"
+                                                                                onClick={() => handleDeleteRole(role._id || role.id)}
+                                                                                icon={<Trash2 size={11} />}
+                                                                            />
+                                                                        )}
+                                                                    </Space>
+                                                                </div>
+                                                            </td>
+                                                            {perms.map((perm) => {
+                                                                const isAssigned = rolePermIds.includes(perm._id || perm.id);
+                                                                const isOperationalManager = (role.name || '').toLowerCase() === 'operational_manager' || (role.displayName || '').toLowerCase() === 'operational manager';
+                                                                const isRestrictedForOpManager = isOperationalManager && [
+                                                                    'settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'
+                                                                ].includes(perm.name || perm.id || perm._id);
 
-                                                            return (
-                                                                <td key={perm._id || perm.id} style={{ padding: '12px', textAlign: 'center', borderLeft: '1px solid #f1f5f9' }}>
-                                                                    {isRestrictedForOpManager ? (
-                                                                        <Tag color="error" style={{ fontSize: 9, fontWeight: 700, margin: 0, borderRadius: 6, padding: '1px 6px' }}>
-                                                                            LOCKED
-                                                                        </Tag>
-                                                                    ) : (
-                                                                        <div 
-                                                                            className={`matrix-cell-check ${isAssigned ? 'assigned' : ''}`}
-                                                                            onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
-                                                                        >
-                                                                            {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
-                                                                        </div>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                                return (
+                                                                    <td key={perm._id || perm.id} style={{ padding: '12px', textAlign: 'center', borderLeft: '1px solid #f1f5f9' }}>
+                                                                        {isRestrictedForOpManager ? (
+                                                                            <Tag color="error" style={{ fontSize: 9, fontWeight: 700, margin: 0, borderRadius: 6, padding: '1px 6px' }}>
+                                                                                LOCKED
+                                                                            </Tag>
+                                                                        ) : (
+                                                                            <div 
+                                                                                className={`matrix-cell-check ${isAssigned ? 'assigned' : ''}`}
+                                                                                onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
+                                                                            >
+                                                                                {isAssigned && <Check size={12} strokeWidth={3} className="text-white" />}
+                                                                            </div>
+                                                                        )}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -1060,13 +1204,13 @@ const UsersPage = () => {
                         <div style={{ background: '#EEF2FF', color: '#4F46E5', padding: 6, borderRadius: 8, display: 'flex' }}>
                             <UserCheck size={16} />
                         </div>
-                        <span style={{ fontWeight: 800 }}>{editingUser ? 'Configure Member Protocol' : 'Initialize Workspace Pilot'}</span>
+                        <span style={{ fontWeight: 800 }}>{editingUser ? 'Edit Member Settings' : 'Register New Member'}</span>
                     </Space>
                 }
                 open={showUserModal}
                 onCancel={() => setShowUserModal(false)}
                 centered
-                destroyOnHidden
+                destroyOnClose
                 width={780}
                 className="glass-modal"
                 footer={[
@@ -1089,7 +1233,7 @@ const UsersPage = () => {
                     {/* Basic Details Block */}
                     <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <User size={13} /> Basic Registry Information
+                            <User size={13} /> Basic Information
                         </div>
                         <Row gutter={[12, 12]}>
                             <Col span={12}>
@@ -1115,7 +1259,7 @@ const UsersPage = () => {
                                 <Input 
                                     type="email"
                                     disabled={!!editingUser}
-                                    placeholder="pilot@retailops.com" 
+                                    placeholder="member@retailops.com" 
                                     value={userFormData.email}
                                     onChange={e => setUserFormData({ ...userFormData, email: e.target.value })}
                                     style={{ borderRadius: 8 }}
@@ -1132,10 +1276,10 @@ const UsersPage = () => {
                             </Col>
                             {!editingUser && (
                                 <Col span={24}>
-                                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>TEMPORARY GATEWAY PASSWORD *</label>
+                                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>INITIAL ACCESS PASSWORD *</label>
                                     <Input 
                                         type="password"
-                                        placeholder="Minimum 6 alphanumeric characters..." 
+                                        placeholder="Minimum 6 characters..." 
                                         value={userFormData.password}
                                         onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
                                         style={{ borderRadius: 8 }}
@@ -1148,7 +1292,7 @@ const UsersPage = () => {
                     {/* Roles Block */}
                     <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Shield size={13} /> Organization Security Protocol
+                            <Shield size={13} /> Role & Permissions
                         </div>
                         <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>ACCESS PRIVILEGE ROLE *</label>
                         <Select 
@@ -1167,7 +1311,7 @@ const UsersPage = () => {
                         <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <UserCheck size={13} className="text-indigo-500" /> Map Direct Supervisors
+                                    <UserCheck size={13} className="text-indigo-500" /> Assign Supervisors
                                 </div>
                                 <Badge count={`${userFormData.supervisors.length} Selected`} style={{ backgroundColor: '#4f46e5', fontWeight: 700, fontSize: 10 }} />
                             </div>
@@ -1176,21 +1320,21 @@ const UsersPage = () => {
                                 <Input 
                                     prefix={<Search size={12} />} 
                                     size="small"
-                                    placeholder="Query supervisors catalogue..." 
+                                    placeholder="Search supervisors..." 
                                     value={modalSearchSupervisor}
                                     onChange={e => setModalSearchSupervisor(e.target.value)}
                                     style={{ borderRadius: 6 }}
                                 />
                                 <Button size="small" onClick={() => setUserFormData({ ...userFormData, supervisors: managers.map(m => m._id || m.id) })} style={{ fontSize: 11, fontWeight: 600 }}>All</Button>
-                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, supervisors: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Wipe</Button>
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, supervisors: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Clear All</Button>
                             </div>
 
                             <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
                                 <Row gutter={[8, 8]}>
-                                    {(() => {
-                                        const filtered = managers.filter(m => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchSupervisor.toLowerCase()));
-                                        if (filtered.length === 0) return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No active accounts found.</div></Col>;
-                                        return filtered.map(m => {
+                                    {filteredSupervisors.length === 0 ? (
+                                        <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No active supervisors found.</div></Col>
+                                    ) : (
+                                        filteredSupervisors.map(m => {
                                             const isChecked = userFormData.supervisors.includes(m._id || m.id);
                                             return (
                                                 <Col key={m._id || m.id} span={12}>
@@ -1218,8 +1362,8 @@ const UsersPage = () => {
                                                     </div>
                                                 </Col>
                                             );
-                                        });
-                                    })()}
+                                        })
+                                    )}
                                 </Row>
                             </div>
                         </Card>
@@ -1230,7 +1374,7 @@ const UsersPage = () => {
                         <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <UserCheck size={13} className="text-emerald-500" /> Assign Brand Managers
+                                    <UserCheck size={13} className="text-emerald-500" /> Select Brand Managers
                                 </div>
                                 <Badge count={`${userFormData.brandManagers.length} Linked`} style={{ backgroundColor: '#10b981', fontWeight: 700, fontSize: 10 }} />
                             </div>
@@ -1239,7 +1383,7 @@ const UsersPage = () => {
                                 <Input 
                                     prefix={<Search size={12} />} 
                                     size="small"
-                                    placeholder="Query brand commanders..." 
+                                    placeholder="Search brand managers..." 
                                     value={modalSearchBrandManager}
                                     onChange={e => setModalSearchBrandManager(e.target.value)}
                                     style={{ borderRadius: 6 }}
@@ -1252,11 +1396,10 @@ const UsersPage = () => {
 
                             <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
                                 <Row gutter={[8, 8]}>
-                                    {(() => {
-                                        const bmUsers = managers.filter(m => m.role?.name?.toLowerCase() === 'brand_manager' || m.role?.displayName?.toLowerCase() === 'brand manager');
-                                        const filtered = bmUsers.filter(m => `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(modalSearchBrandManager.toLowerCase()));
-                                        if (filtered.length === 0) return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No matched brand managers available.</div></Col>;
-                                        return filtered.map(m => {
+                                    {filteredBrandManagers.length === 0 ? (
+                                        <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>No matched brand managers available.</div></Col>
+                                    ) : (
+                                        filteredBrandManagers.map(m => {
                                             const isChecked = userFormData.brandManagers.includes(m._id || m.id);
                                             return (
                                                 <Col key={m._id || m.id} span={12}>
@@ -1284,8 +1427,8 @@ const UsersPage = () => {
                                                     </div>
                                                 </Col>
                                             );
-                                        });
-                                    })()}
+                                        })
+                                    )}
                                 </Row>
                             </div>
                         </Card>
@@ -1295,7 +1438,7 @@ const UsersPage = () => {
                     <Card variant="borderless" style={{ borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Store size={13} className="text-emerald-500" /> Client Brands Association
+                                <Store size={13} className="text-emerald-500" /> Assigned Brands
                             </div>
                             <Badge count={`${isListingTeam ? inheritedSellers.length : userFormData.assignedSellers.length} Associated`} style={{ backgroundColor: '#059669', fontWeight: 700, fontSize: 10 }} />
                         </div>
@@ -1304,7 +1447,7 @@ const UsersPage = () => {
                             <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, display: 'flex', gap: 8 }}>
                                 <Info size={14} className="text-blue-600" style={{ marginTop: 2, flexShrink: 0 }} />
                                 <div style={{ fontSize: 11.5, color: '#1e40af', fontWeight: 500 }}>
-                                    <strong>Brand Inheritance Protocol:</strong> Access rights are dynamic and derived automatically from assigned brand commanders.
+                                    <strong>Brand Inheritance Protocol:</strong> Access rights are dynamic and derived automatically from assigned brand managers.
                                 </div>
                             </div>
                         )}
@@ -1323,27 +1466,24 @@ const UsersPage = () => {
                                 <Input 
                                     prefix={<Search size={12} />} 
                                     size="small"
-                                    placeholder="Search active storefronts..." 
+                                    placeholder="Search brands..." 
                                     value={modalSearchSeller}
                                     onChange={e => setModalSearchSeller(e.target.value)}
                                     style={{ borderRadius: 6 }}
                                 />
                                 <Button size="small" onClick={() => setUserFormData({ ...userFormData, assignedSellers: sellers.map(s => s._id || s.id) })} style={{ fontSize: 11, fontWeight: 600 }}>Link All</Button>
-                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, assignedSellers: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Wipe</Button>
+                                <Button size="small" onClick={() => setUserFormData({ ...userFormData, assignedSellers: [] })} style={{ fontSize: 11, fontWeight: 600 }}>Clear All</Button>
                             </div>
                         )}
 
                         <div style={{ maxHeight: 180, overflowY: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
                             <Row gutter={[8, 8]}>
-                                {(() => {
-                                    const listToRender = isListingTeam ? inheritedSellers : sellers;
-                                    const filtered = listToRender.filter(s => `${s.name} ${s.code || ''}`.toLowerCase().includes(modalSearchSeller.toLowerCase()));
-                                    if (filtered.length === 0) {
-                                        return <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>
-                                            {isListingTeam ? 'Link brand managers to fetch associations.' : 'No matched brands found.'}
-                                        </div></Col>;
-                                    }
-                                    return filtered.map(s => {
+                                {filteredSellers.length === 0 ? (
+                                    <Col span={24}><div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11.5 }}>
+                                        {isListingTeam ? 'Link brand managers to fetch associations.' : 'No matched brands found.'}
+                                    </div></Col>
+                                ) : (
+                                    filteredSellers.map(s => {
                                         const isChecked = isListingTeam ? true : userFormData.assignedSellers.includes(s._id || s.id);
                                         const isReadOnly = isListingTeam;
                                         return (
@@ -1373,8 +1513,8 @@ const UsersPage = () => {
                                                 </div>
                                             </Col>
                                         );
-                                    });
-                                })()}
+                                    })
+                                )}
                             </Row>
                         </div>
                     </Card>
@@ -1388,13 +1528,13 @@ const UsersPage = () => {
                         <div style={{ background: '#F5F3FF', color: '#8B5CF6', padding: 6, borderRadius: 8, display: 'flex' }}>
                             <Shield size={16} />
                         </div>
-                        <span style={{ fontWeight: 800 }}>{editingRole ? 'Configure Role Blueprint' : 'Construct Custom Role'}</span>
+                        <span style={{ fontWeight: 800 }}>{editingRole ? 'Edit Role' : 'Create Custom Role'}</span>
                     </Space>
                 }
                 open={showRoleModal}
                 onCancel={() => setShowRoleModal(false)}
                 centered
-                destroyOnHidden
+                destroyOnClose
                 width={500}
                 className="glass-modal"
                 footer={[
@@ -1408,13 +1548,13 @@ const UsersPage = () => {
                         onClick={handleSaveRole}
                         style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700 }}
                     >
-                        {editingRole ? 'Update Access' : 'Deploy Role'}
+                        {editingRole ? 'Update Access' : 'Create Role'}
                     </Button>
                 ]}
             >
                 <div style={{ padding: '8px 0' }}>
                     <Form layout="vertical">
-                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Technical Reference Name</span>}>
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Identifier Code</span>}>
                             <Input 
                                 disabled={!!editingRole}
                                 placeholder="e.g. analyst_l2" 
@@ -1423,7 +1563,7 @@ const UsersPage = () => {
                                 style={{ borderRadius: 8 }}
                             />
                         </Form.Item>
-                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Display Interface Label *</span>} required>
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Name (Display Label) *</span>} required>
                             <Input 
                                 placeholder="e.g. Senior Operations Analyst" 
                                 value={roleFormData.displayName}
@@ -1433,7 +1573,7 @@ const UsersPage = () => {
                         </Form.Item>
                         <Row gutter={12}>
                             <Col span={12}>
-                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Hierarchy Level (0-100)</span>}>
+                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Priority/Access Level (0-100)</span>}>
                                     <Input 
                                         type="number" 
                                         min={0} max={100}
@@ -1444,7 +1584,7 @@ const UsersPage = () => {
                                 </Form.Item>
                             </Col>
                             <Col span={12}>
-                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Interface Theme Color</span>}>
+                                <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Theme Color</span>}>
                                     <Space size={8} style={{ width: '100%' }}>
                                         <Input 
                                             type="color" 
@@ -1457,7 +1597,7 @@ const UsersPage = () => {
                                 </Form.Item>
                             </Col>
                         </Row>
-                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Strategy Description</span>}>
+                        <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Description</span>}>
                             <TextArea 
                                 rows={3}
                                 placeholder="Define access boundary scopes for this custom role..."
