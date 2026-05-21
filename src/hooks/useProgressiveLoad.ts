@@ -76,7 +76,7 @@ function createSkeleton<TSnapshot>(config: {
 export function useProgressiveLoad(
     definitions: Record<string, { key: string; minMs?: number }>,
 ) {
-    const freezetime = Date.now();
+    const freezetime = useRef(Date.now());
 
     const [sections, setSections]   = useState(
         () => new Map(Object.values(definitions).map((d) => [d.key, createSkeleton(d)])),
@@ -94,7 +94,7 @@ export function useProgressiveLoad(
      * @param snapshot data received
      * @param opts     propagation options
      */
-    const receive = useCallback((key, snapshot, opts?: { updated?: boolean; manual?: boolean }) => {
+    const receive = useCallback((key: string, snapshot: any, opts?: { updated?: boolean; manual?: boolean }) => {
         const def = Object.values(definitions).find((d) => d.key === key);
         if (!def) return;
 
@@ -103,14 +103,18 @@ export function useProgressiveLoad(
 
         setSections((prev) => {
             const existing = prev.get(key);
-            if (existing && existing.updated) return prev; // already resolved, skip
-
-            if (updated) {
-                // Immediate resolution — no skeleton delay
+            
+            // If already resolved with data or manually updated, bypass delay and update immediately
+            if (updated || (existing && existing.snapshot !== null)) {
                 lockedSections.current.delete(key);
                 const next = new Map(prev);
                 next.set(key, { ...existing!, snapshot, updated: true });
                 return next;
+            }
+
+            // Clear any previously pending timeout for this section
+            if (resolveTracker.current.has(key)) {
+                clearTimeout(resolveTracker.current.get(key)!);
             }
 
             // Schedule deferred resolution after minMs
@@ -119,13 +123,12 @@ export function useProgressiveLoad(
                 lockedSections.current.delete(key);
                 setSections((p) => {
                     const ex = p.get(key);
-                    if (!ex || ex.updated) return p;
                     const n = new Map(p);
-                    n.set(key, { ...ex, snapshot });
+                    n.set(key, { ...ex!, snapshot, updated: true });
                     return n;
                 });
                 resolveTracker.current.delete(key);
-            }, Math.max(minMs - (Date.now() - freezetime), 0)));
+            }, Math.max(minMs - (Date.now() - freezetime.current), 0)));
 
             return prev;
         });
@@ -136,7 +139,7 @@ export function useProgressiveLoad(
     /**
      * Signal that a section has an error.
      */
-    const reject = useCallback((key, error: string) => {
+    const reject = useCallback((key: string, error: string) => {
         setErrors((prev) => ({ ...prev, [key]: error }));
         lockedSections.current.delete(key);
     }, []);
@@ -153,35 +156,33 @@ export function useProgressiveLoad(
      */
     const reset = useCallback(() => {
         Object.values(definitions).forEach((def) => {
-            resolveTracker.current.get(def.key) && clearTimeout(resolveTracker.current.get(def.key)!);
+            if (resolveTracker.current.has(def.key)) {
+                clearTimeout(resolveTracker.current.get(def.key)!);
+            }
         });
         resolveTracker.current.clear();
         lockedSections.current.clear();
+        freezetime.current = Date.now();
         setSections(new Map(Object.values(definitions).map((d) => [d.key, createSkeleton(d)])));
         setFlood(0);
         setErrors({});
     }, [definitions]);
 
-    // Hydration: all sections resolved when none are locked
+    // Hydration: all sections resolved when none are null, or have errored
     const checkIsHydrated = useCallback(() => {
         const allDefs = Object.values(definitions);
-        const allResolved = !allDefs.some((d) => resolvedSections.current.has(d.key));
-        return lockedSections.current.size === 0;
-    }, [definitions]);
-
-    const resolvedSections = useRef(new Set<string>());
-    useEffect(() => {
-        sections.forEach((sec) => {
-            if (sec.snapshot !== null && !resolvedSections.current.has(sec.key)) {
-                resolvedSections.current.add(sec.key);
-            }
+        return allDefs.every((def) => {
+            const sec = sections.get(def.key);
+            return sec && (sec.snapshot !== null || errors[def.key] != null);
         });
-    }, [sections]);
+    }, [definitions, sections, errors]);
 
     // ── Pre-baked section getters matching the dashboard's sections ──────────────
     const snap         = <T>(key: string): T | null => ((sections.get(key) as ProgressiveSection<T>)?.snapshot ?? null) as T | null;
-    const isLoadingSec = (key: string) =>
-        sections.get(key)?.snapshot === null ? !lockedSections.current.has(key) : false;
+    const isLoadingSec = (key: string) => {
+        const sec = sections.get(key);
+        return sec ? sec.snapshot === null && errors[key] == null : true;
+    };
 
     return {
         sections,
@@ -192,15 +193,18 @@ export function useProgressiveLoad(
         reset,
         priorityFlood,
         // Convenience typed accessors
-        kpis:      snap<MetricOverview[]>('kpis'),
-        metrics:   snap<MetricOverview[]>('metrics'),
-        targets:   snap<any[]>('targets'),
-        alerts:    snap<any[]>('alerts'),
+        kpis:             snap<MetricOverview[]>('kpis'),
+        revenueSeries:    snap<any[]>('revenueSeries'),
+        adsPerformance:   snap<any[]>('adsPerformance'),
+        categories:       snap<any[]>('categories'),
+        topProducts:      snap<any[]>('topProducts'),
+        targets:          snap<any[]>('targets'),
+        alerts:           snap<any[]>('alerts'),
+        metrics:          snap<MetricOverview[]>('metrics'),
         isLoadingKpis:      isLoadingSec('kpis'),
         isLoadingMetrics:   isLoadingSec('metrics'),
         isLoadingTargets:   isLoadingSec('targets'),
         isLoadingAlerts:    isLoadingSec('alerts'),
-        // Stable boolean flag — computed once per render from the ref-backed state
         isHydrated: checkIsHydrated(),
     };
 }

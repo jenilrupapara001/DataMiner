@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
     Table, Button, Select, Space, Card, Row, Col, Typography,
     Progress, Badge, Divider, Segmented, Tag, Tooltip, Input,
-    List, Avatar
+    List, Avatar, Skeleton
 } from 'antd';
 import {
     Target, DollarSign, Percent, RefreshCw, TrendingUp,
@@ -173,11 +173,11 @@ const TargetVsAchievementDashboard = () => {
     }, [targets]);
 
     // Handle view change from Segmented controller
-    const handleViewChange = (val) => {
+    const handleViewChange = useCallback((val) => {
         if (val === 'table') {
             navigate('/target-achievement');
         }
-    };
+    }, [navigate]);
 
     // Filtered sellers (mapped from user profiles or list of targets)
     const filteredSellers = useMemo(() => {
@@ -199,7 +199,7 @@ const TargetVsAchievementDashboard = () => {
         }
         
         // Admins can see all sellers present in targets or database
-        const sellerCodes = Array.from(new Set(targets.map(t => t.SellerId).filter(Boolean)));
+        const sellerCodes = Array.from(new Set((targets || []).map(t => t.SellerId).filter(Boolean)));
         return sellerCodes.map(code => ({
             sellerId: code,
             name: code,
@@ -209,7 +209,7 @@ const TargetVsAchievementDashboard = () => {
 
     // Filter targets by selected configurations
     const filteredTargets = useMemo(() => {
-        return targets.filter((t) => {
+        return (targets || []).filter((t) => {
             const matchesPlan = t.TargetType === selectedPlanType;
             const matchesYear = t.Year === selectedYear;
             
@@ -340,7 +340,6 @@ const TargetVsAchievementDashboard = () => {
             { name: 'Critical (<50%)', value: critical, color: '#ef4444' }
         ].filter(item => item.value > 0);
     }, [filteredTargets]);
-
     // Breakdown table columns
     const columns = [
         {

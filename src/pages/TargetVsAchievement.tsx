@@ -6,7 +6,7 @@ import React, {
 import {
     Layout, Button, Input, Select, Space, Typography,
     Tag, Tooltip, Popconfirm, Progress, message,
-    Breadcrumb, Divider, Pagination
+    Breadcrumb, Divider, Pagination, Modal, Checkbox
 } from 'antd';
 import {
     Plus, Search, RefreshCw, Edit3, Trash2,
@@ -104,10 +104,11 @@ const PeriodCell = memo(({
 
 const GoalDataRow = memo(({
     record, goalRow, periods, isFirst, isLast,
-    brandRowSpan, onEdit, onDelete, perms
+    brandRowSpan, isSelected, onSelectChange, onEdit, onDelete, perms
 }: {
     record: any; goalRow: any; periods: string[];
     isFirst: boolean; isLast: boolean; brandRowSpan: number;
+    isSelected: boolean; onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void; perms: any;
 }) => {
     const goalType   = resolveGoalType(goalRow);
@@ -135,13 +136,32 @@ const GoalDataRow = memo(({
         return [];
     })();
 
-    const cellBg    = isFirst ? '#fff' : '#fafbff';
+    const cellBg    = isFirst ? '#fff' : '#fcfdff';
     const rowBorder = isLast
-        ? '2px solid #e8e8e8'
-        : '1px solid #f0f0f0';
+        ? '1px solid #e2e8f0'
+        : '1px solid #f1f5f9';
 
     return (
         <tr style={{ borderBottom: rowBorder }}>
+
+            {/* Checkbox — rowSpan */}
+            {isFirst && (
+                <td rowSpan={brandRowSpan} style={{
+                    padding: '12px 12px',
+                    verticalAlign: 'middle',
+                    textAlign: 'center',
+                    background: '#fff',
+                    borderRight: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #e2e8f0',
+                    position: 'sticky', left: 0, zIndex: 2,
+                    width: 46, minWidth: 46
+                }}>
+                    <Checkbox
+                        checked={isSelected}
+                        onChange={e => onSelectChange(record._groupId, e.target.checked)}
+                    />
+                </td>
+            )}
 
             {/* Brand Name — rowSpan */}
             {isFirst && (
@@ -149,20 +169,21 @@ const GoalDataRow = memo(({
                     padding: '12px 16px',
                     verticalAlign: 'middle',
                     background: '#fff',
-                    borderRight: '1px solid #f0f0f0',
-                    borderBottom: '2px solid #e8e8e8',
-                    position: 'sticky', left: 0, zIndex: 2,
+                    borderRight: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #e2e8f0',
+                    position: 'sticky', left: 46, zIndex: 2,
                     minWidth: 200
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {/* Brand avatar with rank number */}
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                             <div style={{
-                                width: 36, height: 36, borderRadius: 10,
-                                background: `linear-gradient(135deg, ${meta.color}22, ${meta.color}44)`,
+                                width: 38, height: 38, borderRadius: 10,
+                                background: `linear-gradient(135deg, ${meta.color}15, ${meta.color}30)`,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 12, fontWeight: 800, color: meta.color,
-                                border: `1.5px solid ${meta.color}30`
+                                fontSize: 13, fontWeight: 700, color: meta.color,
+                                border: `1px solid ${meta.color}25`,
+                                boxShadow: `0 2px 8px -2px ${meta.color}20`
                             }}>
                                 {(record.SellerId || '?')[0].toUpperCase()}
                             </div>
@@ -190,17 +211,18 @@ const GoalDataRow = memo(({
                     padding: '12px 16px',
                     verticalAlign: 'middle',
                     background: '#fff',
-                    borderRight: '1px solid #f0f0f0',
-                    borderBottom: '2px solid #e8e8e8',
+                    borderRight: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #e2e8f0',
                     minWidth: 150
                 }}>
                     {record.BrandManager ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{
-                                width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-                                background: '#ede9fe', fontSize: 10,
-                                fontWeight: 700, color: '#7c3aed',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                                background: '#e0e7ff', fontSize: 11,
+                                fontWeight: 600, color: '#4f46e5',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1px solid #c7d2fe'
                             }}>
                                 {record.BrandManager[0].toUpperCase()}
                             </div>
@@ -222,15 +244,16 @@ const GoalDataRow = memo(({
                     padding: '12px 12px',
                     verticalAlign: 'middle', textAlign: 'center',
                     background: '#fff',
-                    borderRight: '1px solid #f0f0f0',
-                    borderBottom: '2px solid #e8e8e8',
+                    borderRight: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #e2e8f0',
                     width: 90
                 }}>
                     <Tag style={{
                         borderRadius: 20, fontWeight: 600, fontSize: 11, border: 'none',
-                        background: record.TargetType === 'YEARLY' ? '#ede9fe' : '#d1fae5',
-                        color:      record.TargetType === 'YEARLY' ? '#6d28d9' : '#059669',
-                        padding: '2px 10px'
+                        background: record.TargetType === 'YEARLY' ? '#e0e7ff' : '#d1fae5',
+                        color:      record.TargetType === 'YEARLY' ? '#4f46e5' : '#059669',
+                        padding: '2px 10px',
+                        margin: 0
                     }}>
                         {record.TargetType === 'YEARLY' ? 'Yearly' : 'Monthly'}
                     </Tag>
@@ -242,15 +265,16 @@ const GoalDataRow = memo(({
                 padding: '10px 14px',
                 verticalAlign: 'middle',
                 background: cellBg,
-                borderRight: '1px solid #f0f0f0',
+                borderRight: '1px solid #f1f5f9',
                 width: 130
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{
-                        width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
                         background: meta.bg,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 10, fontWeight: 800, color: meta.color
+                        fontSize: 11, fontWeight: 700, color: meta.color,
+                        border: `1px solid ${meta.color}20`
                     }}>
                         {meta.unit}
                     </div>
@@ -267,10 +291,10 @@ const GoalDataRow = memo(({
                 padding: '10px 16px',
                 verticalAlign: 'middle', textAlign: 'right',
                 background: cellBg,
-                borderRight: '1px solid #f0f0f0',
+                borderRight: '1px solid #f1f5f9',
                 width: 130
             }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: meta.color }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
                     {fmtVal(total, meta.unit)}
                 </div>
                 <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
@@ -283,11 +307,11 @@ const GoalDataRow = memo(({
                 padding: '10px 16px',
                 verticalAlign: 'middle', textAlign: 'right',
                 background: cellBg,
-                borderRight: '1px solid #f0f0f0',
+                borderRight: '1px solid #f1f5f9',
                 width: 140
             }}>
                 <div style={{
-                    fontSize: 14, fontWeight: 700,
+                    fontSize: 13, fontWeight: 700,
                     color: overallAch > 0 ? tier.color : '#ef4444'
                 }}>
                     {fmtVal(overallAch, meta.unit)}
@@ -316,7 +340,7 @@ const GoalDataRow = memo(({
                 return (
                     <td key={idx} style={{
                         padding: 0,
-                        borderRight: '1px solid #f5f5f5',
+                        borderRight: '1px solid #f1f5f9',
                         verticalAlign: 'middle',
                         background: cellBg,
                         minWidth: 82
@@ -332,8 +356,8 @@ const GoalDataRow = memo(({
                     padding: '0 12px',
                     verticalAlign: 'middle', textAlign: 'center',
                     background: '#fff',
-                    borderLeft: '1px solid #f0f0f0',
-                    borderBottom: '2px solid #e8e8e8',
+                    borderLeft: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #e2e8f0',
                     position: 'sticky', right: 0, zIndex: 2,
                     width: 80
                 }}>
@@ -347,7 +371,8 @@ const GoalDataRow = memo(({
                                     style={{
                                         background: '#4f46e5', borderColor: '#4f46e5',
                                         width: 30, height: 30,
-                                        boxShadow: '0 2px 8px rgba(79,70,229,0.25)'
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        boxShadow: '0 2px 8px rgba(79,70,229,0.15)'
                                     }}
                                 />
                             </Tooltip>
@@ -366,7 +391,10 @@ const GoalDataRow = memo(({
                                     <Button
                                         danger shape="circle" size="small"
                                         icon={<Trash2 size={13} />}
-                                        style={{ width: 30, height: 30 }}
+                                        style={{
+                                            width: 30, height: 30,
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}
                                     />
                                 </Tooltip>
                             </Popconfirm>
@@ -381,10 +409,11 @@ const GoalDataRow = memo(({
 // ─── Grouped table ────────────────────────────────────────────────────────────
 
 const GroupedTable = memo(({
-    groups, planType, perms, onEdit, onDelete
+    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete
 }: {
     groups: any[]; planType: 'YEARLY'|'MONTHLY';
-    perms: any; onEdit: (r: any) => void; onDelete: (g: any) => void;
+    perms: any; selectedRowKeys: string[]; onSelectChange: (key: string, checked: boolean) => void;
+    onEdit: (r: any) => void; onDelete: (g: any) => void;
 }) => {
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
@@ -440,6 +469,8 @@ const GroupedTable = memo(({
                         isFirst={rowIdx === 0}
                         isLast={rowIdx === rows.length - 1}
                         brandRowSpan={rows.length}
+                        isSelected={selectedRowKeys.includes(group._groupId)}
+                        onSelectChange={onSelectChange}
                         onEdit={onEdit}
                         onDelete={onDelete}
                         perms={perms}
@@ -472,6 +503,18 @@ const TargetVsAchievement = () => {
     const [sellers,       setSellers]       = useState<any[]>([]);
     const [page,          setPage]          = useState(1);
     const [pageSize,      setPageSize]      = useState(20);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+
+    const handleSelectChange = useCallback((key: string, checked: boolean) => {
+        setSelectedRowKeys(prev => 
+            checked ? [...prev, key] : prev.filter(k => k !== key)
+        );
+    }, []);
+
+    // Clear selection when view configurations change
+    useEffect(() => {
+        setSelectedRowKeys([]);
+    }, [planType, filterYear, searchText]);
 
     // Load sellers
     useEffect(() => {
@@ -538,35 +581,39 @@ const TargetVsAchievement = () => {
 
     const editInitialData = useMemo(() => {
         if (!editingRecord) return [];
-        const periodKeys = editingRecord.TargetType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
-        return [{
-            sectionId:  editingRecord._groupId,
-            sellerId:   editingRecord.SellerId  || '',
-            manager:    editingRecord.BrandManager || '',
-            periodType: (editingRecord.TargetType || 'YEARLY') as 'YEARLY'|'MONTHLY',
-            year:       editingRecord.Year  || new Date().getFullYear(),
-            month:      editingRecord.Month || 1,
-            collapsed:  false,
-            goalRows: (editingRecord.goalRows || []).map((gr: any) => {
-                const bds: any[] = gr.monthlyBreakdown || gr.weeklyBreakdown || gr.breakdowns || [];
-                return {
-                    goalRowId:   gr.targetRecordId || `gr_${Math.random()}`,
-                    goalType:    resolveGoalType(gr),
-                    totalTarget: gr.totalTarget || 0,
-                    targetId:    gr.targetRecordId,
-                    cells: periodKeys.map((_: string, i: number) => {
-                        const pv = i + 1;
-                        const bd = bds.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
-                        return {
-                            value:         bd?.TargetValue            ?? bd?.targetValue            ?? 0,
-                            pct:           bd?.PercentageContribution ?? bd?.percentageContribution ?? 0,
-                            achievedValue: bd?.AchievedValue          ?? bd?.achievedValue          ?? 0,
-                            breakdownId:   bd?.Id ?? bd?.id
-                        };
-                    })
-                };
-            })
-        }];
+        const records = Array.isArray(editingRecord) ? editingRecord : [editingRecord];
+        return records.map(rec => {
+            const periodKeys = rec.TargetType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
+            return {
+                sectionId:  rec._groupId,
+                sellerId:   rec.SellerId  || '',
+                brandManager: rec.BrandManager || '',
+                manager:    rec.BrandManager || '',
+                periodType: (rec.TargetType || 'YEARLY') as 'YEARLY'|'MONTHLY',
+                year:       rec.Year  || new Date().getFullYear(),
+                month:      rec.Month || 1,
+                collapsed:  false,
+                goalRows: (rec.goalRows || []).map((gr: any) => {
+                    const bds: any[] = gr.monthlyBreakdown || gr.weeklyBreakdown || gr.breakdowns || [];
+                    return {
+                        goalRowId:   gr.targetRecordId || `gr_${Math.random()}`,
+                        goalType:    resolveGoalType(gr),
+                        totalTarget: gr.totalTarget || 0,
+                        targetId:    gr.targetRecordId,
+                        cells: periodKeys.map((_: string, i: number) => {
+                            const pv = i + 1;
+                            const bd = bds.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
+                            return {
+                                value:         bd?.TargetValue            ?? bd?.targetValue            ?? 0,
+                                pct:           bd?.PercentageContribution ?? bd?.percentageContribution ?? 0,
+                                achievedValue: bd?.AchievedValue          ?? bd?.achievedValue          ?? 0,
+                                breakdownId:   bd?.Id ?? bd?.id
+                            };
+                        })
+                    };
+                })
+            };
+        });
     }, [editingRecord]);
 
     const handleEdit   = useCallback((r: any) => { if (perms.canEdit) { setEditingRecord(r); setEditVisible(true); } }, [perms.canEdit]);
@@ -620,6 +667,7 @@ const TargetVsAchievement = () => {
             }
             setEditVisible(false);
             setEditingRecord(null);
+            setSelectedRowKeys([]);
             msgApi.success('Targets updated successfully!');
         } catch (err: any) {
             msgApi.error(err?.message || 'Error updating targets.');
@@ -629,35 +677,16 @@ const TargetVsAchievement = () => {
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
     return (
-        <Layout style={{ minHeight: '100%', background: '#f5f6fa' }}>
+        <Layout className="target-achievement-container" style={{ minHeight: 'calc(100vh - 72px)', background: '#f8fafc', margin: '-1.5rem -2rem -1.5rem -2rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {contextHolder}
             {msgCtx}
 
             {/* ── Page Header ──────────────────────────────────────── */}
-            <div style={{ background: '#fff', borderBottom: '1px solid #e8e8e8', padding: '0 24px' }}>
-                {/* Breadcrumb */}
-                <div style={{ padding: '12px 0 0' }}>
-                    <Breadcrumb
-                        items={[
-                            { title: <span style={{ color: '#94a3b8', fontSize: 12 }}>Intelligence</span> },
-                            {
-                                title: (
-                                    <span
-                                        style={{ color: '#64748b', fontSize: 12, cursor: 'pointer' }}
-                                        onClick={() => navigate('/target-achievement')}
-                                    >
-                                        Target vs Achievement
-                                    </span>
-                                )
-                            }
-                        ]}
-                    />
-                </div>
-
+            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '20px 32px 14px' }}>
                 {/* Title row */}
                 <div style={{
                     display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', padding: '10px 0 14px',
+                    alignItems: 'center',
                     flexWrap: 'wrap', gap: 12
                 }}>
                     <div>
@@ -675,7 +704,8 @@ const TargetVsAchievement = () => {
                             <Button
                                 style={{
                                     fontWeight: 600, fontSize: 12,
-                                    background: '#f5f3ff', borderColor: '#d8b4fe', color: '#7c3aed'
+                                    background: '#f5f3ff', borderColor: '#c084fc', color: '#7c3aed',
+                                    boxShadow: '0 1px 2px rgba(124, 58, 237, 0.05)'
                                 }}
                             >
                                 Table View
@@ -697,8 +727,8 @@ const TargetVsAchievement = () => {
                                 style={{
                                     fontWeight: 600, fontSize: 12,
                                     ...(planType === 'YEARLY'
-                                        ? { background: '#1e293b', borderColor: '#1e293b' }
-                                        : {})
+                                        ? { background: '#6366f1', borderColor: '#6366f1', color: '#ffffff' }
+                                        : { background: '#ffffff', borderColor: '#e2e8f0', color: '#64748b' })
                                 }}
                             >
                                 Yearly Plans
@@ -709,8 +739,8 @@ const TargetVsAchievement = () => {
                                 style={{
                                     fontWeight: 600, fontSize: 12,
                                     ...(planType === 'MONTHLY'
-                                        ? { background: '#1e293b', borderColor: '#1e293b' }
-                                        : {})
+                                        ? { background: '#6366f1', borderColor: '#6366f1', color: '#ffffff' }
+                                        : { background: '#ffffff', borderColor: '#e2e8f0', color: '#64748b' })
                                 }}
                             >
                                 Monthly Plans
@@ -743,7 +773,7 @@ const TargetVsAchievement = () => {
                             <Button
                                 type="primary" icon={<Plus size={14} />}
                                 onClick={() => setAddVisible(true)}
-                                style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600 }}
+                                style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)' }}
                             >
                                 Establish Targets
                             </Button>
@@ -755,8 +785,8 @@ const TargetVsAchievement = () => {
             {/* ── Toolbar ──────────────────────────────────────────── */}
             <div style={{
                 background: '#fff',
-                padding: '10px 24px',
-                borderBottom: '1px solid #e8e8e8',
+                padding: '12px 32px',
+                borderBottom: '1px solid #f1f5f9',
                 display: 'flex', alignItems: 'center',
                 justifyContent: 'space-between', gap: 16,
                 flexWrap: 'wrap'
@@ -803,15 +833,17 @@ const TargetVsAchievement = () => {
             </div>
 
             {/* ── Table Content ─────────────────────────────────────── */}
-            <Content style={{ padding: '16px 24px', flex: 1, minHeight: 0 }}>
+            <Content style={{ padding: '24px 32px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <div style={{
                     background: '#fff',
-                    borderRadius: 8,
-                    border: '1px solid #e8e8e8',
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 18px -4px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.02)',
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
-                    height: '100%'
+                    height: '100%',
+                    transition: 'box-shadow 0.3s ease'
                 }}>
                     {/* Scrollable table area */}
                     <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
@@ -822,9 +854,10 @@ const TargetVsAchievement = () => {
                         }}>
                             {/* Head */}
                             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                                <tr style={{ background: '#fafafa', borderBottom: '2px solid #e8e8e8' }}>
+                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                     {[
-                                        { label: 'Brand Name',    w: 200, sticky: true },
+                                        { label: '',              w: 46,  sticky: true,  left: 0,   isCheckbox: true },
+                                        { label: 'Brand Name',    w: 200, sticky: true,  left: 46 },
                                         { label: 'Manager',       w: 150, sticky: false },
                                         { label: 'Plan Type',     w: 90,  sticky: false },
                                         { label: 'Goal Type',     w: 130, sticky: false },
@@ -832,22 +865,42 @@ const TargetVsAchievement = () => {
                                         { label: 'Sales Achieved',w: 140, sticky: false },
                                     ].map((col, i) => (
                                         <th key={i} style={{
-                                            padding: '11px 16px',
-                                            textAlign: i >= 4 ? 'right' : 'left',
-                                            fontSize: 11, fontWeight: 700,
-                                            color: '#6b7280',
-                                            letterSpacing: '0.05em',
+                                            padding: col.isCheckbox ? '12px 12px' : '12px 16px',
+                                            textAlign: i >= 5 ? 'right' : col.isCheckbox ? 'center' : 'left',
+                                            fontSize: 11, fontWeight: 600,
+                                            color: '#475569',
+                                            letterSpacing: '0.06em',
                                             textTransform: 'uppercase',
-                                            background: '#fafafa',
-                                            borderRight: '1px solid #f0f0f0',
-                                            borderBottom: '2px solid #e8e8e8',
+                                            background: '#f8fafc',
+                                            borderRight: '1px solid #f1f5f9',
+                                            borderBottom: '1px solid #e2e8f0',
                                             whiteSpace: 'nowrap',
                                             ...(col.sticky
-                                                ? { position: 'sticky', left: 0, zIndex: 6 }
+                                                ? { position: 'sticky', left: col.left, zIndex: 6 }
                                                 : {}),
                                             width: col.w, minWidth: col.w
                                         }}>
-                                            {col.label}
+                                            {col.isCheckbox ? (
+                                                <Checkbox
+                                                    checked={paginatedGroups.length > 0 && paginatedGroups.every(g => selectedRowKeys.includes(g._groupId))}
+                                                    indeterminate={paginatedGroups.some(g => selectedRowKeys.includes(g._groupId)) && !paginatedGroups.every(g => selectedRowKeys.includes(g._groupId))}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        if (checked) {
+                                                            const newKeys = [...selectedRowKeys];
+                                                            paginatedGroups.forEach(g => {
+                                                                if (!newKeys.includes(g._groupId)) {
+                                                                    newKeys.push(g._groupId);
+                                                                }
+                                                            });
+                                                            setSelectedRowKeys(newKeys);
+                                                        } else {
+                                                            const pageKeys = paginatedGroups.map(g => g._groupId);
+                                                            setSelectedRowKeys(selectedRowKeys.filter(k => !pageKeys.includes(k)));
+                                                        }
+                                                    }}
+                                                />
+                                            ) : col.label}
                                         </th>
                                     ))}
 
@@ -856,18 +909,18 @@ const TargetVsAchievement = () => {
                                         <th key={i} style={{
                                             padding: '8px 6px',
                                             textAlign: 'center',
-                                            fontSize: 11, fontWeight: 700,
-                                            color: '#6b7280',
-                                            background: '#fafafa',
-                                            borderRight: '1px solid #f0f0f0',
-                                            borderBottom: '2px solid #e8e8e8',
+                                            fontSize: 11, fontWeight: 600,
+                                            color: '#475569',
+                                            background: '#f8fafc',
+                                            borderRight: '1px solid #f1f5f9',
+                                            borderBottom: '1px solid #e2e8f0',
                                             minWidth: 82, whiteSpace: 'nowrap'
                                         }}>
-                                            <div>{p}</div>
+                                            <div style={{ fontWeight: 600 }}>{p}</div>
                                             <div style={{
                                                 display: 'flex', justifyContent: 'space-around',
                                                 marginTop: 2, fontSize: 8,
-                                                color: '#c4c4c4', fontWeight: 700
+                                                color: '#94a3b8', fontWeight: 700
                                             }}>
                                                 <span>T</span><span>A</span>
                                             </div>
@@ -876,12 +929,12 @@ const TargetVsAchievement = () => {
 
                                     {/* Actions */}
                                     <th style={{
-                                        padding: '11px 12px', textAlign: 'center',
-                                        fontSize: 11, fontWeight: 700, color: '#6b7280',
-                                        letterSpacing: '0.05em', textTransform: 'uppercase',
-                                        background: '#fafafa',
-                                        borderLeft: '1px solid #f0f0f0',
-                                        borderBottom: '2px solid #e8e8e8',
+                                        padding: '12px 12px', textAlign: 'center',
+                                        fontSize: 11, fontWeight: 600, color: '#475569',
+                                        letterSpacing: '0.06em', textTransform: 'uppercase',
+                                        background: '#f8fafc',
+                                        borderLeft: '1px solid #f1f5f9',
+                                        borderBottom: '1px solid #e2e8f0',
                                         position: 'sticky', right: 0, zIndex: 6, width: 80
                                     }}>
                                         Actions
@@ -904,6 +957,8 @@ const TargetVsAchievement = () => {
                                         groups={paginatedGroups}
                                         planType={planType}
                                         perms={perms}
+                                        selectedRowKeys={selectedRowKeys}
+                                        onSelectChange={handleSelectChange}
                                         onEdit={handleEdit}
                                         onDelete={handleDelete}
                                     />
@@ -911,6 +966,83 @@ const TargetVsAchievement = () => {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Floating Bulk Actions Bar */}
+                    {selectedRowKeys.length > 0 && (
+                        <div style={{
+                            position: 'absolute',
+                            bottom: 76,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            zIndex: 50,
+                            background: '#0f172a',
+                            borderRadius: 12,
+                            padding: '10px 20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3)',
+                            border: '1px solid #1e293b',
+                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+                        }}>
+                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>
+                                {selectedRowKeys.length} {selectedRowKeys.length === 1 ? 'brand' : 'brands'} selected
+                            </Text>
+                            <Divider type="vertical" style={{ background: '#334155', margin: 0, height: 20 }} />
+                            <Button
+                                type="primary"
+                                size="small"
+                                icon={<Edit3 size={12} />}
+                                onClick={() => {
+                                    const recordsToEdit = grouped.filter(g => selectedRowKeys.includes(g._groupId));
+                                    setEditingRecord(recordsToEdit);
+                                    setEditVisible(true);
+                                }}
+                                style={{ background: '#6366f1', borderColor: '#6366f1', fontSize: 12, fontWeight: 600 }}
+                            >
+                                Edit Selected
+                            </Button>
+                            {perms.canDelete && (
+                                <Popconfirm
+                                    title="Delete all selected targets?"
+                                    description={`This will permanently delete all targets for the ${selectedRowKeys.length} selected brand(s).`}
+                                    onConfirm={async () => {
+                                        const recordsToDelete = grouped.filter(g => selectedRowKeys.includes(g._groupId));
+                                        const allIds: string[] = [];
+                                        recordsToDelete.forEach(r => {
+                                            if (r._allTargetIds) allIds.push(...r._allTargetIds);
+                                        });
+                                        if (allIds.length) {
+                                            await deleteTargets(allIds);
+                                            setSelectedRowKeys([]);
+                                        }
+                                    }}
+                                    okText="Delete All"
+                                    cancelText="Cancel"
+                                    okButtonProps={{ danger: true }}
+                                    placement="top"
+                                >
+                                    <Button
+                                        danger
+                                        type="primary"
+                                        size="small"
+                                        icon={<Trash2 size={12} />}
+                                        style={{ fontSize: 12, fontWeight: 600 }}
+                                    >
+                                        Delete Selected
+                                    </Button>
+                                </Popconfirm>
+                            )}
+                            <Button
+                                type="text"
+                                size="small"
+                                onClick={() => setSelectedRowKeys([])}
+                                style={{ color: '#94a3b8', fontSize: 12, fontWeight: 500 }}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    )}
 
                     {/* ── Pagination — fixed at bottom of table ─────── */}
                     {totalGroups > 0 && (
@@ -949,11 +1081,48 @@ const TargetVsAchievement = () => {
                 </div>
             </Content>
 
-            {/* Row hover styles */}
+            {/* Row hover and scrollbar styles */}
             <style>{`
+                /* Custom sleek scrollbar for the table area */
+                .target-achievement-container ::-webkit-scrollbar {
+                  width: 6px;
+                  height: 6px;
+                }
+                .target-achievement-container ::-webkit-scrollbar-track {
+                  background: #f8fafc;
+                }
+                .target-achievement-container ::-webkit-scrollbar-thumb {
+                  background: #cbd5e1;
+                  border-radius: 4px;
+                }
+                .target-achievement-container ::-webkit-scrollbar-thumb:hover {
+                  background: #94a3b8;
+                }
+
                 thead th { user-select: none; }
-                tbody tr:hover td { background: #f8f9ff !important; }
+                tbody tr:hover td { background: #f8fafc !important; }
+                tbody tr:hover td[rowspan] { background: #ffffff !important; }
                 tbody td { transition: background 0.12s ease; }
+
+                /* Premium button hover animations */
+                .ant-btn {
+                  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .ant-btn-primary:hover {
+                  transform: translateY(-1px);
+                  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25) !important;
+                }
+
+                @keyframes slideUp {
+                  from {
+                    transform: translate(-50%, 20px);
+                    opacity: 0;
+                  }
+                  to {
+                    transform: translate(-50%, 0);
+                    opacity: 1;
+                  }
+                }
             `}</style>
 
             {/* ── Modals ────────────────────────────────────────────── */}

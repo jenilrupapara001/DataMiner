@@ -57,7 +57,7 @@ exports.getTargets = async (req, res) => {
                     request.input(`sid_${i}`, sql.VarChar, id);
                     return `@sid_${i}`;
                 });
-                orParts.push(`t.SellerId IN (${params.join(',')})`);
+                orParts.push(`s.Id IN (${params.join(',')})`);
             }
             if (bmName) {
                 request.input('bmName', sql.NVarChar, bmName);
@@ -73,7 +73,7 @@ exports.getTargets = async (req, res) => {
                 t.Id, t.SellerId, t.BrandManager, t.TargetType, t.Year, t.Month, t.TotalTargetValue, t.GoalType, t.CreatedAt,
                 s.Name AS SellerName
             FROM GmsTargets t
-            LEFT JOIN Sellers s ON t.SellerId = s.Id
+            LEFT JOIN Sellers s ON t.SellerId = s.SellerId
             ${whereClause}
             ORDER BY t.CreatedAt DESC
         `;
@@ -127,20 +127,21 @@ exports.getTargets = async (req, res) => {
             statsRequest.input('maxDate', sql.Date, `${maxYear}-12-31`);
 
             const dailyQuery = `
-                SELECT a.SellerId, p.Date,
+                SELECT s.SellerId AS ReadableSellerId, p.Date,
                        SUM(ISNULL(p.AdSpend, 0)) as AdSpend,
                        SUM(ISNULL(p.AdSales, 0)) as AdSales,
                        SUM(ISNULL(p.OrganicSales, 0)) as OrganicSales
                 FROM Asins a
                 INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
-                WHERE a.SellerId IN (${sellerParams.join(',')})
+                INNER JOIN Sellers s ON a.SellerId = s.Id
+                WHERE s.SellerId IN (${sellerParams.join(',')})
                   AND p.Date >= @minDate AND p.Date <= @maxDate
-                GROUP BY a.SellerId, p.Date
+                GROUP BY s.SellerId, p.Date
             `;
             const dailyResult = await statsRequest.query(dailyQuery);
 
             dailyResult.recordset.forEach(row => {
-                const sId = row.SellerId;
+                const sId = row.ReadableSellerId;
                 if (row.Date) {
                     const dateStr = format(new Date(row.Date), 'yyyy-MM-dd');
                     if (!dailyStats[sId]) dailyStats[sId] = {};
