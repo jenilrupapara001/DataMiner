@@ -1,4 +1,4 @@
-// pages/SellersPage.tsx — complete fixed version
+// pages/SellersPage.tsx — complete fixed version with optimistic updates
 
 import React, {
   useState, useEffect, useMemo, useCallback,
@@ -8,13 +8,13 @@ import { useDebounce } from '../hooks/useDebounce';
 import { sellerApi, asinApi, marketSyncApi } from '../services/api';
 import {
   Table, Button, Input, Segmented, Select, Space,
-  Tag, Typography, Tooltip, Avatar, Modal, Empty,
-  Divider, Badge, Card, Popconfirm, message
+  Tag, Typography, Tooltip, Avatar, Empty,
+  Divider, Badge, Card, Popconfirm
 } from 'antd';
 import {
   Package, Search, Plus, FileUp, Upload,
   Clock, Trash2, Play, Pause, LayoutGrid,
-  AlertCircle, RefreshCw, Edit3, ChevronRight, X
+  RefreshCw, Edit3, ChevronRight
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -30,7 +30,7 @@ const BulkImportModal = lazy(() => import('../components/asins/BulkImportModal')
 
 const { Text, Title } = Typography;
 
-// ─── Pure helpers (outside component — never recreated) ───────────────────────
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
 
 const GRADIENTS = [
   'linear-gradient(135deg, #4f46e5, #7c3aed)',
@@ -53,15 +53,15 @@ function getStoreGradient(str = '') {
 function formatTimeAgo(dateString) {
   if (!dateString) return 'Never';
   const date = new Date(dateString);
-  const diffInSeconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diffInSeconds < 60) return 'Just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 const SellersPage = () => {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
@@ -100,8 +100,9 @@ const SellersPage = () => {
   const [selectedSellerIds, setSelectedSellerIds] = useState([]);
   const [bulkImportConfig, setBulkImportConfig] = useState({ sellerId: '', tab: 'catalog' });
   const [poolStats, setPoolStats] = useState({ total: 0, assigned: 0, available: 0 });
+  const [syncingIds, setSyncingIds] = useState(new Set());
 
-  // ── Fix 9: stabilise addToast in ref ──────────────────────────────────
+  // Stable toast ref
   const toastRef = useRef(addToast);
   useEffect(() => { toastRef.current = addToast; });
 
@@ -111,7 +112,7 @@ const SellersPage = () => {
   const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
   const canAccessMyntra = isAdmin || hasPermission('marketplace_myntra');
 
-  // ── Fix 13: marketplace filter — run once, not on every render ─────────
+  // Init marketplace filter once
   const marketplaceInitRef = useRef(false);
   useEffect(() => {
     if (marketplaceInitRef.current) return;
@@ -120,14 +121,10 @@ const SellersPage = () => {
     else if (canAccessAmazon && !canAccessAjio) setMarketplaceFilter('amazon.in');
   }, []); // eslint-disable-line
 
-  // ── Fix 1: loadSellers with EMPTY stable deps, params passed directly ──
-  // Previously: loadSellers depended on page/limit/filters via closure
-  // → Every filter change created a new loadSellers → useEffect re-ran → ∞
-  // Solution: pass params explicitly, keep stable function reference
+  // ── Core fetch (stable — never changes) ────────────────────────────────
   const loadSellers = useCallback(async (params = {}) => {
     const {
-      page: p = 1,
-      limit: l = 50,
+      page: p = 1, limit: l = 50,
       activeTab: tab = 'all',
       marketplaceFilter: mf = 'all',
       statusFilter: sf = 'all',
@@ -144,24 +141,24 @@ const SellersPage = () => {
         search: q || undefined,
       });
 
-      let extractedSellers = [];
+      let list = [];
       let total = 0;
 
       if (response?.success && response?.data) {
-        extractedSellers = response.data.sellers || (Array.isArray(response.data) ? response.data : []);
-        total = response.data.pagination?.total ?? response.data.total ?? extractedSellers.length;
+        list = response.data.sellers || (Array.isArray(response.data) ? response.data : []);
+        total = response.data.pagination?.total ?? response.data.total ?? list.length;
       } else if (Array.isArray(response?.sellers)) {
-        extractedSellers = response.sellers;
-        total = response.total ?? extractedSellers.length;
+        list = response.sellers;
+        total = response.total ?? list.length;
       } else if (Array.isArray(response)) {
-        extractedSellers = response;
-        total = response.length;
+        list = response;
+        total = list.length;
       } else if (Array.isArray(response?.data)) {
-        extractedSellers = response.data;
-        total = extractedSellers.length;
+        list = response.data;
+        total = list.length;
       }
 
-      setSellers(extractedSellers);
+      setSellers(list);
       setTotalItems(total);
     } catch (error) {
       toastRef.current('Network error: Could not connect to data service', 'error');
@@ -169,31 +166,28 @@ const SellersPage = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []); // ← stable forever
+  }, []); // stable forever
 
-  // ── Trigger load when filters change ───────────────────────────────────
-  // Fix 10: single effect for all params — no duplicate on mount
+  // Trigger on filter change
   useEffect(() => {
     setPage(1);
-    void loadSellers({
-      page: 1, limit, activeTab, marketplaceFilter,
-      statusFilter, search: debouncedSearch
-    });
+    void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch });
   }, [activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
 
-  // Separate effect for page/limit changes only
+  // Trigger on page/limit change only (skip initial render — already handled above)
+  const isFirstPageRender = useRef(true);
   useEffect(() => {
+    if (isFirstPageRender.current) { isFirstPageRender.current = false; return; }
     void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch });
   }, [page, limit]); // eslint-disable-line
 
-  // ── Fix 2: socket listener via ref — never re-registers ───────────────
+  // Socket: silent refresh via ref
   const loadSellersRef = useRef(loadSellers);
   useEffect(() => { loadSellersRef.current = loadSellers; });
 
   useEffect(() => {
     if (!socket) return;
-    const handler = data => {
-      console.log('📢 Real-time update:', data);
+    const handler = () => {
       void loadSellersRef.current({
         page, limit, activeTab, marketplaceFilter, statusFilter,
         search: debouncedSearch, silent: true
@@ -201,7 +195,7 @@ const SellersPage = () => {
     };
     socket.on('SELLERS_UPDATED', handler);
     return () => socket.off('SELLERS_UPDATED', handler);
-  }, [socket]); // ← socket only — stable
+  }, [socket]); // socket only
 
   // Pool stats
   const fetchPoolStats = useCallback(async () => {
@@ -215,93 +209,108 @@ const SellersPage = () => {
     if (isGlobalUser) fetchPoolStats();
   }, [isGlobalUser, fetchPoolStats]);
 
-  // Clear selection on filter change
   useEffect(() => {
     setSelectedSellerIds([]);
   }, [page, activeTab, marketplaceFilter, debouncedSearch]);
 
-  // ── Fix 4: Optimistic toggle status ───────────────────────────────────
-  const handleToggleStatus = useCallback(async sellerId => {
+  // ── OPTIMISTIC: Toggle status (instant — no refetch) ──────────────────
+  const handleToggleStatus = useCallback(async (sellerId) => {
     const seller = sellers.find(s => s._id === sellerId);
     if (!seller) return;
-
     const newStatus = seller.status === 'Active' ? 'Paused' : 'Active';
 
-    // Instant optimistic update
+    // ① Instant UI
     setSellers(prev => prev.map(s =>
       s._id === sellerId ? { ...s, status: newStatus, _saving: true } : s
     ));
-
     try {
       await sellerApi.update(sellerId, { status: newStatus });
+      // ② Confirm
       setSellers(prev => prev.map(s =>
         s._id === sellerId ? { ...s, _saving: false } : s
       ));
-    } catch (error) {
-      // Rollback
+    } catch {
+      // ③ Rollback
       setSellers(prev => prev.map(s =>
         s._id === sellerId ? { ...s, status: seller.status, _saving: false } : s
       ));
-      toastRef.current('Failed to update seller status', 'error');
+      toastRef.current('Failed to update status', 'error');
     }
   }, [sellers]);
 
-  // ── Fix 3 + 11: No window.confirm — use Popconfirm in JSX instead ─────
-  // (delete/sync confirmation is now inline in renderActions via Popconfirm)
-  const handleDeleteSeller = useCallback(async sellerId => {
-    // Optimistic delete
+  // ── OPTIMISTIC: Delete seller (instant — no refetch) ──────────────────
+  const handleDeleteSeller = useCallback(async (sellerId) => {
     const snapshot = sellers.find(s => s._id === sellerId);
+    // ① Remove instantly
     setSellers(prev => prev.filter(s => s._id !== sellerId));
     setTotalItems(prev => prev - 1);
-
     try {
       await sellerApi.delete(sellerId);
-      toastRef.current('Seller deleted successfully', 'success');
+      toastRef.current('Seller deleted.', 'success');
     } catch (error) {
-      // Rollback
-      if (snapshot) setSellers(prev => [...prev, snapshot]);
+      // ② Rollback
+      if (snapshot) setSellers(prev => [snapshot, ...prev]);
       setTotalItems(prev => prev + 1);
-      toastRef.current('Failed to delete seller: ' + error.message, 'error');
+      toastRef.current('Failed to delete: ' + error.message, 'error');
     }
   }, [sellers]);
 
-  const handleAddSeller = useCallback(async sellerData => {
+  // ── OPTIMISTIC: Add / Edit seller ─────────────────────────────────────
+  const handleAddSeller = useCallback(async (sellerData) => {
     try {
       if (editingSeller) {
-        const updated = await sellerApi.update(editingSeller._id, sellerData);
-        setSellers(prev => prev.map(s => s._id === editingSeller._id ? { ...s, ...sellerData } : s));
+        // ① Patch locally right away
+        setSellers(prev => prev.map(s =>
+          s._id === editingSeller._id ? { ...s, ...sellerData, _saving: true } : s
+        ));
+        await sellerApi.update(editingSeller._id, sellerData);
+        // ② Confirm
+        setSellers(prev => prev.map(s =>
+          s._id === editingSeller._id ? { ...s, _saving: false } : s
+        ));
+        toastRef.current('Seller updated.', 'success');
       } else {
-        await sellerApi.create(sellerData);
-        // Silent reload to get server-assigned ID
-        void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+        // For creates: call API, then prepend returned record
+        const res = await sellerApi.create(sellerData);
+        const newSeller = res?.data || res?.seller || { ...sellerData, _id: `tmp_${Date.now()}` };
+        setSellers(prev => [newSeller, ...prev]);
+        setTotalItems(prev => prev + 1);
+        toastRef.current('Seller added.', 'success');
       }
       setShowAddModal(false);
       setEditingSeller(null);
     } catch (error) {
-      toastRef.current('Failed to save seller: ' + error.message, 'error');
+      // Rollback edit
+      if (editingSeller) {
+        void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+      }
+      toastRef.current('Failed to save: ' + error.message, 'error');
     }
   }, [editingSeller, page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
 
-  const handleEditSeller = useCallback(seller => {
+  const handleEditSeller = useCallback((seller) => {
     setEditingSeller(seller);
     setShowAddModal(true);
   }, []);
 
-  const handleImportSellers = useCallback(async sellersData => {
+  // ── Import sellers (batch add to local state) ─────────────────────────
+  const handleImportSellers = useCallback(async (sellersData) => {
     try {
       const response = await sellerApi.import(sellersData);
       if (response.success) {
-        toastRef.current(`${sellersData.length} storefronts onboarded successfully.`, 'success');
-        void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch });
+        toastRef.current(`${sellersData.length} storefronts onboarded.`, 'success');
+        // Silent refresh to get server-assigned IDs
+        void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
         setShowImportModal(false);
         return true;
       }
     } catch (error) {
-      toastRef.current(error.message || 'Check your CSV format and try again.', 'error');
+      toastRef.current(error.message || 'Check CSV format and try again.', 'error');
     }
     return false;
-  }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
+  }, [limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
 
+  // ── ASIN management ────────────────────────────────────────────────────
   const handleViewAsins = useCallback(async (seller, pageNum = 1) => {
     setSelectedSeller(seller);
     setShowAsinModal(true);
@@ -313,7 +322,6 @@ const SellersPage = () => {
       else setSellerAsins(prev => [...prev, ...(result.asins || [])]);
       setAsinPagination(result.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 });
     } catch (err) {
-      console.error('Failed to load ASINs:', err);
       if (pageNum === 1) setSellerAsins([]);
     } finally {
       setLoadingAsins(false);
@@ -326,16 +334,13 @@ const SellersPage = () => {
     }
   }, [asinPagination, loadingAsins, selectedSeller, handleViewAsins]);
 
-  // ── Fix 5: ASIN mutations — don't reload sellers list ─────────────────
+  // ASIN mutations — patch seller's asin count locally, no full reload
   const refreshAsinList = useCallback(async (sellerId) => {
     const result = await asinApi.getBySeller(sellerId, { page: 1, limit: 50 });
     setSellerAsins(result.asins || []);
     setAsinPagination(result.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 });
-    // Only update the asin count on the specific seller row
     setSellers(prev => prev.map(s =>
-      s._id === sellerId
-        ? { ...s, totalAsins: result.pagination?.total ?? s.totalAsins }
-        : s
+      s._id === sellerId ? { ...s, totalAsins: result.pagination?.total ?? s.totalAsins } : s
     ));
   }, []);
 
@@ -343,7 +348,7 @@ const SellersPage = () => {
     if (!selectedSeller) return;
     try {
       await asinApi.create({ ...asinData, seller: selectedSeller._id, status: 'Active' });
-      toastRef.current(`Added ${asinData.asinCode} to inventory.`, 'success');
+      toastRef.current(`Added ${asinData.asinCode}.`, 'success');
       await refreshAsinList(selectedSeller._id);
     } catch (error) {
       toastRef.current(error.message || 'Failed to add ASIN', 'error');
@@ -383,20 +388,18 @@ const SellersPage = () => {
   const handleSyncAsin = useCallback(async (asinId) => {
     try {
       await marketSyncApi.syncAsin(asinId);
-      toastRef.current('ASIN sync triggered successfully!', 'success');
+      toastRef.current('ASIN sync triggered!', 'success');
     } catch (error) {
       toastRef.current(error.message, 'error');
     }
   }, []);
 
-  // ── Fix 11: row-level sync — no global setLoading ─────────────────────
-  const [syncingIds, setSyncingIds] = useState(new Set());
-
+  // ── Row-level sync (no global loading flash) ──────────────────────────
   const handleSyncSeller = useCallback(async (sellerId) => {
     setSyncingIds(prev => new Set(prev).add(sellerId));
     try {
       const res = await marketSyncApi.syncSellerAsins(sellerId, false);
-      if (res.success) toastRef.current('Seller sync triggered!', 'success');
+      if (res.success) toastRef.current('Sync triggered!', 'success');
     } catch (error) {
       toastRef.current(error.message, 'error');
     } finally {
@@ -410,32 +413,23 @@ const SellersPage = () => {
     setShowBulkImportModal(true);
   }, []);
 
+  // ── Bulk sync ──────────────────────────────────────────────────────────
+  const [bulkSyncing, setBulkSyncing] = useState(false);
   const handleBulkSync = useCallback(async () => {
-    if (selectedSellerIds.length === 0) return;
-    let successCount = 0, errorCount = 0;
-
-    // Fix 12: proper loading isolation — use separate state, not global loading
-    setLoading(true);
+    if (!selectedSellerIds.length) return;
+    setBulkSyncing(true);
+    let ok = 0, fail = 0;
     try {
-      await Promise.all(
-        selectedSellerIds.map(async (sellerId) => {
-          try {
-            await marketSyncApi.syncSellerAsins(sellerId, false);
-            successCount++;
-          } catch (err) {
-            errorCount++;
-          }
-        })
-      );
-      toastRef.current(
-        `Synced ${successCount} seller(s).${errorCount ? ` ${errorCount} failed.` : ''}`,
-        errorCount > 0 ? 'warning' : 'success'
-      );
+      await Promise.all(selectedSellerIds.map(async (id) => {
+        try { await marketSyncApi.syncSellerAsins(id, false); ok++; }
+        catch { fail++; }
+      }));
+      toastRef.current(`Synced ${ok}.${fail ? ` ${fail} failed.` : ''}`, fail ? 'warning' : 'success');
       setSelectedSellerIds([]);
     } catch (err) {
       toastRef.current(err.message, 'error');
     } finally {
-      setLoading(false);
+      setBulkSyncing(false);
     }
   }, [selectedSellerIds]);
 
@@ -443,7 +437,7 @@ const SellersPage = () => {
     setLoading(true);
     try {
       await marketSyncApi.ingestAllResults();
-      toastRef.current('Global ingestion started in background.', 'info');
+      toastRef.current('Global ingestion started.', 'info');
     } catch (error) {
       toastRef.current(error.message, 'error');
     } finally {
@@ -451,20 +445,13 @@ const SellersPage = () => {
     }
   }, []);
 
-  // ── Marketplace badge ──────────────────────────────────────────────────
+  // ── Badges ─────────────────────────────────────────────────────────────
   const getMarketplaceBadge = useCallback((marketplace) => {
-    const market = marketplace?.toLowerCase();
+    const m = marketplace?.toLowerCase();
     let color = '#52525b', bg = '#f4f4f5', border = '#e4e4e7', logo = null;
-    if (market === 'amazon.in') {
-      color = '#1d4ed8'; bg = '#eff6ff'; border = '#bfdbfe';
-      logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg';
-    } else if (market === 'ajio') {
-      color = '#6d28d9'; bg = '#f5f3ff'; border = '#ddd6fe';
-      logo = 'https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png';
-    } else if (market === 'myntra') {
-      color = '#be185d'; bg = '#fdf2f8'; border = '#fbcfe8';
-      logo = 'https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg';
-    }
+    if (m === 'amazon.in') { color = '#1d4ed8'; bg = '#eff6ff'; border = '#bfdbfe'; logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg'; }
+    else if (m === 'ajio') { color = '#6d28d9'; bg = '#f5f3ff'; border = '#ddd6fe'; logo = 'https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png'; }
+    else if (m === 'myntra') { color = '#be185d'; bg = '#fdf2f8'; border = '#fbcfe8'; logo = 'https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg'; }
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -480,14 +467,13 @@ const SellersPage = () => {
 
   const getStatusBadge = useCallback((status) => (
     <Tag color={status === 'Active' ? 'green' : 'default'} style={{
-      fontWeight: 700, textTransform: 'uppercase', fontSize: 10,
-      borderRadius: 6, padding: '0 8px', lineHeight: '18px'
+      fontWeight: 700, textTransform: 'uppercase', fontSize: 10, borderRadius: 6, padding: '0 8px', lineHeight: '18px'
     }}>
       {status?.toUpperCase() || 'UNKNOWN'}
     </Tag>
   ), []);
 
-  // ── Fix 3: Popconfirm-based actions (no window.confirm) ───────────────
+  // ── Row actions ────────────────────────────────────────────────────────
   const renderActions = useCallback((seller) => {
     const isActive = seller.status === 'Active';
     const isSyncing = syncingIds.has(seller._id);
@@ -522,8 +508,8 @@ const SellersPage = () => {
         <Tooltip title="Sync Store">
           <Button type="text" size="small"
             icon={<RefreshCw size={14} className={isSyncing ? 'spin' : ''} />}
-            onClick={() => handleSyncSeller(seller._id)}
             loading={isSyncing}
+            onClick={() => handleSyncSeller(seller._id)}
             style={{ color: '#64748b' }} />
         </Tooltip>
         <Tooltip title={isActive ? 'Pause Store' : 'Resume Store'}>
@@ -534,25 +520,23 @@ const SellersPage = () => {
             loading={seller._saving}
             style={{
               borderRadius: 6,
-              ...(isActive ? { color: '#64748b' } : { background: '#10b981', borderColor: '#10b981', color: '#fff' })
+              ...(isActive
+                ? { color: '#64748b' }
+                : { background: '#10b981', borderColor: '#10b981', color: '#fff' })
             }}
           />
         </Tooltip>
         {hasPermission('sellers_delete') && (
-          // ✅ Fix 3: Popconfirm replaces window.confirm
           <Popconfirm
             title="Delete this seller?"
             description="All ASINs will also be permanently deleted."
             onConfirm={() => handleDeleteSeller(seller._id)}
-            okText="Delete"
-            cancelText="Cancel"
-            okButtonProps={{ danger: true }}
-            placement="left"
+            okText="Delete" cancelText="Cancel"
+            okButtonProps={{ danger: true }} placement="left"
           >
             <Tooltip title="Delete Store">
               <Button type="text" size="small" danger
-                icon={<Trash2 size={14} />}
-                style={{ color: '#ef4444' }} />
+                icon={<Trash2 size={14} />} style={{ color: '#ef4444' }} />
             </Tooltip>
           </Popconfirm>
         )}
@@ -564,8 +548,7 @@ const SellersPage = () => {
     handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission
   ]);
 
-  // ── Columns ────────────────────────────────────────────────────────────
-  // Fix 14: split static columns from action column to reduce rebuild frequency
+  // ── Table columns ──────────────────────────────────────────────────────
   const staticColumns = useMemo(() => [
     {
       title: 'STORE DETAILS', dataIndex: 'name', key: 'name', width: 280,
@@ -575,7 +558,7 @@ const SellersPage = () => {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {getMarketplaceBadge(seller.marketplace)}
-              <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.02em' }}>
+              <Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>
                 {seller.count} STORES
               </Text>
             </div>
@@ -587,8 +570,7 @@ const SellersPage = () => {
               width: 32, height: 32, borderRadius: 8, flexShrink: 0,
               background: getStoreGradient(seller.name || ''),
               color: '#fff', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontWeight: 800, fontSize: 10,
-              letterSpacing: '0.05em'
+              justifyContent: 'center', fontWeight: 800, fontSize: 10
             }}>
               {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
             </div>
@@ -613,7 +595,7 @@ const SellersPage = () => {
         if (!managers?.length) return <Text type="secondary" italic style={{ fontSize: 10 }}>Unassigned</Text>;
         return (
           <Space wrap size={2}>
-            {managers.map(m => (
+            {managers.map((m) => (
               <span key={m._id} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 background: '#f8fafc', padding: '2px 6px', borderRadius: 12, border: '1px solid #f1f5f9'
@@ -687,8 +669,6 @@ const SellersPage = () => {
 
   const columns = useMemo(() => [...staticColumns, actionColumn], [staticColumns, actionColumn]);
 
-  // ── Fix 6: Remove dead paginatedSellers useMemo ────────────────────────
-  // was just: { paginatedSellers: sellers, totalResults: totalItems }
   const groupedDataSource = useMemo(() => {
     const grouped = {};
     sellers.forEach(seller => {
@@ -704,18 +684,11 @@ const SellersPage = () => {
     return data;
   }, [sellers]);
 
-  // ── Fix 7: Stable rowSelection ─────────────────────────────────────────
   const rowSelection = useMemo(() => ({
     selectedRowKeys: selectedSellerIds,
     onChange: (keys) => setSelectedSellerIds(keys),
-    getCheckboxProps: (record) => ({
-      disabled: record.isGroupHeader,
-      name: record.name,
-    }),
+    getCheckboxProps: (record) => ({ disabled: record.isGroupHeader, name: record.name }),
   }), [selectedSellerIds]);
-
-  // ── Fix 8: Correct pagination (exclude group header rows from count) ───
-  const headerRowCount = groupedDataSource.filter(r => r.isGroupHeader).length;
 
   if (loading && sellers.length === 0) {
     return <PageLoader message="Loading Sellers..." />;
@@ -729,7 +702,7 @@ const SellersPage = () => {
         </div>
       )}
 
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────────── */}
       <div style={{
         padding: '16px 24px', background: '#ffffff', borderBottom: '1px solid #f1f5f9',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16
@@ -757,7 +730,6 @@ const SellersPage = () => {
                 size="middle" style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}>
                 Octoparse Pool ({poolStats.available})
               </Button>
-              {/* ✅ Fix 3: replaced window.confirm with Popconfirm */}
               <Popconfirm
                 title="Start batch ingestion?"
                 description="This will check all Octoparse tasks and ingest new results."
@@ -791,7 +763,7 @@ const SellersPage = () => {
         </Space>
       </div>
 
-      {/* Filters */}
+      {/* ── Filters ──────────────────────────────────────────────── */}
       <div style={{
         padding: '10px 24px', background: '#fcfcfd', borderBottom: '1px solid #f1f5f9',
         display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between'
@@ -801,7 +773,7 @@ const SellersPage = () => {
             size="middle"
             options={[{ label: 'All Stores', value: 'all' }, { label: 'Active', value: 'Active' }, { label: 'Paused', value: 'Paused' }]}
             value={activeTab}
-            onChange={v => { setActiveTab(v); setStatusFilter('all'); }}
+            onChange={(v) => { setActiveTab(v); setStatusFilter('all'); }}
             style={{ fontWeight: 600, borderRadius: 8, padding: 2 }}
           />
           <Select value={marketplaceFilter} onChange={setMarketplaceFilter} style={{ width: 150 }} size="middle"
@@ -842,7 +814,7 @@ const SellersPage = () => {
         </Space>
       </div>
 
-      {/* Bulk action bar */}
+      {/* ── Bulk action bar ───────────────────────────────────────── */}
       {selectedSellerIds.length > 0 && (
         <div style={{
           padding: '8px 24px', background: '#0f172a', color: '#fff',
@@ -855,12 +827,12 @@ const SellersPage = () => {
           <Space size={8}>
             <Popconfirm
               title={`Sync ${selectedSellerIds.length} seller(s)?`}
-              description="This will trigger scraping for all ASINs under these sellers."
+              description="This triggers scraping for all ASINs under these sellers."
               onConfirm={handleBulkSync}
               okText="Sync" cancelText="Cancel"
             >
               <Button size="small" type="primary" icon={<RefreshCw size={12} />}
-                loading={loading}
+                loading={bulkSyncing}
                 style={{ borderRadius: 6, fontWeight: 600, background: '#2563eb', borderColor: '#2563eb' }}>
                 Sync Selected
               </Button>
@@ -873,7 +845,7 @@ const SellersPage = () => {
         </div>
       )}
 
-      {/* Table */}
+      {/* ── Table ─────────────────────────────────────────────────── */}
       <div style={{ padding: '20px 24px', flex: 1, background: '#fafafa' }}>
         <Card styles={{ body: { padding: 0 } }}
           style={{ borderRadius: 12, border: '1px solid #f0f0f0', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
@@ -885,7 +857,6 @@ const SellersPage = () => {
             rowSelection={rowSelection}
             size="middle"
             className="premium-seller-table"
-            // ✅ Fix 8: correct pagination — exclude header rows from count
             pagination={{
               current: page,
               pageSize: limit,
@@ -907,7 +878,7 @@ const SellersPage = () => {
                 />
               )
             }}
-            onRow={record => record.isGroupHeader
+            onRow={(record) => record.isGroupHeader
               ? { style: { background: '#f8fafc', fontWeight: 700 } }
               : {}
             }
@@ -916,18 +887,18 @@ const SellersPage = () => {
       </div>
 
       <style>{`
-                .spin { animation: spin 1.5s linear infinite; }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .premium-seller-table .ant-table-thead > tr > th {
-                    background: #fafafa !important; font-size: 10px !important; color: #8c8c8c !important;
-                    font-weight: 800 !important; letter-spacing: 0.1em !important;
-                    padding: 14px 16px !important; border-bottom: 1px solid #f0f0f0 !important;
-                }
-                .premium-seller-table .ant-table-row:hover > td { background: #fdfdfd !important; }
-                .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #f0f0f0 !important; }
-                .premium-seller-table .ant-table-pagination { margin: 16px !important; }
-                @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-            `}</style>
+        .spin { animation: spin 1.5s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .premium-seller-table .ant-table-thead > tr > th {
+          background: #fafafa !important; font-size: 10px !important; color: #8c8c8c !important;
+          font-weight: 800 !important; letter-spacing: 0.1em !important;
+          padding: 14px 16px !important; border-bottom: 1px solid #f0f0f0 !important;
+        }
+        .premium-seller-table .ant-table-row:hover > td { background: #fdfdfd !important; }
+        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #f0f0f0 !important; }
+        .premium-seller-table .ant-table-pagination { margin: 16px !important; }
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
 
       <Suspense fallback={null}>
         {showAddModal && (
@@ -966,7 +937,7 @@ const SellersPage = () => {
         <BulkImportModal
           isOpen={showBulkImportModal}
           onClose={() => setShowBulkImportModal(false)}
-          onComplete={() => loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch })}
+          onComplete={() => loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true })}
           initialSellerId={bulkImportConfig.sellerId}
           initialTab={bulkImportConfig.tab}
         />
