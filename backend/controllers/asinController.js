@@ -574,7 +574,7 @@ exports.getAsins = async (req, res) => {
             dealBadge: a.DealBadge || 'No deal found',
             priceType: a.PriceType || 'Standard Price',
             discountPercentage: parseInt(a.DiscountPercentage) || 0,
-            priceDispute: priceDisputeValue,
+            priceDispute: a.PriceDispute === 1 || a.PriceDispute === true,
             hasDeal: hasDeal,
             
             // BSR & Ratings

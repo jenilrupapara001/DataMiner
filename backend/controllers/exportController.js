@@ -40,8 +40,8 @@ const ALL_ASIN_FIELDS = [
     { key: 'bulletScore', label: 'Bullet Score', category: 'LQS' },
     { key: 'imageScore', label: 'Image Score', category: 'LQS' },
     { key: 'descriptionScore', label: 'Description Score', category: 'LQS' },
-    { key: 'cdq', label: 'CDQ Score', category: 'Performance' },
-    { key: 'cdqGrade', label: 'CDQ Grade', category: 'Performance' },
+    // { key: 'cdq', label: 'CDQ Score', category: 'Performance' },
+    // { key: 'cdqGrade', label: 'CDQ Grade', category: 'Performance' },
     { key: 'buyBoxWin', label: 'BuyBox Winner', category: 'BuyBox' },
     { key: 'soldBy', label: 'Sold By (Current BuyBox)', category: 'BuyBox' },
     { key: 'soldBySec', label: 'Sold By (Other BuyBox)', category: 'BuyBox' },
@@ -135,7 +135,7 @@ async function processExportJob(downloadId, params, userId) {
                 LEFT JOIN Roles R ON U.RoleId = R.Id 
                 WHERE U.Id = @userId
             `);
-        
+
         if (userResult.recordset.length > 0) {
             const u = userResult.recordset[0];
             user = {
@@ -143,7 +143,7 @@ async function processExportJob(downloadId, params, userId) {
                 role: u.RoleName,
                 assignedSellers: []
             };
-            
+
             // Fetch assigned sellers
             const sellersResult = await pool.request()
                 .input('userId', sql.VarChar, userId)
@@ -207,11 +207,11 @@ async function processExportJob(downloadId, params, userId) {
         if (!isGlobalUser) {
             const assignedIds = user?.assignedSellers || [];
             if (assignedIds.length === 0) {
-                whereClause += ' AND 1=0'; 
+                whereClause += ' AND 1=0';
             } else {
                 whereClause += ` AND a.SellerId IN (${assignedIds.map(id => `'${id}'`).join(',')})`;
             }
-            
+
             // Further restrict by requested sellers if provided (intersection)
             if (sellerIds.length > 0) {
                 const allowedSellerIds = sellerIds.filter(id => assignedIds.includes(id));
@@ -225,7 +225,7 @@ async function processExportJob(downloadId, params, userId) {
             // Admins filtering by specific sellers
             whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
         }
-        
+
         if (asinIds.length > 0) {
             whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
         }
@@ -393,8 +393,8 @@ async function processExportJob(downloadId, params, userId) {
             'bulletScore': 'a.BulletScore',
             'imageScore': 'a.ImageScore',
             'descriptionScore': 'a.DescriptionScore',
-            'cdq': 'a.Cdq',
-            'cdqGrade': 'a.CdqGrade',
+            // 'cdq': 'a.Cdq',
+            // 'cdqGrade': 'a.CdqGrade',
             'buyBoxWin': 'a.BuyBoxWin',
             'soldBy': 'a.SoldBy',
             'soldBySec': 'a.SoldBySec',
@@ -448,7 +448,7 @@ async function processExportJob(downloadId, params, userId) {
             const item = {};
             fields.forEach(field => {
                 const label = labelMapping[field] || field;
-                
+
                 // Get value using exact field name from SQL
                 let value = row[field];
                 if (value === undefined) {
@@ -459,14 +459,14 @@ async function processExportJob(downloadId, params, userId) {
                         value = row[simpleCol];
                     }
                 }
-                
+
                 // Special field handling
                 if (field === 'brand' || field === 'Brand') {
                     value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
                 } else if (field === 'buyBoxWin' || field === 'hasAplus') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
                 } else if (field === 'tags' || field === 'Tags') {
-                    try { 
+                    try {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
                         value = Array.isArray(parsed) ? parsed.join(', ') : parsed;
                     } catch { value = value || ''; }
@@ -516,7 +516,7 @@ async function processExportJob(downloadId, params, userId) {
             .input('id', sql.VarChar, downloadId)
             .query('SELECT FileName FROM Downloads WHERE Id = @id');
         const fileName = resultDownloads.recordset[0]?.FileName || `asin_export_${downloadId}.${format}`;
-        
+
         // Generate file
         const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
         const ws = XLSX.utils.json_to_sheet(exportData);
@@ -529,7 +529,7 @@ async function processExportJob(downloadId, params, userId) {
         if (ws['!cols'][3]) ws['!cols'][3] = { wch: 40 }; // Title usually wider
 
         if (format === 'csv') {
-            const csvData = XLSX.utils.sheet_to_csv(ws, { 
+            const csvData = XLSX.utils.sheet_to_csv(ws, {
                 forceQuotes: true,
                 RS: '\r\n'
             });
@@ -693,7 +693,7 @@ exports.downloadFile = async (req, res) => {
         // Find the actual file
         const exportDir = path.join(__dirname, '../uploads/exports');
         const files = fs.readdirSync(exportDir).filter(f => f.includes(id));
-        
+
         if (files.length === 0) {
             return res.status(404).json({ success: false, error: 'File not found on disk' });
         }
@@ -743,7 +743,7 @@ exports.cleanExpiredDownloads = async () => {
             const exportDir = path.join(__dirname, '../uploads/exports');
             const files = fs.readdirSync(exportDir).filter(f => f.includes(download.Id));
             files.forEach(f => {
-                try { fs.unlinkSync(path.join(exportDir, f)); } catch (e) {}
+                try { fs.unlinkSync(path.join(exportDir, f)); } catch (e) { }
             });
 
             // Update status

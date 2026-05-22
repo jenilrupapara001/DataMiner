@@ -44,6 +44,15 @@ IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AN
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'LQSGrade')
     ALTER TABLE Asins ADD LQSGrade NVARCHAR(10);
 
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'Cdq')
+    ALTER TABLE Asins ADD Cdq INT;
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'CdqGrade')
+    ALTER TABLE Asins ADD CdqGrade NVARCHAR(10);
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'CdqComponents')
+    ALTER TABLE Asins ADD CdqComponents NVARCHAR(MAX);
+
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Asins') AND name = 'LqsDetails')
     ALTER TABLE Asins ADD LqsDetails NVARCHAR(MAX);
 

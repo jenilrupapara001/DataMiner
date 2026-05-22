@@ -2789,7 +2789,7 @@ const AsinManagerPage = (props) => {
                   )}
                   {isVisible('price') && (
                     <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
-                      {renderSortableHeader(marketplaceFilter === 'ajio' ? 'ASP' : 'PRICE', 'currentPrice', 'right')}
+                      {renderSortableHeader(marketplaceFilter === 'ajio' ? 'ASP' : 'CHANNEL PRICE', 'currentPrice', 'right')}
                     </th>
                   )}
                   {isVisible('discountPercentage') && (
@@ -3619,12 +3619,10 @@ const AsinManagerPage = (props) => {
                         week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
-                          const currentOrUploadedPrice = (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio')
-                            ? asin.currentPrice
-                            : asin.uploadedPrice;
+                          const currentOrUploadedPrice = asin.currentPrice;
                           const priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
                             ? wData.price
-                            : currentOrUploadedPrice;
+                            : null;
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewPrice(asin, e)}
