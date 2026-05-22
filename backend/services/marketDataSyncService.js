@@ -504,25 +504,25 @@ class MarketDataSyncService {
             const currentId = integerId || taskId;
             const variants = [
                 // Modern OpenAPI V3.0 (Correct path from OpenAPI spec)
-                { name: 'OpenAPI V3 (POST /cloudextraction/start)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId } },
-                { name: 'OpenAPI V3 (POST /cloudextraction/start UUID)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId: taskId } },
+                { name: 'OpenAPI V3 (POST /cloudextraction/start)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                { name: 'OpenAPI V3 (POST /cloudextraction/start UUID)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId: taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
 
                 // Legacy V1 (Standard/Enterprise)
-                { name: 'Legacy V1 (POST Q Integer)', url: `${base}/api/CloudTask/StartTask?taskId=${currentId}`, method: 'post' },
-                { name: 'Legacy V1 (GET UUID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId } },
-                { name: 'Legacy V1 (GET Integer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId } },
+                { name: 'Legacy V1 (POST Q Integer)', url: `${base}/api/CloudTask/StartTask?taskId=${currentId}&runMode=0&run_mode=0&runType=1&run_type=1`, method: 'post' },
+                { name: 'Legacy V1 (GET UUID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                { name: 'Legacy V1 (GET Integer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
 
                 // Variation Handling (Casing & Lowercase Bearer)
-                { name: 'V1 (GET Lowercase ID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskid: currentId } },
-                { name: 'OpenAPI (POST Lowercase Bearer)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId }, lowerBearer: true },
-                { name: 'V1 (GET Lowercase Bearer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId }, lowerBearer: true },
+                { name: 'V1 (GET Lowercase ID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskid: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                { name: 'OpenAPI (POST Lowercase Bearer)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 }, lowerBearer: true },
+                { name: 'V1 (GET Lowercase Bearer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 }, lowerBearer: true },
 
                 // V3 API Paths
-                { name: 'V3 Task Start (POST Body)', url: `${base}/task/start`, method: 'post', data: { taskId: currentId } },
-                { name: 'V3 Task Start (POST Query)', url: `${base}/task/start?taskId=${currentId}`, method: 'post', data: {} },
+                { name: 'V3 Task Start (POST Body)', url: `${base}/task/start`, method: 'post', data: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                { name: 'V3 Task Start (POST Query)', url: `${base}/task/start?taskId=${currentId}&runMode=0&run_mode=0&runType=1&run_type=1`, method: 'post', data: {} },
 
                 // Advanced/AddRun
-                { name: 'Advanced Trigger (AddRunTask)', url: `${base}/api/CloudTask/AddRunTask`, method: 'get', params: { taskId: currentId } }
+                { name: 'Advanced Trigger (AddRunTask)', url: `${base}/api/CloudTask/AddRunTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } }
             ];
 
             for (const v of variants) {
