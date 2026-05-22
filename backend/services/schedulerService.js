@@ -166,9 +166,9 @@ class SchedulerService {
                             return { seller, success: false, reason: 'No status' };
                         }
 
-                        const taskStatus = typeof status.status === 'string' ? status.status.toLowerCase() : status.status;
+                        const normalized = MarketSyncService.normalizeStatus(status);
                         // Octoparse status can be numbers (1: Running, 0: Stopped)
-                        if (taskStatus === 'finished' || taskStatus === 'stopped' || taskStatus === 'idle' || taskStatus === 0) {
+                        if (normalized === 'COMPLETED' || normalized === 'STOPPED' || normalized === 'IDLE') {
                             console.log(`📥 [RECOVERY] Fetching data for completed/idle task ${taskId}...`);
                             
                             const rawData = await MarketSyncService.retrieveResults(taskId);
@@ -180,7 +180,7 @@ class SchedulerService {
                                 return { seller, success: true, count: updated };
                             }
                         }
-                        return { seller, success: true, status: taskStatus };
+                        return { seller, success: true, status: normalized };
                     } catch (err) {
                         console.error(`❌ [RECOVERY] Failed to check task for seller ${seller.Name}:`, err.message);
                         return { seller, success: false, error: err.message };
@@ -588,8 +588,9 @@ class SchedulerService {
                 try {
                     const rawData = await MarketSyncService.retrieveResults(seller.OctoparseId);
                     if (rawData && rawData.length > 0) {
-                        const processedCount = await MarketSyncService.processBatchResults(seller.Id, rawData);
-                        console.log(`[Scheduler] ✅ Successfully bulk-linked ${processedCount} results for ${seller.Name}`);
+                        const batchResult = await MarketSyncService.processBatchResults(seller.Id, rawData);
+                        const updated = batchResult?.updatedCount !== undefined ? batchResult.updatedCount : (batchResult || 0);
+                        console.log(`[Scheduler] ✅ Successfully bulk-linked ${updated} results for ${seller.Name}`);
                     }
                 } catch (err) {
                     console.error(`[Scheduler] ❌ Failed to fetch result for ${seller.Name}:`, err.message);

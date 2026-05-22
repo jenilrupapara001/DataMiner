@@ -35,14 +35,14 @@ async function clearAllCloudData() {
                 // Step 1: Check status and STOP if running
                 console.log(`   🛑 Checking task status: ${seller.OctoparseId}`);
                 const status = await MarketSyncService.getStatus(seller.OctoparseId);
-                const taskStatus = typeof status?.status === 'string' ? status.status.toLowerCase() : status?.status;
+                const normalized = MarketSyncService.normalizeStatus(status);
                 
-                if (taskStatus === 'running' || taskStatus === 1 || taskStatus === '1') {
+                if (normalized === 'RUNNING') {
                     console.log(`   🛑 Task is running. Sending STOP command...`);
                     await MarketSyncService.stopSync(seller.OctoparseId);
                     await new Promise(r => setTimeout(r, 5000)); // Wait for stop to finalize
                 } else {
-                    console.log(`   ℹ️ Task is already idle (${taskStatus || 'idle'}).`);
+                    console.log(`   ℹ️ Task is already idle (${normalized}).`);
                 }
 
                 // Step 2: CLEAR all previous cloud data

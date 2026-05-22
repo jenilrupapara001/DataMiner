@@ -3619,6 +3619,12 @@ const AsinManagerPage = (props) => {
                         week.dates.map((date, dIdx) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const currentOrUploadedPrice = (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio')
+                            ? asin.currentPrice
+                            : asin.uploadedPrice;
+                          const priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
+                            ? wData.price
+                            : currentOrUploadedPrice;
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewPrice(asin, e)}
@@ -3635,7 +3641,7 @@ const AsinManagerPage = (props) => {
                                 overflow: 'hidden',
                                 transition: 'all 0.3s ease'
                               }}>
-                                {wData?.price ? getWeekHistoryBadge(wData.price, 'price', (asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? asin.currentPrice : asin.uploadedPrice)) : '-'}
+                                {priceVal ? getWeekHistoryBadge(priceVal, 'price', currentOrUploadedPrice) : '-'}
                               </div>
                             </td>
                           );

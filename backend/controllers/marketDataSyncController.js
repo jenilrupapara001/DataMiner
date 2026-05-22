@@ -151,7 +151,7 @@ exports.syncAsin = async (req, res) => {
  */
 exports.handleSyncComplete = async (req, res) => {
     try {
-        const { asinId, rawData } = req.body;
+        const { asinId, rawData } = req.body || {};
 
         // This would typically be a webhook from the provider
         // but can be triggered manually for direct API updates.
@@ -208,11 +208,13 @@ exports.syncSellerAsins = async (req, res) => {
         if (!useDirect) {
             try {
                 // Silent sync start
-                const fullSync = req.body.fullSync === true || req.query.fullSync === 'true';
+                const fullSync = req.body?.fullSync === true || req.query?.fullSync === 'true';
+                const forceReRun = req.body?.forceReRun === true || req.query?.forceReRun === 'true';
 
                 const syncStarted = await marketDataSyncService.syncSellerAsinsToOctoparse(sellerId, { 
                     triggerScrape: true,
-                    fullSync: fullSync
+                    fullSync: fullSync,
+                    forceReRun: forceReRun
                 });
 
                 if (!syncStarted) {
@@ -350,7 +352,8 @@ exports.fetchAndApplyResults = async (req, res) => {
         }
 
         // 3. Process batch results
-        const updatedCount = await marketDataSyncService.processBatchResults(sellerId, data);
+        const batchResult = await marketDataSyncService.processBatchResults(sellerId, data);
+        const updatedCount = typeof batchResult === 'object' && batchResult !== null ? (batchResult.updatedCount || 0) : (batchResult || 0);
         
         // Update seller counts
         await updateSellerAsinCount(sellerId);
@@ -372,7 +375,7 @@ exports.fetchAndApplyResults = async (req, res) => {
  */
 exports.ingestTaskResults = async (req, res) => {
     try {
-        const { taskId, executionId, sellerId } = req.body;
+        const { taskId, executionId, sellerId } = req.body || {};
         const pool = await getPool();
 
         if (!taskId && !executionId) {
@@ -417,7 +420,8 @@ exports.ingestTaskResults = async (req, res) => {
         }
 
         // 4. Process & Discover ASINs
-        const updatedCount = await marketDataSyncService.processBatchResults(seller.Id, data);
+        const batchResult = await marketDataSyncService.processBatchResults(seller.Id, data);
+        const updatedCount = typeof batchResult === 'object' && batchResult !== null ? (batchResult.updatedCount || 0) : (batchResult || 0);
         
         res.json({
             success: true,
@@ -509,7 +513,7 @@ exports.uploadTaskPool = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Unauthorized to upload task pool' });
         }
 
-        const { taskIds } = req.body;
+        const { taskIds } = req.body || {};
         
         if (!taskIds || !Array.isArray(taskIds)) {
             return res.status(400).json({ success: false, error: 'Invalid Task IDs list. Expected an array of strings.' });
@@ -712,7 +716,7 @@ exports.getGlobalSyncTasks = async (req, res) => {
  */
 exports.bulkUpdateSellerTasks = async (req, res) => {
     try {
-        const { sellerIds } = req.body;
+        const { sellerIds } = req.body || {};
         const pool = await getPool();
 
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers";
@@ -809,7 +813,7 @@ exports.startTask = async (req, res) => {
  */
 exports.bulkInjectAsinsToTasks = async (req, res) => {
     try {
-        const { sellerIds } = req.body;
+        const { sellerIds } = req.body || {};
         const pool = await getPool();
 
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
@@ -885,7 +889,7 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
  */
 exports.bulkInjectJson = async (req, res) => {
     try {
-        const { data, sellerId } = req.body;
+        const { data, sellerId } = req.body || {};
 
         if (!data || !Array.isArray(data)) {
             return res.status(400).json({ success: false, error: 'Data array required' });
@@ -895,7 +899,8 @@ exports.bulkInjectJson = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Seller ID required' });
         }
 
-        const updatedCount = await marketDataSyncService.processBatchResults(sellerId, data);
+        const batchResult = await marketDataSyncService.processBatchResults(sellerId, data);
+        const updatedCount = typeof batchResult === 'object' && batchResult !== null ? (batchResult.updatedCount || 0) : (batchResult || 0);
         await updateSellerAsinCount(sellerId);
 
         res.json({

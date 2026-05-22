@@ -333,15 +333,40 @@ exports.updateSeller = async (req, res) => {
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
 
     const pool = await getPool();
+
+    // Fetch existing seller for partial updates (e.g. status toggle)
+    const currentResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT * FROM Sellers WHERE Id = @id');
+
+    if (currentResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Seller not found' });
+    }
+    const current = currentResult.recordset[0];
+
+    // Merge incoming fields with existing database fallbacks
+    const finalName = name !== undefined ? name : current.Name;
+    const finalMarketplace = marketplace !== undefined ? marketplace : current.Marketplace;
+    const finalSellerId = sellerId === undefined ? current.SellerId : (sellerId || null);
+    
+    let finalIsActive = current.IsActive;
+    if (status !== undefined) {
+      finalIsActive = status === 'Active' ? 1 : 0;
+    }
+
+    const finalOctoId = req.body.octoparseId === undefined ? current.OctoparseId : (req.body.octoparseId || null);
+    const finalPlan = req.body.plan === undefined ? current.Plan : (req.body.plan || 'Starter');
+    const finalScrapeLimit = req.body.scrapeLimit === undefined ? current.ScrapeLimit : (parseInt(req.body.scrapeLimit) || 100);
+
     await pool.request()
       .input('id', sql.VarChar, id)
-      .input('name', sql.NVarChar, name)
-      .input('marketplace', sql.NVarChar, marketplace)
-      .input('sellerId', sql.NVarChar, sellerId || null)
-      .input('isActive', sql.Bit, status === 'Active' ? 1 : 0)
-      .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
-      .input('plan', sql.NVarChar, req.body.plan || 'Starter')
-      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100)
+      .input('name', sql.NVarChar, finalName)
+      .input('marketplace', sql.NVarChar, finalMarketplace)
+      .input('sellerId', sql.NVarChar, finalSellerId)
+      .input('isActive', sql.Bit, finalIsActive)
+      .input('octoparseId', sql.NVarChar, finalOctoId)
+      .input('plan', sql.NVarChar, finalPlan)
+      .input('scrapeLimit', sql.Int, finalScrapeLimit)
       .query(`
         UPDATE Sellers 
         SET Name = @name, Marketplace = @marketplace, SellerId = @sellerId, 
@@ -370,9 +395,9 @@ exports.updateSeller = async (req, res) => {
         type: 'UPDATE',
         entityType: 'SELLER',
         entityId: id,
-        entityTitle: name,
+        entityTitle: finalName,
         user: req.user?._id || req.userId,
-        description: `Updated seller profile settings for ${name}`
+        description: `Updated seller profile settings for ${finalName}`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

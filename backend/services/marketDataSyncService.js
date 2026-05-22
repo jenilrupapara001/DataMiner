@@ -809,10 +809,9 @@ class MarketDataSyncService {
                 try {
                     // Check status first to avoid unnecessary stop calls
                     const status = await this.getStatus(seller.OctoparseId);
-                    const taskStatus = typeof status?.status === 'string' ? status.status.toLowerCase() : status?.status;
+                    const normalized = this.normalizeStatus(status);
 
-                    // 1: Running, 2: Finished, 3: Stopped
-                    if (taskStatus === 'running' || taskStatus === 1 || taskStatus === '1') {
+                    if (normalized === 'RUNNING') {
                         console.log(`🛑 Stopping running task for ${seller.Name}...`);
                         await this.stopSync(seller.OctoparseId);
                     }
@@ -829,6 +828,27 @@ class MarketDataSyncService {
             console.error('❌ [Octoparse] Error in stopAllActiveTasks:', error.message);
             return false;
         }
+    }
+
+    /**
+     * Normalizes the status of an Octoparse task.
+     * Maps different status patterns/types to standard state names.
+     */
+    normalizeStatus(statusInfo) {
+        if (!statusInfo) return 'UNKNOWN';
+        let status = statusInfo;
+        if (typeof statusInfo === 'object') {
+            status = statusInfo.status ?? statusInfo.Status ?? statusInfo.taskStatus ?? statusInfo.TaskStatus ?? statusInfo.statusInfo;
+        }
+        if (status === undefined || status === null) return 'UNKNOWN';
+        const str = String(status).trim().toLowerCase();
+        const num = parseInt(str);
+        if (str === 'running' || str === 'executing' || str === 'waiting' || num === 1) return 'RUNNING';
+        if (str === 'finished' || str === 'completed' || str === 'success' || num === 2) return 'COMPLETED';
+        if (str === 'stopped' || num === 3) return 'STOPPED';
+        if (str === 'failed' || str === 'error' || num === 4) return 'FAILED';
+        if (str === 'idle' || num === 0) return 'IDLE';
+        return 'UNKNOWN';
     }
 
     /**
@@ -1142,13 +1162,9 @@ class MarketDataSyncService {
                 }
 
                 // Normalizing status codes
-                let status = statusInfo?.status ?? statusInfo?.Status ?? statusInfo;
-                if (typeof status === 'object' && status !== null) status = status.status || status.Status;
-                const statusNum = parseInt(status);
-
-                // 2=Failed, 3=Finished, 4=Stopped (depending on endpoint version)
-                const isCompleted = (statusNum === 3 || status === 'Finished' || status === 'Completed' || status === '3');
-                const isFailed = (statusNum === 2 || statusNum === 4 || status === 'Failed' || status === 'Stopped' || status === '2' || status === '4');
+                const normalized = this.normalizeStatus(statusInfo);
+                const isCompleted = (normalized === 'COMPLETED' || normalized === 'STOPPED');
+                const isFailed = (normalized === 'FAILED');
 
                 if (isCompleted) {
                     // Silent completion
@@ -1185,7 +1201,7 @@ class MarketDataSyncService {
                 }
 
                 if (isFailed) {
-                    console.error(`❌ [AUTO] Task ${taskId} FAILED or STOPPED (Status: ${status}). Automation aborted.`);
+                    console.error(`❌ [AUTO] Task ${taskId} FAILED (Normalized: ${normalized}). Automation aborted.`);
                     return 0;
                 }
 
@@ -1732,22 +1748,15 @@ class MarketDataSyncService {
         while (isRunning && attempts < maxAttempts) {
             const statusInfo = await this.getStatus(taskId);
 
-            // Octoparse statuses can be: 0=Idle, 1=Running, 2=Waiting, 3=Stopped/Finished, 4=Failed
-            let status = statusInfo?.status ?? statusInfo?.Status ?? statusInfo;
-            if (typeof status === 'object' && status !== null) status = status.status || status.Status;
-
-            // Normalize status to number if possible
-            const statusNum = parseInt(status);
-
-            // 0, 3, 4 are "Not Running"
-            isRunning = (statusNum === 1 || statusNum === 2 || status === 'Executing' || status === 'Running' || status === 'Waiting');
+            const normalized = this.normalizeStatus(statusInfo);
+            isRunning = (normalized === 'RUNNING');
 
             if (isRunning) {
-                console.log(`⏳ Task ${taskId} is active (Status: ${status}). Forcing STOP... (Attempt ${attempts + 1}/${maxAttempts})`);
+                console.log(`⏳ Task ${taskId} is active (Status: ${normalized}). Forcing STOP... (Attempt ${attempts + 1}/${maxAttempts})`);
                 await this.stopSync(taskId).catch(err => console.warn(`⚠️ Stop call failed: ${err.message}`));
                 await this.wait(5000); // Increased wait for cloud coordinator
             } else {
-                console.log(`✅ Task ${taskId} is already stopped/idle (Status: ${status}).`);
+                console.log(`✅ Task ${taskId} is already stopped/idle (Status: ${normalized}).`);
                 isRunning = false;
             }
             attempts++;
