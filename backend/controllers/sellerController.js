@@ -63,7 +63,7 @@ const enrichSellersWithAsinCounts = async (sellers) => {
     .query(`
       SELECT SellerId, 
              COUNT(*) as totalAsins,
-             SUM(CASE WHEN Status = 'Active' THEN 1 ELSE 0 END) as activeAsins
+             SUM(CASE WHEN Status IS NULL OR Status != 'Inactive' THEN 1 ELSE 0 END) as activeAsins
       FROM Asins
       WHERE SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})
       GROUP BY SellerId

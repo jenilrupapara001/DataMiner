@@ -835,7 +835,10 @@ exports.octoparseJsonUpload = async (req, res) => {
         res.json({
             success: true,
             message: `Successfully processed Octoparse JSON file.`,
-            ...result
+            updated: result.updatedCount,
+            created: result.createdCount,
+            skipped: result.skippedNoCode + result.skippedNoMatch,
+            total: result.total
         });
 
     } catch (error) {

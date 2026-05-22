@@ -140,7 +140,7 @@ class MarketDataSyncService {
 
         const asinsResult = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Scraping', 'Error', 'Pending')");
+            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
 
         if (asinsResult.recordset.length === 0) {
             this.log('warn', `No active ASINs found for seller: ${sellerId}. Proceeding with task duplication anyway.`);
@@ -1132,6 +1132,7 @@ class MarketDataSyncService {
      * Background worker that polls for task completion and then ingests data.
      */
     async pollAndAutomate(sellerId, taskId, options = {}) {
+        options = options || {};
         const fullSync = options.fullSync || false;
         console.log(`🕵️ [AUTO] Monitoring Seller: ${sellerId}, Task: ${taskId}... (Mode: ${fullSync ? 'FULL' : 'INC'})`);
 
@@ -1531,6 +1532,7 @@ class MarketDataSyncService {
      * Optionally triggers a new cloud scrape.
      */
     async syncSellerAsinsToOctoparse(sellerId, options = {}) {
+        options = options || {};
         if (process.env.AUTOMATION_ENABLED !== 'true') {
             console.log('🛑 syncSellerAsinsToOctoparse blocked (Automation is disabled in .env)');
             return false;
@@ -1598,7 +1600,7 @@ class MarketDataSyncService {
                 console.log(`🎯 [TargetedSync] Using ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
                 asins = options.targetAsins.map(a => ({ AsinCode: a }));
             } else {
-                let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND Status IN ('Active', 'Scraping', 'Error', 'Pending')";
+                let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')";
 
                 if (options.onlyMissing) {
                     console.log(`🔍 [MissingData] Filtering for ASINs with missing critical fields...`);
@@ -1773,19 +1775,28 @@ class MarketDataSyncService {
     /**
      * Maps external raw data to internal ASIN model metrics.
      */
-    async updateAsinMetrics(asinId, rawData) {
+    async updateAsinMetrics(asinId, rawData, preLoadedAsin = null, sellerInfo = null) {
         try {
             const pool = await getPool();
-            const asinResult = await pool.request()
-                .input('asinId', sql.VarChar, asinId)
-                .query(`
-                    SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace 
-                    FROM Asins a 
-                    JOIN Sellers s ON a.SellerId = s.Id 
-                    WHERE a.Id = @asinId
-                `);
+            let asin;
+            if (preLoadedAsin) {
+                asin = { ...preLoadedAsin };
+                if (sellerInfo) {
+                    asin.sellerName = sellerInfo.sellerName;
+                    asin.sellerMarketplace = sellerInfo.sellerMarketplace;
+                }
+            } else {
+                const asinResult = await pool.request()
+                    .input('asinId', sql.VarChar, asinId)
+                    .query(`
+                        SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace 
+                        FROM Asins a 
+                        JOIN Sellers s ON a.SellerId = s.Id 
+                        WHERE a.Id = @asinId
+                    `);
 
-            const asin = asinResult.recordset[0];
+                asin = asinResult.recordset[0];
+            }
             if (!asin) throw new Error('ASIN not found');
 
             // --- Robust Advanced Mapping (Octoparse Specialized) ---
@@ -2401,6 +2412,20 @@ class MarketDataSyncService {
         const pool = await getPool();
         const updatedAsinCodes = []; 
 
+        // Fetch seller details once for the entire batch
+        let sellerInfo = { sellerName: '', sellerMarketplace: '' };
+        try {
+            const sellerResult = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('SELECT Name, Marketplace FROM Sellers WHERE Id = @sellerId');
+            if (sellerResult.recordset[0]) {
+                sellerInfo.sellerName = sellerResult.recordset[0].Name || '';
+                sellerInfo.sellerMarketplace = sellerResult.recordset[0].Marketplace || '';
+            }
+        } catch (err) {
+            console.warn(`[MarketSync] Could not pre-fetch seller ${sellerId}:`, err.message);
+        }
+
         const CHUNK_SIZE = 100;
 
         for (let chunkStart = 0; chunkStart < rawResults.length; chunkStart += CHUNK_SIZE) {
@@ -2426,58 +2451,60 @@ class MarketDataSyncService {
 
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
-            let processedInChunk = 0;
-            for (const rawData of chunk) {
-                const code = this._extractAsinFromData(rawData);
-                if (!code) {
-                    skippedNoCode++;
-                    continue;
-                }
-
-                const normalizedCode = code.toUpperCase();
-                let asin = asinMap.get(normalizedCode);
-
-                if (!asin) {
-                    if (allowCreation) {
-                        try {
-                            const newId = generateId();
-                            // Minimal insert for discovery
-                            await pool.request()
-                                .input('id', sql.VarChar, newId)
-                                .input('asinCode', sql.VarChar, normalizedCode)
-                                .input('sellerId', sql.VarChar, sellerId)
-                                .query(`
-                                    INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-                                    VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
-                                `);
-                            
-                            // Mock basic object for mapping
-                            asin = { Id: newId, AsinCode: normalizedCode };
-                            createdCount++;
-                        } catch (createErr) {
-                            console.error(`❌ Failed to auto-create ASIN ${normalizedCode}:`, createErr.message);
-                            skippedNoMatch++;
-                            continue;
-                        }
-                    } else {
-                        if (skippedNoMatch < 5) {
-                            console.log(`[MarketSync] Miss: ASIN ${normalizedCode} (Seller: ${sellerId}) not found in DB.`);
-                        }
-                        skippedNoMatch++;
-                        continue;
+            // Process the chunk items in sub-chunks of 15 concurrently to respect pool limits
+            const SUB_CHUNK_SIZE = 15;
+            for (let subStart = 0; subStart < chunk.length; subStart += SUB_CHUNK_SIZE) {
+                const subChunk = chunk.slice(subStart, subStart + SUB_CHUNK_SIZE);
+                await Promise.all(subChunk.map(async (rawData) => {
+                    const code = this._extractAsinFromData(rawData);
+                    if (!code) {
+                        skippedNoCode++;
+                        return;
                     }
-                }
 
-                try {
-                    await this.updateAsinMetrics(asin.Id, rawData);
-                    updatedCount++;
-                    processedInChunk++;
-                    updatedAsinCodes.push(asin.AsinCode);
-                } catch (err) {
-                    console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);
-                }
+                    const normalizedCode = code.toUpperCase();
+                    let asin = asinMap.get(normalizedCode);
+
+                    if (!asin) {
+                        if (allowCreation) {
+                            try {
+                                const newId = generateId();
+                                // Minimal insert for discovery
+                                await pool.request()
+                                    .input('id', sql.VarChar, newId)
+                                    .input('asinCode', sql.VarChar, normalizedCode)
+                                    .input('sellerId', sql.VarChar, sellerId)
+                                    .query(`
+                                        INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+                                        VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
+                                    `);
+                                
+                                // Mock basic object for mapping
+                                asin = { Id: newId, AsinCode: normalizedCode };
+                                createdCount++;
+                            } catch (createErr) {
+                                console.error(`❌ Failed to auto-create ASIN ${normalizedCode}:`, createErr.message);
+                                skippedNoMatch++;
+                                return;
+                            }
+                        } else {
+                            if (skippedNoMatch < 5) {
+                                console.log(`[MarketSync] Miss: ASIN ${normalizedCode} (Seller: ${sellerId}) not found in DB.`);
+                            }
+                            skippedNoMatch++;
+                            return;
+                        }
+                    }
+
+                    try {
+                        await this.updateAsinMetrics(asin.Id, rawData, asin, sellerInfo);
+                        updatedCount++;
+                        updatedAsinCodes.push(asin.AsinCode);
+                    } catch (err) {
+                        console.error(`❌ Error updating ASIN ${asin.AsinCode} in batch:`, err.message);
+                    }
+                }));
             }
-            // console.log(`[MarketSync] Chunk processed: ${processedInChunk} success, ${skippedNoMatch} missed.`);
         }
 
         if (updatedAsinCodes.length > 0) {

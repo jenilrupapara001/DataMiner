@@ -352,7 +352,7 @@ class SchedulerService {
                     try {
                         const countResult = await pool.request()
                             .input('sellerId', sql.VarChar, seller.Id)
-                            .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND Status = 'Active'");
+                            .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
                         activeAsinsCount = countResult.recordset[0]?.activeCount || 0;
                     } catch (err) {
                         console.error(`⚠️ Failed to query active ASIN count for seller ${seller.Name}:`, err.message);
