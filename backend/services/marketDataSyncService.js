@@ -605,14 +605,26 @@ class MarketDataSyncService {
 
         for (const item of results) {
             try {
-                // Determine ASIN Code
-                let asinCode = (item.ASIN || item.asin || item.asinCode || '').trim();
-
-                // Fallback: Extract from URL if code is missing
-                if (!asinCode && item.Original_URL) {
+                // Determine injected ASIN code from Original_URL
+                let injectedAsin = null;
+                if (item.Original_URL) {
                     const match = item.Original_URL.match(/\/dp\/(B[A-Z0-9]{9})/);
-                    if (match) asinCode = match[1];
+                    if (match) injectedAsin = match[1];
                 }
+
+                // Determine extracted ASIN Code from the new XML rule
+                let extractedAsin = (item.ASIN || item.asin || item.asinCode || '').trim();
+
+                // If both are present but don't match, the item is out of stock / redirected
+                if (injectedAsin && extractedAsin && injectedAsin !== extractedAsin) {
+                    item.StockLevel = 0;
+                    item.availabilityStatus = 'Currently unavailable.';
+                    item.Price = null;
+                    item.CurrentPrice = null;
+                    item.BuyBoxWin = 0;
+                }
+
+                let asinCode = injectedAsin || extractedAsin;
 
                 if (!asinCode) continue;
 
@@ -1295,7 +1307,7 @@ class MarketDataSyncService {
                     const raw = (code || '').trim();
                     if (!raw) return null;
                     if (raw.startsWith('http')) return raw;
-                    return isAjio ? `https://www.ajio.com/p/${raw}` : `https://www.amazon.in/dp/${raw}`;
+                    return isAjio ? `https://www.ajio.com/p/${raw}` : `https://www.amazon.in/dp/${raw}?th=1&psc=1`;
                 }).filter(Boolean);
 
                 if (reinjectionUrls.length === 0) {

@@ -356,6 +356,22 @@ export const scheduledRunsApi = {
     return res.json();
   },
 
+  getSellerMetrics: async () => {
+    const res = await fetch(`${API_BASE}/scheduled-runs/seller-metrics`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch scheduled run seller metrics');
+    return res.json();
+  },
+
+  getSellerLogs: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/scheduled-runs/seller-logs/${sellerId}`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch seller logs');
+    return res.json();
+  },
+
   getDetails: async (id) => {
     const res = await fetch(`${API_BASE}/scheduled-runs/${id}`, {
       headers: { ...getAuthHeader() },

@@ -1443,6 +1443,21 @@ const AsinManagerPage = (props) => {
     }
   };
 
+  const handleDeleteAsin = async (asinId) => {
+    if (!window.confirm('Are you sure you want to completely delete this ASIN from the database? This action cannot be undone.')) return;
+    try {
+      setSyncing(true);
+      await asinApi.delete(asinId);
+      alert('✅ ASIN deleted successfully from the database.');
+      loadData();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete ASIN: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleCreateTasks = async (asinId, asinCode) => {
     try {
       if (!window.confirm(`Auto-generate optimization tasks for ASIN ${asinCode}?`)) return;
