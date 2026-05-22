@@ -1121,94 +1121,214 @@ class MarketDataSyncService {
     }
 
     /**
-     * Background worker that polls for task completion and then ingests data.
+     * Background worker that polls for task completion, ingests data, then verifies
+     * all ASINs have complete data (title present). If any are incomplete, it
+     * re-injects only those ASINs and re-runs the task — up to MAX_REFILL_CYCLES.
+     *
+     * Rate-limit safe: minimum 60s between status checks, 3s between API calls.
+     * Never queues: always stops first before re-starting.
      */
     async pollAndAutomate(sellerId, taskId, options = {}) {
         options = options || {};
         const fullSync = options.fullSync || false;
-        console.log(`🕵️ [AUTO] Monitoring Seller: ${sellerId}, Task: ${taskId}... (Mode: ${fullSync ? 'FULL' : 'INC'})`);
 
-        let attempts = 0;
-        const maxAttempts = 100; // Increased to handle longer tasks
-        const startTime = Date.now();
-        const FOUR_HOURS = 4 * 60 * 60 * 1000;
+        const MAX_REFILL_CYCLES = 10;       // Max times we will re-inject + re-run
+        const STATUS_POLL_FAST = 60000;   // 1 min while task is fresh
+        const STATUS_POLL_SLOW = 300000;  // 5 min for long-running tasks
+        const MAX_POLL_HOURS = 4;
+        const MAX_POLL_ATTEMPTS = 120;     // Safety hard-stop
+        const API_COURTESY_DELAY = 3000;   // 3s between non-status API calls
 
-        const FAST_INTERVAL = 60000;      // 1 min
-        const STANDARD_INTERVAL = 300000; // 5 mins
-        const INITIAL_WAIT = 30000;      // 30 secs
+        let refillCycle = 0;
+        let totalProcessed = 0;
 
-        await this.wait(INITIAL_WAIT);
+        // Fetch seller marketplace once
+        let isAjio = false;
+        try {
+            const pool = await getPool();
+            const sellerRes = await pool.request()
+                .input('sellerId', sql.VarChar, sellerId)
+                .query('SELECT Marketplace FROM Sellers WHERE Id = @sellerId');
+            isAjio = sellerRes.recordset[0]?.Marketplace?.toLowerCase() === 'ajio';
+        } catch (e) { /* non-fatal */ }
 
-        while (attempts < maxAttempts) {
-            // Stuck detection: Don't poll forever
-            if (Date.now() - startTime > FOUR_HOURS) {
-                console.error(`⏰ [TIMEOUT] Task ${taskId} exceeded 4h limit. Aborting polling.`);
-                return;
+        while (refillCycle <= MAX_REFILL_CYCLES) {
+            const cycleLabel = refillCycle === 0 ? 'INITIAL' : `REFILL #${refillCycle}`;
+            console.log(`🕵️ [AUTO] Monitoring Seller: ${sellerId}, Task: ${taskId} — ${cycleLabel}`);
+
+            // ── PHASE 1: POLL UNTIL COMPLETE ──────────────────────────────────
+            let attempts = 0;
+            const pollStart = Date.now();
+            const initialWait = refillCycle === 0 ? 30000 : 20000; // shorter wait on refill
+            await this.wait(initialWait);
+
+            let taskCompleted = false;
+            let taskFailed = false;
+
+            while (attempts < MAX_POLL_ATTEMPTS) {
+                if (Date.now() - pollStart > MAX_POLL_HOURS * 60 * 60 * 1000) {
+                    console.error(`⏰ [AUTO] Task ${taskId} exceeded ${MAX_POLL_HOURS}h limit. Aborting.`);
+                    return totalProcessed;
+                }
+
+                try {
+                    const statusInfo = await this.getStatus(taskId);
+
+                    if (statusInfo?.error === 'RateLimit') {
+                        console.warn(`⚠️ [AUTO] Rate limited on status check. Waiting 90s...`);
+                        await this.wait(90000);
+                        continue;
+                    }
+
+                    const normalized = this.normalizeStatus(statusInfo);
+                    console.log(`📡 [AUTO] ${cycleLabel} — Status: ${normalized} (attempt ${attempts + 1})`);
+
+                    if (normalized === 'COMPLETED' || normalized === 'STOPPED') {
+                        taskCompleted = true;
+                        break;
+                    }
+
+                    if (normalized === 'FAILED') {
+                        taskFailed = true;
+                        console.error(`❌ [AUTO] Task ${taskId} FAILED. Aborting cycle.`);
+                        break;
+                    }
+
+                    // Adaptive polling interval: faster while fresh, slower for long tasks
+                    const interval = attempts < 10 ? STATUS_POLL_FAST : STATUS_POLL_SLOW;
+                    await this.wait(interval);
+                } catch (err) {
+                    console.warn(`⚠️ [AUTO] Polling error on ${taskId}: ${err.message}. Retrying in 60s...`);
+                    await this.wait(60000);
+                }
+
+                attempts++;
             }
+
+            if (!taskCompleted || taskFailed) {
+                console.warn(`⏰ [AUTO] Task ${taskId} did not complete cleanly in cycle ${cycleLabel}. Exiting.`);
+                return totalProcessed;
+            }
+
+            // ── PHASE 2: INGEST DATA ──────────────────────────────────────────
+            console.log(`📥 [AUTO] ${cycleLabel} — Task complete. Fetching & ingesting data...`);
+            let ingestedCount = 0;
 
             try {
-                const statusInfo = await this.getStatus(taskId);
+                const rawData = await this.retrieveResults(taskId);
+                if (rawData && rawData.length > 0) {
+                    console.log(`📦 [AUTO] ${cycleLabel} — ${rawData.length} rows fetched. Ingesting...`);
+                    const batchResult = await this.processBatchResults(sellerId, rawData);
+                    ingestedCount = batchResult?.updatedCount || 0;
+                    totalProcessed += ingestedCount;
+                    console.log(`✅ [AUTO] ${cycleLabel} — Ingested ${ingestedCount} records.`);
 
-                if (statusInfo?.error === 'RateLimit') {
-                    await this.wait(60000);
-                    continue;
-                }
-
-                // Normalizing status codes
-                const normalized = this.normalizeStatus(statusInfo);
-                const isCompleted = (normalized === 'COMPLETED' || normalized === 'STOPPED');
-                const isFailed = (normalized === 'FAILED');
-
-                if (isCompleted) {
-                    // Silent completion
-                    let processedCount = 0;
-
+                    // Update Seller metadata
                     try {
-                        // Use our ROBUST multi-path retrieval method
-                        const rawData = await this.retrieveResults(taskId);
+                        const pool = await getPool();
+                        await pool.request()
+                            .input('sellerId', sql.VarChar, sellerId)
+                            .input('lastScraped', sql.DateTime2, new Date())
+                            .input('scrapeUsed', sql.Int, totalProcessed)
+                            .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = GETDATE() WHERE Id = @sellerId');
+                    } catch (metaErr) { /* non-fatal */ }
 
-                        if (rawData && rawData.length > 0) {
-                            console.log(`📥 [AUTO] Fetched ${rawData.length} rows for ingestion.`);
-                            const batchResult = await this.processBatchResults(sellerId, rawData);
-                            processedCount = batchResult?.updatedCount || 0;
-
-                            // Update Seller metadata
-                            const pool = await getPool();
-                            await pool.request()
-                                .input('sellerId', sql.VarChar, sellerId)
-                                .input('lastScraped', sql.DateTime2, new Date())
-                                .input('scrapeUsed', sql.Int, processedCount)
-                                .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = GETDATE() WHERE Id = @sellerId');
-
-                            // Silent ingestion completion
-
-                            // Cleanup: Mark as exported to keep Octoparse queue clean
-                            await this.markDataAsExported(taskId).catch(() => { });
-                        } else {
-                            console.warn(`⚠️ [AUTO] Task reported complete but no data found in retrieveResults.`);
-                        }
-                    } catch (ingestErr) {
-                        console.error(`❌ [AUTO] Ingestion Error for ${taskId}:`, ingestErr.message);
-                    }
-                    return processedCount;
+                    await this.wait(API_COURTESY_DELAY);
+                    // Mark as exported to keep Octoparse cloud queue clean
+                    await this.markDataAsExported(taskId).catch(() => { });
+                } else {
+                    console.warn(`⚠️ [AUTO] ${cycleLabel} — Task completed but returned 0 rows. Skipping re-injection.`);
+                    return totalProcessed;
                 }
-
-                if (isFailed) {
-                    console.error(`❌ [AUTO] Task ${taskId} FAILED (Normalized: ${normalized}). Automation aborted.`);
-                    return 0;
-                }
-
-                const currentInterval = attempts < 10 ? FAST_INTERVAL : STANDARD_INTERVAL;
-                await this.wait(currentInterval);
-            } catch (err) {
-                console.warn(`⚠️ [AUTO] Polling Warning for ${taskId}:`, err.message);
-                await this.wait(60000);
+            } catch (ingestErr) {
+                console.error(`❌ [AUTO] Ingestion error for ${taskId}:`, ingestErr.message);
+                return totalProcessed;
             }
-            attempts++;
+
+            // ── PHASE 3: VERIFY COMPLETENESS ─────────────────────────────────
+            if (refillCycle >= MAX_REFILL_CYCLES) {
+                console.log(`🏁 [AUTO] Reached max refill cycles (${MAX_REFILL_CYCLES}). Stopping.`);
+                break;
+            }
+
+            console.log(`🔍 [AUTO] ${cycleLabel} — Verifying ASIN data completeness...`);
+            let incompleteAsins = [];
+
+            try {
+                const pool = await getPool();
+                // Find ASINs belonging to this seller that are missing a Title (core completeness check)
+                const incompleteRes = await pool.request()
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .query(`
+                        SELECT AsinCode FROM Asins
+                        WHERE SellerId = @sellerId
+                          AND (Status IS NULL OR Status != 'Inactive')
+                          AND (Title IS NULL OR LTRIM(RTRIM(Title)) = '')
+                    `);
+                incompleteAsins = incompleteRes.recordset.map(r => r.AsinCode).filter(Boolean);
+            } catch (verifyErr) {
+                console.error(`❌ [AUTO] Completeness check error:`, verifyErr.message);
+                break;
+            }
+
+            if (incompleteAsins.length === 0) {
+                console.log(`🎉 [AUTO] All ASINs are complete! Seller ${sellerId} sync finished.`);
+                break;
+            }
+
+            console.log(`🔄 [AUTO] ${incompleteAsins.length} ASINs still missing title. Starting refill cycle ${refillCycle + 1}...`);
+            refillCycle++;
+
+            // ── PHASE 4: RE-INJECT INCOMPLETE ASINs ONLY ─────────────────────
+            try {
+                // Stop the task first — never queue on top of a running task
+                console.log(`🛑 [AUTO] Stopping task ${taskId} before re-injection...`);
+                await this.stopSync(taskId).catch(e => console.warn(`⚠️ Stop warning: ${e.message}`));
+                await this.wait(8000); // Give Octoparse time to process the stop
+
+                // Ensure fully stopped before injection
+                await this.ensureTaskStopped(taskId);
+                await this.wait(API_COURTESY_DELAY);
+
+                // Build URLs from ASIN codes
+                const reinjectionUrls = incompleteAsins.map(code => {
+                    const raw = (code || '').trim();
+                    if (!raw) return null;
+                    if (raw.startsWith('http')) return raw;
+                    return isAjio ? `https://www.ajio.com/p/${raw}` : `https://www.amazon.in/dp/${raw}`;
+                }).filter(Boolean);
+
+                if (reinjectionUrls.length === 0) {
+                    console.warn(`⚠️ [AUTO] No valid URLs for re-injection. Stopping.`);
+                    break;
+                }
+
+                console.log(`📂 [AUTO] Re-injecting ${reinjectionUrls.length} incomplete ASINs into task ${taskId}...`);
+                await this.updateTaskUrlsWithFile(taskId, reinjectionUrls, isAjio);
+
+                // Settling delay: let Octoparse finish processing the file before starting
+                console.log(`⏳ [AUTO] Settling delay (15s) after re-injection...`);
+                await this.wait(15000);
+
+                // Clear old data before re-running to avoid mixing stale + new results
+                await this.clearTaskData(taskId).catch(() => { });
+                await this.wait(API_COURTESY_DELAY);
+
+                // Start the task fresh — not queued, clean run
+                console.log(`🚀 [AUTO] Starting re-run for refill cycle ${refillCycle}...`);
+                await this.startCloudExtraction(taskId);
+
+            } catch (refillErr) {
+                console.error(`❌ [AUTO] Refill cycle ${refillCycle} setup failed:`, refillErr.message);
+                break;
+            }
+
+            // Loop back to polling phase for this new run
         }
 
-        console.warn(`⏰ [AUTO] Max attempts reached for ${taskId}.`);
-        return 0;
+        console.log(`✅ [AUTO] pollAndAutomate complete for seller ${sellerId}. Total records ingested: ${totalProcessed}`);
+        if (options.returnCount) return totalProcessed;
+        return totalProcessed;
     }
 
     /**
@@ -1304,13 +1424,13 @@ class MarketDataSyncService {
                     });
                     pathSuccess = true;
                 } catch (err) {
-                    const isTooLarge = err.response?.status === 400 && 
-                                     (JSON.stringify(err.response.data || '').toLowerCase().includes('too large') || 
-                                      JSON.stringify(err.response.data || '').toLowerCase().includes('permissible limit'));
+                    const isTooLarge = err.response?.status === 400 &&
+                        (JSON.stringify(err.response.data || '').toLowerCase().includes('too large') ||
+                            JSON.stringify(err.response.data || '').toLowerCase().includes('permissible limit'));
                     const isTransient = !err.response || err.message?.includes('aborted') || err.message?.includes('timeout') || err.message?.includes('hang up') || isTooLarge;
-                    
+
                     console.log(`⚠️ Attempt ${attempt} failed for path ${path}: ${err.message}${isTooLarge ? ' (Payload too large, will downscale)' : ''}`);
-                    
+
                     if (isTransient && attempt < maxAttempts) {
                         currentSize = Math.max(100, Math.floor(currentSize / 2));
                         const delay = attempt * 2000;
@@ -1687,7 +1807,7 @@ class MarketDataSyncService {
             // 5. Update task URLs (using FILE endpoint)
             try {
                 await this.updateTaskUrlsWithFile(taskId, urls, isAjio);
-                
+
                 // Add Settling Delay: Give Octoparse 15 seconds to fully process the uploaded file/URLs
                 // before we trigger cloud extraction. This prevents starting a run with 0 settled URLs.
                 console.log(`⏳ [Settling] Waiting 15 seconds for file injection to settle on Octoparse backend...`);
@@ -2407,7 +2527,7 @@ class MarketDataSyncService {
         let skippedNoMatch = 0;
         const now = new Date();
         const pool = await getPool();
-        const updatedAsinCodes = []; 
+        const updatedAsinCodes = [];
 
         // Fetch seller details once for the entire batch
         let sellerInfo = { sellerName: '', sellerMarketplace: '' };
@@ -2475,7 +2595,7 @@ class MarketDataSyncService {
                                         INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
                                         VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), GETDATE(), GETDATE())
                                     `);
-                                
+
                                 // Mock basic object for mapping
                                 asin = { Id: newId, AsinCode: normalizedCode };
                                 createdCount++;
@@ -3209,20 +3329,20 @@ class MarketDataSyncService {
 
     _extractParentAsinFromData(rawData) {
         if (!rawData) return null;
-        
+
         // Try common field names for Parent ASIN
         const parent = this._getFromRaw(rawData, [
             'ParentASIN', 'parent_asin', 'parentasin', 'Parent ASIN', 'Parent_ASIN',
             'parent_code', 'Parent_Code', 'ParentCode', 'Parent_ID', 'ParentID'
         ], '');
-        
+
         if (parent) {
             const cleaned = parent.toString().trim().toUpperCase();
             if (/^[A-Z0-9]{10,16}$/.test(cleaned) || /^\d+$/.test(cleaned)) {
                 return cleaned;
             }
         }
-        
+
         return null;
     }
 
@@ -3320,7 +3440,7 @@ class MarketDataSyncService {
     async syncOctoparseTasksToPool() {
         try {
             this.log('info', '🔄 Starting Full Octoparse Task Sync...');
-            
+
             const groups = await this.getTaskGroupList();
             if (!groups || groups.length === 0) {
                 throw new Error('No task groups found in Octoparse');
@@ -3330,10 +3450,10 @@ class MarketDataSyncService {
             for (const group of groups) {
                 const groupId = group.categoryId || group.id || group.taskGroupId;
                 const groupName = group.categoryName || group.name || group.taskGroupName;
-                
+
                 this.log('info', `Fetching tasks for group: ${groupName} (${groupId})`);
                 const tasks = await this.getTasksInGroup(groupId);
-                
+
                 if (Array.isArray(tasks)) {
                     tasks.forEach(t => {
                         allTasks.push({
@@ -3343,14 +3463,14 @@ class MarketDataSyncService {
                         });
                     });
                 }
-                
+
                 // Small delay to prevent rate limiting
                 await this.wait(500);
             }
 
             this.log('info', `Found total ${allTasks.length} tasks. Syncing to database...`);
             const result = await this.importTaskPool(allTasks);
-            
+
             return {
                 success: true,
                 message: `Successfully synced ${allTasks.length} tasks from Octoparse.`,
