@@ -29,6 +29,14 @@ const setCachedAsinStats = (key, data) => {
 const clearAsinStatsCache = () => {
   console.log('[STATS CACHE] Invalidation triggered - clearing cached ASIN stats.');
   asinStatsCache.clear();
+  try {
+    const sellerController = require('./sellerController');
+    if (sellerController && typeof sellerController.clearSellerCache === 'function') {
+      sellerController.clearSellerCache();
+    }
+  } catch (err) {
+    console.warn('[STATS CACHE] Warning invalidating seller cache from ASIN controller:', err.message);
+  }
 };
 
 exports.clearAsinStatsCache = clearAsinStatsCache;

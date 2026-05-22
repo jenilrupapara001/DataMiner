@@ -25,6 +25,9 @@ const clearSellerCache = () => {
   sellerCache.clear();
 };
 
+exports.clearSellerCache = clearSellerCache;
+
+
 /**
  * Enrich sellers with their assigned managers.
  */

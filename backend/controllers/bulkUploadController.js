@@ -5,6 +5,17 @@ const path = require('path');
 const AutoTagService = require('../services/autoTagService');
 const SystemLogService = require('../services/SystemLogService');
 
+const clearCaches = () => {
+    try {
+        const sellerController = require('./sellerController');
+        sellerController.clearSellerCache();
+    } catch (e) {}
+    try {
+        const asinController = require('./asinController');
+        asinController.clearAsinStatsCache();
+    } catch (e) {}
+};
+
 /**
  * Helper to get value from row with multiple possible keys (case-insensitive and space-insensitive)
  */
@@ -395,6 +406,8 @@ exports.catalogSync = async (req, res) => {
             }
         });
 
+        clearCaches();
+
         res.json({
             success: true,
             message: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created, ${results.skipped} skipped.`,
@@ -599,6 +612,8 @@ exports.ajioBulkImport = async (req, res) => {
             }
         });
 
+        clearCaches();
+
         res.json({
             success: true,
             message: `Processed ${data.length} rows: ${results.updated} updated, ${results.created} created.`,
@@ -731,6 +746,8 @@ exports.tagsImport = async (req, res) => {
             }
         });
 
+        clearCaches();
+
         res.json({
             success: true,
             message: `Tags updated for ${results.updated} ASINs. ${results.notFound} ASINs not found. ${results.skipped} skipped.`,
@@ -831,6 +848,8 @@ exports.octoparseJsonUpload = async (req, res) => {
 
         // Cleanup
         try { fs.unlinkSync(filePath); } catch (e) { }
+
+        clearCaches();
 
         res.json({
             success: true,

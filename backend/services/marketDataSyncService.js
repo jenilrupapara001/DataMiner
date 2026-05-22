@@ -503,26 +503,25 @@ class MarketDataSyncService {
         for (const base of baseUrls) {
             const currentId = integerId || taskId;
             const variants = [
-                // Modern OpenAPI V3.0 (Correct path from OpenAPI spec)
-                { name: 'OpenAPI V3 (POST /cloudextraction/start)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
-                { name: 'OpenAPI V3 (POST /cloudextraction/start UUID)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId: taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                // Modern OpenAPI V3.0 (Official spec: POST /cloudextraction/start with { taskId } only)
+                { name: 'OpenAPI V3 (POST /cloudextraction/start UUID)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId } },
 
                 // Legacy V1 (Standard/Enterprise)
-                { name: 'Legacy V1 (POST Q Integer)', url: `${base}/api/CloudTask/StartTask?taskId=${currentId}&runMode=0&run_mode=0&runType=1&run_type=1`, method: 'post' },
-                { name: 'Legacy V1 (GET UUID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
-                { name: 'Legacy V1 (GET Integer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
+                { name: 'Legacy V1 (POST Q Integer)', url: `${base}/api/CloudTask/StartTask?taskId=${currentId}`, method: 'post' },
+                { name: 'Legacy V1 (GET UUID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId } },
+                { name: 'Legacy V1 (GET Integer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId } },
 
                 // Variation Handling (Casing & Lowercase Bearer)
-                { name: 'V1 (GET Lowercase ID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskid: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
-                { name: 'OpenAPI (POST Lowercase Bearer)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 }, lowerBearer: true },
-                { name: 'V1 (GET Lowercase Bearer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 }, lowerBearer: true },
+                { name: 'V1 (GET Lowercase ID)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskid: currentId } },
+                { name: 'OpenAPI (POST Lowercase Bearer)', url: `${base}/cloudextraction/start`, method: 'post', data: { taskId }, lowerBearer: true },
+                { name: 'V1 (GET Lowercase Bearer)', url: `${base}/api/CloudTask/StartTask`, method: 'get', params: { taskId: currentId }, lowerBearer: true },
 
                 // V3 API Paths
-                { name: 'V3 Task Start (POST Body)', url: `${base}/task/start`, method: 'post', data: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } },
-                { name: 'V3 Task Start (POST Query)', url: `${base}/task/start?taskId=${currentId}&runMode=0&run_mode=0&runType=1&run_type=1`, method: 'post', data: {} },
+                { name: 'V3 Task Start (POST Body)', url: `${base}/task/start`, method: 'post', data: { taskId: currentId } },
+                { name: 'V3 Task Start (POST Query)', url: `${base}/task/start?taskId=${currentId}`, method: 'post', data: {} },
 
                 // Advanced/AddRun
-                { name: 'Advanced Trigger (AddRunTask)', url: `${base}/api/CloudTask/AddRunTask`, method: 'get', params: { taskId: currentId, runMode: 0, run_mode: 0, runType: 1, run_type: 1 } }
+                { name: 'Advanced Trigger (AddRunTask)', url: `${base}/api/CloudTask/AddRunTask`, method: 'get', params: { taskId: currentId } }
             ];
 
             for (const v of variants) {
@@ -860,19 +859,12 @@ class MarketDataSyncService {
 
         const token = await this.authenticate();
         try {
-            console.log(`📊 Batch Status Check for ${taskIds.length} tasks...`);
+            console.log(`📊 Batch Status Check for ${taskIds.length} tasks (using direct UUID V2 API)...`);
 
-            // Resolve any UUIDs to Integer IDs for higher compatibility with the Batch API
-            const resolvedIds = await Promise.all(taskIds.map(async id => {
-                if (id.includes('-')) {
-                    const res = await this.resolveTaskIdToInteger(id);
-                    return res || id;
-                }
-                return id;
-            }));
-
+            // UUIDs are natively supported by CloudExtraction Statuses V2 API, no resolution needed.
+            // Bypassing resolveTaskIdToInteger directly prevents rate limits and keeps queries ultra fast.
             const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`, {
-                taskIds: resolvedIds
+                taskIds: taskIds
             }, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -884,8 +876,8 @@ class MarketDataSyncService {
 
             // Map results back to original IDs for internal consistency
             const finalResults = [];
-            taskIds.forEach((originalId, index) => {
-                const statusObj = results.find(r => r.taskId === originalId || r.taskId === resolvedIds[index]);
+            taskIds.forEach((originalId) => {
+                const statusObj = results.find(r => r.taskId === originalId);
                 if (statusObj) {
                     this.statusCache.set(originalId, { data: statusObj, timestamp: Date.now() });
                     finalResults.push(statusObj);
@@ -952,23 +944,14 @@ class MarketDataSyncService {
         if (!taskIds || taskIds.length === 0) return [];
         const token = await this.authenticate();
 
-        // Strategy: Try modern V2 first, then legacy list, then individual if needed
+        // Strategy: Try modern V2 first (natively supports UUIDs), then legacy list if needed
         try {
-            console.log(`🔍 Fetching bulk status for ${taskIds.length} tasks (Resolving UUIDs)...`);
+            console.log(`🔍 Fetching bulk status for ${taskIds.length} tasks (using direct UUID V2 API)...`);
 
-            // Resolve any UUIDs to Integer IDs for higher compatibility
-            const resolvedIds = await Promise.all(taskIds.map(async id => {
-                if (id.includes('-')) {
-                    const res = await this.resolveTaskIdToInteger(id);
-                    return res || id;
-                }
-                return id;
-            }));
-
-            // 1. Try Modern V2
+            // 1. Try Modern V2 directly with original taskIds (UUID support)
             try {
                 const response = await axios.post(`${this.baseUrl}/cloudextraction/statuses/v2`, {
-                    taskIds: resolvedIds
+                    taskIds: taskIds
                 }, {
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
                 });
@@ -977,7 +960,16 @@ class MarketDataSyncService {
                 console.warn('⚠️ Octoparse V2 Bulk Status failed:', v2Err.response?.data?.message || v2Err.message);
             }
 
-            // 2. Try Legacy List Endpoint
+            // 2. Fallback to Legacy List Endpoint (needs resolved IDs)
+            console.log(`🔍 Falling back to legacy status search (Resolving UUIDs)...`);
+            const resolvedIds = await Promise.all(taskIds.map(async id => {
+                if (id.includes('-')) {
+                    const res = await this.resolveTaskIdToInteger(id);
+                    return res || id;
+                }
+                return id;
+            }));
+
             const legacyRes = await axios.get(`${this.baseUrl}/api/CloudTask/GetTaskStatusList`, {
                 params: { taskIds: resolvedIds.join(',') },
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1695,6 +1687,11 @@ class MarketDataSyncService {
             // 5. Update task URLs (using FILE endpoint)
             try {
                 await this.updateTaskUrlsWithFile(taskId, urls, isAjio);
+                
+                // Add Settling Delay: Give Octoparse 15 seconds to fully process the uploaded file/URLs
+                // before we trigger cloud extraction. This prevents starting a run with 0 settled URLs.
+                console.log(`⏳ [Settling] Waiting 15 seconds for file injection to settle on Octoparse backend...`);
+                await this.wait(15000);
             } catch (injectionError) {
                 console.error(`❌ File-based injection failed for task ${taskId}: ${injectionError.message}`);
                 throw injectionError;
