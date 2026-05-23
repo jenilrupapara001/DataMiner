@@ -33,7 +33,7 @@ exports.clearSellerCache = clearSellerCache;
  */
 const enrichSellersWithManagers = async (sellers) => {
   if (!sellers || sellers.length === 0) return sellers;
-  const sellerIds = sellers.map(s => s.Id);
+  const sellerIds = sellers.map(s => s._id || s.Id);
   const pool = await getPool();
   
   const result = await pool.request()
@@ -47,10 +47,11 @@ const enrichSellersWithManagers = async (sellers) => {
   const managers = result.recordset;
 
   return sellers.map(seller => {
+    const sId = seller._id || seller.Id;
     const sellerManagers = managers
-      .filter(m => m.SellerId === seller.Id)
+      .filter(m => m.SellerId === sId)
       .map(({ SellerId, ...m }) => m);
-    return { ...seller, _id: seller.Id, managers: sellerManagers };
+    return { ...seller, _id: sId, managers: sellerManagers };
   });
 };
 
@@ -59,7 +60,7 @@ const enrichSellersWithManagers = async (sellers) => {
  */
 const enrichSellersWithAsinCounts = async (sellers) => {
   if (!sellers || sellers.length === 0) return sellers;
-  const sellerIds = sellers.map(s => s.Id);
+  const sellerIds = sellers.map(s => s._id || s.Id);
   const pool = await getPool();
 
   const result = await pool.request()
@@ -78,7 +79,8 @@ const enrichSellersWithAsinCounts = async (sellers) => {
   });
 
   return sellers.map(seller => {
-    const stats = countMap[seller.Id] || { totalAsins: 0, activeAsins: 0 };
+    const sId = seller._id || seller.Id;
+    const stats = countMap[sId] || { totalAsins: 0, activeAsins: 0 };
     return {
       ...seller,
       totalAsins: stats.totalAsins,
