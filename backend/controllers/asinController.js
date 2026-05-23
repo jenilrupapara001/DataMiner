@@ -231,7 +231,11 @@ exports.getAsins = async (req, res) => {
     if (req.query.ratingTrend) whereClause += ' AND RatingTrend = @ratingTrend';
 
     // [2] Filters
-    if (status) whereClause += ' AND Status = @status';
+    if (status) {
+      whereClause += ' AND a.Status = @status';
+    } else {
+      whereClause += " AND (a.Status IS NULL OR a.Status != 'Archived')";
+    }
     if (category) whereClause += ' AND Category = @category';
     if (brand) whereClause += ' AND s.Name = @brand';
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';

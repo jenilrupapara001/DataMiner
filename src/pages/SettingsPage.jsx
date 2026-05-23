@@ -58,7 +58,8 @@ const SettingsPage = () => {
         minDescLength: 1000,
         AUTOMATION_SCHEDULE_TIME: '11:20',
         AUTOMATION_AJIO_SCHEDULE_TIME: '12:00',
-        AUTOMATION_ENABLED: true,
+        AUTOMATION_AMAZON_ENABLED: true,
+        AUTOMATION_AJIO_ENABLED: true,
     });
 
     const [loading, setLoading] = useState(true);
@@ -465,17 +466,6 @@ const SettingsPage = () => {
                                         <span>Background Pipeline Schedules</span>
                                     </div>
                                 }
-                                extra={
-                                    <Space size={12}>
-                                        <Text style={{ fontSize: 12.5, color: '#64748b', fontWeight: 500 }}>Automation Stack:</Text>
-                                        <Switch 
-                                            checked={settings.AUTOMATION_ENABLED === true || settings.AUTOMATION_ENABLED === 'true'}
-                                            onChange={checked => handleFieldChange('AUTOMATION_ENABLED', checked)}
-                                            checkedChildren="ON"
-                                            unCheckedChildren="OFF"
-                                        />
-                                    </Space>
-                                }
                             >
                                 <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: 12, padding: '16px', marginBottom: 24, display: 'flex', gap: 12 }}>
                                     <div style={{ color: '#D97706', flexShrink: 0 }}><Cpu size={18} /></div>
@@ -491,6 +481,12 @@ const SettingsPage = () => {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                                                 <Badge color="#FF9900" />
                                                 <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Amazon Scheduler</div>
+                                                <Switch 
+                                                    size="small"
+                                                    checked={settings.AUTOMATION_AMAZON_ENABLED !== false && settings.AUTOMATION_AMAZON_ENABLED !== 'false'}
+                                                    onChange={checked => handleFieldChange('AUTOMATION_AMAZON_ENABLED', checked)}
+                                                    style={{ marginLeft: 'auto' }}
+                                                />
                                             </div>
                                             <div className="form-section-title">Routine Dispatch Lock</div>
                                             <TimePicker 
@@ -508,6 +504,12 @@ const SettingsPage = () => {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                                                 <Badge color="#06B6D4" />
                                                 <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Ajio Scheduler</div>
+                                                <Switch 
+                                                    size="small"
+                                                    checked={settings.AUTOMATION_AJIO_ENABLED !== false && settings.AUTOMATION_AJIO_ENABLED !== 'false'}
+                                                    onChange={checked => handleFieldChange('AUTOMATION_AJIO_ENABLED', checked)}
+                                                    style={{ marginLeft: 'auto' }}
+                                                />
                                             </div>
                                             <div className="form-section-title">Routine Dispatch Lock</div>
                                             <TimePicker 

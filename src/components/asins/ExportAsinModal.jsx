@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Drawer, Tabs, Button, Select, Checkbox, Row, Col, 
   Radio, Progress, Alert, Tag as AntTag, Space, 
-  Typography, Segmented, Divider, Input, Tooltip, Card
+  Typography, Segmented, Divider, Input, Tooltip, Card,
+  DatePicker
 } from 'antd';
 import { 
   Download, FileSpreadsheet, FileText, Calendar, 
@@ -13,6 +14,7 @@ import {
 import { sellerApi, asinApi, exportApi } from '../../services/api';
 
 const { Text, Title, Paragraph } = Typography;
+const { RangePicker } = DatePicker;
 
 const ALL_ASIN_FIELDS = [
   { key: 'asinCode', label: 'ASIN Code', category: 'Basic' },
@@ -81,6 +83,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
   // Format & Options
   const [exportFormat, setExportFormat] = useState('csv');
   const [dateOption, setDateOption] = useState('all');
+  const [customDateRange, setCustomDateRange] = useState(null);
   const [exportType, setExportType] = useState(selectedIds.length > 0 ? 'selected' : 'filtered');
   const [marketplace, setMarketplace] = useState('amazon');
   
@@ -100,8 +103,45 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
       setSelectedSellerIds(selectedSeller ? [selectedSeller] : []);
       setMarketplace('amazon');
       setExportType(selectedIds.length > 0 ? 'selected' : 'filtered');
+
+      // Auto-select fields based on active filters
+      let baseFields = new Set([
+        'asinCode', 'parentAsin', 'sku', 'title', 'brand', 'category',
+        'currentPrice', 'mrp', 'bsr', 'rating', 'reviewCount', 'lqs', 'soldBy', 'tags'
+      ]);
+      
+      if (currentFilters) {
+        if (currentFilters.priceDispute) {
+          ['uploadedPrice', 'dealBadge', 'priceDispute', 'discountPercentage', 'secondAsp'].forEach(f => baseFields.add(f));
+        }
+        if (currentFilters.buyBoxWin) {
+          ['buyBoxWin', 'soldBy', 'soldBySec'].forEach(f => baseFields.add(f));
+        }
+        if (currentFilters.hasAplus) {
+          baseFields.add('hasAplus');
+        }
+        if (currentFilters.scrapeStatus) {
+          ['scrapeStatus', 'lastScraped'].forEach(f => baseFields.add(f));
+        }
+        if (currentFilters.bsrTrend) {
+          ['bsr', 'subBsr'].forEach(f => baseFields.add(f));
+        }
+        if (currentFilters.ratingTrend) {
+          ['rating', 'reviewCount'].forEach(f => baseFields.add(f));
+        }
+        if (currentFilters.hasVideo) {
+          baseFields.add('videoCount');
+        }
+        if (currentFilters.hasDeal) {
+          baseFields.add('dealBadge');
+        }
+        if (currentFilters.minTitleScore || currentFilters.minBulletScore || currentFilters.minImageScore || currentFilters.minDescriptionScore) {
+          ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore'].forEach(f => baseFields.add(f));
+        }
+      }
+      setSelectedFields(Array.from(baseFields));
     }
-  }, [isOpen, selectedSeller, selectedIds]);
+  }, [isOpen, selectedSeller, selectedIds, currentFilters]);
 
   const fetchSellers = async () => {
     try {
@@ -111,21 +151,37 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
   };
 
   const sellerOptions = useMemo(() => {
-    return sellers
-      .filter(s => {
-        const m = (s.marketplace || '').toLowerCase();
-        return marketplace === 'ajio' ? m === 'ajio' : m !== 'ajio';
-      })
-      .map(s => ({
+    const filteredSellers = sellers.filter(s => {
+      if (marketplace === 'all') return true;
+      const m = (s.marketplace || '').toLowerCase();
+      return marketplace === 'ajio' ? m === 'ajio' : m !== 'ajio';
+    });
+
+    const options = filteredSellers.map(s => ({
+      label: (
+        <div className="d-flex flex-column">
+          <Text strong style={{ fontSize: '13px' }}>{s.name}</Text>
+          <Text type="secondary" style={{ fontSize: '11px' }}>{s.sellerId} • {s.marketplace || 'amazon.in'}</Text>
+        </div>
+      ),
+      value: s._id || s.Id,
+      searchText: `${s.name} ${s.sellerId}`.toLowerCase()
+    }));
+
+    if (options.length > 0) {
+      options.unshift({
         label: (
-          <div className="d-flex flex-column">
-            <Text strong style={{ fontSize: '13px' }}>{s.name}</Text>
-            <Text type="secondary" style={{ fontSize: '11px' }}>{s.sellerId} • {s.marketplace || 'amazon.in'}</Text>
+          <div className="d-flex align-items-center gap-2">
+            <ListChecks size={14} className="text-primary" />
+            <Text strong className="text-primary">Select All Brands</Text>
           </div>
         ),
-        value: s._id || s.Id,
-        searchText: `${s.name} ${s.sellerId}`.toLowerCase()
-      }));
+        value: 'SELECT_ALL',
+        searchText: 'select all brands'
+      });
+    }
+
+    return options;
   }, [sellers, marketplace]);
 
   const filteredFields = useMemo(() => {
@@ -153,12 +209,76 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     setSelectedFields(prev => [...new Set([...prev, ...catKeys])]);
   };
 
-  const handleExport = async () => {
-    if (exportType === 'filtered' && selectedSellerIds.length === 0) {
-      setError('Please select at least one seller for filtered export');
-      return;
+  const getAppliedFiltersBadges = () => {
+    const badges = [];
+    const mapping = {
+      sku: 'SKU',
+      parentAsin: 'Parent ASIN',
+      scrapeStatus: 'Scrape Status',
+      brand: 'Brand',
+      category: 'Category',
+      subBsrCategory: 'Sub BSR',
+      buyBoxWin: 'BuyBox Winner',
+      hasAplus: 'A+ Content',
+      hasVideo: 'Video',
+      hasDeal: 'Deal',
+      minPrice: 'Min Price',
+      maxPrice: 'Max Price',
+      minBSR: 'Min BSR',
+      maxBSR: 'Max BSR',
+      minRating: 'Min Rating',
+      maxRating: 'Max Rating',
+      ageFilter: 'Age',
+      minReleaseDate: 'From',
+      maxReleaseDate: 'To',
+      priceDispute: 'Price Dispute',
+      bsrTrend: 'BSR Trend',
+      ratingTrend: 'Rating Trend',
+      historyDays: 'History Range',
+      status: 'Status'
+    };
+
+    if (currentFilters) {
+      Object.entries(currentFilters).forEach(([key, value]) => {
+        if (value && mapping[key]) {
+          let label = value;
+          if (value === 'true') label = 'Yes';
+          if (value === 'false') label = 'No';
+
+          badges.push(
+            <div key={key} className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#f4f4f5', color: '#3f3f46', borderColor: '#e4e4e7', borderRadius: '6px' }}>
+              <span className="fw-bold opacity-70 text-uppercase" style={{ fontSize: '8px', letterSpacing: '0.02em' }}>{mapping[key]}:</span>
+              <span className="fw-bold">{label}</span>
+            </div>
+          );
+        }
+      });
+
+      if (currentFilters.selectedTags?.length > 0) {
+        currentFilters.selectedTags.forEach(tag => {
+          badges.push(
+            <div key={`tag-${tag}`} className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#eef2ff', color: '#4338ca', borderColor: '#c7d2fe', borderRadius: '6px' }}>
+              <TagIcon size={10} className="opacity-80" />
+              <span className="fw-bold">{tag}</span>
+            </div>
+          );
+        });
+      }
     }
-    
+
+    if (searchQuery) {
+      badges.unshift(
+        <div key="search" className="d-flex align-items-center gap-1.5 px-2 border shadow-sm" style={{ height: '26px', fontSize: '10px', backgroundColor: '#fffbeb', color: '#b45309', borderColor: '#fcd34d', borderRadius: '6px' }}>
+          <Search size={10} className="opacity-80" />
+          <span className="fw-bold italic">"{searchQuery}"</span>
+        </div>
+      );
+    }
+
+    return badges;
+  };
+
+  const handleExport = async () => {
     if (exportType === 'selected' && selectedIds.length === 0) {
       setError('No items selected to export');
       return;
@@ -178,7 +298,9 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
       const exportParams = {
         fields: selectedFields,
         format: exportFormat,
-        dateRange: dateOption,
+        dateRange: dateOption === 'custom' && customDateRange 
+          ? { start: customDateRange[0].toISOString(), end: customDateRange[1].toISOString() } 
+          : dateOption,
         sellerIds: selectedSellerIds,
       };
 
@@ -297,7 +419,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
               icon={exporting ? <RefreshCw size={16} className="spin" /> : <Download size={16} />}
               onClick={handleExport}
               loading={exporting}
-              disabled={selectedFields.length === 0 || (exportType === 'filtered' && selectedSellerIds.length === 0)}
+              disabled={selectedFields.length === 0}
               style={{ minWidth: '160px' }}
               className="export-primary-btn"
             >
@@ -387,6 +509,14 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                                   onChange={(val) => { setMarketplace(val); setSelectedSellerIds([]); }}
                                   options={[
                                     { 
+                                      value: 'all', 
+                                      label: (
+                                        <div className="marketplace-logo-wrapper">
+                                          <Text strong style={{ fontSize: '14px', letterSpacing: '1px', color: '#1e293b' }}>ALL</Text>
+                                        </div>
+                                      )
+                                    },
+                                    { 
                                       value: 'amazon', 
                                       label: (
                                         <div className="marketplace-logo-wrapper">
@@ -410,7 +540,14 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                                 style={{ width: '100%' }}
                                 placeholder="Select sellers to include..."
                                 value={selectedSellerIds}
-                                onChange={setSelectedSellerIds}
+                                onChange={(vals) => {
+                                  if (vals.includes('SELECT_ALL')) {
+                                    const allIds = sellerOptions.filter(o => o.value !== 'SELECT_ALL').map(o => o.value);
+                                    setSelectedSellerIds(allIds);
+                                  } else {
+                                    setSelectedSellerIds(vals);
+                                  }
+                                }}
                                 options={sellerOptions}
                                 optionFilterProp="searchText"
                                 maxTagCount="responsive"
@@ -419,6 +556,15 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                                 className="modern-select"
                               />
                             </div>
+
+                            {getAppliedFiltersBadges().length > 0 && (
+                              <div className="mt-3">
+                                <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '8px' }}>Active Filters Applied to Export</Text>
+                                <div className="d-flex flex-wrap gap-2">
+                                  {getAppliedFiltersBadges()}
+                                </div>
+                              </div>
+                            )}
                           </Col>
                         )}
                       </Row>
@@ -517,8 +663,20 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                                 <Radio value="7days" className="radio-pill flex-grow-1">Last 7d</Radio>
                                 <Radio value="30days" className="radio-pill flex-grow-1">Last 30d</Radio>
                               </div>
+                              <Radio value="custom" className="radio-pill">Custom Range</Radio>
                             </div>
                           </Radio.Group>
+                          
+                          {dateOption === 'custom' && (
+                            <div className="mt-3 fade-in">
+                              <RangePicker 
+                                style={{ width: '100%', borderRadius: '8px' }} 
+                                value={customDateRange}
+                                onChange={setCustomDateRange}
+                                size="large"
+                              />
+                            </div>
+                          )}
                         </Col>
                         <Col span={12}>
                           <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '10px', textTransform: 'uppercase' }}>File Type</Text>

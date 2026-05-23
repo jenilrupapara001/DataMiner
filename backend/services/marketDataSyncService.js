@@ -1560,24 +1560,17 @@ class MarketDataSyncService {
                 let newCount = 0;
                 for (const item of dataList) {
                     const url = item.Original_URL || item.url || '';
-                    if (!seenUrls.has(url)) {
-                        seenUrls.add(url);
+                    // Do not aggressively deduplicate empty URLs to avoid dropping items
+                    if (!url || !seenUrls.has(url)) {
+                        if (url) seenUrls.add(url);
                         allResults.push(item);
                         newCount++;
                     }
                 }
 
-                // Silent count update
-
-                // Check for empty data - if ALL items have empty Title/asp, stop early
-                const allEmpty = dataList.every(item => !item.Title && !item.asp && !item.mrp);
-                if (allEmpty && dataList.length > 0) {
-                    console.warn(`⚠️ WARNING: All ${dataList.length} items have empty data fields! Stopping.`);
-                    console.warn(`⚠️ This indicates Octoparse task is NOT extracting product data properly.`);
-                    hasMore = false;
-                    break;
-                }
-
+                // CRITICAL FIX: We no longer stop early if a batch is empty.
+                // We must process ALL possible data (make chunks) without leaving any behind.
+                
                 if (dataList.length < size) {
                     hasMore = false;
                 } else {
@@ -1962,6 +1955,7 @@ class MarketDataSyncService {
             let allOffers = [];
             let availabilityStatus = 'Available';
             let brand = '';
+            let scrapedAsin = '';
 
             const isAjio = asin.sellerMarketplace && asin.sellerMarketplace.toLowerCase() === 'ajio';
 
@@ -1969,7 +1963,6 @@ class MarketDataSyncService {
                 // --- Ajio Specific Parsing Logic (Robust Mode) ---
                 price = this._cleanPrice(this._getFromRaw(rawData, ['ASP (Gross)', 'ASP', 'asp', 'price', 'currentPrice'], 0));
                 mrp = this._cleanPrice(this._getFromRaw(rawData, ['MRP', 'mrp', 'listPrice'], 0));
-                if (!mrp) mrp = price;
 
                 // Discount & Deal Details
                 dealBadge = this._getFromRaw(rawData, ['off_percent', 'offPercent', 'discountPercentage', 'deal_badge', 'deal'], 'No deal found');
@@ -2218,6 +2211,11 @@ class MarketDataSyncService {
                         availabilityStatus = 'Currently unavailable.';
                     }
                 }
+                
+                scrapedAsin = this._getFromRaw(rawData, ['ASIN', 'asin', 'Asin', 'asinCode', 'Field26'], '').trim();
+                if (scrapedAsin && scrapedAsin.length > 5 && scrapedAsin.toUpperCase() !== (asin.AsinCode || '').toUpperCase()) {
+                    availabilityStatus = 'Currently unavailable.';
+                }
 
                 brand = (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim();
             }
@@ -2350,6 +2348,7 @@ class MarketDataSyncService {
                 Mrp: mrp > 0 ? mrp : asin.Mrp,
                 DealBadge: dealBadge,
                 PriceType: priceType,
+                ScrapedAsin: scrapedAsin || null,
                 BSR: currentBSR,
                 BsrTrend: bsrTrend,
                 Rating: currentRating,

@@ -233,8 +233,8 @@ async function processExportJob(downloadId, params, userId) {
         console.log(`🔍 [Export] Generated Where Clause: ${whereClause}`);
         if (asinIds.length > 0) console.log(`🔍 [Export] Specific ASINs requested: ${asinIds.length}`);
 
-        // Apply advanced filters ONLY if no specific sellers or specific ASIN IDs are selected
-        if (sellerIds.length === 0 && asinIds.length === 0) {
+        // Apply advanced filters (Always apply these even if specific sellers are selected)
+        if (asinIds.length === 0) {
             if (search) {
                 request.input('search', sql.NVarChar, `%${search}%`);
                 whereClause += ' AND (a.AsinCode LIKE @search OR a.Title LIKE @search OR a.Sku LIKE @search)';

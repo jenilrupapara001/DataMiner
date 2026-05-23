@@ -2804,7 +2804,7 @@ const AsinManagerPage = (props) => {
                   )}
                   {isVisible('price') && (
                     <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'right', background: '#eef2ff', color: '#4338ca', borderBottom: '2px solid #c7d2fe' }}>
-                      {renderSortableHeader(marketplaceFilter === 'ajio' ? 'ASP' : 'CHANNEL PRICE', 'currentPrice', 'right')}
+                      {renderSortableHeader('CHANNEL PRICE', 'uploadedPrice', 'right')}
                     </th>
                   )}
                   {isVisible('discountPercentage') && (
@@ -3564,30 +3564,24 @@ const AsinManagerPage = (props) => {
                           onClick={(e) => handleViewPrice(asin, e)}
                           title="View Price Trend Matrix">
                           <div className="d-flex flex-column align-items-end">
-                            {asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? (
-                              <span style={{ color: '#4338ca' }}>
-                                ₹{(asin.currentPrice || 0).toLocaleString()}
+                            <>
+                              <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
+                                ₹{(asin.uploadedPrice || 0).toLocaleString()}
                               </span>
-                            ) : (
-                              <>
-                                <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
-                                  ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                              {asin.priceDispute && (
+                                <span className="badge mt-1 shadow-sm" style={{
+                                  fontSize: '8px',
+                                  padding: '2px 6px',
+                                  fontWeight: 800,
+                                  backgroundColor: '#dc2626',
+                                  color: '#fff',
+                                  borderRadius: '4px',
+                                  textTransform: 'uppercase'
+                                }}>
+                                  PRICE DISPUTE
                                 </span>
-                                {asin.priceDispute && (
-                                  <span className="badge mt-1 shadow-sm" style={{
-                                    fontSize: '8px',
-                                    padding: '2px 6px',
-                                    fontWeight: 800,
-                                    backgroundColor: '#dc2626',
-                                    color: '#fff',
-                                    borderRadius: '4px',
-                                    textTransform: 'uppercase'
-                                  }}>
-                                    PRICE DISPUTE
-                                  </span>
-                                )}
-                              </>
-                            )}
+                              )}
+                            </>
                           </div>
                         </td>
                       )}
@@ -3635,9 +3629,15 @@ const AsinManagerPage = (props) => {
                           const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
                             || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
                           const currentOrUploadedPrice = asin.currentPrice;
-                          const priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
+                          let priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
                             ? wData.price
                             : null;
+
+                          // Fallback to currentPrice for the latest date (today) if history is empty or 0
+                          if (!priceVal && dIdx === week.dates.length - 1 && asin.currentPrice > 0) {
+                            priceVal = asin.currentPrice;
+                          }
+
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
                               onClick={(e) => handleViewPrice(asin, e)}

@@ -14,7 +14,7 @@ import {
 import {
   Package, Search, Plus, FileUp, Upload,
   Clock, Trash2, Play, Pause, LayoutGrid,
-  RefreshCw, Edit3, ChevronRight
+  RefreshCw, Edit3, ChevronRight, Star
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -235,6 +235,29 @@ const SellersPage = () => {
         s._id === sellerId ? { ...s, status: seller.status, _saving: false } : s
       ));
       toastRef.current('Failed to update status', 'error');
+    }
+  }, [sellers]);
+
+  // ── OPTIMISTIC: Toggle Priority ─────────────────────────────────────────
+  const handleTogglePriority = useCallback(async (sellerId) => {
+    const seller = sellers.find(s => s._id === sellerId);
+    if (!seller) return;
+    const newPriority = !seller.isPriority;
+
+    setSellers(prev => prev.map(s =>
+      s._id === sellerId ? { ...s, isPriority: newPriority, _savingPriority: true } : s
+    ));
+    try {
+      await sellerApi.update(sellerId, { isPriority: newPriority });
+      setSellers(prev => prev.map(s =>
+        s._id === sellerId ? { ...s, _savingPriority: false } : s
+      ));
+      toastRef.current(newPriority ? 'Marked as High Priority' : 'Removed from High Priority', 'success');
+    } catch {
+      setSellers(prev => prev.map(s =>
+        s._id === sellerId ? { ...s, isPriority: seller.isPriority, _savingPriority: false } : s
+      ));
+      toastRef.current('Failed to update priority', 'error');
     }
   }, [sellers]);
 
@@ -512,6 +535,16 @@ const SellersPage = () => {
             onClick={() => handleSyncSeller(seller._id)}
             style={{ color: '#64748b' }} />
         </Tooltip>
+        {isGlobalUser && (
+          <Tooltip title={seller.isPriority ? 'Remove High Priority' : 'Set as High Priority'}>
+            <Button
+              type="text" size="small"
+              icon={<Star size={14} fill={seller.isPriority ? "#f59e0b" : "none"} stroke={seller.isPriority ? "#f59e0b" : "#64748b"} />}
+              onClick={() => handleTogglePriority(seller._id)}
+              loading={seller._savingPriority}
+            />
+          </Tooltip>
+        )}
         <Tooltip title={isActive ? 'Pause Store' : 'Resume Store'}>
           <Button
             type={isActive ? 'text' : 'primary'} size="small"
@@ -545,7 +578,7 @@ const SellersPage = () => {
   }, [
     isBrandManager, isGlobalUser, syncingIds,
     handleEditSeller, handleViewAsins, handleCatalogSync,
-    handleSyncSeller, handleToggleStatus, handleDeleteSeller, hasPermission
+    handleSyncSeller, handleToggleStatus, handleTogglePriority, handleDeleteSeller, hasPermission
   ]);
 
   // ── Table columns ──────────────────────────────────────────────────────
@@ -575,7 +608,10 @@ const SellersPage = () => {
               {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
             </div>
             <div style={{ lineHeight: 1.2 }}>
-              <Text strong style={{ fontSize: 12.5, color: '#1e293b' }}>{seller.name}</Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Text strong style={{ fontSize: 12.5, color: '#1e293b' }}>{seller.name}</Text>
+                {seller.isPriority && <Star size={12} fill="#f59e0b" stroke="#f59e0b" style={{ marginTop: '-2px' }} />}
+              </div>
               {seller.sellerId && (
                 <div style={{ marginTop: 1 }}>
                   <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 4px', borderRadius: 4, color: '#64748b' }}>

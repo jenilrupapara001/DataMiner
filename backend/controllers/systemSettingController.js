@@ -37,8 +37,8 @@ exports.getSettingByKey = async (req, res) => {
     try {
         const { key } = req.params;
         
-        if (key === 'AUTOMATION_ENABLED') {
-            return res.json({ success: true, data: { Key: 'AUTOMATION_ENABLED', Value: 'true' } });
+        if (key === 'AUTOMATION_AMAZON_ENABLED' || key === 'AUTOMATION_AJIO_ENABLED') {
+            return res.json({ success: true, data: { Key: key, Value: 'true' } });
         }
 
         const pool = await getPool();
@@ -89,7 +89,7 @@ exports.updateSettings = async (req, res) => {
 
         // Dynamically trigger rescheduling if schedule settings were updated
         const keys = Object.keys(settings);
-        if (keys.includes('AUTOMATION_SCHEDULE_TIME') || keys.includes('AUTOMATION_AJIO_SCHEDULE_TIME') || keys.includes('AUTOMATION_ENABLED')) {
+        if (keys.includes('AUTOMATION_SCHEDULE_TIME') || keys.includes('AUTOMATION_AJIO_SCHEDULE_TIME') || keys.includes('AUTOMATION_AMAZON_ENABLED') || keys.includes('AUTOMATION_AJIO_ENABLED')) {
             try {
                 const SchedulerService = require('../services/schedulerService');
                 // Use a non-blocking background invocation so response returns immediately
@@ -142,7 +142,7 @@ exports.toggleOctoparseAutomation = async (req, res) => {
 exports.getScheduleConfig = async (req, res) => {
     try {
         const pool = await getPool();
-        const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_ENABLED')");
+        const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_AMAZON_ENABLED', 'AUTOMATION_AJIO_ENABLED')");
         
         const settingsMap = {};
         settingsResult.recordset.forEach(s => {
@@ -151,16 +151,22 @@ exports.getScheduleConfig = async (req, res) => {
 
         const scheduleTime = settingsMap['AUTOMATION_SCHEDULE_TIME'] || process.env.AUTOMATION_SCHEDULE_TIME || '11:20';
         const ajioScheduleTime = settingsMap['AUTOMATION_AJIO_SCHEDULE_TIME'] || process.env.AUTOMATION_AJIO_SCHEDULE_TIME || '12:00';
-        const automationEnabled = settingsMap['AUTOMATION_ENABLED'] !== undefined 
-            ? settingsMap['AUTOMATION_ENABLED'] === 'true'
-            : process.env.AUTOMATION_ENABLED === 'true';
+        
+        const amazonAutomationEnabled = settingsMap['AUTOMATION_AMAZON_ENABLED'] !== undefined 
+            ? settingsMap['AUTOMATION_AMAZON_ENABLED'] === 'true'
+            : true;
+            
+        const ajioAutomationEnabled = settingsMap['AUTOMATION_AJIO_ENABLED'] !== undefined 
+            ? settingsMap['AUTOMATION_AJIO_ENABLED'] === 'true'
+            : true;
 
         res.json({
             success: true,
             data: {
                 scheduleTime,
                 ajioScheduleTime,
-                automationEnabled
+                amazonAutomationEnabled,
+                ajioAutomationEnabled
             }
         });
     } catch (error) {

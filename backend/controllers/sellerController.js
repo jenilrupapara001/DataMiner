@@ -150,10 +150,10 @@ exports.getSellers = async (req, res) => {
 
     // Prepare paginated query with parameters
     const sqlQuery = `
-      SELECT Id as _id, Id, Name as name, Marketplace as marketplace, SellerId as sellerId,
-             OctoparseId as octoparseId, IsActive as status, [Plan] as sellerPlan,
-             ScrapeLimit as scrapeLimit, ScrapeUsed as scrapeUsed, LastScrapedAt as lastScraped,
-             CreatedAt, UpdatedAt
+      SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, 
+             OctoparseId as octoparseId, IsActive as status, IsPriority as isPriority, [Plan] as sellerPlan,
+             ScrapeLimit as scrapeLimit, CreatedAt as createdAt, UpdatedAt as updatedAt,
+             LastScrapedAt as lastScraped
        FROM Sellers
        ${whereClause}
        ORDER BY Name ASC
@@ -169,6 +169,7 @@ exports.getSellers = async (req, res) => {
         sellers = sellersResult.recordset.map(s => ({
             ...s,
             status: s.status ? 'Active' : 'Inactive',
+            isPriority: !!s.isPriority,
             plan: s.sellerPlan
         }));
         console.log('Fetched sellers count:', sellers.length);
@@ -248,6 +249,7 @@ exports.getSeller = async (req, res) => {
           marketplace: seller.Marketplace,
           sellerId: seller.SellerId,
           status: seller.IsActive ? 'Active' : 'Inactive',
+          isPriority: !!seller.IsPriority,
           octoparseId: seller.OctoparseId,
           plan: seller.Plan,
           scrapeLimit: seller.ScrapeLimit,
@@ -267,23 +269,26 @@ exports.createSeller = async (req, res) => {
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
     const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-    const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status, isPriority } = req.body;
 
     const pool = await getPool();
     const id = generateId();
 
-    await pool.request()
+    const request = pool.request();
+    request
       .input('id', sql.VarChar, id)
       .input('name', sql.NVarChar, name)
-      .input('marketplace', sql.NVarChar, marketplace)
+      .input('marketplace', sql.NVarChar, marketplace || 'amazon.in')
       .input('sellerId', sql.NVarChar, sellerId || null)
       .input('isActive', sql.Bit, status === 'Active' ? 1 : 0)
+      .input('isPriority', sql.Bit, isPriority === true ? 1 : 0)
       .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
       .input('plan', sql.NVarChar, req.body.plan || 'Starter')
-      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100)
-      .query(`
-        INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, OctoparseId, [Plan], ScrapeLimit, CreatedAt, UpdatedAt)
-        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @octoparseId, @plan, @scrapeLimit, GETDATE(), GETDATE())
+      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100);
+
+    await request.query(`
+        INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, CreatedAt, UpdatedAt)
+        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, GETDATE(), GETDATE())
       `);
 
     // Assign to users
@@ -331,7 +336,7 @@ exports.createSeller = async (req, res) => {
 exports.updateSeller = async (req, res) => {
   try {
     const { id } = req.params;
-    const { assignedUserIds, name, marketplace, sellerId, status } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status, isPriority } = req.body;
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
 
@@ -356,27 +361,48 @@ exports.updateSeller = async (req, res) => {
     if (status !== undefined) {
       finalIsActive = status === 'Active' ? 1 : 0;
     }
+    
+    let finalIsPriority = current.IsPriority;
+    if (isPriority !== undefined) {
+      finalIsPriority = isPriority === true ? 1 : 0;
+    }
 
     const finalOctoId = req.body.octoparseId === undefined ? current.OctoparseId : (req.body.octoparseId || null);
     const finalPlan = req.body.plan === undefined ? current.Plan : (req.body.plan || 'Starter');
     const finalScrapeLimit = req.body.scrapeLimit === undefined ? current.ScrapeLimit : (parseInt(req.body.scrapeLimit) || 100);
 
-    await pool.request()
+    const request = pool.request();
+    request
       .input('id', sql.VarChar, id)
       .input('name', sql.NVarChar, finalName)
       .input('marketplace', sql.NVarChar, finalMarketplace)
       .input('sellerId', sql.NVarChar, finalSellerId)
       .input('isActive', sql.Bit, finalIsActive)
+      .input('isPriority', sql.Bit, finalIsPriority)
       .input('octoparseId', sql.NVarChar, finalOctoId)
       .input('plan', sql.NVarChar, finalPlan)
-      .input('scrapeLimit', sql.Int, finalScrapeLimit)
-      .query(`
+      .input('scrapeLimit', sql.Int, finalScrapeLimit);
+
+    await request.query(`
         UPDATE Sellers 
         SET Name = @name, Marketplace = @marketplace, SellerId = @sellerId, 
-            IsActive = @isActive, OctoparseId = @octoparseId, [Plan] = @plan, 
+            IsActive = @isActive, IsPriority = @isPriority, OctoparseId = @octoparseId, [Plan] = @plan, 
             ScrapeLimit = @scrapeLimit, UpdatedAt = GETDATE()
         WHERE Id = @id
       `);
+
+    // Handle Archiving/Restoring ASINs when Seller status changes
+    if (finalIsActive === 0 && current.IsActive === true) {
+      console.log(`[SELLER PAUSED] Archiving ASINs for seller ${id}`);
+      await pool.request()
+        .input('sellerId', sql.VarChar, id)
+        .query("UPDATE Asins SET Status = 'Archived', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
+    } else if (finalIsActive === 1 && current.IsActive === false) {
+      console.log(`[SELLER RESUMED] Un-archiving ASINs for seller ${id}`);
+      await pool.request()
+        .input('sellerId', sql.VarChar, id)
+        .query("UPDATE Asins SET Status = 'Active', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND Status = 'Archived'");
+    }
 
     if (isGlobalUser && assignedUserIds !== undefined) {
       await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
