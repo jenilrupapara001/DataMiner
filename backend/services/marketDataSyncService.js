@@ -1147,8 +1147,8 @@ class MarketDataSyncService {
         const MAX_REFILL_CYCLES = 10;       // Max times we will re-inject + re-run
         const STATUS_POLL_FAST = 60000;   // 1 min while task is fresh
         const STATUS_POLL_SLOW = 300000;  // 5 min for long-running tasks
-        const MAX_POLL_HOURS = 4;
-        const MAX_POLL_ATTEMPTS = 120;     // Safety hard-stop
+        const MAX_POLL_HOURS = 720;       // ~1 month
+        const MAX_POLL_ATTEMPTS = 1000000; // Uncapped attempts
         const API_COURTESY_DELAY = 3000;   // 3s between non-status API calls
 
         let refillCycle = 0;
@@ -1178,6 +1178,7 @@ class MarketDataSyncService {
             let taskFailed = false;
 
             while (attempts < MAX_POLL_ATTEMPTS) {
+                // Time limit check has been effectively removed per user request (720h limit)
                 if (Date.now() - pollStart > MAX_POLL_HOURS * 60 * 60 * 1000) {
                     console.error(`⏰ [AUTO] Task ${taskId} exceeded ${MAX_POLL_HOURS}h limit. Aborting.`);
                     return totalProcessed;
