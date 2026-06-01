@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
-import { 
+import {
   Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag
 } from 'antd';
 const { Title, Text } = Typography;
@@ -158,7 +158,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   const totalClicks = Number(rowData.clicks || 0);
   const totalImpressions = Number(fullHistory.reduce((sum, d) => sum + Number(d.impressions || 0), 0));
   const totalOrders = Number(rowData.orders || 0);
-  
+
   const blendedAcos = totalSales > 0 ? (totalSpend / totalSales) * 100 : 0;
   const blendedRoas = totalSpend > 0 ? totalSales / totalSpend : 0;
   const blendedCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
@@ -302,11 +302,11 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
         <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
           <div className="d-flex align-items-center gap-3">
             {displayImage ? (
-              <img 
-                src={displayImage} 
-                alt="" 
-                className="rounded-3 border object-fit-contain bg-white" 
-                style={{ width: '52px', height: '52px', padding: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
+              <img
+                src={displayImage}
+                alt=""
+                className="rounded-3 border object-fit-contain bg-white"
+                style={{ width: '52px', height: '52px', padding: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
               />
             ) : (
               <div className="rounded-3 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '52px', height: '52px' }}>
@@ -381,11 +381,11 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
               <Table
                 dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
                 columns={columns}
-                pagination={{ 
-                  pageSize: 10, 
-                  showSizeChanger: false, 
-                  size: 'small', 
-                  style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' } 
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: false,
+                  size: 'small',
+                  style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' }
                 }}
                 size="small"
                 className="modern-timeline-table"
@@ -805,7 +805,7 @@ export default function AdsManagerPage() {
           imageUrl: row.imageUrl || '',
           brand: row.brand || '',
           category: row.category || '',
-          
+
           impressions: 0,
           clicks: 0,
           spend: 0,
@@ -816,12 +816,12 @@ export default function AdsManagerPage() {
           organicOrders: 0,
           pageViews: 0,
           sessions: 0,
-          
+
           children: [],
           weekHistory: []
         };
       }
-      
+
       const p = parents[pid];
       p.children.push(row);
       p.impressions += Number(row.impressions || 0);
@@ -834,7 +834,7 @@ export default function AdsManagerPage() {
       p.organicOrders += Number(row.organicOrders || 0);
       p.pageViews += Number(row.pageViews || 0);
       p.sessions += Number(row.sessions || 0);
-      
+
       if (!p.imageUrl && row.imageUrl) p.imageUrl = row.imageUrl;
       if (!p.brand && row.brand) p.brand = row.brand;
       if (!p.category && row.category) p.category = row.category;
@@ -875,14 +875,14 @@ export default function AdsManagerPage() {
           dailyMap[d].conversions += Number(h.conversions || 0);
         });
       });
-      
+
       const sortedHistory = Object.values(dailyMap).sort((a, b) => new Date(a.date) - new Date(b.date));
       sortedHistory.forEach(h => {
         h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
         h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
         h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
       });
-      
+
       p.weekHistory = sortedHistory;
       p.history = sortedHistory;
       p.childCount = p.children.length;
@@ -1017,22 +1017,22 @@ export default function AdsManagerPage() {
             onDateChange={(type, s, e) => updateDateRange({ startDate: s, endDate: e, rangeType: type })}
           />
 
-          <Button 
-            onClick={fetchAdsData} 
+          <Button
+            onClick={fetchAdsData}
             loading={loading}
-            icon={<RefreshCw size={14} />} 
+            icon={<RefreshCw size={14} />}
             className="fw-bold"
           >
             REFRESH
           </Button>
 
-          <Button 
-            type="primary" 
-            onClick={() => setShowImportModal(true)} 
-            icon={<Download size={14} />} 
+          <Button
+            type="primary"
+            onClick={() => setShowImportModal(true)}
+            icon={<Download size={14} />}
             className="fw-bold d-flex align-items-center justify-content-center gap-2"
-            style={{ 
-              backgroundColor: '#4f46e5', 
+            style={{
+              backgroundColor: '#4f46e5',
               borderColor: '#4f46e5',
               boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)'
             }}
@@ -1100,7 +1100,7 @@ export default function AdsManagerPage() {
       {/* CHART WRAPPER - COMPACT VERTICAL FOOTPRINT */}
       <div className="flex-shrink-0 overflow-hidden bg-light" style={{ maxHeight: showDashboardCharts ? '420px' : '0px', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', opacity: showDashboardCharts ? 1 : 0 }}>
         <div className="px-3 py-2">
-          <Card 
+          <Card
             styles={{ body: { padding: '10px 12px 12px 12px' } }}
             style={{ borderRadius: '12px', boxShadow: '0 4px 12px -2px rgba(0,0,0,0.04)', overflow: 'hidden' }}
           >
@@ -1345,7 +1345,7 @@ export default function AdsManagerPage() {
                       >
                         <div className="d-flex align-items-center gap-2">
                           {isParentRow && (
-                            <div 
+                            <div
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleParentExpand(row.asin);

@@ -8,8 +8,10 @@ const {
     downloadFile,
     getExportFields
 } = require('../controllers/exportController');
+const { startAdsExport } = require('../controllers/exportAdsController');
 
 router.post('/start', auth, startExport);
+router.post('/start-ads', auth, startAdsExport);
 router.get('/downloads', auth, getDownloads);
 router.get('/status/:id', auth, getExportStatus);
 router.get('/download/:id', auth, downloadFile);
