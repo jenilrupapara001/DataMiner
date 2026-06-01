@@ -52,6 +52,25 @@ const memProcessor = new MemorySafeProcessor({
 });
 
 /**
+ * Helper to execute a database query with deadlock retry logic.
+ */
+async function executeSqlWithRetry(queryFn, maxRetries = 3, retryDelayMs = 50) {
+    let retries = 0;
+    while (true) {
+        try {
+            return await queryFn();
+        } catch (err) {
+            if (err.message && err.message.toLowerCase().includes('deadlock') && retries < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, retryDelayMs * Math.pow(2, retries)));
+                retries++;
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
+/**
  * Discreet service for syncing market data from external provider.
  * Consolidated from OctoparseAutomationService and MarketDataSyncService.
  */
@@ -2444,24 +2463,26 @@ class MarketDataSyncService {
 
             // 11. History Tracking
             const today = now.toISOString().split('T')[0];
-            await pool.request()
-                .input('asinId', sql.VarChar, asinId)
-                .input('date', sql.Date, today)
-                .input('price', sql.Decimal(18, 2), updates.CurrentPrice)
-                .input('bsr', sql.Int, updates.BSR)
-                .input('rating', sql.Decimal(3, 2), updates.Rating)
-                .input('reviewCount', sql.Int, updates.ReviewCount)
-                .input('buyBoxStatus', sql.Bit, updates.BuyBoxStatus)
-                .input('stockLevel', sql.Int, updates.StockLevel)
-                .input('lqs', sql.Decimal(5, 2), updates.LQS)
-                .query(`
-                    IF EXISTS (SELECT 1 FROM AsinHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date)
-                        UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
-                        WHERE AsinId = @asinId AND Date = @date
-                    ELSE
-                        INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
-                        VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
-                `);
+            await executeSqlWithRetry(async () => {
+                await pool.request()
+                    .input('asinId', sql.VarChar, asinId)
+                    .input('date', sql.Date, today)
+                    .input('price', sql.Decimal(18, 2), updates.CurrentPrice)
+                    .input('bsr', sql.Int, updates.BSR)
+                    .input('rating', sql.Decimal(3, 2), updates.Rating)
+                    .input('reviewCount', sql.Int, updates.ReviewCount)
+                    .input('buyBoxStatus', sql.Bit, updates.BuyBoxStatus)
+                    .input('stockLevel', sql.Int, updates.StockLevel)
+                    .input('lqs', sql.Decimal(5, 2), updates.LQS)
+                    .query(`
+                        IF EXISTS (SELECT 1 FROM AsinHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date)
+                            UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
+                            WHERE AsinId = @asinId AND Date = @date
+                        ELSE
+                            INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
+                            VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
+                    `);
+            });
 
             // ✅ NEW: Save Detailed Sub BSR History
             if (subBSRs && subBSRs.length > 0) {
@@ -2472,19 +2493,21 @@ class MarketDataSyncService {
                         const category = match[2].trim();
 
                         try {
-                            await pool.request()
-                                .input('asinId', sql.VarChar, asinId)
-                                .input('date', sql.Date, today)
-                                .input('category', sql.NVarChar, category)
-                                .input('rank', sql.Int, rank)
-                                .query(`
-                                    IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
-                                        UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
-                                        WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
-                                    ELSE
-                                        INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                        VALUES (@asinId, @date, @category, @rank, GETDATE())
-                                `);
+                            await executeSqlWithRetry(async () => {
+                                await pool.request()
+                                    .input('asinId', sql.VarChar, asinId)
+                                    .input('date', sql.Date, today)
+                                    .input('category', sql.NVarChar, category)
+                                    .input('rank', sql.Int, rank)
+                                    .query(`
+                                        IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
+                                            UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
+                                            WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
+                                        ELSE
+                                            INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                            VALUES (@asinId, @date, @category, @rank, GETDATE())
+                                    `);
+                            });
                         } catch (e) {
                             console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
                         }
