@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
 const SocketService = require('../services/socketService');
@@ -421,13 +422,39 @@ async function processExportJob(downloadId, params, userId) {
             return `${sqlField} AS [${f}]`;
         }).join(', ');
 
-        const selectQuery = `
-            SELECT ${selectColumns}, s.Name as sellerName
-            FROM Asins a
-            LEFT JOIN Sellers s ON a.SellerId = s.Id
-            ${whereClause}
-            ORDER BY a.AsinCode ASC
-        `;
+        let selectQuery = '';
+        if (params.isHistorical) {
+            // Replace a.LastScrapedAt with ah.Date in whereClause
+            whereClause = whereClause.replace(/a\.LastScrapedAt/g, 'ah.Date');
+            
+            selectQuery = `
+                SELECT 
+                  CONVERT(varchar, ah.Date, 23) as [Date],
+                  a.AsinCode as [ASIN Code],
+                  a.Title as [Product Title],
+                  s.Name as [Brand],
+                  ah.Price as [Price (₹)],
+                  ah.BSR as [Best Seller Rank],
+                  ah.Rating as [Rating],
+                  ah.ReviewCount as [Review Count],
+                  CASE WHEN ah.BuyBoxStatus = 1 THEN 'Yes' ELSE 'No' END as [BuyBox Winner],
+                  ah.StockLevel as [Stock Level],
+                  ah.LQS as [LQS Score]
+                FROM AsinHistory ah
+                JOIN Asins a ON ah.AsinId = a.Id
+                LEFT JOIN Sellers s ON a.SellerId = s.Id
+                ${whereClause}
+                ORDER BY ah.Date DESC, a.AsinCode ASC
+            `;
+        } else {
+            selectQuery = `
+                SELECT ${selectColumns}, s.Name as sellerName
+                FROM Asins a
+                LEFT JOIN Sellers s ON a.SellerId = s.Id
+                ${whereClause}
+                ORDER BY a.AsinCode ASC
+            `;
+        }
 
         console.log(`📊 [Export] Running query: ${selectQuery.substring(0, 500)}${selectQuery.length > 500 ? '...' : ''}`);
 
@@ -439,76 +466,82 @@ async function processExportJob(downloadId, params, userId) {
 
         await updateDownloadStatus(pool, downloadId, 'processing', 40);
 
-        // Map label mapping
-        const labelMapping = {};
-        ALL_ASIN_FIELDS.forEach(f => { labelMapping[f.key] = f.label; });
-        labelMapping['sellerName'] = 'Seller Name';
+        let exportData = [];
+        
+        if (params.isHistorical) {
+            exportData = asins; // The SQL already formatted the columns perfectly
+        } else {
+            // Map label mapping for standard live export
+            const labelMapping = {};
+            ALL_ASIN_FIELDS.forEach(f => { labelMapping[f.key] = f.label; });
+            labelMapping['sellerName'] = 'Seller Name';
 
-        const exportData = asins.map(row => {
-            const item = {};
-            fields.forEach(field => {
-                const label = labelMapping[field] || field;
+            exportData = asins.map(row => {
+                const item = {};
+                fields.forEach(field => {
+                    const label = labelMapping[field] || field;
 
-                // Get value using exact field name from SQL
-                let value = row[field];
-                if (value === undefined) {
-                    // Try to find the matching column from SQL result
-                    const colName = sqlFieldMapping[field];
-                    if (colName) {
-                        const simpleCol = colName.includes('.') ? colName.split('.')[1] : colName;
-                        value = row[simpleCol];
+                    // Get value using exact field name from SQL
+                    let value = row[field];
+                    if (value === undefined) {
+                        // Try to find the matching column from SQL result
+                        const colName = sqlFieldMapping[field];
+                        if (colName) {
+                            const simpleCol = colName.includes('.') ? colName.split('.')[1] : colName;
+                            value = row[simpleCol];
+                        }
                     }
-                }
 
-                // Special field handling
-                if (field === 'brand' || field === 'Brand') {
-                    value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
-                } else if (field === 'buyBoxWin' || field === 'hasAplus') {
-                    value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
-                } else if (field === 'tags' || field === 'Tags') {
-                    try {
-                        const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
-                        value = Array.isArray(parsed) ? parsed.join(', ') : parsed;
-                    } catch { value = value || ''; }
-                } else if (field === 'subBSRs' || field === 'SubBSRs') {
-                    try {
-                        const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
-                        value = Array.isArray(parsed) ? parsed.map(b => `${b.category}: ${b.rank}`).join(' | ') : value;
-                    } catch { value = value || ''; }
-                } else if (field === 'ratingBreakdown' || field === 'RatingBreakdown') {
-                    try {
-                        const parsed = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {});
-                        value = Object.entries(parsed).map(([star, pct]) => `${star}: ${pct}`).join(', ');
-                    } catch { value = ''; }
-                } else if (['createdAt', 'updatedAt', 'lastScraped', 'CreatedAt', 'UpdatedAt', 'LastScrapedAt', 'ReleaseDate'].includes(field)) {
-                    if (value) value = new Date(value).toLocaleString('en-IN');
-                } else if (field === 'sellerName' || field === 'SellerName') {
-                    value = row.sellerName || row.SellerName || '';
-                } else if (field === 'bulletPointsText' || field === 'BulletPointsText') {
-                    try {
-                        const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
-                        value = Array.isArray(parsed) ? parsed.join(' | ') : value;
-                    } catch { value = value || ''; }
-                }
+                    // Special field handling
+                    if (field === 'brand' || field === 'Brand') {
+                        value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
+                    } else if (field === 'buyBoxWin' || field === 'hasAplus') {
+                        value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
+                    } else if (field === 'tags' || field === 'Tags') {
+                        try {
+                            const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                            value = Array.isArray(parsed) ? parsed.join(', ') : parsed;
+                        } catch { value = value || ''; }
+                    } else if (field === 'subBSRs' || field === 'SubBSRs') {
+                        try {
+                            const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                            value = Array.isArray(parsed) ? parsed.map(b => `${b.category}: ${b.rank}`).join(' | ') : value;
+                        } catch { value = value || ''; }
+                    } else if (field === 'ratingBreakdown' || field === 'RatingBreakdown') {
+                        try {
+                            const parsed = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {});
+                            value = Object.entries(parsed).map(([star, pct]) => `${star}: ${pct}`).join(', ');
+                        } catch { value = ''; }
+                    } else if (['createdAt', 'updatedAt', 'lastScraped', 'CreatedAt', 'UpdatedAt', 'LastScrapedAt', 'ReleaseDate'].includes(field)) {
+                        if (value) value = new Date(value).toLocaleString('en-IN');
+                    } else if (field === 'sellerName' || field === 'SellerName') {
+                        value = row.sellerName || row.SellerName || '';
+                    } else if (field === 'bulletPointsText' || field === 'BulletPointsText') {
+                        try {
+                            const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                            value = Array.isArray(parsed) ? parsed.join(' | ') : value;
+                        } catch { value = value || ''; }
+                    }
 
-                // --- CLEANING & DECODING ---
-                if (typeof value === 'string') {
-                    value = value
-                        .replace(/&amp;/g, '&')
-                        .replace(/&nbsp;/g, ' ')
-                        .replace(/&lt;/g, '<')
-                        .replace(/&gt;/g, '>')
-                        .replace(/&quot;/g, '"')
-                        .replace(/&#39;/g, "'")
-                        // Remove control characters and non-printable chars that break CSV
-                        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
-                        .trim();
-                }
+                    // --- CLEANING & DECODING ---
+                    if (typeof value === 'string') {
+                        value = value
+                            .replace(/&amp;/g, '&')
+                            .replace(/&nbsp;/g, ' ')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#39;/g, "'")
+                            // Remove control characters and non-printable chars that break CSV
+                            .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+                            .trim();
+                    }
 
-                item[label] = (value === null || value === undefined) ? '' : value;
+                    item[label] = (value === null || value === undefined) ? '' : value;
+                });
+                return item;
             });
-            return item;
-        });
+        }
 
         await updateDownloadStatus(pool, downloadId, 'processing', 70);
 
@@ -517,27 +550,56 @@ async function processExportJob(downloadId, params, userId) {
             .query('SELECT FileName FROM Downloads WHERE Id = @id');
         const fileName = resultDownloads.recordset[0]?.FileName || `asin_export_${downloadId}.${format}`;
 
-        // Generate file
-        const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'ASINs');
-
         // Set column widths (approximate)
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        ws['!cols'] = Array(range.e.c + 1).fill({ wch: 15 });
-        if (ws['!cols'][3]) ws['!cols'][3] = { wch: 40 }; // Title usually wider
-
+        const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
+        
         if (format === 'csv') {
-            const csvData = XLSX.utils.sheet_to_csv(ws, {
-                forceQuotes: true,
-                RS: '\r\n'
-            });
-            // Add BOM (Byte Order Mark) for Excel UTF-8 recognition
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const csvData = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, RS: '\r\n' });
             fs.writeFileSync(filePath, '\uFEFF' + csvData, 'utf8');
         } else {
-            const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-            fs.writeFileSync(filePath, buffer);
+            // ExcelJS for .xlsx files
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('ASINs');
+            
+            // Build columns
+            if (exportData.length > 0) {
+                const keys = Object.keys(exportData[0]);
+                worksheet.columns = keys.map(key => ({
+                    header: key,
+                    key: key,
+                    width: key.includes('Title') ? 40 : 18
+                }));
+                
+                // Add rows
+                exportData.forEach(row => {
+                    worksheet.addRow(row);
+                });
+                
+                // Style the header row
+                const headerRow = worksheet.getRow(1);
+                headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                headerRow.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FF1E293B' } // Professional Dark Blue/Slate
+                };
+                headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+                headerRow.height = 24;
+                
+                // Add simple borders to all cells
+                worksheet.eachRow((row) => {
+                    row.eachCell((cell) => {
+                        cell.border = {
+                            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                        };
+                    });
+                });
+            }
+            await workbook.xlsx.writeFile(filePath);
         }
 
         const stats = fs.statSync(filePath);

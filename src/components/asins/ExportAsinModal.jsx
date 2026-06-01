@@ -304,6 +304,15 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
         sellerIds: selectedSellerIds,
       };
 
+      if (dateOption === 'custom' && customDateRange) {
+        // Check if multiple dates are selected (start and end are not on the same day)
+        const startDay = customDateRange[0].toISOString().split('T')[0];
+        const endDay = customDateRange[1].toISOString().split('T')[0];
+        if (startDay !== endDay) {
+          exportParams.isHistorical = true;
+        }
+      }
+
       if (exportType === 'selected') {
         exportParams.asinIds = selectedIds;
       } else {

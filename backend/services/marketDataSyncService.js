@@ -758,6 +758,11 @@ class MarketDataSyncService {
                 return true;
             }
         } catch (err) {
+            if (err.response?.status === 404) {
+                // If V3 gives 404, it means the task doesn't exist or is already stopped. No need to try V1.
+                console.log(`ℹ️ [Octoparse] Task ${taskId} is already stopped (404 Not Found).`);
+                return true;
+            }
             console.log(`⚠️ V3 Stop failed: ${err.response?.status || err.message}`);
         }
 
@@ -770,6 +775,10 @@ class MarketDataSyncService {
             });
             return !!v1Response.data;
         } catch (v1Err) {
+            if (v1Err.response?.status === 404) {
+                console.log(`ℹ️ [Octoparse] Task ${taskId} is already stopped (404 Not Found).`);
+                return true;
+            }
             console.error(`❌ All Stop variants failed for ${taskId}:`, v1Err.message);
             return false;
         }
