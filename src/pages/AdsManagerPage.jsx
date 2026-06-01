@@ -112,6 +112,162 @@ const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   const Icon = isGood ? TrendingUp : TrendingDown;
   const color = isGood ? '#059669' : '#dc2626';
 
+
+  const getAntColumns = () => {
+    const cols = [
+      {
+        title: 'IMAGE',
+        dataIndex: 'imageUrl',
+        key: 'imageUrl',
+        fixed: 'left',
+        width: 60,
+        render: (url, record) => (
+          <div style={{ width: '40px', height: '40px', margin: 'auto', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
+            {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={16} className="text-zinc-300" />}
+          </div>
+        )
+      },
+      {
+        title: (
+          <div className="d-flex flex-column align-items-stretch gap-1">
+            <span className="text-zinc-500 smallest fw-bold text-start" style={{ letterSpacing: '0.05em', fontSize: '9px' }}>SELLER ACCOUNT</span>
+            <div style={{ width: '100%', fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
+              <InfiniteScrollSelect
+                fetchData={fetchSellerDropdownData}
+                value={selectedSeller}
+                onSelect={(val) => setSelectedSeller(val)}
+                placeholder="All Sellers"
+              />
+            </div>
+          </div>
+        ),
+        key: 'identifier',
+        fixed: 'left',
+        width: 185,
+        render: (_, record) => {
+          const isParentRow = record.isParent === true;
+          return (
+            <div className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
+              {isParentRow && (
+                <div 
+                  onClick={(e) => { e.stopPropagation(); toggleParentExpand(record.asin); }}
+                  className="d-flex align-items-center justify-content-center bg-zinc-100 hover-bg-zinc-200 rounded text-zinc-600"
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
+                >
+                  {expandedParents.has(record.asin) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </div>
+              )}
+              <div className="d-flex flex-column gap-0.5">
+                <span className="fw-bold text-indigo-600 font-monospace" style={{ fontSize: '10px' }}>{record.asin}</span>
+                {isParentRow && <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded smallest fw-bold" style={{ width: 'fit-content', fontSize: '8.5px' }}>{record.childCount} CHILDREN</span>}
+              </div>
+            </div>
+          );
+        }
+      },
+      {
+        title: 'SKU',
+        dataIndex: 'sku',
+        key: 'sku',
+        width: 110,
+        render: (sku, record) => record.isParent ? <span className="badge bg-zinc-100 text-zinc-600 border px-2 py-1 rounded" style={{ fontSize: '9px' }}>GROUP</span> : <span style={{ fontWeight: 600, color: '#475569' }}>{sku}</span>
+      },
+      {
+        title: 'PRODUCT DETAILS',
+        key: 'productDetails',
+        width: 200,
+        render: (_, record) => (
+          <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
+            <span className="fw-bold text-zinc-800 text-truncate" title={record.title}>{record.title}</span>
+            <span className="smallest text-zinc-400 fw-semibold">{record.brand} • {record.category}</span>
+          </div>
+        )
+      },
+      {
+        title: 'TARGET',
+        key: 'target',
+        width: 70,
+        align: 'center',
+        render: () => <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>
+      }
+    ];
+
+    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false) => {
+      const isExpanded = expandedCols[key];
+      const children = [
+        {
+          title: 'AVG',
+          key: `${key}_avg`,
+          width: 80,
+          align: 'right',
+          render: (_, record) => {
+            const val = record[key] || 0;
+            return <span className="fw-bold" style={{ fontSize: '11px', color: '#334155' }}>
+              {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
+            </span>;
+          }
+        },
+        {
+          title: 'TRN',
+          key: `${key}_trn`,
+          width: 60,
+          align: 'center',
+          render: (_, record) => {
+            const val = record[key] || 0;
+            if (val === 0) return <span className="text-zinc-300">-</span>;
+            return <Badge status="success" />;
+          }
+        }
+      ];
+
+      if (isExpanded) {
+        activeDates.forEach(d => {
+          children.push({
+            title: <div className="text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}><div className="text-zinc-400">{d.month}</div><div>{d.day}</div></div>,
+            key: `${key}_${d.raw}`,
+            width: 70,
+            align: 'right',
+            render: (_, record) => {
+              const hist = record.weekHistory?.find(h => h.date === d.raw);
+              const val = hist ? (hist[key] || 0) : 0;
+              if (val === 0) return <span className="text-zinc-300">-</span>;
+              return <span className="fw-semibold" style={{ fontSize: '10px', color: '#64748b' }}>
+                {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
+              </span>;
+            }
+          });
+        });
+      }
+
+      return {
+        title: (
+          <div className="d-flex align-items-center justify-content-center gap-1 cursor-pointer" onClick={() => toggleCol(key)}>
+            {icon}
+            <span style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{title}</span>
+            <div className="bg-white rounded ms-1 p-0.5 border" style={{ display: 'flex' }}>
+              {isExpanded ? <ChevronLeft size={10} className="text-zinc-400" /> : <ChevronRight size={10} className="text-zinc-400" />}
+            </div>
+          </div>
+        ),
+        children
+      };
+    };
+
+    cols.push(buildMetricGroup('TOTAL SALES', 'totalSales', <FileBarChart size={12} />, true));
+    cols.push(buildMetricGroup('ORDERS', 'orders', <Layers size={12} />));
+    cols.push(buildMetricGroup('SPEND', 'spend', <BarChart3 size={12} />, true));
+    cols.push(buildMetricGroup('CLICKS', 'clicks', <TrendUpIcon size={12} />));
+    cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={12} />));
+    cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={12} />));
+    cols.push(buildMetricGroup('ACOS', 'acos', <Target size={12} />, false, true));
+    cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={12} />, true));
+    cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={12} />, false, true));
+    cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={12} />, true));
+    cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={12} />));
+
+    return cols;
+  };
+
   return (
     <div className="d-flex align-items-center gap-0.5 fw-bold" style={{ fontSize: '9px', color }}>
       <Icon size={10} />
@@ -1192,305 +1348,25 @@ export default function AdsManagerPage() {
         </div>
       </div>
 
-      {/* MAIN TABLE CONTAINER */}
-      <div className="flex-grow-1 overflow-hidden d-flex flex-column">
-        <div id="ads-table-container" style={{ flex: 1, overflow: 'auto', position: 'relative', backgroundColor: '#fff' }}>
-          <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 4, background: '#fff' }}>
-              {/* ROW 1: High-level groups */}
-              <tr>
-                {/* --- STICKY CORNER CELL (IMAGE) --- */}
-                <th
-                  rowSpan={2}
-                  style={{
-                    ...thStyle,
-                    width: '60px',
-                    position: 'sticky',
-                    left: 0,
-                    top: 0,
-                    zIndex: 5,
-                    background: '#fafafa',
-                    borderRight: '1px solid #e2e8f0',
-                  }}
-                >
-                  IMAGE
-                </th>
-
-                {/* --- STICKY CORNER CELL (IDENTIFIER / SELLER DROPDOWN) --- */}
-                <th
-                  rowSpan={2}
-                  style={{
-                    ...thStyle,
-                    width: '185px',
-                    position: 'sticky',
-                    left: '60px',
-                    top: 0,
-                    zIndex: 5,
-                    background: '#fff',
-                    borderRight: '1px solid #e2e8f0',
-                    padding: '6px 10px',
-                  }}
-                >
-                  <div className="d-flex flex-column align-items-stretch gap-1">
-                    <span className="text-zinc-500 smallest fw-bold text-start" style={{ letterSpacing: '0.05em', fontSize: '9px' }}>SELLER ACCOUNT</span>
-                    <div style={{ width: '100%', fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
-                      <InfiniteScrollSelect
-                        fetchData={fetchSellerDropdownData}
-                        value={selectedSeller}
-                        onSelect={(val) => setSelectedSeller(val)}
-                        placeholder="All Sellers"
-                      />
-                    </div>
-                  </div>
-                </th>
-
-                {/* --- REMAINING HEADERS (inherit top via thead sticky) --- */}
-                <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left' }}>SKU</th>
-                <th rowSpan={2} style={{ ...thStyle, width: '200px', textAlign: 'left' }}>PRODUCT DETAILS</th>
-                <th rowSpan={2} style={{ ...thStyle, width: '70px', textAlign: 'center', background: '#fafafa' }}>TARGET</th>
-
-                {/* DYNAMIC ADS COLUMNS */}
-                {renderHeaderGroup('TOTAL SALES(AD + ORG)', 'blue', <FileBarChart size={12} />, 'totalSales')}
-                {renderHeaderGroup('ORDERED UNITS', 'pink', <Layers size={12} />, 'orders')}
-                {renderHeaderGroup('SPEND', 'indigo', <BarChart3 size={12} />, 'spend')}
-                {renderHeaderGroup('CLICKS', 'cyan', <TrendUpIcon size={12} />, 'clicks')}
-                {renderHeaderGroup('IMPRESSIONS', 'blue', <Eye size={12} />, 'impressions')}
-                {renderHeaderGroup('ROAS', 'amber', <RefreshCw size={12} />, 'roas')}
-                {renderHeaderGroup('ACOS', 'purple', <Target size={12} />, 'acos')}
-                {renderHeaderGroup('AD SALES', 'emerald', <FileBarChart size={12} />, 'sales')}
-                {renderHeaderGroup('CVR', 'slate', <Activity size={12} />, 'cvr')}
-                {renderHeaderGroup('ORGANIC SALES', 'emerald', <BarChart3 size={12} />, 'organicSales')}
-                {renderHeaderGroup('PAGE VIEWS', 'blue', <Eye size={12} />, 'pageViews')}
-              </tr>
-
-              {/* ROW 2: Metrics Sub-headers (Avg / Trend / Dates) */}
-              <tr>
-                {renderSubHeaders('blue', 'totalSales')}
-                {renderSubHeaders('pink', 'orders')}
-                {renderSubHeaders('indigo', 'spend')}
-                {renderSubHeaders('cyan', 'clicks')}
-                {renderSubHeaders('blue', 'impressions')}
-                {renderSubHeaders('amber', 'roas')}
-                {renderSubHeaders('purple', 'acos')}
-                {renderSubHeaders('emerald', 'sales')}
-                {renderSubHeaders('slate', 'cvr')}
-                {renderSubHeaders('emerald', 'organicSales')}
-                {renderSubHeaders('blue', 'pageViews')}
-              </tr>
-            </thead>
-
-            <tbody>
-              {data.length === 0 ? (
-                <tr>
-                  <td colSpan={100} style={{ padding: '100px 0', textAlign: 'center', backgroundColor: '#fff' }}>
-                    {loading ? (
-                      <div className="d-flex flex-column align-items-center gap-2 py-5">
-                        <div className="spinner-border spinner-border-sm text-indigo-600" role="status"></div>
-                        <span className="text-zinc-500 smallest fw-bold" style={{ letterSpacing: '0.05em' }}>LOADING PERFORMANCE DATA...</span>
-                      </div>
-                    ) : (
-                      <EmptyState
-                        icon={BarChart3}
-                        title="No Advertising Data"
-                        description="We couldn't find any matching performance records for your search."
-                      />
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                paginatedData.flatMap((row, idx) => {
-                  const isAltRow = idx % 2 === 1;
-                  const rowBg = isAltRow ? '#f9fafb' : '#ffffff';
-                  const isParentRow = row.isParent === true;
-
-                  const mainRow = (
-                    <tr key={row.id || idx} className="table-row-hover" style={{ background: rowBg }}>
-                      {/* Identifiers (Sticky) */}
-                      {/* IMAGE CELL */}
-                      <td
-                        style={{
-                          ...tdStyle,
-                          padding: '4px',
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 3,
-                          background: rowBg,
-                          borderRight: '1px solid #f1f5f9',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => setActiveHistoryRow(row)}
-                        title="View Detail History"
-                      >
-                        <div style={{ width: '40px', height: '40px', margin: 'auto', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {row.imageUrl ? (
-                            <img src={row.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                          ) : (
-                            <Package size={16} className="text-zinc-300" />
-                          )}
-                        </div>
-                      </td>
-
-                      {/* IDENTIFIER CELL */}
-                      <td
-                        style={{
-                          ...tdStyle,
-                          position: 'sticky',
-                          left: '60px',
-                          zIndex: 3,
-                          background: rowBg,
-                          borderRight: '1px solid #f1f5f9',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => setActiveHistoryRow(row)}
-                        title="View Detail History"
-                      >
-                        <div className="d-flex align-items-center gap-2">
-                          {isParentRow && (
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleParentExpand(row.asin);
-                              }}
-                              className="d-flex align-items-center justify-content-center bg-zinc-100 hover-bg-zinc-200 rounded text-zinc-600"
-                              style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
-                            >
-                              {expandedParents.has(row.asin) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                            </div>
-                          )}
-                          <div className="d-flex flex-column gap-0.5">
-                            <span className="fw-bold text-indigo-600 font-monospace" style={{ fontSize: '10px' }}>
-                              {row.asin}
-                            </span>
-                            {isParentRow && (
-                              <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded smallest fw-bold" style={{ width: 'fit-content', fontSize: '8.5px' }}>
-                                {row.childCount} CHILDREN
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td style={{ ...tdStyle, fontWeight: 600, color: '#475569' }}>
-                        {isParentRow ? (
-                          <span className="badge bg-zinc-100 text-zinc-600 border px-2 py-1 rounded" style={{ fontSize: '9px' }}>GROUP</span>
-                        ) : row.sku}
-                      </td>
-
-                      <td style={{ ...tdStyle }}>
-                        <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
-                          <span className="fw-bold text-zinc-800 text-truncate" title={row.title}>{row.title}</span>
-                          <span className="smallest text-zinc-400 fw-semibold">{row.brand} • {row.category}</span>
-                        </div>
-                      </td>
-
-                      <td style={{ ...tdStyle, textAlign: 'center' }}>
-                        <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>
-                      </td>
-
-                      {/* --- CORE METRIC CELLS --- */}
-                      {renderCells(row, 'totalSales', 'blue', 'totalSales', true)}
-                      {renderCells(row, 'orders', 'pink', 'orders')}
-                      {renderCells(row, 'spend', 'indigo', 'spend', true)}
-                      {renderCells(row, 'clicks', 'cyan', 'clicks')}
-                      {renderCells(row, 'impressions', 'blue', 'impressions')}
-                      {renderCells(row, 'roas', 'amber', 'roas', false, false)}
-                      {renderCells(row, 'acos', 'purple', 'acos', false, true)}
-                      {renderCells(row, 'sales', 'emerald', 'sales', true)}
-                      {renderCells(row, 'cvr', 'slate', 'cvr', false, true)}
-                      {renderCells(row, 'organicSales', 'emerald', 'organicSales', true)}
-                      {renderCells(row, 'pageViews', 'blue', 'pageViews')}
-                    </tr>
-                  );
-
-                  if (isParentRow && expandedParents.has(row.asin)) {
-                    const childrenRows = row.children.map((child, cIdx) => {
-                      const childBg = '#fcfdff';
-                      return (
-                        <tr key={`${row.id}-child-${child.id || cIdx}`} className="table-row-hover" style={{ background: childBg, borderLeft: '3px solid #6366f1' }}>
-                          {/* IMAGE CELL */}
-                          <td
-                            style={{
-                              ...tdStyle,
-                              padding: '4px',
-                              position: 'sticky',
-                              left: 0,
-                              zIndex: 3,
-                              background: childBg,
-                              borderRight: '1px solid #f1f5f9',
-                              cursor: 'pointer',
-                            }}
-                            onClick={() => setActiveHistoryRow(child)}
-                            title="View Detail History"
-                          >
-                            <div style={{ width: '32px', height: '32px', margin: 'auto', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {child.imageUrl ? (
-                                <img src={child.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                              ) : (
-                                <Package size={14} className="text-zinc-300" />
-                              )}
-                            </div>
-                          </td>
-
-                          {/* IDENTIFIER CELL */}
-                          <td
-                            style={{
-                              ...tdStyle,
-                              position: 'sticky',
-                              left: '60px',
-                              zIndex: 3,
-                              background: childBg,
-                              borderRight: '1px solid #f1f5f9',
-                              cursor: 'pointer',
-                              paddingLeft: '16px'
-                            }}
-                            onClick={() => setActiveHistoryRow(child)}
-                            title="View Detail History"
-                          >
-                            <div className="d-flex align-items-center gap-1">
-                              <span className="text-zinc-400 fw-bold font-monospace" style={{ fontSize: '10px' }}>↳</span>
-                              <span className="fw-semibold text-zinc-700 font-monospace" style={{ fontSize: '10px' }}>
-                                {child.asin}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td style={{ ...tdStyle, fontWeight: 600, color: '#475569', fontSize: '9.5px' }}>{child.sku}</td>
-
-                          <td style={{ ...tdStyle }}>
-                            <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
-                              <span className="text-zinc-700 text-truncate" style={{ fontSize: '10px' }} title={child.title}>{child.title}</span>
-                              <span className="smallest text-zinc-400 fw-semibold">{child.brand} • {child.category}</span>
-                            </div>
-                          </td>
-
-                          <td style={{ ...tdStyle, textAlign: 'center' }}>
-                            <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>
-                          </td>
-
-                          {/* --- CORE METRIC CELLS --- */}
-                          {renderCells(child, 'totalSales', 'blue', 'totalSales', true)}
-                          {renderCells(child, 'orders', 'pink', 'orders')}
-                          {renderCells(child, 'spend', 'indigo', 'spend', true)}
-                          {renderCells(child, 'clicks', 'cyan', 'clicks')}
-                          {renderCells(child, 'impressions', 'blue', 'impressions')}
-                          {renderCells(child, 'roas', 'amber', 'roas', false, false)}
-                          {renderCells(child, 'acos', 'purple', 'acos', false, true)}
-                          {renderCells(child, 'sales', 'emerald', 'sales', true)}
-                          {renderCells(child, 'cvr', 'slate', 'cvr', false, true)}
-                          {renderCells(child, 'organicSales', 'emerald', 'organicSales', true)}
-                          {renderCells(child, 'pageViews', 'blue', 'pageViews')}
-                        </tr>
-                      );
-                    });
-                    return [mainRow, ...childrenRows];
-                  }
-
-                  return [mainRow];
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+            {/* MAIN TABLE CONTAINER */}
+      <div className="flex-grow-1 overflow-hidden d-flex flex-column bg-white">
+        <Table
+          columns={getAntColumns()}
+          dataSource={paginatedData}
+          rowKey={(record) => record.id || record.asin}
+          loading={loading}
+          pagination={false}
+          scroll={{ x: 'max-content', y: 'calc(100vh - 250px)' }}
+          size="small"
+          bordered
+          rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : 'table-row-light'}
+          expandable={{
+            expandedRowRender: record => null,
+            rowExpandable: record => record.isParent,
+            expandedRowKeys: Array.from(expandedParents),
+            expandIcon: () => null
+          }}
+        />
 
         {/* Table Footer / Meta Status & PAGINATION */}
         <div className="bg-white border-top px-3 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>

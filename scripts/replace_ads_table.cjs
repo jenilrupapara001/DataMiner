@@ -117,7 +117,7 @@ const columnsCode = `
       if (isExpanded) {
         activeDates.forEach(d => {
           children.push({
-            title: d.label,
+            title: <div className="text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}><div className="text-zinc-400">{d.month}</div><div>{d.day}</div></div>,
             key: \`\${key}_\${d.raw}\`,
             width: 70,
             align: 'right',
@@ -167,7 +167,7 @@ const columnsCode = `
 code = code.substring(0, returnIndex) + columnsCode + code.substring(returnIndex);
 
 const tableStartString = '{/* MAIN TABLE CONTAINER */}';
-const tableEndString = '</div>\n      </div>\n\n      {/* RIGHT SLIDE-OVER DETAIL PANEL (ADS) */}';
+const tableEndString = '        {/* Table Footer / Meta Status & PAGINATION */}';
 
 const startIdx = code.indexOf(tableStartString);
 const endIdx = code.indexOf(tableEndString);
@@ -190,14 +190,17 @@ const tableReplacement = `      {/* MAIN TABLE CONTAINER */}
           bordered
           rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : 'table-row-light'}
           expandable={{
-            expandedRowRender: record => null, // Managed by parent toggle
+            expandedRowRender: record => null,
             rowExpandable: record => record.isParent,
             expandedRowKeys: Array.from(expandedParents),
-            expandIcon: () => null // Handled in identifier column manually for style
+            expandIcon: () => null
           }}
         />
+      </div>
+
 `;
 
+// Just replace everything from startIdx up to endIdx
 code = code.substring(0, startIdx) + tableReplacement + code.substring(endIdx);
 
 fs.writeFileSync(path, code);

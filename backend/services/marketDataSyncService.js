@@ -2455,7 +2455,7 @@ class MarketDataSyncService {
                 .input('stockLevel', sql.Int, updates.StockLevel)
                 .input('lqs', sql.Decimal(5, 2), updates.LQS)
                 .query(`
-                    IF EXISTS (SELECT 1 FROM AsinHistory WHERE AsinId = @asinId AND Date = @date)
+                    IF EXISTS (SELECT 1 FROM AsinHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date)
                         UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
                         WHERE AsinId = @asinId AND Date = @date
                     ELSE
@@ -2478,7 +2478,7 @@ class MarketDataSyncService {
                                 .input('category', sql.NVarChar, category)
                                 .input('rank', sql.Int, rank)
                                 .query(`
-                                    IF EXISTS (SELECT 1 FROM SubBsrHistory WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
+                                    IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
                                         UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
                                         WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
                                     ELSE
