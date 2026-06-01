@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import {
-  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag
+  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag, message
 } from 'antd';
 const { Title, Text } = Typography;
 import axios from 'axios';
@@ -479,6 +479,7 @@ export default function AdsManagerPage() {
   const [expandedParents, setExpandedParents] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
 
