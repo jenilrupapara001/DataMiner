@@ -54,14 +54,16 @@ const memProcessor = new MemorySafeProcessor({
 /**
  * Helper to execute a database query with deadlock retry logic.
  */
-async function executeSqlWithRetry(queryFn, maxRetries = 3, retryDelayMs = 50) {
+async function executeSqlWithRetry(queryFn, maxRetries = 3, retryDelayMs = 150) {
     let retries = 0;
     while (true) {
         try {
             return await queryFn();
         } catch (err) {
             if (err.message && err.message.toLowerCase().includes('deadlock') && retries < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, retryDelayMs * Math.pow(2, retries)));
+                const jitter = Math.floor(Math.random() * 100);
+                const delay = (retryDelayMs * Math.pow(2, retries)) + jitter;
+                await new Promise(resolve => setTimeout(resolve, delay));
                 retries++;
             } else {
                 throw err;
@@ -2475,42 +2477,52 @@ class MarketDataSyncService {
                     .input('stockLevel', sql.Int, updates.StockLevel)
                     .input('lqs', sql.Decimal(5, 2), updates.LQS)
                     .query(`
+                        SET NOCOUNT ON;
                         IF EXISTS (SELECT 1 FROM AsinHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date)
-                            UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
+                            UPDATE AsinHistory WITH (ROWLOCK) SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
                             WHERE AsinId = @asinId AND Date = @date
                         ELSE
-                            INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
+                            INSERT INTO AsinHistory WITH (ROWLOCK) (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
                             VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
                     `);
             });
 
             // ✅ NEW: Save Detailed Sub BSR History
             if (subBSRs && subBSRs.length > 0) {
-                for (const rankStr of subBSRs) {
-                    const match = String(rankStr).match(/#([\d,]+)\s+in\s+(.+)/);
+                const subBsrRequest = pool.request();
+                let subBsrQuery = 'SET NOCOUNT ON;\n';
+                let validRanks = 0;
+
+                for (let i = 0; i < subBSRs.length; i++) {
+                    const match = String(subBSRs[i]).match(/#([\d,]+)\s+in\s+(.+)/);
                     if (match) {
                         const rank = parseInt(match[1].replace(/,/g, ''));
                         const category = match[2].trim();
 
-                        try {
-                            await executeSqlWithRetry(async () => {
-                                await pool.request()
-                                    .input('asinId', sql.VarChar, asinId)
-                                    .input('date', sql.Date, today)
-                                    .input('category', sql.NVarChar, category)
-                                    .input('rank', sql.Int, rank)
-                                    .query(`
-                                        IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category)
-                                            UPDATE SubBsrHistory SET SubBsrRank = @rank, CreatedAt = GETDATE()
-                                            WHERE AsinId = @asinId AND Date = @date AND SubBsrCategory = @category
-                                        ELSE
-                                            INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                            VALUES (@asinId, @date, @category, @rank, GETDATE())
-                                    `);
-                            });
-                        } catch (e) {
-                            console.warn(`Failed to save Sub BSR history for ${asin.AsinCode}:`, e.message);
-                        }
+                        subBsrRequest.input(`asinId${i}`, sql.VarChar, asinId);
+                        subBsrRequest.input(`date${i}`, sql.Date, today);
+                        subBsrRequest.input(`category${i}`, sql.NVarChar, category);
+                        subBsrRequest.input(`rank${i}`, sql.Int, rank);
+
+                        subBsrQuery += `
+                            IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i})
+                                UPDATE SubBsrHistory WITH (ROWLOCK) SET SubBsrRank = @rank${i}, CreatedAt = GETDATE()
+                                WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i}
+                            ELSE
+                                INSERT INTO SubBsrHistory WITH (ROWLOCK) (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                                VALUES (@asinId${i}, @date${i}, @category${i}, @rank${i}, GETDATE());
+                        `;
+                        validRanks++;
+                    }
+                }
+
+                if (validRanks > 0) {
+                    try {
+                        await executeSqlWithRetry(async () => {
+                            await subBsrRequest.query(subBsrQuery);
+                        });
+                    } catch (e) {
+                        console.warn(`Failed to save Sub BSR history batch for ${asin.AsinCode}:`, e.message);
                     }
                 }
             }
@@ -2612,7 +2624,7 @@ class MarketDataSyncService {
 
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
-            // Process the chunk items in sub-chunks of 15 concurrently to respect pool limits
+            // Process the chunk items in sub-chunks of 15 concurrently for maximum performance
             const SUB_CHUNK_SIZE = 15;
             for (let subStart = 0; subStart < chunk.length; subStart += SUB_CHUNK_SIZE) {
                 const subChunk = chunk.slice(subStart, subStart + SUB_CHUNK_SIZE);
