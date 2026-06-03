@@ -15,7 +15,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTargetsData } from '../hooks/useTargetsData';
 import { useTargetPermissions } from '../hooks/useTargetPermissions';
-import { TargetSheetModal } from '../components/targets/TargetSheetModal';
+import { useAuth } from '../contexts/AuthContext';
+
 import { getAchievementTier } from '../utils/targets';
 import { sellerApi } from '../services/api';
 
@@ -119,13 +120,15 @@ const PeriodCell = memo(({
 
 const GoalDataRow = memo(({
     record, goalRow, periods, isFirst, isLast,
-    brandRowSpan, isSelected, onSelectChange, onEdit, onDelete, perms
+    brandRowSpan, isSelected, onSelectChange, onEdit, onDelete, perms, sellerName
 }: {
     record: any; goalRow: any; periods: string[];
     isFirst: boolean; isLast: boolean; brandRowSpan: number;
     isSelected: boolean; onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void; perms: any;
+    sellerName?: string;
 }) => {
+    const displayName = sellerName || record.SellerId || '?';
     const goalType = resolveGoalType(goalRow);
     const meta = getMeta(goalType);
     const total = goalRow.totalTarget || goalRow.TotalTargetValue || 0;
@@ -185,7 +188,7 @@ const GoalDataRow = memo(({
                             border: `1px solid ${meta.color}25`,
                             boxShadow: `0 2px 8px -2px ${meta.color}20`, marginTop: 1
                         }}>
-                            {(record.SellerId || '?')[0].toUpperCase()}
+                            {(displayName)[0].toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{
@@ -193,7 +196,7 @@ const GoalDataRow = memo(({
                                 lineHeight: '16px', whiteSpace: 'nowrap',
                                 overflow: 'hidden', textOverflow: 'ellipsis'
                             }}>
-                                {record.SellerId}
+                                {displayName}
                             </div>
                             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
                                 {record.Year}{record.Month ? ` · ${MONTHS_SHORT[record.Month - 1]}` : ''}
@@ -350,7 +353,7 @@ const GoalDataRow = memo(({
                         {perms.canDelete && (
                             <Popconfirm
                                 title="Delete all targets for this brand?"
-                                description={`This permanently deletes all ${brandRowSpan} goal row(s) for ${record.SellerId}.`}
+                                description={`This permanently deletes all ${brandRowSpan} goal row(s) for ${displayName}.`}
                                 onConfirm={() => onDelete(record)}
                                 okText="Delete All" cancelText="Cancel"
                                 okButtonProps={{ danger: true }} placement="left"
@@ -436,6 +439,7 @@ const GroupedTable = memo(({
                         onEdit={onEdit}
                         onDelete={onDelete}
                         perms={perms}
+                        sellerName={sellerMap.get(group.SellerId) || group.SellerId}
                     />
                 ));
             })}
@@ -448,6 +452,7 @@ const GroupedTable = memo(({
 const TargetVsAchievement = () => {
     const navigate = useNavigate();
     const perms = useTargetPermissions();
+    const { user } = useAuth();
     const [msgApi, msgCtx] = message.useMessage();
 
     const {
@@ -455,6 +460,49 @@ const TargetVsAchievement = () => {
         createTargets, updateTarget, deleteTargets,
         refresh, contextHolder
     } = useTargetsData();
+
+    const [sellers, setSellers] = useState<any[]>([]);
+
+    useEffect(() => {
+        sellerApi.getAll({ limit: 500 })
+            .then((res: any) => {
+                const list = res?.data?.sellers || res?.data || res?.sellers || [];
+                setSellers(Array.isArray(list) ? list : []);
+            })
+            .catch(err => console.error('[Sellers] load error:', err));
+    }, []);
+
+    const sellerMap = useMemo(() => {
+        const map = new Map<string, string>();
+        sellers.forEach(s => {
+            map.set(s._id || s.id, s.name || '');
+        });
+        return map;
+    }, [sellers]);
+
+    const filteredSellers = useMemo(() => {
+        if (!user) return [];
+        const roleName = (user.role?.name || user.role || '').toString().toLowerCase().trim();
+        const isMgr = roleName === 'brand manager' || roleName === 'brand_manager';
+        
+        if (isMgr) {
+            const userSellers = user.assignedSellers || [];
+            return userSellers.map((s: any) => {
+                const sid = s.sellerId || s.SellerId || s._id || s.Id || s;
+                return {
+                    sellerId: sid,
+                    name: s.name || s.SellerName || sid,
+                    marketplace: s.marketplace || 'Amazon'
+                };
+            });
+        }
+        
+        return sellers.map(s => ({
+            sellerId: s._id || s.id,
+            name: s.name || s._id || s.id,
+            marketplace: s.marketplace || 'Amazon'
+        }));
+    }, [user, sellers]);
 
     const [planType, setPlanType] = useState<'YEARLY' | 'MONTHLY'>('YEARLY');
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
@@ -465,10 +513,6 @@ const TargetVsAchievement = () => {
     const [filterManager, setFilterManager] = useState<string>('');
     const [filterGoalType, setFilterGoalType] = useState<string>('');
 
-    const [addVisible, setAddVisible] = useState(false);
-    const [editVisible, setEditVisible] = useState(false);
-    const [editingRecord, setEditingRecord] = useState<any>(null);
-    const [sellers, setSellers] = useState<any[]>([]);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
@@ -483,21 +527,15 @@ const TargetVsAchievement = () => {
         setPage(1);
     }, [planType, filterYear, searchText, filterSeller, filterManager, filterGoalType]);
 
-    useEffect(() => {
-        sellerApi.getAll({ limit: 500 })
-            .then((res: any) => {
-                const list = res?.data?.sellers || res?.data || res?.sellers || [];
-                setSellers(Array.isArray(list) ? list : []);
-            })
-            .catch((err: any) => console.error('[Sellers] load error:', err));
-    }, []);
-
     // ── Derived filter options from actual data ────────────────────────
 
     const availableSellers = useMemo(() => {
-        const ids = [...new Set(targets.map(t => t.SellerId).filter(Boolean))].sort();
-        return ids;
-    }, [targets]);
+        const ids = [...new Set(targets.map(t => t.SellerId).filter(Boolean))];
+        return ids.map(id => ({
+            value: id,
+            label: sellerMap.get(id) || id
+        })).sort((a, b) => a.label.localeCompare(b.label));
+    }, [targets, sellerMap]);
 
     const availableManagers = useMemo(() => {
         const names = [...new Set(targets.map(t => t.BrandManager).filter(Boolean))].sort();
@@ -525,6 +563,25 @@ const TargetVsAchievement = () => {
         const filtered = targets
             .filter(t => t.TargetType === planType)
             .filter(t => !filterYear || Number(t.Year || 0) === filterYear)
+            // RBAC Filter
+            .filter(t => {
+                if (perms.isBrandManager) {
+                    const sellerIdLower = (t.SellerId || '').toString().toLowerCase();
+                    const matchesSeller = filteredSellers.some(s => {
+                        const code = (s.sellerId || '').toString().toLowerCase();
+                        return code === sellerIdLower;
+                    });
+                    
+                    const targetManagerLower = (t.BrandManager || '').toString().toLowerCase().trim();
+                    const currentUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+                    const matchesManagerName = targetManagerLower === currentUserName;
+                    
+                    if (!matchesSeller && !matchesManagerName) {
+                        return false;
+                    }
+                }
+                return true;
+            })
             // Seller filter
             .filter(t => !filterSeller || t.SellerId === filterSeller)
             // Manager filter
@@ -533,8 +590,9 @@ const TargetVsAchievement = () => {
             .filter(t => {
                 if (!searchText) return true;
                 const q = searchText.toLowerCase();
+                const sellerName = (sellerMap.get(t.SellerId) || t.SellerId || '').toLowerCase();
                 return (
-                    (t.SellerId || '').toLowerCase().includes(q) ||
+                    sellerName.includes(q) ||
                     (t.BrandManager || '').toLowerCase().includes(q)
                 );
             });
@@ -574,7 +632,7 @@ const TargetVsAchievement = () => {
 
         // Remove groups that ended up with no goal rows after goal type filter
         return Array.from(map.values()).filter(g => g.goalRows.length > 0);
-    }, [targets, planType, filterYear, filterSeller, filterManager, filterGoalType, searchText]);
+    }, [targets, planType, filterYear, filterSeller, filterManager, filterGoalType, searchText, perms.isBrandManager, filteredSellers, user, sellerMap]);
 
     const totalGroups = grouped.length;
     const totalGoalRows = useMemo(() => grouped.reduce((s, g) => s + g.goalRows.length, 0), [grouped]);
@@ -585,100 +643,46 @@ const TargetVsAchievement = () => {
         return yrs.length ? yrs : [new Date().getFullYear()];
     }, [targets]);
 
-    const editInitialData = useMemo(() => {
-        if (!editingRecord) return [];
-        const records = Array.isArray(editingRecord) ? editingRecord : [editingRecord];
-        return records.map(rec => {
-            const periodKeys = rec.TargetType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
-            return {
-                sectionId: rec._groupId,
-                sellerId: rec.SellerId || '',
-                brandManager: rec.BrandManager || '',
-                manager: rec.BrandManager || '',
-                periodType: (rec.TargetType || 'YEARLY') as 'YEARLY' | 'MONTHLY',
-                year: rec.Year || new Date().getFullYear(),
-                month: rec.Month || 1,
-                collapsed: false,
-                goalRows: (rec.goalRows || []).map((gr: any) => {
-                    const bds: any[] = gr.monthlyBreakdown || gr.weeklyBreakdown || gr.breakdowns || [];
-                    return {
-                        goalRowId: gr.targetRecordId || `gr_${Math.random()}`,
-                        goalType: resolveGoalType(gr),
-                        totalTarget: gr.totalTarget || 0,
-                        targetId: gr.targetRecordId,
-                        cells: periodKeys.map((_: string, i: number) => {
-                            const pv = i + 1;
-                            const bd = bds.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
-                            return {
-                                value: bd?.TargetValue ?? bd?.targetValue ?? 0,
-                                pct: bd?.PercentageContribution ?? bd?.percentageContribution ?? 0,
-                                achievedValue: bd?.AchievedValue ?? bd?.achievedValue ?? 0,
-                                breakdownId: bd?.Id ?? bd?.id
-                            };
-                        })
-                    };
-                })
-            };
-        });
-    }, [editingRecord]);
+    const handleEdit = useCallback((r: any) => { 
+        if (perms.canEdit) { 
+            const records = Array.isArray(r) ? r : [r];
+            const initialData = records.map(rec => {
+                const periodKeys = rec.TargetType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
+                return {
+                    sectionId: rec._groupId,
+                    sellerId: rec.SellerId || '',
+                    brandManager: rec.BrandManager || '',
+                    manager: rec.BrandManager || '',
+                    periodType: (rec.TargetType || 'YEARLY') as 'YEARLY' | 'MONTHLY',
+                    year: rec.Year || new Date().getFullYear(),
+                    month: rec.Month || 1,
+                    collapsed: false,
+                    goalRows: (rec.goalRows || []).map((gr: any) => {
+                        const bds: any[] = gr.monthlyBreakdown || gr.weeklyBreakdown || gr.breakdowns || [];
+                        return {
+                            goalRowId: gr.targetRecordId || `gr_${Math.random()}`,
+                            goalType: resolveGoalType(gr),
+                            totalTarget: gr.totalTarget || 0,
+                            targetId: gr.targetRecordId,
+                            cells: periodKeys.map((_: string, i: number) => {
+                                const pv = i + 1;
+                                const bd = bds.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
+                                return {
+                                    value: bd?.TargetValue ?? bd?.targetValue ?? 0,
+                                    pct: bd?.PercentageContribution ?? bd?.percentageContribution ?? 0,
+                                    achievedValue: bd?.AchievedValue ?? bd?.achievedValue ?? 0,
+                                    breakdownId: bd?.Id ?? bd?.id
+                                };
+                            })
+                        };
+                    })
+                };
+            });
+            navigate('/target-achievement/create', { state: { mode: 'edit', initialData } });
+        } 
+    }, [perms.canEdit, navigate]);
 
-    const handleEdit = useCallback((r: any) => { if (perms.canEdit) { setEditingRecord(r); setEditVisible(true); } }, [perms.canEdit]);
     const handleDelete = useCallback(async (g: any) => { const ids = g._allTargetIds || []; if (ids.length) await deleteTargets(ids); }, [deleteTargets]);
-
-    const handleAddSubmit = useCallback(async (sections: any[]) => {
-        try {
-            for (const section of sections) {
-                if (!section.sellerId) continue;
-                const valid = (section.goalRows || []).filter((r: any) => r.goalType && r.totalTarget > 0);
-                if (!valid.length) continue;
-                const payload = valid.map((r: any) => {
-                    const cells = r.cells || r.breakdowns || [];
-                    return {
-                        sellerId: section.sellerId, brandManager: section.manager || '',
-                        goalType: r.goalType, targetType: section.periodType,
-                        year: section.year, month: section.periodType === 'MONTHLY' ? section.month : null,
-                        totalTargetValue: r.totalTarget,
-                        breakdowns: cells.map((c: any, i: number) => ({
-                            periodValue: i + 1,
-                            percentageContribution: c?.pct ?? c?.percentageContribution ?? 0,
-                            targetValue: c?.value ?? c?.targetValue ?? 0,
-                            achievedValue: c?.achievedValue ?? 0
-                        }))
-                    };
-                });
-                if (payload.length) await createTargets(payload);
-            }
-            setAddVisible(false);
-            msgApi.success('Targets saved successfully!');
-        } catch (err: any) {
-            msgApi.error(err?.message || 'Error saving targets.');
-        }
-    }, [createTargets, msgApi]);
-
-    const handleEditSubmit = useCallback(async (sections: any[]) => {
-        try {
-            for (const section of sections) {
-                for (const r of (section.goalRows || [])) {
-                    const targetId = r.targetId || r.targetRecordId;
-                    if (!targetId || String(targetId).startsWith('gr_')) continue;
-                    const cells = r.cells || r.breakdowns || [];
-                    await updateTarget(targetId, r.totalTarget || 0, cells.map((c: any, i: number) => ({
-                        periodValue: i + 1,
-                        targetValue: c?.value ?? 0,
-                        achievedValue: c?.achievedValue ?? 0,
-                        percentageContribution: c?.pct ?? 0,
-                        breakdownId: c?.breakdownId
-                    })));
-                }
-            }
-            setEditVisible(false);
-            setEditingRecord(null);
-            setSelectedRowKeys([]);
-            msgApi.success('Targets updated successfully!');
-        } catch (err: any) {
-            msgApi.error(err?.message || 'Error updating targets.');
-        }
-    }, [updateTarget, msgApi]);
 
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
@@ -761,7 +765,7 @@ const TargetVsAchievement = () => {
 
                         {perms.canCreate && (
                             <Button type="primary" icon={<Plus size={14} />}
-                                onClick={() => setAddVisible(true)}
+                                onClick={() => navigate('/target-achievement/create')}
                                 style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, boxShadow: '0 4px 12px rgba(79,70,229,0.25)' }}>
                                 Establish Targets
                             </Button>
@@ -830,7 +834,7 @@ const TargetVsAchievement = () => {
                         filterOption={(input, opt) =>
                             (opt?.label as string || '').toLowerCase().includes(input.toLowerCase())
                         }
-                        options={availableSellers.map(s => ({ label: s, value: s }))}
+                        options={availableSellers}
                     />
 
                     {/* Manager filter */}
@@ -890,7 +894,7 @@ const TargetVsAchievement = () => {
                                         color: '#7c3aed', margin: 0, padding: '1px 8px'
                                     }}
                                 >
-                                    Brand: {filterSeller}
+                                    Brand: {sellerMap.get(filterSeller) || filterSeller}
                                 </Tag>
                             )}
                             {filterManager && (
@@ -1071,8 +1075,7 @@ const TargetVsAchievement = () => {
                             <Button type="primary" size="small" icon={<Edit3 size={12} />}
                                 onClick={() => {
                                     const recs = grouped.filter(g => selectedRowKeys.includes(g._groupId));
-                                    setEditingRecord(recs);
-                                    setEditVisible(true);
+                                    handleEdit(recs);
                                 }}
                                 style={{ background: '#6366f1', borderColor: '#6366f1', fontSize: 12, fontWeight: 600 }}>
                                 Edit Selected
@@ -1154,28 +1157,6 @@ const TargetVsAchievement = () => {
                 }
             `}</style>
 
-            {perms.canCreate && (
-                <TargetSheetModal
-                    visible={addVisible}
-                    onClose={() => setAddVisible(false)}
-                    sellers={sellers}
-                    mode="add"
-                    submitting={savingIds.size > 0}
-                    onSubmit={handleAddSubmit}
-                />
-            )}
-
-            {perms.canEdit && editVisible && editingRecord && (
-                <TargetSheetModal
-                    visible={editVisible}
-                    onClose={() => { setEditVisible(false); setEditingRecord(null); }}
-                    sellers={sellers}
-                    mode="edit"
-                    submitting={savingIds.size > 0}
-                    initialData={editInitialData}
-                    onSubmit={handleEditSubmit}
-                />
-            )}
         </Layout>
     );
 };

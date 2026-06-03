@@ -44,6 +44,7 @@ const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const GoalAchievementReport = lazy(() => import('./pages/GoalAchievementReport'));
 const TargetVsAchievement = lazy(() => import('./pages/TargetVsAchievement'));
 const TargetVsAchievementDashboard = lazy(() => import('./pages/TargetVsAchievementDashboard'));
+const TargetCreationPage = lazy(() => import('./pages/TargetCreationPage'));
 const RevenueCalculatorPage = lazy(() => import('./pages/RevenueCalculatorPage'));
 const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
@@ -156,6 +157,7 @@ function AppRoutes() {
                   <Route path="/actions/achievement-report" element={<ProtectedRoute permission="monthlyreport_view"><GoalAchievementReport /></ProtectedRoute>} />
                   <Route path="/target-achievement" element={<ProtectedRoute permission="monthlyreport_view"><TargetVsAchievement /></ProtectedRoute>} />
                   <Route path="/target-achievement/dashboard" element={<ProtectedRoute permission="monthlyreport_view"><TargetVsAchievementDashboard /></ProtectedRoute>} />
+                  <Route path="/target-achievement/create" element={<ProtectedRoute permission="monthlyreport_edit"><TargetCreationPage /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
                   <Route path="/tasks" element={<ProtectedRoute permission="tasks_view"><TasksPage /></ProtectedRoute>} />
 

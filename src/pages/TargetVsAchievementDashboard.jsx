@@ -14,6 +14,7 @@ import { usePageTitle } from '../contexts/PageTitleContext';
 import { useTargetsData } from '../hooks/useTargetsData';
 import { useAuth } from '../contexts/AuthContext';
 import { useTargetPermissions } from '../hooks/useTargetPermissions';
+import { sellerApi } from '../services/api';
 import { PermissionGuard } from '../components/common/PermissionGuard';
 import { ReadOnlyBanner } from '../components/targets/ReadOnlyBanner';
 import { ConnectionBanner } from './TargetVsAchievement';
@@ -164,6 +165,25 @@ const TargetVsAchievementDashboard = () => {
     const [searchText, setSearchText] = useState('');
     
     const { targets, loading, refresh } = useTargetsData();
+
+    const [sellers, setSellers] = useState([]);
+
+    useEffect(() => {
+        sellerApi.getAll({ limit: 500 })
+            .then((res) => {
+                const list = res?.data?.sellers || res?.data || res?.sellers || [];
+                setSellers(Array.isArray(list) ? list : []);
+            })
+            .catch(err => console.error('[Sellers] load error:', err));
+    }, []);
+
+    const sellerMap = useMemo(() => {
+        const map = new Map();
+        sellers.forEach(s => {
+            map.set(s._id || s.id, s.name || '');
+        });
+        return map;
+    }, [sellers]);
 
     // Available years list
     const availableYears = useMemo(() => {
