@@ -811,12 +811,14 @@ exports.downloadCatalogTemplate = async (req, res) => {
 exports.octoparseJsonUpload = async (req, res) => {
     try {
         if (!req.file) {
+            console.error('❌ [BulkUpload] octoparseJsonUpload failed: No file uploaded');
             return res.status(400).json({ success: false, error: 'No file uploaded' });
         }
 
         const sellerId = req.body.sellerId;
         if (!sellerId) {
             try { fs.unlinkSync(req.file.path); } catch (e) { }
+            console.error('❌ [BulkUpload] octoparseJsonUpload failed: Seller ID missing');
             return res.status(400).json({ success: false, error: 'Seller ID is required for JSON ingestion' });
         }
 
@@ -830,11 +832,13 @@ exports.octoparseJsonUpload = async (req, res) => {
             rawData = JSON.parse(content);
         } catch (parseErr) {
             try { fs.unlinkSync(filePath); } catch (e) { }
+            console.error(`❌ [BulkUpload] octoparseJsonUpload failed: Invalid JSON format - ${parseErr.message}`);
             return res.status(400).json({ success: false, error: 'Invalid JSON file format: ' + parseErr.message });
         }
 
         if (!Array.isArray(rawData)) {
             try { fs.unlinkSync(filePath); } catch (e) { }
+            console.error('❌ [BulkUpload] octoparseJsonUpload failed: Not an array of product objects');
             return res.status(400).json({ success: false, error: 'Expected an array of product objects in the JSON file' });
         }
 

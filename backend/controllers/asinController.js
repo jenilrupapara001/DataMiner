@@ -3006,3 +3006,39 @@ exports.getSubBsrTrend = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * Match ASIN codes to IDs
+ */
+exports.matchAsins = async (req, res) => {
+  try {
+    const { sellerId, asinCodes } = req.body;
+    if (!sellerId || !asinCodes || !Array.isArray(asinCodes)) {
+      return res.status(400).json({ success: false, error: 'sellerId and asinCodes array are required' });
+    }
+    
+    if (asinCodes.length === 0) {
+      return res.json({ success: true, matchedIds: [] });
+    }
+
+    const pool = await getPool();
+    const codesStr = asinCodes.join(',');
+
+    const result = await pool.request()
+      .input('sellerId', sql.VarChar, sellerId)
+      .input('codes', sql.NVarChar(sql.MAX), codesStr)
+      .query(`
+        SELECT Id 
+        FROM Asins WITH (NOLOCK)
+        WHERE SellerId = @sellerId 
+        AND AsinCode IN (SELECT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@codes, ','))
+      `);
+      
+    const matchedIds = result.recordset.map(row => row.Id);
+    
+    res.json({ success: true, matchedIds });
+  } catch (error) {
+    console.error('matchAsins Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

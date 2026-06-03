@@ -60,6 +60,8 @@ router.put('/:id/week-history', protect, requirePermission('asinmanager_manage')
 
 // CRUD operations
 router.post('/', protect, requirePermission('asinmanager_manage'), checkSellerAccess, asinController.createAsin);
+router.post('/match', protect, requirePermission('asinmanager_view'), asinController.matchAsins);
+
 router.post('/bulk', protect, requirePermission('asinmanager_manage'), checkSellerAccess, asinController.createAsins);
 router.post('/bulk-delete', protect, requirePermission('asinmanager_manage'), asinController.bulkDeleteAsins);
 router.post('/bulk-update', protect, requirePermission('asinmanager_manage'), asinController.bulkUpdateAsins);

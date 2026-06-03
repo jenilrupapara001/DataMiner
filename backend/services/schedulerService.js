@@ -324,13 +324,32 @@ class SchedulerService {
                 return { success: true, totalSellers: 0 };
             }
 
-            // High Priority first (IsPriority DESC), then A-Z sorting (Name ASC)
+            // Bulk fetch ASIN counts for sorting small -> large
+            const countsResult = await pool.request().query(`
+                SELECT SellerId, COUNT(*) as activeCount 
+                FROM Asins 
+                WHERE Status IS NULL OR Status != 'Inactive'
+                GROUP BY SellerId
+            `);
+            const asinCountMap = {};
+            countsResult.recordset.forEach(row => {
+                asinCountMap[row.SellerId] = row.activeCount;
+            });
+
+            // High Priority first (IsPriority DESC), then by ASIN count (smallest first)
             sellers.sort((a, b) => {
                 const priorityA = a.IsPriority ? 1 : 0;
                 const priorityB = b.IsPriority ? 1 : 0;
                 
                 if (priorityA !== priorityB) {
                     return priorityB - priorityA; // 1 before 0
+                }
+                
+                const countA = asinCountMap[a.Id] || 0;
+                const countB = asinCountMap[b.Id] || 0;
+                
+                if (countA !== countB) {
+                    return countA - countB; // smallest first
                 }
                 
                 const nameA = (a.Name || '').toString().trim();
@@ -364,15 +383,7 @@ class SchedulerService {
 
                     console.log(`🚀 [ENTERPRISE] Worker starting seller: ${seller.Name} (${index + 1} of ${sellers.length})...`);
 
-                    let activeAsinsCount = 0;
-                    try {
-                        const countResult = await pool.request()
-                            .input('sellerId', sql.VarChar, seller.Id)
-                            .query("SELECT COUNT(*) as activeCount FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
-                        activeAsinsCount = countResult.recordset[0]?.activeCount || 0;
-                    } catch (err) {
-                        console.error(`⚠️ Failed to query active ASIN count for seller ${seller.Name}:`, err.message);
-                    }
+                    let activeAsinsCount = asinCountMap[seller.Id] || 0;
 
                     const sellerStat = {
                         sellerId: seller.Id,
@@ -440,6 +451,10 @@ class SchedulerService {
             // After completed, stop all active tasks completely as requested
             console.log(`🏢 [ENTERPRISE] Stopping all active ${marketplace} tasks after pipeline completion to prevent concurrency...`);
             await MarketSyncService.stopAllActiveTasks(marketplace).catch(() => {});
+            
+            // RUN SELF-HEALING IMMEDIATELY AFTER ALL SELLERS ARE PROCESSED
+            console.log(`🏢 [ENTERPRISE] Phase 2: Running Self-Healing (Missing Data Recovery) after main pipeline...`);
+            await this.runMissingDataRecovery();
 
             const totalDurationSecs = Math.round((Date.now() - startTime) / 1000);
             const result = {

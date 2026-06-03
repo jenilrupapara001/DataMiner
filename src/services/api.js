@@ -581,6 +581,15 @@ export const sellerApi = {
 
 // ASIN API
 export const asinApi = {
+  matchAsins: async (sellerId, asinCodes) => {
+    const res = await fetch(`${API_BASE}/asins/match`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ sellerId, asinCodes }),
+    });
+    if (!res.ok) throw new Error('Failed to match ASINs');
+    return res.json();
+  },
   updateTags: async (asinId, tags) => {
     try {
       const res = await fetch(`${API_BASE}/asins/${asinId}/tags`, {

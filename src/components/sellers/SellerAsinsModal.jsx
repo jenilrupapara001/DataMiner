@@ -99,7 +99,7 @@ const SellerAsinsModal = memo(({
     );
   }, [asins]);
 
-  const handleMatchPastedAsins = useCallback(() => {
+  const handleMatchPastedAsins = useCallback(async () => {
     if (!matchText.trim()) return;
 
     const codes = matchText
@@ -107,22 +107,30 @@ const SellerAsinsModal = memo(({
       .map(a => a.trim().toUpperCase())
       .filter(Boolean);
 
-    const matchedIds = asins
-      .filter(a => codes.includes((a.asinCode || '').toUpperCase()))
-      .map(a => a._id);
+    if (codes.length === 0) return;
 
-    if (matchedIds.length > 0) {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        matchedIds.forEach(id => next.add(id));
-        return next;
-      });
-      addToast(`Matched and selected ${matchedIds.length} ASIN(s).`, 'success');
-    } else {
-      addToast('None of the pasted ASINs matched current items.', 'warning');
+    setIsSubmitting(true);
+    try {
+      const result = await asinApi.matchAsins(seller._id, codes);
+      const matchedIds = result.matchedIds || [];
+
+      if (matchedIds.length > 0) {
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          matchedIds.forEach(id => next.add(id));
+          return next;
+        });
+        addToast(`Matched and selected ${matchedIds.length} ASIN(s) from database.`, 'success');
+      } else {
+        addToast('None of the pasted ASINs matched items in the database.', 'warning');
+      }
+      setMatchText('');
+    } catch (error) {
+      addToast(error.message || 'Failed to match ASINs', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setMatchText('');
-  }, [matchText, asins, addToast]);
+  }, [matchText, seller._id, addToast]);
 
   const handleSelectAllFromDatabase = useCallback(async () => {
     startProgress(20);
