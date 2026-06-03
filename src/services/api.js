@@ -1626,6 +1626,16 @@ export const targetsApi = {
         invalidateCachePattern('targets');
         return res.json();
     },
+    updateBulk: async (updates) => {
+        const res = await fetch(`${API_BASE}/targets`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ updates })
+        });
+        if (!res.ok) throw new Error('Failed to update targets');
+        invalidateCachePattern('targets');
+        return res.json();
+    },
     updateAchievements: async (updates) => {
         const res = await fetch(`${API_BASE}/targets/achievements`, {
             method: 'PUT',

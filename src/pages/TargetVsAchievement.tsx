@@ -288,7 +288,7 @@ const GoalDataRow = memo(({
                     <Progress
                         percent={Math.min(overallPct, 100)}
                         strokeColor={tier.color}
-                        trailColor="#f1f5f9"
+                        railColor="#f1f5f9"
                         size={[80, 4]}
                         showInfo={false}
                         strokeLinecap="round"
@@ -334,7 +334,7 @@ const GoalDataRow = memo(({
                     borderBottom: '1px solid #e2e8f0',
                     position: 'sticky', right: 0, zIndex: 2, width: 80
                 }}>
-                    <Space direction="vertical" size={6} align="center">
+                    <Space orientation="vertical" size={6} align="center">
                         {perms.canEdit && (
                             <Tooltip title="Edit targets" placement="left">
                                 <Button
@@ -376,12 +376,13 @@ const GoalDataRow = memo(({
 // ─── Grouped table ────────────────────────────────────────────────────────────
 
 const GroupedTable = memo(({
-    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete
+    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete, sellerMap
 }: {
     groups: any[]; planType: 'YEARLY' | 'MONTHLY';
     perms: any; selectedRowKeys: string[];
     onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void;
+    sellerMap: Map<string, string>;
 }) => {
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
@@ -484,7 +485,7 @@ const TargetVsAchievement = () => {
         if (!user) return [];
         const roleName = (user.role?.name || user.role || '').toString().toLowerCase().trim();
         const isMgr = roleName === 'brand manager' || roleName === 'brand_manager';
-        
+
         if (isMgr) {
             const userSellers = user.assignedSellers || [];
             return userSellers.map((s: any) => {
@@ -496,7 +497,7 @@ const TargetVsAchievement = () => {
                 };
             });
         }
-        
+
         return sellers.map(s => ({
             sellerId: s._id || s.id,
             name: s.name || s._id || s.id,
@@ -571,11 +572,11 @@ const TargetVsAchievement = () => {
                         const code = (s.sellerId || '').toString().toLowerCase();
                         return code === sellerIdLower;
                     });
-                    
+
                     const targetManagerLower = (t.BrandManager || '').toString().toLowerCase().trim();
                     const currentUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
                     const matchesManagerName = targetManagerLower === currentUserName;
-                    
+
                     if (!matchesSeller && !matchesManagerName) {
                         return false;
                     }
@@ -643,8 +644,8 @@ const TargetVsAchievement = () => {
         return yrs.length ? yrs : [new Date().getFullYear()];
     }, [targets]);
 
-    const handleEdit = useCallback((r: any) => { 
-        if (perms.canEdit) { 
+    const handleEdit = useCallback((r: any) => {
+        if (perms.canEdit) {
             const records = Array.isArray(r) ? r : [r];
             const initialData = records.map(rec => {
                 const periodKeys = rec.TargetType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
@@ -660,6 +661,7 @@ const TargetVsAchievement = () => {
                     goalRows: (rec.goalRows || []).map((gr: any) => {
                         const bds: any[] = gr.monthlyBreakdown || gr.weeklyBreakdown || gr.breakdowns || [];
                         return {
+                            id: gr.targetRecordId || `gr_${Math.random()}`,
                             goalRowId: gr.targetRecordId || `gr_${Math.random()}`,
                             goalType: resolveGoalType(gr),
                             totalTarget: gr.totalTarget || 0,
@@ -679,7 +681,7 @@ const TargetVsAchievement = () => {
                 };
             });
             navigate('/target-achievement/create', { state: { mode: 'edit', initialData } });
-        } 
+        }
     }, [perms.canEdit, navigate]);
 
     const handleDelete = useCallback(async (g: any) => { const ids = g._allTargetIds || []; if (ids.length) await deleteTargets(ids); }, [deleteTargets]);
@@ -1051,6 +1053,7 @@ const TargetVsAchievement = () => {
                                         onSelectChange={handleSelectChange}
                                         onEdit={handleEdit}
                                         onDelete={handleDelete}
+                                        sellerMap={sellerMap}
                                     />
                                 )}
                             </tbody>

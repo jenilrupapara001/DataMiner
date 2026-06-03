@@ -508,7 +508,188 @@ exports.deleteTargetsBulk = async (req, res) => {
  */
 exports.updateTarget = async (req, res) => {
     try {
-        const { targetId, totalTargetValue, breakdowns } = req.body;
+        const { targetId, totalTargetValue, breakdowns, updates } = req.body;
+
+        // Bulk updates branch
+        if (updates && Array.isArray(updates)) {
+            const pool = await getPool();
+            const transaction = pool.transaction();
+            await transaction.begin();
+
+            try {
+                const allRows = [];
+
+                for (const update of updates) {
+                    const { targetId: uTargetId, totalTargetValue: uTotalTargetValue, breakdowns: uBreakdowns } = update;
+                    if (!uTargetId || uTotalTargetValue === undefined || !Array.isArray(uBreakdowns)) {
+                        await transaction.rollback();
+                        return res.status(400).json({ success: false, message: "Invalid payload inside updates array." });
+                    }
+
+                    // 1. Fetch the existing target record
+                    const targetResult = await transaction.request()
+                        .input(`tId_${uTargetId}`, sql.VarChar, uTargetId)
+                        .query(`SELECT Id, SellerId, TargetType, Year, Month FROM GmsTargets WHERE Id = @tId_${uTargetId}`);
+                    
+                    const target = targetResult.recordset[0];
+                    if (!target) {
+                        await transaction.rollback();
+                        return res.status(404).json({ success: false, message: `Target ${uTargetId} not found.` });
+                    }
+
+                    const { TargetType: targetType, Year: year, Month: month } = target;
+
+                    // 2. Update TotalTargetValue on GmsTargets
+                    await transaction.request()
+                        .input(`tId_up_${uTargetId}`, sql.VarChar, uTargetId)
+                        .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), uTotalTargetValue)
+                        .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = GETDATE() WHERE Id = @tId_up_${uTargetId}`);
+
+                    // 3. Clear existing breakdowns
+                    await transaction.request()
+                        .input(`tId_del_${uTargetId}`, sql.VarChar, uTargetId)
+                        .query(`DELETE FROM GmsTargetBreakdowns WHERE TargetId = @tId_del_${uTargetId}`);
+
+                    // 4. Build all breakdown rows in memory
+                    if (targetType === 'YEARLY') {
+                        for (const breakdownItem of uBreakdowns) {
+                            const { periodValue, targetValue, achievedValue } = breakdownItem;
+                            const monthlyBreakdownId = generateId();
+                            const percentageContribution = uTotalTargetValue > 0 ? (targetValue / uTotalTargetValue) * 100 : 0;
+
+                            const monthlyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
+                            const weeklyAchieved = monthlyAchieved !== null ? monthlyAchieved / 4 : null;
+                            const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
+
+                            // Month row
+                            allRows.push({
+                                id: monthlyBreakdownId,
+                                targetId: uTargetId,
+                                periodType: 'MONTH',
+                                periodValue,
+                                targetValue: parseFloat(targetValue) || 0,
+                                achievedValue: monthlyAchieved,
+                                percentage: percentageContribution,
+                                specificDate: null
+                            });
+
+                             // Distribute to 4 Weeks
+                             const monthlyTarget = parseFloat(targetValue) || 0;
+                             const weeklyTarget = monthlyTarget / 4;
+
+                             for (let w = 1; w <= 4; w++) {
+                                  const compositeWeekValue = periodValue * 10 + w;
+                                  allRows.push({
+                                      id: generateId(),
+                                      targetId: uTargetId,
+                                      periodType: 'WEEK',
+                                      periodValue: compositeWeekValue,
+                                      targetValue: weeklyTarget,
+                                      achievedValue: weeklyAchieved,
+                                      percentage: 25.00,
+                                      specificDate: null
+                                  });
+
+                                  // Distribute to 7 Days
+                                  const dailyTarget = weeklyTarget / 7;
+                                  const weekStartRange = getWeekRange(year, periodValue, w);
+                                  let currentDay = new Date(weekStartRange.startDate);
+
+                                  for (let d = 1; d <= 7; d++) {
+                                      allRows.push({
+                                          id: generateId(),
+                                          targetId: uTargetId,
+                                          periodType: 'DAY',
+                                          periodValue: d,
+                                          targetValue: dailyTarget,
+                                          achievedValue: dailyAchieved,
+                                          percentage: null,
+                                          specificDate: format(currentDay, 'yyyy-MM-dd')
+                                      });
+                                      currentDay = addDays(currentDay, 1);
+                                  }
+                              }
+                        }
+                    } else {
+                        // MONTHLY: breakdowns are weekly values
+                        for (const breakdownItem of uBreakdowns) {
+                            const { periodValue, targetValue, achievedValue } = breakdownItem;
+                            const percentageContribution = uTotalTargetValue > 0 ? (targetValue / uTotalTargetValue) * 100 : 0;
+
+                            const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
+                            const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
+
+                            // Week row
+                            allRows.push({
+                                id: generateId(),
+                                targetId: uTargetId,
+                                periodType: 'WEEK',
+                                periodValue,
+                                targetValue: parseFloat(targetValue) || 0,
+                                achievedValue: weeklyAchieved,
+                                percentage: percentageContribution,
+                                specificDate: null
+                            });
+
+                            // Distribute to 7 Days
+                            const weeklyTarget = parseFloat(targetValue) || 0;
+                            const dailyTarget = weeklyTarget / 7;
+                            const weekStartRange = getWeekRange(year, month, periodValue);
+                            let currentDay = new Date(weekStartRange.startDate);
+
+                            for (let d = 1; d <= 7; d++) {
+                                allRows.push({
+                                    id: generateId(),
+                                    targetId: uTargetId,
+                                    periodType: 'DAY',
+                                    periodValue: d,
+                                    targetValue: dailyTarget,
+                                    achievedValue: dailyAchieved,
+                                    percentage: null,
+                                    specificDate: format(currentDay, 'yyyy-MM-dd')
+                                });
+                                currentDay = addDays(currentDay, 1);
+                            }
+                        }
+                    }
+                }
+
+                // 5. Batch insert all rows in chunks
+                const CHUNK_SIZE = 50;
+                for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
+                    const chunk = allRows.slice(i, i + CHUNK_SIZE);
+                    const values = [];
+                    const request = transaction.request();
+
+                    chunk.forEach((row, idx) => {
+                        request.input(`id${idx}`, sql.VarChar, row.id);
+                        request.input(`tid${idx}`, sql.VarChar, row.targetId);
+                        request.input(`pt${idx}`, sql.VarChar, row.periodType);
+                        request.input(`pv${idx}`, sql.Int, row.periodValue);
+                        request.input(`tv${idx}`, sql.Decimal(18, 2), row.targetValue);
+                        request.input(`av${idx}`, sql.Decimal(18, 2), row.achievedValue);
+                        request.input(`pc${idx}`, sql.Decimal(5, 2), row.percentage);
+                        request.input(`sd${idx}`, sql.Date, row.specificDate);
+
+                        values.push(`(@id${idx}, @tid${idx}, @pt${idx}, @pv${idx}, @sd${idx}, @tv${idx}, @av${idx}, @pc${idx})`);
+                    });
+
+                    const insertQuery = `
+                        INSERT INTO GmsTargetBreakdowns (Id, TargetId, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue, PercentageContribution)
+                        VALUES ${values.join(', ')}
+                    `;
+                    await request.query(insertQuery);
+                }
+
+                await transaction.commit();
+                return res.json({ success: true, message: "All targets updated and distributed successfully!" });
+            } catch (innerErr) {
+                await transaction.rollback();
+                throw innerErr;
+            }
+        }
+
+        // Single update fallback
         if (!targetId || totalTargetValue === undefined || !Array.isArray(breakdowns)) {
             return res.status(400).json({ success: false, message: "Invalid payload: targetId, totalTargetValue, and breakdowns array required." });
         }

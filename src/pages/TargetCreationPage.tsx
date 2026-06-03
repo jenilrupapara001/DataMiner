@@ -355,7 +355,7 @@ export default function TargetCreationPage() {
     const location = useLocation();
     const [msgApi, msgCtx] = message.useMessage();
 
-    const { createTargets, updateTarget } = useTargetsData();
+    const { createTargets, updateTarget, updateTargetsBulk } = useTargetsData();
     const [sellers, setSellers] = useState<any[]>([]);
     const [sections, setSections] = useState<BrandSection[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -503,21 +503,34 @@ export default function TargetCreationPage() {
         setSubmitting(true);
         try {
             if (isEditMode) {
+                const updates: any[] = [];
                 for (const section of sections) {
                     for (const r of (section.rows || [])) {
                         const targetId = r.targetId;
                         if (!targetId || String(targetId).startsWith('gr_')) continue;
-                        await updateTarget(targetId, r.totalTarget || 0, r.cells.map((c: any, i: number) => ({
-                            periodValue: i + 1,
-                            targetValue: c?.value ?? 0,
-                            achievedValue: c?.achievedValue ?? 0,
-                            percentageContribution: c?.pct ?? 0,
-                            breakdownId: c?.breakdownId
-                        })));
+                        updates.push({
+                            id: targetId,
+                            totalTargetValue: r.totalTarget || 0,
+                            breakdowns: r.cells.map((c: any, i: number) => ({
+                                periodValue: i + 1,
+                                targetValue: c?.value ?? 0,
+                                achievedValue: c?.achievedValue ?? 0,
+                                percentageContribution: c?.pct ?? 0,
+                                breakdownId: c?.breakdownId
+                            }))
+                        });
+                    }
+                }
+                if (updates.length > 0) {
+                    const success = await updateTargetsBulk(updates);
+                    if (!success) {
+                        setSubmitting(false);
+                        return;
                     }
                 }
                 msgApi.success('Targets updated successfully!');
             } else {
+                const allPayloads: any[] = [];
                 for (const section of sections) {
                     const valid = section.rows.filter(r => r.goalType && r.totalTarget > 0);
                     if (!valid.length) continue;
@@ -533,7 +546,14 @@ export default function TargetCreationPage() {
                             achievedValue: c.achievedValue || 0
                         }))
                     }));
-                    if (payload.length) await createTargets(payload);
+                    allPayloads.push(...payload);
+                }
+                if (allPayloads.length) {
+                    const success = await createTargets(allPayloads);
+                    if (!success) {
+                        setSubmitting(false);
+                        return;
+                    }
                 }
                 msgApi.success('Targets created successfully!');
             }

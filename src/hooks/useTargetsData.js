@@ -188,6 +188,64 @@ export function useTargetsData(customNotificationApi) {
         debouncedUpdate(id, totalTargetValue, breakdowns, previousData);
     }, [targets, debouncedUpdate]);
 
+    const updateTargetsBulk = useCallback(async (updates) => {
+        // updates: array of { id, totalTargetValue, breakdowns }
+        const snapshots = [];
+        updates.forEach((u) => {
+            const prev = targets.find((t) => t.Id === u.id || t.id === u.id);
+            if (prev) snapshots.push({ id: u.id, previousData: prev });
+        });
+
+        // 1. Instant optimistic updates
+        updates.forEach((u) => {
+            const optimisticBreakdowns = u.breakdowns.map((b) => ({
+                PeriodValue: b.periodValue || b.PeriodValue,
+                TargetValue: b.targetValue || b.TargetValue,
+                AchievedValue: b.achievedValue || b.AchievedValue || 0,
+                PercentageContribution: b.percentageContribution || b.PercentageContribution || 0,
+            }));
+            const overallAchieved = u.breakdowns.reduce((sum, b) => sum + (b.achievedValue || b.AchievedValue || 0), 0);
+            targetsCache.optimisticPatch(u.id, {
+                TotalTargetValue: u.totalTargetValue,
+                monthlyBreakdown: optimisticBreakdowns,
+                overallAchieved,
+            });
+        });
+
+        try {
+            // 2. Real API call
+            const res = await targetsApi.updateBulk(updates.map(u => ({
+                targetId: u.id,
+                totalTargetValue: u.totalTargetValue,
+                breakdowns: u.breakdowns
+            })));
+
+            if (res?.success) {
+                // Confirm all updates — remove _optimistic flag
+                updates.forEach((u) => {
+                    const overallAchieved = u.breakdowns.reduce((sum, b) => sum + (b.achievedValue || b.AchievedValue || 0), 0);
+                    targetsCache.optimisticPatch(u.id, { _optimistic: false, overallAchieved });
+                });
+                return true;
+            } else {
+                snapshots.forEach((s) => targetsCache.rollback(s.id, s.previousData));
+                notifRef.current.error({
+                    message: 'Could not update targets',
+                    description: res?.message || 'Server error',
+                });
+                return false;
+            }
+        } catch (e) {
+            snapshots.forEach((s) => targetsCache.rollback(s.id, s.previousData));
+            notifRef.current.error({
+                message: 'Update failed — changes reversed',
+                description: e.message,
+                duration: 5,
+            });
+            return false;
+        }
+    }, [targets]);
+
     // ──────────────────────────────────────────────────────────────────────
     // DELETE — optimistic remove + real API call
     // ──────────────────────────────────────────────────────────────────────
@@ -231,6 +289,7 @@ export function useTargetsData(customNotificationApi) {
         errorIds,
         createTargets,
         updateTarget,
+        updateTargetsBulk,
         deleteTargets,
         refresh,
         contextHolder,

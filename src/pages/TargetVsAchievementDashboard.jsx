@@ -212,7 +212,7 @@ const TargetVsAchievementDashboard = () => {
                 const sid = s.sellerId || s.SellerId || s._id || s.Id || s;
                 return {
                     sellerId: sid,
-                    name: s.name || s.SellerName || sid,
+                    name: s.name || s.SellerName || sellerMap.get(sid) || sid,
                     marketplace: s.marketplace || 'Amazon'
                 };
             });
@@ -222,10 +222,10 @@ const TargetVsAchievementDashboard = () => {
         const sellerCodes = Array.from(new Set((targets || []).map(t => t.SellerId).filter(Boolean)));
         return sellerCodes.map(code => ({
             sellerId: code,
-            name: code,
+            name: sellerMap.get(code) || code,
             marketplace: 'Amazon'
         }));
-    }, [user, targets]);
+    }, [user, targets, sellerMap]);
 
     // Filter targets by selected configurations
     const filteredTargets = useMemo(() => {
@@ -235,8 +235,9 @@ const TargetVsAchievementDashboard = () => {
             
             // Search query matches seller ID or manager
             const sLower = searchText.toLowerCase();
+            const sellerName = (sellerMap.get(t.SellerId) || t.SellerId || '').toLowerCase();
             const matchesSearch = 
-                (t.SellerId || '').toLowerCase().includes(sLower) || 
+                sellerName.includes(sLower) || 
                 (t.BrandManager || '').toLowerCase().includes(sLower);
             
             if (isBrandManager) {
@@ -257,7 +258,7 @@ const TargetVsAchievementDashboard = () => {
             
             return matchesPlan && matchesYear && matchesSearch;
         });
-    }, [targets, selectedPlanType, selectedYear, searchText, isBrandManager, filteredSellers, user]);
+    }, [targets, selectedPlanType, selectedYear, searchText, isBrandManager, filteredSellers, user, sellerMap]);
 
     // Compute aggregated KPI stats
     const kpiStats = useMemo(() => {
@@ -328,7 +329,7 @@ const TargetVsAchievementDashboard = () => {
             .map(t => {
                 const pct = t.TotalTargetValue > 0 ? (t.overallAchieved / t.TotalTargetValue) * 100 : 0;
                 return {
-                    name: t.SellerId || 'Unknown',
+                    name: sellerMap.get(t.SellerId) || t.SellerId || 'Unknown',
                     target: t.TotalTargetValue || 0,
                     achieved: t.overallAchieved || 0,
                     rate: parseFloat(pct.toFixed(1))
@@ -336,7 +337,7 @@ const TargetVsAchievementDashboard = () => {
             })
             .sort((a, b) => b.rate - a.rate)
             .slice(0, 5);
-    }, [filteredTargets]);
+    }, [filteredTargets, sellerMap]);
 
     // Status Distribution pie chart data
     const statusDistributionData = useMemo(() => {
@@ -369,14 +370,15 @@ const TargetVsAchievementDashboard = () => {
             render: (text, record) => {
                 const pct = record.TotalTargetValue > 0 ? (record.overallAchieved / record.TotalTargetValue) * 100 : 0;
                 const tier = getAchievementTier(pct);
-                const initial = text ? text.charAt(0).toUpperCase() : 'B';
+                const displayName = sellerMap.get(text) || text;
+                const initial = displayName ? displayName.charAt(0).toUpperCase() : 'B';
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <Avatar style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', fontWeight: 800 }}>
                             {initial}
                         </Avatar>
                         <div>
-                            <Text strong style={{ fontSize: 13 }}>{text}</Text>
+                            <Text strong style={{ fontSize: 13 }}>{displayName}</Text>
                             <div style={{ marginTop: 2 }}>
                                 <Tag color={tier.color === '#4f46e5' ? 'blue' : tier.color === '#10b981' ? 'success' : tier.color === '#f59e0b' ? 'warning' : 'error'} style={{ fontSize: 9, fontWeight: 700 }}>
                                     {tier.label}
