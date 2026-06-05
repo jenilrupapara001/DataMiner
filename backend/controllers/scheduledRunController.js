@@ -6,21 +6,40 @@ const SchedulerService = require('../services/schedulerService');
  * Handles reporting, analytics, and manual triggering of the enterprise pipeline runs.
  */
 class ScheduledRunController {
-    /**
-     * Get all scheduled runs sorted by StartTime DESC
-     */
     async getScheduledRuns(req, res) {
         try {
             const pool = await getPool();
             const result = await pool.request().query(`
-                SELECT Id, StartTime, EndTime, Status, CreatedAt, UpdatedAt
+                SELECT Id, StartTime, EndTime, Status, Details, CreatedAt, UpdatedAt
                 FROM ScheduledRuns
                 ORDER BY StartTime DESC
             `);
 
+            const runs = result.recordset.map(run => {
+                let totalInserted = 0;
+                let totalExpected = 0;
+                if (run.Details) {
+                    try {
+                        const details = typeof run.Details === 'string' ? JSON.parse(run.Details) : run.Details;
+                        if (Array.isArray(details)) {
+                            details.forEach(d => {
+                                totalInserted += (d.count || 0);
+                                totalExpected += (d.asinsCount || 0);
+                            });
+                        }
+                    } catch (e) {}
+                }
+                const { Details, ...rest } = run;
+                return {
+                    ...rest,
+                    totalInserted,
+                    totalExpected
+                };
+            });
+
             res.json({
                 success: true,
-                data: result.recordset
+                data: runs
             });
         } catch (err) {
             console.error('❌ Failed to get scheduled runs:', err.message);

@@ -270,7 +270,7 @@ exports.getDashboardData = async (req, res) => {
 
 function processChartData(days, adsData = [], endDate) {
   const endDateObj = new Date(endDate);
-  const useWeekly = days > 14;
+  const useWeekly = days > 60;
   const bucketCount = useWeekly ? Math.ceil(days / 7) : days;
   const buckets = [];
 

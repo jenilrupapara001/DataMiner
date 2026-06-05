@@ -6,7 +6,7 @@ class SystemLogService {
             const pool = await getPool();
             const id = generateId();
             const userId = user?.Id || user?._id || user;
-            
+
             await pool.request()
                 .input('Id', sql.VarChar, id)
                 .input('Type', sql.NVarChar, type)
@@ -20,7 +20,27 @@ class SystemLogService {
                     INSERT INTO SystemLogs (Id, Type, EntityType, EntityId, EntityTitle, UserId, Description, Metadata, CreatedAt)
                     VALUES (@Id, @Type, @EntityType, @EntityId, @EntityTitle, @UserId, @Description, @Metadata, GETDATE())
                 `);
-            
+
+            // Emit log event through SocketService in real-time
+            try {
+                const SocketService = require('./socketService');
+                const io = SocketService.getIo();
+                if (io) {
+                    io.emit('new_system_log', {
+                        Id: id,
+                        Type: type,
+                        EntityType: entityType,
+                        EntityId: entityId,
+                        EntityTitle: entityTitle,
+                        UserId: userId,
+                        Description: description,
+                        CreatedAt: new Date().toISOString()
+                    });
+                }
+            } catch (err) {
+                console.warn('[SystemLogService] Failed to emit socket event:', err.message);
+            }
+
             return { Id: id };
         } catch (error) {
             console.error('[SystemLogService] Failed to create log:', error);
@@ -37,7 +57,7 @@ class SystemLogService {
                     LEFT JOIN Users u ON l.UserId = u.Id
                     ORDER BY l.CreatedAt DESC
                 `);
-            
+
             return result.recordset.map(log => ({
                 ...log,
                 user: {

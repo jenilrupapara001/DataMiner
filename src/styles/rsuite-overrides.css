@@ -88,3 +88,16 @@
 .rs-picker-menu, .rs-picker-select-menu, .rs-picker-check-menu {
     z-index: 2100 !important;
 }
+
+/* Hide selected range text in picker popover to prevent duplication/overlap */
+.rs-picker-daterange-header,
+[data-testid="daterange-header"],
+.rs-picker-daterange-menu .rs-picker-daterange-header {
+    display: none !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    visibility: hidden !important;
+    overflow: hidden !important;
+}

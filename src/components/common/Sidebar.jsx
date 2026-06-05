@@ -68,24 +68,29 @@ const Sidebar = () => {
 
     const sections = [
         {
-            id: 'MAIN',
-            label: 'Main',
-            items: navItems.main,
+            id: 'OVERVIEW',
+            label: 'Overview',
+            items: navItems.overview || [],
         },
         {
-            id: 'ACTIONS',
-            label: 'Actions',
-            items: navItems.actions,
+            id: 'CATALOG',
+            label: 'Catalog & Ads',
+            items: navItems.catalog || [],
+        },
+        {
+            id: 'AUTOMATION',
+            label: 'Automation & Tasks',
+            items: navItems.automation || [],
         },
         {
             id: 'INTELLIGENCE',
-            label: 'Intelligence',
-            items: navItems.intelligence,
+            label: 'Analytics & Finance',
+            items: navItems.intelligence || [],
         },
         {
             id: 'SYSTEM',
-            label: 'System',
-            items: navItems.system,
+            label: 'System & Control',
+            items: navItems.system || [],
         },
     ];
 
@@ -116,13 +121,14 @@ const Sidebar = () => {
                 label: (
                     <div className="d-flex align-items-center justify-content-between w-100">
                         <span className="menu-label-text">{item.label}</span>
-                        {item.badge && !visuallyCollapsed && (
+                        {item.badge !== undefined && !visuallyCollapsed && (
                             <Badge 
                                 count={item.badge} 
+                                showZero
                                 overflowCount={9999}
                                 style={{ 
-                                    backgroundColor: item.badgeColor || 'var(--blue-soft)', 
-                                    color: item.badgeColor === '#f59e0b' ? '#ffffff' : 'var(--blue)', 
+                                    backgroundColor: item.badgeColor || '#6366f1', 
+                                    color: '#ffffff', 
                                     boxShadow: 'none',
                                     fontSize: '10px',
                                     fontWeight: 650,

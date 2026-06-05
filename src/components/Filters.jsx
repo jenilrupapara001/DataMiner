@@ -119,9 +119,9 @@ const Filters = ({
             <DateRangePicker
               startDate={filters.startDate ? new Date(filters.startDate) : null}
               endDate={filters.endDate ? new Date(filters.endDate) : null}
-              onDateChange={(start, end) => {
+              onDateChange={(type, start, end) => {
                 onFilterChange({
-                  dateRange: 'custom',
+                  dateRange: type || 'custom',
                   startDate: start ? start.toISOString().split('T')[0] : null,
                   endDate: end ? end.toISOString().split('T')[0] : null
                 });

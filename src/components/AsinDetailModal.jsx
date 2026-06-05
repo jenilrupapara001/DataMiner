@@ -668,6 +668,11 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                                         {offer.isBuyBoxWinner && <Trophy size={11} style={{ color: '#f59e0b' }} />}
                                       </Text>
                                       <Text type="secondary" style={{ fontSize: '10px', display: 'block' }}>{offer.isBuyBoxWinner ? 'Winner' : 'Secondary Offer'}</Text>
+                                      {offer.delivery && (
+                                        <Text type="secondary" style={{ fontSize: '9px', display: 'block', color: '#64748b', marginTop: '2px', maxWidth: '160px' }}>
+                                          🚚 {offer.delivery}
+                                        </Text>
+                                      )}
                                     </div>
                                     <Text strong style={{ color: '#4f46e5', fontSize: '13px' }}>₹{offer.price?.toLocaleString()}</Text>
                                   </div>

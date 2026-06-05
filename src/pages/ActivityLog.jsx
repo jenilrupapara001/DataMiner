@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/db';
+import { useSocket } from '../contexts/SocketContext';
 import { 
   Card, Table, Input, Select, Badge, Avatar, Space, 
-  Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions
+  Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message
 } from 'antd';
 import { 
   Clock, Search, ArrowRight, CheckCircle, 
@@ -20,10 +21,40 @@ const ActivityLog = () => {
     const [filterType, setFilterType] = useState('ALL');
     const [selectedLog, setSelectedLog] = useState(null);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
+    const socket = useSocket();
 
     useEffect(() => {
         loadLogs();
     }, []);
+
+    // Real-time socket sync
+    useEffect(() => {
+        if (!socket) return;
+        
+        const handleNewSystemLog = (data) => {
+            if (!data) return;
+            const normalized = {
+                ...data,
+                _id: data._id || data.id || data.Id,
+                createdAt: data.createdAt || data.CreatedAt,
+                type: data.type || data.Type || '',
+                entityType: data.entityType || data.EntityType || '',
+                entityTitle: data.entityTitle || data.EntityTitle || '',
+                description: data.description || data.Description || '',
+                metadata: data.metadata || data.Metadata || null
+            };
+            setLogs(prev => [normalized, ...prev]);
+            
+            message.info({
+                content: `Activity Stream: ${normalized.entityTitle || 'System Activity'} - ${normalized.description}`,
+                icon: <Activity size={16} style={{ color: '#4f46e5' }} />,
+                duration: 3
+            });
+        };
+
+        socket.on('new_system_log', handleNewSystemLog);
+        return () => socket.off('new_system_log', handleNewSystemLog);
+    }, [socket]);
 
     const loadLogs = async () => {
         setLoading(true);

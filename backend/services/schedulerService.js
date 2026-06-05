@@ -513,7 +513,7 @@ class SchedulerService {
         try {
             console.log('🔍 [MISSING DATA] Starting concurrent recovery for incomplete ASINs...');
             const pool = await getPool();
-            const sellersResult = await pool.request().query("SELECT Id, Name FROM Sellers WHERE IsActive = 1");
+            const sellersResult = await pool.request().query("SELECT Id, Name FROM Sellers WHERE IsActive = 1 AND LastScrapedAt IS NOT NULL AND OctoparseId IS NOT NULL AND OctoparseId != ''");
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) return { success: true, count: 0 };

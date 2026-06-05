@@ -150,6 +150,20 @@ const MiniSpark = ({ data, color }) => {
 const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   if (!rowData) return null;
 
+  const safeFormatDate = (dateVal) => {
+    if (!dateVal) return 'N/A';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const safeFormatDateShort = (dateVal) => {
+    if (!dateVal) return 'N/A';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  };
+
   // Try to find a valid image in child ASINs if parent doesn't have one
   const displayImage = rowData.imageUrl || (rowData.children && rowData.children.find(c => c.imageUrl)?.imageUrl);
 
@@ -176,12 +190,11 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       key: 'date',
       width: '180px',
       render: (dateStr) => {
-        const d = new Date(dateStr);
         return (
           <div className="d-flex align-items-center gap-2">
             <Calendar size={13} className="text-indigo-500" />
             <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>
-              {d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+              {safeFormatDate(dateStr)}
             </span>
           </div>
         );
@@ -355,7 +368,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
                 chart: { ...areaChartOptions().chart, toolbar: { show: false }, sparkline: { enabled: false } },
                 stroke: { curve: 'smooth', width: 2.2 },
                 xaxis: {
-                  categories: [...fullHistory].reverse().map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+                  categories: [...fullHistory].reverse().map(d => safeFormatDateShort(d.date)),
                   labels: { style: { fontSize: '9px', fontWeight: 600 } },
                   axisBorder: { show: false },
                   axisTicks: { show: false }
@@ -1055,30 +1068,42 @@ export default function AdsManagerPage() {
       }
     ];
 
-    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false) => {
+    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false, themeColor = '#6366f1') => {
       const isExpanded = expandedCols[key];
       const children = [
         {
-          title: 'AVG',
+          title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>AVG</span>,
           key: `${key}_avg`,
           width: 80,
           align: 'right',
           render: (_, record) => {
             const val = record[key] || 0;
-            return <span className="fw-bold" style={{ fontSize: '11px', color: '#334155' }}>
+            return <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
               {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
             </span>;
           }
         },
         {
-          title: 'TRN',
+          title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>TREND</span>,
           key: `${key}_trn`,
-          width: 60,
+          width: 65,
           align: 'center',
           render: (_, record) => {
-            const val = record[key] || 0;
-            if (val === 0) return <span className="text-zinc-300">-</span>;
-            return <Badge status="success" />;
+            const history = record.weekHistory || record.history || [];
+            if (history.length === 0) return <span className="text-zinc-300">-</span>;
+            const values = history.map(h => Number(h[key] || 0));
+            if (values.every(v => v === 0)) return <span className="text-zinc-300">-</span>;
+            
+            const first = values[0];
+            const last = values[values.length - 1];
+            const isGood = key === 'acos' ? last < first : last > first;
+            const color = isGood ? '#10b981' : '#ef4444';
+            
+            return (
+              <div style={{ width: '40px', margin: 'auto' }}>
+                <MiniSpark data={values} color={color} />
+              </div>
+            );
           }
         }
       ];
@@ -1086,7 +1111,7 @@ export default function AdsManagerPage() {
       if (isExpanded) {
         activeDates.forEach(d => {
           children.push({
-            title: <div className="text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}><div className="text-zinc-400">{d.month}</div><div>{d.day}</div></div>,
+            title: <div className="text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}><div className="text-zinc-400">{d.month}</div><div className="fw-bold text-zinc-700">{d.day}</div></div>,
             key: `${key}_${d.raw}`,
             width: 70,
             align: 'right',
@@ -1094,7 +1119,7 @@ export default function AdsManagerPage() {
               const hist = record.weekHistory?.find(h => normalizeDateStr(h.date) === d.raw);
               const val = hist ? (hist[key] || 0) : 0;
               if (val === 0) return <span className="text-zinc-300">-</span>;
-              return <span className="fw-semibold" style={{ fontSize: '10px', color: '#64748b' }}>
+              return <span className="fw-semibold" style={{ fontSize: '10px', color: '#475569' }}>
                 {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
               </span>;
             }
@@ -1104,11 +1129,20 @@ export default function AdsManagerPage() {
 
       return {
         title: (
-          <div className="d-flex align-items-center justify-content-center gap-1 cursor-pointer" onClick={() => toggleCol(key)}>
+          <div 
+            className="d-flex align-items-center justify-content-center gap-1.5 cursor-pointer py-1 px-2 rounded-2" 
+            style={{ 
+              background: `${themeColor}0d`, 
+              border: `1.5px solid ${themeColor}26`,
+              color: themeColor,
+              transition: 'all 0.2s ease'
+            }}
+            onClick={() => toggleCol(key)}
+          >
             {icon}
-            <span style={{ fontSize: '10px', letterSpacing: '0.05em' }}>{title}</span>
-            <div className="bg-white rounded ms-1 p-0.5 border" style={{ display: 'flex' }}>
-              {isExpanded ? <ChevronLeft size={10} className="text-zinc-400" /> : <ChevronRight size={10} className="text-zinc-400" />}
+            <span style={{ fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.03em' }}>{title}</span>
+            <div className="bg-white rounded-circle ms-1 p-0.5 shadow-sm d-flex align-items-center justify-content-center" style={{ border: `1.5px solid ${themeColor}1a`, display: 'flex' }}>
+              {isExpanded ? <ChevronLeft size={9} style={{ color: themeColor }} /> : <ChevronRight size={9} style={{ color: themeColor }} />}
             </div>
           </div>
         ),
@@ -1116,17 +1150,17 @@ export default function AdsManagerPage() {
       };
     };
 
-    cols.push(buildMetricGroup('TOTAL SALES', 'totalSales', <FileBarChart size={12} />, true));
-    cols.push(buildMetricGroup('ORDERS', 'orders', <Layers size={12} />));
-    cols.push(buildMetricGroup('SPEND', 'spend', <BarChart3 size={12} />, true));
-    cols.push(buildMetricGroup('CLICKS', 'clicks', <TrendUpIcon size={12} />));
-    cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={12} />));
-    cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={12} />));
-    cols.push(buildMetricGroup('ACOS', 'acos', <Target size={12} />, false, true));
-    cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={12} />, true));
-    cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={12} />, false, true));
-    cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={12} />, true));
-    cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={12} />));
+    cols.push(buildMetricGroup('TOTAL SALES', 'totalSales', <FileBarChart size={12} />, true, false, '#0284c7'));
+    cols.push(buildMetricGroup('ORDERS', 'orders', <Layers size={12} />, false, false, '#7c3aed'));
+    cols.push(buildMetricGroup('SPEND', 'spend', <BarChart3 size={12} />, true, false, '#ea580c'));
+    cols.push(buildMetricGroup('CLICKS', 'clicks', <TrendUpIcon size={12} />, false, false, '#2563eb'));
+    cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={12} />, false, false, '#475569'));
+    cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={12} />, false, false, '#d97706'));
+    cols.push(buildMetricGroup('ACOS', 'acos', <Target size={12} />, false, true, '#dc2626'));
+    cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={12} />, true, false, '#16a34a'));
+    cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={12} />, false, true, '#0d9488'));
+    cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={12} />, true, false, '#059669'));
+    cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={12} />, false, false, '#db2777'));
 
     cols.push({
       title: 'ACTIONS',
@@ -1171,9 +1205,6 @@ export default function AdsManagerPage() {
       <div className="ads-top-header py-2">
         <div className="d-flex align-items-center gap-3">
           <h1 className="m-0 fw-bolder text-dark d-none d-md-block" style={{ fontSize: '18px', letterSpacing: '-0.01em' }}>Ads Manager</h1>
-          <div className="p-2 bg-indigo-50 rounded-3 text-indigo-600 shadow-sm d-flex align-items-center justify-content-center" style={{ border: '1px solid #e0e7ff', width: '36px', height: '36px' }}>
-            <Activity size={18} />
-          </div>
           <Input.Search
             placeholder="Search ASIN, SKU or Title..."
             allowClear

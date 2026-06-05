@@ -418,6 +418,8 @@ const AsinManagerPage = (props) => {
   const socket = useSocket();
   const [selectedAsin, setSelectedAsin] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showTrendsModal, setShowTrendsModal] = useState(false);
+  const [trendsMetric, setTrendsMetric] = useState('price');
   const [sellers, setSellers] = useState([]);
   const [selectedSellerId, setSelectedSellerId] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -1297,21 +1299,31 @@ const AsinManagerPage = (props) => {
       const reviewColor = reviewChange >= 0 ? '#10b981' : '#ef4444';
       const bestSeller = stats.bestSellingAsins?.[0];
 
+      // Compute derived values not directly in API response
+      const totalNum = Number(stats.total) || 0;
+      const activeNum = Number(stats.active) || 0;
+      const uniqueParents = Number(stats.uniqueParents) || 1;
+      const totalReviews = Number(stats.totalReviews) || 0;
+      const avgReviewsPerParent = uniqueParents > 0 ? Math.round(totalReviews / uniqueParents) : 0;
+      const standaloneCount = totalNum - activeNum;
+      const avgPriceNum = parseFloat(stats.avgPrice) || 0;
+      const avgLqsNum = parseFloat(stats.avgLQS) || 0;
+
       return [
         {
-          label: 'ALL ASINS', value: (stats.total || 0).toLocaleString(), color: '#6366f1', icon: <Package size={14} />,
-          sub: `${stats.uniqueParents || 0} parent groups`
+          label: 'ALL ASINS', value: totalNum.toLocaleString(), color: '#6366f1', icon: <Package size={14} />,
+          sub: `${uniqueParents} parent groups`
         },
         {
-          label: 'ACTIVE ASINS', value: (stats.active || 0).toLocaleString(), color: '#10b981', icon: <Activity size={14} />,
-          sub: `${stats.standaloneAsins || 0} standalone`
+          label: 'ACTIVE ASINS', value: activeNum.toLocaleString(), color: '#10b981', icon: <Activity size={14} />,
+          sub: `${totalNum - activeNum} inactive`
         },
         {
           label: 'TOTAL REVIEWS',
-          value: (stats.totalReviews || 0).toLocaleString(),
+          value: totalReviews.toLocaleString(),
           color: '#8b5cf6',
           icon: <Star size={14} />,
-          sub: `Avg ${stats.avgReviewsPerParent || 0}/parent`,
+          sub: `Avg ${avgReviewsPerParent.toLocaleString()}/parent`,
           onClick: () => { setShowAllRatingHistory(true); }
         },
         {
@@ -1324,22 +1336,22 @@ const AsinManagerPage = (props) => {
         },
         {
           label: 'BEST SELLER',
-          value: bestSeller ? `#${bestSeller.bsr?.toLocaleString()}` : '-',
-          sub: bestSeller?.asinCode || '',
+          value: bestSeller ? `#${(bestSeller.BSR || bestSeller.bsr || 0).toLocaleString()}` : '-',
+          sub: bestSeller?.AsinCode || bestSeller?.asinCode || '',
           color: '#06b6d4',
           icon: <Award size={14} />,
           onClick: () => { setShowAllBsrHistory(true); }
         },
         {
           label: 'AVG PRICE',
-          value: '₹' + (stats.avgPrice || 0).toLocaleString(),
+          value: '₹' + avgPriceNum.toLocaleString(),
           color: '#ec4899',
           icon: <IndianRupee size={14} />,
           onClick: () => { setShowAllPriceHistory(true); }
         },
         {
           label: 'AVG LQS',
-          value: (stats.avgLQS || 0) + '%',
+          value: avgLqsNum.toFixed(1) + '%',
           color: '#8b5cf6',
           icon: <Sparkles size={14} />
         },
@@ -2141,40 +2153,48 @@ const AsinManagerPage = (props) => {
       <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
         <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {kpis.map((kpi, idx) => (
-            <div
-              key={idx}
-              className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild"
-              style={{
-                height: '32px',
-                minWidth: 'max-content',
-                flexShrink: 0,
-                cursor: kpi.onClick ? 'pointer' : 'default',
-                borderRadius: '6px',
-                borderColor: '#e4e4e7'
-              }}
-              onClick={kpi.onClick}
-            >
-              {/* Status Dot */}
+            <Tooltip key={idx} title={kpi.sub || null} placement="bottom" mouseEnterDelay={0.3}>
               <div
+                className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild"
                 style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: kpi.color,
-                  flexShrink: 0
+                  height: '32px',
+                  minWidth: 'max-content',
+                  flexShrink: 0,
+                  cursor: kpi.onClick ? 'pointer' : 'default',
+                  borderRadius: '6px',
+                  borderColor: '#e4e4e7'
                 }}
-              />
+                onClick={kpi.onClick}
+              >
+                {/* Status Dot */}
+                <div
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: kpi.color,
+                    flexShrink: 0
+                  }}
+                />
 
-              {/* Label */}
-              <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
-                {kpi.label}
-              </span>
+                {/* Label */}
+                <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
+                  {kpi.label}
+                </span>
 
-              {/* Value */}
-              <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
-                {kpi.value}
-              </span>
-            </div>
+                {/* Value */}
+                <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
+                  {kpi.value}
+                </span>
+
+                {/* Inline sub hint */}
+                {kpi.sub && (
+                  <span style={{ fontSize: '9px', color: '#a1a1aa', whiteSpace: 'nowrap', marginLeft: '2px' }}>
+                    ({kpi.sub})
+                  </span>
+                )}
+              </div>
+            </Tooltip>
           ))}
         </div>
       </div>
@@ -3507,9 +3527,18 @@ const AsinManagerPage = (props) => {
                                   ) : (
                                     <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
                                   )}
+                                  {firstOther.delivery && (
+                                    <span
+                                      className="text-zinc-400 text-truncate"
+                                      style={{ fontSize: '8px', maxWidth: '100px', cursor: 'help' }}
+                                      title={firstOther.delivery}
+                                    >
+                                      🚚 {firstOther.delivery}
+                                    </span>
+                                  )}
                                   {remainingCount > 0 && (
                                     <span className="text-zinc-400" style={{ fontSize: '8px' }}
-                                      title={otherOffers.slice(1).map(o => `${o.seller}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
+                                      title={otherOffers.slice(1).map(o => `${o.seller}${o.delivery ? ` (${o.delivery})` : ''}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
                                       +{remainingCount} more
                                     </span>
                                   )}
@@ -3733,7 +3762,10 @@ const AsinManagerPage = (props) => {
                         </td>
                       )}
                       {isVisible('bsrTrendStatus') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a' }}>
+                        <td 
+                          style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a', cursor: 'pointer' }}
+                          onClick={() => handleViewTrends(asin, 'bsr')}
+                        >
                           <TrendBadge status={asin.bsrTrend} />
                         </td>
                       )}
@@ -3780,7 +3812,10 @@ const AsinManagerPage = (props) => {
                         </td>
                       )}
                       {isVisible('ratingTrendStatus') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        <td 
+                          style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                          onClick={() => handleViewTrends(asin, 'rating')}
+                        >
                           <TrendBadge status={asin.ratingTrend} />
                         </td>
                       )}
@@ -3811,7 +3846,10 @@ const AsinManagerPage = (props) => {
                         })
                       ))}
                       {isVisible('reviewCount') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        <td 
+                          style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                          onClick={() => handleViewTrends(asin, 'reviews')}
+                        >
                           <TrendBadge status={getReviewTrendStatus(asin)} />
                         </td>
                       )}
@@ -3938,6 +3976,12 @@ const AsinManagerPage = (props) => {
                                 label: 'View Details',
                                 icon: <Eye size={14} className="text-blue-500" />,
                                 onClick: () => handleViewAsin(asin)
+                              },
+                              {
+                                key: 'trends',
+                                label: 'View Trends',
+                                icon: <TrendingUp size={14} className="text-indigo-500" />,
+                                onClick: () => handleViewTrends(asin)
                               },
                               {
                                 key: 'sync',
@@ -4256,6 +4300,11 @@ const AsinManagerPage = (props) => {
           asin={selectedAsin}
           isOpen={showDetailModal}
           onClose={() => setShowDetailModal(false)}
+        />
+        <AsinTrendsModal
+          asin={selectedAsin}
+          isOpen={showTrendsModal}
+          onClose={() => setShowTrendsModal(false)}
         />
         <PriceViewModal
           isOpen={!!selectedAsinForPrice || showAllPriceHistory}

@@ -25,7 +25,6 @@ const ParentAsinReport = lazy(() => import('./pages/ParentAsinReport'));
 const MonthWiseReport = lazy(() => import('./pages/MonthWiseReport'));
 const AdsReport = lazy(() => import('./pages/AdsReport'));
 const UploadExport = lazy(() => import('./pages/UploadExport'));
-const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const AlertRulesPage = lazy(() => import('./pages/AlertRulesPage'));
 const RuleSetsPage = lazy(() => import('./pages/RuleSetsPage'));
 const RulesetBuilderPage = lazy(() => import('./pages/RulesetBuilderPage'));
@@ -142,7 +141,7 @@ function AppRoutes() {
                   <Route path="/api-keys" element={<ProtectedRoute permission="apikeys_manage"><ApiKeysPage /></ProtectedRoute>} />
                   <Route path="/file-manager" element={<ProtectedRoute permission="files_manage"><FileManagerPage /></ProtectedRoute>} />
                   <Route path="/upload-export" element={<ProtectedRoute permission="asinmanager_import"><UploadExport /></ProtectedRoute>} />
-                  <Route path="/alerts" element={<ProtectedRoute permission="alerts_view"><AlertsPage /></ProtectedRoute>} />
+                  <Route path="/alerts" element={<ProtectedRoute permission="activitylogs_view"><ActivityLog /></ProtectedRoute>} />
                   <Route path="/alert-rules" element={<ProtectedRoute permission="rules_view"><AlertRulesPage /></ProtectedRoute>} />
                   <Route path="/rule-sets" element={<ProtectedRoute permission="rules_view"><RuleSetsPage /></ProtectedRoute>} />
                   <Route path="/rule-sets/new" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />

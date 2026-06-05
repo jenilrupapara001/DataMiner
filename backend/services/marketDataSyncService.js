@@ -3244,12 +3244,82 @@ class MarketDataSyncService {
             const dom = new JSDOM(htmlContent);
             const doc = dom.window.document;
 
-            const offerContainers = doc.querySelectorAll('.aod-offer, .a-fixed-left-grid, [id^="aod-offer"]');
-
-            for (const container of offerContainers) {
+            // 1. Process Pinned Offer (can be structured with .pinned-offer-inner / #aod-pinned-offer and sibling #aod-pinned-offer-additional-content)
+            const pinnedContainer = doc.querySelector('.pinned-offer-inner, #aod-pinned-offer');
+            if (pinnedContainer) {
                 const offer = {};
+                
+                // Search for seller link globally first or inside specific sections but avoid .aod-offer blocks
+                let sellerLink = doc.querySelector('#aod-offer-soldBy a, a[href*="seller="]:not(.aod-offer a)');
+                if (!sellerLink) {
+                    const allSellerLinks = Array.from(doc.querySelectorAll('a[href*="seller="], #aod-offer-soldBy a'));
+                    sellerLink = allSellerLinks.find(link => !link.closest('.aod-offer'));
+                }
 
-                const sellerLink = container.querySelector('a[href*="seller="], [aria-label*="Seller"], #aod-offer-shipsFrom-soldBy');
+                if (sellerLink) {
+                    const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
+                    if (this._isValidSellerName(rawName)) {
+                        offer.seller = rawName;
+                    }
+                }
+
+                // If seller is still empty, look at the add-to-cart button's aria-label as a fallback
+                if (!offer.seller) {
+                    const atcButton = doc.querySelector('input[name="submit.addToCart"], [aria-label*="seller"]');
+                    if (atcButton) {
+                        const ariaLabel = atcButton.getAttribute('aria-label') || '';
+                        const match = ariaLabel.match(/from seller\s+([^and]+?)\s+and/i) || ariaLabel.match(/seller\s+([^,]+?)\s+/i);
+                        if (match && this._isValidSellerName(match[1])) {
+                            offer.seller = match[1].trim();
+                        }
+                    }
+                }
+
+                // Extract Price
+                const priceWhole = pinnedContainer.querySelector('.a-price-whole');
+                const priceFraction = pinnedContainer.querySelector('.a-price-fraction');
+                if (priceWhole) {
+                    const whole = priceWhole.textContent.replace(/[^\d]/g, '');
+                    const fraction = priceFraction ? priceFraction.textContent.replace(/[^\d]/g, '') : '00';
+                    offer.price = parseFloat(`${whole}.${fraction}`);
+                }
+
+                // Extract Delivery Promise
+                let deliveryBlock = pinnedContainer.querySelector('#mir-layout-DELIVERY_BLOCK');
+                if (!deliveryBlock) {
+                    deliveryBlock = doc.querySelector('#mir-layout-DELIVERY_BLOCK');
+                }
+                if (deliveryBlock) {
+                    offer.delivery = deliveryBlock.textContent.replace(/\s+/g, ' ').replace(/Details/g, '').trim();
+                }
+
+                if (offer.seller || offer.price) {
+                    offers.push(offer);
+                }
+            }
+
+            // 2. Process other offers (non-pinned ones)
+            const otherContainers = doc.querySelectorAll('.aod-offer, [id^="aod-offer-"]');
+            for (const container of otherContainers) {
+                // Avoid treating pinned additional content or other utility sections as normal offer container
+                if (container.id && (
+                    container.id.includes('soldBy') || 
+                    container.id.includes('shipsFrom') || 
+                    container.id.includes('promotion') || 
+                    container.id.includes('heading') || 
+                    container.id.includes('added') || 
+                    container.id.includes('updated') || 
+                    container.id.includes('not-added') || 
+                    container.id.includes('view-cart') || 
+                    container.id.includes('divider') || 
+                    container.id.includes('delivery-more')
+                )) {
+                    continue;
+                }
+
+                const offer = {};
+                
+                const sellerLink = container.querySelector('a[href*="seller="], [aria-label*="Seller"], .aod-offer-soldBy a');
                 if (sellerLink) {
                     const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
                     if (this._isValidSellerName(rawName)) {
@@ -3260,12 +3330,19 @@ class MarketDataSyncService {
                 const priceWhole = container.querySelector('.a-price-whole');
                 const priceFraction = container.querySelector('.a-price-fraction');
                 if (priceWhole) {
-                    const whole = priceWhole.textContent.replace(/,/g, '');
-                    const fraction = priceFraction ? priceFraction.textContent : '00';
+                    const whole = priceWhole.textContent.replace(/[^\d]/g, '');
+                    const fraction = priceFraction ? priceFraction.textContent.replace(/[^\d]/g, '') : '00';
                     offer.price = parseFloat(`${whole}.${fraction}`);
                 }
 
-                if (offer.seller || offer.price) offers.push(offer);
+                const deliveryBlock = container.querySelector('#mir-layout-DELIVERY_BLOCK, .aod-delivery-promise');
+                if (deliveryBlock) {
+                    offer.delivery = deliveryBlock.textContent.replace(/\s+/g, ' ').replace(/Details/g, '').trim();
+                }
+
+                if (offer.seller || offer.price) {
+                    offers.push(offer);
+                }
             }
 
             if (offers.length === 0) {
@@ -3300,26 +3377,39 @@ class MarketDataSyncService {
     }
 
     _extractSellerFromBuyboxHtml(htmlContent) {
-        if (!htmlContent || typeof htmlContent !== 'string') return null;
-
-        let name = null;
-        // Pattern 1: Sold by section with link text
-        const soldByMatch = htmlContent.match(/Sold by\s*<\/span>\s*<[^>]+>\s*<a[^>]*>([^<]+)</i);
-        if (soldByMatch) name = soldByMatch[1].trim();
-
-        // Pattern 2: aria-label with seller info
-        if (!name) {
+        if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.length < 5) return null;
+        try {
+            const dom = new JSDOM(htmlContent);
+            const doc = dom.window.document;
+            
+            let sellerLink = doc.querySelector('#aod-offer-soldBy a, a[href*="seller="]:not(.aod-offer a), [aria-label*="Seller"], #aod-offer-shipsFrom-soldBy');
+            if (sellerLink) {
+                const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
+                if (this._isValidSellerName(rawName)) {
+                    return rawName;
+                }
+            }
+            
+            const atcButton = doc.querySelector('input[name="submit.addToCart"], [aria-label*="seller"]');
+            if (atcButton) {
+                const ariaLabel = atcButton.getAttribute('aria-label') || '';
+                const match = ariaLabel.match(/from seller\s+([^and]+?)\s+and/i) || ariaLabel.match(/seller\s+([^,]+?)\s+/i);
+                if (match && this._isValidSellerName(match[1])) {
+                    return match[1].trim();
+                }
+            }
+            
+            const soldByMatch = htmlContent.match(/Sold by\s*<\/span>\s*<[^>]+>\s*<a[^>]*>([^<]+)</i);
+            if (soldByMatch && this._isValidSellerName(soldByMatch[1])) return soldByMatch[1].trim();
+            
             const ariaMatch = htmlContent.match(/aria-label="[^"]*Seller[^"]*:\s*([^"]+)/i);
-            if (ariaMatch) name = ariaMatch[1].trim();
-        }
-
-        // Pattern 3: Direct seller name in text
-        if (!name) {
+            if (ariaMatch && this._isValidSellerName(ariaMatch[1])) return ariaMatch[1].trim();
+            
             const textMatch = htmlContent.match(/sold by\s*[:;]?\s*([^<>{}\n]+)/i);
-            if (textMatch) name = textMatch[1].trim();
+            if (textMatch && this._isValidSellerName(textMatch[1])) return textMatch[1].trim();
+        } catch (e) {
+            console.warn('Failed to extract seller name:', e.message);
         }
-
-        if (name && this._isValidSellerName(name)) return name;
         return null;
     }
 
