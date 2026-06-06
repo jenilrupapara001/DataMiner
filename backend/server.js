@@ -2,22 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { getPool, sql } = require('./database/db');
+const { MemoryMonitor } = require('./utils/memoryMonitor');
+const requestGuard = require('./middleware/requestGuard');
 
-// Memory monitoring - reduced frequency to every 30 minutes
-setInterval(() => {
-  const mem = process.memoryUsage();
-  const heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
-  const heapTotal = Math.round(mem.heapTotal / 1024 / 1024);
-  const percent = Math.round((heapUsed / heapTotal) * 100);
-  
-  if (percent > 85) {
-    console.log(`📊 High Memory Warning: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
-    if (global.gc) {
-      console.log('🧹 Running emergency garbage collection...');
-      global.gc();
-    }
-  }
-}, 30 * 60 * 1000);
+// ── Memory monitor ────────────────────────────────────────────────────────────
+const memoryMonitor = new MemoryMonitor({
+  warningThreshold:  0.70,   // 70 % of max heap → warning
+  criticalThreshold: 0.85,   // 85 % → force GC
+  checkIntervalMs:   30_000, // check every 30 s
+});
+memoryMonitor.start();
 
 const app = express();
 app.use(cors({
@@ -35,6 +29,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ── Request guard: 30s timeout + 10MB non-upload payload limit ────────────────
+app.use(requestGuard);
 
 // SQL Server connection verification
 async function verifySqlConnection() {
@@ -141,22 +138,30 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/scheduled-runs', scheduledRunRoutes);
 app.use('/api/targets', targetRoutes);
 
-// Health check endpoint - SQL version
+// Health check endpoint — includes memory telemetry
 app.get('/api/health', async (req, res) => {
   try {
     const pool = await getPool();
     await pool.request().query('SELECT 1 as test');
+    const memReport = memoryMonitor.report();
     res.json({
-      status: 'ok',
+      status:   'ok',
       timestamp: new Date().toISOString(),
       database: 'sql-server-connected',
-      uptime: process.uptime()
+      uptime:   process.uptime(),
+      pid:      process.pid,
+      memory: {
+        heapUsedMB:  memReport.current.heapUsedMB,
+        heapTotalMB: memReport.current.heapTotalMB,
+        rssMB:       memReport.current.rssMB,
+        trend:       memReport.trend,
+      },
     });
   } catch (err) {
     res.status(500).json({
-      status: 'error',
+      status:   'error',
       database: 'disconnected',
-      error: err.message
+      error:     err.message,
     });
   }
 });
@@ -578,3 +583,27 @@ global.sql = sql;
 function conversationIdFromMessage(messageId) {
   return '';
 }
+
+// ── Graceful shutdown (SIGTERM from PM2 / Docker / systemd) ──────────────────
+process.on('SIGTERM', async () => {
+  console.log('📴 [SIGTERM] Graceful shutdown initiated…');
+  memoryMonitor.stop();
+
+  server.close(async () => {
+    console.log('📴 [SIGTERM] HTTP server closed');
+    try {
+      const pool = await getPool();
+      await pool.close();
+      console.log('📴 [SIGTERM] MSSQL pool closed');
+    } catch (e) {
+      console.warn('📴 [SIGTERM] MSSQL pool close error:', e.message);
+    }
+    process.exit(0);
+  });
+
+  // Hard exit after 30 s if graceful shutdown hangs
+  setTimeout(() => {
+    console.error('📴 [SIGTERM] Forced exit after 30 s');
+    process.exit(1);
+  }, 30_000).unref();
+});

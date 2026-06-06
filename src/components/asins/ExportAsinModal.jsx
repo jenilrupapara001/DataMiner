@@ -34,6 +34,7 @@ const ALL_ASIN_FIELDS = [
   { key: 'discountPercentage', label: 'Discount %', category: 'Pricing' },
   { key: 'secondAsp', label: 'Second ASP (₹)', category: 'Pricing' },
   { key: 'bsr', label: 'BSR', category: 'Performance' },
+  { key: 'totalOrders', label: 'Total Orders', category: 'Performance' },
   { key: 'subBsr', label: 'Sub BSR', category: 'Performance' },
   { key: 'rating', label: 'Rating', category: 'Performance' },
   { key: 'reviewCount', label: 'Review Count', category: 'Performance' },

@@ -35,6 +35,18 @@ async function ensureIndexes() {
             BEGIN
                 PRINT 'Index IX_AdsPerformance_Asin_Date_ReportType already exists';
             END
+
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_AdsPerformance_Asin_Month_ReportType' AND object_id = OBJECT_ID('AdsPerformance'))
+            BEGIN
+                CREATE NONCLUSTERED INDEX IX_AdsPerformance_Asin_Month_ReportType 
+                ON AdsPerformance(Asin, Month, ReportType) 
+                INCLUDE (AdSales, AdSpend, Orders, OrganicSales, Impressions, Clicks);
+                PRINT 'Created index IX_AdsPerformance_Asin_Month_ReportType';
+            END
+            ELSE
+            BEGIN
+                PRINT 'Index IX_AdsPerformance_Asin_Month_ReportType already exists';
+            END
         `);
 
         // 3. Alerts Indexes

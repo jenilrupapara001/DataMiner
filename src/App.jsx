@@ -16,6 +16,7 @@ import { RefreshProvider } from './contexts/RefreshContext';
 const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'));
 const GlobalNotificationListener = lazy(() => import('./components/GlobalNotificationListener'));
 import CometChatInitializer from './components/chat/CometChatInitializer';
+import { DashboardSkeleton } from './components/ui/skeleton/index.jsx';
 import './App.css';
 
 // Lazy load pages for better performance
@@ -55,28 +56,32 @@ const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage'));
 const FileManagerPage = lazy(() => import('./pages/FileManagerPage'));
 const TeamManagementPage = lazy(() => import('./pages/TeamManagementPage'));
 
-// Simple loading fallback
+// Minimal full-screen spinner — used only for the outer auth Suspense boundary
+// (login / register pages are tiny; the skeleton would be jarring there)
 const PageLoader = () => (
-  <div style={{ 
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     height: '100vh',
     background: '#f9fafb'
   }}>
     <div style={{
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
       border: '3px solid #e5e7eb',
       borderTopColor: '#6366f1',
       borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
+      animation: 'spin 0.9s linear infinite'
     }} />
-    <style>{`
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-    `}</style>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
+
+// Skeleton fallback used for all protected routes (matches the page layout)
+const PageSkeleton = () => (
+  <div style={{ padding: '24px' }}>
+    <DashboardSkeleton statsCount={4} tableRows={6} />
   </div>
 );
 
@@ -121,7 +126,7 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <AppLayout>
-                <Suspense fallback={<PageLoader />}>
+                <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   <Route path="/" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />

@@ -2522,12 +2522,14 @@ class MarketDataSyncService {
                     .input('lqs', sql.Decimal(5, 2), updates.LQS)
                     .query(`
                         SET NOCOUNT ON;
-                        IF EXISTS (SELECT 1 FROM AsinHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId AND Date = @date)
-                            UPDATE AsinHistory WITH (ROWLOCK) SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
-                            WHERE AsinId = @asinId AND Date = @date
-                        ELSE
-                            INSERT INTO AsinHistory WITH (ROWLOCK) (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
-                            VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs)
+                        UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
+                        WHERE AsinId = @asinId AND Date = @date;
+
+                        IF @@ROWCOUNT = 0
+                        BEGIN
+                            INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
+                            VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs);
+                        END
                     `);
             });
 
@@ -2549,12 +2551,14 @@ class MarketDataSyncService {
                         subBsrRequest.input(`rank${i}`, sql.Int, rank);
 
                         subBsrQuery += `
-                            IF EXISTS (SELECT 1 FROM SubBsrHistory WITH (UPDLOCK, SERIALIZABLE) WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i})
-                                UPDATE SubBsrHistory WITH (ROWLOCK) SET SubBsrRank = @rank${i}, CreatedAt = GETDATE()
-                                WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i}
-                            ELSE
-                                INSERT INTO SubBsrHistory WITH (ROWLOCK) (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
+                            UPDATE SubBsrHistory SET SubBsrRank = @rank${i}, CreatedAt = GETDATE()
+                            WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i};
+
+                            IF @@ROWCOUNT = 0
+                            BEGIN
+                                INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
                                 VALUES (@asinId${i}, @date${i}, @category${i}, @rank${i}, GETDATE());
+                            END
                         `;
                         validRanks++;
                     }
@@ -2668,8 +2672,8 @@ class MarketDataSyncService {
 
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
-            // Process the chunk items in sub-chunks of 15 concurrently for maximum performance
-            const SUB_CHUNK_SIZE = 15;
+            // Process the chunk items in sub-chunks of 5 concurrently to prevent connection pool exhaustion and database lock starvation
+            const SUB_CHUNK_SIZE = 5;
             for (let subStart = 0; subStart < chunk.length; subStart += SUB_CHUNK_SIZE) {
                 const subChunk = chunk.slice(subStart, subStart + SUB_CHUNK_SIZE);
                 await Promise.all(subChunk.map(async (rawData) => {
@@ -2797,8 +2801,9 @@ class MarketDataSyncService {
 
         // If it's HTML, parse it
         if (rawCat.includes('<')) {
+            let dom;
             try {
-                const dom = new JSDOM(rawCat);
+                dom = new JSDOM(rawCat);
                 const doc = dom.window.document;
 
                 // Find all breadcrumb links
@@ -2822,6 +2827,10 @@ class MarketDataSyncService {
                 }
             } catch (e) {
                 console.warn('JSDOM category parsing failed:', e.message);
+            } finally {
+                if (dom) {
+                    try { dom.window.close(); } catch (err) {}
+                }
             }
 
             // Regex fallback
@@ -3135,8 +3144,9 @@ class MarketDataSyncService {
         const bulletPoints = [];
 
         // Method 1: JSDOM - preserve exact text from <li> elements
+        let dom;
         try {
-            const dom = new JSDOM(bulletHtml);
+            dom = new JSDOM(bulletHtml);
             const doc = dom.window.document;
 
             const liTags = doc.querySelectorAll('li');
@@ -3159,6 +3169,10 @@ class MarketDataSyncService {
             if (bulletPoints.length > 0) return bulletPoints;
         } catch (e) {
             console.warn('JSDOM bullet parsing failed:', e.message);
+        } finally {
+            if (dom) {
+                try { dom.window.close(); } catch (err) {}
+            }
         }
 
         // Method 2: Regex for <li> elements
@@ -3284,8 +3298,9 @@ class MarketDataSyncService {
         }
 
         const offers = [];
+        let dom;
         try {
-            const dom = new JSDOM(htmlContent);
+            dom = new JSDOM(htmlContent);
             const doc = dom.window.document;
 
             // 1. Process Pinned Offer (can be structured with .pinned-offer-inner / #aod-pinned-offer and sibling #aod-pinned-offer-additional-content)
@@ -3410,6 +3425,10 @@ class MarketDataSyncService {
             }
         } catch (e) {
             console.warn('Failed to parse secondary buybox HTML:', e.message);
+        } finally {
+            if (dom) {
+                try { dom.window.close(); } catch (err) {}
+            }
         }
 
         return {
@@ -3422,8 +3441,9 @@ class MarketDataSyncService {
 
     _extractSellerFromBuyboxHtml(htmlContent) {
         if (!htmlContent || typeof htmlContent !== 'string' || htmlContent.length < 5) return null;
+        let dom;
         try {
-            const dom = new JSDOM(htmlContent);
+            dom = new JSDOM(htmlContent);
             const doc = dom.window.document;
 
             let sellerLink = doc.querySelector('#aod-offer-soldBy a, a[href*="seller="]:not(.aod-offer a), [aria-label*="Seller"], #aod-offer-shipsFrom-soldBy');
@@ -3453,6 +3473,10 @@ class MarketDataSyncService {
             if (textMatch && this._isValidSellerName(textMatch[1])) return textMatch[1].trim();
         } catch (e) {
             console.warn('Failed to extract seller name:', e.message);
+        } finally {
+            if (dom) {
+                try { dom.window.close(); } catch (err) {}
+            }
         }
         return null;
     }

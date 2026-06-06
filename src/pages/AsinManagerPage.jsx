@@ -556,8 +556,20 @@ const AsinManagerPage = (props) => {
   const [ratingTrendExpanded, setRatingTrendExpanded] = useState(false);
   const [reviewTrendExpanded, setReviewTrendExpanded] = useState(false);
   const [imageTrendExpanded, setImageTrendExpanded] = useState(false);
+  const [ordersExpanded, setOrdersExpanded] = useState(false);
+  const [availableMonths, setAvailableMonths] = useState([]);
+
+  const formatMonthHeader = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  };
 
   const visibleLQSCount = useMemo(() => ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore', 'lqs'].filter(isVisible).length, [isVisible]);
+  const visibleOrdersCount = useMemo(() => {
+    if (!isVisible('totalOrders')) return 0;
+    return ordersExpanded ? availableMonths.length + 1 : 1;
+  }, [isVisible, ordersExpanded, availableMonths]);
   const visiblePriceTrendCount = useMemo(() => {
     if (!isVisible('priceTrend')) return 0;
     return visibleHistoryCols;
@@ -1110,6 +1122,7 @@ const AsinManagerPage = (props) => {
 
 
       setAsins(asinRes?.asins || []);
+      setAvailableMonths(asinRes?.months || []);
       setPagination(asinRes?.pagination || { page: 1, limit: limit, total: 0, totalPages: 0 });
       setStats(statsRes);
       setError(null);
@@ -2812,6 +2825,29 @@ const AsinManagerPage = (props) => {
                   )}
 
                   {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>ADS</th>}
+                  {visibleOrdersCount > 0 && (
+                    <th
+                      rowSpan={ordersExpanded ? 1 : 2}
+                      colSpan={ordersExpanded ? (availableMonths.length + 1) : 1}
+                      style={{ ...thStyle, background: '#f8fafc', color: '#334155', textAlign: 'center', borderBottom: '2px solid #cbd5e1', transition: 'all 0.3s ease' }}
+                    >
+                      <div className="d-flex align-items-center justify-content-center gap-1" style={{ fontSize: '10px', fontWeight: 700 }}>
+                        {ordersExpanded ? (
+                          <span>ORDERS</span>
+                        ) : (
+                          renderSortableHeader('ORDERS', 'totalOrders', 'center')
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOrdersExpanded(!ordersExpanded); }}
+                          className="btn btn-sm p-0 d-inline-flex align-items-center justify-content-center ms-1"
+                          style={{ border: 'none', background: 'none', color: '#334155', cursor: 'pointer' }}
+                          title={ordersExpanded ? "Collapse to Total" : "Expand to Monthly Orders"}
+                        >
+                          {ordersExpanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                      </div>
+                    </th>
+                  )}
                   {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
                   {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
                   {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
@@ -2978,6 +3014,45 @@ const AsinManagerPage = (props) => {
                   {isVisible('imageScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>}
                   {isVisible('descriptionScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>}
                   {isVisible('lqs') && <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>}
+
+                  {/* Orders Expanded Monthly Columns */}
+                  {ordersExpanded && isVisible('totalOrders') && availableMonths.map((month, idx) => (
+                    <th key={`ord-m-${idx}`} style={{
+                      ...thStyle,
+                      ...getTransitionStyle(ordersExpanded, idx, availableMonths.length + 1, '70px'),
+                      fontSize: 9,
+                      textAlign: 'center',
+                      background: '#f8fafc',
+                      color: '#334155'
+                    }}>
+                      <div style={{
+                        width: ordersExpanded ? 'auto' : '0px',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease'
+                      }}>
+                        {formatMonthHeader(month)}
+                      </div>
+                    </th>
+                  ))}
+                  {ordersExpanded && isVisible('totalOrders') && (
+                    <th style={{
+                      ...thStyle,
+                      ...getTransitionStyle(ordersExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
+                      fontSize: 9,
+                      textAlign: 'center',
+                      background: '#f1f5f9',
+                      fontWeight: 800,
+                      color: '#334155'
+                    }}>
+                      <div style={{
+                        width: ordersExpanded ? 'auto' : '0px',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease'
+                      }}>
+                        TOTAL
+                      </div>
+                    </th>
+                  )}
 
                   {/* Price Trend Dates */}
                   {isVisible('priceTrend') && historyStructure.map(week => (
@@ -3425,6 +3500,54 @@ const AsinManagerPage = (props) => {
                           ) : (
                             <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
                           )}
+                        </td>
+                      )}
+                      {/* Orders Monthly Cells */}
+                      {isVisible('totalOrders') && ordersExpanded && availableMonths.map((month, mIdx) => {
+                        const monthOrders = asin.monthlyOrders ? asin.monthlyOrders[month] : 0;
+                        return (
+                          <td key={`ord-c-${mIdx}`} style={{
+                            ...tdStyle,
+                            ...getTransitionStyle(ordersExpanded, mIdx, availableMonths.length + 1, '70px'),
+                            textAlign: 'center'
+                          }}>
+                            <div style={{
+                              width: ordersExpanded ? 'auto' : '0px',
+                              overflow: 'hidden',
+                              transition: 'all 0.3s ease'
+                            }}>
+                              {monthOrders > 0 ? (
+                                <span className="text-zinc-600" style={{ fontSize: '11px' }}>
+                                  {monthOrders.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      {/* Orders Total Cell */}
+                      {isVisible('totalOrders') && (
+                        <td style={{
+                          ...tdStyle,
+                          ...getTransitionStyle(ordersExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
+                          textAlign: 'center',
+                          background: ordersExpanded ? '#f8fafc' : 'transparent'
+                        }}>
+                          <div style={{
+                            width: 'auto',
+                            overflow: 'hidden',
+                            transition: 'all 0.3s ease'
+                          }}>
+                            {asin.totalOrders !== undefined && asin.totalOrders > 0 ? (
+                              <span className="fw-bold text-zinc-700" style={{ fontSize: '11px' }}>
+                                {asin.totalOrders.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isVisible('dealBadge') && (

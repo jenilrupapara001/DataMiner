@@ -183,9 +183,12 @@ exports.uploadAdsData = async (req, res) => {
     filePath = req.file.path;
     
     const isCSV = filePath.toLowerCase().endsWith('.csv');
-    const workbook = XLSX.readFile(filePath, isCSV ? { raw: true } : {});
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    let workbook = XLSX.readFile(filePath, isCSV ? { raw: true } : {});
+    let sheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+    // Free large workbook objects immediately to avoid memory retention
+    sheet = null;
+    workbook = null;
 
     const reportType = req.body.reportType || 'daily';
     const reportDate = req.body.date;
@@ -321,6 +324,7 @@ exports.uploadAdsData = async (req, res) => {
 
       if (reportType === 'daily') {
         targetDate = parsedDate;
+        targetMonth = new Date(Date.UTC(parsedDate.getUTCFullYear(), parsedDate.getUTCMonth(), 1));
         // Unique string format for consistency
         compositeKey = `${asin}|daily|${targetDate.toISOString().split('T')[0]}`;
       } else {
@@ -408,14 +412,9 @@ exports.uploadAdsData = async (req, res) => {
       const insertColNames = columnsList.map(c => `[${c.name}]`).join(', ');
       const insertColVals = columnsList.map(c => `S.[${c.name}]`).join(', ');
 
-      const matchClause = `
-        T.Asin = S.Asin 
-        AND T.ReportType = S.ReportType 
-        AND (
-          (S.ReportType = 'daily' AND T.[Date] = S.[Date]) OR 
-          (S.ReportType = 'monthly' AND T.[Month] = S.[Month])
-        )
-      `;
+      const matchClause = reportType === 'daily'
+        ? `T.Asin = S.Asin AND T.ReportType = 'daily' AND T.[Date] = S.[Date]`
+        : `T.Asin = S.Asin AND T.ReportType = 'monthly' AND T.[Month] = S.[Month]`;
 
       // Perform Atomic Unit-of-Work UPSERT across all rows simultaneously
       await pool.request().query(`
@@ -516,10 +515,13 @@ exports.uploadOctoparseData = async (req, res) => {
       rawDataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     } else {
       // Excel format
-      const workbook = XLSX.readFile(filePath);
+      let workbook = XLSX.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
+      let sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      // Free large workbook objects immediately to avoid memory retention
+      sheet = null;
+      workbook = null;
       rawDataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     }
 

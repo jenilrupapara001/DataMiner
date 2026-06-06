@@ -374,6 +374,7 @@ exports.getAsins = async (req, res) => {
                     sortBy === 'videoCount' ? 'a.VideoCount' :
                     sortBy === 'imagesCount' ? 'a.ImagesCount' :
                     sortBy === 'hasAplus' ? 'a.HasAplus' :
+                    sortBy === 'orders' || sortBy === 'totalOrders' ? '(SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode)' :
                     sortBy === 'lastScraped' ? 'a.LastScrapedAt' : 'a.CreatedAt';
         return `${col} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
     };
@@ -383,7 +384,8 @@ exports.getAsins = async (req, res) => {
         .input('offset', sql.Int, offset)
         .input('limit', sql.Int, limitNum)
         .query(`
-            SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace
+            SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace,
+                   (SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode) as TotalOrders
             FROM Asins a
             JOIN Sellers s ON a.SellerId = s.Id
             ${whereClause}
@@ -465,6 +467,35 @@ exports.getAsins = async (req, res) => {
         category: h.category || ''
       });
     });
+
+    // [7.7] Fetch monthly orders for collapsible Orders column
+    const monthsResult = await pool.request().query(`
+      SELECT DISTINCT ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month 
+      FROM AdsPerformance 
+      WHERE Month IS NOT NULL OR Date IS NOT NULL
+      ORDER BY Month ASC
+    `);
+    const availableMonths = monthsResult.recordset.map(r => {
+      return r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
+    });
+
+    const monthlyOrdersMap = {};
+    if (asins.length > 0) {
+      const asinCodes = asins.map(a => `'${a.AsinCode}'`).join(',');
+      const monthlyOrdersResult = await pool.request().query(`
+        SELECT Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month, SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as Orders
+        FROM AdsPerformance
+        WHERE Asin IN (${asinCodes})
+        AND (Month IS NOT NULL OR Date IS NOT NULL)
+        GROUP BY Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1))
+      `);
+      
+      monthlyOrdersResult.recordset.forEach(r => {
+        if (!monthlyOrdersMap[r.Asin]) monthlyOrdersMap[r.Asin] = {};
+        const monthStr = r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
+        monthlyOrdersMap[r.Asin][monthStr] = r.Orders;
+      });
+    }
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {
@@ -679,6 +710,10 @@ exports.getAsins = async (req, res) => {
             createdAt: a.CreatedAt,
             updatedAt: a.UpdatedAt,
             
+            // Advertising orders
+            totalOrders: parseInt(a.TotalOrders) || 0,
+            monthlyOrders: monthlyOrdersMap[a.AsinCode] || {},
+            
             // Preserve original ID
             _id: a.Id,
             Id: a.Id,
@@ -688,6 +723,7 @@ exports.getAsins = async (req, res) => {
 
     res.json({
       asins: processedAsins,
+      months: availableMonths,
       pagination: {
         page: pageNum,
         limit: limitNum,
