@@ -15,7 +15,7 @@ const getLastValidData = (asin, field, defaultValue = 0) => {
   if (asin[field] && asin[field] > 0) {
     return { value: asin[field], source: 'current' };
   }
-  
+
   // Fallback to most recent history with valid data
   const history = asin.history || asin.weekHistory || [];
   if (history.length > 0) {
@@ -26,7 +26,7 @@ const getLastValidData = (asin, field, defaultValue = 0) => {
       }
     }
   }
-  
+
   return { value: defaultValue, source: 'none' };
 };
 
@@ -37,20 +37,20 @@ const ScoreCard = ({ title, score: rawScore, grade, issues = [], recommendations
   // Handle 0-100 scale legacy data
   const score = rawScore > 10 ? parseFloat((rawScore / 10).toFixed(1)) : parseFloat((rawScore || 0).toFixed(1));
 
-  const color = score >= 8.5 ? '#059669' : 
-                score >= 7.0 ? '#d97706' : 
-                score >= 5.0 ? '#dc2626' : '#991b1b';
+  const color = score >= 8.5 ? '#059669' :
+    score >= 7.0 ? '#d97706' :
+      score >= 5.0 ? '#dc2626' : '#991b1b';
 
   const gradient = score >= 8.5 ? 'linear-gradient(135deg, #10b981, #059669)' :
-                   score >= 7.0 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                   'linear-gradient(135deg, #ef4444, #b91c1c)';
+    score >= 7.0 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+      'linear-gradient(135deg, #ef4444, #b91c1c)';
 
   return (
-    <Card 
-      hoverable 
-      style={{ 
-        height: '100%', 
-        borderRadius: '16px', 
+    <Card
+      hoverable
+      style={{
+        height: '100%',
+        borderRadius: '16px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
         border: '1px solid #f1f5f9',
         background: '#fff',
@@ -68,9 +68,9 @@ const ScoreCard = ({ title, score: rawScore, grade, issues = [], recommendations
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
         <div style={{ flex: 1 }}>
-          <Progress 
-            percent={score * 10} 
-            showInfo={false} 
+          <Progress
+            percent={score * 10}
+            showInfo={false}
             strokeColor={{ from: color, to: color }}
             railColor="#f1f5f9"
             size={[undefined, 6]}
@@ -78,7 +78,7 @@ const ScoreCard = ({ title, score: rawScore, grade, issues = [], recommendations
         </div>
         <Text strong style={{ fontSize: '15px', color: '#0f172a', minWidth: '42px', textAlign: 'right' }}>{score.toFixed(1)}<span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>/10</span></Text>
       </div>
-      
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {parsedIssues.length > 0 && (
           <div>
@@ -156,11 +156,11 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
   // Compute current values with history fallback
   const { currentData, bsrData, ratingData, ratingBreakdownData } = useMemo(() => {
     if (!asin) return { currentData: {}, bsrData: {}, ratingData: {}, ratingBreakdownData: {} };
-    
+
     const priceInfo = getLastValidData(asin, 'currentPrice') || getLastValidData(asin, 'price');
     const bsrInfo = getLastValidData(asin, 'bsr');
     const ratingInfo = getLastValidData(asin, 'rating');
-    
+
     // Get rating breakdown from current or history
     let breakdownData = asin.ratingBreakdown;
     let breakdownDate = null;
@@ -177,7 +177,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
         }
       }
     }
-    
+
     return {
       currentData: { value: priceInfo.value, source: priceInfo.source, date: priceInfo.date },
       bsrData: { value: bsrInfo.value, source: bsrInfo.source, date: bsrInfo.date },
@@ -192,13 +192,13 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (source === 'history') {
       return (
         <Tooltip title={`Loaded from database history Snapshot (${date ? new Date(date).toLocaleDateString('en-IN') : 'N/A'})`}>
-          <Tag 
-            color="warning" 
-            style={{ 
-              marginLeft: '6px', 
-              border: 'none', 
-              fontSize: '9px', 
-              fontWeight: 600, 
+          <Tag
+            color="warning"
+            style={{
+              marginLeft: '6px',
+              border: 'none',
+              fontSize: '9px',
+              fontWeight: 600,
               borderRadius: '6px',
               display: 'inline-flex',
               alignItems: 'center',
@@ -256,14 +256,14 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
   const processedPriceHistory = useMemo(() => {
     if (!asin || !history) return [];
     let lastValidPrice = null;
-    
+
     if (history.length > 0) {
       const fullHistory = asin.history || asin.weekHistory || [];
       const firstDate = new Date(history[0].date || history[0].week);
       const beforeHistory = fullHistory
         .filter(h => new Date(h.date || h.week) < firstDate)
         .sort((a, b) => new Date(b.date || b.week) - new Date(a.date || a.week));
-      
+
       if (beforeHistory.length > 0) {
         for (const h of beforeHistory) {
           const p = h.price || h.currentPrice;
@@ -273,7 +273,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           }
         }
       }
-      
+
       if (lastValidPrice === null) lastValidPrice = currentData.value;
     }
 
@@ -340,7 +340,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       },
       yaxis: {
         reversed: true,
-        labels: { 
+        labels: {
           style: { fontSize: '10px', colors: '#64748b' },
           formatter: (val) => val ? `#${Number(val).toLocaleString()}` : ''
         }
@@ -368,15 +368,15 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (!asin || !history) return { ratingSeries: [], hasBreakdownHistory: false };
     let lastValidRating = null;
     let lastValidBreakdown = { fiveStar: null, fourStar: null, threeStar: null, twoStar: null, oneStar: null };
-    
+
     const fullHistory = asin.history || asin.weekHistory || [];
     const firstDate = history.length > 0 ? new Date(history[0].date || history[0].week) : null;
-    
+
     if (firstDate) {
       const beforeHistory = fullHistory
         .filter(h => new Date(h.date || h.week) < firstDate)
         .sort((a, b) => new Date(b.date || b.week) - new Date(a.date || a.week));
-      
+
       if (beforeHistory.length > 0) {
         for (const h of beforeHistory) {
           if (lastValidRating === null && h.rating && h.rating > 0) lastValidRating = h.rating;
@@ -391,7 +391,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
         }
       }
     }
-    
+
     if (lastValidRating === null) lastValidRating = ratingData.value;
     Object.keys(lastValidBreakdown).forEach(key => {
       if (lastValidBreakdown[key] === null) lastValidBreakdown[key] = ratingBreakdownData.data?.[key] || 0;
@@ -444,12 +444,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
   const ratingOptions = {
     ...commonOptions,
-    chart: { 
-      ...commonOptions.chart, 
-      type: 'line', 
+    chart: {
+      ...commonOptions.chart,
+      type: 'line',
       height: 300
     },
-    colors: hasBreakdownHistory 
+    colors: hasBreakdownHistory
       ? ['#f59e0b', '#10b981', '#84cc16', '#eab308', '#f97316', '#ef4444']
       : ['#f59e0b'],
     stroke: {
@@ -526,17 +526,17 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
             <Row gutter={[24, 24]} align="middle">
               {/* Thumbnail */}
               <Col xs={24} md={5}>
-                <div style={{ 
-                  width: '100%', 
-                  height: '200px', 
-                  borderRadius: '16px', 
-                  border: '1.5px solid #e0e7ff', 
-                  padding: '8px', 
-                  display: 'flex', 
-                  justifyContent: 'center', 
+                <div style={{
+                  width: '100%',
+                  height: '200px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #e0e7ff',
+                  padding: '8px',
+                  display: 'flex',
+                  justifyContent: 'center',
                   alignItems: 'center',
                   background: '#fafafa',
-                  overflow: 'hidden' 
+                  overflow: 'hidden'
                 }}>
                   {asin.imageUrl ? (
                     <img src={asin.imageUrl} alt={asin.asinCode} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
@@ -548,7 +548,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   )}
                 </div>
               </Col>
-              
+
               {/* Content Info */}
               <Col xs={24} md={19}>
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
@@ -570,9 +570,9 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                       <Text type="secondary" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Store size={13} /> Sold By: <strong style={{ color: '#334155' }}>{asin.soldBy || 'Amazon.in'}</strong>
                       </Text>
-                      <Button 
-                        type="link" 
-                        size="small" 
+                      <Button
+                        type="link"
+                        size="small"
                         href={asin.marketplace === 'ajio' ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : asin.marketplace === 'myntra' ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
                         target="_blank"
                         icon={<ExternalLink size={12} />}
@@ -584,17 +584,17 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   </div>
 
                   {/* Modern Statistics Row */}
-                  <div style={{ 
+                  <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
                     gap: '16px',
                     marginTop: '16px'
                   }}>
                     {/* Stat Card 1 */}
-                    <div style={{ 
-                      background: '#fff', 
-                      padding: '16px 20px', 
-                      borderRadius: '16px', 
+                    <div style={{
+                      background: '#fff',
+                      padding: '16px 20px',
+                      borderRadius: '16px',
                       border: '1px solid #f1f5f9',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -607,10 +607,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     </div>
 
                     {/* Stat Card 2 */}
-                    <div style={{ 
-                      background: '#fff', 
-                      padding: '16px 20px', 
-                      borderRadius: '16px', 
+                    <div style={{
+                      background: '#fff',
+                      padding: '16px 20px',
+                      borderRadius: '16px',
                       border: '1px solid #f1f5f9',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -622,10 +622,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     </div>
 
                     {/* Stat Card 3 */}
-                    <div style={{ 
-                      background: '#fff', 
-                      padding: '16px 20px', 
-                      borderRadius: '16px', 
+                    <div style={{
+                      background: '#fff',
+                      padding: '16px 20px',
+                      borderRadius: '16px',
                       border: '1px solid #f1f5f9',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -638,10 +638,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     </div>
 
                     {/* Stat Card 4 */}
-                    <div style={{ 
-                      background: '#fff', 
-                      padding: '16px 20px', 
-                      borderRadius: '16px', 
+                    <div style={{
+                      background: '#fff',
+                      padding: '16px 20px',
+                      borderRadius: '16px',
                       border: '1px solid #f1f5f9',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -703,7 +703,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
               <div style={{ p: '8px', background: '#ede9fe', color: '#7c3aed', padding: '8px', borderRadius: '10px' }}><ListChecks size={20} /></div>
               <Text strong style={{ fontSize: '16px', color: '#1e293b' }}>Product Key Features</Text>
             </div>
-            
+
             {(() => {
               const bullets = (() => {
                 if (Array.isArray(asin.bulletPointsText) && asin.bulletPointsText.length > 0) {
@@ -715,14 +715,14 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     if (Array.isArray(parsed) && parsed.length > 0) {
                       return parsed.filter(b => typeof b === 'string' && b.trim().length > 0);
                     }
-                  } catch (e) {}
-                  
+                  } catch (e) { }
+
                   if (asin.bulletPointsText.includes('<li') || asin.bulletPointsText.includes('<span')) {
                     const tempDiv = document.createElement('div');
                     tempDiv.innerHTML = asin.bulletPointsText;
                     const items = Array.from(tempDiv.querySelectorAll('li, .a-list-item'))
-                        .map(el => el.textContent.trim())
-                        .filter(t => t.length > 3);
+                      .map(el => el.textContent.trim())
+                      .filter(t => t.length > 3);
                     if (items.length > 0) return items;
                   }
                   return [asin.bulletPointsText.replace(/<[^>]+>/g, '').trim()];
@@ -737,26 +737,26 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   <Row gutter={[16, 16]}>
                     {bullets.map((bullet, idx) => (
                       <Col xs={24} md={12} key={idx}>
-                        <div style={{ 
-                          display: 'flex', 
-                          gap: '12px', 
-                          padding: '16px 20px', 
-                          background: '#fff', 
-                          borderRadius: '16px', 
+                        <div style={{
+                          display: 'flex',
+                          gap: '12px',
+                          padding: '16px 20px',
+                          background: '#fff',
+                          borderRadius: '16px',
                           border: '1px solid #f1f5f9',
                           borderLeft: '4px solid #6366f1',
                           boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                           height: '100%',
                           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                         }} className="bullet-item-hover">
-                          <div style={{ 
-                            width: '24px', 
-                            height: '24px', 
-                            borderRadius: '50%', 
-                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)', 
-                            color: '#fff', 
-                            display: 'flex', 
-                            justifyContent: 'center', 
+                          <div style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            color: '#fff',
+                            display: 'flex',
+                            justifyContent: 'center',
                             alignItems: 'center',
                             fontSize: '10px',
                             fontWeight: 700,
@@ -775,17 +775,17 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
               if (typeof asin.bullet_points === 'string' && asin.bullet_points.length > 20) {
                 return (
-                  <div 
+                  <div
                     style={{ padding: '20px', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', color: '#334155', fontSize: '13px', lineHeight: '1.6' }}
-                    dangerouslySetInnerHTML={{ __html: asin.bullet_points }} 
+                    dangerouslySetInnerHTML={{ __html: asin.bullet_points }}
                   />
                 );
               }
 
               return (
-                <Empty 
-                  image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                  description={<span style={{ color: '#94a3b8', fontSize: '13px' }}>No product features synced for this listing yet</span>} 
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={<span style={{ color: '#94a3b8', fontSize: '13px' }}>No product features synced for this listing yet</span>}
                 />
               );
             })()}
@@ -806,27 +806,27 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           {/* Score Header */}
           {/* Score Header */}
           {(() => {
-            const lqsScore = typeof asin.lqs === 'number' 
-              ? (asin.lqs > 10 ? asin.lqs / 10 : asin.lqs) 
+            const lqsScore = typeof asin.lqs === 'number'
+              ? (asin.lqs > 10 ? asin.lqs / 10 : asin.lqs)
               : (parseFloat(asin.lqs || 0) > 10 ? parseFloat(asin.lqs || 0) / 10 : parseFloat(asin.lqs || 0));
 
-            const accentColor = lqsScore >= 8.5 ? '#059669' : 
-                                lqsScore >= 7.0 ? '#d97706' : 
-                                lqsScore >= 5.0 ? '#dc2626' : '#991b1b';
-            
+            const accentColor = lqsScore >= 8.5 ? '#059669' :
+              lqsScore >= 7.0 ? '#d97706' :
+                lqsScore >= 5.0 ? '#dc2626' : '#991b1b';
+
             const gradientBg = lqsScore >= 8.5 ? 'linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)' :
-                               lqsScore >= 7.0 ? 'linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)' :
-                               'linear-gradient(90deg, #fef2f2 0%, #ffffff 100%)';
+              lqsScore >= 7.0 ? 'linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)' :
+                'linear-gradient(90deg, #fef2f2 0%, #ffffff 100%)';
 
             return (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                background: '#fff', 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: '#fff',
                 backgroundImage: gradientBg,
-                padding: '24px 32px', 
-                borderRadius: '20px', 
+                padding: '24px 32px',
+                borderRadius: '20px',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.03)',
                 border: '1px solid #f1f5f9',
                 borderLeft: `6px solid ${accentColor}`
@@ -838,12 +838,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                   <div style={{ textAlign: 'center' }}>
                     <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OVERALL SCORE</Text>
-                    <div style={{ 
-                      fontSize: '32px', 
-                      fontWeight: 900, 
+                    <div style={{
+                      fontSize: '32px',
+                      fontWeight: 900,
                       marginTop: '2px',
                       lineHeight: 1,
-                      color: accentColor 
+                      color: accentColor
                     }}>
                       {lqsScore.toFixed(1)}
                     </div>
@@ -852,12 +852,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   <div style={{ textAlign: 'center' }}>
                     <Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>QUALITY GRADE</Text>
                     <div style={{ marginTop: '4px' }}>
-                      <Tag 
-                        style={{ 
-                          fontSize: '11px', 
-                          fontWeight: 800, 
-                          padding: '4px 12px', 
-                          borderRadius: '8px', 
+                      <Tag
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          padding: '4px 12px',
+                          borderRadius: '8px',
                           border: 'none',
                           color: accentColor,
                           background: lqsScore >= 8.5 ? '#ecfdf5' : lqsScore >= 7.0 ? '#fffbeb' : '#fef2f2'
@@ -875,38 +875,38 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           {/* Grid cards */}
           <Row gutter={[20, 20]}>
             <Col xs={24} sm={12} lg={6}>
-              <ScoreCard 
-                title="Product Title" 
-                score={asin.titleScore} 
-                grade={asin.titleGrade} 
-                issues={asin.titleIssues} 
+              <ScoreCard
+                title="Product Title"
+                score={asin.titleScore}
+                grade={asin.titleGrade}
+                issues={asin.titleIssues}
                 recommendations={asin.titleRecommendations}
               />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <ScoreCard 
-                title="Bullet Points" 
-                score={asin.bulletScore} 
-                grade={asin.bulletGrade} 
-                issues={asin.bulletIssues} 
+              <ScoreCard
+                title="Bullet Points"
+                score={asin.bulletScore}
+                grade={asin.bulletGrade}
+                issues={asin.bulletIssues}
                 recommendations={asin.bulletRecommendations}
               />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <ScoreCard 
-                title="Images & Media" 
-                score={asin.imageScore} 
-                grade={asin.imageGrade} 
-                issues={asin.imageIssues} 
+              <ScoreCard
+                title="Images & Media"
+                score={asin.imageScore}
+                grade={asin.imageGrade}
+                issues={asin.imageIssues}
                 recommendations={asin.imageRecommendations}
               />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <ScoreCard 
-                title="Description / A+" 
-                score={asin.descriptionScore} 
-                grade={asin.descriptionGrade} 
-                issues={asin.descriptionIssues} 
+              <ScoreCard
+                title="Description / A+"
+                score={asin.descriptionScore}
+                grade={asin.descriptionGrade}
+                issues={asin.descriptionIssues}
                 recommendations={asin.descriptionRecommendations}
               />
             </Col>
@@ -925,7 +925,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       children: (
         <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Price Chart */}
-          <Card 
+          <Card
             style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -941,7 +941,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           </Card>
 
           {/* Detailed Sub-BSR Historical Trends */}
-          <Card 
+          <Card
             style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -962,10 +962,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                   <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                     {subBsrTrend.trends.map((t, i) => (
                       <Col xs={24} sm={8} key={i}>
-                        <div style={{ 
-                          padding: '14px 18px', 
-                          background: '#f8fafc', 
-                          borderRadius: '16px', 
+                        <div style={{
+                          padding: '14px 18px',
+                          background: '#f8fafc',
+                          borderRadius: '16px',
                           border: '1px solid #e2e8f0',
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -1007,7 +1007,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       children: (
         <div style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Rating Breakdown Card */}
-          <Card 
+          <Card
             style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1031,12 +1031,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <Text strong style={{ minWidth: '36px', color: '#475569', fontSize: '13px' }}>{stars} ★</Text>
                       <div style={{ flex: 1 }}>
-                        <Progress 
-                          percent={percentage} 
-                          strokeColor={color} 
-                          railColor="#f1f5f9" 
-                          size={[undefined, 10]} 
-                          showInfo={false} 
+                        <Progress
+                          percent={percentage}
+                          strokeColor={color}
+                          railColor="#f1f5f9"
+                          size={[undefined, 10]}
+                          showInfo={false}
                         />
                       </div>
                       <div style={{ minWidth: '80px', textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
@@ -1053,7 +1053,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           </Card>
 
           {/* Rating progression chart */}
-          <Card 
+          <Card
             style={{ borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1133,12 +1133,12 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       `}</style>
 
       {/* Modal Sticky Header Top */}
-      <div style={{ 
-        padding: '20px 32px', 
-        background: '#fff', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <div style={{
+        padding: '20px 32px',
+        background: '#fff',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         borderBottom: '1px solid #f1f5f9'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1155,14 +1155,14 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', padding: '6px 12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <Calendar size={14} style={{ color: '#64748b' }} />
-            <Text style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#007dfaff', padding: '6px 12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <Calendar size={14} style={{ color: '#ffffffff' }} />
+            <Text style={{ fontSize: '12px', fontWeight: 600, color: '#ffffffff' }}>
               {format(dateRange.start, 'MMM dd')} — {format(dateRange.end, 'MMM dd, yyyy')}
             </Text>
-            <Button 
-              type="text" 
-              size="small" 
+            <Button
+              type="text"
+              size="small"
               onClick={() => setIsPickerOpen(true)}
               style={{ height: 'auto', padding: '2px 6px', fontSize: '11px', background: '#fff', fontWeight: 700, color: '#4f46e5', border: '1px solid #dbeafe', marginLeft: '6px' }}
             >
@@ -1184,9 +1184,9 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
 
       {/* Tab Contents */}
       <div style={{ padding: '0 32px 32px 32px', maxHeight: '80vh', overflowY: 'auto' }}>
-        <Tabs 
-          defaultActiveKey="1" 
-          items={tabItems} 
+        <Tabs
+          defaultActiveKey="1"
+          items={tabItems}
           className="premium-asin-tabs"
           animated={{ inkBar: true, tabPane: true }}
         />

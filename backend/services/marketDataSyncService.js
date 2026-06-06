@@ -2159,7 +2159,7 @@ class MarketDataSyncService {
                 }
 
                 soldBy = this._extractSellerFromRaw(rawData) || asin.SoldBy || '';
-                buyBoxWin = this._isBuyBoxWinner(soldBy, asin.sellerName);
+                buyBoxWin = this._isBuyBoxWinner(soldBy);
 
                 if (soldBy && soldBy.trim() !== '') {
                     allOffers.push({

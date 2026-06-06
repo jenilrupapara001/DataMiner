@@ -1842,7 +1842,7 @@ const AsinManagerPage = (props) => {
         placement="right"
         onClose={() => setFilterPanelOpen(false)}
         open={filterPanelOpen}
-        width={window.innerWidth < 576 ? '100%' : 420}
+        size={window.innerWidth < 576 ? '100%' : 420}
 
         styles={{
           header: { background: '#18181b', borderBottom: 'none', padding: '16px 24px' },
@@ -3762,7 +3762,7 @@ const AsinManagerPage = (props) => {
                         </td>
                       )}
                       {isVisible('bsrTrendStatus') && (
-                        <td 
+                        <td
                           style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a', cursor: 'pointer' }}
                           onClick={() => handleViewTrends(asin, 'bsr')}
                         >
@@ -3812,7 +3812,7 @@ const AsinManagerPage = (props) => {
                         </td>
                       )}
                       {isVisible('ratingTrendStatus') && (
-                        <td 
+                        <td
                           style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                           onClick={() => handleViewTrends(asin, 'rating')}
                         >
@@ -3846,7 +3846,7 @@ const AsinManagerPage = (props) => {
                         })
                       ))}
                       {isVisible('reviewCount') && (
-                        <td 
+                        <td
                           style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
                           onClick={() => handleViewTrends(asin, 'reviews')}
                         >

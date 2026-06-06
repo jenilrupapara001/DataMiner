@@ -29,38 +29,61 @@ const OWN_SELLERS = [
  * Robustly identifies if a seller is authorized based on given names.
  * Implements partial matching (ignores spaces, casing, and special characters).
  * 
- * @param {string} soldBy - The seller name found on Amazon
+ * LOGIC: A BuyBox is "won" if the soldBy name matches EITHER:
+ *   1. Any name in the hardcoded OWN_SELLERS list (always checked), OR
+ *   2. Any name in the configuredSellers / extra trusted sellers (e.g. the brand's own store name), OR
+ *   3. Any name from the TRUSTED_SELLER_NAMES env variable
+ * 
+ * @param {string} sellerName - The seller name found on the product page (soldBy)
+ * @param {string[]|string|null} configuredSellers - Additional trusted seller names (e.g. the brand's own name)
  * @returns {boolean} - true if the seller is authorized (Won), false otherwise (Lost)
  */
 function isBuyBoxWinner(sellerName, configuredSellers = null) {
     if (!sellerName) return false;
 
-    // Get configured sellers from env or database
-    const trustedSellers = configuredSellers || (process.env.TRUSTED_SELLER_NAMES || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    const normalizedSoldBy = normalize(sellerName);
 
-    const sellerLower = sellerName.toLowerCase();
+    // 1. ALWAYS check the hardcoded OWN_SELLERS list first
+    const matchesOwnSeller = OWN_SELLERS.some(s => {
+        const authorized = normalize(s);
+        return normalizedSoldBy.includes(authorized) || authorized.includes(normalizedSoldBy);
+    });
+    if (matchesOwnSeller) return true;
 
-    // Check if seller is in trusted list
-    const isTrusted = trustedSellers.some(trusted =>
-        sellerLower.includes(trusted.toLowerCase()) ||
-        trusted.toLowerCase().includes(sellerLower)
-    );
-
-    // Fallback to OWN_SELLERS if no trusted sellers configured
-    if (trustedSellers.length === 0) {
-        const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-        const normalizedSoldBy = normalize(sellerName);
-        const result = OWN_SELLERS.some(s => {
-            const authorized = normalize(s);
-            return normalizedSoldBy.includes(authorized) || authorized.includes(normalizedSoldBy);
+    // 2. Check env-configured trusted sellers
+    const envSellers = (process.env.TRUSTED_SELLER_NAMES || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (envSellers.length > 0) {
+        const matchesEnv = envSellers.some(trusted => {
+            const normalizedTrusted = normalize(trusted);
+            return normalizedSoldBy.includes(normalizedTrusted) || normalizedTrusted.includes(normalizedSoldBy);
         });
-        return result;
+        if (matchesEnv) return true;
     }
 
-    return isTrusted;
+    // 3. Check extra trusted sellers passed as parameter (e.g. the seller/brand's own name)
+    let extraSellers = [];
+    if (configuredSellers) {
+        if (Array.isArray(configuredSellers)) {
+            extraSellers = configuredSellers.filter(Boolean);
+        } else if (typeof configuredSellers === 'string' && configuredSellers.trim()) {
+            extraSellers = [configuredSellers.trim()];
+        }
+    }
+
+    if (extraSellers.length > 0) {
+        const matchesExtra = extraSellers.some(trusted => {
+            const normalizedTrusted = normalize(trusted);
+            return normalizedSoldBy.includes(normalizedTrusted) || normalizedTrusted.includes(normalizedSoldBy);
+        });
+        if (matchesExtra) return true;
+    }
+
+    return false;
 }
 
 module.exports = {
     OWN_SELLERS,
     isBuyBoxWinner
 };
+
