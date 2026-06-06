@@ -106,7 +106,7 @@ class SchedulerService {
             let amazonCronExpr = '0 0 * * *';
             if (scheduleTime && scheduleTime.includes(':')) {
                 const [hour, minute] = scheduleTime.split(':');
-                amazonCronExpr = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+                amazonCronExpr = `${parseInt(minute, 10)} ${parseInt(hour, 10)} * * *`;
             }
 
             this.jobs.enterprisePipeline = cron.schedule(amazonCronExpr, async () => {
@@ -123,7 +123,7 @@ class SchedulerService {
             let ajioCronExpr = '0 0 * * *';
             if (ajioScheduleTime && ajioScheduleTime.includes(':')) {
                 const [hour, minute] = ajioScheduleTime.split(':');
-                ajioCronExpr = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+                ajioCronExpr = `${parseInt(minute, 10)} ${parseInt(hour, 10)} * * *`;
             }
 
             this.jobs.enterpriseAjioPipeline = cron.schedule(ajioCronExpr, async () => {

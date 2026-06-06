@@ -84,7 +84,10 @@ exports.startExport = async (req, res) => {
 
         // Create download record
         const downloadId = generateId();
-        const fileName = `asin_export_${new Date().toISOString().replace(/[:.]/g, '-')}.${format}`;
+        const now = new Date();
+        const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+        const dateStr = istTime.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const fileName = `asin_export_${dateStr}.${format}`;
         const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
 
         await pool.request()

@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Kolkata'; // Force server timezone to India Standard Time
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');

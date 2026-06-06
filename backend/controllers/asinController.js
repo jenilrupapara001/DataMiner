@@ -2701,7 +2701,9 @@ exports.exportData = async (req, res) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'ASINs');
 
-    const fileName = `asin_export_${new Date().toISOString().split('T')[0]}`;
+    const now = new Date();
+    const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const fileName = `asin_export_${istTime.toISOString().split('T')[0]}`;
     
     if (format === 'csv') {
       const csvOutput = XLSX.utils.sheet_to_csv(ws, { 
@@ -2832,7 +2834,9 @@ exports.downloadTagsTemplate = async (req, res) => {
     XLSX.utils.book_append_sheet(wb, ws, 'Tags Template');
 
     const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-    const fileName = `tags_template_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const now = new Date();
+    const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const fileName = `tags_template_${istTime.toISOString().split('T')[0]}.xlsx`;
 
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
