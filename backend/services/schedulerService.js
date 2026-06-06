@@ -23,6 +23,12 @@ class SchedulerService {
         try {
             await this.scheduleJobs();
             console.log('✅ Background tasks successfully initialized.');
+            
+            // Check completed tasks and recover status on startup
+            await this.runOctoparseTaskRecovery().catch(err => console.error('Recovery failed:', err.message));
+            
+            // Resume any interrupted active scheduled runs
+            await this.resumeInterruptedRuns().catch(err => console.error('Resume failed:', err.message));
         } catch (error) {
             console.error('❌ Scheduler initialization error:', error.message);
         }
@@ -205,6 +211,53 @@ class SchedulerService {
         }
     }
 
+    async resumeInterruptedRuns() {
+        try {
+            console.log('🔄 [RESUME] Checking for interrupted scheduled runs...');
+            const pool = await getPool();
+            const activeRunsResult = await pool.request()
+                .query("SELECT TOP 1 * FROM ScheduledRuns WHERE Status = 'RUNNING' ORDER BY StartTime DESC");
+            
+            const activeRun = activeRunsResult.recordset[0];
+            if (!activeRun) {
+                console.log('ℹ️ [RESUME] No interrupted scheduled runs to resume.');
+                return;
+            }
+
+            console.log(`🏢 [RESUME] Found interrupted scheduled run: ${activeRun.Id} (Started at: ${activeRun.StartTime})`);
+            
+            let details = [];
+            if (activeRun.Details) {
+                try {
+                    details = JSON.parse(activeRun.Details);
+                } catch (e) {
+                    details = activeRun.Details;
+                }
+            }
+
+            // Determine marketplace from details if possible, default to amazon
+            let marketplace = 'amazon';
+            if (details.length > 0) {
+                const firstSellerId = details[0].sellerId;
+                const sellerRes = await pool.request()
+                    .input('id', sql.VarChar, firstSellerId)
+                    .query("SELECT Marketplace FROM Sellers WHERE Id = @id");
+                const mkt = sellerRes.recordset[0]?.Marketplace?.toLowerCase();
+                if (mkt === 'ajio') marketplace = 'ajio';
+            }
+
+            console.log(`🏢 [RESUME] Resuming ${marketplace} pipeline for run ${activeRun.Id} in background...`);
+            
+            // Resume the pipeline in the background
+            this.runEnterprisePipeline(marketplace, { resumeRunId: activeRun.Id, existingDetails: details }).catch(err => {
+                console.error(`❌ Interrupted pipeline resume failed in background:`, err.message);
+            });
+
+        } catch (err) {
+            console.error('❌ [RESUME] Error in resumeInterruptedRuns:', err.message);
+        }
+    }
+
     async refreshAgeTags() {
         try {
             // console.log('🔄 [AutoTag] Starting daily age tag refresh...');
@@ -299,31 +352,38 @@ class SchedulerService {
         }
     }
 
-    async runEnterprisePipeline(marketplace = 'amazon') {
+    async runEnterprisePipeline(marketplace = 'amazon', options = {}) {
+        options = options || {};
         const isAjio = marketplace === 'ajio';
-        console.log(`🏢 [ENTERPRISE] Starting full ${marketplace} automation pipeline (Dynamic worker pool with concurrency up to 5)...`);
-        const runId = generateId();
-        const details = [];
+        const isResuming = !!options.resumeRunId;
+        const runId = isResuming ? options.resumeRunId : generateId();
+        const details = isResuming ? (options.existingDetails || []) : [];
         const startTime = new Date();
+
+        console.log(`🏢 [ENTERPRISE] ${isResuming ? 'Resuming' : 'Starting'} full ${marketplace} automation pipeline (Dynamic worker pool with concurrency limit)...`);
 
         try {
             const pool = await getPool();
 
-            // Insert initial run record
-            await pool.request()
-                .input('id', sql.VarChar, runId)
-                .input('startTime', sql.DateTime2, startTime)
-                .input('status', sql.VarChar, 'RUNNING')
-                .input('details', sql.NVarChar, JSON.stringify([]))
-                .query(`
-                    INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
-                    VALUES (@id, @startTime, @status, @details, GETDATE(), GETDATE())
-                `);
+            if (!isResuming) {
+                // Insert initial run record
+                await pool.request()
+                    .input('id', sql.VarChar, runId)
+                    .input('startTime', sql.DateTime2, startTime)
+                    .input('status', sql.VarChar, 'RUNNING')
+                    .input('details', sql.NVarChar, JSON.stringify([]))
+                    .query(`
+                        INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
+                        VALUES (@id, @startTime, @status, @details, GETDATE(), GETDATE())
+                    `);
 
-            // 1. FIRST: Stop all active tasks to ensure a fresh state
-            console.log(`🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse ${marketplace} tasks...`);
-            await MarketSyncService.stopAllActiveTasks(marketplace);
-            await new Promise(r => setTimeout(r, 15000)); // Allow time for stop commands to propagate
+                // 1. FIRST: Stop all active tasks to ensure a fresh state
+                console.log(`🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse ${marketplace} tasks...`);
+                await MarketSyncService.stopAllActiveTasks(marketplace);
+                await new Promise(r => setTimeout(r, 15000)); // Allow time for stop commands to propagate
+            } else {
+                console.log(`🏢 [ENTERPRISE] Phase 1 (Resuming): Skipping stop commands to preserve running tasks.`);
+            }
 
             const queryStr = isAjio
                 ? "SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' AND LOWER(Marketplace) = 'ajio'"
@@ -332,8 +392,28 @@ class SchedulerService {
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) {
-                await this.updateRunDetails(runId, [], 'COMPLETED', true);
+                if (!isResuming) {
+                    await this.updateRunDetails(runId, [], 'COMPLETED', true);
+                }
                 return { success: true, totalSellers: 0 };
+            }
+
+            // Populate completed sellers set if resuming
+            let successful = 0;
+            const completedSellers = new Set();
+            details.forEach(d => {
+                if (d.status === 'COMPLETED') {
+                    completedSellers.add(d.sellerId);
+                    successful++;
+                }
+            });
+
+            const pendingSellers = sellers.filter(s => !completedSellers.has(s.Id));
+
+            if (pendingSellers.length === 0) {
+                console.log(`🏢 [ENTERPRISE] All sellers already completed in run ${runId}. Completing run.`);
+                await this.updateRunDetails(runId, details, 'COMPLETED', true);
+                return { success: true, totalSellers: sellers.length, successful };
             }
 
             // Bulk fetch ASIN counts for sorting small -> large
@@ -348,15 +428,8 @@ class SchedulerService {
                 asinCountMap[row.SellerId] = row.activeCount;
             });
 
-            // High Priority first (IsPriority DESC), then by ASIN count (smallest first)
-            sellers.sort((a, b) => {
-                const priorityA = a.IsPriority ? 1 : 0;
-                const priorityB = b.IsPriority ? 1 : 0;
-                
-                if (priorityA !== priorityB) {
-                    return priorityB - priorityA; // 1 before 0
-                }
-                
+            // Sort pending sellers purely by ASIN count (smallest first)
+            pendingSellers.sort((a, b) => {
                 const countA = asinCountMap[a.Id] || 0;
                 const countB = asinCountMap[b.Id] || 0;
                 
@@ -382,46 +455,70 @@ class SchedulerService {
                 } catch(e) {}
             }
 
-            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} active sellers. Processing with a dynamic concurrency pool of up to ${CONCURRENCY_LIMIT} concurrent tasks.`);
+            console.log(`🏢 [ENTERPRISE] Found ${sellers.length} sellers total (${pendingSellers.length} pending). Processing with concurrency limit of ${CONCURRENCY_LIMIT}.`);
             
-            let successful = 0;
             let currentIndex = 0;
 
             const runWorker = async () => {
-                while (currentIndex < sellers.length) {
+                while (currentIndex < pendingSellers.length) {
                     const index = currentIndex++;
-                    const seller = sellers[index];
+                    const seller = pendingSellers[index];
                     if (!seller) break;
 
-                    console.log(`🚀 [ENTERPRISE] Worker starting seller: ${seller.Name} (${index + 1} of ${sellers.length})...`);
+                    console.log(`🚀 [ENTERPRISE] Worker starting seller: ${seller.Name} (${index + 1} of ${pendingSellers.length})...`);
 
                     let activeAsinsCount = asinCountMap[seller.Id] || 0;
 
-                    const sellerStat = {
-                        sellerId: seller.Id,
-                        name: seller.Name,
-                        startTime: new Date(),
-                        endTime: null,
-                        status: 'RUNNING',
-                        asinsCount: activeAsinsCount,
-                        count: 0,
-                        error: null
-                    };
-                    details.push(sellerStat);
+                    let sellerStat = details.find(d => d.sellerId === seller.Id);
+                    if (!sellerStat) {
+                        sellerStat = {
+                            sellerId: seller.Id,
+                            name: seller.Name,
+                            startTime: new Date(),
+                            endTime: null,
+                            status: 'RUNNING',
+                            asinsCount: activeAsinsCount,
+                            count: 0,
+                            error: null
+                        };
+                        details.push(sellerStat);
+                    } else {
+                        sellerStat.status = 'RUNNING';
+                        sellerStat.error = null;
+                        sellerStat.startTime = new Date();
+                    }
                     await this.updateRunDetails(runId, details);
 
                     try {
-                        // Clear previous data from Octoparse cloud before starting
-                        console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
-                        await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
-                        
-                        // Trigger sync and await complete scrape + polling
-                        const syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
-                            triggerScrape: true,
-                            fullSync: true,
-                            forceReRun: true,
-                            awaitCompletion: true
-                        });
+                        const taskId = seller.OctoparseId;
+
+                        // Check status of task on Octoparse cloud first
+                        console.log(`🔍 [ENTERPRISE] Checking status of active task ${taskId} for ${seller.Name}...`);
+                        const status = await MarketSyncService.getStatus(taskId).catch(() => null);
+                        const normalized = MarketSyncService.normalizeStatus(status);
+
+                        let syncResult;
+                        if (normalized === 'RUNNING') {
+                            console.log(`📡 [ENTERPRISE] Task is already running on Octoparse cloud. Joining active execution...`);
+                            // Poll and ingest results from the already running execution
+                            const count = await MarketSyncService.pollAndAutomate(seller.Id, taskId, { 
+                                fullSync: true,
+                                returnCount: true
+                            });
+                            syncResult = { success: true, count, asinsCount: activeAsinsCount };
+                        } else {
+                            // Clear previous data from Octoparse cloud before starting
+                            console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
+                            await MarketSyncService.clearTaskData(taskId).catch(() => {});
+                            
+                            // Trigger sync and await complete scrape + polling
+                            syncResult = await MarketSyncService.syncSellerAsinsToOctoparse(seller.Id, { 
+                                triggerScrape: true,
+                                fullSync: true,
+                                forceReRun: true,
+                                awaitCompletion: true
+                            });
+                        }
 
                         sellerStat.status = 'COMPLETED';
                         if (syncResult && typeof syncResult === 'object') {
@@ -429,6 +526,7 @@ class SchedulerService {
                             sellerStat.count = syncResult.count || 0;
                         }
                         successful++;
+                        completedSellers.add(seller.Id);
                         console.log(`✅ [ENTERPRISE] Successfully completed and exported data for ${seller.Name}!`);
                     } catch (err) {
                         sellerStat.status = 'FAILED';
@@ -440,7 +538,7 @@ class SchedulerService {
                     }
 
                     // Stability delay after a worker finishes a task before picking up the next one
-                    if (currentIndex < sellers.length) {
+                    if (currentIndex < pendingSellers.length) {
                         await new Promise(r => setTimeout(r, 2000));
                     }
                 }

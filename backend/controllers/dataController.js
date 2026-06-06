@@ -715,6 +715,7 @@ exports.getAdsManagerData = async (req, res) => {
                     sales: 0,
                     orders: 0,
                     organicSales: 0,
+                    organicOrders: 0,
                     pageViews: 0,
                     conversions: 0
                 };
@@ -728,6 +729,7 @@ exports.getAdsManagerData = async (req, res) => {
             daySlot.sales += Number(row.AdSales || 0);
             daySlot.orders += Number(row.Orders || 0);
             daySlot.organicSales += Number(row.OrganicSales || 0);
+            daySlot.organicOrders += Number(row.OrganicOrders || 0);
             daySlot.pageViews += Number(row.PageViews || 0);
             daySlot.conversions += Number(row.Conversions || 0);
         });

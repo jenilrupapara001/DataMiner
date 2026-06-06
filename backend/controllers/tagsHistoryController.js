@@ -72,26 +72,47 @@ exports.getTagsHistory = async (req, res) => {
             .query('SELECT COUNT(*) as total FROM TagsHistory WHERE AsinId = @asinId');
         const total = countResult.recordset[0].total;
 
-        // Fetch history with pagination
+        // Fetch history with pagination joining Users and Roles
         const offset = (parseInt(page) - 1) * parseInt(limit);
         const historyResult = await pool.request()
             .input('asinId', sql.VarChar, asinId)
             .input('offset', sql.Int, offset)
             .input('limit', sql.Int, parseInt(limit))
             .query(`
-                SELECT * FROM TagsHistory 
-                WHERE AsinId = @asinId 
-                ORDER BY CreatedAt DESC
+                SELECT 
+                    th.*,
+                    u.FirstName as UserFirstName,
+                    u.LastName as UserLastName,
+                    u.Email as UserEmail,
+                    u.Avatar as UserAvatar,
+                    r.Name as RoleName,
+                    r.DisplayName as RoleDisplayName
+                FROM TagsHistory th
+                LEFT JOIN Users u ON th.UserId = u.Id
+                LEFT JOIN Roles r ON u.RoleId = r.Id
+                WHERE th.AsinId = @asinId 
+                ORDER BY th.CreatedAt DESC
                 OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
             `);
 
-        // Parse JSON fields
+        // Parse JSON fields and format rich user object
         const history = historyResult.recordset.map(row => ({
             _id: row.Id,
             id: row.Id,
             action: row.Action,
             source: row.Source,
             userName: row.UserName,
+            user: row.UserId ? {
+                id: row.UserId,
+                firstName: row.UserFirstName,
+                lastName: row.UserLastName,
+                email: row.UserEmail,
+                avatar: row.UserAvatar,
+                role: {
+                    name: row.RoleName,
+                    displayName: row.RoleDisplayName
+                }
+            } : null,
             previousTags: (() => { try { return JSON.parse(row.PreviousTags || '[]'); } catch { return []; } })(),
             newTags: (() => { try { return JSON.parse(row.NewTags || '[]'); } catch { return []; } })(),
             addedTags: (() => { try { return JSON.parse(row.AddedTags || '[]'); } catch { return []; } })(),
@@ -146,20 +167,40 @@ exports.getTagsSummary = async (req, res) => {
         let currentTags = [];
         try { currentTags = JSON.parse(asin.Tags || '[]'); } catch { currentTags = []; }
 
-        // Get last 5 changes
+        // Get last 5 changes joining Users and Roles
         const historyResult = await pool.request()
             .input('asinId', sql.VarChar, asinId)
             .query(`
-                SELECT TOP 5 Id, Action, AddedTags, RemovedTags, UserName, CreatedAt, Source
-                FROM TagsHistory 
-                WHERE AsinId = @asinId 
-                ORDER BY CreatedAt DESC
+                SELECT TOP 5 
+                    th.Id, th.Action, th.AddedTags, th.RemovedTags, th.UserName, th.CreatedAt, th.Source, th.UserId,
+                    u.FirstName as UserFirstName,
+                    u.LastName as UserLastName,
+                    u.Email as UserEmail,
+                    u.Avatar as UserAvatar,
+                    r.Name as RoleName,
+                    r.DisplayName as RoleDisplayName
+                FROM TagsHistory th
+                LEFT JOIN Users u ON th.UserId = u.Id
+                LEFT JOIN Roles r ON u.RoleId = r.Id
+                WHERE th.AsinId = @asinId 
+                ORDER BY th.CreatedAt DESC
             `);
 
         const recentChanges = historyResult.recordset.map(row => ({
             action: row.Action,
             source: row.Source,
             userName: row.UserName,
+            user: row.UserId ? {
+                id: row.UserId,
+                firstName: row.UserFirstName,
+                lastName: row.UserLastName,
+                email: row.UserEmail,
+                avatar: row.UserAvatar,
+                role: {
+                    name: row.RoleName,
+                    displayName: row.RoleDisplayName
+                }
+            } : null,
             addedTags: (() => { try { return JSON.parse(row.AddedTags || '[]'); } catch { return []; } })(),
             removedTags: (() => { try { return JSON.parse(row.RemovedTags || '[]'); } catch { return []; } })(),
             createdAt: row.CreatedAt

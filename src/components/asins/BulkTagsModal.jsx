@@ -26,6 +26,20 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
   const [step, setStep] = useState(1); // 1=select, 2=review, 3=result
 
   const [existingTags, setExistingTags] = useState([]);
+  const [predefinedTags, setPredefinedTags] = useState([]);
+
+  // Fetch predefined tags
+  const fetchPredefinedTags = async () => {
+    try {
+      const res = await asinApi.getPredefinedTags();
+      if (res.success) {
+        setPredefinedTags(res.data.map(t => t.name));
+      }
+    } catch (err) {
+      console.error('Failed to load predefined tags in bulk view:', err);
+      setPredefinedTags(DEFAULT_TAGS); // Fallback
+    }
+  };
 
   // Reset state when modal opens
   useEffect(() => {
@@ -37,6 +51,7 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
       setError(null);
       setStep(1);
       setAction('replace');
+      fetchPredefinedTags();
 
       // Calculate existing tags across all selected ASINs
       const allTags = new Set();
@@ -54,8 +69,8 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
   }, [isOpen, selectedAsins]);
 
   const filteredTags = search.trim()
-    ? DEFAULT_TAGS.filter(t => t.toLowerCase().includes(search.toLowerCase()))
-    : DEFAULT_TAGS;
+    ? predefinedTags.filter(t => t.toLowerCase().includes(search.toLowerCase()))
+    : predefinedTags;
 
   const toggleTag = (tag) => {
     setSelectedTags(prev => 

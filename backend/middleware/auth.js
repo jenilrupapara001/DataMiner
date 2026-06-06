@@ -15,7 +15,11 @@ exports.authenticate = async (req, res, next) => {
     req.user = {
       Id: 'demo-user',
       _id: 'demo-user',
-      role: { Name: 'admin', name: 'admin' },
+      FirstName: 'Demo',
+      LastName: 'User',
+      Email: 'demo@brandcentral.in',
+      Avatar: null,
+      role: { Name: 'admin', name: 'admin', DisplayName: 'Administrator' },
       assignedSellers: [],
       isActive: true,
       hasPermission: async () => true,

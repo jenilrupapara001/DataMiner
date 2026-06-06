@@ -46,15 +46,20 @@ import { format } from 'date-fns';
 
 // Define canonical metrics dictionary for custom dashboard selector from screenshot
 const METRIC_MAP = {
-  spend: { label: 'Ad Spend', color: '#6366f1', type: 'currency', seriesType: 'column' },
-  sales: { label: 'Ad Sales', color: '#10b981', type: 'currency', seriesType: 'column' },
-  totalSales: { label: 'Total Sales', color: '#3b82f6', type: 'currency', seriesType: 'column' },
-  acos: { label: 'ACOS', color: '#f43f5e', type: 'percent', seriesType: 'line' },
-  roas: { label: 'ROAS', color: '#f59e0b', type: 'ratio', seriesType: 'line' },
-  cvr: { label: 'CVR', color: '#8b5cf6', type: 'percent', seriesType: 'line' },
-  cpc: { label: 'CPC', color: '#14b8a6', type: 'currency', seriesType: 'line' },
+  spend: { label: 'Ads Spend', color: '#4f46e5', type: 'currency', seriesType: 'column' },
+  sales: { label: 'Ads Sales', color: '#10b981', type: 'currency', seriesType: 'column' },
+  totalSales: { label: 'Total Sales', color: '#0284c7', type: 'currency', seriesType: 'column' },
+  organicSales: { label: 'Organic Sales', color: '#059669', type: 'currency', seriesType: 'column' },
+  acos: { label: 'ACOS', color: '#dc2626', type: 'percent', seriesType: 'line' },
+  tacos: { label: 'TACOS', color: '#0284c7', type: 'percent', seriesType: 'line' },
+  roas: { label: 'ROAS', color: '#d97706', type: 'ratio', seriesType: 'line' },
+  cvr: { label: 'CVR', color: '#0d9488', type: 'percent', seriesType: 'line' },
+  cpc: { label: 'CPC', color: '#ea580c', type: 'currency', seriesType: 'line' },
   ctr: { label: 'CTR', color: '#ec4899', type: 'percent', seriesType: 'line' },
-  orders: { label: 'Orders', color: '#64748b', type: 'number', seriesType: 'column' },
+  orders: { label: 'Ads Orders', color: '#9333ea', type: 'number', seriesType: 'column' },
+  organicOrders: { label: 'Organic Orders', color: '#db2777', type: 'number', seriesType: 'column' },
+  totalOrders: { label: 'Total Orders', color: '#7c3aed', type: 'number', seriesType: 'column' },
+  adSalesPct: { label: 'Ads Sales (%)', color: '#ea580c', type: 'percent', seriesType: 'line' },
   impressions: { label: 'Impressions', color: '#94a3b8', type: 'number', seriesType: 'column' },
   clicks: { label: 'Clicks', color: '#94a3b8', type: 'number', seriesType: 'column' }
 };
@@ -253,6 +258,17 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0),
     },
     {
+      title: 'TACOS',
+      dataIndex: 'tacos',
+      key: 'tacos',
+      align: 'right',
+      render: (val) => {
+        const v = Number(val || 0);
+        return `${v.toFixed(2)}%`;
+      },
+      sorter: (a, b) => Number(a.tacos || 0) - Number(b.tacos || 0),
+    },
+    {
       title: 'ROAS',
       dataIndex: 'roas',
       key: 'roas',
@@ -270,6 +286,33 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       align: 'right',
       render: (val) => Number(val || 0).toLocaleString(),
       sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0),
+    },
+    {
+      title: 'Organic Orders',
+      dataIndex: 'organicOrders',
+      key: 'organicOrders',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.organicOrders || 0) - Number(b.organicOrders || 0),
+    },
+    {
+      title: 'Total Orders',
+      dataIndex: 'totalOrders',
+      key: 'totalOrders',
+      align: 'right',
+      render: (val) => Number(val || 0).toLocaleString(),
+      sorter: (a, b) => Number(a.totalOrders || 0) - Number(b.totalOrders || 0),
+    },
+    {
+      title: 'Ads Sales (%)',
+      dataIndex: 'adSalesPct',
+      key: 'adSalesPct',
+      align: 'right',
+      render: (val) => {
+        const v = Number(val || 0);
+        return `${v.toFixed(2)}%`;
+      },
+      sorter: (a, b) => Number(a.adSalesPct || 0) - Number(b.adSalesPct || 0),
     },
     {
       title: 'CVR',
@@ -466,7 +509,7 @@ export default function AdsManagerPage() {
   // 0. Aggregated summary for Top View
   const summaryData = useMemo(() => {
     const sum = {
-      impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, pageViews: 0, organicSales: 0
+      impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, pageViews: 0, organicSales: 0, organicOrders: 0, totalOrders: 0
     };
     data.forEach(d => {
       sum.impressions += Number(d.impressions || 0);
@@ -476,6 +519,7 @@ export default function AdsManagerPage() {
       sum.orders += Number(d.orders || 0);
       sum.pageViews += Number(d.pageViews || 0);
       sum.organicSales += Number(d.organicSales || 0);
+      sum.organicOrders += Number(d.organicOrders || 0);
     });
 
     // Extended Derived Metrics
@@ -487,6 +531,7 @@ export default function AdsManagerPage() {
     sum.ctr = sum.impressions > 0 ? (sum.clicks / sum.impressions) * 100 : 0;
     sum.tacos = sum.totalSales > 0 ? (sum.spend / sum.totalSales) * 100 : 0;
     sum.adSalesPct = sum.totalSales > 0 ? (sum.sales / sum.totalSales) * 100 : 0;
+    sum.totalOrders = sum.orders + sum.organicOrders;
 
     return sum;
   }, [data]);
@@ -527,7 +572,7 @@ export default function AdsManagerPage() {
         const key = normalizeDateStr(day.date);
         if (!key) return;
         if (!dateMap[key]) {
-          dateMap[key] = { date: key, spend: 0, sales: 0, clicks: 0, impressions: 0, orders: 0, organicSales: 0 };
+          dateMap[key] = { date: key, spend: 0, sales: 0, clicks: 0, impressions: 0, orders: 0, organicSales: 0, organicOrders: 0 };
         }
         dateMap[key].spend += Number(day.spend || 0);
         dateMap[key].sales += Number(day.sales || 0);
@@ -535,6 +580,7 @@ export default function AdsManagerPage() {
         dateMap[key].impressions += Number(day.impressions || 0);
         dateMap[key].orders += Number(day.orders || 0);
         dateMap[key].organicSales += Number(day.organicSales || 0);
+        dateMap[key].organicOrders += Number(day.organicOrders || 0);
       });
     });
 
@@ -543,12 +589,15 @@ export default function AdsManagerPage() {
       const totalS = day.sales + day.organicSales;
       return {
         ...day,
+        totalSales: totalS,
         acos: day.sales > 0 ? (day.spend / day.sales) * 100 : 0,
+        tacos: totalS > 0 ? (day.spend / totalS) * 100 : 0,
+        adSalesPct: totalS > 0 ? (day.sales / totalS) * 100 : 0,
         roas: day.spend > 0 ? (day.sales / day.spend) : 0,
         cvr: day.clicks > 0 ? (day.orders / day.clicks) * 100 : 0,
         cpc: day.clicks > 0 ? (day.spend / day.clicks) : 0,
         ctr: day.impressions > 0 ? (day.clicks / day.impressions) * 100 : 0,
-        totalSales: totalS
+        totalOrders: day.orders + day.organicOrders
       };
     }).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -563,6 +612,8 @@ export default function AdsManagerPage() {
     spend: false,
     sales: false,
     acos: false,
+    tacos: false,
+    adSalesPct: false,
     roas: false,
     orders: false,
     cvr: false,
@@ -594,13 +645,26 @@ export default function AdsManagerPage() {
       if (res.success) {
         const mapped = (res.data || []).map(item => {
           const totalSales = (item.sales || 0) + (item.organicSales || 0);
-          const weekHistory = (item.weekHistory || []).map(h => ({
-            ...h,
-            totalSales: (h.sales || 0) + (h.organicSales || 0)
-          }));
+          const tacos = totalSales > 0 ? ((item.spend || 0) / totalSales) * 100 : 0;
+          const adSalesPct = totalSales > 0 ? ((item.sales || 0) / totalSales) * 100 : 0;
+          const totalOrders = (item.orders || 0) + (item.organicOrders || 0);
+
+          const weekHistory = (item.weekHistory || []).map(h => {
+            const hTotalSales = (h.sales || 0) + (h.organicSales || 0);
+            return {
+              ...h,
+              totalSales: hTotalSales,
+              tacos: hTotalSales > 0 ? ((h.spend || 0) / hTotalSales) * 100 : 0,
+              adSalesPct: hTotalSales > 0 ? ((h.sales || 0) / hTotalSales) * 100 : 0,
+              totalOrders: (h.orders || 0) + (h.organicOrders || 0)
+            };
+          });
           return {
             ...item,
             totalSales,
+            tacos,
+            adSalesPct,
+            totalOrders,
             weekHistory
           };
         });
@@ -859,7 +923,11 @@ export default function AdsManagerPage() {
     });
 
     const parentsList = Object.values(parents).map(p => {
+      p.totalSales = p.sales + p.organicSales;
+      p.totalOrders = p.orders + p.organicOrders;
       p.acos = p.sales > 0 ? (p.spend / p.sales) * 100 : 0;
+      p.tacos = p.totalSales > 0 ? (p.spend / p.totalSales) * 100 : 0;
+      p.adSalesPct = p.totalSales > 0 ? (p.sales / p.totalSales) * 100 : 0;
       p.roas = p.spend > 0 ? (p.sales / p.spend) : 0;
       p.cvr = p.clicks > 0 ? (p.orders / p.clicks) * 100 : 0;
       p.ctr = p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0;
@@ -879,6 +947,7 @@ export default function AdsManagerPage() {
               clicks: 0,
               impressions: 0,
               organicSales: 0,
+              organicOrders: 0,
               pageViews: 0,
               conversions: 0
             };
@@ -889,6 +958,7 @@ export default function AdsManagerPage() {
           dailyMap[d].clicks += Number(h.clicks || 0);
           dailyMap[d].impressions += Number(h.impressions || 0);
           dailyMap[d].organicSales += Number(h.organicSales || 0);
+          dailyMap[d].organicOrders += Number(h.organicOrders || 0);
           dailyMap[d].pageViews += Number(h.pageViews || 0);
           dailyMap[d].conversions += Number(h.conversions || 0);
         });
@@ -896,9 +966,13 @@ export default function AdsManagerPage() {
 
       const sortedHistory = Object.values(dailyMap).sort((a, b) => new Date(a.date) - new Date(b.date));
       sortedHistory.forEach(h => {
+        h.totalSales = h.sales + h.organicSales;
         h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
+        h.tacos = h.totalSales > 0 ? (h.spend / h.totalSales) * 100 : 0;
+        h.adSalesPct = h.totalSales > 0 ? (h.sales / h.totalSales) * 100 : 0;
         h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
         h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
+        h.totalOrders = h.orders + h.organicOrders;
       });
 
       p.weekHistory = sortedHistory;
@@ -1019,7 +1093,7 @@ export default function AdsManagerPage() {
           return (
             <div className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
               {isParentRow && (
-                <div 
+                <div
                   onClick={(e) => { e.stopPropagation(); toggleParentExpand(record.asin); }}
                   className="d-flex align-items-center justify-content-center bg-zinc-100 hover-bg-zinc-200 rounded text-zinc-600"
                   style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
@@ -1093,12 +1167,12 @@ export default function AdsManagerPage() {
             if (history.length === 0) return <span className="text-zinc-300">-</span>;
             const values = history.map(h => Number(h[key] || 0));
             if (values.every(v => v === 0)) return <span className="text-zinc-300">-</span>;
-            
+
             const first = values[0];
             const last = values[values.length - 1];
             const isGood = key === 'acos' ? last < first : last > first;
             const color = isGood ? '#10b981' : '#ef4444';
-            
+
             return (
               <div style={{ width: '40px', margin: 'auto' }}>
                 <MiniSpark data={values} color={color} />
@@ -1129,10 +1203,10 @@ export default function AdsManagerPage() {
 
       return {
         title: (
-          <div 
-            className="d-flex align-items-center justify-content-center gap-1.5 cursor-pointer py-1 px-2 rounded-2" 
-            style={{ 
-              background: `${themeColor}0d`, 
+          <div
+            className="d-flex align-items-center justify-content-center gap-1.5 cursor-pointer py-1 px-2 rounded-2"
+            style={{
+              background: `${themeColor}0d`,
               border: `1.5px solid ${themeColor}26`,
               color: themeColor,
               transition: 'all 0.2s ease'
@@ -1157,7 +1231,9 @@ export default function AdsManagerPage() {
     cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={12} />, false, false, '#475569'));
     cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={12} />, false, false, '#d97706'));
     cols.push(buildMetricGroup('ACOS', 'acos', <Target size={12} />, false, true, '#dc2626'));
+    cols.push(buildMetricGroup('TACOS', 'tacos', <Target size={12} />, false, true, '#0284c7'));
     cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={12} />, true, false, '#16a34a'));
+    cols.push(buildMetricGroup('AD SALES %', 'adSalesPct', <Layers size={12} />, false, true, '#ea580c'));
     cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={12} />, false, true, '#0d9488'));
     cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={12} />, true, false, '#059669'));
     cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={12} />, false, false, '#db2777'));
@@ -1262,14 +1338,16 @@ export default function AdsManagerPage() {
       <div className="flex-shrink-0 overflow-hidden bg-light border-bottom" style={{ maxHeight: showDashboardCharts ? '48px' : '0px', transition: 'all 0.3s ease', opacity: showDashboardCharts ? 1 : 0 }}>
         <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {[
-            { label: 'Ad Spend', key: 'spend', color: '#4F46E5' },
-            { label: 'Ad Sales', key: 'sales', color: '#16a34a' },
-            { label: 'Total Sales', key: 'totalSales', color: '#0284c7' },
+            { label: 'Ads Spend', key: 'spend', color: '#4f46e5' },
+            { label: 'Ads Revenue', key: 'sales', color: '#16a34a' },
+            { label: 'Ads Sales', key: 'sales', color: '#10b981' },
+            { label: 'Organic Sales', key: 'organicSales', color: '#059669' },
             { label: 'ACOS', key: 'acos', color: '#dc2626' },
-            { label: 'ROAS', key: 'roas', color: '#d97706' },
-            { label: 'Orders', key: 'orders', color: '#9333EA' },
-            { label: 'CPC', key: 'cpc', color: '#ea580c' },
-            { label: 'CVR %', key: 'cvr', color: '#0d9488' }
+            { label: 'TACOS', key: 'tacos', color: '#0284c7' },
+            { label: 'Ads Orders', key: 'orders', color: '#9333ea' },
+            { label: 'Organic Orders', key: 'organicOrders', color: '#db2777' },
+            { label: 'Ads Sales (%)', key: 'adSalesPct', color: '#ea580c' },
+            { label: 'Total Orders', key: 'totalOrders', color: '#7c3aed' }
           ].map((kpi, idx) => {
             const meta = METRIC_MAP[kpi.key] || {};
             const val = summaryData[kpi.key] || 0;
@@ -1407,7 +1485,7 @@ export default function AdsManagerPage() {
         </div>
       </div>
 
-            {/* MAIN TABLE CONTAINER */}
+      {/* MAIN TABLE CONTAINER */}
       <div className="flex-grow-1 overflow-hidden d-flex flex-column bg-white">
         <Table
           columns={getAntColumns()}

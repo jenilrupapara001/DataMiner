@@ -1,4 +1,45 @@
-const axios = require('axios');
+const originalAxios = require('axios');
+
+const rateLimitQueue = [];
+let rateLimitRunning = false;
+const rateLimitDelay = 250; // max 4 req/sec to stay strictly below 5 req/sec
+
+async function axiosRateLimited(configOrUrl, config) {
+    return new Promise((resolve, reject) => {
+        rateLimitQueue.push({ configOrUrl, config, resolve, reject });
+        processRateLimitQueue();
+    });
+}
+
+async function processRateLimitQueue() {
+    if (rateLimitRunning || rateLimitQueue.length === 0) return;
+    rateLimitRunning = true;
+    while (rateLimitQueue.length > 0) {
+        const { configOrUrl, config, resolve, reject } = rateLimitQueue.shift();
+        try {
+            let res;
+            if (typeof configOrUrl === 'string') {
+                res = await originalAxios(configOrUrl, config);
+            } else {
+                res = await originalAxios(configOrUrl);
+            }
+            resolve(res);
+        } catch (err) {
+            reject(err);
+        }
+        await new Promise(r => setTimeout(r, rateLimitDelay));
+    }
+    rateLimitRunning = false;
+}
+
+// Add shortcut methods
+axiosRateLimited.get = (url, config) => axiosRateLimited({ method: 'get', url, ...config });
+axiosRateLimited.post = (url, data, config) => axiosRateLimited({ method: 'post', url, data, ...config });
+axiosRateLimited.put = (url, data, config) => axiosRateLimited({ method: 'put', url, data, ...config });
+axiosRateLimited.delete = (url, config) => axiosRateLimited({ method: 'delete', url, ...config });
+axiosRateLimited.create = (defaults) => axiosRateLimited;
+
+const axios = axiosRateLimited;
 const { sql, getPool, generateId, query } = require('../database/db');
 const config = require('../config/env');
 const imageGenerationService = require('./imageGenerationService');
@@ -846,7 +887,8 @@ class MarketDataSyncService {
                 return true;
             }
 
-            const results = await Promise.all(sellers.map(async (seller) => {
+            const results = [];
+            for (const seller of sellers) {
                 try {
                     // Check status first to avoid unnecessary stop calls
                     const status = await this.getStatus(seller.OctoparseId);
@@ -856,12 +898,14 @@ class MarketDataSyncService {
                         console.log(`🛑 Stopping running task for ${seller.Name}...`);
                         await this.stopSync(seller.OctoparseId);
                     }
-                    return { name: seller.Name, success: true };
+                    results.push({ name: seller.Name, success: true });
                 } catch (err) {
                     console.log(`⚠️ Could not stop task for ${seller.Name}: ${err.message}`);
-                    return { name: seller.Name, success: false };
+                    results.push({ name: seller.Name, success: false });
                 }
-            }));
+                // Polite delay to prevent rate limiting issues
+                await this.wait(500);
+            }
 
             console.log(`✅ [Octoparse] Bulk stop cycle completed.`);
             return true;
@@ -1601,7 +1645,7 @@ class MarketDataSyncService {
 
                 // CRITICAL FIX: We no longer stop early if a batch is empty.
                 // We must process ALL possible data (make chunks) without leaving any behind.
-                
+
                 if (dataList.length < size) {
                     hasMore = false;
                 } else {
@@ -2242,7 +2286,7 @@ class MarketDataSyncService {
                         availabilityStatus = 'Currently unavailable.';
                     }
                 }
-                
+
                 scrapedAsin = this._getFromRaw(rawData, ['ASIN', 'asin', 'Asin', 'asinCode', 'Field26'], '').trim();
                 if (scrapedAsin && scrapedAsin.length > 5 && scrapedAsin.toUpperCase() !== (asin.AsinCode || '').toUpperCase()) {
                     availabilityStatus = 'Currently unavailable.';
@@ -3248,7 +3292,7 @@ class MarketDataSyncService {
             const pinnedContainer = doc.querySelector('.pinned-offer-inner, #aod-pinned-offer');
             if (pinnedContainer) {
                 const offer = {};
-                
+
                 // Search for seller link globally first or inside specific sections but avoid .aod-offer blocks
                 let sellerLink = doc.querySelector('#aod-offer-soldBy a, a[href*="seller="]:not(.aod-offer a)');
                 if (!sellerLink) {
@@ -3303,22 +3347,22 @@ class MarketDataSyncService {
             for (const container of otherContainers) {
                 // Avoid treating pinned additional content or other utility sections as normal offer container
                 if (container.id && (
-                    container.id.includes('soldBy') || 
-                    container.id.includes('shipsFrom') || 
-                    container.id.includes('promotion') || 
-                    container.id.includes('heading') || 
-                    container.id.includes('added') || 
-                    container.id.includes('updated') || 
-                    container.id.includes('not-added') || 
-                    container.id.includes('view-cart') || 
-                    container.id.includes('divider') || 
+                    container.id.includes('soldBy') ||
+                    container.id.includes('shipsFrom') ||
+                    container.id.includes('promotion') ||
+                    container.id.includes('heading') ||
+                    container.id.includes('added') ||
+                    container.id.includes('updated') ||
+                    container.id.includes('not-added') ||
+                    container.id.includes('view-cart') ||
+                    container.id.includes('divider') ||
                     container.id.includes('delivery-more')
                 )) {
                     continue;
                 }
 
                 const offer = {};
-                
+
                 const sellerLink = container.querySelector('a[href*="seller="], [aria-label*="Seller"], .aod-offer-soldBy a');
                 if (sellerLink) {
                     const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
@@ -3381,7 +3425,7 @@ class MarketDataSyncService {
         try {
             const dom = new JSDOM(htmlContent);
             const doc = dom.window.document;
-            
+
             let sellerLink = doc.querySelector('#aod-offer-soldBy a, a[href*="seller="]:not(.aod-offer a), [aria-label*="Seller"], #aod-offer-shipsFrom-soldBy');
             if (sellerLink) {
                 const rawName = sellerLink.textContent.trim().replace(/^Sold by\s*/i, '');
@@ -3389,7 +3433,7 @@ class MarketDataSyncService {
                     return rawName;
                 }
             }
-            
+
             const atcButton = doc.querySelector('input[name="submit.addToCart"], [aria-label*="seller"]');
             if (atcButton) {
                 const ariaLabel = atcButton.getAttribute('aria-label') || '';
@@ -3398,13 +3442,13 @@ class MarketDataSyncService {
                     return match[1].trim();
                 }
             }
-            
+
             const soldByMatch = htmlContent.match(/Sold by\s*<\/span>\s*<[^>]+>\s*<a[^>]*>([^<]+)</i);
             if (soldByMatch && this._isValidSellerName(soldByMatch[1])) return soldByMatch[1].trim();
-            
+
             const ariaMatch = htmlContent.match(/aria-label="[^"]*Seller[^"]*:\s*([^"]+)/i);
             if (ariaMatch && this._isValidSellerName(ariaMatch[1])) return ariaMatch[1].trim();
-            
+
             const textMatch = htmlContent.match(/sold by\s*[:;]?\s*([^<>{}\n]+)/i);
             if (textMatch && this._isValidSellerName(textMatch[1])) return textMatch[1].trim();
         } catch (e) {

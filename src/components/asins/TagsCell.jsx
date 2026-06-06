@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Check, Search, Eye, Tag as TagIcon } from 'lucide-react';
+import { Tooltip } from 'antd';
 import { asinApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import TagsHistoryModal from '../TagsHistoryModal';
@@ -13,7 +14,7 @@ const DEFAULT_TAGS = [
     'MAP Violation', 'Hijacker Alert', 'Inventory Low', 'Out of Stock'
 ];
 
-const TagsCell = ({ asin, onUpdate }) => {
+const TagsCell = ({ asin, onUpdate, onRefresh }) => {
     const { hasPermission } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [historyVisible, setHistoryVisible] = useState(false);
@@ -79,6 +80,7 @@ const TagsCell = ({ asin, onUpdate }) => {
         try {
             await asinApi.updateTags(asin._id || asin.Id, tags);
             onUpdate?.(asin._id || asin.Id, tags);
+            onRefresh?.();
         } catch (err) {
             console.error('Failed to save tags:', err);
         }
@@ -150,92 +152,124 @@ const TagsCell = ({ asin, onUpdate }) => {
         return { bg: '#71717a', text: '#ffffff' };
     };
 
+    const tooltipContent = (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '4px', maxWidth: '250px' }}>
+            {tags.map((tag, idx) => {
+                const color = getTagColor(tag);
+                return (
+                    <span
+                        key={idx}
+                        className="badge d-flex align-items-center gap-1 shadow-sm"
+                        style={{
+                            backgroundColor: color.bg,
+                            color: color.text,
+                            border: 'none',
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '5px',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        {tag}
+                    </span>
+                );
+            })}
+        </div>
+    );
+
     return (
         <div ref={ref} className="position-relative" style={{ minWidth: '60px' }}>
             {/* TAGS DISPLAY - Click to open */}
-            <div
-                className="d-flex align-items-center gap-1 overflow-hidden cursor-pointer"
-                onClick={(e) => { 
-                    e.stopPropagation(); 
-                    if (hasPermission('asinmanager_manage')) {
-                        setShowEditModal(true); 
-                    }
-                }}
-                style={{ 
-                    minHeight: '24px', 
-                    padding: '1px 2px',
-                    borderRadius: '6px',
-                    transition: 'background 0.15s',
-                    whiteSpace: 'nowrap'
-                }}
+            <Tooltip
+                title={tags.length > 0 ? tooltipContent : null}
+                color="#ffffff"
+                overlayInnerStyle={{ padding: '8px' }}
+                mouseEnterDelay={0.3}
             >
-                {tags.length === 0 ? (
-                    <span 
-                        className="d-flex align-items-center gap-1 text-zinc-400"
-                        style={{ fontSize: '10px', cursor: 'pointer' }}
-                    >
-                        <Plus size={10} />
-                        <span>Tags</span>
-                    </span>
-                ) : (
-                    <>
-                        {tags.slice(0, 2).map((tag, idx) => {
-                            const color = getTagColor(tag);
-                            return (
-                                <span
-                                    key={idx}
-                                    className="badge d-flex align-items-center gap-1 shadow-sm"
-                                    style={{
-                                        backgroundColor: color.bg,
-                                        color: color.text,
-                                        border: 'none',
-                                        fontSize: '9px',
-                                        fontWeight: 700,
-                                        padding: '3px 8px',
-                                        borderRadius: '5px',
-                                        whiteSpace: 'nowrap',
-                                        cursor: 'pointer'
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (hasPermission('asinmanager_manage')) {
-                                            removeTag(tag, e);
-                                        }
-                                    }}
-                                >
-                                    {tag.length > 14 ? tag.substring(0, 13) + '…' : tag}
-                                    <X size={10} style={{ cursor: 'pointer', opacity: 0.8 }} />
-                                </span>
-                            );
-                        })}
-                        {tags.length > 2 && (
-                            <span 
-                                className="badge bg-zinc-100 text-zinc-500 border border-zinc-200"
-                                style={{ fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}
-                                title={tags.slice(2).join(', ')}
-                            >
-                                +{tags.length - 2}
-                            </span>
-                        )}
-                        {saving && (
-                            <span className="text-zinc-400" style={{ fontSize: '8px' }}>saving...</span>
-                        )}
-                    </>
-                )}
-
-                {/* History Button - Only show if tags exist or on hover potentially, but let's keep it visible for easy audit */}
-                <button
-                    className="btn btn-ghost p-0 border-0 ms-auto text-zinc-300 hover-text-zinc-500 transition-colors"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setHistoryVisible(true);
+                <div
+                    className="d-flex align-items-center gap-1 overflow-hidden cursor-pointer"
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (hasPermission('asinmanager_manage')) {
+                            setShowEditModal(true); 
+                        }
                     }}
-                    title="View Tags History"
-                    style={{ opacity: tags.length > 0 ? 1 : 0, transition: 'opacity 0.2s' }}
+                    style={{ 
+                        minHeight: '24px', 
+                        padding: '1px 2px',
+                        borderRadius: '6px',
+                        transition: 'background 0.15s',
+                        whiteSpace: 'nowrap'
+                    }}
                 >
-                    <Eye size={12} />
-                </button>
-            </div>
+                    {tags.length === 0 ? (
+                        <span 
+                            className="d-flex align-items-center gap-1 text-zinc-400"
+                            style={{ fontSize: '10px', cursor: 'pointer' }}
+                        >
+                            <Plus size={10} />
+                            <span>Tags</span>
+                        </span>
+                    ) : (
+                        <>
+                            {tags.slice(0, 2).map((tag, idx) => {
+                                const color = getTagColor(tag);
+                                return (
+                                    <span
+                                        key={idx}
+                                        className="badge d-flex align-items-center gap-1 shadow-sm"
+                                        style={{
+                                            backgroundColor: color.bg,
+                                            color: color.text,
+                                            border: 'none',
+                                            fontSize: '9px',
+                                            fontWeight: 700,
+                                            padding: '3px 8px',
+                                            borderRadius: '5px',
+                                            whiteSpace: 'nowrap',
+                                            cursor: 'pointer'
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (hasPermission('asinmanager_manage')) {
+                                                removeTag(tag, e);
+                                            }
+                                        }}
+                                    >
+                                        {tag.length > 14 ? tag.substring(0, 13) + '…' : tag}
+                                        <X size={10} style={{ cursor: 'pointer', opacity: 0.8 }} />
+                                    </span>
+                                );
+                            })}
+                            {tags.length > 2 && (
+                                <span 
+                                    className="badge bg-zinc-100 text-zinc-500 border border-zinc-200"
+                                    style={{ fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}
+                                >
+                                    +{tags.length - 2}
+                                </span>
+                            )}
+                            {saving && (
+                                <span className="text-zinc-400" style={{ fontSize: '8px' }}>saving...</span>
+                            )}
+                        </>
+                    )}
+
+                    {/* History Button - Only show if tags exist or on hover potentially, but let's keep it visible for easy audit */}
+                    <button
+                        className="btn btn-ghost p-0 border-0 ms-auto text-zinc-300 hover-text-zinc-500 transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setHistoryVisible(true);
+                        }}
+                        title="View Tags History"
+                        style={{ opacity: tags.length > 0 ? 1 : 0, transition: 'opacity 0.2s' }}
+                    >
+                        <Eye size={12} />
+                    </button>
+                </div>
+            </Tooltip>
 
             {showEditModal && (
                 <EditTagsModal
@@ -245,6 +279,7 @@ const TagsCell = ({ asin, onUpdate }) => {
                     onUpdate={(asinId, newTags) => {
                         setTags(newTags);
                         onUpdate?.(asinId, newTags);
+                        onRefresh?.();
                     }}
                 />
             )}

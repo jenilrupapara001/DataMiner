@@ -81,6 +81,12 @@ router.get('/tags', protect, requirePermission('asinmanager_view'), tagControlle
 router.get('/tags/template', protect, requirePermission('asinmanager_view'), tagController.downloadTagsTemplate);
 router.post('/bulk-tags', protect, requirePermission('asinmanager_manage'), tagController.bulkUpdateTags);
 router.post('/tags/bulk', protect, requirePermission('asinmanager_import'), upload.single('file'), tagController.bulkUpdateTagsCSV);
+
+router.get('/predefined-tags', protect, requirePermission('asinmanager_view'), tagController.getPredefinedTags);
+router.post('/predefined-tags', protect, requirePermission('asinmanager_manage'), tagController.addPredefinedTag);
+router.put('/predefined-tags/:id', protect, requirePermission('asinmanager_manage'), tagController.updatePredefinedTag);
+router.delete('/predefined-tags/:id', protect, requirePermission('asinmanager_manage'), tagController.deletePredefinedTag);
+
 router.get('/:id', protect, requirePermission('asinmanager_view'), asinController.getAsin);
 router.put('/:id', protect, requirePermission('asinmanager_manage'), asinController.updateAsin);
 router.delete('/:id', protect, requirePermission('asinmanager_manage'), asinController.deleteAsin);

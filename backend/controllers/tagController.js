@@ -21,6 +21,17 @@ exports.getTags = async (req, res) => {
     try {
         const pool = await getPool();
         
+        // Fetch predefined tags from database
+        let currentDefaultTags = [...DEFAULT_TAGS];
+        try {
+            const predefinedResult = await pool.request().query('SELECT Name FROM PredefinedTags ORDER BY Category, Name');
+            if (predefinedResult.recordset.length > 0) {
+                currentDefaultTags = predefinedResult.recordset.map(r => r.Name);
+            }
+        } catch (dbErr) {
+            console.error('Failed to fetch predefined tags from database:', dbErr.message);
+        }
+
         const result = await pool.request().query(`
             SELECT Tags FROM Asins WHERE Tags IS NOT NULL AND Tags != '[]' AND Tags != ''
         `);
@@ -38,9 +49,9 @@ exports.getTags = async (req, res) => {
         res.json({
             success: true,
             data: {
-                default: DEFAULT_TAGS,
+                default: currentDefaultTags,
                 used: [...usedTags],
-                all: [...new Set([...DEFAULT_TAGS, ...usedTags])].sort()
+                all: [...new Set([...currentDefaultTags, ...usedTags])].sort()
             }
         });
     } catch (error) {
@@ -57,10 +68,13 @@ exports.updateAsinTags = async (req, res) => {
     try {
         const { asinId } = req.params;
         const { tags } = req.body;
-        const userId = (req.user?._id || req.user?.id || '').toString();
-        const userName = req.user?.firstName 
-            ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
-            : (req.user?.email || 'Unknown User');
+        const userId = (req.user?.Id || req.user?._id || req.user?.id || '').toString();
+        const firstName = req.user?.FirstName || req.user?.firstName || '';
+        const lastName = req.user?.LastName || req.user?.lastName || '';
+        const email = req.user?.Email || req.user?.email || '';
+        const userName = firstName 
+            ? `${firstName} ${lastName}`.trim() 
+            : (email || 'Unknown User');
         
         if (!asinId) {
             return res.status(400).json({ success: false, error: 'ASIN ID required' });
@@ -124,10 +138,13 @@ exports.bulkUpdateTagsCSV = async (req, res) => {
         }
         
         const sellerId = req.body.sellerId || '';
-        const userId = (req.user?._id || req.user?.id || '').toString();
-        const userName = req.user?.firstName 
-            ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
-            : (req.user?.email || 'Unknown User');
+        const userId = (req.user?.Id || req.user?._id || req.user?.id || '').toString();
+        const firstName = req.user?.FirstName || req.user?.firstName || '';
+        const lastName = req.user?.LastName || req.user?.lastName || '';
+        const email = req.user?.Email || req.user?.email || '';
+        const userName = firstName 
+            ? `${firstName} ${lastName}`.trim() 
+            : (email || 'Unknown User');
         
         const filePath = req.file.path;
         const workbook = XLSX.readFile(filePath);
@@ -277,9 +294,19 @@ exports.downloadTagsTemplate = async (req, res) => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Tags Template');
         
-        // Add a second sheet with available tags
+        // Add a second sheet with available tags from database
+        let templateDefaultTags = [...DEFAULT_TAGS];
+        try {
+            const predefinedResult = await pool.request().query('SELECT Name FROM PredefinedTags ORDER BY Name');
+            if (predefinedResult.recordset.length > 0) {
+                templateDefaultTags = predefinedResult.recordset.map(r => r.Name);
+            }
+        } catch (dbErr) {
+            console.error('Failed to fetch predefined tags for template:', dbErr.message);
+        }
+
         const tagsSheet = XLSX.utils.json_to_sheet(
-            DEFAULT_TAGS.map(tag => ({ 'Available Tags': tag }))
+            templateDefaultTags.map(tag => ({ 'Available Tags': tag }))
         );
         XLSX.utils.book_append_sheet(wb, tagsSheet, 'Available Tags');
         
@@ -308,10 +335,10 @@ exports.downloadTagsTemplate = async (req, res) => {
 exports.bulkUpdateTags = async (req, res) => {
   try {
     const { asinIds, tags, action = 'replace' } = req.body;
-    const userId = (req.user?._id || req.user?.id || '').toString();
-    const userName = req.user?.firstName 
-      ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() 
-      : (req.user?.email || 'Unknown User');
+    const userId = (req.user?.Id || req.user?._id || req.user?.id || '').toString();
+    const userName = req.user?.FirstName 
+      ? `${req.user.FirstName} ${req.user.LastName || ''}`.trim() 
+      : (req.user?.Email || req.user?.email || req.user?.firstName || 'Unknown User');
 
     if (!asinIds || !Array.isArray(asinIds) || asinIds.length === 0) {
       return res.status(400).json({ success: false, error: 'No ASINs selected' });
@@ -424,4 +451,166 @@ exports.bulkUpdateTags = async (req, res) => {
     console.error('bulkUpdateTags Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
+};
+
+/**
+ * Get all predefined tags (complete list with categories)
+ * GET /api/asins/predefined-tags
+ */
+exports.getPredefinedTags = async (req, res) => {
+    try {
+        const pool = await getPool();
+        const result = await pool.request().query('SELECT Id, Name, Category, CreatedAt FROM PredefinedTags ORDER BY Category, Name');
+        res.json({
+            success: true,
+            data: result.recordset.map(row => ({
+                id: row.Id,
+                _id: row.Id,
+                name: row.Name,
+                category: row.Category,
+                createdAt: row.CreatedAt
+            }))
+        });
+    } catch (error) {
+        console.error('getPredefinedTags error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Add a new predefined tag
+ * POST /api/asins/predefined-tags
+ */
+exports.addPredefinedTag = async (req, res) => {
+    try {
+        const { name, category = 'General' } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Tag name is required' });
+        }
+        
+        const tagName = name.trim();
+        const pool = await getPool();
+
+        // Check if exists
+        const existsRes = await pool.request()
+            .input('name', sql.NVarChar, tagName)
+            .query('SELECT 1 FROM PredefinedTags WHERE Name = @name');
+
+        if (existsRes.recordset.length > 0) {
+            return res.status(400).json({ success: false, error: 'Predefined tag with this name already exists' });
+        }
+
+        const id = generateId();
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .input('name', sql.NVarChar, tagName)
+            .input('category', sql.NVarChar, category)
+            .query('INSERT INTO PredefinedTags (Id, Name, Category, CreatedAt, UpdatedAt) VALUES (@id, @name, @category, GETDATE(), GETDATE())');
+
+        res.status(201).json({
+            success: true,
+            message: 'Predefined tag added successfully',
+            data: { id, _id: id, name: tagName, category }
+        });
+    } catch (error) {
+        console.error('addPredefinedTag error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Update an existing predefined tag
+ * PUT /api/asins/predefined-tags/:id
+ */
+exports.updatePredefinedTag = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, category } = req.body;
+
+        if (!id) {
+            return res.status(400).json({ success: false, error: 'Tag ID is required' });
+        }
+
+        const pool = await getPool();
+
+        // Verify exists
+        const existsRes = await pool.request()
+            .input('id', sql.VarChar, id)
+            .query('SELECT Name, Category FROM PredefinedTags WHERE Id = @id');
+
+        if (existsRes.recordset.length === 0) {
+            return res.status(404).json({ success: false, error: 'Predefined tag not found' });
+        }
+
+        const currentTag = existsRes.recordset[0];
+        const newName = name !== undefined ? name.trim() : currentTag.Name;
+        const newCategory = category !== undefined ? category.trim() : currentTag.Category;
+
+        if (!newName) {
+            return res.status(400).json({ success: false, error: 'Tag name cannot be empty' });
+        }
+
+        // If name changes, check uniqueness
+        if (newName !== currentTag.Name) {
+            const uniqueRes = await pool.request()
+                .input('name', sql.NVarChar, newName)
+                .input('id', sql.VarChar, id)
+                .query('SELECT 1 FROM PredefinedTags WHERE Name = @name AND Id != @id');
+
+            if (uniqueRes.recordset.length > 0) {
+                return res.status(400).json({ success: false, error: 'Another tag with this name already exists' });
+            }
+        }
+
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .input('name', sql.NVarChar, newName)
+            .input('category', sql.NVarChar, newCategory)
+            .query('UPDATE PredefinedTags SET Name = @name, Category = @category, UpdatedAt = GETDATE() WHERE Id = @id');
+
+        res.json({
+            success: true,
+            message: 'Predefined tag updated successfully',
+            data: { id, _id: id, name: newName, category: newCategory }
+        });
+    } catch (error) {
+        console.error('updatePredefinedTag error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Delete a predefined tag
+ * DELETE /api/asins/predefined-tags/:id
+ */
+exports.deletePredefinedTag = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ success: false, error: 'Tag ID is required' });
+        }
+
+        const pool = await getPool();
+
+        // Verify exists
+        const existsRes = await pool.request()
+            .input('id', sql.VarChar, id)
+            .query('SELECT Name FROM PredefinedTags WHERE Id = @id');
+
+        if (existsRes.recordset.length === 0) {
+            return res.status(404).json({ success: false, error: 'Predefined tag not found' });
+        }
+
+        await pool.request()
+            .input('id', sql.VarChar, id)
+            .query('DELETE FROM PredefinedTags WHERE Id = @id');
+
+        res.json({
+            success: true,
+            message: 'Predefined tag deleted successfully'
+        });
+    } catch (error) {
+        console.error('deletePredefinedTag error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 };

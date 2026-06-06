@@ -732,6 +732,78 @@ export const asinApi = {
     }
   },
 
+  getPredefinedTags: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/predefined-tags`, {
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) throw new Error('Failed to fetch predefined tags');
+      return res.json();
+    } catch (error) {
+      console.error('Failed to get predefined tags:', error);
+      throw error;
+    }
+  },
+
+  addPredefinedTag: async (tagData) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/predefined-tags`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify(tagData)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to add predefined tag');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to add predefined tag:', error);
+      throw error;
+    }
+  },
+
+  updatePredefinedTag: async (id, tagData) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/predefined-tags/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify(tagData)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update predefined tag');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to update predefined tag:', error);
+      throw error;
+    }
+  },
+
+  deletePredefinedTag: async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/asins/predefined-tags/${id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeader() }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete predefined tag');
+      }
+      return res.json();
+    } catch (error) {
+      console.error('Failed to delete predefined tag:', error);
+      throw error;
+    }
+  },
+
   getAll: async (params = {}) => {
     // Filter out null, undefined, or empty strings to keep URL clean
     const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
