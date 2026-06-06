@@ -1614,10 +1614,12 @@ class MarketDataSyncService {
         let hasMore = true;
         const seenUrls = new Set();
         let useServerOffset = false; // For /data/all which returns next offset from server
+        let maxLoops = 150; // Hard limit to prevent infinite loops causing OOM
 
         try {
             // Silent multi-path retrieval
-            while (hasMore) {
+            while (hasMore && maxLoops > 0) {
+                maxLoops--;
                 const batchResult = await this._fetchDataBatch(taskId, size, offset, executionId);
 
                 // Handle both array return and object return (for /data/all which returns nextOffset)
@@ -1633,14 +1635,28 @@ class MarketDataSyncService {
 
                 // Deduplicate: Only add items we haven't seen before (by URL)
                 let newCount = 0;
+                let dedupePossible = false;
                 for (const item of dataList) {
                     const url = item.Original_URL || item.url || '';
+                    if (url) dedupePossible = true;
                     // Do not aggressively deduplicate empty URLs to avoid dropping items
                     if (!url || !seenUrls.has(url)) {
                         if (url) seenUrls.add(url);
                         allResults.push(item);
                         newCount++;
                     }
+                }
+
+                // ANTI-INFINITE-LOOP: If the API ignores offset and returns the same items over and over
+                if (dataList.length > 0 && newCount === 0 && dedupePossible) {
+                    console.warn(`⚠️ Anti-Loop Triggered: Fetched ${dataList.length} items but 0 were new. Breaking to prevent OOM.`);
+                    break;
+                }
+
+                // OOM HARD LIMIT: Prevent node.js heap out of memory
+                if (allResults.length > 80000) {
+                    console.warn(`⚠️ Warning: Hard limit of 80,000 items reached for task ${taskId}. Breaking to prevent OOM.`);
+                    break;
                 }
 
                 // CRITICAL FIX: We no longer stop early if a batch is empty.
