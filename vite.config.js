@@ -19,30 +19,58 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1000,
+      target: 'es2020',        // Better tree-shaking + modern output
+      sourcemap: false,        // Skip sourcemaps in production for smaller bundles
       rollupOptions: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor_core';
+        output: {
+          manualChunks: (id) => {
+            if (id.includes('node_modules')) {
+              // ── Core React runtime ───────────────────────────────────────────
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+                return 'vendor_core';
+              }
+              // ── Ant Design (large, keeps it out of vendor_misc) ─────────────
+              if (id.includes('/antd/') || id.includes('@ant-design') || id.includes('rc-')) {
+                return 'vendor_antd';
+              }
+              // ── MUI + emotion + Bootstrap ────────────────────────────────────
+              if (id.includes('@mui') || id.includes('@emotion') || id.includes('bootstrap')) {
+                return 'vendor_ui';
+              }
+              // ── React Query ──────────────────────────────────────────────────
+              if (id.includes('@tanstack')) {
+                return 'vendor_query';
+              }
+              // ── Chart libraries ──────────────────────────────────────────────
+              if (
+                id.includes('apexcharts') || id.includes('chart.js') ||
+                id.includes('recharts')   || id.includes('@mui/x-charts')
+              ) {
+                return 'vendor_charts';
+              }
+              // ── CometChat (very large, keep isolated) ────────────────────────
+              if (id.includes('cometchat')) {
+                return 'vendor_chat';
+              }
+              // ── Real-time + date + icons + HTTP ─────────────────────────────
+              if (
+                id.includes('lucide-react')   || id.includes('tabler-icons') ||
+                id.includes('react-icons')    || id.includes('date-fns')     ||
+                id.includes('axios')          || id.includes('socket.io-client')
+              ) {
+                return 'vendor_common';
+              }
+              // ── Excel / spreadsheet ─────────────────────────────────────────
+              if (id.includes('xlsx')) {
+                return 'vendor_xlsx';
+              }
+              // ── rsuite + date pickers ────────────────────────────────────────
+              if (id.includes('rsuite') || id.includes('react-datepicker') || id.includes('react-day-picker')) {
+                return 'vendor_forms';
+              }
+              return 'vendor_misc';
             }
-            if (id.includes('@mui') || id.includes('@emotion') || id.includes('bootstrap')) {
-              return 'vendor_ui';
-            }
-            if (id.includes('apexcharts') || id.includes('chart.js') || id.includes('recharts') || id.includes('@mui/x-charts')) {
-              return 'vendor_charts';
-            }
-            if (id.includes('cometchat')) {
-              return 'vendor_chat';
-            }
-            if (id.includes('lucide-react') || id.includes('tabler-icons') || id.includes('react-icons') ||
-              id.includes('date-fns') || id.includes('axios') || id.includes('socket.io-client')) {
-              return 'vendor_common';
-            }
-            if (id.includes('xlsx')) {
-              return 'vendor_xlsx';
-            }
-            return 'vendor_misc';
-          }
+          },
         },
       },
     },
