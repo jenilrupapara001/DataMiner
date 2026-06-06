@@ -77,7 +77,7 @@ async function importUsers() {
                     .input('roleId', sql.VarChar, roleId)
                     .query(`
                         UPDATE Users 
-                        SET Password = @password, FirstName = @firstName, LastName = @lastName, RoleId = @roleId, UpdatedAt = GETDATE()
+                        SET Password = @password, FirstName = @firstName, LastName = @lastName, RoleId = @roleId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                         WHERE Id = @id
                     `);
                 console.log(`Updated existing user: ${email}`);
@@ -95,7 +95,7 @@ async function importUsers() {
                     .input('roleId', sql.VarChar, roleId)
                     .query(`
                         INSERT INTO Users (Id, Email, Password, FirstName, LastName, RoleId, IsActive, CreatedAt, UpdatedAt) 
-                        VALUES (@id, @email, @password, @firstName, @lastName, @roleId, 1, GETDATE(), GETDATE())
+                        VALUES (@id, @email, @password, @firstName, @lastName, @roleId, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                     `);
                 
                 console.log(`Inserted user: ${email}`);

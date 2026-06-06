@@ -12,7 +12,8 @@ const config = {
     options: {
         encrypt: false,
         trustServerCertificate: true,
-        enableArithAbort: true
+        enableArithAbort: true,
+        useUTC: false
     },
     requestTimeout: 120000,
     pool: {

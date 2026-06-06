@@ -11,7 +11,7 @@ async function syncOldAvailability() {
         const updateResult = await pool.request().query(`
             UPDATE Asins
             SET AvailabilityStatus = 'Available',
-                UpdatedAt = GETDATE()
+                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
             WHERE CurrentPrice > 0 
               AND (AvailabilityStatus = 'Currently unavailable.' OR AvailabilityStatus IS NULL)
         `);
@@ -23,7 +23,7 @@ async function syncOldAvailability() {
         const zeroPriceResult = await pool.request().query(`
             UPDATE Asins
             SET AvailabilityStatus = 'Currently unavailable.',
-                UpdatedAt = GETDATE()
+                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
             WHERE (CurrentPrice = 0 OR CurrentPrice IS NULL)
               AND (AvailabilityStatus = 'Available' OR AvailabilityStatus IS NULL)
         `);

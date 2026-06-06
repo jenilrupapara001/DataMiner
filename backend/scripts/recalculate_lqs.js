@@ -89,7 +89,7 @@ async function run() {
                                     BulletScore = @bulletScore,
                                     ImageScore = @imageScore,
                                     DescriptionScore = @descriptionScore,
-                                    UpdatedAt = GETDATE()
+                                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                                 WHERE Id = @id
                             `);
                             

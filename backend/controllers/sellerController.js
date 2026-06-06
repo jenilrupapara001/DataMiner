@@ -290,7 +290,7 @@ exports.createSeller = async (req, res) => {
 
     await request.query(`
         INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, CreatedAt, UpdatedAt)
-        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, GETDATE(), GETDATE())
+        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
       `);
 
     // Assign to users
@@ -389,7 +389,7 @@ exports.updateSeller = async (req, res) => {
         UPDATE Sellers 
         SET Name = @name, Marketplace = @marketplace, SellerId = @sellerId, 
             IsActive = @isActive, IsPriority = @isPriority, OctoparseId = @octoparseId, [Plan] = @plan, 
-            ScrapeLimit = @scrapeLimit, UpdatedAt = GETDATE()
+            ScrapeLimit = @scrapeLimit, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
         WHERE Id = @id
       `);
 
@@ -398,12 +398,12 @@ exports.updateSeller = async (req, res) => {
       console.log(`[SELLER PAUSED] Archiving ASINs for seller ${id}`);
       await pool.request()
         .input('sellerId', sql.VarChar, id)
-        .query("UPDATE Asins SET Status = 'Archived', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
+        .query("UPDATE Asins SET Status = 'Archived', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
     } else if (finalIsActive === 1 && current.IsActive === false) {
       console.log(`[SELLER RESUMED] Un-archiving ASINs for seller ${id}`);
       await pool.request()
         .input('sellerId', sql.VarChar, id)
-        .query("UPDATE Asins SET Status = 'Active', UpdatedAt = GETDATE() WHERE SellerId = @sellerId AND Status = 'Archived'");
+        .query("UPDATE Asins SET Status = 'Active', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE SellerId = @sellerId AND Status = 'Archived'");
     }
 
     if (isGlobalUser && assignedUserIds !== undefined) {

@@ -10,7 +10,7 @@ if (!fs.existsSync(EXPORTS_DIR)) {
 }
 
 const updateDownloadStatus = async (pool, id, status, progress, filePath = null) => {
-    let q = `UPDATE Downloads SET Status = @status, Progress = @progress, UpdatedAt = GETDATE()`;
+    let q = `UPDATE Downloads SET Status = @status, Progress = @progress, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())`;
     if (filePath) { q += `, FilePath = @filePath`; }
     q += ` WHERE Id = @id`;
 
@@ -36,7 +36,7 @@ exports.startAdsExport = async (req, res) => {
         // 1. Create Download Record
         const insertQuery = `
             INSERT INTO Downloads (Id, UserId, Status, Progress, Type, Format, Filters, FileName, CreatedAt, UpdatedAt)
-            VALUES (@id, @userId, 'pending', 0, 'ads', @format, @filters, @fileName, GETDATE(), GETDATE())
+            VALUES (@id, @userId, 'pending', 0, 'ads', @format, @filters, @fileName, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
         `;
         const fileName = `ads_export_${Date.now()}.${format}`;
 
@@ -75,7 +75,7 @@ async function processAdsExportJob(downloadId, params) {
         whereClause += " AND p.Date >= @startDate";
         request.input('startDate', sql.Date, new Date(startDate));
     } else {
-        whereClause += " AND p.Date >= DATEADD(day, -30, GETDATE())";
+        whereClause += " AND p.Date >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))";
     }
     if (endDate) {
         whereClause += " AND p.Date <= @endDate";

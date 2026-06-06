@@ -48,7 +48,7 @@ class AIGoalController {
         .input('progress', sql.Decimal(5, 2), 0)
         .query(`
           INSERT INTO Goals (Id, Title, OwnerId, StartDate, EndDate, Status, Progress, CreatedAt, UpdatedAt)
-          VALUES (@id, @title, @ownerId, @startDate, @endDate, @status, @progress, GETDATE(), GETDATE())
+          VALUES (@id, @title, @ownerId, @startDate, @endDate, @status, @progress, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
         `);
 
       const goal = {
@@ -97,7 +97,7 @@ class AIGoalController {
               VALUES (
                 @id, @title, @description, @status, @priority, @type, 
                 @createdBy, @goalId, @dueDate, @isAIGenerated, @aiReasoning, 
-                @resolvedAsins, GETDATE(), GETDATE()
+                @resolvedAsins, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE())
               )
             `);
             

@@ -241,7 +241,7 @@ io.on('connection', async (socket) => {
       const pool = await getPool();
       await pool.request()
         .input('id', sql.VarChar, userId)
-        .query("UPDATE Users SET IsOnline = 1, LastSeen = GETDATE() WHERE Id = @id");
+        .query("UPDATE Users SET IsOnline = 1, LastSeen = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
 
       // Get user's assigned sellers to join rooms
       const sellersResult = await pool.request()
@@ -358,13 +358,13 @@ io.on('connection', async (socket) => {
         .input('ReplyToId', sql.VarChar, replyTo || null)
         .query(`
           INSERT INTO Messages (Id, ConversationId, SenderId, Type, Content, FileUrl, ReplyToId, CreatedAt)
-          VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, GETDATE())
+          VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, DATEADD(minute, 330, GETUTCDATE()))
         `);
 
       await pool.request()
         .input('convId', sql.VarChar, conversationId)
         .input('msgId', sql.VarChar, messageId)
-        .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = GETDATE() WHERE Id = @convId`);
+        .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @convId`);
 
       const msgResult = await pool.request()
         .input('msgId', sql.VarChar, messageId)
@@ -397,7 +397,7 @@ io.on('connection', async (socket) => {
           )
           BEGIN
             INSERT INTO MessageReactions (MessageId, UserId, Emoji, CreatedAt)
-            VALUES (@msgId, @uid, @emoji, GETDATE())
+            VALUES (@msgId, @uid, @emoji, DATEADD(minute, 330, GETUTCDATE()))
           END
         `);
 
@@ -426,7 +426,7 @@ io.on('connection', async (socket) => {
           )
           BEGIN
             INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
-            VALUES (@msgId, @userId, 1, GETDATE())
+            VALUES (@msgId, @userId, 1, DATEADD(minute, 330, GETUTCDATE()))
           END
         `);
     } catch (err) {
@@ -449,7 +449,7 @@ io.on('connection', async (socket) => {
         .input('Status', sql.NVarChar, 'INITIATED')
         .query(`
           INSERT INTO CallLogs (Id, ConversationId, CallerId, ReceiverId, Type, Status, StartedAt)
-          VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, GETDATE())
+          VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, DATEADD(minute, 330, GETUTCDATE()))
         `);
 
       io.to(receiverId).emit('incoming_call', { callId, conversationId, callerId, type, status: 'INITIATED' });
@@ -464,7 +464,7 @@ io.on('connection', async (socket) => {
       const pool = await getPool();
       await pool.request()
         .input('callId', sql.VarChar, callId)
-        .query(`UPDATE CallLogs SET Status = 'ONGOING', StartedAt = GETDATE() WHERE Id = @callId AND Status = 'INITIATED'`);
+        .query(`UPDATE CallLogs SET Status = 'ONGOING', StartedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @callId AND Status = 'INITIATED'`);
 
       const callResult = await pool.request()
         .input('callId', sql.VarChar, callId)
@@ -521,7 +521,7 @@ io.on('connection', async (socket) => {
       await pool.request()
         .input('callId', sql.VarChar, callId)
         .input('duration', sql.Int, duration)
-        .query(`UPDATE CallLogs SET Status = 'ENDED', EndedAt = GETDATE(), Duration = @duration WHERE Id = @callId`);
+        .query(`UPDATE CallLogs SET Status = 'ENDED', EndedAt = DATEADD(minute, 330, GETUTCDATE()), Duration = @duration WHERE Id = @callId`);
 
       io.to(call.CallerId).emit('call_ended', { callId, duration });
       if (call.ReceiverId) {
@@ -540,7 +540,7 @@ io.on('connection', async (socket) => {
         const pool = await getPool();
         await pool.request()
           .input('id', sql.VarChar, socket.userId)
-          .query("UPDATE Users SET IsOnline = 0, LastSeen = GETDATE() WHERE Id = @id");
+          .query("UPDATE Users SET IsOnline = 0, LastSeen = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
       } catch (e) { }
       io.emit('user_status_change', { userId: socket.userId, status: 'offline' });
     }

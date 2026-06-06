@@ -332,12 +332,12 @@ exports.getAsins = async (req, res) => {
     if (req.query.maxReleaseDate) whereClause += ' AND ReleaseDate <= @maxReleaseDate';
 
     if (req.query.ageFilter) {
-      if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, GETDATE())';
-      else if (req.query.ageFilter === '60') whereClause += ' AND ReleaseDate < DATEADD(day, -30, GETDATE()) AND ReleaseDate >= DATEADD(day, -60, GETDATE())';
-      else if (req.query.ageFilter === '90') whereClause += ' AND ReleaseDate < DATEADD(day, -60, GETDATE()) AND ReleaseDate >= DATEADD(day, -90, GETDATE())';
-      else if (req.query.ageFilter === '180') whereClause += ' AND ReleaseDate < DATEADD(day, -90, GETDATE()) AND ReleaseDate >= DATEADD(day, -180, GETDATE())';
-      else if (req.query.ageFilter === '365') whereClause += ' AND ReleaseDate < DATEADD(day, -180, GETDATE()) AND ReleaseDate >= DATEADD(day, -365, GETDATE())';
-      else if (req.query.ageFilter === '365+') whereClause += ' AND ReleaseDate < DATEADD(day, -365, GETDATE())';
+      if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))';
+      else if (req.query.ageFilter === '60') whereClause += ' AND ReleaseDate < DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -60, DATEADD(minute, 330, GETUTCDATE()))';
+      else if (req.query.ageFilter === '90') whereClause += ' AND ReleaseDate < DATEADD(day, -60, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -90, DATEADD(minute, 330, GETUTCDATE()))';
+      else if (req.query.ageFilter === '180') whereClause += ' AND ReleaseDate < DATEADD(day, -90, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -180, DATEADD(minute, 330, GETUTCDATE()))';
+      else if (req.query.ageFilter === '365') whereClause += ' AND ReleaseDate < DATEADD(day, -180, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -365, DATEADD(minute, 330, GETUTCDATE()))';
+      else if (req.query.ageFilter === '365+') whereClause += ' AND ReleaseDate < DATEADD(day, -365, DATEADD(minute, 330, GETUTCDATE()))';
     }
 
     // [4] Search
@@ -408,7 +408,7 @@ exports.getAsins = async (req, res) => {
              StockLevel as stockLevel, LQS as lqs
       FROM AsinHistory 
       WHERE AsinId IN (${asinIds}) 
-      AND Date >= DATEADD(day, -${historyDays}, GETDATE())
+      AND Date >= DATEADD(day, -${historyDays}, DATEADD(minute, 330, GETUTCDATE()))
       ORDER BY Date ASC
     `);
     
@@ -453,7 +453,7 @@ exports.getAsins = async (req, res) => {
       SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
       FROM SubBsrHistory
       WHERE AsinId IN (${asinIds})
-      AND Date >= DATEADD(day, -14, GETDATE())
+      AND Date >= DATEADD(day, -14, DATEADD(minute, 330, GETUTCDATE()))
       ORDER BY Date ASC, CreatedAt DESC
     `);
 
@@ -1203,7 +1203,7 @@ exports.createAsin = async (req, res) => {
       .input('imageUrl', sql.NVarChar, imageUrl || null)
       .query(`
         INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, Category, Brand, Title, ImageUrl, ScrapeStatus, CreatedAt, UpdatedAt)
-        VALUES (@id, @asinCode, @sellerId, @sku, @status, @category, @brand, @title, @imageUrl, 'PENDING', GETDATE(), GETDATE())
+        VALUES (@id, @asinCode, @sellerId, @sku, @status, @category, @brand, @title, @imageUrl, 'PENDING', DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
       `);
 
     await updateSellerAsinCount(seller, req.app.get('io'));
@@ -1269,7 +1269,7 @@ exports.updateAsin = async (req, res) => {
           Rating = COALESCE(@rating, Rating),
           ReviewCount = COALESCE(@reviews, ReviewCount),
           PriceDispute = COALESCE(@priceDispute, PriceDispute),
-          UpdatedAt = GETDATE()
+          UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
         WHERE Id = @id;
 
         -- 2. Handle Tags based on PriceDispute status
@@ -1664,7 +1664,7 @@ exports.importFromCsv = async (req, res) => {
             .input('status', sql.VarChar, status)
             .input('mrp', sql.Decimal(18, 2), mrp)
             .input('marketplace', sql.VarChar, marketplace)
-            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = GETDATE() WHERE Id = @id');
+            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
           
           // History tracking for manual import
           const today = new Date().toISOString().split('T')[0];
@@ -1692,7 +1692,7 @@ exports.importFromCsv = async (req, res) => {
             .input('marketplace', sql.VarChar, marketplace)
             .query(`
               INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, GETDATE(), GETDATE())
+              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
             `);
             
           // History tracking for manual import
@@ -1849,7 +1849,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('brand', sql.NVarChar, sellerName)
                             .query(`
                                 UPDATE Asins 
-                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = GETDATE()
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                                 WHERE Id = @id
                             `);
                             
@@ -1881,7 +1881,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('brand', sql.NVarChar, sellerName)
                             .query(`
                                 INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
-                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, GETDATE(), GETDATE())
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                             `);
                             
                         const today = new Date().toISOString().split('T')[0];
@@ -2061,7 +2061,7 @@ exports.createAsins = async (req, res) => {
           .input('sku', sql.NVarChar, item.sku || null)
           .query(`
             INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-            VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', GETDATE(), GETDATE())
+            VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
           `);
       }
       await transaction.commit();
@@ -2106,7 +2106,7 @@ exports.bulkUpdateAsins = async (req, res) => {
       }
       
       if (setParts.length > 0) {
-        setParts.push('UpdatedAt = GETDATE()');
+        setParts.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
         await request.query(`UPDATE Asins SET ${setParts.join(', ')} WHERE Id IN (${idList})`);
 
         // Handle tags for Price Dispute bulk update
@@ -2235,7 +2235,7 @@ exports.recalculateLqs = async (req, res) => {
                             BulletScore = @bulletScore,
                             ImageScore = @imageScore,
                             DescriptionScore = @descriptionScore,
-                            UpdatedAt = GETDATE()
+                            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                         WHERE Id = @id
                     `);
                 
@@ -2336,8 +2336,8 @@ exports.uploadRawAsins = async (req, res) => {
             .query(`
                 UPDATE Sellers
                 SET ScrapeUsed = ScrapeUsed + @count,
-                    LastScrapedAt = GETDATE(),
-                    UpdatedAt = GETDATE()
+                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
+                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                 WHERE Id = @sellerId
             `);
 
@@ -2403,8 +2403,8 @@ exports.uploadRawText = async (req, res) => {
             .query(`
                 UPDATE Sellers
                 SET ScrapeUsed = ScrapeUsed + @count,
-                    LastScrapedAt = GETDATE(),
-                    UpdatedAt = GETDATE()
+                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
+                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                 WHERE Id = @sellerId
             `);
 
@@ -2499,7 +2499,7 @@ exports.exportData = async (req, res) => {
     if (dateRange !== 'all' && !isCustomDate) {
       const daysMap = { today: 1, yesterday: 2, '7days': 7, '30days': 30, '90days': 90 };
       const days = daysMap[dateRange] || 30;
-      whereClause += ` AND a.LastScrapedAt >= DATEADD(DAY, -${days}, GETDATE())`;
+      whereClause += ` AND a.LastScrapedAt >= DATEADD(DAY, -${days}, DATEADD(minute, 330, GETUTCDATE()))`;
     } else if (isCustomDate) {
       const { start, end } = dateRange;
       if (start) {
@@ -2755,7 +2755,7 @@ exports.updateAsinTags = async (req, res) => {
     await pool.request()
       .input('id', sql.VarChar, id)
       .input('tags', sql.NVarChar, tagsJson)
-      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
     res.json({ success: true, data: { id, tags } });
   } catch (error) {
@@ -2883,7 +2883,7 @@ exports.bulkUploadTags = async (req, res) => {
         const result = await pool.request()
           .input('asinCode', sql.NVarChar, asinCode)
           .input('tags', sql.NVarChar, tagsJson)
-          .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE AsinCode = @asinCode');
+          .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE AsinCode = @asinCode');
         if (result.rowsAffected[0] > 0) updated++;
       } catch (err) {
         errors.push({ asin: asinCode, error: err.message });
@@ -2916,7 +2916,7 @@ exports.updateTags = async (req, res) => {
     const result = await pool.request()
       .input('id', sql.VarChar, id)
       .input('tags', sql.NVarChar, tagsJson)
-      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ success: false, error: 'ASIN not found' });
@@ -2989,7 +2989,7 @@ exports.getSubBsrTrend = async (req, res) => {
           SubBsrRank
         FROM SubBsrHistory
         WHERE AsinId = @asinId
-          AND Date >= DATEADD(DAY, -@days, GETDATE())
+          AND Date >= DATEADD(DAY, -@days, DATEADD(minute, 330, GETUTCDATE()))
         ORDER BY Date ASC, SubBsrRank ASC
       `);
 

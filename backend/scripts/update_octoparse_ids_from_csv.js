@@ -146,7 +146,7 @@ async function updateOctoparseIds() {
             await pool.request()
                 .input('newTaskId', sql.VarChar, newTaskId)
                 .input('sellerId', sql.VarChar, seller.Id)
-                .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = GETDATE() WHERE Id = @sellerId');
+                .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
 
             // Upsert OctoTasks table to keep it in sync
             const taskCheck = await pool.request()
@@ -162,7 +162,7 @@ async function updateOctoparseIds() {
                     .input('sellerId', sql.VarChar, seller.Id)
                     .query(`
                         INSERT INTO OctoTasks (Id, TaskId, TaskName, GroupName, IsAssigned, SellerId, LastAssignedAt, CreatedAt, UpdatedAt)
-                        VALUES (@id, @taskId, @taskName, 'RetailOps-Production', 1, @sellerId, GETDATE(), GETDATE(), GETDATE())
+                        VALUES (@id, @taskId, @taskName, 'RetailOps-Production', 1, @sellerId, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                     `);
             } else {
                 // Existing entry - update assignment
@@ -171,7 +171,7 @@ async function updateOctoparseIds() {
                     .input('sellerId', sql.VarChar, seller.Id)
                     .query(`
                         UPDATE OctoTasks
-                        SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = GETDATE(), UpdatedAt = GETDATE()
+                        SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = DATEADD(minute, 330, GETUTCDATE()), UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                         WHERE TaskId = @taskId
                     `);
             }

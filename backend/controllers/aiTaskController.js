@@ -49,7 +49,7 @@ class AITaskController {
         .input('DueDate', sql.DateTime, new Date(Date.now() + (3 * 24 * 60 * 60 * 1000)))
         .query(`
           INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, CreatedBy, KeyResultId, IsAIGenerated, AiReasoning, DueDate, CreatedAt, UpdatedAt)
-          VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, @DueDate, GETDATE(), GETDATE())
+          VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, @DueDate, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
         `);
 
       return responseHandler.success(res, { Id: id, ...enriched }, 'AI-Enriched task created successfully', 201);
@@ -105,7 +105,7 @@ class AITaskController {
           .input('AiReasoning', sql.NVarChar, t.aiReason)
           .query(`
             INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, CreatedBy, KeyResultId, IsAIGenerated, AiReasoning, CreatedAt, UpdatedAt)
-            VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, GETDATE(), GETDATE())
+            VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @CreatedBy, @KeyResultId, @IsAIGenerated, @AiReasoning, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
           `);
         savedTasks.push({ Id: id, ...t });
       }

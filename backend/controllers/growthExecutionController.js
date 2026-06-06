@@ -26,7 +26,7 @@ exports.getPerformanceAnalytics = async (req, res) => {
             .query(`
                 SELECT COUNT(*) as totalAsins, COUNT(DISTINCT SellerId) as totalSellers
                 FROM Asins
-                WHERE CreatedAt >= DATEADD(DAY, -@tf, GETDATE())
+                WHERE CreatedAt >= DATEADD(DAY, -@tf, DATEADD(minute, 330, GETUTCDATE()))
             `);
         res.json({ success: true, data: result.recordset[0] });
     } catch (error) {

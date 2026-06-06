@@ -51,7 +51,7 @@ const acknowledgeAllAlerts = async (req, res) => {
         .input('acknowledgedBy', sql.NVarChar, userName)
         .query(`
             UPDATE Alerts 
-            SET Acknowledged = 1, AcknowledgedBy = @acknowledgedBy, AcknowledgedAt = GETDATE() 
+            SET Acknowledged = 1, AcknowledgedBy = @acknowledgedBy, AcknowledgedAt = DATEADD(minute, 330, GETUTCDATE()) 
             ${whereClause}
         `);
 
@@ -101,7 +101,7 @@ const toggleAlertRule = async (req, res) => {
     await pool.request()
         .input('id', sql.VarChar, req.params.id)
         .input('isActive', sql.Bit, newStatus)
-        .query('UPDATE AlertRules SET IsActive = @isActive, UpdatedAt = GETDATE() WHERE Id = @id');
+        .query('UPDATE AlertRules SET IsActive = @isActive, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
     res.json({ id: req.params.id, isActive: !!newStatus });
   } catch (error) {
@@ -214,7 +214,7 @@ const evaluateAndExecuteRule = async (rule) => {
             .input('message', sql.NVarChar, message)
             .query(`
                 INSERT INTO Alerts (Id, SellerId, Type, Severity, Title, Message, Acknowledged, CreatedAt)
-                VALUES (@id, @sellerId, @type, @severity, @title, @message, 0, GETDATE())
+                VALUES (@id, @sellerId, @type, @severity, @title, @message, 0, DATEADD(minute, 330, GETUTCDATE()))
             `);
 
         const alert = { id: alertId, message };
@@ -234,7 +234,7 @@ const evaluateAndExecuteRule = async (rule) => {
               .input('sourceId', sql.VarChar, rule.Id)
               .query(`
                   INSERT INTO Actions (Id, Title, Description, Status, Priority, Type, SellerId, Source, SourceId, CreatedAt)
-                  VALUES (@id, @title, @description, @status, @priority, @type, @sellerId, @source, @sourceId, GETDATE())
+                  VALUES (@id, @title, @description, @status, @priority, @type, @sellerId, @source, @sourceId, DATEADD(minute, 330, GETUTCDATE()))
               `);
           tasks.push({ id: taskId });
         }
@@ -414,7 +414,7 @@ const executeRule = async (req, res) => {
       await pool.request()
           .input('id', sql.VarChar, rule.Id)
           .input('execution', sql.NVarChar, JSON.stringify(execution))
-          .query('UPDATE AlertRules SET Execution = @execution, UpdatedAt = GETDATE() WHERE Id = @id');
+          .query('UPDATE AlertRules SET Execution = @execution, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
   
       res.json({
         ruleId: rule.Id,
@@ -464,7 +464,7 @@ const executeAllRules = async (req, res) => {
         await pool.request()
             .input('id', sql.VarChar, rule.Id)
             .input('execution', sql.NVarChar, JSON.stringify(execution))
-            .query('UPDATE AlertRules SET Execution = @execution, UpdatedAt = GETDATE() WHERE Id = @id');
+            .query('UPDATE AlertRules SET Execution = @execution, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
   
         results.push({
           ruleId: rule.Id,

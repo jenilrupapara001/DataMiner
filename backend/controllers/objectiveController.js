@@ -109,7 +109,7 @@ exports.createObjective = async (req, res) => {
             .input('CreatedBy', sql.VarChar, createdBy)
             .query(`
                 INSERT INTO Objectives (Id, Title, Description, StartDate, EndDate, SellerId, OwnerId, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Title, @Description, @StartDate, @EndDate, @SellerId, @CreatedBy, GETDATE(), GETDATE())
+                VALUES (@Id, @Title, @Description, @StartDate, @EndDate, @SellerId, @CreatedBy, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
             `);
 
         // Insert key results if any
@@ -126,7 +126,7 @@ exports.createObjective = async (req, res) => {
                     .input('Unit', sql.NVarChar, kr.unit || '')
                     .query(`
                         INSERT INTO KeyResults (Id, ObjectiveId, Title, Description, OwnerId, TargetValue, Unit, CurrentValue, CreatedAt, UpdatedAt)
-                        VALUES (@Id, @ObjectiveId, @Title, @Description, @OwnerId, @TargetValue, @Unit, 0, GETDATE(), GETDATE())
+                        VALUES (@Id, @ObjectiveId, @Title, @Description, @OwnerId, @TargetValue, @Unit, 0, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                     `);
             }
         }
@@ -163,7 +163,7 @@ exports.updateObjective = async (req, res) => {
 
         if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        updates.push('UpdatedAt = GETDATE()');
+        updates.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
         request.input('id', sql.VarChar, id);
         const result = await request.query(`
             UPDATE Objectives SET ${updates.join(', ')} WHERE Id = @id;
@@ -221,7 +221,7 @@ exports.createKeyResult = async (req, res) => {
             .input('Unit', sql.NVarChar, unit || '')
             .query(`
                 INSERT INTO KeyResults (Id, ObjectiveId, Title, Description, OwnerId, TargetValue, Unit, CurrentValue, CreatedAt, UpdatedAt)
-                VALUES (@Id, @ObjectiveId, @Title, @Description, @OwnerId, @TargetValue, @Unit, 0, GETDATE(), GETDATE())
+                VALUES (@Id, @ObjectiveId, @Title, @Description, @OwnerId, @TargetValue, @Unit, 0, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
             `);
 
         // Recalculate objective progress
@@ -251,7 +251,7 @@ exports.updateKeyResult = async (req, res) => {
 
         if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        updates.push('UpdatedAt = GETDATE()');
+        updates.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
         request.input('id', sql.VarChar, id);
         const result = await request.query(`
             UPDATE KeyResults SET ${updates.join(', ')} WHERE Id = @id;
@@ -319,7 +319,7 @@ async function recalcObjectiveProgress(objectiveId) {
     await pool.request()
         .input('id', sql.VarChar, objectiveId)
         .input('progress', sql.Decimal(5,2), overall)
-        .query("UPDATE Objectives SET Progress = @progress, UpdatedAt = GETDATE() WHERE Id = @id");
+        .query("UPDATE Objectives SET Progress = @progress, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
 }
 
 // Additional stubs

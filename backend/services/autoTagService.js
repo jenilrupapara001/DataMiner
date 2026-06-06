@@ -170,7 +170,7 @@ class AutoTagService {
                     await pool.request()
                         .input('id', sql.VarChar, asin.Id)
                         .input('tags', sql.NVarChar, JSON.stringify(mergedTags))
-                        .query('UPDATE Asins SET Tags = @tags, UpdatedAt = GETDATE() WHERE Id = @id');
+                        .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
                     updated++;
                 } else {
                     skipped++;

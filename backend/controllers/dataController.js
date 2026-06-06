@@ -31,7 +31,7 @@ exports.getChartData = async (req, res) => {
         const result = await pool.request().query(`
             SELECT CAST(CreatedAt AS DATE) as date, COUNT(*) as count
             FROM Asins
-            WHERE CreatedAt >= DATEADD(DAY, -30, GETDATE())
+            WHERE CreatedAt >= DATEADD(DAY, -30, DATEADD(minute, 330, GETUTCDATE()))
             GROUP BY CAST(CreatedAt AS DATE)
             ORDER BY date ASC
         `);
@@ -607,7 +607,7 @@ exports.getAdsManagerData = async (req, res) => {
             whereClause += " AND p.Date >= @startDate";
             request.input('startDate', sql.Date, new Date(startDate));
         } else {
-            whereClause += " AND p.Date >= DATEADD(day, -30, GETDATE())"; // default to 30d
+            whereClause += " AND p.Date >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))"; // default to 30d
         }
         if (endDate) {
             whereClause += " AND p.Date <= @endDate";

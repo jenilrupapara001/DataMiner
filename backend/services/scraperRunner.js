@@ -116,8 +116,8 @@ class ScraperRunner {
                                     ReviewCount = @reviewCount,
                                     LQS = @lqs,
                                     ScrapeStatus = @scrapeStatus,
-                                    LastScrapedAt = GETDATE(),
-                                    UpdatedAt = GETDATE()
+                                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
+                                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                                 WHERE Id = @id
                             `);
                         

@@ -45,7 +45,7 @@ async function importSellersOctoparseIds() {
                 const updateSellerQuery = `
                     UPDATE Sellers 
                     SET OctoparseId = @param0, 
-                        UpdatedAt = GETDATE()
+                        UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                     WHERE Id = @param1
                 `;
                 
@@ -68,7 +68,7 @@ async function importSellersOctoparseIds() {
                         .input('sellerId', sql.VarChar, sellerId)
                         .query(`
                             INSERT INTO OctoTasks (Id, TaskId, TaskName, GroupName, IsAssigned, SellerId, LastAssignedAt, CreatedAt, UpdatedAt)
-                            VALUES (@id, @taskId, @taskName, 'Imported', 1, @sellerId, GETDATE(), GETDATE(), GETDATE())
+                            VALUES (@id, @taskId, @taskName, 'Imported', 1, @sellerId, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                         `);
                 } else {
                     // Update existing task in pool
@@ -79,8 +79,8 @@ async function importSellersOctoparseIds() {
                             UPDATE OctoTasks 
                             SET IsAssigned = 1, 
                                 SellerId = @sellerId, 
-                                LastAssignedAt = GETDATE(),
-                                UpdatedAt = GETDATE()
+                                LastAssignedAt = DATEADD(minute, 330, GETUTCDATE()),
+                                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
                             WHERE TaskId = @taskId
                         `);
                 }

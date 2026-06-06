@@ -152,7 +152,7 @@ exports.createNotification = async (recipientId, type, referenceModel, reference
             .input('Message', sql.NVarChar, message)
             .query(`
                 INSERT INTO Notifications (Id, RecipientId, Type, ReferenceModel, ReferenceId, Message, CreatedAt)
-                VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, GETDATE())
+                VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, DATEADD(minute, 330, GETUTCDATE()))
             `);
 
         // Emit via socket if available

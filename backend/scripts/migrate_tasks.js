@@ -26,7 +26,7 @@ async function migrate() {
                     AssignedTo VARCHAR(24) NULL,
                     CreatedBy VARCHAR(24) NULL,
                     
-                    CreatedAt DATETIME2 DEFAULT GETDATE(),
+                    CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
                     StartTime DATETIME2 NULL,
                     CompletedAt DATETIME2 NULL,
                     DueDate DATETIME2 NULL,
@@ -42,7 +42,7 @@ async function migrate() {
                     EffortEstimate NVARCHAR(20) NULL,
                     Tags NVARCHAR(MAX) NULL,
                     
-                    UpdatedAt DATETIME2 DEFAULT GETDATE(),
+                    UpdatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
                     
                     CONSTRAINT FK_Tasks_Asin FOREIGN KEY (AsinId) REFERENCES Asins(Id),
                     CONSTRAINT FK_Tasks_Seller FOREIGN KEY (SellerId) REFERENCES Sellers(Id)

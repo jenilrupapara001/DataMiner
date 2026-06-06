@@ -193,10 +193,10 @@ router.post('/asins/bulk', authenticate, requirePermission('calculator_manage'),
                 .input('status', sql.NVarChar, item.Status || item.status || 'pending')
                 .query(`
                     IF EXISTS (SELECT 1 FROM CalculatorAsins WHERE Id = @id)
-                        UPDATE CalculatorAsins SET AsinCode = @asin, Title = @title, Category = @category, Price = @price, Weight = @weight, StapleLevel = @staple, Status = @status, UpdatedAt = GETDATE() WHERE Id = @id
+                        UPDATE CalculatorAsins SET AsinCode = @asin, Title = @title, Category = @category, Price = @price, Weight = @weight, StapleLevel = @staple, Status = @status, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id
                     ELSE
                         INSERT INTO CalculatorAsins (Id, AsinCode, Title, Category, Price, Weight, StapleLevel, Status, CreatedAt, UpdatedAt)
-                        VALUES (@id, @asin, @title, @category, @price, @weight, @staple, @status, GETDATE(), GETDATE())
+                        VALUES (@id, @asin, @title, @category, @price, @weight, @staple, @status, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                 `);
         }
         

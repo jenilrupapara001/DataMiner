@@ -184,7 +184,7 @@ async function applyAction(entity, action, type, sellerId, userId, matchedRule =
           .input('Read', sql.Bit, 0)
           .query(`
             INSERT INTO Notifications (Id, UserId, Type, Title, Message, [Read], CreatedAt)
-            VALUES (@Id, @UserId, @Type, @Title, @Message, @Read, GETDATE())
+            VALUES (@Id, @UserId, @Type, @Title, @Message, @Read, DATEADD(minute, 330, GETUTCDATE()))
           `);
         results.push({ action: 'notification_created', status: 'success' });
       } catch (err) {
@@ -213,7 +213,7 @@ async function applyAction(entity, action, type, sellerId, userId, matchedRule =
           .input('CreatedBy', sql.VarChar, userId)
           .query(`
             INSERT INTO Actions (Id, Title, Description, Priority, Status, Type, Asins, SellerId, CreatedBy, CreatedAt, UpdatedAt)
-            VALUES (@Id, @Title, @Description, @Priority, @Status, @Type, @Asins, @SellerId, @CreatedBy, GETDATE(), GETDATE())
+            VALUES (@Id, @Title, @Description, @Priority, @Status, @Type, @Asins, @SellerId, @CreatedBy, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
           `);
         results.push({ action: 'task_created', status: 'success', taskId: id });
       } catch (err) {
@@ -360,7 +360,7 @@ async function evaluateRuleset(rulesetId, options = {}) {
       .input('CreatedBy', sql.VarChar, ruleset.CreatedBy)
       .query(`
         INSERT INTO RulesetExecutionLogs (Id, RulesetId, ExecutedAt, TriggeredBy, Summary, Entries, SellerId, CreatedBy)
-        VALUES (@Id, @RulesetId, GETDATE(), @TriggeredBy, @Summary, @Entries, @SellerId, @CreatedBy)
+        VALUES (@Id, @RulesetId, DATEADD(minute, 330, GETUTCDATE()), @TriggeredBy, @Summary, @Entries, @SellerId, @CreatedBy)
       `);
 
     await pool.request()
@@ -368,10 +368,10 @@ async function evaluateRuleset(rulesetId, options = {}) {
       .input('summary', sql.NVarChar, JSON.stringify(summary))
       .query(`
         UPDATE Rulesets 
-        SET LastRunAt = GETDATE(), 
+        SET LastRunAt = DATEADD(minute, 330, GETUTCDATE()), 
             TotalRunCount = ISNULL(TotalRunCount, 0) + 1,
             LastRunSummary = @summary,
-            UpdatedAt = GETDATE()
+            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
         WHERE Id = @id
       `);
   }

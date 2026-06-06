@@ -75,7 +75,7 @@ exports.register_disabled = async (req, res) => {
       .input('roleId', sql.VarChar, roleId)
       .query(`
         INSERT INTO Users (Id, Email, Password, FirstName, LastName, RoleId, IsActive, CreatedAt, UpdatedAt)
-        VALUES (@id, @email, @password, @firstName, @lastName, @roleId, 1, GETDATE(), GETDATE())
+        VALUES (@id, @email, @password, @firstName, @lastName, @roleId, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
       `);
 
     const { accessToken, refreshToken } = generateTokens(userId);
@@ -175,7 +175,7 @@ exports.login = async (req, res) => {
 
     await pool.request()
       .input('id', sql.VarChar, user.Id)
-      .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL, LastSeen = GETDATE() WHERE Id = @id');
+      .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL, LastSeen = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
     const { accessToken, refreshToken } = generateTokens(user.Id);
     await pool.request()
@@ -276,7 +276,7 @@ exports.updateProfile = async (req, res) => {
       .input('pref', sql.NVarChar, JSON.stringify(preferences))
       .query(`
         UPDATE Users SET 
-          FirstName = @fn, LastName = @ln, Phone = @ph, Preferences = @pref, UpdatedAt = GETDATE()
+          FirstName = @fn, LastName = @ln, Phone = @ph, Preferences = @pref, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
         WHERE Id = @id
       `);
 
@@ -302,7 +302,7 @@ exports.changePassword = async (req, res) => {
     await pool.request()
       .input('id', sql.VarChar, req.userId)
       .input('pw', sql.NVarChar, hashed)
-      .query('UPDATE Users SET Password = @pw, UpdatedAt = GETDATE() WHERE Id = @id');
+      .query('UPDATE Users SET Password = @pw, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
     res.json({ success: true });
   } catch (error) {

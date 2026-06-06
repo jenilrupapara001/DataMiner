@@ -93,7 +93,7 @@ async function normalizeHistoricalTrends() {
                         .query(`
                             IF NOT EXISTS (SELECT 1 FROM SubBsrHistory WHERE AsinId = @asinId AND Date = @date)
                                 INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                VALUES (@asinId, @date, @category, @rank, GETDATE())
+                                VALUES (@asinId, @date, @category, @rank, DATEADD(minute, 330, GETUTCDATE()))
                         `);
                 }
             }

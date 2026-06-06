@@ -68,7 +68,7 @@ exports.generateTasks = async (req, res) => {
                             ImpactScore, EffortEstimate, IsAIGenerated, AIReasoning, CreatedAt, UpdatedAt)
                         VALUES (@id, @title, @description, @category, @priority, @status, @type,
                             @asinId, @asinCode, @sellerId, @sellerName, @createdBy, @assignedTo,
-                            @impactScore, @effortEstimate, @isAIGenerated, @aiReasoning, GETDATE(), GETDATE())
+                            @impactScore, @effortEstimate, @isAIGenerated, @aiReasoning, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                     `);
 
                 // Insert into Actions table (for the premium TasksPage interface)
@@ -95,7 +95,7 @@ exports.generateTasks = async (req, res) => {
                     .input('actionTimeTracking', sql.NVarChar, timeTrackingJson)
                     .query(`
                         INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, AsinId, SellerId, CreatedBy, AssignedTo, IsAIGenerated, AiReasoning, Asins, Stage, TimeTracking, CreatedAt, UpdatedAt)
-                        VALUES (@actionId, @actionTitle, @actionDesc, @actionType, @actionPriority, @actionStatus, @actionAsinId, @actionSellerId, @actionCreatedBy, @actionAssignedTo, @actionIsAIGenerated, @actionAiReasoning, @actionAsins, @actionStage, @actionTimeTracking, GETDATE(), GETDATE())
+                        VALUES (@actionId, @actionTitle, @actionDesc, @actionType, @actionPriority, @actionStatus, @actionAsinId, @actionSellerId, @actionCreatedBy, @actionAssignedTo, @actionIsAIGenerated, @actionAiReasoning, @actionAsins, @actionStage, @actionTimeTracking, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
                     `);
 
                 savedCount++;
@@ -272,16 +272,16 @@ exports.updateTaskStatus = async (req, res) => {
         const userId = (req.user?._id || req.user?.id || '').toString();
         const pool = await getPool();
 
-        let setClause = 'Status = @status, UpdatedAt = GETDATE()';
+        let setClause = 'Status = @status, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())';
         const request = pool.request()
             .input('id', sql.VarChar, id)
             .input('status', sql.NVarChar, status);
 
         if (status === 'In Progress') {
-            setClause += ', StartTime = GETDATE()';
+            setClause += ', StartTime = DATEADD(minute, 330, GETUTCDATE())';
         }
         if (status === 'Completed') {
-            setClause += ', CompletedAt = GETDATE(), CompletedBy = @userId';
+            setClause += ', CompletedAt = DATEADD(minute, 330, GETUTCDATE()), CompletedBy = @userId';
             request.input('userId', sql.VarChar, userId);
             if (completionRemarks) {
                 setClause += ', CompletionRemarks = @remarks';
@@ -310,7 +310,7 @@ exports.assignTask = async (req, res) => {
         await pool.request()
             .input('id', sql.VarChar, id)
             .input('userId', sql.VarChar, userId)
-            .query('UPDATE Tasks SET AssignedTo = @userId, UpdatedAt = GETDATE() WHERE Id = @id');
+            .query('UPDATE Tasks SET AssignedTo = @userId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
 
         res.json({ success: true, message: 'Task assigned' });
     } catch (error) {
