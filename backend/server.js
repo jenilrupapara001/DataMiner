@@ -36,8 +36,6 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ── Request guard: 30s timeout + 10MB non-upload payload limit ────────────────
-app.use(requestGuard);
 
 // SQL Server connection verification
 async function verifySqlConnection() {
@@ -144,30 +142,22 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/scheduled-runs', scheduledRunRoutes);
 app.use('/api/targets', targetRoutes);
 
-// Health check endpoint — includes memory telemetry
+// Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {
   try {
     const pool = await getPool();
     await pool.request().query('SELECT 1 as test');
-    const memReport = memoryMonitor.report();
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       database: 'sql-server-connected',
-      uptime: process.uptime(),
-      pid: process.pid,
-      memory: {
-        heapUsedMB: memReport.current.heapUsedMB,
-        heapTotalMB: memReport.current.heapTotalMB,
-        rssMB: memReport.current.rssMB,
-        trend: memReport.trend,
-      },
+      uptime: process.uptime()
     });
   } catch (err) {
     res.status(500).json({
       status: 'error',
       database: 'disconnected',
-      error: err.message,
+      error: err.message
     });
   }
 });
@@ -590,26 +580,3 @@ function conversationIdFromMessage(messageId) {
   return '';
 }
 
-// ── Graceful shutdown (SIGTERM from PM2 / Docker / systemd) ──────────────────
-process.on('SIGTERM', async () => {
-  console.log('📴 [SIGTERM] Graceful shutdown initiated…');
-  memoryMonitor.stop();
-
-  server.close(async () => {
-    console.log('📴 [SIGTERM] HTTP server closed');
-    try {
-      const pool = await getPool();
-      await pool.close();
-      console.log('📴 [SIGTERM] MSSQL pool closed');
-    } catch (e) {
-      console.warn('📴 [SIGTERM] MSSQL pool close error:', e.message);
-    }
-    process.exit(0);
-  });
-
-  // Hard exit after 30 s if graceful shutdown hangs
-  setTimeout(() => {
-    console.error('📴 [SIGTERM] Forced exit after 30 s');
-    process.exit(1);
-  }, 30_000).unref();
-});
