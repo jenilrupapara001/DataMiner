@@ -70,12 +70,12 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
         if (saving) return;
         const currentTags = JSON.stringify(tags);
         const originalTags = JSON.stringify(
-            Array.isArray(asin.tags) ? asin.tags : 
-            (typeof asin.Tags === 'string' ? JSON.parse(asin.Tags || '[]') : (asin.Tags || []))
+            Array.isArray(asin.tags) ? asin.tags :
+                (typeof asin.Tags === 'string' ? JSON.parse(asin.Tags || '[]') : (asin.Tags || []))
         );
-        
+
         if (currentTags === originalTags) return;
-        
+
         setSaving(true);
         try {
             await asinApi.updateTags(asin._id || asin.Id, tags);
@@ -88,9 +88,9 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
     };
 
     const toggleTag = (tag) => {
-        setTags(prev => 
-            prev.includes(tag) 
-                ? prev.filter(t => t !== tag) 
+        setTags(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
                 : [...prev, tag]
         );
     };
@@ -131,7 +131,7 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
     const getTagColor = (tag) => {
         const t = tag.toLowerCase();
         // Green
-        if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
+        if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential'))
             return { bg: '#10b981', text: '#ffffff' };
         // Red
         if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
@@ -184,19 +184,19 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
             <Tooltip
                 title={tags.length > 0 ? tooltipContent : null}
                 color="#ffffff"
-                overlayInnerStyle={{ padding: '8px' }}
+                styles={{ padding: '8px' }}
                 mouseEnterDelay={0.3}
             >
                 <div
                     className="d-flex align-items-center gap-1 overflow-hidden cursor-pointer"
-                    onClick={(e) => { 
-                        e.stopPropagation(); 
+                    onClick={(e) => {
+                        e.stopPropagation();
                         if (hasPermission('asinmanager_manage')) {
-                            setShowEditModal(true); 
+                            setShowEditModal(true);
                         }
                     }}
-                    style={{ 
-                        minHeight: '24px', 
+                    style={{
+                        minHeight: '24px',
                         padding: '1px 2px',
                         borderRadius: '6px',
                         transition: 'background 0.15s',
@@ -204,7 +204,7 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                     }}
                 >
                     {tags.length === 0 ? (
-                        <span 
+                        <span
                             className="d-flex align-items-center gap-1 text-zinc-400"
                             style={{ fontSize: '10px', cursor: 'pointer' }}
                         >
@@ -243,7 +243,7 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                                 );
                             })}
                             {tags.length > 2 && (
-                                <span 
+                                <span
                                     className="badge bg-zinc-100 text-zinc-500 border border-zinc-200"
                                     style={{ fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}
                                 >

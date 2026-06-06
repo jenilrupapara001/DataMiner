@@ -60,24 +60,17 @@ const RegisterPage = () => {
             ]}
             footerText="RetailOps. Start Scaling Today."
         >
-            <div style={{ marginBottom: 40 }}>
-                <div style={{ 
-                    width: 48, 
-                    height: 4, 
-                    background: '#CA8A04', 
-                    borderRadius: 2, 
-                    marginBottom: 24 
-                }} />
-                <Title level={2} style={{ 
-                    marginBottom: 12, 
-                    fontWeight: 800, 
-                    fontSize: '2.4rem', 
-                    letterSpacing: '-0.04em',
-                    color: '#1C1917' 
+            <div style={{ marginBottom: 32, textAlign: 'center' }}>
+                <Title level={3} style={{ 
+                    marginBottom: 8, 
+                    fontWeight: 700, 
+                    fontSize: '1.75rem', 
+                    letterSpacing: '-0.03em',
+                    color: '#09090B' 
                 }}>
-                    Register Account
+                    Create Account
                 </Title>
-                <Paragraph style={{ color: '#78716C', fontSize: 16, lineHeight: 1.5 }}>
+                <Paragraph style={{ color: '#52525B', fontSize: 14, lineHeight: 1.5, marginBottom: 0 }}>
                     Enter your professional details to request access to the platform.
                 </Paragraph>
             </div>
@@ -95,9 +88,9 @@ const RegisterPage = () => {
                     style={{ marginBottom: 20 }}
                 >
                     <Input 
-                        prefix={<Contact size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<Contact size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="e.g. John Doe"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
@@ -111,9 +104,9 @@ const RegisterPage = () => {
                     style={{ marginBottom: 20 }}
                 >
                     <Input 
-                        prefix={<Mail size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<Mail size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="name@company.com"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
@@ -127,9 +120,9 @@ const RegisterPage = () => {
                     style={{ marginBottom: 20 }}
                 >
                     <Input.Password 
-                        prefix={<Lock size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<Lock size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="••••••••"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
@@ -151,55 +144,54 @@ const RegisterPage = () => {
                     style={{ marginBottom: 32 }}
                 >
                     <Input.Password 
-                        prefix={<Lock size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<Lock size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="••••••••"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
-                <Form.Item style={{ marginBottom: 32 }}>
+                <Form.Item style={{ marginBottom: 24 }}>
                     <Button 
                         type="primary" 
                         htmlType="submit" 
                         loading={loading}
                         block
                         style={{ 
-                            height: 56, 
-                            background: '#1C1917', 
-                            borderColor: '#1C1917',
-                            fontSize: '16px',
-                            fontWeight: 800,
-                            letterSpacing: '0.02em',
+                            height: 50, 
+                            fontSize: '15px',
+                            fontWeight: 700,
+                            letterSpacing: '0.01em',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '12px'
+                            gap: '8px'
                         }}
                     >
-                        CREATE ACCOUNT <ArrowRight size={18} />
+                        Create Account <ArrowRight size={16} />
                     </Button>
                 </Form.Item>
             </Form>
 
             <div style={{ textAlign: 'center' }}>
-                <Text style={{ fontSize: '14px', color: '#78716C', fontWeight: 500 }}>
-                    Already have access? <Link to="/login" style={{ color: '#1C1917', fontWeight: 800, marginLeft: '6px', borderBottom: '2px solid #CA8A04' }}>Sign In</Link>
+                <Text style={{ fontSize: '13px', color: '#52525B', fontWeight: 500 }}>
+                    Already have access? <Link to="/login" style={{ color: '#0145f2', fontWeight: 600, marginLeft: '6px', borderBottom: '1px solid #0145f2', paddingBottom: 2 }}>Sign In</Link>
                 </Text>
             </div>
 
             <div style={{ 
-                marginTop: 60, 
-                paddingTop: 32, 
-                borderTop: '1px solid #E7E5E4', 
+                marginTop: 32, 
+                paddingTop: 24, 
+                borderTop: '1px solid #e4e4e7', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                gap: '10px', 
-                color: '#A8A29E',
-                fontSize: '12px',
-                fontWeight: 600
+                gap: '8px', 
+                color: '#a1a1aa',
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.05em'
             }}>
-                <ShieldCheck size={16} style={{ color: '#10B981' }} />
+                <ShieldCheck size={14} style={{ color: '#10B981' }} />
                 <span>SECURED BY ENTERPRISE ENCRYPTION</span>
             </div>
         </AuthLayout>

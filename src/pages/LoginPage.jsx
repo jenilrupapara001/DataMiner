@@ -55,25 +55,18 @@ const LoginPage = () => {
                 { icon: <ShieldCheck size={20} />, title: 'Enterprise Security', desc: 'SaaS-grade data protection & isolation' }
             ]}
         >
-            <div style={{ marginBottom: 48 }}>
-                <div style={{ 
-                    width: 48, 
-                    height: 4, 
-                    background: '#CA8A04', 
-                    borderRadius: 2, 
-                    marginBottom: 24 
-                }} />
-                <Title level={2} style={{ 
-                    marginBottom: 12, 
-                    fontWeight: 800, 
-                    fontSize: '2.4rem', 
-                    letterSpacing: '-0.04em',
-                    color: '#1C1917' 
+            <div style={{ marginBottom: 32, textAlign: 'center' }}>
+                <Title level={3} style={{ 
+                    marginBottom: 8, 
+                    fontWeight: 700, 
+                    fontSize: '1.75rem', 
+                    letterSpacing: '-0.03em',
+                    color: '#09090B' 
                 }}>
-                    Login to Gateway
+                    Sign in to RetailOps
                 </Title>
-                <Paragraph style={{ color: '#78716C', fontSize: 16, lineHeight: 1.5 }}>
-                    Enter your administrative credentials to access the RetailOps command center.
+                <Paragraph style={{ color: '#52525B', fontSize: 14, lineHeight: 1.5, marginBottom: 0 }}>
+                    Enter your administrative credentials to initialize access.
                 </Paragraph>
             </div>
 
@@ -91,13 +84,13 @@ const LoginPage = () => {
                         { required: true, message: 'Please provide your corporate email' },
                         { type: 'email', message: 'The format must be a valid email' }
                     ]}
-                    style={{ marginBottom: 28 }}
+                    style={{ marginBottom: 24 }}
                 >
                     <Input 
-                        prefix={<Mail size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<Mail size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="e.g. director@company.com"
                         autoComplete="email"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
@@ -108,10 +101,10 @@ const LoginPage = () => {
                     style={{ marginBottom: 12 }}
                 >
                     <Input.Password 
-                        prefix={<KeyRound size={18} style={{ color: '#A8A29E', marginRight: 10 }} />} 
+                        prefix={<KeyRound size={16} style={{ color: '#71717A', marginRight: 8 }} />} 
                         placeholder="••••••••••••"
                         autoComplete="current-password"
-                        style={{ height: 54, fontSize: 15 }}
+                        style={{ height: 50, fontSize: 14 }}
                     />
                 </Form.Item>
 
@@ -119,61 +112,60 @@ const LoginPage = () => {
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
-                    marginBottom: 40 
+                    marginBottom: 32 
                 }}>
                     <Form.Item name="remember" valuePropName="checked" noStyle>
-                        <Checkbox style={{ fontSize: '14px', fontWeight: 500, color: '#44403C' }}>
+                        <Checkbox style={{ fontSize: '13px', fontWeight: 500, color: '#52525B' }}>
                             Stay authenticated
                         </Checkbox>
                     </Form.Item>
-                    <Link to="#" style={{ fontSize: '14px', fontWeight: 700, color: '#CA8A04' }}>
+                    <Link to="#" style={{ fontSize: '13px', fontWeight: 600, color: '#0145f2' }}>
                         Forgot Access Key?
                     </Link>
                 </div>
 
-                <Form.Item style={{ marginBottom: 32 }}>
+                <Form.Item style={{ marginBottom: 24 }}>
                     <Button 
                         type="primary" 
                         htmlType="submit" 
                         loading={loading}
                         block
                         style={{ 
-                            height: 56, 
-                            background: '#1C1917', 
-                            borderColor: '#1C1917',
-                            fontSize: '16px',
-                            fontWeight: 800,
-                            letterSpacing: '0.02em',
+                            height: 50, 
+                            fontSize: '15px',
+                            fontWeight: 700,
+                            letterSpacing: '0.01em',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '12px'
+                            gap: '8px'
                         }}
                     >
-                        INITIALIZE ACCESS <ArrowRight size={18} />
+                        Initialize Access <ArrowRight size={16} />
                     </Button>
                 </Form.Item>
             </Form>
 
             <div style={{ textAlign: 'center' }}>
-                <Text style={{ fontSize: '14px', color: '#78716C', fontWeight: 500 }}>
-                    New to the network? <Link to="/register" style={{ color: '#1C1917', fontWeight: 800, marginLeft: '6px', borderBottom: '2px solid #CA8A04' }}>Request Access</Link>
+                <Text style={{ fontSize: '13px', color: '#52525B', fontWeight: 500 }}>
+                    New to the network? <Link to="/register" style={{ color: '#0145f2', fontWeight: 600, marginLeft: '6px', borderBottom: '1px solid #0145f2', paddingBottom: 2 }}>Request Access</Link>
                 </Text>
             </div>
             
             <div style={{ 
-                marginTop: 60, 
-                paddingTop: 32, 
-                borderTop: '1px solid #E7E5E4', 
+                marginTop: 32, 
+                paddingTop: 24, 
+                borderTop: '1px solid #e4e4e7', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
-                gap: '10px', 
-                color: '#A8A29E',
-                fontSize: '12px',
-                fontWeight: 600
+                gap: '8px', 
+                color: '#a1a1aa',
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.05em'
             }}>
-                <ShieldCheck size={16} style={{ color: '#10B981' }} />
+                <ShieldCheck size={14} style={{ color: '#10B981' }} />
                 <span>ENCRYPTED END-TO-END VIA AES-256</span>
             </div>
         </AuthLayout>

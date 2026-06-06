@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
 import {
   X, BarChart3, Search, Download, Maximize2, Minimize2,
   ArrowUpDown, ArrowUp, ArrowDown, FileText, Minus,
-  TrendingUp, TrendingDown, SlidersHorizontal, Loader2, Store
+  TrendingUp, TrendingDown, SlidersHorizontal, Loader2, Store, Calendar
 } from 'lucide-react';
 import { asinApi, sellerApi } from '../services/api';
 import InfiniteScrollSelect from './common/InfiniteScrollSelect';
@@ -17,6 +18,8 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
   const [totalCount, setTotalCount] = useState(0);
   const [currentSellerId, setCurrentSellerId] = useState(initialSellerId);
   const [sellers, setSellers] = useState([]);
+  const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+  const [exporting, setExporting] = useState(false);
 
   // Fetch all sellers once for badge labels
   useEffect(() => {
@@ -51,7 +54,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
 
   const loaderRef = useRef(null);
 
-  // ===== DATA FETCHING =====
+  // ===== DATA FETCHING with date range =====
   const fetchData = useCallback(async (pageNum, isNew = false) => {
     if (!isOpen || (loading && !isNew) || (!hasMore && !isNew)) return;
 
@@ -64,7 +67,9 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
         search: searchQuery,
         ...filters,
         sortBy: sortBy === 'asinCode' ? 'asinCode' : 'lastScraped',
-        sortOrder: 'desc'
+        sortOrder: 'desc',
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
       };
 
       const res = await asinApi.getAll(params);
@@ -78,7 +83,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     } finally {
       setLoading(false);
     }
-  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading]);
+  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading, dateRange]);
 
   useEffect(() => {
     if (isOpen) {
@@ -87,7 +92,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
       setHasMore(true);
       fetchData(1, true);
     }
-  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters)]);
+  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters), dateRange.startDate, dateRange.endDate]);
 
   useEffect(() => {
     if (page > 1) fetchData(page);
@@ -135,10 +140,9 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
       const h = a.history || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
-    
-    // Sort ascending (oldest first)
+
     const sorted = [...dates].sort();
-    
+
     const dateColumnsArray = [];
     const groups = [];
     let currentWeek = null;
@@ -148,27 +152,26 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     sorted.forEach(d => {
       const dateObj = new Date(d);
       const day = dateObj.getDay();
-      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(dateObj.setDate(diff)).toISOString().split('T')[0];
-      
+
       if (monday !== currentWeek) {
         currentWeek = monday;
         weekCounter++;
         currentGroup = { name: `W${weekCounter}`, colSpan: 0 };
         groups.push(currentGroup);
       }
-      
+
       currentGroup.colSpan++;
       dateColumnsArray.push({ date: d, weekName: `W${weekCounter}`, isLastOfWeek: false });
     });
-    
-    // Mark the last element of each week
+
     for (let i = 0; i < dateColumnsArray.length; i++) {
-        if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i+1].weekName) {
-            dateColumnsArray[i].isLastOfWeek = true;
-        }
+      if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i + 1].weekName) {
+        dateColumnsArray[i].isLastOfWeek = true;
+      }
     }
-    
+
     return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
 
@@ -257,7 +260,6 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     else if (filterStatus === 'bsrUp') data = data.filter(d => d.trend === 'up');
     else if (filterStatus === 'bsrDown') data = data.filter(d => d.trend === 'down');
 
-    // Range filtering
     if (filterBsrRange.min) data = data.filter(d => d.mainBsr >= parseInt(filterBsrRange.min));
     if (filterBsrRange.max) data = data.filter(d => d.mainBsr > 0 && d.mainBsr <= parseInt(filterBsrRange.max));
 
@@ -306,7 +308,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     setFilterBsrRange({ min: '', max: '' });
     setSortBy('mainBsr');
     setSortOrder('asc');
-    // Keep currentSellerId as requested for persistent seller filtering
+    setDateRange({ startDate: '', endDate: '' });
   };
 
   const getAppliedFiltersBadges = () => {
@@ -319,6 +321,16 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
           <Store size={10} className="opacity-60" />
           <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
           <button className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" onClick={() => setCurrentSellerId('')}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    if (dateRange.startDate || dateRange.endDate) {
+      badges.push(
+        <div key="dateRange" className="badge bg-indigo-50 text-indigo-700 border border-indigo-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Calendar size={10} className="opacity-60" />
+          <span className="fw-bold">{dateRange.startDate || 'Any'} → {dateRange.endDate || 'Any'}</span>
+          <button className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" onClick={() => setDateRange({ startDate: '', endDate: '' })}><X size={12} /></button>
         </div>
       );
     }
@@ -357,14 +369,108 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     return badges;
   };
 
-  const exportData = () => {
-    const headers = ['ASIN', 'SKU', 'Title', 'Main BSR', ...dateColumns.map(c => `${c.weekName} - ${new Date(c.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`), 'WoW %', 'Trend'];
-    const rows = filteredData.map(d => [d.asinCode, d.sku, d.title, d.mainBsrStr, ...d.dateValues.map(v => v.rank || ''), d.woWPercent.toFixed(1) + '%', d.trend]);
-    const csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `bsr_trend_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  // ===== EXPORT ALL DATA (CSV or Excel) =====
+  const exportAllData = async (format = 'excel') => {
+    setExporting(true);
     setShowExportMenu(false);
+    try {
+      // Fetch all ASINs for the current seller (or all sellers if none selected)
+      let allAsins = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const limit = 200;
+
+      while (currentPage <= totalPages) {
+        const params = {
+          page: currentPage,
+          limit,
+          seller: currentSellerId || undefined,
+          search: searchQuery,
+          ...filters,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+        };
+        const res = await asinApi.getAll(params);
+        if (res && res.asins) {
+          allAsins = [...allAsins, ...res.asins];
+          totalPages = res.pagination.totalPages;
+          currentPage++;
+        } else {
+          break;
+        }
+      }
+
+      // Collect all unique dates from all ASINs
+      const allDatesSet = new Set();
+      allAsins.forEach(asin => {
+        const history = asin.history || [];
+        history.forEach(h => {
+          if (h.date) allDatesSet.add(h.date.split('T')[0]);
+        });
+        const subBsrHistory = asin.subBsrHistory || [];
+        subBsrHistory.forEach(h => {
+          if (h.date) allDatesSet.add(h.date.split('T')[0]);
+        });
+      });
+      const sortedDates = Array.from(allDatesSet).sort();
+
+      // Build rows: ASIN, Parent ASIN, SKU, Brand Name, then each date's BSR rank
+      const headers = ['ASIN', 'Parent ASIN', 'SKU', 'Brand Name', ...sortedDates];
+      const rows = allAsins.map(asin => {
+        // Build rank map for this ASIN
+        const rankMap = new Map();
+        const history = asin.history || [];
+        history.forEach(h => {
+          if (h.date && h.bsr) {
+            const d = h.date.split('T')[0];
+            if (!rankMap.has(d) || rankMap.get(d) > h.bsr) rankMap.set(d, h.bsr);
+          }
+        });
+        const subBsrHistory = asin.subBsrHistory || [];
+        subBsrHistory.forEach(h => {
+          if (h.date && h.rank) {
+            const d = h.date.split('T')[0];
+            if (!rankMap.has(d) || rankMap.get(d) > h.rank) rankMap.set(d, h.rank);
+          }
+        });
+        const row = [
+          asin.asinCode || '',
+          asin.parentAsin || '',
+          asin.sku || '',
+          asin.brand || asin.seller?.name || '',
+        ];
+        sortedDates.forEach(date => {
+          const rank = rankMap.get(date);
+          row.push(rank ? `#${rank.toLocaleString()}` : '');
+        });
+        return row;
+      });
+
+      const sheetData = [headers, ...rows];
+      const fileName = `bsr_trend_${new Date().toISOString().split('T')[0]}`;
+
+      if (format === 'csv') {
+        const csvContent = sheetData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = headers.map(() => ({ wch: 15 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'BSRTrend');
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      }
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -420,13 +526,16 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
           </div>
           <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
-              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#059669', color: '#059669' }}>
-                <Download size={13} /> Export BSR
+              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#059669', color: '#059669' }} disabled={exporting}>
+                {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export
               </button>
-              {showExportMenu && (
+              {showExportMenu && !exporting && (
                 <div className="position-absolute bg-white border rounded-3 shadow-xl p-1" style={{ top: '100%', right: 0, zIndex: 100, marginTop: '8px', minWidth: '160px' }}>
-                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={exportData} style={{ fontSize: '11px' }}>
-                    <FileText size={15} className="text-green-600" /> Export CSV
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('excel')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-green-600" /> Export Excel (.xlsx)
+                  </button>
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-blue-600" /> Export CSV (.csv)
                   </button>
                 </div>
               )}
@@ -451,9 +560,39 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
             <InfiniteScrollSelect
               fetchData={fetchSellerDropdownData}
               value={currentSellerId}
-              onSelect={setCurrentSellerId}
+              onSelect={(sellerId) => {
+                setCurrentSellerId(sellerId);
+                setDateRange({ startDate: '', endDate: '' }); // reset date range on seller change
+              }}
               placeholder="Filter by Seller..."
             />
+          </div>
+
+          {/* Custom Date Range Picker (native) */}
+          <div className="d-flex align-items-center gap-2">
+            <Calendar size={13} className="text-zinc-400" />
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              placeholder="Start"
+            />
+            <span className="text-zinc-300">–</span>
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              placeholder="End"
+            />
+            {(dateRange.startDate || dateRange.endDate) && (
+              <button className="btn btn-sm p-0 text-zinc-400 hover-text-red-500" onClick={() => setDateRange({ startDate: '', endDate: '' })}>
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           <div className="d-flex gap-1.5 flex-wrap">
@@ -470,7 +609,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
             ))}
           </div>
 
-          {(filterStatus !== 'all' || localSearch) && (
+          {(filterStatus !== 'all' || localSearch || filterBsrRange.min || filterBsrRange.max || dateRange.startDate || dateRange.endDate) && (
             <button className="chp text-red-500 border-red-100 bg-red-50" onClick={resetAllFilters} style={{ fontSize: '10px' }}>
               <X size={12} className="me-1" /> Reset
             </button>
@@ -480,16 +619,16 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
         </div>
 
         {/* APPLIED FILTERS BADGES */}
-        {(currentSellerId || localSearch || filterStatus !== 'all' || filterBsrRange.min || filterBsrRange.max) && (
-          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+        {(currentSellerId || localSearch || filterStatus !== 'all' || filterBsrRange.min || filterBsrRange.max || dateRange.startDate || dateRange.endDate) && (
+          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2">
             <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Context Filters
             </span>
             <div className="d-flex flex-wrap gap-2">
               {getAppliedFiltersBadges()}
             </div>
-            <button 
-              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
+            <button
+              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none"
               style={{ fontSize: '10px' }}
               onClick={resetAllFilters}
             >

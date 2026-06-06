@@ -23,38 +23,43 @@ const AuthLayout = ({
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1C1917',
-          colorInfo: '#CA8A04',
-          borderRadius: 16,
-          fontFamily: "'DM Sans', sans-serif",
+          colorPrimary: '#0145f2',
+          colorInfo: '#0145f2',
+          borderRadius: 12,
+          fontFamily: "'Inter', sans-serif",
           colorBgContainer: '#ffffff',
-          colorLink: '#CA8A04',
-          colorLinkHover: '#A16207',
+          colorText: '#09090B',
+          colorTextDescription: '#52525B',
+          colorLink: '#0145f2',
+          colorLinkHover: '#0070F3',
         },
         components: {
           Button: {
-            controlHeight: 52,
-            fontSize: 16,
-            fontWeight: 700,
-            borderRadius: 12,
-            colorPrimary: '#1C1917',
-            colorPrimaryHover: '#2d2a28',
+            controlHeight: 48,
+            fontSize: 14,
+            fontWeight: 600,
+            borderRadius: 8,
+            colorPrimary: '#0f172a',
+            colorPrimaryHover: '#1e293b',
           },
           Input: {
             controlHeight: 48,
-            borderRadius: 12,
-            colorBgContainer: '#FAFAF9',
-            activeBorderColor: '#CA8A04',
+            borderRadius: 8,
+            colorBgContainer: '#ffffff',
+            activeBorderColor: '#0145f2',
+            colorText: '#09090B',
+            colorTextPlaceholder: '#A1A1AA',
           },
           Checkbox: {
-            colorPrimary: '#CA8A04',
+            colorPrimary: '#0145f2',
+            colorText: '#52525B',
           }
         }
       }}
     >
       <div style={{
         minHeight: '100vh',
-        background: '#0c0a09',
+        background: '#f9fafb',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -62,22 +67,49 @@ const AuthLayout = ({
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* Advanced Mesh Background */}
+        {/* Subtle dot-grid lines background */}
         <div style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          background: `
-            radial-gradient(circle at 10% 10%, rgba(202, 138, 4, 0.08) 0%, transparent 40%),
-            radial-gradient(circle at 90% 10%, rgba(28, 25, 23, 0.4) 0%, transparent 50%),
-            radial-gradient(circle at 50% 90%, rgba(202, 138, 4, 0.05) 0%, transparent 40%),
-            radial-gradient(circle at 80% 80%, rgba(68, 64, 60, 0.2) 0%, transparent 50%)
-          `,
-          zIndex: 0
+          backgroundImage: 'radial-gradient(rgba(9, 9, 11, 0.02) 1.5px, transparent 0)',
+          backgroundSize: '28px 28px',
+          zIndex: 0,
+          opacity: 0.8
         }} />
-        
+
+        {/* Floating Decorative Elements (Light/Lavender square outlines matching user image) */}
+        <div style={{
+          position: 'absolute',
+          top: '15%',
+          left: '18%',
+          width: 200,
+          height: 200,
+          borderRadius: 24,
+          background: 'rgba(99, 102, 241, 0.04)',
+          border: '2px dashed rgba(99, 102, 241, 0.1)',
+          transform: 'rotate(-15deg)',
+          pointerEvents: 'none',
+          zIndex: 0,
+          animation: 'pulse-slow 8s ease-in-out infinite'
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: '12%',
+          right: '18%',
+          width: 240,
+          height: 240,
+          borderRadius: 32,
+          background: 'rgba(1, 69, 242, 0.03)',
+          border: '2px dashed rgba(1, 69, 242, 0.08)',
+          transform: 'rotate(20deg)',
+          pointerEvents: 'none',
+          zIndex: 0,
+          animation: 'pulse-slow-reverse 10s ease-in-out infinite'
+        }} />
+
         {/* Animated Noise/Grain Overlay */}
         <div style={{
           position: 'absolute',
@@ -85,187 +117,101 @@ const AuthLayout = ({
           left: 0,
           right: 0,
           bottom: 0,
-          opacity: 0.03,
+          opacity: 0.015,
           backgroundImage: 'url("https://grainy-gradients.vercel.app/noise.svg")',
           pointerEvents: 'none',
           zIndex: 1
         }} />
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          style={{ zIndex: 2, width: '100%', maxWidth: 1200 }}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          style={{ zIndex: 2, width: '100%', maxWidth: 460 }}
         >
           <Card
             variant="borderless"
-            styles={{ body: { padding: 0 } }}
+            styles={{ body: { padding: '40px 36px' } }}
             style={{
-              borderRadius: 32,
+              borderRadius: 16,
               overflow: 'hidden',
-              boxShadow: '0 40px 100px -20px rgba(0, 0, 0, 0.8)',
-              background: 'rgba(255, 255, 255, 0.01)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              backdropFilter: 'blur(24px)'
+              boxShadow: '0 20px 50px -12px rgba(9, 9, 11, 0.08), 0 0 0 1px rgba(9, 9, 11, 0.04)',
+              background: '#ffffff',
+              border: '1px solid #e4e4e7',
             }}
           >
-            <Row align="stretch" style={{ minHeight: 720 }}>
-              {/* Left Panel: High-Impact Visuals */}
-              <Col xs={0} md={11} lg={12} style={{
-                background: '#0c0a09',
-                padding: '80px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative',
-                color: '#FAFAF9',
-                borderRight: '1px solid rgba(255, 255, 255, 0.05)',
-                overflow: 'hidden'
+            {/* Header Brand Logo */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+              <div style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                background: '#f4f4f5',
+                border: '1px solid #e4e4e7',
+                display: 'inline-block'
               }}>
-                {/* Visual Accent */}
-                <div style={{
-                    position: 'absolute',
-                    top: '-10%',
-                    right: '-10%',
-                    width: '60%',
-                    height: '60%',
-                    background: 'radial-gradient(circle, rgba(202, 138, 4, 0.15) 0%, transparent 70%)',
-                    filter: 'blur(60px)',
-                    zIndex: 0
-                }} />
+                <RetailOpsWordmark size={24} color="#09090B" />
+              </div>
+            </div>
 
-                <div style={{ zIndex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ 
-                        width: 40, 
-                        height: 40, 
-                        background: '#CA8A04', 
-                        borderRadius: 10, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        boxShadow: '0 0 20px rgba(202, 138, 4, 0.3)'
-                    }}>
-                        <RetailOpsWordmark size={24} color="#0c0a09" style={{ filter: 'brightness(0)' }} />
-                    </div>
-                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em' }}>RetailOps<span style={{ color: '#CA8A04' }}>.</span></Text>
-                  </div>
-                  
-                  <div style={{ marginTop: 80 }}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      <Title level={1} style={{ 
-                        color: '#FAFAF9', 
-                        fontSize: '3.2rem', 
-                        fontWeight: 800, 
-                        lineHeight: 1, 
-                        marginBottom: 24,
-                        letterSpacing: '-0.04em'
-                      }}>
-                        {heroTitle.split(' ').map((word, i) => (
-                            <span key={i} style={{ display: 'inline-block', marginRight: '0.3em' }}>{word}</span>
-                        ))}
-                      </Title>
-                      <Paragraph style={{ 
-                        color: '#A8A29E', 
-                        fontSize: '1.2rem', 
-                        lineHeight: 1.6,
-                        marginBottom: 60,
-                        maxWidth: '90%',
-                        fontWeight: 400
-                      }}>
-                        {heroSubtitle}
-                      </Paragraph>
-                    </motion.div>
+            {children}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-                      {features.map((feature, index) => (
-                        <motion.div 
-                          key={index}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.5 + (index * 0.1) }}
-                          style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}
-                        >
-                          <div style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 14,
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 20,
-                            color: '#CA8A04',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
-                            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.05)'
-                          }}>
-                            {feature.icon}
-                          </div>
-                          <div style={{ paddingTop: 4 }}>
-                            <Text strong style={{ color: '#FAFAF9', fontSize: 16, display: 'block', marginBottom: 2 }}>{feature.title}</Text>
-                            <Text style={{ color: '#78716C', fontSize: 14 }}>{feature.desc}</Text>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ zIndex: 1, color: '#57534E', fontSize: 13, fontWeight: 600, letterSpacing: '0.02em' }}>
-                  &copy; 2026 {footerText}
-                </div>
-              </Col>
-
-              {/* Right Panel: The Gateway */}
-              <Col xs={24} md={13} lg={12} style={{
-                padding: '80px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                background: '#FAFAF9',
-                position: 'relative'
-              }}>
-                <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
-                  {children}
-                </div>
-              </Col>
-            </Row>
+            <div style={{ 
+              marginTop: 28, 
+              textAlign: 'center', 
+              color: '#a1a1aa', 
+              fontSize: 12, 
+              fontWeight: 500, 
+              letterSpacing: '0.02em' 
+            }}>
+              &copy; 2026 {footerText}
+            </div>
           </Card>
         </motion.div>
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-        
+        @keyframes pulse-slow {
+          0%, 100% { transform: rotate(-15deg) scale(1); opacity: 0.8; }
+          50% { transform: rotate(-10deg) scale(1.03); opacity: 1; }
+        }
+        @keyframes pulse-slow-reverse {
+          0%, 100% { transform: rotate(20deg) scale(1); opacity: 0.7; }
+          50% { transform: rotate(25deg) scale(0.97); opacity: 0.9; }
+        }
+
         .ant-btn-primary {
-            box-shadow: 0 4px 14px 0 rgba(28, 25, 23, 0.3) !important;
-            transition: all 0.3s ease !important;
+            background: #0f172a !important;
+            border: none !important;
+            box-shadow: 0 4px 12px 0 rgba(15, 23, 42, 0.12) !important;
+            transition: all 0.2s ease !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         .ant-btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(28, 25, 23, 0.4) !important;
+            background: #1e293b !important;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2) !important;
         }
         .ant-input-affix-wrapper {
-            padding-left: 16px !important;
-            padding-right: 16px !important;
-            transition: all 0.3s ease !important;
-            border: 1.5px solid #E7E5E4 !important;
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+            transition: all 0.2s ease !important;
+            border: 1px solid #e4e4e7 !important;
+            background: #ffffff !important;
         }
         .ant-input-affix-wrapper-focused {
-            border-color: #CA8A04 !important;
-            box-shadow: 0 0 0 4px rgba(202, 138, 4, 0.1) !important;
-            background: #fff !important;
+            border-color: #0145f2 !important;
+            box-shadow: 0 0 0 3px rgba(1, 69, 242, 0.1) !important;
+            background: #ffffff !important;
         }
         .ant-form-item-label label {
-            color: #44403C !important;
-            font-weight: 700 !important;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px !important;
+            color: #3f3f46 !important;
+            font-weight: 600 !important;
+            font-size: 13px !important;
+            text-transform: none !important;
+            letter-spacing: normal !important;
+            margin-bottom: 2px !important;
         }
       `}</style>
     </ConfigProvider>

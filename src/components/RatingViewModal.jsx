@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
 import {
   X, Star, Search, Download, Maximize2, Minimize2,
   ArrowUpDown, ArrowUp, ArrowDown, FileText, MessageSquare,
-  Minus, TrendingUp, TrendingDown, SlidersHorizontal, Loader2, Store
+  Minus, TrendingUp, TrendingDown, SlidersHorizontal, Loader2, Store, Calendar
 } from 'lucide-react';
 import { asinApi, sellerApi } from '../services/api';
 import InfiniteScrollSelect from './common/InfiniteScrollSelect';
@@ -17,6 +18,8 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
   const [totalCount, setTotalCount] = useState(0);
   const [currentSellerId, setCurrentSellerId] = useState(initialSellerId);
   const [sellers, setSellers] = useState([]);
+  const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+  const [exporting, setExporting] = useState(false);
 
   // Fetch all sellers once for badge labels
   useEffect(() => {
@@ -51,7 +54,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
   const loaderRef = useRef(null);
 
-  // ===== DATA FETCHING =====
+  // ===== DATA FETCHING with date range =====
   const fetchData = useCallback(async (pageNum, isNew = false) => {
     if (!isOpen || (loading && !isNew) || (!hasMore && !isNew)) return;
 
@@ -63,8 +66,10 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         seller: currentSellerId,
         search: searchQuery,
         ...filters,
-        sortBy: sortBy === 'asinCode' ? 'asinCode' : 'lastScraped', // Sort by lastScraped by default for trends
-        sortOrder: 'desc'
+        sortBy: sortBy === 'asinCode' ? 'asinCode' : 'lastScraped',
+        sortOrder: 'desc',
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
       };
 
       const res = await asinApi.getAll(params);
@@ -78,9 +83,9 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     } finally {
       setLoading(false);
     }
-  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading]);
+  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading, dateRange]);
 
-  // Reset and fetch when modal opens or primary filters change
+  // Reset and fetch when modal opens or filters change
   useEffect(() => {
     if (isOpen) {
       setAsins([]);
@@ -88,13 +93,11 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
       setHasMore(true);
       fetchData(1, true);
     }
-  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters)]);
+  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters), dateRange.startDate, dateRange.endDate]);
 
   // Fetch next page when page changes
   useEffect(() => {
-    if (page > 1) {
-      fetchData(page);
-    }
+    if (page > 1) fetchData(page);
   }, [page]);
 
   // ===== INFINITE SCROLL OBSERVER =====
@@ -132,10 +135,9 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
       const h = a.history || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
-    
-    // Sort ascending (oldest first)
+
     const sorted = [...dates].sort();
-    
+
     const dateColumnsArray = [];
     const groups = [];
     let currentWeek = null;
@@ -145,31 +147,30 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     sorted.forEach(d => {
       const dateObj = new Date(d);
       const day = dateObj.getDay();
-      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(dateObj.setDate(diff)).toISOString().split('T')[0];
-      
+
       if (monday !== currentWeek) {
         currentWeek = monday;
         weekCounter++;
         currentGroup = { name: `W${weekCounter}`, colSpan: 0 };
         groups.push(currentGroup);
       }
-      
+
       currentGroup.colSpan++;
       dateColumnsArray.push({ date: d, weekName: `W${weekCounter}`, isLastOfWeek: false });
     });
-    
-    // Mark the last element of each week
+
     for (let i = 0; i < dateColumnsArray.length; i++) {
-        if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i+1].weekName) {
-            dateColumnsArray[i].isLastOfWeek = true;
-        }
+      if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i + 1].weekName) {
+        dateColumnsArray[i].isLastOfWeek = true;
+      }
     }
-    
+
     return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
 
-  // ===== PROCESS DATA FOR DISPLAY (Trends, WoW) =====
+  // ===== PROCESS DATA FOR DISPLAY =====
   const processedData = useMemo(() => {
     const now = new Date();
 
@@ -294,7 +295,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     setFilterRatingRange({ min: '', max: '' });
     setSortBy('rating');
     setSortOrder('desc');
-    // Keep currentSellerId as requested for persistent seller filtering
+    setDateRange({ startDate: '', endDate: '' });
   };
 
   const getAppliedFiltersBadges = () => {
@@ -307,6 +308,16 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
           <Store size={10} className="opacity-60" />
           <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
           <button className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" onClick={() => setCurrentSellerId('')}><X size={12} /></button>
+        </div>
+      );
+    }
+
+    if (dateRange.startDate || dateRange.endDate) {
+      badges.push(
+        <div key="dateRange" className="badge bg-indigo-50 text-indigo-700 border border-indigo-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Calendar size={10} className="opacity-60" />
+          <span className="fw-bold">{dateRange.startDate || 'Any'} → {dateRange.endDate || 'Any'}</span>
+          <button className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" onClick={() => setDateRange({ startDate: '', endDate: '' })}><X size={12} /></button>
         </div>
       );
     }
@@ -345,21 +356,104 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     return badges;
   };
 
-  const exportData = () => {
-    const headers = ['ASIN', 'SKU', 'Title', 'Rating', 'Reviews', ...dateColumns.map(c => `${c.weekName} - ${new Date(c.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`), 'WoW %', 'Trend'];
-    const rows = filteredData.map(d => [d.asinCode, d.sku, d.title, d.currentRating, d.reviewCount, ...d.dateValues.map(v => v.rating || ''), d.woWPercent.toFixed(1) + '%', d.trend]);
-    const csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `rating_trend_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  // ===== EXPORT ALL DATA (CSV or Excel) =====
+  const exportAllData = async (format = 'excel') => {
+    setExporting(true);
     setShowExportMenu(false);
+    try {
+      // Fetch all ASINs for the current seller (or all sellers if none selected)
+      let allAsins = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const limit = 200;
+
+      while (currentPage <= totalPages) {
+        const params = {
+          page: currentPage,
+          limit,
+          seller: currentSellerId || undefined,
+          search: searchQuery,
+          ...filters,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+        };
+        const res = await asinApi.getAll(params);
+        if (res && res.asins) {
+          allAsins = [...allAsins, ...res.asins];
+          totalPages = res.pagination.totalPages;
+          currentPage++;
+        } else {
+          break;
+        }
+      }
+
+      // Collect all unique dates from all ASINs
+      const allDatesSet = new Set();
+      allAsins.forEach(asin => {
+        const history = asin.history || [];
+        history.forEach(h => {
+          if (h.date) allDatesSet.add(h.date.split('T')[0]);
+        });
+      });
+      const sortedDates = Array.from(allDatesSet).sort();
+
+      // Build rows: ASIN, Parent ASIN, SKU, Brand Name, then each date's rating
+      const headers = ['ASIN', 'Parent ASIN', 'SKU', 'Brand Name', ...sortedDates];
+      const rows = allAsins.map(asin => {
+        // Build rating map for this ASIN
+        const ratingMap = new Map();
+        const history = asin.history || [];
+        history.forEach(h => {
+          if (h.date && h.rating) {
+            const d = h.date.split('T')[0];
+            ratingMap.set(d, h.rating);
+          }
+        });
+        const row = [
+          asin.asinCode || '',
+          asin.parentAsin || '',
+          asin.sku || '',
+          asin.brand || asin.seller?.name || '',
+        ];
+        sortedDates.forEach(date => {
+          const rating = ratingMap.get(date);
+          row.push(rating !== undefined ? rating.toFixed(1) : '');
+        });
+        return row;
+      });
+
+      const sheetData = [headers, ...rows];
+      const fileName = `rating_trend_${new Date().toISOString().split('T')[0]}`;
+
+      if (format === 'csv') {
+        const csvContent = sheetData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = headers.map(() => ({ wch: 15 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'RatingTrend');
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      }
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!isOpen) return null;
 
   const css = `
     .rt { width:100%; border-collapse:separate; border-spacing:0; }
-    .rt th { background:#fafafa; position:sticky; top:0; z-index:10; padding:6px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#71717a; border-bottom:2px solid #e5e7eb; white-space:nowrap; cursor:pointer; transition: background 0.2s; }
+    .rt th { background:#fafafa; position:sticky; top:0; z-index:10; padding:6px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#71717a; border-bottom:2px solid #e5e7eb; white-space:nowrap; cursor:pointer; }
     .rt th:hover { background:#f4f4f5; }
     .rt td { padding:5px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; vertical-align: middle; }
     .rt tr:hover td { background:#fafafa; }
@@ -368,11 +462,10 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     .chp { padding:4px 12px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; border:1.5px solid #e5e7eb; background:#fff; color:#71717a; white-space:nowrap; transition:all 0.2s; }
     .chp:hover { border-color:#18181b; color:#18181b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .chp.act { background:#18181b; color:#fff; border-color:#18181b; }
-    .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:55px; transition: all 0.2s; }
+    .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:55px; }
     .dd-has { background:#fffbeb; color:#d97706; font-weight:600; }
     .dd-no { color:#d1d5db; }
-    .inp-sm { font-size:11px; height:28px; border:1.5px solid #e5e7eb; border-radius:8px; padding:2px 10px; width:80px; outline: none; transition: border-color 0.2s; }
-    .inp-sm:focus { border-color: #18181b; }
+    .inp-sm { font-size:11px; height:28px; border:1.5px solid #e5e7eb; border-radius:8px; padding:2px 10px; width:80px; outline: none; }
     .loader-pulse { height:30px; display:flex; align-items:center; justify-content:center; gap:6px; margin:20px 0; }
     .pulse-dot { width:8px; height:8px; background:#d1d5db; border-radius:50%; animation: pulse 1.5s infinite; }
     .pulse-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -402,36 +495,37 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
               <Star size={20} className="fill-current" />
             </div>
             <div>
-              <h5 className="mb-0 fw-bold text-zinc-900" style={{ fontSize: '15px', letterSpacing: '-0.01em' }}>Rating Analytics Matrix</h5>
+              <h5 className="mb-0 fw-bold text-zinc-900" style={{ fontSize: '15px' }}>Rating Analytics Matrix</h5>
               <div className="d-flex align-items-center gap-2 mt-0.5">
                 <span className="badge bg-zinc-100 text-zinc-600 border fw-medium" style={{ fontSize: '10px' }}>
                   {totalCount.toLocaleString()} Total ASINs
                 </span>
                 <span className="text-zinc-400" style={{ fontSize: '10px' }}>•</span>
-                <span className="text-zinc-500 fw-medium" style={{ fontSize: '10px' }}>
-                  Live Data Streamed from DB
-                </span>
+                <span className="text-zinc-500 fw-medium" style={{ fontSize: '10px' }}>Live Data Streamed from DB</span>
               </div>
             </div>
           </div>
           <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
-              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#d97706', color: '#d97706' }}>
-                <Download size={13} /> Export Insights
+              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#d97706', color: '#d97706' }} disabled={exporting}>
+                {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export
               </button>
-              {showExportMenu && (
+              {showExportMenu && !exporting && (
                 <div className="position-absolute bg-white border rounded-3 shadow-xl p-1" style={{ top: '100%', right: 0, zIndex: 100, marginTop: '8px', minWidth: '160px' }}>
-                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={exportData} style={{ fontSize: '11px' }}>
-                    <FileText size={15} className="text-amber-600" /> <span>Export to CSV</span>
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('excel')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-green-600" /> Export Excel (.xlsx)
+                  </button>
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-blue-600" /> Export CSV (.csv)
                   </button>
                 </div>
               )}
             </div>
             <div className="vr mx-1 opacity-10" style={{ height: '24px' }}></div>
-            <button className="btn btn-ghost p-2 rounded-circle hover-bg-zinc-100 transition-all" onClick={() => setIsFullscreen(!isFullscreen)}>
+            <button className="btn btn-ghost p-2 rounded-circle transition-all" onClick={() => setIsFullscreen(!isFullscreen)}>
               {isFullscreen ? <Minimize2 size={17} className="text-zinc-500" /> : <Maximize2 size={17} className="text-zinc-500" />}
             </button>
-            <button className="btn btn-ghost p-2 rounded-circle hover-bg-red-50 transition-all text-zinc-500 hover-text-red-500" onClick={onClose}><X size={18} /></button>
+            <button className="btn btn-ghost p-2 rounded-circle text-zinc-500 hover-text-red-500" onClick={onClose}><X size={18} /></button>
           </div>
         </div>
 
@@ -440,16 +534,46 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
           <div className="position-relative" style={{ width: '220px' }}>
             <Search size={13} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-zinc-400" />
             <input className="form-control form-control-sm ps-5 rounded-3" placeholder="Filter ASIN, SKU, Title..." value={localSearch}
-              onChange={e => setLocalSearch(e.target.value)} style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', background: '#fcfcfc' }} />
+              onChange={e => setLocalSearch(e.target.value)} style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb' }} />
           </div>
 
           <div style={{ width: '200px' }}>
             <InfiniteScrollSelect
               fetchData={fetchSellerDropdownData}
               value={currentSellerId}
-              onSelect={setCurrentSellerId}
+              onSelect={(sellerId) => {
+                setCurrentSellerId(sellerId);
+                setDateRange({ startDate: '', endDate: '' }); // reset date range on seller change
+              }}
               placeholder="Filter by Seller..."
             />
+          </div>
+
+          {/* Custom Date Range Picker (native) */}
+          <div className="d-flex align-items-center gap-2">
+            <Calendar size={13} className="text-zinc-400" />
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              placeholder="Start"
+            />
+            <span className="text-zinc-300">–</span>
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              placeholder="End"
+            />
+            {(dateRange.startDate || dateRange.endDate) && (
+              <button className="btn btn-sm p-0 text-zinc-400 hover-text-red-500" onClick={() => setDateRange({ startDate: '', endDate: '' })}>
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           <div className="d-flex gap-1.5 flex-wrap">
@@ -459,7 +583,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
           </div>
 
           <button className={`chp d-flex align-items-center gap-2 ${showFilters ? 'act' : ''}`} onClick={() => setShowFilters(!showFilters)}>
-            <SlidersHorizontal size={13} /> <span>Advanced Filters</span>
+            <SlidersHorizontal size={13} /> Advanced Filters
           </button>
 
           <div className="vr mx-1 opacity-10" style={{ height: '20px' }}></div>
@@ -472,7 +596,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
             ))}
           </div>
 
-          {(filterStatus !== 'all' || localSearch || filterRatingRange.min || filterRatingRange.max) && (
+          {(filterStatus !== 'all' || localSearch || filterRatingRange.min || filterRatingRange.max || dateRange.startDate || dateRange.endDate) && (
             <button className="chp text-red-500 border-red-100 bg-red-50" onClick={resetAllFilters} style={{ fontSize: '10px' }}><X size={12} className="me-1" /> Reset View</button>
           )}
 
@@ -480,16 +604,16 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         </div>
 
         {/* APPLIED FILTERS BADGES */}
-        {(currentSellerId || localSearch || filterStatus !== 'all' || filterRatingRange.min || filterRatingRange.max) && (
-          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+        {(currentSellerId || localSearch || filterStatus !== 'all' || filterRatingRange.min || filterRatingRange.max || dateRange.startDate || dateRange.endDate) && (
+          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2">
             <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Context Filters
             </span>
             <div className="d-flex flex-wrap gap-2">
               {getAppliedFiltersBadges()}
             </div>
-            <button 
-              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
+            <button
+              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none"
               style={{ fontSize: '10px' }}
               onClick={resetAllFilters}
             >
@@ -499,20 +623,20 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         )}
 
         {showFilters && (
-          <div className="px-4 py-3 bg-zinc-50 border-bottom d-flex gap-4 flex-shrink-0 flex-wrap align-items-center shadow-inner">
+          <div className="px-4 py-3 bg-zinc-50 border-bottom d-flex gap-4 flex-shrink-0 flex-wrap align-items-center">
             <div className="d-flex align-items-center gap-2">
               <span className="text-zinc-500 fw-bold" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Rating Range:</span>
               <div className="d-flex align-items-center gap-1.5 bg-white p-1 rounded-2 border">
-                <input type="number" step="0.1" className="inp-sm border-0 bg-transparent" placeholder="Min" value={filterRatingRange.min} onChange={e => setFilterRatingRange(prev => ({ ...prev, min: e.target.value }))} />
+                <input type="number" step="0.1" className="inp-sm border-0" placeholder="Min" value={filterRatingRange.min} onChange={e => setFilterRatingRange(prev => ({ ...prev, min: e.target.value }))} />
                 <span className="text-zinc-300">/</span>
-                <input type="number" step="0.1" className="inp-sm border-0 bg-transparent" placeholder="Max" value={filterRatingRange.max} onChange={e => setFilterRatingRange(prev => ({ ...prev, max: e.target.value }))} />
+                <input type="number" step="0.1" className="inp-sm border-0" placeholder="Max" value={filterRatingRange.max} onChange={e => setFilterRatingRange(prev => ({ ...prev, max: e.target.value }))} />
               </div>
             </div>
           </div>
         )}
 
         {/* TABLE */}
-        <div className="flex-grow-1 overflow-auto position-relative custom-scrollbar">
+        <div className="flex-grow-1 overflow-auto position-relative">
           <table className="table table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
@@ -554,7 +678,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                   <td style={{ position: 'sticky', left: 0, background: idx % 2 === 0 ? '#fff' : '#fafafa', textAlign: 'center', zIndex: 20 }}>
                     <input type="checkbox" checked={selectedIds.has(item._id)} onChange={() => toggleSelect(item._id)} style={{ width: '13px', height: '13px', cursor: 'pointer', accentColor: '#18181b' }} />
                   </td>
-                  <td className="text-zinc-400 text-center fw-medium" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20, fontSize: '10px' }}>{idx + 1}</td>
+                  <td className="text-zinc-400 text-center" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>{idx + 1}</td>
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
                     <a
                       href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : item.marketplace === 'myntra' ? (item.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${item.asinCode}`}
@@ -566,7 +690,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                       {item.asinCode}
                     </a>
                   </td>
-                  <td className="text-zinc-500 font-mono" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
+                  <td className="text-zinc-500" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
                   <td className="text-center">
                     {item.currentRating > 0 ? (
                       <div className="d-inline-flex align-items-center gap-1 px-2 py-0.5 rounded-2 bg-amber-50 text-amber-700 fw-bold border border-amber-100" style={{ fontSize: '11px' }}>
@@ -584,7 +708,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
                   {item.dateValues.map((dv, di) => {
                     const col = dateColumns[di];
                     return (
-                      <td key={di} className="text-center" style={{ padding: '4px 2px', background: di % 2 === 0 ? '#fafafa' : '#fff', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
+                      <td key={di} className="text-center" style={{ padding: '4px 2px', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
                         <div className="d-flex flex-column align-items-center gap-0.5">
                           {dv.rating ? (
                             <span className="fw-bold text-amber-600" style={{ fontSize: '10px' }}>{dv.rating.toFixed(1)}</span>
@@ -621,7 +745,6 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
             </tbody>
           </table>
 
-          {/* LOADING STATE */}
           {(loading || hasMore) && (
             <div ref={loaderRef} className="loader-pulse">
               <div className="pulse-dot"></div>

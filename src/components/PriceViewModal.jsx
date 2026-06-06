@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
 import {
   X, TrendingUp, TrendingDown, IndianRupee, Search, Download,
   ArrowUp, ArrowDown, Minus, Maximize2, Minimize2,
-  ArrowUpDown, FileText, SlidersHorizontal, Loader2, Store
+  ArrowUpDown, FileText, SlidersHorizontal, Loader2, Store, Calendar
 } from 'lucide-react';
 import { asinApi, sellerApi } from '../services/api';
 import InfiniteScrollSelect from './common/InfiniteScrollSelect';
@@ -17,6 +18,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
   const [totalCount, setTotalCount] = useState(0);
   const [currentSellerId, setCurrentSellerId] = useState(initialSellerId);
   const [sellers, setSellers] = useState([]);
+  const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
 
   // Fetch all sellers once for badge labels
   useEffect(() => {
@@ -31,7 +33,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     fetchSellers();
   }, []);
 
-  // Sync with prop if it changes (e.g. parent updates seller)
+  // Sync with prop if it changes
   useEffect(() => {
     if (isOpen) {
       setCurrentSellerId(initialSellerId);
@@ -48,10 +50,11 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [exporting, setExporting] = useState(false);
 
   const loaderRef = useRef(null);
 
-  // ===== DATA FETCHING =====
+  // ===== DATA FETCHING (with date range) =====
   const fetchData = useCallback(async (pageNum, isNew = false) => {
     if (!isOpen || (loading && !isNew) || (!hasMore && !isNew)) return;
 
@@ -64,7 +67,9 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         search: searchQuery,
         ...filters,
         sortBy: sortBy === 'asinCode' ? 'asinCode' : 'lastScraped',
-        sortOrder: 'desc'
+        sortOrder: 'desc',
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
       };
 
       const res = await asinApi.getAll(params);
@@ -78,7 +83,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     } finally {
       setLoading(false);
     }
-  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading]);
+  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading, dateRange]);
 
   useEffect(() => {
     if (isOpen) {
@@ -87,13 +92,13 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
       setHasMore(true);
       fetchData(1, true);
     }
-  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters)]);
+  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters), dateRange.startDate, dateRange.endDate]);
 
   useEffect(() => {
     if (page > 1) fetchData(page);
   }, [page]);
 
-  // ===== INFINITE SCROLL OBSERVER =====
+  // ===== INFINITE SCROLL =====
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && hasMore && !loading) {
@@ -128,10 +133,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
       const h = a.history || a.weekHistory || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
-    
-    // Sort ascending (oldest first)
     const sorted = [...dates].sort();
-    
     const dateColumnsArray = [];
     const groups = [];
     let currentWeek = null;
@@ -141,34 +143,28 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     sorted.forEach(d => {
       const dateObj = new Date(d);
       const day = dateObj.getDay();
-      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(dateObj.setDate(diff)).toISOString().split('T')[0];
-      
       if (monday !== currentWeek) {
         currentWeek = monday;
         weekCounter++;
         currentGroup = { name: `W${weekCounter}`, colSpan: 0 };
         groups.push(currentGroup);
       }
-      
       currentGroup.colSpan++;
       dateColumnsArray.push({ date: d, weekName: `W${weekCounter}`, isLastOfWeek: false });
     });
-    
-    // Mark the last element of each week
     for (let i = 0; i < dateColumnsArray.length; i++) {
-        if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i+1].weekName) {
-            dateColumnsArray[i].isLastOfWeek = true;
-        }
+      if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i + 1].weekName) {
+        dateColumnsArray[i].isLastOfWeek = true;
+      }
     }
-    
     return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
 
   // ===== PROCESS DATA FOR DISPLAY =====
   const processedData = useMemo(() => {
     const now = new Date();
-
     return asins.map(asin => {
       const currentPrice = asin.currentPrice || 0;
       const mrp = asin.mrp || 0;
@@ -204,10 +200,8 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
 
       const woWChange = currentWeekPrice - lastWeekPrice;
       const woWPercent = lastWeekPrice > 0 ? ((woWChange / lastWeekPrice) * 100) : 0;
-
       const firstValid = dateValues.find(d => d.price !== null);
       const periodChange = firstValid ? currentPrice - firstValid.price : 0;
-      const periodPercent = firstValid?.price ? ((periodChange / firstValid.price) * 100) : 0;
       const discountPercent = mrp > 0 ? Math.round(((mrp - currentPrice) / mrp) * 100) : 0;
 
       return {
@@ -228,7 +222,6 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
   // ===== LOCAL FILTERING & SORTING =====
   const filteredData = useMemo(() => {
     let data = [...processedData];
-
     if (localSearch.trim()) {
       const q = localSearch.toLowerCase();
       data = data.filter(d =>
@@ -237,7 +230,6 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         (d.title || '').toLowerCase().includes(q)
       );
     }
-
     if (filterStatus === 'hasPrice') data = data.filter(d => d.currentPrice > 0);
     else if (filterStatus === 'priceUp') data = data.filter(d => d.trend === 'up');
     else if (filterStatus === 'priceDown') data = data.filter(d => d.trend === 'down');
@@ -258,15 +250,12 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         case 'asinCode': return sortOrder === 'asc' ? (a.asinCode || '').localeCompare(b.asinCode || '') : (b.asinCode || '').localeCompare(a.asinCode || '');
         default: valA = a.currentPrice; valB = b.currentPrice;
       }
-
       const aE = !valA || valA === 0, bE = !valB || valB === 0;
       if (aE && bE) return 0;
       if (aE) return 1;
       if (bE) return -1;
-
       return sortOrder === 'asc' ? valA - valB : valB - valA;
     });
-
     return data;
   }, [processedData, localSearch, sortBy, sortOrder, filterStatus, filterPriceRange]);
 
@@ -299,12 +288,11 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     setFilterPriceRange({ min: '', max: '' });
     setSortBy('currentPrice');
     setSortOrder('desc');
-    // Keep currentSellerId as requested for persistent seller filtering
+    setDateRange({ startDate: '', endDate: '' });
   };
 
   const getAppliedFiltersBadges = () => {
     const badges = [];
-
     if (currentSellerId) {
       const seller = sellers.find(s => s._id === currentSellerId);
       badges.push(
@@ -315,7 +303,15 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         </div>
       );
     }
-
+    if (dateRange.startDate || dateRange.endDate) {
+      badges.push(
+        <div key="dateRange" className="badge bg-indigo-50 text-indigo-700 border border-indigo-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
+          <Calendar size={10} className="opacity-60" />
+          <span className="fw-bold">{dateRange.startDate || 'Any'} → {dateRange.endDate || 'Any'}</span>
+          <button className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" onClick={() => setDateRange({ startDate: '', endDate: '' })}><X size={12} /></button>
+        </div>
+      );
+    }
     if (localSearch) {
       badges.push(
         <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
@@ -325,7 +321,6 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         </div>
       );
     }
-
     if (filterStatus !== 'all') {
       badges.push(
         <div key="status" className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
@@ -335,7 +330,6 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         </div>
       );
     }
-
     if (filterPriceRange.min || filterPriceRange.max) {
       const label = `${filterPriceRange.min || 0} - ${filterPriceRange.max || '∞'}`;
       badges.push(
@@ -346,18 +340,98 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         </div>
       );
     }
-
     return badges;
   };
 
-  const exportData = () => {
-    const headers = ['ASIN', 'SKU', 'Title', 'Live Price', 'MRP', 'Discount %', ...dateColumns.map(c => `${c.weekName} - ${new Date(c.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`), 'WoW %', 'Trend'];
-    const rows = filteredData.map(d => [d.asinCode, d.sku, d.title, d.currentPrice, d.mrp, d.discountPercent, ...d.dateValues.map(v => v.price || ''), d.woWPercent.toFixed(1) + '%', d.trend]);
-    const csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `price_trend_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  // ===== EXPORT ALL DATA (CSV or Excel) =====
+  const exportAllData = async (format = 'excel') => {
+    setExporting(true);
     setShowExportMenu(false);
+    try {
+      // Fetch all ASINs for the current seller (or all sellers if none selected)
+      let allAsins = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const limit = 200;
+
+      while (currentPage <= totalPages) {
+        const params = {
+          page: currentPage,
+          limit,
+          seller: currentSellerId || undefined,
+          search: searchQuery,
+          ...filters,
+          startDate: dateRange.startDate,
+          endDate: dateRange.endDate,
+        };
+        const res = await asinApi.getAll(params);
+        if (res && res.asins) {
+          allAsins = [...allAsins, ...res.asins];
+          totalPages = res.pagination.totalPages;
+          currentPage++;
+        } else {
+          break;
+        }
+      }
+
+      // Collect all unique dates from all ASINs
+      const allDatesSet = new Set();
+      allAsins.forEach(asin => {
+        const history = asin.history || asin.weekHistory || [];
+        history.forEach(h => {
+          if (h.date) allDatesSet.add(h.date.split('T')[0]);
+        });
+      });
+      const sortedDates = Array.from(allDatesSet).sort();
+
+      // Build rows: ASIN, Parent ASIN, SKU, Brand Name, then each date's price
+      const headers = ['ASIN', 'Parent ASIN', 'SKU', 'Brand Name', ...sortedDates];
+      const rows = allAsins.map(asin => {
+        const priceMap = new Map();
+        const history = asin.history || asin.weekHistory || [];
+        history.forEach(h => {
+          if (h.date && h.price) {
+            const d = h.date.split('T')[0];
+            priceMap.set(d, h.price);
+          }
+        });
+        const row = [
+          asin.asinCode || '',
+          asin.parentAsin || '',
+          asin.sku || '',
+          asin.brand || asin.seller?.name || '',
+        ];
+        sortedDates.forEach(date => {
+          row.push(priceMap.get(date) || '');
+        });
+        return row;
+      });
+
+      const sheetData = [headers, ...rows];
+      const fileName = `price_trend_${new Date().toISOString().split('T')[0]}`;
+
+      if (format === 'csv') {
+        const csvContent = sheetData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = headers.map(() => ({ wch: 15 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'PriceTrend');
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      }
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -414,13 +488,16 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
           </div>
           <div className="d-flex align-items-center gap-2 flex-wrap">
             <div className="position-relative">
-              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#2563eb', color: '#2563eb' }}>
-                <Download size={13} /> Export Price Data
+              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#2563eb', color: '#2563eb' }} disabled={exporting}>
+                {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export
               </button>
-              {showExportMenu && (
+              {showExportMenu && !exporting && (
                 <div className="position-absolute bg-white border rounded-3 shadow-xl p-1" style={{ top: '100%', right: 0, zIndex: 100, marginTop: '8px', minWidth: '160px' }}>
-                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={exportData} style={{ fontSize: '11px' }}>
-                    <FileText size={15} className="text-blue-600" /> Export CSV
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('excel')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-green-600" /> Export Excel (.xlsx)
+                  </button>
+                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: '11px' }}>
+                    <FileText size={15} className="text-blue-600" /> Export CSV (.csv)
                   </button>
                 </div>
               )}
@@ -445,9 +522,39 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
             <InfiniteScrollSelect
               fetchData={fetchSellerDropdownData}
               value={currentSellerId}
-              onSelect={setCurrentSellerId}
+              onSelect={(sellerId) => {
+                setCurrentSellerId(sellerId);
+                setDateRange({ startDate: '', endDate: '' }); // reset date range on seller change
+              }}
               placeholder="Filter by Seller..."
             />
+          </div>
+
+          {/* Custom Date Range Picker (native) */}
+          <div className="d-flex align-items-center gap-2">
+            <Calendar size={13} className="text-zinc-400" />
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+              placeholder="Start"
+            />
+            <span className="text-zinc-300">–</span>
+            <input
+              type="date"
+              className="form-control form-control-sm rounded-3"
+              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+              placeholder="End"
+            />
+            {(dateRange.startDate || dateRange.endDate) && (
+              <button className="btn btn-sm p-0 text-zinc-400 hover-text-red-500" onClick={() => setDateRange({ startDate: '', endDate: '' })}>
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           <div className="d-flex gap-1.5 flex-wrap">
@@ -468,7 +575,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
             ))}
           </div>
 
-          {(filterStatus !== 'all' || localSearch || filterPriceRange.min || filterPriceRange.max) && (
+          {(filterStatus !== 'all' || localSearch || filterPriceRange.min || filterPriceRange.max || dateRange.startDate || dateRange.endDate) && (
             <button className="chp text-red-500 border-red-100 bg-red-50" onClick={resetAllFilters} style={{ fontSize: '10px' }}><X size={12} className="me-1" /> Reset</button>
           )}
 
@@ -476,21 +583,15 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
         </div>
 
         {/* APPLIED FILTERS BADGES */}
-        {(currentSellerId || localSearch || filterStatus !== 'all' || filterPriceRange.min || filterPriceRange.max) && (
-          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+        {(currentSellerId || localSearch || filterStatus !== 'all' || filterPriceRange.min || filterPriceRange.max || dateRange.startDate || dateRange.endDate) && (
+          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2">
             <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Context Filters
             </span>
             <div className="d-flex flex-wrap gap-2">
               {getAppliedFiltersBadges()}
             </div>
-            <button 
-              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" 
-              style={{ fontSize: '10px' }}
-              onClick={resetAllFilters}
-            >
-              CLEAR ALL
-            </button>
+            <button className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none" style={{ fontSize: '10px' }} onClick={resetAllFilters}>CLEAR ALL</button>
           </div>
         )}
 
@@ -552,33 +653,21 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                   </td>
                   <td className="text-zinc-400 text-center" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>{idx + 1}</td>
                   <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
-                    <a
-                      href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : item.marketplace === 'myntra' ? (item.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${item.asinCode}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="fw-bold text-primary hover-underline"
-                      style={{ fontSize: '11px', textDecoration: 'none' }}
-                    >
+                    <a href={`https://www.amazon.in/dp/${item.asinCode}`} target="_blank" rel="noopener noreferrer" className="fw-bold text-primary hover-underline" style={{ fontSize: '11px', textDecoration: 'none' }}>
                       {item.asinCode}
                     </a>
                   </td>
                   <td className="text-zinc-500" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
                   <td className="text-end fw-bold" style={{ fontSize: '11px' }}>
                     <div className="d-flex flex-column align-items-end">
-                      <span style={{ color: '#16a34a' }}>
-                        ₹{(item.uploadedPrice || item.currentPrice || 0).toLocaleString()}
-                      </span>
+                      <span style={{ color: '#16a34a' }}>₹{(item.uploadedPrice || item.currentPrice || 0).toLocaleString()}</span>
                       {item.uploadedPrice > 0 && item.currentPrice > 0 && Math.abs(item.uploadedPrice - item.currentPrice) > 0.01 && (
-                        <span className="badge bg-danger text-white mt-1" style={{ fontSize: '8px', padding: '1px 4px', fontWeight: 800 }}>
-                          PRICE DISPUTE
-                        </span>
+                        <span className="badge bg-danger text-white mt-1" style={{ fontSize: '8px', padding: '1px 4px', fontWeight: 800 }}>PRICE DISPUTE</span>
                       )}
                     </div>
                   </td>
                   <td className="text-center">
-                    {item.discountPercent > 0 ? (
-                      <span className="badge" style={{ background: '#dc2626', color: '#ffffff', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span>
-                    ) : <span className="text-zinc-300">—</span>}
+                    {item.discountPercent > 0 ? <span className="badge" style={{ background: '#dc2626', color: '#ffffff', fontSize: '10px', padding: '2px 8px', borderRadius: '4px' }}>-{item.discountPercent}%</span> : <span className="text-zinc-300">—</span>}
                   </td>
                   {item.dateValues.map((dv, di) => {
                     const col = dateColumns[di];
@@ -601,30 +690,20 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                   </td>
                 </tr>
               )) : !loading ? (
-                <tr>
-                  <td colSpan={11 + dateColumns.length} className="text-center py-5">
-                    <IndianRupee size={48} className="text-zinc-200 mb-3" />
-                    <p className="text-zinc-500 fw-medium">No matching records found</p>
-                  </td>
-                </tr>
+                <tr><td colSpan={11 + dateColumns.length} className="text-center py-5"><IndianRupee size={48} className="text-zinc-200 mb-3" /><p className="text-zinc-500 fw-medium">No matching records found</p></td></tr>
               ) : null}
             </tbody>
           </table>
-
           {(loading || hasMore) && (
             <div ref={loaderRef} className="loader-pulse">
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
+              <div className="pulse-dot"></div><div className="pulse-dot"></div><div className="pulse-dot"></div>
             </div>
           )}
         </div>
 
         {/* FOOTER */}
         <div className="px-4 py-2.5 bg-zinc-50 border-top d-flex justify-content-between align-items-center flex-shrink-0">
-          <span className="text-zinc-500 fw-medium" style={{ fontSize: '11px' }}>
-            Showing {asins.length.toLocaleString()} of {totalCount.toLocaleString()} ASINs
-          </span>
+          <span className="text-zinc-500 fw-medium" style={{ fontSize: '11px' }}>Showing {asins.length.toLocaleString()} of {totalCount.toLocaleString()} ASINs</span>
           <div className="d-flex align-items-center gap-2 text-zinc-400" style={{ fontSize: '11px' }}>
             <Loader2 size={12} className={loading ? "animate-spin" : "d-none"} />
             {loading ? 'Fetching...' : hasMore ? 'Scroll for more' : 'End of records'}
