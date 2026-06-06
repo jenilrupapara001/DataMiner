@@ -1,0 +1,185 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Skeleton.css — shimmer / pulse skeleton loading animations
+   Respects prefers-reduced-motion and supports dark mode via CSS variables.
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+.sk {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--sk-base, #e8eaed);
+  border-radius: var(--sk-radius, 4px);
+  flex-shrink: 0;
+}
+
+/* ── Wave (shimmer) animation ──────────────────────────────────────────────── */
+.sk--wave::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--sk-shine, rgba(255, 255, 255, 0.55)) 50%,
+    transparent 100%
+  );
+  animation: sk-wave 1.6s ease-in-out infinite;
+  transform: translateX(-100%);
+}
+
+@keyframes sk-wave {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%);  }
+}
+
+/* ── Pulse animation ───────────────────────────────────────────────────────── */
+.sk--pulse {
+  animation: sk-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sk-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Variants ──────────────────────────────────────────────────────────────── */
+.sk--circular {
+  border-radius: 50%;
+}
+.sk--text {
+  border-radius: 4px;
+  margin-bottom: 0.4em;
+  display: block;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .sk {
+    --sk-base:  #2d3748;
+    --sk-shine: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* Override with explicit dark class (for apps with manual dark toggle) */
+.dark .sk,
+[data-theme='dark'] .sk {
+  --sk-base:  #2d3748;
+  --sk-shine: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Accessible: no animation when user prefers reduced motion ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sk--wave::after { animation: none; }
+  .sk--pulse        { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Compound skeleton layouts                                                  */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Stat / KPI card ───────────────────────────────────────────────────────── */
+.sk-stat-card {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--sk-card-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sk-stat-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+/* ── Generic card ──────────────────────────────────────────────────────────── */
+.sk-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--sk-card-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.sk-card__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sk-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────────── */
+.sk-table {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--sk-card-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.sk-table__head {
+  display: grid;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 2px solid var(--sk-base, #e8eaed);
+}
+.sk-table__row {
+  display: grid;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--sk-base, #e8eaed);
+}
+.sk-table__row:last-child { border-bottom: none; }
+
+/* ── User list item ────────────────────────────────────────────────────────── */
+.sk-user-list { display: flex; flex-direction: column; gap: 10px; }
+.sk-user-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--sk-card-bg, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.sk-user-info { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
+/* ── Dashboard layout ──────────────────────────────────────────────────────── */
+.sk-dashboard { display: flex; flex-direction: column; gap: 24px; padding: 0; }
+.sk-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.sk-chart-area {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .sk-chart-area { grid-template-columns: 1fr; }
+}
+.sk-chart-box {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--sk-card-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sk-chart-side { align-items: center; }
+.sk-section { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Form ──────────────────────────────────────────────────────────────────── */
+.sk-form { max-width: 520px; display: flex; flex-direction: column; gap: 20px; }
+.sk-form__field { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Profile ───────────────────────────────────────────────────────────────── */
+.sk-profile__header { display: flex; gap: 24px; align-items: center; margin-bottom: 24px; }
+.sk-profile__info   { display: flex; flex-direction: column; gap: 10px; }

@@ -8,7 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const domain = env.VITE_API_URL ? new URL(env.VITE_API_URL).hostname : 'data.brandcentral.in';
-  
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-     server: {
+    server: {
       host: '0.0.0.0',
       proxy: {
         '/api': {

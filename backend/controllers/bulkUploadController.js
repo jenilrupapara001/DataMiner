@@ -139,7 +139,7 @@ exports.catalogSync = async (req, res) => {
         }
 
         const filePath = req.file.path;
-        const workbook = XLSX.readFile(filePath);
+        let workbook = XLSX.readFile(filePath);
 
         let data = [];
         for (const sheetName of workbook.SheetNames) {
@@ -168,6 +168,8 @@ exports.catalogSync = async (req, res) => {
                 }
             }
         }
+        // Free large workbook object immediately to reduce memory retention
+        workbook = null;
 
         if (data.length === 0) {
             try { fs.unlinkSync(filePath); } catch (e) { }
@@ -441,7 +443,7 @@ exports.ajioBulkImport = async (req, res) => {
         }
 
         const filePath = req.file.path;
-        const workbook = XLSX.readFile(filePath);
+        let workbook = XLSX.readFile(filePath);
 
         // 1. Initial attempt to read data
         let data = [];
@@ -471,6 +473,8 @@ exports.ajioBulkImport = async (req, res) => {
                 }
             }
         }
+        // Free large workbook object immediately to reduce memory retention
+        workbook = null;
 
         if (data.length === 0) {
             try { fs.unlinkSync(filePath); } catch (e) { }
@@ -648,7 +652,7 @@ exports.tagsImport = async (req, res) => {
 
         const sellerId = req.body.sellerId || '';
         const filePath = req.file.path;
-        const workbook = XLSX.readFile(filePath);
+        let workbook = XLSX.readFile(filePath);
 
         let data = [];
         for (const sheetName of workbook.SheetNames) {
@@ -659,6 +663,8 @@ exports.tagsImport = async (req, res) => {
                 break;
             }
         }
+        // Free large workbook object immediately to reduce memory retention
+        workbook = null;
 
         if (data.length === 0) {
             try { fs.unlinkSync(filePath); } catch (e) { }

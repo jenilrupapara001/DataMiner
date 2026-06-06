@@ -9,7 +9,6 @@ setInterval(() => {
   const heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
   const heapTotal = Math.round(mem.heapTotal / 1024 / 1024);
   const percent = Math.round((heapUsed / heapTotal) * 100);
-  
   if (percent > 85) {
     console.log(`📊 High Memory Warning: ${heapUsed}MB / ${heapTotal}MB (${percent}%)`);
     if (global.gc) {
@@ -164,7 +163,7 @@ app.get('/api/health', async (req, res) => {
 // Error handling
 app.use(async (err, req, res, next) => {
   console.error('🚨 [GLOBAL ERROR]:', err.stack);
-  
+
   try {
     const SystemLogService = require('./services/SystemLogService');
     await SystemLogService.log({
@@ -203,7 +202,7 @@ server.headersTimeout = 620000;
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-      origin: [
+    origin: [
       'http://localhost:5173',
       'http://localhost:5175',
       'http://localhost:3000',
@@ -228,7 +227,7 @@ app.set('io', io);
 const onlineUsers = new Map();
 
 io.on('connection', async (socket) => {
-    // Silent connection logs
+  // Silent connection logs
 
   socket.on('join', async (userId) => {
     try {
@@ -271,11 +270,11 @@ io.on('connection', async (socket) => {
   socket.on('update_role_permissions', async ({ roleId, permissions }) => {
     try {
       const pool = await getPool();
-      
+
       await pool.request()
         .input('roleId', sql.VarChar, roleId)
         .query('DELETE FROM RolePermissions WHERE RoleId = @roleId');
-        
+
       if (permissions && Array.isArray(permissions)) {
         for (const permId of permissions) {
           await pool.request()
@@ -284,17 +283,17 @@ io.on('connection', async (socket) => {
             .query('INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@roleId, @permId)');
         }
       }
-      
+
       const roleResult = await pool.request()
         .input('roleId', sql.VarChar, roleId)
         .query('SELECT * FROM Roles WHERE Id = @roleId');
-        
+
       if (roleResult.recordset.length > 0) {
         const role = roleResult.recordset[0];
         const perms = await pool.request()
           .input('roleId', sql.VarChar, roleId)
           .query('SELECT P.* FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
-          
+
         const formattedRole = {
           _id: role.Id,
           id: role.Id,
@@ -317,7 +316,7 @@ io.on('connection', async (socket) => {
             action: p.Action
           }))
         };
-        
+
         io.emit('role_permissions_updated', formattedRole);
       }
     } catch (err) {
@@ -539,7 +538,7 @@ io.on('connection', async (socket) => {
         await pool.request()
           .input('id', sql.VarChar, socket.userId)
           .query("UPDATE Users SET IsOnline = 0, LastSeen = GETDATE() WHERE Id = @id");
-      } catch (e) {}
+      } catch (e) { }
       io.emit('user_status_change', { userId: socket.userId, status: 'offline' });
     }
   });
@@ -567,7 +566,7 @@ server.listen(PORT, () => {
   try {
     const { syncAllToCometChat } = require('./services/cometChatService');
     syncAllToCometChat();
-  } catch (err) {}
+  } catch (err) { }
 });
 
 // Make getPool available globally for socket handlers

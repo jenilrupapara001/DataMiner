@@ -60,9 +60,10 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
     setLoading(true);
     try {
+      const isSellerActive = !!currentSellerId;
       const params = {
-        page: pageNum,
-        limit: 50,
+        page: isSellerActive ? 1 : pageNum,
+        limit: isSellerActive ? 10000 : 50,
         seller: currentSellerId,
         search: searchQuery,
         ...filters,
@@ -74,8 +75,8 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
       const res = await asinApi.getAll(params);
       if (res && res.asins) {
-        setAsins(prev => isNew ? res.asins : [...prev, ...res.asins]);
-        setHasMore(res.pagination.page < res.pagination.totalPages);
+        setAsins(prev => (isNew || isSellerActive) ? res.asins : [...prev, ...res.asins]);
+        setHasMore(isSellerActive ? false : res.pagination.page < res.pagination.totalPages);
         setTotalCount(res.pagination.total);
       }
     } catch (err) {

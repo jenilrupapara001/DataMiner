@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check, Loader2, X } from 'lucide-react';
 
 /**
@@ -27,10 +28,39 @@ const InfiniteScrollSelect = ({
     const [hasMore, setHasMore] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedLabel, setSelectedLabel] = useState('');
+    const [dropdownStyle, setDropdownStyle] = useState({});
 
     const dropdownRef = useRef(null);
+    const triggerRef = useRef(null);
+    const portalRef = useRef(null);
     const observerTarget = useRef(null);
     const searchTimeout = useRef(null);
+
+    // Update position when dropdown is opened or window is resized/scrolled
+    useEffect(() => {
+        if (!isOpen || !triggerRef.current) return;
+
+        const updatePosition = () => {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setDropdownStyle({
+                position: 'fixed',
+                top: `${rect.bottom + 4}px`,
+                left: `${rect.left}px`,
+                width: `${rect.width}px`,
+                zIndex: 99999
+            });
+        };
+
+        updatePosition();
+
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen]);
 
     // Initial load and Search load
     const loadOptions = useCallback(async (pageNum, searchQuery, append = false) => {
@@ -136,6 +166,9 @@ const InfiniteScrollSelect = ({
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                if (portalRef.current && portalRef.current.contains(event.target)) {
+                    return;
+                }
                 setIsOpen(false);
             }
         };
@@ -159,6 +192,7 @@ const InfiniteScrollSelect = ({
         <div ref={dropdownRef} className="infinite-select-container" style={{ position: 'relative', width: '100%' }}>
             {/* Display / Trigger */}
             <div 
+                ref={triggerRef}
                 className={`infinite-select-trigger ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
                 onClick={handleToggle}
             >
@@ -180,8 +214,8 @@ const InfiniteScrollSelect = ({
             </div>
 
             {/* Dropdown Content */}
-            {isOpen && (
-                <div className="infinite-select-dropdown">
+            {isOpen && createPortal(
+                <div ref={portalRef} className="infinite-select-dropdown" style={dropdownStyle}>
                     {/* Search Area */}
                     <div className="search-wrapper">
                         <Search size={12} className="search-icon" />
@@ -234,7 +268,8 @@ const InfiniteScrollSelect = ({
                             </>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             <style dangerouslySetInnerHTML={{ __html: `
