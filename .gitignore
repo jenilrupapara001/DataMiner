@@ -158,3 +158,4 @@ lib-cov
 160: vite.config.js.timestamp-*
 161: vite.config.ts.timestamp-*
 162: .vite/
+database_backup.zip
