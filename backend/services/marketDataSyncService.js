@@ -799,7 +799,7 @@ class MarketDataSyncService {
     async stopAllActiveTasks(marketplace = 'amazon') {
         try {
             const isAjio = marketplace === 'ajio';
-            console.log(`🛑 [Octoparse] Stopping all active ${marketplace} tasks before automation run...`);
+            console.log(`🛑 [Octoparse] Stopping all active ${marketplace} tasks one by one before automation run...`);
             const pool = await getPool();
             const queryStr = isAjio
                 ? "SELECT OctoparseId, Name FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId != '' AND IsActive = 1 AND LOWER(Marketplace) = 'ajio'"
@@ -1247,6 +1247,9 @@ class MarketDataSyncService {
                     await this.wait(API_COURTESY_DELAY);
                     // Mark as exported to keep Octoparse cloud queue clean
                     await this.markDataAsExported(taskId).catch(() => { });
+                    
+                    // Completely wipe the data from Octoparse cloud so it never pulls duplicates
+                    await this.clearTaskData(taskId).catch(() => { });
                 } else {
                     console.warn(`⚠️ [AUTO] ${cycleLabel} — Task completed but returned 0 rows. Skipping re-injection.`);
                     return totalProcessed;

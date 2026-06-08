@@ -192,6 +192,9 @@ class SchedulerService {
                                 const updated = processedCount?.updatedCount !== undefined ? processedCount.updatedCount : 0;
                                 console.log(`✅ [RECOVERY] Saved ${updated} ASINs for seller ${seller.Name}`);
                                 
+                                // Clean up the task data so it doesn't get extracted again
+                                await MarketSyncService.clearTaskData(taskId).catch(() => {});
+                                
                                 return { seller, success: true, count: updated };
                             }
                         }
@@ -442,6 +445,8 @@ class SchedulerService {
                 return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
             });
 
+            console.log(`🏢 [ENTERPRISE] Sorted ${pendingSellers.length} tasks in configured order: small first and large in ends.`);
+
             let CONCURRENCY_LIMIT = 10;
             if (!isAjio) {
                 try {
@@ -508,7 +513,7 @@ class SchedulerService {
                             syncResult = { success: true, count, asinsCount: activeAsinsCount };
                         } else {
                             // Clear previous data from Octoparse cloud before starting
-                            console.log(`🧹 [ENTERPRISE] Clearing previous data for ${seller.Name}...`);
+                            console.log(`🧹 [ENTERPRISE] First run compulsory: Clearing previous data for ${seller.Name}...`);
                             await MarketSyncService.clearTaskData(taskId).catch(() => {});
                             
                             // Trigger sync and await complete scrape + polling
@@ -563,7 +568,7 @@ class SchedulerService {
             await MarketSyncService.stopAllActiveTasks(marketplace).catch(() => {});
             
             // RUN SELF-HEALING IMMEDIATELY AFTER ALL SELLERS ARE PROCESSED
-            console.log(`🏢 [ENTERPRISE] Phase 2: Running Self-Healing (Missing Data Recovery) after main pipeline...`);
+            console.log(`🏢 [ENTERPRISE] Phase 2: Running Self-Healing after main pipeline completes...`);
             await this.runMissingDataRecovery();
 
             const totalDurationSecs = Math.round((Date.now() - startTime) / 1000);
@@ -732,6 +737,9 @@ class SchedulerService {
                         const batchResult = await MarketSyncService.processBatchResults(seller.Id, rawData);
                         const updated = batchResult?.updatedCount !== undefined ? batchResult.updatedCount : (batchResult || 0);
                         console.log(`[Scheduler] ✅ Successfully bulk-linked ${updated} results for ${seller.Name}`);
+                        
+                        // Clean up the task data so it doesn't get extracted again
+                        await MarketSyncService.clearTaskData(seller.OctoparseId).catch(() => {});
                     }
                 } catch (err) {
                     console.error(`[Scheduler] ❌ Failed to fetch result for ${seller.Name}:`, err.message);
