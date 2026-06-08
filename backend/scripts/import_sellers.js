@@ -129,7 +129,7 @@ async function importSellers() {
                             OctoparseId = @octoparseId, IsActive = @isActive, [Plan] = @plan, 
                             ScrapeLimit = @scrapeLimit, ScrapeUsed = @scrapeUsed, 
                             OctoparseConfig = @octoparseConfig, KeepaConfig = @keepaConfig,
-                            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                            UpdatedAt = dbo.GetEnvDate()
                         WHERE Id = @id
                     `);
                 updatedSellers++;
@@ -149,7 +149,7 @@ async function importSellers() {
                     .input('keepaConfig', sql.NVarChar, keepaConfig)
                     .query(`
                         INSERT INTO Sellers (Id, Name, Marketplace, SellerId, OctoparseId, IsActive, [Plan], ScrapeLimit, ScrapeUsed, OctoparseConfig, KeepaConfig, CreatedAt, UpdatedAt)
-                        VALUES (@id, @name, @marketplace, @sellerId, @octoparseId, @isActive, @plan, @scrapeLimit, @scrapeUsed, @octoparseConfig, @keepaConfig, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                        VALUES (@id, @name, @marketplace, @sellerId, @octoparseId, @isActive, @plan, @scrapeLimit, @scrapeUsed, @octoparseConfig, @keepaConfig, dbo.GetEnvDate(), dbo.GetEnvDate())
                     `);
                 insertedSellers++;
             }

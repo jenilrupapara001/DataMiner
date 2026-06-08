@@ -17,7 +17,7 @@ async function run() {
                     Progress INT DEFAULT 0,
                     [RowCount] INT NULL,
                     ErrorMessage NVARCHAR(MAX) NULL,
-                    CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
+                    CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
                     CompletedAt DATETIME2 NULL,
                     ExpiresAt DATETIME2 NULL,
                     DownloadedAt DATETIME2 NULL,

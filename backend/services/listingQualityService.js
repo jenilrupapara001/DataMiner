@@ -98,7 +98,7 @@ class ListingQualityService {
             ImageScore = @is, ImageGrade = @ig, ImageIssues = @ii, ImageRecommendations = @ir, ImageDetails = @id_details,
             DescriptionScore = @ds, DescriptionGrade = @dg, DescriptionIssues = @di, DescriptionRecommendations = @dr, DescriptionDetails = @dd,
             LQS = @totalScore, LQSGrade = @totalGrade,
-            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+            UpdatedAt = dbo.GetEnvDate()
           WHERE Id = @id
         `);
 

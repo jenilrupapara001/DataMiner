@@ -44,7 +44,7 @@ exports.uploadFiles = async (req, res) => {
                 .input('StorageProvider', sql.NVarChar, 'local')
                 .query(`
                     INSERT INTO Files (Id, FileName, OriginalName, FilePath, FileSize, MimeType, UploadedBy, Folder, Starred, Trashed, StorageProvider, CreatedAt)
-                    VALUES (@Id, @FileName, @OriginalName, @FilePath, @FileSize, @MimeType, @UploadedBy, @Folder, @Starred, @Trashed, @StorageProvider, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@Id, @FileName, @OriginalName, @FilePath, @FileSize, @MimeType, @UploadedBy, @Folder, @Starred, @Trashed, @StorageProvider, dbo.GetEnvDate())
                 `);
 
             savedFiles.push({
@@ -165,7 +165,7 @@ exports.trashFile = async (req, res) => {
             .query(`
                 UPDATE Files 
                 SET Trashed = ~Trashed, 
-                    TrashedAt = CASE WHEN Trashed = 1 THEN NULL ELSE DATEADD(minute, 330, GETUTCDATE()) END
+                    TrashedAt = CASE WHEN Trashed = 1 THEN NULL ELSE dbo.GetEnvDate() END
                 WHERE Id = @id AND UploadedBy = @userId;
                 SELECT * FROM Files WHERE Id = @id;
             `);

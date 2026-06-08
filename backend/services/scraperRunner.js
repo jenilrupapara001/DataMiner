@@ -116,8 +116,8 @@ class ScraperRunner {
                                     ReviewCount = @reviewCount,
                                     LQS = @lqs,
                                     ScrapeStatus = @scrapeStatus,
-                                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
-                                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                                    LastScrapedAt = dbo.GetEnvDate(),
+                                    UpdatedAt = dbo.GetEnvDate()
                                 WHERE Id = @id
                             `);
                         

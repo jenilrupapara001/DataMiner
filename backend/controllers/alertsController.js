@@ -115,7 +115,7 @@ exports.createAlertRule = async (req, res) => {
             .input('CreatedBy', sql.VarChar, userId)
             .query(`
                 INSERT INTO AlertRules (Id, Name, Type, Condition, Actions, SellerId, IsActive, CreatedBy, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Name, @Type, @Condition, @Actions, @SellerId, @IsActive, @CreatedBy, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @Name, @Type, @Condition, @Actions, @SellerId, @IsActive, @CreatedBy, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         const result = await pool.request()
@@ -154,7 +154,7 @@ exports.updateAlertRule = async (req, res) => {
 
         if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        updates.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
+        updates.push('UpdatedAt = dbo.GetEnvDate()');
         request.input('id', sql.VarChar, id);
         const result = await request.query(`
             UPDATE AlertRules SET ${updates.join(', ')} WHERE Id = @id;
@@ -223,7 +223,7 @@ exports.acknowledgeAlert = async (req, res) => {
             .input('ackBy', sql.NVarChar, acknowledgedBy || req.user.name || 'unknown')
             .query(`
                 UPDATE Alerts 
-                SET Acknowledged = 1, AcknowledgedBy = @ackBy, AcknowledgedAt = DATEADD(minute, 330, GETUTCDATE())
+                SET Acknowledged = 1, AcknowledgedBy = @ackBy, AcknowledgedAt = dbo.GetEnvDate()
                 WHERE Id = @id
             `);
 
@@ -243,7 +243,7 @@ exports.acknowledgeAllAlerts = async (req, res) => {
         const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
         const pool = await getPool();
 
-        let updateSql = "UPDATE Alerts SET Acknowledged = 1, AcknowledgedBy = @ackBy, AcknowledgedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Acknowledged = 0";
+        let updateSql = "UPDATE Alerts SET Acknowledged = 1, AcknowledgedBy = @ackBy, AcknowledgedAt = dbo.GetEnvDate() WHERE Acknowledged = 0";
         const request = pool.request().input('ackBy', sql.NVarChar, req.user.name || 'unknown');
 
         if (!isGlobalUser) {
@@ -306,7 +306,7 @@ exports.createAlert = async (alertData) => {
             .input('RuleId', sql.VarChar, alertData.ruleId || null)
             .query(`
                 INSERT INTO Alerts (Id, SellerId, AsinId, Type, Severity, Title, Message, RuleId, CreatedAt)
-                VALUES (@Id, @SellerId, @AsinId, @Type, @Severity, @Title, @Message, @RuleId, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @SellerId, @AsinId, @Type, @Severity, @Title, @Message, @RuleId, dbo.GetEnvDate())
             `);
 
         // Notify users?

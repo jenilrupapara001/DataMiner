@@ -109,7 +109,7 @@ exports.updateAsinTags = async (req, res) => {
             await pool.request()
                 .input('id', sql.VarChar, asinId)
                 .input('tags', sql.NVarChar, JSON.stringify(newTags))
-                .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+                .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
 
             // Log the change
             await logTagChange(asinId, currentTags, newTags, userId, userName, 'manual');
@@ -196,7 +196,7 @@ exports.bulkUpdateTagsCSV = async (req, res) => {
                         await pool.request()
                             .input('id', sql.VarChar, asin.Id)
                             .input('tags', sql.NVarChar, JSON.stringify(newTags))
-                            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+                            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
                         
                         await logTagChange(asin.Id, currentTags, newTags, userId, userName, 'bulk_upload');
                         updated++;
@@ -400,7 +400,7 @@ exports.bulkUpdateTags = async (req, res) => {
           await transaction.request()
             .input('id', sql.VarChar, asin.Id)
             .input('tags', sql.NVarChar, JSON.stringify(newTags))
-            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+            .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
 
           // 2. Log to TagsHistory
           const historyId = generateId();
@@ -421,7 +421,7 @@ exports.bulkUpdateTags = async (req, res) => {
             .input('notes', sql.NVarChar, `Bulk ${action} tags on ${asinIds.length} ASINs`)
             .query(`
               INSERT INTO TagsHistory (Id, AsinId, UserId, UserName, PreviousTags, NewTags, AddedTags, RemovedTags, Action, Source, Notes, CreatedAt)
-              VALUES (@id, @asinId, @userId, @userName, @previousTags, @newTags, @addedTags, @removedTags, @action, @source, @notes, DATEADD(minute, 330, GETUTCDATE()))
+              VALUES (@id, @asinId, @userId, @userName, @previousTags, @newTags, @addedTags, @removedTags, @action, @source, @notes, dbo.GetEnvDate())
             `);
         } else {
           skipped++;
@@ -505,7 +505,7 @@ exports.addPredefinedTag = async (req, res) => {
             .input('id', sql.VarChar, id)
             .input('name', sql.NVarChar, tagName)
             .input('category', sql.NVarChar, category)
-            .query('INSERT INTO PredefinedTags (Id, Name, Category, CreatedAt, UpdatedAt) VALUES (@id, @name, @category, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))');
+            .query('INSERT INTO PredefinedTags (Id, Name, Category, CreatedAt, UpdatedAt) VALUES (@id, @name, @category, dbo.GetEnvDate(), dbo.GetEnvDate())');
 
         res.status(201).json({
             success: true,
@@ -566,7 +566,7 @@ exports.updatePredefinedTag = async (req, res) => {
             .input('id', sql.VarChar, id)
             .input('name', sql.NVarChar, newName)
             .input('category', sql.NVarChar, newCategory)
-            .query('UPDATE PredefinedTags SET Name = @name, Category = @category, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+            .query('UPDATE PredefinedTags SET Name = @name, Category = @category, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
 
         res.json({
             success: true,

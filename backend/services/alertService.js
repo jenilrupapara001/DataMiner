@@ -158,7 +158,7 @@ class AlertService {
             .input('IsResolved', sql.Bit, 0)
             .query(`
               INSERT INTO Alerts (Id, SellerId, AsinId, Type, Severity, Title, Message, IsResolved, CreatedAt)
-              VALUES (@Id, @SellerId, @AsinId, @Type, @Severity, @Title, @Message, @IsResolved, DATEADD(minute, 330, GETUTCDATE()))
+              VALUES (@Id, @SellerId, @AsinId, @Type, @Severity, @Title, @Message, @IsResolved, dbo.GetEnvDate())
             `);
         } catch (err) {
           console.error('[AlertService] Failed to save alert:', err);

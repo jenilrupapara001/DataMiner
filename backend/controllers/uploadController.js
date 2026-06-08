@@ -393,8 +393,8 @@ exports.uploadAdsData = async (req, res) => {
               'Active' AS Status,
               'Pending' AS ScrapeStatus,
               1 AS Ads,
-              DATEADD(minute, 330, GETUTCDATE()) AS CreatedAt,
-              DATEADD(minute, 330, GETUTCDATE()) AS UpdatedAt
+              dbo.GetEnvDate() AS CreatedAt,
+              dbo.GetEnvDate() AS UpdatedAt
             FROM (
               SELECT DISTINCT Asin AS AsinCode FROM ${tempTableName}
             ) t
@@ -423,10 +423,10 @@ exports.uploadAdsData = async (req, res) => {
           USING ${tempTableName} AS S
           ON (${matchClause})
           WHEN MATCHED THEN
-            UPDATE SET ${updateCols}, T.UploadedAt = DATEADD(minute, 330, GETUTCDATE())
+            UPDATE SET ${updateCols}, T.UploadedAt = dbo.GetEnvDate()
           WHEN NOT MATCHED THEN
             INSERT (${insertColNames}, UploadedAt)
-            VALUES (${insertColVals}, DATEADD(minute, 330, GETUTCDATE()));
+            VALUES (${insertColVals}, dbo.GetEnvDate());
         `);
       });
 
@@ -549,8 +549,8 @@ exports.uploadOctoparseData = async (req, res) => {
       .query(`
         UPDATE Sellers
         SET ScrapeUsed = ScrapeUsed + @count,
-            LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
-            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+            LastScrapedAt = dbo.GetEnvDate(),
+            UpdatedAt = dbo.GetEnvDate()
         WHERE Id = @sellerId
       `);
 
@@ -621,7 +621,7 @@ exports.uploadAsinMapping = async (req, res) => {
           .input('child', sql.VarChar, child)
           .query(`
             UPDATE Asins 
-            SET ParentAsin = @parent, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) 
+            SET ParentAsin = @parent, UpdatedAt = dbo.GetEnvDate() 
             WHERE AsinCode = @child
           `);
         inserted++;

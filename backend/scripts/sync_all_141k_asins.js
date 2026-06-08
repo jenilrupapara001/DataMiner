@@ -20,7 +20,7 @@ async function syncAll141kAsins() {
         const positivePriceResult = await pool.request().query(`
             UPDATE Asins
             SET AvailabilityStatus = 'Available',
-                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                UpdatedAt = dbo.GetEnvDate()
             WHERE CurrentPrice > 0 
               AND (AvailabilityStatus = 'Currently unavailable.' 
                    OR AvailabilityStatus = 'Temporarily out of stock.' 
@@ -34,7 +34,7 @@ async function syncAll141kAsins() {
         const zeroPriceResult = await pool.request().query(`
             UPDATE Asins
             SET AvailabilityStatus = 'Currently unavailable.',
-                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                UpdatedAt = dbo.GetEnvDate()
             WHERE (CurrentPrice = 0 OR CurrentPrice IS NULL)
               AND (AvailabilityStatus = 'Available' 
                    OR AvailabilityStatus = 'In stock' 

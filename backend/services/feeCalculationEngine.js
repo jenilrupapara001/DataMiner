@@ -257,7 +257,7 @@ const calculateProfits = async (asinIds = []) => {
                     UPDATE Asins SET 
                         FeePreview = @feePreview,
                         LossPerReturn = @returnFee,
-                        UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                        UpdatedAt = dbo.GetEnvDate()
                     WHERE Id = @id
                 `);
         }

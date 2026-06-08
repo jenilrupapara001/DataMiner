@@ -90,7 +90,7 @@ class NvidiaAiService {
             await pool.request()
                 .input('id', sql.VarChar, asinId)
                 .input('lqsDetails', sql.NVarChar, JSON.stringify(lqsDetails))
-                .query("UPDATE Asins SET LqsDetails = @lqsDetails, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+                .query("UPDATE Asins SET LqsDetails = @lqsDetails, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
 
             if (!parsedResults.hasWhiteBackground || !parsedResults.hasHighResolution) {
                 await this.handleAuditFailure(asin, parsedResults);
@@ -135,7 +135,7 @@ class NvidiaAiService {
                     .input('CreatedBy', sql.VarChar, asin.SellerId)
                     .query(`
                         INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, AsinId, IsAIGenerated, AiReasoning, SellerId, CreatedBy, CreatedAt, UpdatedAt)
-                        VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @AsinId, @IdAIGenerated, @AiReasoning, @SellerId, @CreatedBy, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                        VALUES (@Id, @Title, @Description, @Type, @Priority, @Status, @AsinId, @IdAIGenerated, @AiReasoning, @SellerId, @CreatedBy, dbo.GetEnvDate(), dbo.GetEnvDate())
                     `);
             } else {
                 actionId = existingRes.recordset[0].Id;
@@ -147,7 +147,7 @@ class NvidiaAiService {
                     await pool.request()
                         .input('id', sql.VarChar, actionId)
                         .input('desc', sql.NVarChar, description + `\n\n✅ AI GENERATED IMAGE READY: ${imageUrl}`)
-                        .query("UPDATE Actions SET Description = @desc, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+                        .query("UPDATE Actions SET Description = @desc, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
                 }
             }
         } catch (err) {

@@ -18,7 +18,7 @@ class SystemLogService {
                 .input('Metadata', sql.NVarChar, metadata ? JSON.stringify(metadata) : null)
                 .query(`
                     INSERT INTO SystemLogs (Id, Type, EntityType, EntityId, EntityTitle, UserId, Description, Metadata, CreatedAt)
-                    VALUES (@Id, @Type, @EntityType, @EntityId, @EntityTitle, @UserId, @Description, @Metadata, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@Id, @Type, @EntityType, @EntityId, @EntityTitle, @UserId, @Description, @Metadata, dbo.GetEnvDate())
                 `);
 
             // Emit log event through SocketService in real-time

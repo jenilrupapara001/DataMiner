@@ -52,7 +52,7 @@ exports.getTrackerList = async (req, res) => {
                 .query(`
                     SELECT SellerId,
                            COUNT(*) as totalAsins,
-                           SUM(CASE WHEN DATEDIFF(DAY, CreatedAt, DATEADD(minute, 330, GETUTCDATE())) = 0 THEN 1 ELSE 0 END) as newToday
+                           SUM(CASE WHEN DATEDIFF(DAY, CreatedAt, dbo.GetEnvDate()) = 0 THEN 1 ELSE 0 END) as newToday
                     FROM Asins
                     WHERE SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})
                     GROUP BY SellerId
@@ -161,7 +161,7 @@ const syncSellerFromKeepa = async (seller) => {
                 .input('ScrapeStatus', sql.NVarChar, 'PENDING')
                 .query(`
                     INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, CreatedAt)
-                    VALUES (@Id, @AsinCode, @SellerId, @Status, @ScrapeStatus, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@Id, @AsinCode, @SellerId, @Status, @ScrapeStatus, dbo.GetEnvDate())
                 `)
         );
 
@@ -177,7 +177,7 @@ const syncSellerFromKeepa = async (seller) => {
         await pool.request()
             .input('Id', sql.VarChar, seller.Id)
             .input('Count', sql.Int, keepaAsins.length)
-            .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = DATEADD(minute, 330, GETUTCDATE()), UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @Id');
+            .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate() WHERE Id = @Id');
 
         console.log(`[SellerTracker] ${seller.name}: added ${newAsins.length} new ASINs from Keepa`);
 
@@ -197,7 +197,7 @@ const syncSellerFromKeepa = async (seller) => {
         await pool.request()
             .input('Id', sql.VarChar, seller.Id)
             .input('Count', sql.Int, keepaAsins.length)
-            .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = DATEADD(minute, 330, GETUTCDATE()), UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @Id');
+            .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate() WHERE Id = @Id');
     }
 
     return {
@@ -309,7 +309,7 @@ async function notifySellerUsers(sellerId, sellerName, newAsinsCount) {
                 .input('Message', sql.NVarChar, message)
                 .query(`
                     INSERT INTO Notifications (Id, RecipientId, Type, ReferenceModel, ReferenceId, Message, CreatedAt)
-                    VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, dbo.GetEnvDate())
                 `)
         );
 

@@ -143,7 +143,7 @@ exports.createRole = async (req, res) => {
         .input('clr', sql.NVarChar, color || '#4F46E5')
         .query(`
           INSERT INTO Roles (Id, Name, DisplayName, Description, Level, Color, IsSystem, IsActive, CreatedAt, UpdatedAt)
-          VALUES (@id, @name, @dn, @desc, @lvl, @clr, 0, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+          VALUES (@id, @name, @dn, @desc, @lvl, @clr, 0, 1, dbo.GetEnvDate(), dbo.GetEnvDate())
         `);
 
       if (permissions && Array.isArray(permissions)) {
@@ -189,7 +189,7 @@ exports.updateRole = async (req, res) => {
             Level = COALESCE(@lvl, Level),
             Color = COALESCE(@clr, Color),
             IsActive = @active,
-            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+            UpdatedAt = dbo.GetEnvDate()
           WHERE Id = @id
         `);
 
@@ -405,7 +405,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
           .input('action', sql.NVarChar, perm.action)
           .query(`
             INSERT INTO Permissions (Id, Name, DisplayName, Description, Category, Action, CreatedAt)
-            VALUES (@id, @name, @displayName, @description, @category, @action, DATEADD(minute, 330, GETUTCDATE()))
+            VALUES (@id, @name, @displayName, @description, @category, @action, dbo.GetEnvDate())
           `);
         
         // Small delay to prevent remote socket exhaustion
@@ -447,7 +447,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
           .input('isActive', sql.Bit, 1)
           .query(`
             INSERT INTO Roles (Id, Name, DisplayName, Description, Level, Color, IsSystem, IsActive, CreatedAt, UpdatedAt)
-            VALUES (@id, @name, @displayName, @description, @level, @color, @isSystem, @isActive, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+            VALUES (@id, @name, @displayName, @description, @level, @color, @isSystem, @isActive, dbo.GetEnvDate(), dbo.GetEnvDate())
           `);
       } else if (existingResult.recordset[0].IsSystem) {
         await transaction.request()
@@ -462,7 +462,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
               Description = @description,
               Level = @level,
               Color = @color,
-              UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+              UpdatedAt = dbo.GetEnvDate()
             WHERE Id = @id
           `);
       }

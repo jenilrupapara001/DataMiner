@@ -61,7 +61,7 @@ exports.createKey = async (req, res) => {
             .input('IsActive', sql.Bit, 1)
             .query(`
                 INSERT INTO ApiKeys (Id, Name, ServiceId, Value, Category, Description, OwnerId, IsActive, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Name, @ServiceId, @Value, @Category, @Description, @OwnerId, @IsActive, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @Name, @ServiceId, @Value, @Category, @Description, @OwnerId, @IsActive, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         const result = await pool.request()
@@ -107,7 +107,7 @@ exports.updateKey = async (req, res) => {
             return res.status(400).json({ success: false, message: 'No updates provided' });
         }
 
-        updates.push(`UpdatedAt = DATEADD(minute, 330, GETUTCDATE())`);
+        updates.push(`UpdatedAt = dbo.GetEnvDate()`);
 
         request.input('id', sql.VarChar, id);
         const sqlText = `UPDATE ApiKeys SET ${updates.join(', ')} WHERE Id = @id; SELECT * FROM ApiKeys WHERE Id = @id`;

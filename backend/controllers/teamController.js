@@ -96,7 +96,7 @@ exports.createTeam = async (req, res) => {
             .input('ManagerId', sql.VarChar, userId)
             .query(`
                 INSERT INTO Teams (Id, Name, Description, ManagerId, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Name, @Description, @ManagerId, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @Name, @Description, @ManagerId, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         // Add owner as lead member
@@ -255,7 +255,7 @@ exports.updateMember = async (req, res) => {
 
         if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        updates.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
+        updates.push('UpdatedAt = dbo.GetEnvDate()');
         request.input('teamId', sql.VarChar, id);
         request.input('userId', sql.VarChar, userId);
         const updateSql = `UPDATE TeamMembers SET ${updates.join(', ')} WHERE TeamId = @teamId AND UserId = @userId; SELECT * FROM TeamMembers WHERE TeamId = @teamId AND UserId = @userId;`;
@@ -286,7 +286,7 @@ exports.updateTeam = async (req, res) => {
             .input('desc', sql.NVarChar, description || '')
             .query(`
                 UPDATE Teams 
-                SET Name = @name, Description = @desc, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                SET Name = @name, Description = @desc, UpdatedAt = dbo.GetEnvDate()
                 WHERE Id = @id
             `);
 

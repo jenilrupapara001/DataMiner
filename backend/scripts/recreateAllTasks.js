@@ -57,7 +57,7 @@ async function recreateAllTasks() {
                 await pool.request()
                     .input('newTaskId', sql.VarChar, newTaskId)
                     .input('sellerId', sql.VarChar, seller.Id)
-                    .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
+                    .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
                 console.log('   - 💾 Sellers database updated.');
 
                 // Update/Insert OctoTasks Pool Table
@@ -73,7 +73,7 @@ async function recreateAllTasks() {
                         .input('sellerId', sql.VarChar, seller.Id)
                         .query(`
                             INSERT INTO OctoTasks (Id, TaskId, TaskName, GroupName, IsAssigned, SellerId, LastAssignedAt, CreatedAt, UpdatedAt)
-                            VALUES (@id, @taskId, @taskName, 'StandardModeMigration', 1, @sellerId, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                            VALUES (@id, @taskId, @taskName, 'StandardModeMigration', 1, @sellerId, dbo.GetEnvDate(), dbo.GetEnvDate(), dbo.GetEnvDate())
                         `);
                 } else {
                     await pool.request()
@@ -81,7 +81,7 @@ async function recreateAllTasks() {
                         .input('sellerId', sql.VarChar, seller.Id)
                         .query(`
                             UPDATE OctoTasks 
-                            SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = DATEADD(minute, 330, GETUTCDATE()), UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) 
+                            SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate() 
                             WHERE TaskId = @taskId
                         `);
                 }

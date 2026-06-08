@@ -100,7 +100,7 @@ exports.startExport = async (req, res) => {
             .input('params', sql.NVarChar, JSON.stringify(req.body))
             .query(`
                 INSERT INTO Downloads (Id, UserId, FileName, FilePath, Format, Status, Params, CreatedAt)
-                VALUES (@id, @userId, @fileName, @filePath, @format, @status, @params, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@id, @userId, @fileName, @filePath, @format, @status, @params, dbo.GetEnvDate())
             `);
 
         // Return immediately with download ID
@@ -349,11 +349,11 @@ async function processExportJob(downloadId, params, userId) {
             }
 
             // Date Range (CreatedAt or LastScrapedAt based on context)
-            if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(minute, 330, GETUTCDATE()))';
-            else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, DATEADD(minute, 330, GETUTCDATE())))';
-            else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, DATEADD(minute, 330, GETUTCDATE()))';
-            else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, DATEADD(minute, 330, GETUTCDATE()))';
-            else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, DATEADD(minute, 330, GETUTCDATE()))';
+            if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, dbo.GetEnvDate())';
+            else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, dbo.GetEnvDate()))';
+            else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, dbo.GetEnvDate())';
+            else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, dbo.GetEnvDate())';
+            else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, dbo.GetEnvDate())';
             else if (dateRange && typeof dateRange === 'object' && dateRange.start) {
                 request.input('dateStart', sql.DateTime2, new Date(dateRange.start));
                 whereClause += ' AND a.LastScrapedAt >= @dateStart';
@@ -676,8 +676,8 @@ async function processExportJob(downloadId, params, userId) {
                     FileSize = @fileSize,
                     [RowCount] = @rowCount,
                     FilePath = '/exports/' + (SELECT FileName FROM Downloads WHERE Id = @id),
-                    CompletedAt = DATEADD(minute, 330, GETUTCDATE()),
-                    ExpiresAt = DATEADD(HOUR, 24, DATEADD(minute, 330, GETUTCDATE()))
+                    CompletedAt = dbo.GetEnvDate(),
+                    ExpiresAt = DATEADD(HOUR, 24, dbo.GetEnvDate())
                 WHERE Id = @id
             `);
 
@@ -825,7 +825,7 @@ exports.downloadFile = async (req, res) => {
         // Update download count
         await pool.request()
             .input('id', sql.VarChar, id)
-            .query('UPDATE Downloads SET DownloadCount = DownloadCount + 1, DownloadedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+            .query('UPDATE Downloads SET DownloadCount = DownloadCount + 1, DownloadedAt = dbo.GetEnvDate() WHERE Id = @id');
 
         // Send file
         res.download(filePath, download.FileName);
@@ -858,7 +858,7 @@ exports.cleanExpiredDownloads = async () => {
     try {
         const pool = await getPool();
         const result = await pool.request()
-            .query("SELECT Id, FilePath FROM Downloads WHERE Status = 'completed' AND ExpiresAt < DATEADD(minute, 330, GETUTCDATE())");
+            .query("SELECT Id, FilePath FROM Downloads WHERE Status = 'completed' AND ExpiresAt < dbo.GetEnvDate()");
 
         for (const download of result.recordset) {
             // Delete file

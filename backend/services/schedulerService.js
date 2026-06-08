@@ -282,8 +282,8 @@ class SchedulerService {
                         EndTime DATETIME2,
                         Status VARCHAR(50) NOT NULL, -- 'RUNNING', 'COMPLETED', 'FAILED'
                         Details NVARCHAR(MAX), -- JSON string with seller-wise stats
-                        CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
-                        UpdatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE())
+                        CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
+                        UpdatedAt DATETIME2 DEFAULT dbo.GetEnvDate()
                     );
                 END
 
@@ -298,8 +298,8 @@ class SchedulerService {
                         Type NVARCHAR(100),
                         TimeLimit INT DEFAULT 60,
                         IsActive BIT DEFAULT 1,
-                        CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
-                        UpdatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE())
+                        CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
+                        UpdatedAt DATETIME2 DEFAULT dbo.GetEnvDate()
                     );
                     CREATE INDEX IX_TaskTemplates_Category ON TaskTemplates(Category);
                     CREATE INDEX IX_TaskTemplates_IsActive ON TaskTemplates(IsActive);
@@ -312,8 +312,8 @@ class SchedulerService {
                         Name NVARCHAR(255) NOT NULL,
                         Description NVARCHAR(MAX),
                         OwnerId VARCHAR(24),
-                        CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
-                        UpdatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
+                        CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
+                        UpdatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
                         CONSTRAINT FK_GoalTemplates_Owner FOREIGN KEY (OwnerId) REFERENCES Users(Id)
                     );
                     CREATE INDEX IX_GoalTemplates_OwnerId ON GoalTemplates(OwnerId);
@@ -337,13 +337,13 @@ class SchedulerService {
             if (isEnd) {
                 await request.query(`
                     UPDATE ScheduledRuns 
-                    SET Status = @status, Details = @details, EndTime = DATEADD(minute, 330, GETUTCDATE()), UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                    SET Status = @status, Details = @details, EndTime = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate()
                     WHERE Id = @id
                 `);
             } else {
                 await request.query(`
                     UPDATE ScheduledRuns 
-                    SET Status = @status, Details = @details, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                    SET Status = @status, Details = @details, UpdatedAt = dbo.GetEnvDate()
                     WHERE Id = @id
                 `);
             }
@@ -374,7 +374,7 @@ class SchedulerService {
                     .input('details', sql.NVarChar, JSON.stringify([]))
                     .query(`
                         INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
-                        VALUES (@id, @startTime, @status, @details, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                        VALUES (@id, @startTime, @status, @details, dbo.GetEnvDate(), dbo.GetEnvDate())
                     `);
 
                 // 1. FIRST: Stop all active tasks to ensure a fresh state

@@ -80,10 +80,10 @@ exports.updateSettings = async (req, res) => {
                     USING (SELECT @key AS [Key]) AS source
                     ON target.[Key] = source.[Key]
                     WHEN MATCHED THEN
-                        UPDATE SET Value = @val, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                        UPDATE SET Value = @val, UpdatedAt = dbo.GetEnvDate()
                     WHEN NOT MATCHED THEN
                         INSERT ([Key], Value, Description, CreatedAt, UpdatedAt)
-                        VALUES (@key, @val, @desc, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()));
+                        VALUES (@key, @val, @desc, dbo.GetEnvDate(), dbo.GetEnvDate());
                 `);
         }
 

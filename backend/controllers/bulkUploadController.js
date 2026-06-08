@@ -323,7 +323,7 @@ exports.catalogSync = async (req, res) => {
                                 Tags = @tags,
                                 Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
                                 Marketplace = @marketplace,
-                                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                                UpdatedAt = dbo.GetEnvDate()
                             WHERE Id = @id
                         `);
 
@@ -358,7 +358,7 @@ exports.catalogSync = async (req, res) => {
                         .input('marketplace', sql.NVarChar, rowMarketplace || 'amazon.in')
                         .query(`
                             INSERT INTO Asins (Id, AsinCode, SellerId, ParentAsin, Sku, ReleaseDate, UploadedPrice, Tags, Status, ScrapeStatus, Brand, Marketplace, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, @marketplace, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                            VALUES (@id, @asinCode, @sellerId, @parentAsin, @sku, @releaseDate, @uploadedPrice, @tags, 'Active', 'PENDING', @brand, @marketplace, dbo.GetEnvDate(), dbo.GetEnvDate())
                         `);
 
                     if (uploadedPrice !== null) {
@@ -536,7 +536,7 @@ exports.ajioBulkImport = async (req, res) => {
                                 UploadedPrice = CASE WHEN @uploadedPrice IS NOT NULL THEN @uploadedPrice ELSE UploadedPrice END,
                                 Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END,
                                 Marketplace = 'ajio',
-                                UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                                UpdatedAt = dbo.GetEnvDate()
                             WHERE Id = @id
                         `);
                         
@@ -567,7 +567,7 @@ exports.ajioBulkImport = async (req, res) => {
                         .input('brand', sql.NVarChar, brandName || null)
                         .query(`
                             INSERT INTO Asins (Id, AsinCode, SellerId, Sku, UploadedPrice, Brand, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-                            VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, @brand, 'Active', 'PENDING', 'ajio', DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                            VALUES (@id, @asinCode, @sellerId, @sku, @uploadedPrice, @brand, 'Active', 'PENDING', 'ajio', dbo.GetEnvDate(), dbo.GetEnvDate())
                         `);
                         
                     if (uploadedPrice !== null) {
@@ -728,7 +728,7 @@ exports.tagsImport = async (req, res) => {
                 await pool.request()
                     .input('id', sql.VarChar, asinId)
                     .input('tags', sql.NVarChar, JSON.stringify(tags))
-                    .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+                    .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
                 results.updated++;
             } catch (e) {
                 results.errors.push({ asin: childAsin, reason: e.message });

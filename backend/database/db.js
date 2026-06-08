@@ -30,8 +30,24 @@ function getPool() {
     if (!poolPromise) {
         poolPromise = new sql.ConnectionPool(config)
             .connect()
-            .then(pool => {
-                // console.log('✅ Connected to SQL Server Pool');
+            .then(async pool => {
+                // Dynamically calculate TZ offset in minutes
+                const tz = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata';
+                const d = new Date();
+                const utcStr = d.toLocaleString('en-US', { timeZone: 'UTC' });
+                const locStr = d.toLocaleString('en-US', { timeZone: tz });
+                const offsetMins = Math.round((new Date(locStr) - new Date(utcStr)) / 60000);
+                
+                // Inject the Global Env Date UDF
+                await pool.request().query(`
+                    CREATE OR ALTER FUNCTION dbo.GetEnvDate()
+                    RETURNS DATETIME2
+                    AS
+                    BEGIN
+                        RETURN DATEADD(minute, ${offsetMins}, GETUTCDATE())
+                    END
+                `);
+                
                 return pool;
             })
             .catch(err => {

@@ -34,7 +34,7 @@ async function logTagChange(asinId, previousTags, newTags, userId, userName, sou
             .input('notes', sql.NVarChar, notes)
             .query(`
                 INSERT INTO TagsHistory (Id, AsinId, UserId, UserName, PreviousTags, NewTags, AddedTags, RemovedTags, Action, Source, Notes, CreatedAt)
-                VALUES (@id, @asinId, @userId, @userName, @previousTags, @newTags, @addedTags, @removedTags, @action, @source, @notes, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@id, @asinId, @userId, @userName, @previousTags, @newTags, @addedTags, @removedTags, @action, @source, @notes, dbo.GetEnvDate())
             `);
         
         return id;

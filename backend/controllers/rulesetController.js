@@ -53,7 +53,7 @@ exports.createRuleset = async (req, res) => {
             .input('IsActive', sql.Bit, 1)
             .query(`
                 INSERT INTO Rulesets (Id, Name, Description, Rules, Conditions, Actions, CreatedBy, IsActive, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Name, @Description, @Rules, @Conditions, @Actions, @CreatedBy, @IsActive, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @Name, @Description, @Rules, @Conditions, @Actions, @CreatedBy, @IsActive, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         const result = await pool.request()
@@ -88,7 +88,7 @@ exports.updateRuleset = async (req, res) => {
 
         if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
 
-        updates.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
+        updates.push('UpdatedAt = dbo.GetEnvDate()');
         request.input('id', sql.VarChar, id);
         const result = await request.query(`
             UPDATE Rulesets SET ${updates.join(', ')} WHERE Id = @id;

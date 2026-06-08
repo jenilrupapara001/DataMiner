@@ -340,7 +340,7 @@ exports.createUser = async (req, res) => {
         .input('exclPerms', sql.NVarChar, JSON.stringify(excludedPermissions || []))
         .query(`
           INSERT INTO Users (Id, Email, Password, FirstName, LastName, Phone, RoleId, IsActive, CreatedAt, UpdatedAt, ExtraPermissions, ExcludedPermissions)
-          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()), @extraPerms, @exclPerms)
+          VALUES (@id, @email, @password, @fn, @ln, @ph, @rid, 1, dbo.GetEnvDate(), dbo.GetEnvDate(), @extraPerms, @exclPerms)
         `);
 
       // Assign sellers
@@ -417,7 +417,7 @@ exports.updateUser = async (req, res) => {
         .input('ph', sql.NVarChar, phone || null)
         .input('email', sql.NVarChar, email || null);
 
-      let setClauses = ['UpdatedAt = DATEADD(minute, 330, GETUTCDATE())'];
+      let setClauses = ['UpdatedAt = dbo.GetEnvDate()'];
       
       if (firstName !== undefined) { setClauses.push('FirstName = @fn'); }
       if (lastName !== undefined) { setClauses.push('LastName = @ln'); }

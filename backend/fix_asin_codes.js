@@ -66,7 +66,7 @@ async function fixAsins() {
                         .input('realSku', sql.NVarChar, sku)
                         .query(`
                             UPDATE Asins 
-                            SET AsinCode = @realAsin, Sku = @realSku, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                            SET AsinCode = @realAsin, Sku = @realSku, UpdatedAt = dbo.GetEnvDate()
                             WHERE Id = @badId
                         `);
                     totalUpdated++;

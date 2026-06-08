@@ -78,7 +78,7 @@ class GrowthService {
       await pool.request()
         .input('id', sql.VarChar, goalId)
         .input('progress', sql.Float, (currentValue / 100000) * 100) // Dummy target for now
-        .query("UPDATE Goals SET Progress = @progress, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+        .query("UPDATE Goals SET Progress = @progress, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
 
       return { ...goal, Progress: (currentValue / 100000) * 100 };
     } catch (error) {
@@ -96,7 +96,7 @@ class GrowthService {
       await pool.request()
         .input('taskId', sql.VarChar, taskId)
         .input('goalId', sql.VarChar, goalId)
-        .query("UPDATE Actions SET GoalId = @goalId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @taskId");
+        .query("UPDATE Actions SET GoalId = @goalId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @taskId");
       
       return { Id: taskId, GoalId: goalId };
     } catch (err) {

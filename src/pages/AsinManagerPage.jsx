@@ -111,7 +111,7 @@ const generateHistoryStructureFromDates = (sortedDates) => {
   return [{
     label: 'Current Week',
     dates: recentDates.map(dateStr => {
-      const date = new Date(dateStr + 'T00:00:00');
+      const date = new Date(`${dateStr}T00:00:00Z`);
       return {
         raw: dateStr,
         label: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
@@ -132,16 +132,11 @@ const getWeekNumber = (date) => {
 // Helper to normalize dates to YYYY-MM-DD string without timezone offset
 const normalizeDateStr = (dateInput) => {
   if (!dateInput) return '';
+  if (typeof dateInput === 'string') {
+    return dateInput.substring(0, 10);
+  }
   try {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) {
-      if (typeof dateInput === 'string') return dateInput.substring(0, 10);
-      return '';
-    }
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return new Date(dateInput).toISOString().split('T')[0];
   } catch (e) {
     return '';
   }
@@ -396,6 +391,7 @@ const demoAsins = [
 const AsinManagerPage = (props) => {
   const { isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [asins, setAsins] = useState([]);
+  const [globalHistoryDates, setGlobalHistoryDates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDashboard, setShowDashboard] = useState(true);
   const [showTable, setShowTable] = useState(true);
@@ -501,39 +497,14 @@ const AsinManagerPage = (props) => {
   const actionsRef = useRef(null);
 
   const historyStructure = useMemo(() => {
-    if (asins.length > 0) {
-      const dateMap = new Map();
-
-      const asinsWithHistory = asins.filter(a => (a.weekHistory && a.weekHistory.length > 0) || (a.history && a.history.length > 0));
-
-      if (asinsWithHistory.length > 0) {
-        asinsWithHistory.forEach(asin => {
-          const allHistory = [
-            ...(asin.weekHistory || []),
-            ...(asin.history || []),
-            ...(asin.subBsrHistory || [])
-          ];
-
-          allHistory.forEach(h => {
-            if (h.date) {
-              const dateKey = normalizeDateStr(h.date);
-              if (dateKey) {
-                const existing = dateMap.get(dateKey);
-                if (!existing || new Date(h.date) > new Date(existing.timestamp)) {
-                  dateMap.set(dateKey, { dateStr: h.date, timestamp: h.date });
-                }
-              }
-            }
-          });
-        });
-
-        // Lexical sort on YYYY-MM-DD gives chronological order (Oldest -> Newest)
-        const sortedDates = Array.from(dateMap.keys()).sort();
-        return generateHistoryStructureFromDates(sortedDates);
-      }
+    if (globalHistoryDates && globalHistoryDates.length > 0) {
+      // Lexical sort on YYYY-MM-DD gives chronological order (Oldest -> Newest)
+      // Reverse if needed, but generateHistoryStructureFromDates takes sorted Oldest -> Newest
+      const sortedDates = [...globalHistoryDates].sort();
+      return generateHistoryStructureFromDates(sortedDates);
     }
     return [{ label: 'W1', dates: [{ label: 'N/A' }] }];
-  }, [asins]);
+  }, [globalHistoryDates]);
 
   const totalHistoryCols = useMemo(() => {
     if (!historyStructure) return 0;
@@ -1127,6 +1098,7 @@ const AsinManagerPage = (props) => {
 
 
       setAsins(asinRes?.asins || []);
+      setGlobalHistoryDates(asinRes?.globalHistoryDates || []);
       setAvailableMonths(asinRes?.months || []);
       setPagination(asinRes?.pagination || { page: 1, limit: limit, total: 0, totalPages: 0 });
       setStats(statsRes);
@@ -3183,7 +3155,17 @@ const AsinManagerPage = (props) => {
                     </td>
                   </tr>
                 ) : (
-                  filteredAsins.map((asin, idx) => (
+                  filteredAsins.map((asin, idx) => {
+                    const historyMap = {};
+                    asin.history?.forEach(h => historyMap[normalizeDateStr(h.date)] = h);
+                    
+                    const weekHistoryMap = {};
+                    asin.weekHistory?.forEach(w => weekHistoryMap[normalizeDateStr(w.date)] = w);
+                    
+                    const subBsrHistoryMap = {};
+                    asin.subBsrHistory?.forEach(h => subBsrHistoryMap[normalizeDateStr(h.date)] = h);
+                    
+                    return (
                     <tr key={asin._id || idx} className="table-row-hover" style={{
                       background: idx % 2 === 0 ? '#fff' : '#f9fafb'
                     }}>
@@ -3783,17 +3765,13 @@ const AsinManagerPage = (props) => {
                       )}
                       {isVisible('priceTrend') && historyStructure.map(week => (
                         week.dates.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
-                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
                           const currentOrUploadedPrice = asin.currentPrice;
                           let priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
                             ? wData.price
                             : null;
 
-                          // Fallback to currentPrice for the latest date (today) if history is empty or 0
-                          if (!priceVal && dIdx === week.dates.length - 1 && asin.currentPrice > 0) {
-                            priceVal = asin.currentPrice;
-                          }
+                          // Fallback removed to expose data integrity gaps
 
                           return (
                             <td key={`p-${week.label}-${dIdx}`}
@@ -3900,7 +3878,7 @@ const AsinManagerPage = (props) => {
                       {isVisible('bsrTrend') && historyStructure.map(week => (
                         week.dates.map((date, dIdx) => {
                           const hDate = date.raw;
-                          const subBsrPoint = asin.subBsrHistory?.find(h => normalizeDateStr(h.date) === hDate);
+                          const subBsrPoint = subBsrHistoryMap[hDate];
                           const displayVal = subBsrPoint?.rank ?? asin.subBsr;
                           return (
                             <td key={`b-${week.label}-${dIdx}`}
@@ -3949,8 +3927,7 @@ const AsinManagerPage = (props) => {
                       )}
                       {isVisible('ratingTrend') && historyStructure.map(week => (
                         week.dates.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
-                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
                           const ratingVal = (wData && wData.rating !== undefined && wData.rating !== null) ? wData.rating : asin.rating;
                           return (
                             <td key={`r-${week.label}-${dIdx}`}
@@ -3983,8 +3960,7 @@ const AsinManagerPage = (props) => {
                       )}
                       {isVisible('reviewTrend') && historyStructure.map(week => (
                         week.dates.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
-                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
                           const reviewsVal = (wData && wData.reviews !== undefined && wData.reviews !== null) ? wData.reviews : (wData?.reviewCount !== undefined && wData?.reviewCount !== null ? wData.reviewCount : asin.reviewCount);
                           return (
                             <td key={`rev-${week.label}-${dIdx}`}
@@ -4026,8 +4002,7 @@ const AsinManagerPage = (props) => {
 
                       {isVisible('imageTrend') && historyStructure.map(week => (
                         week.dates.map((date, dIdx) => {
-                          const wData = asin.weekHistory?.find(w => normalizeDateStr(w.date) === date.raw)
-                            || asin.history?.find(h => normalizeDateStr(h.date) === date.raw);
+                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
                           return (
                             <td key={`i-${week.label}-${dIdx}`}
                               style={{
@@ -4155,7 +4130,8 @@ const AsinManagerPage = (props) => {
                         </Dropdown>
                       </td>
                     </tr>
-                  )))}
+                  );
+                  }))}
               </tbody>
             </table>
           </div>

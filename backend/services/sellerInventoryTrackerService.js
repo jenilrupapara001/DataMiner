@@ -112,7 +112,7 @@ class SellerInventoryTracker {
                         .input('AsinCode', sql.NVarChar, code.toUpperCase())
                         .input('SellerId', sql.VarChar, seller.Id)
                         .query(`INSERT INTO Asins (AsinCode, SellerId, Status, ScrapeStatus, CreatedAt)
-                                VALUES (@AsinCode, @SellerId, 'Active', 'PENDING', DATEADD(minute, 330, GETUTCDATE()))`);
+                                VALUES (@AsinCode, @SellerId, 'Active', 'PENDING', dbo.GetEnvDate())`);
                     addedCount++;
                 }
 
@@ -127,7 +127,7 @@ class SellerInventoryTracker {
             await pool.request()
                 .input('Id', sql.Int, seller.Id)
                 .input('Count', sql.Int, keepaAsins.length)
-                .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @Id');
+                .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = dbo.GetEnvDate() WHERE Id = @Id');
 
             return { success: true, newAsinsCount: addedCount };
 
@@ -166,7 +166,7 @@ class SellerInventoryTracker {
                 .input('Message', sql.NVarChar, message)
                 .query(`
                     INSERT INTO Notifications (Id, RecipientId, Type, ReferenceModel, ReferenceId, Message, CreatedAt)
-                    VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@Id, @RecipientId, @Type, @ReferenceModel, @ReferenceId, @Message, dbo.GetEnvDate())
                 `)
         );
 

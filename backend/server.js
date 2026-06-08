@@ -1,21 +1,6 @@
 require('dotenv').config();
 const globalTimezone = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata';
 process.env.TZ = globalTimezone; // Force server timezone to dynamically match .env
-Date.prototype.toJSON = function() {
-  const tzo = -this.getTimezoneOffset();
-  const dif = tzo >= 0 ? '+' : '-';
-  const pad = (num) => (num < 10 ? '0' : '') + num;
-  
-  return this.getFullYear() +
-    '-' + pad(this.getMonth() + 1) +
-    '-' + pad(this.getDate()) +
-    'T' + pad(this.getHours()) +
-    ':' + pad(this.getMinutes()) +
-    ':' + pad(this.getSeconds()) +
-    '.' + (this.getMilliseconds() / 1000).toFixed(3).slice(2, 5) +
-    dif + pad(Math.floor(Math.abs(tzo) / 60)) +
-    ':' + pad(Math.abs(tzo) % 60);
-};
 
 const express = require('express');
 const cors = require('cors');
@@ -271,7 +256,7 @@ io.on('connection', async (socket) => {
       const pool = await getPool();
       await pool.request()
         .input('id', sql.VarChar, userId)
-        .query("UPDATE Users SET IsOnline = 1, LastSeen = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+        .query("UPDATE Users SET IsOnline = 1, LastSeen = dbo.GetEnvDate() WHERE Id = @id");
 
       // Get user's assigned sellers to join rooms
       const sellersResult = await pool.request()
@@ -388,13 +373,13 @@ io.on('connection', async (socket) => {
         .input('ReplyToId', sql.VarChar, replyTo || null)
         .query(`
           INSERT INTO Messages (Id, ConversationId, SenderId, Type, Content, FileUrl, ReplyToId, CreatedAt)
-          VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, DATEADD(minute, 330, GETUTCDATE()))
+          VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, dbo.GetEnvDate())
         `);
 
       await pool.request()
         .input('convId', sql.VarChar, conversationId)
         .input('msgId', sql.VarChar, messageId)
-        .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @convId`);
+        .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @convId`);
 
       const msgResult = await pool.request()
         .input('msgId', sql.VarChar, messageId)
@@ -427,7 +412,7 @@ io.on('connection', async (socket) => {
           )
           BEGIN
             INSERT INTO MessageReactions (MessageId, UserId, Emoji, CreatedAt)
-            VALUES (@msgId, @uid, @emoji, DATEADD(minute, 330, GETUTCDATE()))
+            VALUES (@msgId, @uid, @emoji, dbo.GetEnvDate())
           END
         `);
 
@@ -456,7 +441,7 @@ io.on('connection', async (socket) => {
           )
           BEGIN
             INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
-            VALUES (@msgId, @userId, 1, DATEADD(minute, 330, GETUTCDATE()))
+            VALUES (@msgId, @userId, 1, dbo.GetEnvDate())
           END
         `);
     } catch (err) {
@@ -479,7 +464,7 @@ io.on('connection', async (socket) => {
         .input('Status', sql.NVarChar, 'INITIATED')
         .query(`
           INSERT INTO CallLogs (Id, ConversationId, CallerId, ReceiverId, Type, Status, StartedAt)
-          VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, DATEADD(minute, 330, GETUTCDATE()))
+          VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, dbo.GetEnvDate())
         `);
 
       io.to(receiverId).emit('incoming_call', { callId, conversationId, callerId, type, status: 'INITIATED' });
@@ -494,7 +479,7 @@ io.on('connection', async (socket) => {
       const pool = await getPool();
       await pool.request()
         .input('callId', sql.VarChar, callId)
-        .query(`UPDATE CallLogs SET Status = 'ONGOING', StartedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @callId AND Status = 'INITIATED'`);
+        .query(`UPDATE CallLogs SET Status = 'ONGOING', StartedAt = dbo.GetEnvDate() WHERE Id = @callId AND Status = 'INITIATED'`);
 
       const callResult = await pool.request()
         .input('callId', sql.VarChar, callId)
@@ -551,7 +536,7 @@ io.on('connection', async (socket) => {
       await pool.request()
         .input('callId', sql.VarChar, callId)
         .input('duration', sql.Int, duration)
-        .query(`UPDATE CallLogs SET Status = 'ENDED', EndedAt = DATEADD(minute, 330, GETUTCDATE()), Duration = @duration WHERE Id = @callId`);
+        .query(`UPDATE CallLogs SET Status = 'ENDED', EndedAt = dbo.GetEnvDate(), Duration = @duration WHERE Id = @callId`);
 
       io.to(call.CallerId).emit('call_ended', { callId, duration });
       if (call.ReceiverId) {
@@ -570,7 +555,7 @@ io.on('connection', async (socket) => {
         const pool = await getPool();
         await pool.request()
           .input('id', sql.VarChar, socket.userId)
-          .query("UPDATE Users SET IsOnline = 0, LastSeen = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+          .query("UPDATE Users SET IsOnline = 0, LastSeen = dbo.GetEnvDate() WHERE Id = @id");
       } catch (e) { }
       io.emit('user_status_change', { userId: socket.userId, status: 'offline' });
     }
@@ -584,22 +569,32 @@ global.sql = require('./database/db').sql;
 server.listen(PORT, () => {
   console.log(`🚀 Backend running: http://localhost:${PORT}`);
 
-  const recurringTaskScheduler = require('./services/recurringTaskScheduler');
-  recurringTaskScheduler.start();
+  // Only start cron jobs and background syncs on the primary instance in a PM2 cluster
+  // PM2 sets NODE_APP_INSTANCE to '0', '1', '2', etc.
+  const isPrimaryWorker = process.env.NODE_APP_INSTANCE === undefined || process.env.NODE_APP_INSTANCE === '0';
 
-  const schedulerService = require('./services/schedulerService');
-  schedulerService.init();
+  if (isPrimaryWorker) {
+    const recurringTaskScheduler = require('./services/recurringTaskScheduler');
+    recurringTaskScheduler.start();
+
+    const schedulerService = require('./services/schedulerService');
+    schedulerService.init();
+
+    try {
+      const { syncAllToCometChat } = require('./services/cometChatService');
+      syncAllToCometChat();
+    } catch (err) { }
+    
+    console.log('👑 Primary Node Worker [0] initialized schedulers and background tasks.');
+  } else {
+    console.log(`👷 Secondary Node Worker [${process.env.NODE_APP_INSTANCE}] initialized as an API request handler only.`);
+  }
 
   if (process.env.AUTOMATION_ENABLED === 'true') {
     console.log('🤖 Octoparse Automation enabled');
   } else {
     console.log('🛑 Octoparse Automation paused (Direct scraper deprecated)');
   }
-
-  try {
-    const { syncAllToCometChat } = require('./services/cometChatService');
-    syncAllToCometChat();
-  } catch (err) { }
 });
 
 // 1000 users support: High concurrency keep-alive configuration to prevent socket hangups under load

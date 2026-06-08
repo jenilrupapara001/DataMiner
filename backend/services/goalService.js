@@ -25,7 +25,7 @@ class GoalService {
         .input('Progress', sql.Float, 0)
         .query(`
           INSERT INTO Goals (Id, Title, Description, OwnerId, StartDate, EndDate, Status, Progress, CreatedAt, UpdatedAt)
-          VALUES (@Id, @Title, @Description, @OwnerId, @StartDate, @EndDate, @Status, @Progress, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+          VALUES (@Id, @Title, @Description, @OwnerId, @StartDate, @EndDate, @Status, @Progress, dbo.GetEnvDate(), dbo.GetEnvDate())
         `);
       
       return await this.calculateProgress(id);
@@ -86,7 +86,7 @@ class GoalService {
         .input('status', sql.NVarChar, progress >= 100 ? 'achieved' : progress >= 80 ? 'on_track' : 'behind')
         .query(`
           UPDATE Goals 
-          SET Progress = @progress, Status = @status, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+          SET Progress = @progress, Status = @status, UpdatedAt = dbo.GetEnvDate()
           WHERE Id = @id
         `);
 

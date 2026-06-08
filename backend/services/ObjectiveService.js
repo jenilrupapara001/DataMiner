@@ -26,7 +26,7 @@ class ObjectiveService {
             .input('createdBy', sql.VarChar, user.Id || user._id)
             .query(`
                 INSERT INTO Objectives (Id, GoalId, Title, Description, OwnerId, SellerId, Type, StartDate, EndDate, Status, AutoGenerateWeekly, CreatedBy, Progress, CreatedAt, UpdatedAt)
-                VALUES (@id, @goalId, @title, @description, @ownerId, @sellerId, @type, @startDate, @endDate, @status, @autoGenerateWeekly, @createdBy, 0, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@id, @goalId, @title, @description, @ownerId, @sellerId, @type, @startDate, @endDate, @status, @autoGenerateWeekly, @createdBy, 0, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         // System Log
@@ -79,7 +79,7 @@ class ObjectiveService {
                 .input('metricType', sql.NVarChar, 'Tasks Completed')
                 .query(`
                     INSERT INTO KeyResults (Id, ObjectiveId, Title, OwnerId, Status, TargetValue, Unit, MetricType, CurrentValue, Progress, CreatedAt, UpdatedAt)
-                    VALUES (@id, @objectiveId, @title, @ownerId, @status, @targetValue, @unit, @metricType, 0, 0, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@id, @objectiveId, @title, @ownerId, @status, @targetValue, @unit, @metricType, 0, 0, dbo.GetEnvDate(), dbo.GetEnvDate())
                 `);
 
             // Create default tasks for this week
@@ -104,7 +104,7 @@ class ObjectiveService {
                     .input('dueDate', sql.DateTime, actualEnd)
                     .query(`
                         INSERT INTO Actions (Id, Title, Type, Priority, Status, CreatedBy, AssignedTo, KeyResultId, SellerId, DueDate, CreatedAt, UpdatedAt)
-                        VALUES (@id, @title, @type, @priority, @status, @createdBy, @assignedTo, @krId, @sellerId, @dueDate, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                        VALUES (@id, @title, @type, @priority, @status, @createdBy, @assignedTo, @krId, @sellerId, @dueDate, dbo.GetEnvDate(), dbo.GetEnvDate())
                     `);
             }
         }
@@ -175,7 +175,7 @@ class ObjectiveService {
         await pool.request()
             .input('id', sql.VarChar, objectiveId)
             .input('progress', sql.Decimal(5, 2), avgProgress)
-            .query(`UPDATE Objectives SET Progress = @progress, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id`);
+            .query(`UPDATE Objectives SET Progress = @progress, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id`);
 
         return avgProgress;
     }
@@ -205,7 +205,7 @@ class ObjectiveService {
                     SellerId = COALESCE(@sellerId, SellerId),
                     StartDate = COALESCE(@startDate, StartDate),
                     EndDate = COALESCE(@endDate, EndDate),
-                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                    UpdatedAt = dbo.GetEnvDate()
                 WHERE Id = @id
             `);
 
@@ -276,7 +276,7 @@ class ObjectiveService {
             await pool.request()
                 .input('krId', sql.VarChar, krId)
                 .input('currentValue', sql.Decimal(18, 2), currentGms)
-                .query(`UPDATE KeyResults SET CurrentValue = @currentValue, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @krId`);
+                .query(`UPDATE KeyResults SET CurrentValue = @currentValue, UpdatedAt = dbo.GetEnvDate() WHERE Id = @krId`);
 
             await this.refreshProgress(kr.ObjectiveId);
             return { ...kr, CurrentValue: currentGms };

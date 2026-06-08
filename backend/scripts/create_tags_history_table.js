@@ -21,7 +21,7 @@ async function migrate() {
                     Action NVARCHAR(20) DEFAULT 'update', -- update, add, remove, bulk_upload, auto_tag
                     Source NVARCHAR(50) NULL,        -- 'manual', 'bulk_upload', 'auto_age', 'system'
                     Notes NVARCHAR(500) NULL,
-                    CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
+                    CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
                     CONSTRAINT FK_TagsHistory_Asin FOREIGN KEY (AsinId) REFERENCES Asins(Id)
                 );
                 

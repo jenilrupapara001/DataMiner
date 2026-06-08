@@ -89,7 +89,7 @@ async function run() {
                                     BulletScore = @bulletScore,
                                     ImageScore = @imageScore,
                                     DescriptionScore = @descriptionScore,
-                                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                                    UpdatedAt = dbo.GetEnvDate()
                                 WHERE Id = @id
                             `);
                             

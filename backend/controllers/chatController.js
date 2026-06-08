@@ -149,7 +149,7 @@ exports.getOrCreateConversation = async (req, res) => {
             .input('SellerId', sql.VarChar, sellerId || null)
             .query(`
                 INSERT INTO Conversations (Id, Type, SellerId, IsActive, CreatedAt, UpdatedAt)
-                VALUES (@Id, @Type, @SellerId, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @Type, @SellerId, 1, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
 
         // Add participants
@@ -283,14 +283,14 @@ exports.sendMessage = async (req, res) => {
             .input('ReplyToId', sql.VarChar, replyTo || null)
             .query(`
                 INSERT INTO Messages (Id, ConversationId, SenderId, Type, Content, FileUrl, ReplyToId, CreatedAt)
-                VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @ConversationId, @SenderId, @Type, @Content, @FileUrl, @ReplyToId, dbo.GetEnvDate())
             `);
 
         // Update conversation lastMessage
         await pool.request()
             .input('convId', sql.VarChar, conversationId)
             .input('msgId', sql.VarChar, messageId)
-            .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @convId`);
+            .query(`UPDATE Conversations SET LastMessageId = @msgId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @convId`);
 
         // Fetch created message with sender info
         const msgResult = await pool.request()
@@ -310,7 +310,7 @@ exports.sendMessage = async (req, res) => {
             .input('userId', sql.VarChar, senderId)
             .query(`
                 INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
-                VALUES (@msgId, @userId, 1, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@msgId, @userId, 1, dbo.GetEnvDate())
             `);
 
         // Emit to conversation room
@@ -343,7 +343,7 @@ exports.addReaction = async (req, res) => {
                 )
                 BEGIN
                     INSERT INTO MessageReactions (MessageId, UserId, Emoji, CreatedAt)
-                    VALUES (@msgId, @userId, @emoji, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@msgId, @userId, @emoji, dbo.GetEnvDate())
                 END
             `);
 
@@ -382,12 +382,12 @@ exports.markMessageRead = async (req, res) => {
                 )
                 BEGIN
                     INSERT INTO MessageStatus (MessageId, UserId, IsRead, ReadAt)
-                    VALUES (@msgId, @userId, 1, DATEADD(minute, 330, GETUTCDATE()))
+                    VALUES (@msgId, @userId, 1, dbo.GetEnvDate())
                 END
                 ELSE
                 BEGIN
                     UPDATE MessageStatus
-                    SET IsRead = 1, ReadAt = DATEADD(minute, 330, GETUTCDATE())
+                    SET IsRead = 1, ReadAt = dbo.GetEnvDate()
                     WHERE MessageId = @msgId AND UserId = @userId
                 END
             `);
@@ -417,7 +417,7 @@ exports.inviteToCall = async (req, res) => {
             .input('Status', sql.NVarChar, 'INITIATED')
             .query(`
                 INSERT INTO CallLogs (Id, ConversationId, CallerId, ReceiverId, Type, Status, StartedAt)
-                VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@Id, @ConversationId, @CallerId, @ReceiverId, @Type, @Status, dbo.GetEnvDate())
             `);
 
         // Notify receiver via socket
@@ -446,7 +446,7 @@ exports.acceptCall = async (req, res) => {
             .input('callId', sql.VarChar, callId)
             .query(`
                 UPDATE CallLogs
-                SET Status = 'ONGOING', StartedAt = DATEADD(minute, 330, GETUTCDATE())
+                SET Status = 'ONGOING', StartedAt = dbo.GetEnvDate()
                 WHERE Id = @callId AND Status = 'INITIATED'
             `);
 
@@ -522,7 +522,7 @@ exports.endCall = async (req, res) => {
             .input('duration', sql.Int, duration)
             .query(`
                 UPDATE CallLogs
-                SET Status = 'ENDED', EndedAt = DATEADD(minute, 330, GETUTCDATE()), Duration = @duration
+                SET Status = 'ENDED', EndedAt = dbo.GetEnvDate(), Duration = @duration
                 WHERE Id = @callId
             `);
 
@@ -717,7 +717,7 @@ exports.createGroup = async (req, res) => {
             .input('Type', sql.NVarChar, 'GROUP')
             .input('Title', sql.NVarChar, name || null)
             .input('SellerId', sql.VarChar, sellerId || null)
-            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))");
+            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, dbo.GetEnvDate(), dbo.GetEnvDate())");
 
         // Add participants
         const allParticipants = [...participantIds, userId];
@@ -954,7 +954,7 @@ exports.createGroup = async (req, res) => {
             .input('Type', sql.NVarChar, 'GROUP')
             .input('Title', sql.NVarChar, name || null)
             .input('SellerId', sql.VarChar, sellerId || null)
-            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))");
+            .query("INSERT INTO Conversations (Id, Type, Title, SellerId, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Type, @Title, @SellerId, 1, dbo.GetEnvDate(), dbo.GetEnvDate())");
 
         // Add participants
         const allParticipants = [...participantIds, userId];

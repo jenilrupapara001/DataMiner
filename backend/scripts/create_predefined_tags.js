@@ -65,8 +65,8 @@ async function migrate() {
                     Id VARCHAR(24) PRIMARY KEY,
                     Name NVARCHAR(80) NOT NULL UNIQUE,
                     Category NVARCHAR(50) DEFAULT 'General',
-                    CreatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE()),
-                    UpdatedAt DATETIME2 DEFAULT DATEADD(minute, 330, GETUTCDATE())
+                    CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
+                    UpdatedAt DATETIME2 DEFAULT dbo.GetEnvDate()
                 );
                 
                 CREATE INDEX IX_PredefinedTags_Category ON PredefinedTags(Category);
@@ -96,7 +96,7 @@ async function migrate() {
                     .input('category', sql.NVarChar, tag.category)
                     .query(`
                         INSERT INTO PredefinedTags (Id, Name, Category, CreatedAt, UpdatedAt)
-                        VALUES (@id, @name, @category, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                        VALUES (@id, @name, @category, dbo.GetEnvDate(), dbo.GetEnvDate())
                     `);
                 seeded++;
             } else {

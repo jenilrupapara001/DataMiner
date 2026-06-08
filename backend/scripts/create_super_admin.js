@@ -33,7 +33,7 @@ async function createSuperAdmin() {
             const hashedPassword = await bcrypt.hash(password, 12);
             await pool.request().query(`
                 INSERT INTO Users (Id, Email, Password, FirstName, LastName, RoleId, IsActive, IsEmailVerified, CreatedAt, UpdatedAt)
-                VALUES ('${userId}', '${email}', '${hashedPassword}', 'Super', 'Admin', '${roleId}', 1, 1, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES ('${userId}', '${email}', '${hashedPassword}', 'Super', 'Admin', '${roleId}', 1, 1, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
             console.log('✅ Super Admin created successfully.');
         }

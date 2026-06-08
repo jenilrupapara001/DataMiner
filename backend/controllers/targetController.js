@@ -285,7 +285,7 @@ exports.createTargets = async (req, res) => {
             // 1. Insert main Target record with GoalType
             const mainQuery = `
                 INSERT INTO GmsTargets (Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
-                VALUES (@id, @sellerId, @brandManager, @targetType, @year, @month, @totalTargetValue, @goalType, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                VALUES (@id, @sellerId, @brandManager, @targetType, @year, @month, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
             `;
             await pool.request()
                 .input('id', sql.VarChar, targetId)
@@ -543,7 +543,7 @@ exports.updateTarget = async (req, res) => {
                     await transaction.request()
                         .input(`tId_up_${uTargetId}`, sql.VarChar, uTargetId)
                         .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), uTotalTargetValue)
-                        .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @tId_up_${uTargetId}`);
+                        .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId_up_${uTargetId}`);
 
                     // 3. Clear existing breakdowns
                     await transaction.request()
@@ -716,7 +716,7 @@ exports.updateTarget = async (req, res) => {
             await transaction.request()
                 .input('targetId', sql.VarChar, targetId)
                 .input('totalTargetValue', sql.Decimal(18, 2), totalTargetValue)
-                .query('UPDATE GmsTargets SET TotalTargetValue = @totalTargetValue, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @targetId');
+                .query('UPDATE GmsTargets SET TotalTargetValue = @totalTargetValue, UpdatedAt = dbo.GetEnvDate() WHERE Id = @targetId');
 
             // 3. Clear existing breakdowns
             await transaction.request()

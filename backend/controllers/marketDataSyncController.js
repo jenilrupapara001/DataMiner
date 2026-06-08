@@ -94,7 +94,7 @@ exports.syncAsin = async (req, res) => {
         // 4. Update status to scraping in SQL
         await pool.request()
             .input('id', sql.VarChar, id)
-            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
 
         const isConfigured = marketDataSyncService.isConfigured();
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
@@ -125,7 +125,7 @@ exports.syncAsin = async (req, res) => {
                 // Revert status if sync fails
                 await pool.request()
                     .input('id', sql.VarChar, id)
-                    .query("UPDATE Asins SET ScrapeStatus = 'FAILED', Status = 'Error', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+                    .query("UPDATE Asins SET ScrapeStatus = 'FAILED', Status = 'Error', UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
 
                 return res.status(400).json({ 
                     success: false, 
@@ -197,7 +197,7 @@ exports.syncSellerAsins = async (req, res) => {
         // 3. Update ASIN statuses in bulk
         await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
-            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
+            .query("UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
 
         const isConfigured = marketDataSyncService.isConfigured();
         const automationEnabled = process.env.AUTOMATION_ENABLED === 'true';
@@ -231,7 +231,7 @@ exports.syncSellerAsins = async (req, res) => {
                 // Revert status
                 await pool.request()
                     .input('sellerId', sql.VarChar, sellerId)
-                    .query("UPDATE Asins SET ScrapeStatus = 'FAILED', Status = 'Error', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE SellerId = @sellerId AND ScrapeStatus = 'SCRAPING'");
+                    .query("UPDATE Asins SET ScrapeStatus = 'FAILED', Status = 'Error', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND ScrapeStatus = 'SCRAPING'");
 
                 return res.status(400).json({ 
                     success: false, 
@@ -281,7 +281,7 @@ exports.syncAllAsins = async (req, res) => {
 
         // 2. Update ASIN statuses in bulk
         const asinIdsStr = asins.map(a => `'${a.Id}'`).join(',');
-        await pool.request().query(`UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id IN (${asinIdsStr})`);
+        await pool.request().query(`UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = dbo.GetEnvDate() WHERE Id IN (${asinIdsStr})`);
 
         // 3. Process Sellers in background (Bulk sync approach)
         const sellerIds = [...new Set(asins.map(a => a.SellerId).filter(Boolean))];

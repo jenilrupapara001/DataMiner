@@ -214,7 +214,7 @@ class MarketDataSyncService {
         await pool.request()
             .input('newTaskId', sql.VarChar, newTaskId)
             .input('sellerId', sql.VarChar, sellerId)
-            .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
+            .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
 
         this.log('info', `Created new Octoparse task ${newTaskId} for seller ${seller.Name}`);
         return newTaskId;
@@ -1317,7 +1317,7 @@ class MarketDataSyncService {
                             .input('sellerId', sql.VarChar, sellerId)
                             .input('lastScraped', sql.DateTime2, new Date())
                             .input('scrapeUsed', sql.Int, totalProcessed)
-                            .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
+                            .query('UPDATE Sellers SET LastScrapedAt = @lastScraped, ScrapeUsed = @scrapeUsed, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
                     } catch (metaErr) { /* non-fatal */ }
 
                     await this.wait(API_COURTESY_DELAY);
@@ -1725,7 +1725,7 @@ class MarketDataSyncService {
             await pool.request()
                 .input('newTaskId', sql.NVarChar, newTaskId)
                 .input('sellerId', sql.VarChar, sellerId)
-                .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
+                .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
 
             console.log(`✅ Seller ${seller.Name} now linked to task: ${newTaskId}`);
             return newTaskId;
@@ -1894,7 +1894,7 @@ class MarketDataSyncService {
             await pool.request()
                 .input('totalAsins', sql.Int, urls.length)
                 .input('sellerId', sql.VarChar, sellerId)
-                .query('UPDATE Sellers SET ScrapeUsed = @totalAsins, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId');
+                .query('UPDATE Sellers SET ScrapeUsed = @totalAsins, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
 
             console.log(`💾 Updated metadata for seller: ${sellerId}`);
 
@@ -2521,10 +2521,17 @@ class MarketDataSyncService {
             });
             request.input('asinId', sql.VarChar, asinId);
 
-            await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
+            await executeSqlWithRetry(async () => {
+                await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
+            });
 
             // 11. History Tracking - Use IST Date
-            const localNow = new Date(now.getTime() + (330 * 60 * 1000));
+            const tz = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata';
+            const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
+            const locStr = now.toLocaleString('en-US', { timeZone: tz });
+            const offsetMins = Math.round((new Date(locStr) - new Date(utcStr)) / 60000);
+            
+            const localNow = new Date(now.getTime() + (offsetMins * 60 * 1000));
             const today = localNow.toISOString().split('T')[0];
             await executeSqlWithRetry(async () => {
                 await pool.request()
@@ -2568,13 +2575,13 @@ class MarketDataSyncService {
                         subBsrRequest.input(`rank${i}`, sql.Int, rank);
 
                         subBsrQuery += `
-                            UPDATE SubBsrHistory SET SubBsrRank = @rank${i}, CreatedAt = DATEADD(minute, 330, GETUTCDATE())
+                            UPDATE SubBsrHistory SET SubBsrRank = @rank${i}, CreatedAt = dbo.GetEnvDate()
                             WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i};
 
                             IF @@ROWCOUNT = 0
                             BEGIN
                                 INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                VALUES (@asinId${i}, @date${i}, @category${i}, @rank${i}, DATEADD(minute, 330, GETUTCDATE()));
+                                VALUES (@asinId${i}, @date${i}, @category${i}, @rank${i}, dbo.GetEnvDate());
                             END
                         `;
                         validRanks++;
@@ -2712,7 +2719,7 @@ class MarketDataSyncService {
                                     .input('sellerId', sql.VarChar, sellerId)
                                     .query(`
                                         INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-                                        VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                                        VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), dbo.GetEnvDate(), dbo.GetEnvDate())
                                     `);
 
                                 // Mock basic object for mapping
@@ -3597,13 +3604,13 @@ class MarketDataSyncService {
                 .input('id', sql.VarChar, task.Id)
                 .input('sellerId', sql.VarChar, sellerId)
                 .input('now', sql.DateTime2, new Date())
-                .query("UPDATE OctoTasks SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = @now, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id");
+                .query("UPDATE OctoTasks SET IsAssigned = 1, SellerId = @sellerId, LastAssignedAt = @now, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
 
             // 3. Sync with Seller model
             await pool.request()
                 .input('octoparseId', sql.NVarChar, task.TaskId)
                 .input('sellerId', sql.VarChar, sellerId)
-                .query("UPDATE Sellers SET OctoparseId = @octoparseId, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @sellerId");
+                .query("UPDATE Sellers SET OctoparseId = @octoparseId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId");
 
             console.log(`✅ Assigned Pool Task ${task.TaskId} to seller: ${sellerId}`);
             return task.TaskId;
@@ -3637,13 +3644,13 @@ class MarketDataSyncService {
                         IF NOT EXISTS (SELECT 1 FROM OctoTasks WHERE TaskId = @taskId)
                         BEGIN
                             INSERT INTO OctoTasks (Id, TaskId, TaskName, GroupName, IsAssigned, CreatedAt, UpdatedAt)
-                            VALUES (@newId, @taskId, @taskName, @groupName, 0, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()));
+                            VALUES (@newId, @taskId, @taskName, @groupName, 0, dbo.GetEnvDate(), dbo.GetEnvDate());
                             SELECT 1 as Added;
                         END
                         ELSE 
                         BEGIN
                             UPDATE OctoTasks 
-                            SET TaskName = @taskName, GroupName = @groupName, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                            SET TaskName = @taskName, GroupName = @groupName, UpdatedAt = dbo.GetEnvDate()
                             WHERE TaskId = @taskId;
                             SELECT 0 as Added;
                         END

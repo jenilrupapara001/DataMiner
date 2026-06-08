@@ -71,7 +71,7 @@ async function fixBuyBoxValues() {
                 // Use individual updates in a single transaction for safety
                 let sql = 'SET NOCOUNT ON;\n';
                 for (const item of updateIds) {
-                    sql += `UPDATE Asins SET BuyBoxWin = @${item.paramVal}, BuyBoxStatus = @${item.paramVal}, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @${item.paramId};\n`;
+                    sql += `UPDATE Asins SET BuyBoxWin = @${item.paramVal}, BuyBoxStatus = @${item.paramVal}, UpdatedAt = dbo.GetEnvDate() WHERE Id = @${item.paramId};\n`;
                 }
 
                 try {

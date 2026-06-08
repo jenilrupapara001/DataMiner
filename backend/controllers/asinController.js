@@ -332,12 +332,12 @@ exports.getAsins = async (req, res) => {
     if (req.query.maxReleaseDate) whereClause += ' AND ReleaseDate <= @maxReleaseDate';
 
     if (req.query.ageFilter) {
-      if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))';
-      else if (req.query.ageFilter === '60') whereClause += ' AND ReleaseDate < DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -60, DATEADD(minute, 330, GETUTCDATE()))';
-      else if (req.query.ageFilter === '90') whereClause += ' AND ReleaseDate < DATEADD(day, -60, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -90, DATEADD(minute, 330, GETUTCDATE()))';
-      else if (req.query.ageFilter === '180') whereClause += ' AND ReleaseDate < DATEADD(day, -90, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -180, DATEADD(minute, 330, GETUTCDATE()))';
-      else if (req.query.ageFilter === '365') whereClause += ' AND ReleaseDate < DATEADD(day, -180, DATEADD(minute, 330, GETUTCDATE())) AND ReleaseDate >= DATEADD(day, -365, DATEADD(minute, 330, GETUTCDATE()))';
-      else if (req.query.ageFilter === '365+') whereClause += ' AND ReleaseDate < DATEADD(day, -365, DATEADD(minute, 330, GETUTCDATE()))';
+      if (req.query.ageFilter === '30') whereClause += ' AND ReleaseDate >= DATEADD(day, -30, dbo.GetEnvDate())';
+      else if (req.query.ageFilter === '60') whereClause += ' AND ReleaseDate < DATEADD(day, -30, dbo.GetEnvDate()) AND ReleaseDate >= DATEADD(day, -60, dbo.GetEnvDate())';
+      else if (req.query.ageFilter === '90') whereClause += ' AND ReleaseDate < DATEADD(day, -60, dbo.GetEnvDate()) AND ReleaseDate >= DATEADD(day, -90, dbo.GetEnvDate())';
+      else if (req.query.ageFilter === '180') whereClause += ' AND ReleaseDate < DATEADD(day, -90, dbo.GetEnvDate()) AND ReleaseDate >= DATEADD(day, -180, dbo.GetEnvDate())';
+      else if (req.query.ageFilter === '365') whereClause += ' AND ReleaseDate < DATEADD(day, -180, dbo.GetEnvDate()) AND ReleaseDate >= DATEADD(day, -365, dbo.GetEnvDate())';
+      else if (req.query.ageFilter === '365+') whereClause += ' AND ReleaseDate < DATEADD(day, -365, dbo.GetEnvDate())';
     }
 
     // [4] Search
@@ -385,9 +385,9 @@ exports.getAsins = async (req, res) => {
         .input('limit', sql.Int, limitNum)
         .query(`
             SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace,
-                   (SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode) as TotalOrders
-            FROM Asins a
-            JOIN Sellers s ON a.SellerId = s.Id
+                   (SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WITH (NOLOCK) WHERE Asin = a.AsinCode) as TotalOrders
+            FROM Asins a WITH (NOLOCK)
+            JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id
             ${whereClause}
             ORDER BY ${getOrderBy()}
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -408,7 +408,7 @@ exports.getAsins = async (req, res) => {
              StockLevel as stockLevel, LQS as lqs
       FROM AsinHistory 
       WHERE AsinId IN (${asinIds}) 
-      AND Date >= DATEADD(day, -${historyDays}, DATEADD(minute, 330, GETUTCDATE()))
+      AND Date >= DATEADD(day, -${historyDays}, dbo.GetEnvDate())
       ORDER BY Date ASC
     `);
     
@@ -453,7 +453,7 @@ exports.getAsins = async (req, res) => {
       SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
       FROM SubBsrHistory
       WHERE AsinId IN (${asinIds})
-      AND Date >= DATEADD(day, -14, DATEADD(minute, 330, GETUTCDATE()))
+      AND Date >= DATEADD(day, -14, dbo.GetEnvDate())
       ORDER BY Date ASC, CreatedAt DESC
     `);
 
@@ -721,9 +721,24 @@ exports.getAsins = async (req, res) => {
         };
     });
 
+    const datesResult = await pool.request().query(`
+      SELECT DISTINCT TOP 7 Date 
+      FROM AsinHistory 
+      ORDER BY Date DESC
+    `);
+    const globalHistoryDates = datesResult.recordset.map(r => {
+      const d = r.Date;
+      if (!d) return null;
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${yr}-${mo}-${da}`;
+    }).filter(Boolean).sort();
+
     res.json({
       asins: processedAsins,
       months: availableMonths,
+      globalHistoryDates,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -1203,7 +1218,7 @@ exports.createAsin = async (req, res) => {
       .input('imageUrl', sql.NVarChar, imageUrl || null)
       .query(`
         INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, Category, Brand, Title, ImageUrl, ScrapeStatus, CreatedAt, UpdatedAt)
-        VALUES (@id, @asinCode, @sellerId, @sku, @status, @category, @brand, @title, @imageUrl, 'PENDING', DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+        VALUES (@id, @asinCode, @sellerId, @sku, @status, @category, @brand, @title, @imageUrl, 'PENDING', dbo.GetEnvDate(), dbo.GetEnvDate())
       `);
 
     await updateSellerAsinCount(seller, req.app.get('io'));
@@ -1269,7 +1284,7 @@ exports.updateAsin = async (req, res) => {
           Rating = COALESCE(@rating, Rating),
           ReviewCount = COALESCE(@reviews, ReviewCount),
           PriceDispute = COALESCE(@priceDispute, PriceDispute),
-          UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+          UpdatedAt = dbo.GetEnvDate()
         WHERE Id = @id;
 
         -- 2. Handle Tags based on PriceDispute status
@@ -1484,10 +1499,10 @@ exports.getAsinFilterOptions = async (req, res) => {
     }
 
     const [categoriesResult, brandsResult, subBsrResult, tagsResult] = await Promise.all([
-      pool.request().query(`SELECT DISTINCT Category FROM Asins a ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
-      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a JOIN Sellers s ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
-      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins a CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
-      pool.request().query(`SELECT Tags FROM Asins a ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
+      pool.request().query(`SELECT DISTINCT Category FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
+      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a WITH (NOLOCK) JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
+      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins a WITH (NOLOCK) CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
+      pool.request().query(`SELECT Tags FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
     ]);
 
     // Extract unique tags
@@ -1664,7 +1679,7 @@ exports.importFromCsv = async (req, res) => {
             .input('status', sql.VarChar, status)
             .input('mrp', sql.Decimal(18, 2), mrp)
             .input('marketplace', sql.VarChar, marketplace)
-            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+            .query('UPDATE Asins SET Sku = @sku, Status = @status, UploadedPrice = @mrp, Mrp = @mrp, Marketplace = @marketplace, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
           
           // History tracking for manual import
           const today = new Date().toISOString().split('T')[0];
@@ -1692,7 +1707,7 @@ exports.importFromCsv = async (req, res) => {
             .input('marketplace', sql.VarChar, marketplace)
             .query(`
               INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, UploadedPrice, Mrp, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+              VALUES (@id, @asin, @sellerId, @sku, @status, @mrp, @mrp, 'PENDING', @marketplace, dbo.GetEnvDate(), dbo.GetEnvDate())
             `);
             
           // History tracking for manual import
@@ -1849,7 +1864,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('brand', sql.NVarChar, sellerName)
                             .query(`
                                 UPDATE Asins 
-                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                                SET Sku = @sku, ParentAsin = @parentAsin, ReleaseDate = @releaseDate, UploadedPrice = @price, Mrp = @price, Status = @status, Brand = CASE WHEN Brand IS NULL OR Brand = '' THEN @brand ELSE Brand END, UpdatedAt = dbo.GetEnvDate()
                                 WHERE Id = @id
                             `);
                             
@@ -1881,7 +1896,7 @@ exports.bulkUploadAllSellers = async (req, res) => {
                             .input('brand', sql.NVarChar, sellerName)
                             .query(`
                                 INSERT INTO Asins (Id, AsinCode, SellerId, Sku, ParentAsin, ReleaseDate, UploadedPrice, Mrp, Status, ScrapeStatus, Brand, CreatedAt, UpdatedAt)
-                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+                                VALUES (@id, @asin, @sellerId, @sku, @parentAsin, @releaseDate, @price, @price, @status, 'PENDING', @brand, dbo.GetEnvDate(), dbo.GetEnvDate())
                             `);
                             
                         const today = new Date().toISOString().split('T')[0];
@@ -2061,7 +2076,7 @@ exports.createAsins = async (req, res) => {
           .input('sku', sql.NVarChar, item.sku || null)
           .query(`
             INSERT INTO Asins (Id, AsinCode, SellerId, Sku, Status, ScrapeStatus, CreatedAt, UpdatedAt)
-            VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', DATEADD(minute, 330, GETUTCDATE()), DATEADD(minute, 330, GETUTCDATE()))
+            VALUES (@id, @asin, @sellerId, @sku, 'Active', 'PENDING', dbo.GetEnvDate(), dbo.GetEnvDate())
           `);
       }
       await transaction.commit();
@@ -2106,7 +2121,7 @@ exports.bulkUpdateAsins = async (req, res) => {
       }
       
       if (setParts.length > 0) {
-        setParts.push('UpdatedAt = DATEADD(minute, 330, GETUTCDATE())');
+        setParts.push('UpdatedAt = dbo.GetEnvDate()');
         await request.query(`UPDATE Asins SET ${setParts.join(', ')} WHERE Id IN (${idList})`);
 
         // Handle tags for Price Dispute bulk update
@@ -2235,7 +2250,7 @@ exports.recalculateLqs = async (req, res) => {
                             BulletScore = @bulletScore,
                             ImageScore = @imageScore,
                             DescriptionScore = @descriptionScore,
-                            UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                            UpdatedAt = dbo.GetEnvDate()
                         WHERE Id = @id
                     `);
                 
@@ -2336,8 +2351,8 @@ exports.uploadRawAsins = async (req, res) => {
             .query(`
                 UPDATE Sellers
                 SET ScrapeUsed = ScrapeUsed + @count,
-                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
-                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                    LastScrapedAt = dbo.GetEnvDate(),
+                    UpdatedAt = dbo.GetEnvDate()
                 WHERE Id = @sellerId
             `);
 
@@ -2403,8 +2418,8 @@ exports.uploadRawText = async (req, res) => {
             .query(`
                 UPDATE Sellers
                 SET ScrapeUsed = ScrapeUsed + @count,
-                    LastScrapedAt = DATEADD(minute, 330, GETUTCDATE()),
-                    UpdatedAt = DATEADD(minute, 330, GETUTCDATE())
+                    LastScrapedAt = dbo.GetEnvDate(),
+                    UpdatedAt = dbo.GetEnvDate()
                 WHERE Id = @sellerId
             `);
 
@@ -2499,7 +2514,7 @@ exports.exportData = async (req, res) => {
     if (dateRange !== 'all' && !isCustomDate) {
       const daysMap = { today: 1, yesterday: 2, '7days': 7, '30days': 30, '90days': 90 };
       const days = daysMap[dateRange] || 30;
-      whereClause += ` AND a.LastScrapedAt >= DATEADD(DAY, -${days}, DATEADD(minute, 330, GETUTCDATE()))`;
+      whereClause += ` AND a.LastScrapedAt >= DATEADD(DAY, -${days}, dbo.GetEnvDate())`;
     } else if (isCustomDate) {
       const { start, end } = dateRange;
       if (start) {
@@ -2755,7 +2770,7 @@ exports.updateAsinTags = async (req, res) => {
     await pool.request()
       .input('id', sql.VarChar, id)
       .input('tags', sql.NVarChar, tagsJson)
-      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
 
     res.json({ success: true, data: { id, tags } });
   } catch (error) {
@@ -2883,7 +2898,7 @@ exports.bulkUploadTags = async (req, res) => {
         const result = await pool.request()
           .input('asinCode', sql.NVarChar, asinCode)
           .input('tags', sql.NVarChar, tagsJson)
-          .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE AsinCode = @asinCode');
+          .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE AsinCode = @asinCode');
         if (result.rowsAffected[0] > 0) updated++;
       } catch (err) {
         errors.push({ asin: asinCode, error: err.message });
@@ -2916,7 +2931,7 @@ exports.updateTags = async (req, res) => {
     const result = await pool.request()
       .input('id', sql.VarChar, id)
       .input('tags', sql.NVarChar, tagsJson)
-      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = DATEADD(minute, 330, GETUTCDATE()) WHERE Id = @id');
+      .query('UPDATE Asins SET Tags = @tags, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ success: false, error: 'ASIN not found' });
@@ -2989,7 +3004,7 @@ exports.getSubBsrTrend = async (req, res) => {
           SubBsrRank
         FROM SubBsrHistory
         WHERE AsinId = @asinId
-          AND Date >= DATEADD(DAY, -@days, DATEADD(minute, 330, GETUTCDATE()))
+          AND Date >= DATEADD(DAY, -@days, dbo.GetEnvDate())
         ORDER BY Date ASC, SubBsrRank ASC
       `);
 
