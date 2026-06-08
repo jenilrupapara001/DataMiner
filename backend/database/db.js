@@ -16,10 +16,11 @@ const config = {
         useUTC: false
     },
     requestTimeout: 120000,
+    connectionTimeout: 60000,
     pool: {
-        max: 25,
-        min: 0,
-        idleTimeoutMillis: 30000
+        max: 200,
+        min: 10,
+        idleTimeoutMillis: 10000
     }
 };
 
@@ -75,9 +76,33 @@ function generateId() {
     }
 }
 
+/**
+ * Execute a database query with deadlock retry logic.
+ */
+async function executeWithRetry(queryFn, maxRetries = 3, retryDelayMs = 200) {
+    let retries = 0;
+    while (true) {
+        try {
+            return await queryFn();
+        } catch (err) {
+            // Error 1205 is deadlock in SQL Server
+            if ((err.number === 1205 || (err.message && err.message.toLowerCase().includes('deadlock'))) && retries < maxRetries) {
+                const jitter = Math.floor(Math.random() * 100);
+                const delay = (retryDelayMs * Math.pow(2, retries)) + jitter;
+                console.warn(`[DB] Deadlock detected. Retrying transaction in ${delay}ms... (Attempt ${retries + 1} of ${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                retries++;
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
 module.exports = {
     sql,
     getPool,
     query,
-    generateId
+    generateId,
+    executeWithRetry
 };

@@ -2,6 +2,7 @@ process.env.TZ = 'Asia/Kolkata'; // Force server timezone to India Standard Time
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { getPool, sql } = require('./database/db');
 
 // Memory monitoring - reduced frequency to every 30 minutes
@@ -32,8 +33,19 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// 1000 users support: Apply Rate Limiting
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 500, // Limit each IP to 500 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// 1000 users support: Shrink payload limit to save Memory
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -571,6 +583,10 @@ server.listen(PORT, () => {
     syncAllToCometChat();
   } catch (err) { }
 });
+
+// 1000 users support: High concurrency keep-alive configuration to prevent socket hangups under load
+server.keepAliveTimeout = 65000; 
+server.headersTimeout = 66000;
 
 // Make getPool available globally for socket handlers
 global.getPool = getPool;

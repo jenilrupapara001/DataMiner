@@ -132,11 +132,16 @@ const getWeekNumber = (date) => {
 // Helper to normalize dates to YYYY-MM-DD string without timezone offset
 const normalizeDateStr = (dateInput) => {
   if (!dateInput) return '';
-  if (typeof dateInput === 'string') {
-    return dateInput.substring(0, 10);
-  }
   try {
-    return new Date(dateInput).toISOString().substring(0, 10);
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) {
+      if (typeof dateInput === 'string') return dateInput.substring(0, 10);
+      return '';
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   } catch (e) {
     return '';
   }

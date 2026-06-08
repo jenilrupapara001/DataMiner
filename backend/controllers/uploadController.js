@@ -1,6 +1,6 @@
 const XLSX = require("xlsx");
 const fs = require("fs");
-const { sql, getPool, generateId } = require('../database/db');
+const { sql, getPool, generateId, executeWithRetry } = require('../database/db');
 const marketDataSyncService = require("../services/marketDataSyncService");
 const SystemLogService = require('../services/SystemLogService');
 
@@ -417,16 +417,18 @@ exports.uploadAdsData = async (req, res) => {
         : `T.Asin = S.Asin AND T.ReportType = 'monthly' AND T.[Month] = S.[Month]`;
 
       // Perform Atomic Unit-of-Work UPSERT across all rows simultaneously
-      await pool.request().query(`
-        MERGE AdsPerformance AS T
-        USING ${tempTableName} AS S
-        ON (${matchClause})
-        WHEN MATCHED THEN
-          UPDATE SET ${updateCols}, T.UploadedAt = DATEADD(minute, 330, GETUTCDATE())
-        WHEN NOT MATCHED THEN
-          INSERT (${insertColNames}, UploadedAt)
-          VALUES (${insertColVals}, DATEADD(minute, 330, GETUTCDATE()));
-      `);
+      await executeWithRetry(async () => {
+        await pool.request().query(`
+          MERGE AdsPerformance WITH (HOLDLOCK) AS T
+          USING ${tempTableName} AS S
+          ON (${matchClause})
+          WHEN MATCHED THEN
+            UPDATE SET ${updateCols}, T.UploadedAt = DATEADD(minute, 330, GETUTCDATE())
+          WHEN NOT MATCHED THEN
+            INSERT (${insertColNames}, UploadedAt)
+            VALUES (${insertColVals}, DATEADD(minute, 330, GETUTCDATE()));
+        `);
+      });
 
       // 3. Mark Asins as having Ads
       await pool.request().query(`
