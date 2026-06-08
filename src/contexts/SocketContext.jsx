@@ -29,7 +29,7 @@ export const SocketProvider = ({ children }) => {
             console.log('[DEBUG] Socket URL:', socketUrl);
 
             const newSocket = io(socketUrl, {
-                transports: ['polling', 'websocket'],
+                transports: ['websocket'], // Force WebSocket to prevent 400 errors across PM2 load-balanced clusters
                 autoConnect: true,
                 reconnection: true,
                 reconnectionDelay: 1000,

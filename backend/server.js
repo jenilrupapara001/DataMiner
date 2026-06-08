@@ -1,6 +1,6 @@
-process.env.TZ = 'Asia/Kolkata'; // Force server timezone to India Standard Time
-
-// Force JSON serialization to strictly format dates in local IST timezone instead of converting to UTC 'Z' strings
+require('dotenv').config();
+const globalTimezone = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata';
+process.env.TZ = globalTimezone; // Force server timezone to dynamically match .env
 Date.prototype.toJSON = function() {
   const tzo = -this.getTimezoneOffset();
   const dif = tzo >= 0 ? '+' : '-';
@@ -17,7 +17,6 @@ Date.prototype.toJSON = function() {
     ':' + pad(Math.abs(tzo) % 60);
 };
 
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
