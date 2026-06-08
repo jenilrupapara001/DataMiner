@@ -246,10 +246,10 @@ const Dashboard = () => {
   // Dynamic Top ASINs mapping with mockup fallbacks
   const displayAsins = useMemo(() => {
     const mockAsins = [
-      { title: 'Copper Bottle 1L', subtitle: 'B0C9X1A2IN · Ayur Life', lqs: 91, cdq: 87 },
-      { title: 'Yoga Mat Pro', subtitle: 'B0B7M9K3IN · FlexWell', lqs: 76, cdq: 82 },
-      { title: 'Kitchen Storage Set', subtitle: 'B09N2Q8DIN · HomeStack', lqs: 63, cdq: 71 },
-      { title: 'LED Study Lamp', subtitle: 'B0D1P554IN · BrightDesk', lqs: 88, cdq: 91 }
+      { title: 'Copper Bottle 1L', subtitle: 'B0C9X1A2IN · Ayur Life', lqs: 91 },
+      { title: 'Yoga Mat Pro', subtitle: 'B0B7M9K3IN · FlexWell', lqs: 76 },
+      { title: 'Kitchen Storage Set', subtitle: 'B09N2Q8DIN · HomeStack', lqs: 63 },
+      { title: 'LED Study Lamp', subtitle: 'B0D1P554IN · BrightDesk', lqs: 88 }
     ];
 
     const result = [];
@@ -259,8 +259,7 @@ const Dashboard = () => {
         result.push({
           title: p.title || 'Unknown Product',
           subtitle: `${p.asin || ''} · ${p.sku || ''}`,
-          lqs: p.lqs || 85,
-          cdq: p.cdq || 80
+          trend: p.trend || (p.lqs > 80 ? 'up' : 'down')
         });
       } else {
         result.push(mockAsins[i]);
@@ -569,11 +568,8 @@ const Dashboard = () => {
                     </span>
                   </div>
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>
                       LQS {asin.lqs}
-                    </span>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>
-                      CDQ {asin.cdq}
                     </span>
                   </div>
                 </div>

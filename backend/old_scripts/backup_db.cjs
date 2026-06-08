@@ -3,10 +3,20 @@ const path = require('path');
 const { getPool } = require('./database/db');
 require('dotenv').config({ path: './.env' });
 
+const zlib = require('zlib');
+
 async function backupDatabase() {
     console.log("Connecting to database using database/db.js...");
     const pool = await getPool();
-    const backupDir = path.join(__dirname, 'database_backup');
+    
+    // Create a timestamped folder for each backup
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const backupBaseDir = path.join(__dirname, 'database_backups');
+    const backupDir = path.join(backupBaseDir, `backup_${dateStr}`);
+    
+    if (!fs.existsSync(backupBaseDir)) {
+        fs.mkdirSync(backupBaseDir);
+    }
     if (!fs.existsSync(backupDir)) {
         fs.mkdirSync(backupDir);
     }
@@ -15,14 +25,17 @@ async function backupDatabase() {
 
     for (const table of tables) {
         console.log(`Backing up ${table}...`);
-        const filePath = path.join(backupDir, `${table}.json`);
+        const filePath = path.join(backupDir, `${table}.json.gz`);
         
         await new Promise((resolve, reject) => {
             const request = pool.request();
             request.stream = true; // Use streaming to prevent OOM / Invalid String Length errors
             
             const writeStream = fs.createWriteStream(filePath);
-            writeStream.write('[\n');
+            const gzip = zlib.createGzip();
+            gzip.pipe(writeStream);
+            
+            gzip.write('[\n');
             
             let isFirst = true;
             let count = 0;
@@ -31,11 +44,11 @@ async function backupDatabase() {
             
             request.on('row', row => {
                 if (!isFirst) {
-                    writeStream.write(',\n');
+                    gzip.write(',\n');
                 } else {
                     isFirst = false;
                 }
-                writeStream.write(JSON.stringify(row));
+                gzip.write(JSON.stringify(row));
                 count++;
             });
             
@@ -45,10 +58,13 @@ async function backupDatabase() {
             });
             
             request.on('done', () => {
-                writeStream.write('\n]');
-                writeStream.end();
-                console.log(`Successfully backed up ${count} records to ${table}.json`);
-                resolve();
+                gzip.write('\n]');
+                gzip.end();
+                
+                writeStream.on('finish', () => {
+                    console.log(`Successfully backed up ${count} records to ${table}.json.gz`);
+                    resolve();
+                });
             });
         });
     }

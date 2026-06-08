@@ -5,6 +5,7 @@ import Chart from 'react-apexcharts';
 import { subDays, endOfDay, format } from 'date-fns';
 import AdvancedDateRangePicker from '../contexts/DateRangeContext';
 import Popover from './common/Popover';
+import DOMPurify from 'dompurify';
 import { Modal, Tabs, Card, Row, Col, Progress, Tag, Typography, Button, Divider, Tooltip, Empty, Space } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
@@ -777,7 +778,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 return (
                   <div
                     style={{ padding: '20px', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', color: '#334155', fontSize: '13px', lineHeight: '1.6' }}
-                    dangerouslySetInnerHTML={{ __html: asin.bullet_points }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asin.bullet_points) }}
                   />
                 );
               }

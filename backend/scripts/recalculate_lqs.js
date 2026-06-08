@@ -61,24 +61,32 @@ async function run() {
                         }
                         
                         // Calculate new LQS with updated logic
-                        const analysis = LQS.calculateCDQ({
-                            Title: asin.Title || '',
-                            BulletPoints: bulletPoints,
-                            ImagesUrls: imageUrls,
-                            HasAplus: !!asin.HasAplus,
-                            Category: asin.Category || ''
+                        // CDQ system disabled per user request, using standard LQS instead
+                        const score = LQS.calculateLQS({
+                            titleLength: asin.Title?.length || 0,
+                            hasAplus: !!asin.HasAplus,
+                            bulletCount: bulletPoints.length,
+                            imageCount: imageUrls.length,
+                            descriptionLength: 0,
+                            hasEbc: false,
+                            price: asin.CurrentPrice || 0,
+                            rating: asin.Rating || 0,
+                            reviews: asin.ReviewCount || 0
                         });
+                        const grade = LQS.getGrade(score);
+                        const issues = [];
                         
                         // Update the ASIN record
                         await transaction.request()
                             .input('id', sql.VarChar, asin.Id)
-                            .input('lqsScore', sql.Decimal(5, 2), analysis.score)
-                            .input('lqsGrade', sql.NVarChar(5), analysis.grade)
-                            .input('lqsIssues', sql.NVarChar(sql.MAX), JSON.stringify(analysis.issues))
-                            .input('titleScore', sql.Decimal(5, 2), analysis.components.titleQuality)
-                            .input('bulletScore', sql.Decimal(5, 2), analysis.components.bulletPoints)
-                            .input('imageScore', sql.Decimal(5, 2), analysis.components.imageQuality)
-                            .input('descriptionScore', sql.Decimal(5, 2), analysis.components.descriptionQuality)
+                            .input('lqs', sql.Decimal(5, 2), score)
+                            .input('lqsScore', sql.Decimal(5, 2), score)
+                            .input('lqsGrade', sql.NVarChar(5), grade)
+                            .input('lqsIssues', sql.NVarChar(sql.MAX), JSON.stringify(issues))
+                            .input('titleScore', sql.Decimal(5, 2), 0)
+                            .input('bulletScore', sql.Decimal(5, 2), 0)
+                            .input('imageScore', sql.Decimal(5, 2), 0)
+                            .input('descriptionScore', sql.Decimal(5, 2), 0)
                             .query(`
                                 UPDATE Asins 
                                 SET LQS = @lqsScore,

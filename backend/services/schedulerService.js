@@ -48,6 +48,10 @@ class SchedulerService {
             this.jobs.integrityRepair.stop();
             delete this.jobs.integrityRepair;
         }
+        if (this.jobs.weeklyBackup) {
+            this.jobs.weeklyBackup.stop();
+            delete this.jobs.weeklyBackup;
+        }
         if (this.jobs.ageTagRefresh) {
             this.jobs.ageTagRefresh.stop();
             delete this.jobs.ageTagRefresh;
@@ -140,6 +144,29 @@ class SchedulerService {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
             console.log('ℹ️ Repair task skipped (Refactoring in progress)');
         }, cronOptions);
+
+        // 4. Automated Weekly Database Backup (Every Sunday at 00:00)
+        if (this.jobs.weeklyBackup) {
+            this.jobs.weeklyBackup.stop();
+        }
+        this.jobs.weeklyBackup = cron.schedule('0 0 * * 0', async () => {
+            console.log('🕒 [Cron] Starting Automated Weekly Database Backup...');
+            try {
+                const { exec } = require('child_process');
+                const path = require('path');
+                const backupScript = path.join(__dirname, '../backup_db.cjs');
+                exec(`node "${backupScript}"`, (error, stdout, stderr) => {
+                    if (error) {
+                        console.error('❌ Weekly backup failed:', error.message);
+                        return;
+                    }
+                    console.log('✅ Weekly database backup completed successfully.');
+                });
+            } catch (err) {
+                console.error('❌ Error executing weekly backup:', err.message);
+            }
+        }, cronOptions);
+        console.log(`🕒 Database Weekly Backup scheduled (Sundays at 00:00) in ${automationTimezone}`);
 
         // 4. Daily Age Tag Refresh (Every day at 2 AM)
         this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {

@@ -4,6 +4,7 @@ process.env.TZ = globalTimezone; // Force server timezone to dynamically match .
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { getPool, sql } = require('./database/db');
 
@@ -36,6 +37,7 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true
 }));
+app.use(helmet({ crossOriginResourcePolicy: false })); // Use helmet, but allow cross-origin for static images if needed
 // 1000 users support: Apply Rate Limiting
 const globalLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute

@@ -17,11 +17,10 @@ const { Title, Text, Paragraph } = Typography;
 const MARKETPLACE_FLAGS = { 'amazon.in': '🇮🇳', 'ajio': '💜', 'myntra': '💖' };
 
 /* ── Badge Helpers ─────────────────────────────────────── */
-const getLqsBadge = (lqs, cdqGrade) => {
-  if (lqs == null && cdqGrade == null) return <span style={{ color: '#a1a1aa' }}>—</span>;
+const getLqsBadge = (lqs) => {
+  if (lqs == null) return <span style={{ color: '#a1a1aa' }}>—</span>;
 
-  // Use CDQ grade if available, otherwise fallback to LQS-based grade
-  const grade = cdqGrade || (lqs >= 80 ? 'A' : lqs >= 60 ? 'B' : lqs >= 40 ? 'C' : 'D');
+  const grade = lqs >= 80 ? 'A' : lqs >= 60 ? 'B' : lqs >= 40 ? 'C' : 'D';
 
   let color = 'default';
   if (grade === 'A') color = 'success';
@@ -96,15 +95,15 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
     }
     if (lqsFilter) {
       if (lqsFilter === 'high') {
-        result = result.filter(a => (a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D')) === 'A');
+        result = result.filter(a => (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D') === 'A');
       } else if (lqsFilter === 'medium') {
         result = result.filter(a => {
-          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D');
+          const grade = a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D';
           return grade === 'B';
         });
       } else if (lqsFilter === 'low') {
         result = result.filter(a => {
-          const grade = a.cdqGrade || (a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D');
+          const grade = a.lqs >= 80 ? 'A' : a.lqs >= 60 ? 'B' : a.lqs >= 40 ? 'C' : 'D';
           return grade === 'C' || grade === 'D';
         });
       }
@@ -216,11 +215,11 @@ const SellerAsinPanel = ({ seller, onSync, syncing, refreshKey }) => {
       )
     },
     {
-      title: 'CDQ',
-      key: 'cdq',
+      title: 'LQS',
+      key: 'lqs',
       align: 'center',
       width: 100,
-      render: (_, record) => getLqsBadge(record.lqs, record.cdqGrade)
+      render: (_, record) => getLqsBadge(record.lqs)
     },
     {
       title: 'IMAGES',

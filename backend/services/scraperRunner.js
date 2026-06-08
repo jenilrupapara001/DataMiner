@@ -1,7 +1,7 @@
 const { sql, getPool } = require('../database/db');
 const directScraperService = require('./directScraperService');
 const socketService = require('./socketService');
-const { calculateCDQ } = require('../utils/lqs');
+const { calculateLQS } = require('../utils/lqs');
 
 /**
  * Orchestrates high-volume ASIN repair jobs using DirectScraperService.
@@ -92,9 +92,18 @@ class ScraperRunner {
                     const scrapedData = await directScraperService.scrapeAsin(asinDoc.AsinCode);
                     
                     if (scrapedData && scrapedData.title) {
-                        // Recalculate CDQ/LQS
-                        const cdq = calculateCDQ(scrapedData);
-                        const lqs = Math.round(cdq.totalScore);
+                        // Calculate standard LQS (CDQ is disabled per user request)
+                        const lqs = Math.round(calculateLQS({
+                            titleLength: scrapedData.title?.length || 0,
+                            hasAplus: scrapedData.hasAplus || false,
+                            bulletCount: scrapedData.bulletPoints?.length || 0,
+                            imageCount: scrapedData.imagesCount || 0,
+                            descriptionLength: 0,
+                            hasEbc: false,
+                            price: scrapedData.currentPrice || 0,
+                            rating: scrapedData.rating || 0,
+                            reviews: scrapedData.reviewCount || 0
+                        }));
                         
                         await pool.request()
                             .input('id', sql.VarChar, asinDoc.Id)

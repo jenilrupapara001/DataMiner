@@ -20,8 +20,9 @@ export const ALL_COLUMNS = [
   { key: 'imageScore', label: 'Image Score (IMG)', defaultVisible: true, category: 'LQS' },
   { key: 'descriptionScore', label: 'Desc Score (DSC)', defaultVisible: true, category: 'LQS' },
   { key: 'lqs', label: 'Total LQS', defaultVisible: true, category: 'LQS' },
-  { key: 'cdq', label: 'CDQ', defaultVisible: false, category: 'LQS' },
-  { key: 'cdqGrade', label: 'CDQ Grade', defaultVisible: false, category: 'LQS' },
+  // CDQ columns disabled per user request
+  // { key: 'cdq', label: 'CDQ', defaultVisible: false, category: 'LQS' },
+  // { key: 'cdqGrade', label: 'CDQ Grade', defaultVisible: false, category: 'LQS' },
   
   { key: 'price', label: 'Price', defaultVisible: true, category: 'Pricing' },
   { key: 'priceDispute', label: 'Price Dispute', defaultVisible: true, category: 'Pricing' },

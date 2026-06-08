@@ -48,7 +48,7 @@ const SocketService = require('./socketService');
 const nvidiaAiService = require('./nvidiaAiService');
 const { MemorySafeProcessor, clearArray } = require('../utils/memorySafe');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
-const { calculateLQS, calculateCDQ, getGrade, getCDQBreakdown } = require('../utils/lqs');
+const { calculateLQS, getGrade } = require('../utils/lqs');
 const listingQualityService = require('./listingQualityService');
 const SystemLogService = require('./SystemLogService');
 

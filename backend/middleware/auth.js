@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../database/db');
 const config = require('../config/env');
 
-const DEMO_MODE = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
+const DEMO_MODE = process.env.DEMO_MODE === 'true'; // Strictly require DEMO_MODE=true in .env to prevent accidental bypass in production
 
 /**
  * SQL-based Authentication Middleware
