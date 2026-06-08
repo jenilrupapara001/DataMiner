@@ -2344,7 +2344,7 @@ class MarketDataSyncService {
                 reviews: reviewCount || asin.ReviewCount || 0,
                 imageCount: imagesCount || asin.ImagesCount || 0,
                 videoCount: videoCount || asin.VideoCount || 0,
-                date: now.toISOString().split('T')[0]
+                date: new Date(now.getTime() + (330 * 60 * 1000)).toISOString().split('T')[0]
             });
 
             // Keep last 7 unique days
@@ -2523,8 +2523,9 @@ class MarketDataSyncService {
 
             await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
 
-            // 11. History Tracking
-            const today = now.toISOString().split('T')[0];
+            // 11. History Tracking - Use IST Date
+            const localNow = new Date(now.getTime() + (330 * 60 * 1000));
+            const today = localNow.toISOString().split('T')[0];
             await executeSqlWithRetry(async () => {
                 await pool.request()
                     .input('asinId', sql.VarChar, asinId)
@@ -2591,8 +2592,7 @@ class MarketDataSyncService {
                 }
             }
 
-            // 12. Socket Notification (REMOVED - Handled by batch in processBatchResults)
-            /*
+            // 12. Socket Notification - Restored for live updates
             const io = SocketService.getIo();
             if (io) {
                 io.emit('scrape_data_ingested', {
@@ -2602,7 +2602,6 @@ class MarketDataSyncService {
                     timestamp: now
                 });
             }
-            */
 
             // console.log(`✅ SQL Metrics updated for ASIN: ${asin.AsinCode}`);
             return true;
