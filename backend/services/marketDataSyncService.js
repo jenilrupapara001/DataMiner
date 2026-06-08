@@ -40,7 +40,7 @@ axiosRateLimited.delete = (url, config) => axiosRateLimited({ method: 'delete', 
 axiosRateLimited.create = (defaults) => axiosRateLimited;
 
 const axios = axiosRateLimited;
-const { sql, getPool, generateId, query } = require('../database/db');
+const { sql, getPool, generateId, query, executeWithRetry } = require('../database/db');
 const config = require('../config/env');
 const imageGenerationService = require('./imageGenerationService');
 const { JSDOM } = require('jsdom');
@@ -92,27 +92,7 @@ const memProcessor = new MemorySafeProcessor({
     maxMemoryPercent: 70
 });
 
-/**
- * Helper to execute a database query with deadlock retry logic.
- */
-async function executeSqlWithRetry(queryFn, maxRetries = 3, retryDelayMs = 150) {
-    let retries = 0;
-    while (true) {
-        try {
-            return await queryFn();
-        } catch (err) {
-            if (err.message && err.message.toLowerCase().includes('deadlock') && retries < maxRetries) {
-                const jitter = Math.floor(Math.random() * 100);
-                const delay = (retryDelayMs * Math.pow(2, retries)) + jitter;
-                await new Promise(resolve => setTimeout(resolve, delay));
-                retries++;
-            } else {
-                throw err;
-            }
-        }
-    }
-}
-
+// executeSqlWithRetry removed in favor of global executeWithRetry from db.js
 /**
  * Discreet service for syncing market data from external provider.
  * Consolidated from OctoparseAutomationService and MarketDataSyncService.
@@ -2459,7 +2439,7 @@ class MarketDataSyncService {
             });
             request.input('asinId', sql.VarChar, asinId);
 
-            await executeSqlWithRetry(async () => {
+            await executeWithRetry(async () => {
                 await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
             });
 
@@ -2471,7 +2451,7 @@ class MarketDataSyncService {
             
             const localNow = new Date(now.getTime() + (offsetMins * 60 * 1000));
             const today = localNow.toISOString().split('T')[0];
-            await executeSqlWithRetry(async () => {
+            await executeWithRetry(async () => {
                 await pool.request()
                     .input('asinId', sql.VarChar, asinId)
                     .input('date', sql.Date, today)
@@ -2528,7 +2508,7 @@ class MarketDataSyncService {
 
                 if (validRanks > 0) {
                     try {
-                        await executeSqlWithRetry(async () => {
+                        await executeWithRetry(async () => {
                             await subBsrRequest.query(subBsrQuery);
                         });
                     } catch (e) {
@@ -2596,9 +2576,11 @@ class MarketDataSyncService {
         // Fetch seller details once for the entire batch
         let sellerInfo = { sellerName: '', sellerMarketplace: '' };
         try {
-            const sellerResult = await pool.request()
-                .input('sellerId', sql.VarChar, sellerId)
-                .query('SELECT Name, Marketplace FROM Sellers WHERE Id = @sellerId');
+            const sellerResult = await executeWithRetry(async () => {
+                return await pool.request()
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .query('SELECT Name, Marketplace FROM Sellers WHERE Id = @sellerId');
+            });
             if (sellerResult.recordset[0]) {
                 sellerInfo.sellerName = sellerResult.recordset[0].Name || '';
                 sellerInfo.sellerMarketplace = sellerResult.recordset[0].Marketplace || '';
@@ -2626,9 +2608,11 @@ class MarketDataSyncService {
             const codeParams = asinCodesToFind.map((_, i) => `@code${i}`).join(', ');
 
             asinRequest.input('sellerId', sellerId.toUpperCase());
-            const asinResult = await asinRequest.query(
-                `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
-            );
+            const asinResult = await executeWithRetry(async () => {
+                return await asinRequest.query(
+                    `SELECT * FROM Asins WHERE UPPER(SellerId) = @sellerId AND UPPER(AsinCode) IN (${codeParams})`
+                );
+            });
 
             const asinMap = new Map(asinResult.recordset.map(a => [a.AsinCode.toUpperCase(), a]));
 
@@ -2651,14 +2635,16 @@ class MarketDataSyncService {
                             try {
                                 const newId = generateId();
                                 // Minimal insert for discovery
-                                await pool.request()
-                                    .input('id', sql.VarChar, newId)
-                                    .input('asinCode', sql.VarChar, normalizedCode)
-                                    .input('sellerId', sql.VarChar, sellerId)
-                                    .query(`
-                                        INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
-                                        VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), dbo.GetEnvDate(), dbo.GetEnvDate())
-                                    `);
+                                await executeWithRetry(async () => {
+                                    await pool.request()
+                                        .input('id', sql.VarChar, newId)
+                                        .input('asinCode', sql.VarChar, normalizedCode)
+                                        .input('sellerId', sql.VarChar, sellerId)
+                                        .query(`
+                                            INSERT INTO Asins (Id, AsinCode, SellerId, Status, ScrapeStatus, Marketplace, CreatedAt, UpdatedAt)
+                                            VALUES (@id, @asinCode, @sellerId, 'Active', 'SCRAPING', (SELECT Marketplace FROM Sellers WHERE Id = @sellerId), dbo.GetEnvDate(), dbo.GetEnvDate())
+                                        `);
+                                });
 
                                 // Mock basic object for mapping
                                 asin = { Id: newId, AsinCode: normalizedCode };

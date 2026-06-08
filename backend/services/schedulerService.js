@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { sql, getPool, generateId } = require('../database/db');
+const { sql, getPool, generateId, executeWithRetry } = require('../database/db');
 const MarketSyncService = require('./marketDataSyncService');
 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
 const AutoTagService = require('./autoTagService');
@@ -185,8 +185,10 @@ class SchedulerService {
         
         try {
             const pool = await getPool();
-            const sellersResult = await pool.request()
-                .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+            const sellersResult = await executeWithRetry(async () => {
+                return await pool.request()
+                    .query("SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != ''");
+            });
             const sellers = sellersResult.recordset;
 
             console.log(`🔄 [RECOVERY] Found ${sellers.length} sellers - running with concurrency limit...`);
@@ -246,8 +248,10 @@ class SchedulerService {
         try {
             console.log('🔄 [RESUME] Checking for interrupted scheduled runs...');
             const pool = await getPool();
-            const activeRunsResult = await pool.request()
-                .query("SELECT TOP 1 * FROM ScheduledRuns WHERE Status = 'RUNNING' ORDER BY StartTime DESC");
+            const activeRunsResult = await executeWithRetry(async () => {
+                return await pool.request()
+                    .query("SELECT TOP 1 * FROM ScheduledRuns WHERE Status = 'RUNNING' ORDER BY StartTime DESC");
+            });
             
             const activeRun = activeRunsResult.recordset[0];
             if (!activeRun) {
@@ -366,17 +370,21 @@ class SchedulerService {
                 .input('details', sql.NVarChar, detailsJson);
             
             if (isEnd) {
-                await request.query(`
-                    UPDATE ScheduledRuns 
-                    SET Status = @status, Details = @details, EndTime = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate()
-                    WHERE Id = @id
-                `);
+                await executeWithRetry(async () => {
+                    await request.query(`
+                        UPDATE ScheduledRuns 
+                        SET Status = @status, Details = @details, EndTime = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate()
+                        WHERE Id = @id
+                    `);
+                });
             } else {
-                await request.query(`
-                    UPDATE ScheduledRuns 
-                    SET Status = @status, Details = @details, UpdatedAt = dbo.GetEnvDate()
-                    WHERE Id = @id
-                `);
+                await executeWithRetry(async () => {
+                    await request.query(`
+                        UPDATE ScheduledRuns 
+                        SET Status = @status, Details = @details, UpdatedAt = dbo.GetEnvDate()
+                        WHERE Id = @id
+                    `);
+                });
             }
         } catch (err) {
             console.error(`❌ Failed to update ScheduledRuns details for run ${runId}:`, err.message);
@@ -398,15 +406,17 @@ class SchedulerService {
 
             if (!isResuming) {
                 // Insert initial run record
-                await pool.request()
-                    .input('id', sql.VarChar, runId)
-                    .input('startTime', sql.DateTime2, startTime)
-                    .input('status', sql.VarChar, 'RUNNING')
-                    .input('details', sql.NVarChar, JSON.stringify([]))
-                    .query(`
-                        INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
-                        VALUES (@id, @startTime, @status, @details, dbo.GetEnvDate(), dbo.GetEnvDate())
-                    `);
+                await executeWithRetry(async () => {
+                    await pool.request()
+                        .input('id', sql.VarChar, runId)
+                        .input('startTime', sql.DateTime2, startTime)
+                        .input('status', sql.VarChar, 'RUNNING')
+                        .input('details', sql.NVarChar, JSON.stringify([]))
+                        .query(`
+                            INSERT INTO ScheduledRuns (Id, StartTime, Status, Details, CreatedAt, UpdatedAt)
+                            VALUES (@id, @startTime, @status, @details, dbo.GetEnvDate(), dbo.GetEnvDate())
+                        `);
+                });
 
                 // 1. FIRST: Stop all active tasks to ensure a fresh state
                 console.log(`🏢 [ENTERPRISE] Phase 1: Stopping all active Octoparse ${marketplace} tasks...`);
@@ -419,7 +429,9 @@ class SchedulerService {
             const queryStr = isAjio
                 ? "SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' AND LOWER(Marketplace) = 'ajio'"
                 : "SELECT * FROM Sellers WHERE IsActive = 1 AND OctoparseId IS NOT NULL AND OctoparseId != '' AND (Marketplace IS NULL OR LOWER(Marketplace) != 'ajio')";
-            const sellersResult = await pool.request().query(queryStr);
+            const sellersResult = await executeWithRetry(async () => {
+                return await pool.request().query(queryStr);
+            });
             const sellers = sellersResult.recordset;
 
             if (sellers.length === 0) {

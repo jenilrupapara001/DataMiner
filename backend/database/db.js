@@ -95,17 +95,24 @@ function generateId() {
 /**
  * Execute a database query with deadlock retry logic.
  */
-async function executeWithRetry(queryFn, maxRetries = 3, retryDelayMs = 200) {
+async function executeWithRetry(queryFn, maxRetries = 5, retryDelayMs = 250) {
     let retries = 0;
     while (true) {
         try {
             return await queryFn();
         } catch (err) {
-            // Error 1205 is deadlock in SQL Server
-            if ((err.number === 1205 || (err.message && err.message.toLowerCase().includes('deadlock'))) && retries < maxRetries) {
-                const jitter = Math.floor(Math.random() * 100);
+            const isDeadlock = err.number === 1205 || (err.message && err.message.toLowerCase().includes('deadlock'));
+            const isConnectionError = err.message && (
+                err.message.toLowerCase().includes('failed to connect') ||
+                err.message.toLowerCase().includes('timeout') ||
+                err.message.toLowerCase().includes('socket hang up') ||
+                err.message.toLowerCase().includes('sequence')
+            );
+
+            if ((isDeadlock || isConnectionError) && retries < maxRetries) {
+                const jitter = Math.floor(Math.random() * 200);
                 const delay = (retryDelayMs * Math.pow(2, retries)) + jitter;
-                console.warn(`[DB] Deadlock detected. Retrying transaction in ${delay}ms... (Attempt ${retries + 1} of ${maxRetries})`);
+                console.warn(`[DB] Transient error detected (${isDeadlock ? 'Deadlock' : 'Connection'}). Retrying transaction in ${delay}ms... (Attempt ${retries + 1} of ${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 retries++;
             } else {
