@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
-import { 
-    Space, Button, Segmented, Table, Modal, Card, Statistic, Input, Row, Col, 
-    Typography, Tag, Tooltip, Form, Select, Switch, Avatar, Badge, Divider, notification, message as antdMessage 
+import {
+    Space, Button, Segmented, Table, Modal, Card, Statistic, Input, Row, Col,
+    Typography, Tag, Tooltip, Form, Select, Switch, Avatar, Badge, Divider, notification, message as antdMessage
 } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
@@ -129,9 +129,9 @@ const UsersPage = () => {
             };
             const response = await userApi.getAll(params);
             if (response.success) {
-                 setUsers(response.data.users || []);
-                 setTotalRecords(response.data.pagination?.total || 0);
-             }
+                setUsers(response.data.users || []);
+                setTotalRecords(response.data.pagination?.total || 0);
+            }
         } catch (error) {
             console.error('Failed to load users:', error);
             messageApi.error('Failed to load team roster.');
@@ -149,7 +149,7 @@ const UsersPage = () => {
             if (rolesRes.success) {
                 const rolesData = rolesRes.data?.roles || rolesRes.data || [];
                 const allowedRoleNames = ['admin', 'operational_manager', 'brand manager', 'catalog_manager', 'listing_team'];
-                const filteredRoles = (Array.isArray(rolesData) ? rolesData : []).filter(r => 
+                const filteredRoles = (Array.isArray(rolesData) ? rolesData : []).filter(r =>
                     allowedRoleNames.includes((r.name || r.displayName || '').toString().toLowerCase())
                 );
                 setRoles(filteredRoles);
@@ -194,7 +194,7 @@ const UsersPage = () => {
     useEffect(() => {
         if (!socket) return;
         const handleRolePermissionsUpdated = (updatedRole) => {
-            setRoles(prevRoles => prevRoles.map(role => 
+            setRoles(prevRoles => prevRoles.map(role =>
                 (role._id === updatedRole._id || role.id === updatedRole.id) ? updatedRole : role
             ));
         };
@@ -229,7 +229,7 @@ const UsersPage = () => {
             await userApi.toggleStatus(userId);
             messageApi.success('User status updated successfully.');
             // Perform optimistic state update
-            setUsers(prevUsers => prevUsers.map(user => 
+            setUsers(prevUsers => prevUsers.map(user =>
                 (user._id === userId || user.id === userId) ? { ...user, isActive: !user.isActive } : user
             ));
         } catch (error) {
@@ -393,7 +393,7 @@ const UsersPage = () => {
                 const updatedPermIds = isAssigned
                     ? rolePermIds.filter(id => id !== permId)
                     : [...rolePermIds, permId];
-                
+
                 const updatedPermsObjects = updatedPermIds.map(id => {
                     const found = allPermissions.find(p => p._id === id || p.id === id);
                     return found || { id, _id: id };
@@ -508,7 +508,7 @@ const UsersPage = () => {
         if (!permissionSearch) return groupedPermissions;
         const result = {};
         Object.entries(groupedPermissions).forEach(([category, perms]) => {
-            const filtered = perms.filter(p => 
+            const filtered = perms.filter(p =>
                 p.displayName?.toLowerCase().includes(permissionSearch.toLowerCase()) ||
                 p.name?.toLowerCase().includes(permissionSearch.toLowerCase())
             );
@@ -529,7 +529,7 @@ const UsersPage = () => {
     // Memoized filters for direct supervisor assignment (Clean Audit #11)
     const filteredSupervisors = useMemo(() => {
         const query = modalSearchSupervisor.toLowerCase();
-        return managers.filter(m => 
+        return managers.filter(m =>
             `${m.firstName || ''} ${m.lastName || ''} ${m.email || ''}`.toLowerCase().includes(query)
         );
     }, [managers, modalSearchSupervisor]);
@@ -537,11 +537,11 @@ const UsersPage = () => {
     // Memoized filters for Brand Manager assignment in Listing Team Role (Clean Audit #11)
     const filteredBrandManagers = useMemo(() => {
         const query = modalSearchBrandManager.toLowerCase();
-        const bmUsers = managers.filter(m => 
-            m.role?.name?.toLowerCase() === 'brand_manager' || 
+        const bmUsers = managers.filter(m =>
+            m.role?.name?.toLowerCase() === 'brand_manager' ||
             m.role?.displayName?.toLowerCase() === 'brand manager'
         );
-        return bmUsers.filter(m => 
+        return bmUsers.filter(m =>
             `${m.firstName || ''} ${m.lastName || ''} ${m.email || ''}`.toLowerCase().includes(query)
         );
     }, [managers, modalSearchBrandManager]);
@@ -550,7 +550,7 @@ const UsersPage = () => {
     const filteredSellers = useMemo(() => {
         const listToRender = isListingTeam ? inheritedSellers : sellers;
         const query = modalSearchSeller.toLowerCase();
-        return listToRender.filter(s => 
+        return listToRender.filter(s =>
             `${s.name || ''} ${s.code || ''}`.toLowerCase().includes(query)
         );
     }, [isListingTeam, inheritedSellers, sellers, modalSearchSeller]);
@@ -566,14 +566,14 @@ const UsersPage = () => {
                 const roleId = record.role?._id || record.role?.id || record.role;
                 const resolvedRole = roles.find(r => (r._id || r.id) === roleId) || (typeof record.role === 'object' ? record.role : null);
                 const roleColor = resolvedRole?.color || '#6366f1';
-                
+
                 return (
                     <Space size={12}>
-                        <Avatar 
-                            style={{ 
-                                backgroundColor: `${roleColor}15`, 
-                                color: roleColor, 
-                                fontWeight: 700, 
+                        <Avatar
+                            style={{
+                                backgroundColor: `${roleColor}15`,
+                                color: roleColor,
+                                fontWeight: 700,
                                 fontSize: 13,
                                 border: `1px solid ${roleColor}25`
                             }}
@@ -606,18 +606,18 @@ const UsersPage = () => {
             render: (_, record) => {
                 const roleId = record.role?._id || record.role?.id || record.role;
                 const resolvedRole = roles.find(r => (r._id || r.id) === roleId) || (typeof record.role === 'object' ? record.role : null);
-                
+
                 const color = resolvedRole?.color || '#6366f1';
                 const displayName = resolvedRole?.displayName || 'Standard Role';
-                
+
                 return (
-                    <Tag 
-                        variant="filled" 
-                        style={{ 
-                            backgroundColor: `${color}12`, 
-                            color: color, 
-                            borderRadius: '8px', 
-                            fontWeight: '800', 
+                    <Tag
+                        variant="filled"
+                        style={{
+                            backgroundColor: `${color}12`,
+                            color: color,
+                            borderRadius: '8px',
+                            fontWeight: '800',
                             fontSize: '11px',
                             letterSpacing: '0.02em',
                             padding: '5px 14px',
@@ -662,10 +662,10 @@ const UsersPage = () => {
             width: 130,
             render: (isActive, record) => (
                 <Space size={8}>
-                    <Switch 
-                        size="small" 
-                        checked={isActive} 
-                        onChange={() => handleToggleStatus(record._id || record.id)} 
+                    <Switch
+                        size="small"
+                        checked={isActive}
+                        onChange={() => handleToggleStatus(record._id || record.id)}
                         style={{ backgroundColor: isActive ? '#10b981' : '#cbd5e1' }}
                     />
                     <Text style={{ fontSize: 11.5, fontWeight: 600, color: isActive ? '#059669' : '#64748b' }}>
@@ -683,22 +683,22 @@ const UsersPage = () => {
             render: (_, record) => (
                 <Space size={4}>
                     <Tooltip title="Edit Profile Settings">
-                        <Button 
-                            type="text" 
-                            shape="circle" 
-                            size="small" 
+                        <Button
+                            type="text"
+                            shape="circle"
+                            size="small"
                             onClick={() => handleOpenUserModal(record)}
-                            icon={<Pencil size={13} className="text-indigo-600" />} 
+                            icon={<Pencil size={13} className="text-indigo-600" />}
                         />
                     </Tooltip>
                     <Tooltip title="Remove Member">
-                        <Button 
-                            type="text" 
-                            danger 
-                            shape="circle" 
-                            size="small" 
+                        <Button
+                            type="text"
+                            danger
+                            shape="circle"
+                            size="small"
                             onClick={() => handleDeleteUser(record._id || record.id)}
-                            icon={<Trash2 size={13} />} 
+                            icon={<Trash2 size={13} />}
                         />
                     </Tooltip>
                 </Space>
@@ -894,8 +894,8 @@ const UsersPage = () => {
                     </Space>
                 </div>
                 <Space size={8}>
-                    <Button 
-                        icon={<RefreshCw size={14} />} 
+                    <Button
+                        icon={<RefreshCw size={14} />}
                         shape="round"
                         style={{ fontWeight: 600, fontSize: 12.5, color: '#475569' }}
                         onClick={() => loadUsers()}
@@ -903,9 +903,9 @@ const UsersPage = () => {
                         Refresh Directory
                     </Button>
                     {activeTab === 'users' ? (
-                        <Button 
-                            type="primary" 
-                            icon={<UserPlus size={14} />} 
+                        <Button
+                            type="primary"
+                            icon={<UserPlus size={14} />}
                             shape="round"
                             style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
                             onClick={() => handleOpenUserModal()}
@@ -913,9 +913,9 @@ const UsersPage = () => {
                             Register New Member
                         </Button>
                     ) : (
-                        <Button 
-                            type="primary" 
-                            icon={<Plus size={14} />} 
+                        <Button
+                            type="primary"
+                            icon={<Plus size={14} />}
                             shape="round"
                             style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12.5 }}
                             onClick={() => handleOpenRoleModal()}
@@ -928,7 +928,7 @@ const UsersPage = () => {
 
             {/* 2. SCROLLABLE WORKSPACE */}
             <div className="users-scroll-content">
-                
+
                 {/* Primary Controller Strip */}
                 <Card variant="borderless" styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.01)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
@@ -946,17 +946,17 @@ const UsersPage = () => {
 
                         {activeTab === 'users' ? (
                             <div style={{ flex: 1, display: 'flex', gap: 8, maxWidth: 650, justifyContent: 'flex-end' }}>
-                                <Input 
-                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />} 
-                                    placeholder="Filter profiles..." 
+                                <Input
+                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                                    placeholder="Filter profiles..."
                                     allowClear
                                     value={searchText}
                                     onChange={e => setSearchText(e.target.value)}
                                     style={{ width: 240, borderRadius: 8 }}
                                 />
-                                <Select 
-                                    placeholder="Select Role" 
-                                    allowClear 
+                                <Select
+                                    placeholder="Select Role"
+                                    allowClear
                                     value={selectedRole || undefined}
                                     onChange={handleRoleFilterChange}
                                     style={{ width: 160 }}
@@ -964,9 +964,9 @@ const UsersPage = () => {
                                 >
                                     {roles.map(r => <Option key={r._id || r.id} value={r.name || r.id}>{r.displayName}</Option>)}
                                 </Select>
-                                <Select 
-                                    placeholder="Status" 
-                                    allowClear 
+                                <Select
+                                    placeholder="Status"
+                                    allowClear
                                     value={selectedStatus || undefined}
                                     onChange={handleStatusFilterChange}
                                     style={{ width: 120 }}
@@ -980,15 +980,15 @@ const UsersPage = () => {
                             </div>
                         ) : (
                             <div style={{ flex: 1, display: 'flex', gap: 8, maxWidth: 650, justifyContent: 'flex-end', alignItems: 'center' }}>
-                                <Input 
-                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />} 
-                                    placeholder="Filter system capabilities..." 
+                                <Input
+                                    prefix={<Search size={13} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                                    placeholder="Filter system capabilities..."
                                     allowClear
                                     value={permissionSearch}
                                     onChange={e => setPermissionSearch(e.target.value)}
                                     style={{ width: 240, borderRadius: 8 }}
                                 />
-                                <Button 
+                                <Button
                                     type="primary"
                                     icon={<CheckCircle2 size={14} />}
                                     loading={matrixSaving}
@@ -1062,7 +1062,7 @@ const UsersPage = () => {
                         </Row>
 
                         <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                            <Table 
+                            <Table
                                 columns={columns}
                                 dataSource={users.map(u => ({ ...u, key: u._id || u.id }))}
                                 loading={loading}
@@ -1089,20 +1089,20 @@ const UsersPage = () => {
                             const isTargetsCategory = category.toLowerCase() === 'targets';
                             return (
                                 <div key={category} className="matrix-table-panel">
-                                    <div style={{ 
-                                        background: '#fcfdfe', 
-                                        padding: '12px 20px', 
+                                    <div style={{
+                                        background: '#fcfdfe',
+                                        padding: '12px 20px',
                                         borderBottom: '1.5px solid #f1f5f9',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 8
                                     }}>
-                                        <div style={{ 
-                                            background: isTargetsCategory ? '#ecfdf5' : '#e0e7ff', 
-                                            padding: 6, 
-                                            borderRadius: 8, 
-                                            display: 'flex', 
-                                            color: isTargetsCategory ? '#10b981' : '#4f46e5' 
+                                        <div style={{
+                                            background: isTargetsCategory ? '#ecfdf5' : '#e0e7ff',
+                                            padding: 6,
+                                            borderRadius: 8,
+                                            display: 'flex',
+                                            color: isTargetsCategory ? '#10b981' : '#4f46e5'
                                         }}>
                                             {isTargetsCategory ? <Target size={14} /> : <Shield size={14} />}
                                         </div>
@@ -1140,18 +1140,18 @@ const UsersPage = () => {
                                                                         <span>{role.displayName}</span>
                                                                     </Space>
                                                                     <Space size={6}>
-                                                                        <Button 
-                                                                            type="text" 
-                                                                            size="small" 
+                                                                        <Button
+                                                                            type="text"
+                                                                            size="small"
                                                                             shape="circle"
                                                                             onClick={() => handleOpenRoleModal(role)}
                                                                             icon={<Pencil size={11} style={{ color: '#64748b' }} />}
                                                                         />
                                                                         {role.name !== 'super_admin' && (
-                                                                            <Button 
-                                                                                type="text" 
-                                                                                danger 
-                                                                                size="small" 
+                                                                            <Button
+                                                                                type="text"
+                                                                                danger
+                                                                                size="small"
                                                                                 shape="circle"
                                                                                 onClick={() => handleDeleteRole(role._id || role.id)}
                                                                                 icon={<Trash2 size={11} />}
@@ -1174,7 +1174,7 @@ const UsersPage = () => {
                                                                                 LOCKED
                                                                             </Tag>
                                                                         ) : (
-                                                                            <div 
+                                                                            <div
                                                                                 className={`matrix-cell-check ${isAssigned ? 'assigned' : ''}`}
                                                                                 onClick={() => handleToggleCellPermission(role._id || role.id, perm._id || perm.id)}
                                                                             >
@@ -1210,17 +1210,17 @@ const UsersPage = () => {
                 open={showUserModal}
                 onCancel={() => setShowUserModal(false)}
                 centered
-                destroyOnClose
+                destroyOnHidden
                 width={780}
                 className="glass-modal"
                 footer={[
                     <Button key="back" shape="round" onClick={() => setShowUserModal(false)}>
                         Discard
                     </Button>,
-                    <Button 
-                        key="submit" 
-                        type="primary" 
-                        shape="round" 
+                    <Button
+                        key="submit"
+                        type="primary"
+                        shape="round"
                         onClick={handleSaveUser}
                         style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700 }}
                     >
@@ -1229,7 +1229,7 @@ const UsersPage = () => {
                 ]}
             >
                 <div style={{ padding: '8px 0', maxHeight: '65vh', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    
+
                     {/* Basic Details Block */}
                     <Card variant="borderless" style={{ background: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0' }} styles={{ body: { padding: 16 } }}>
                         <div style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1238,8 +1238,8 @@ const UsersPage = () => {
                         <Row gutter={[12, 12]}>
                             <Col span={12}>
                                 <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>FIRST NAME *</label>
-                                <Input 
-                                    placeholder="John" 
+                                <Input
+                                    placeholder="John"
                                     value={userFormData.firstName}
                                     onChange={e => setUserFormData({ ...userFormData, firstName: e.target.value })}
                                     style={{ borderRadius: 8 }}
@@ -1247,8 +1247,8 @@ const UsersPage = () => {
                             </Col>
                             <Col span={12}>
                                 <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>LAST NAME *</label>
-                                <Input 
-                                    placeholder="Doe" 
+                                <Input
+                                    placeholder="Doe"
                                     value={userFormData.lastName}
                                     onChange={e => setUserFormData({ ...userFormData, lastName: e.target.value })}
                                     style={{ borderRadius: 8 }}
@@ -1256,10 +1256,10 @@ const UsersPage = () => {
                             </Col>
                             <Col span={12}>
                                 <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>EMAIL ADDRESS *</label>
-                                <Input 
+                                <Input
                                     type="email"
                                     disabled={!!editingUser}
-                                    placeholder="member@retailops.com" 
+                                    placeholder="member@retailops.com"
                                     value={userFormData.email}
                                     onChange={e => setUserFormData({ ...userFormData, email: e.target.value })}
                                     style={{ borderRadius: 8 }}
@@ -1267,8 +1267,8 @@ const UsersPage = () => {
                             </Col>
                             <Col span={12}>
                                 <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>PHONE NUMBER</label>
-                                <Input 
-                                    placeholder="+91 98765 43210" 
+                                <Input
+                                    placeholder="+91 98765 43210"
                                     value={userFormData.phone}
                                     onChange={e => setUserFormData({ ...userFormData, phone: e.target.value })}
                                     style={{ borderRadius: 8 }}
@@ -1277,9 +1277,9 @@ const UsersPage = () => {
                             {!editingUser && (
                                 <Col span={24}>
                                     <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>INITIAL ACCESS PASSWORD *</label>
-                                    <Input 
+                                    <Input
                                         type="password"
-                                        placeholder="Minimum 6 characters..." 
+                                        placeholder="Minimum 6 characters..."
                                         value={userFormData.password}
                                         onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
                                         style={{ borderRadius: 8 }}
@@ -1295,7 +1295,7 @@ const UsersPage = () => {
                             <Shield size={13} /> Role & Permissions
                         </div>
                         <label style={{ display: 'block', fontSize: 11.5, fontWeight: 650, color: '#334155', marginBottom: 5 }}>ACCESS PRIVILEGE ROLE *</label>
-                        <Select 
+                        <Select
                             style={{ width: '100%' }}
                             placeholder="Configure Authorization Level"
                             value={userFormData.role || undefined}
@@ -1317,10 +1317,10 @@ const UsersPage = () => {
                             </div>
 
                             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                <Input 
-                                    prefix={<Search size={12} />} 
+                                <Input
+                                    prefix={<Search size={12} />}
                                     size="small"
-                                    placeholder="Search supervisors..." 
+                                    placeholder="Search supervisors..."
                                     value={modalSearchSupervisor}
                                     onChange={e => setModalSearchSupervisor(e.target.value)}
                                     style={{ borderRadius: 6 }}
@@ -1338,10 +1338,10 @@ const UsersPage = () => {
                                             const isChecked = userFormData.supervisors.includes(m._id || m.id);
                                             return (
                                                 <Col key={m._id || m.id} span={12}>
-                                                    <div 
+                                                    <div
                                                         className={`selection-item-card ${isChecked ? 'selected' : ''}`}
                                                         onClick={() => {
-                                                            const updated = isChecked 
+                                                            const updated = isChecked
                                                                 ? userFormData.supervisors.filter(id => id !== (m._id || m.id))
                                                                 : [...userFormData.supervisors, (m._id || m.id)];
                                                             setUserFormData({ ...userFormData, supervisors: updated });
@@ -1380,10 +1380,10 @@ const UsersPage = () => {
                             </div>
 
                             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                <Input 
-                                    prefix={<Search size={12} />} 
+                                <Input
+                                    prefix={<Search size={12} />}
                                     size="small"
-                                    placeholder="Search brand managers..." 
+                                    placeholder="Search brand managers..."
                                     value={modalSearchBrandManager}
                                     onChange={e => setModalSearchBrandManager(e.target.value)}
                                     style={{ borderRadius: 6 }}
@@ -1403,10 +1403,10 @@ const UsersPage = () => {
                                             const isChecked = userFormData.brandManagers.includes(m._id || m.id);
                                             return (
                                                 <Col key={m._id || m.id} span={12}>
-                                                    <div 
+                                                    <div
                                                         className={`selection-item-card ${isChecked ? 'selected-green' : ''}`}
                                                         onClick={() => {
-                                                            const updated = isChecked 
+                                                            const updated = isChecked
                                                                 ? userFormData.brandManagers.filter(id => id !== (m._id || m.id))
                                                                 : [...userFormData.brandManagers, (m._id || m.id)];
                                                             setUserFormData({ ...userFormData, brandManagers: updated });
@@ -1463,10 +1463,10 @@ const UsersPage = () => {
 
                         {!isListingTeam && (
                             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                <Input 
-                                    prefix={<Search size={12} />} 
+                                <Input
+                                    prefix={<Search size={12} />}
                                     size="small"
-                                    placeholder="Search brands..." 
+                                    placeholder="Search brands..."
                                     value={modalSearchSeller}
                                     onChange={e => setModalSearchSeller(e.target.value)}
                                     style={{ borderRadius: 6 }}
@@ -1488,11 +1488,11 @@ const UsersPage = () => {
                                         const isReadOnly = isListingTeam;
                                         return (
                                             <Col key={s._id || s.id} span={12} style={isReadOnly ? { pointerEvents: 'none' } : {}}>
-                                                <div 
+                                                <div
                                                     className={`selection-item-card ${isChecked ? 'selected-green' : ''}`}
                                                     onClick={() => {
                                                         if (isReadOnly) return;
-                                                        const updated = isChecked 
+                                                        const updated = isChecked
                                                             ? userFormData.assignedSellers.filter(id => id !== (s._id || s.id))
                                                             : [...userFormData.assignedSellers, (s._id || s.id)];
                                                         setUserFormData({ ...userFormData, assignedSellers: updated });
@@ -1534,17 +1534,17 @@ const UsersPage = () => {
                 open={showRoleModal}
                 onCancel={() => setShowRoleModal(false)}
                 centered
-                destroyOnClose
+                destroyOnHidden
                 width={500}
                 className="glass-modal"
                 footer={[
                     <Button key="back" shape="round" onClick={() => setShowRoleModal(false)}>
                         Abort
                     </Button>,
-                    <Button 
-                        key="submit" 
-                        type="primary" 
-                        shape="round" 
+                    <Button
+                        key="submit"
+                        type="primary"
+                        shape="round"
                         onClick={handleSaveRole}
                         style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700 }}
                     >
@@ -1555,17 +1555,17 @@ const UsersPage = () => {
                 <div style={{ padding: '8px 0' }}>
                     <Form layout="vertical">
                         <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Identifier Code</span>}>
-                            <Input 
+                            <Input
                                 disabled={!!editingRole}
-                                placeholder="e.g. analyst_l2" 
+                                placeholder="e.g. analyst_l2"
                                 value={roleFormData.name}
                                 onChange={e => setRoleFormData({ ...roleFormData, name: e.target.value })}
                                 style={{ borderRadius: 8 }}
                             />
                         </Form.Item>
                         <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Name (Display Label) *</span>} required>
-                            <Input 
-                                placeholder="e.g. Senior Operations Analyst" 
+                            <Input
+                                placeholder="e.g. Senior Operations Analyst"
                                 value={roleFormData.displayName}
                                 onChange={e => setRoleFormData({ ...roleFormData, displayName: e.target.value })}
                                 style={{ borderRadius: 8 }}
@@ -1574,8 +1574,8 @@ const UsersPage = () => {
                         <Row gutter={12}>
                             <Col span={12}>
                                 <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Priority/Access Level (0-100)</span>}>
-                                    <Input 
-                                        type="number" 
+                                    <Input
+                                        type="number"
                                         min={0} max={100}
                                         value={roleFormData.level}
                                         onChange={e => setRoleFormData({ ...roleFormData, level: parseInt(e.target.value) || 0 })}
@@ -1586,8 +1586,8 @@ const UsersPage = () => {
                             <Col span={12}>
                                 <Form.Item label={<span style={{ fontSize: 11.5, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Theme Color</span>}>
                                     <Space size={8} style={{ width: '100%' }}>
-                                        <Input 
-                                            type="color" 
+                                        <Input
+                                            type="color"
                                             value={roleFormData.color}
                                             onChange={e => setRoleFormData({ ...roleFormData, color: e.target.value })}
                                             style={{ width: 44, height: 36, padding: '4px 6px', cursor: 'pointer' }}
@@ -1598,7 +1598,7 @@ const UsersPage = () => {
                             </Col>
                         </Row>
                         <Form.Item label={<span style={{ fontSize: 12, fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#475569' }}>Role Description</span>}>
-                            <TextArea 
+                            <TextArea
                                 rows={3}
                                 placeholder="Define access boundary scopes for this custom role..."
                                 value={roleFormData.description}

@@ -562,47 +562,7 @@ export default function AdsManagerPage() {
     setPage(1);
   }, [groupBy]);
 
-  // Aggregate timeseries history across all loaded items for global chart
-  const globalChartData = useMemo(() => {
-    if (!data || data.length === 0) return [];
-    const dateMap = {};
-    data.forEach(item => {
-      const hist = item.weekHistory || item.history || [];
-      hist.forEach(day => {
-        const key = normalizeDateStr(day.date);
-        if (!key) return;
-        if (!dateMap[key]) {
-          dateMap[key] = { date: key, spend: 0, sales: 0, clicks: 0, impressions: 0, orders: 0, organicSales: 0, organicOrders: 0 };
-        }
-        dateMap[key].spend += Number(day.spend || 0);
-        dateMap[key].sales += Number(day.sales || 0);
-        dateMap[key].clicks += Number(day.clicks || 0);
-        dateMap[key].impressions += Number(day.impressions || 0);
-        dateMap[key].orders += Number(day.orders || 0);
-        dateMap[key].organicSales += Number(day.organicSales || 0);
-        dateMap[key].organicOrders += Number(day.organicOrders || 0);
-      });
-    });
 
-    // After raw aggregation, calculate runtime daily derived fields needed for chart lines
-    const results = Object.values(dateMap).map(day => {
-      const totalS = day.sales + day.organicSales;
-      return {
-        ...day,
-        totalSales: totalS,
-        acos: day.sales > 0 ? (day.spend / day.sales) * 100 : 0,
-        tacos: totalS > 0 ? (day.spend / totalS) * 100 : 0,
-        adSalesPct: totalS > 0 ? (day.sales / totalS) * 100 : 0,
-        roas: day.spend > 0 ? (day.sales / day.spend) : 0,
-        cvr: day.clicks > 0 ? (day.orders / day.clicks) * 100 : 0,
-        cpc: day.clicks > 0 ? (day.spend / day.clicks) : 0,
-        ctr: day.impressions > 0 ? (day.clicks / day.impressions) * 100 : 0,
-        totalOrders: day.orders + day.organicOrders
-      };
-    }).sort((a, b) => a.date.localeCompare(b.date));
-
-    return results;
-  }, [data]);
 
   // Visual Collapsible Columns Tracking
   const [expandedCols, setExpandedCols] = useState({
@@ -624,6 +584,10 @@ export default function AdsManagerPage() {
   // Pagination state for performance optimization
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortBy, setSortBy] = useState('sales');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [globalChartData, setGlobalChartData] = useState([]);
 
   const toggleCol = (colKey) => {
     setExpandedCols(prev => ({ ...prev, [colKey]: !prev[colKey] }));
@@ -634,8 +598,12 @@ export default function AdsManagerPage() {
     try {
       setLoading(true);
       const params = {
-        groupBy: 'asin', // ALWAYS fetch at ASIN level for high-fidelity client-side tree construction
-        search: searchQuery
+        groupBy: groupBy, // Let backend handle grouping!
+        search: searchQuery,
+        page: page,
+        limit: pageSize,
+        sortBy: sortBy,
+        sortOrder: sortOrder
       };
       if (selectedSeller) params.sellerId = selectedSeller;
       if (startDate) params.startDate = format(startDate, 'yyyy-MM-dd');
@@ -643,40 +611,16 @@ export default function AdsManagerPage() {
 
       const res = await adsApi.getAdsManagerData(params);
       if (res.success) {
-        const mapped = (res.data || []).map(item => {
-          const totalSales = (item.sales || 0) + (item.organicSales || 0);
-          const tacos = totalSales > 0 ? ((item.spend || 0) / totalSales) * 100 : 0;
-          const adSalesPct = totalSales > 0 ? ((item.sales || 0) / totalSales) * 100 : 0;
-          const totalOrders = (item.orders || 0) + (item.organicOrders || 0);
-
-          const weekHistory = (item.weekHistory || []).map(h => {
-            const hTotalSales = (h.sales || 0) + (h.organicSales || 0);
-            return {
-              ...h,
-              totalSales: hTotalSales,
-              tacos: hTotalSales > 0 ? ((h.spend || 0) / hTotalSales) * 100 : 0,
-              adSalesPct: hTotalSales > 0 ? ((h.sales || 0) / hTotalSales) * 100 : 0,
-              totalOrders: (h.orders || 0) + (h.organicOrders || 0)
-            };
-          });
-          return {
-            ...item,
-            totalSales,
-            tacos,
-            adSalesPct,
-            totalOrders,
-            weekHistory
-          };
-        });
-        setData(mapped);
-        setPage(1); // Reset page on fresh fetch
+        setData(res.data || []);
+        setTotalCount(res.total || 0);
+        setGlobalChartData(res.globalChartData || []);
       }
     } catch (err) {
       console.error('Failed to fetch ads data:', err);
     } finally {
       setLoading(false);
     }
-  }, [groupBy, searchQuery, startDate, endDate, selectedSeller]);
+  }, [groupBy, searchQuery, startDate, endDate, selectedSeller, page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchAdsData();
@@ -867,130 +811,10 @@ export default function AdsManagerPage() {
     );
   };
 
-  // Construct parent-child tree hierarchy when groupBy is 'parent'
-  const processedData = useMemo(() => {
-    if (groupBy === 'asin') {
-      return data;
-    }
-
-    const parents = {};
-    data.forEach(row => {
-      const pid = row.parentAsin || row.asin;
-      if (!parents[pid]) {
-        parents[pid] = {
-          id: pid,
-          asin: pid,
-          parentAsin: pid,
-          isParent: true,
-          sku: 'PARENT',
-          title: `Parent Group: ${pid}`,
-          imageUrl: row.imageUrl || '',
-          brand: row.brand || '',
-          category: row.category || '',
-
-          impressions: 0,
-          clicks: 0,
-          spend: 0,
-          sales: 0,
-          orders: 0,
-          conversions: 0,
-          organicSales: 0,
-          organicOrders: 0,
-          pageViews: 0,
-          sessions: 0,
-
-          children: [],
-          weekHistory: []
-        };
-      }
-
-      const p = parents[pid];
-      p.children.push(row);
-      p.impressions += Number(row.impressions || 0);
-      p.clicks += Number(row.clicks || 0);
-      p.spend += Number(row.spend || 0);
-      p.sales += Number(row.sales || 0);
-      p.orders += Number(row.orders || 0);
-      p.conversions += Number(row.conversions || 0);
-      p.organicSales += Number(row.organicSales || 0);
-      p.organicOrders += Number(row.organicOrders || 0);
-      p.pageViews += Number(row.pageViews || 0);
-      p.sessions += Number(row.sessions || 0);
-
-      if (!p.imageUrl && row.imageUrl) p.imageUrl = row.imageUrl;
-      if (!p.brand && row.brand) p.brand = row.brand;
-      if (!p.category && row.category) p.category = row.category;
-    });
-
-    const parentsList = Object.values(parents).map(p => {
-      p.totalSales = p.sales + p.organicSales;
-      p.totalOrders = p.orders + p.organicOrders;
-      p.acos = p.sales > 0 ? (p.spend / p.sales) * 100 : 0;
-      p.tacos = p.totalSales > 0 ? (p.spend / p.totalSales) * 100 : 0;
-      p.adSalesPct = p.totalSales > 0 ? (p.sales / p.totalSales) * 100 : 0;
-      p.roas = p.spend > 0 ? (p.sales / p.spend) : 0;
-      p.cvr = p.clicks > 0 ? (p.orders / p.clicks) * 100 : 0;
-      p.ctr = p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0;
-      p.cpc = p.clicks > 0 ? (p.spend / p.clicks) : 0;
-
-      const dailyMap = {};
-      p.children.forEach(child => {
-        const hist = child.weekHistory || child.history || [];
-        hist.forEach(h => {
-          const d = h.date;
-          if (!dailyMap[d]) {
-            dailyMap[d] = {
-              date: d,
-              spend: 0,
-              sales: 0,
-              orders: 0,
-              clicks: 0,
-              impressions: 0,
-              organicSales: 0,
-              organicOrders: 0,
-              pageViews: 0,
-              conversions: 0
-            };
-          }
-          dailyMap[d].spend += Number(h.spend || 0);
-          dailyMap[d].sales += Number(h.sales || 0);
-          dailyMap[d].orders += Number(h.orders || 0);
-          dailyMap[d].clicks += Number(h.clicks || 0);
-          dailyMap[d].impressions += Number(h.impressions || 0);
-          dailyMap[d].organicSales += Number(h.organicSales || 0);
-          dailyMap[d].organicOrders += Number(h.organicOrders || 0);
-          dailyMap[d].pageViews += Number(h.pageViews || 0);
-          dailyMap[d].conversions += Number(h.conversions || 0);
-        });
-      });
-
-      const sortedHistory = Object.values(dailyMap).sort((a, b) => new Date(a.date) - new Date(b.date));
-      sortedHistory.forEach(h => {
-        h.totalSales = h.sales + h.organicSales;
-        h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
-        h.tacos = h.totalSales > 0 ? (h.spend / h.totalSales) * 100 : 0;
-        h.adSalesPct = h.totalSales > 0 ? (h.sales / h.totalSales) * 100 : 0;
-        h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
-        h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
-        h.totalOrders = h.orders + h.organicOrders;
-      });
-
-      p.weekHistory = sortedHistory;
-      p.history = sortedHistory;
-      p.childCount = p.children.length;
-      return p;
-    });
-
-    return parentsList;
-  }, [data, groupBy]);
-
-  // Compute paginated subset for this frame
-  const paginatedData = useMemo(() => {
-    const startIndex = (page - 1) * pageSize;
-    return processedData.slice(startIndex, startIndex + pageSize);
-  }, [processedData, page, pageSize]);
-
-  const totalPages = Math.ceil(processedData.length / pageSize);
+  // Data is already paginated and processed by the backend!
+  const processedData = data;
+  const paginatedData = data;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -999,6 +823,13 @@ export default function AdsManagerPage() {
       const tableContainer = document.getElementById('ads-table-container');
       if (tableContainer) tableContainer.scrollTop = 0;
     }
+  };
+
+  const handleSortChange = (col) => {
+    const isDesc = sortBy === col && sortOrder === 'desc';
+    setSortOrder(isDesc ? 'asc' : 'desc');
+    setSortBy(col);
+    setPage(1);
   };
 
   // Generate dynamic Dual-Axis series mapping based on selected metrics from toolbar
@@ -1147,13 +978,16 @@ export default function AdsManagerPage() {
       const children = [
         {
           title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>AVG</span>,
-          key: `${key}_avg`,
+          key: key,
+          dataIndex: key,
           width: 80,
           align: 'right',
-          render: (_, record) => {
-            const val = record[key] || 0;
+          sorter: true,
+          sortOrder: sortBy === key ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
+          render: (val) => {
+            const numVal = Number(val || 0);
             return <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
-              {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
+              {isCurrency ? `₹${numVal.toLocaleString('en-IN')}` : isPercent ? `${numVal.toFixed(2)}%` : numVal.toLocaleString()}
             </span>;
           }
         },
@@ -1481,7 +1315,7 @@ export default function AdsManagerPage() {
         </div>
 
         <div className="small text-muted fw-bold bg-light px-3 py-1 rounded-pill border" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
-          Showing <span className="text-indigo-600 fw-bolder">{paginatedData.length}</span> results of <span className="text-dark fw-bolder">{data.length}</span>
+          Showing <span className="text-indigo-600 fw-bolder">{paginatedData.length}</span> results of <span className="text-dark fw-bolder">{totalCount}</span>
         </div>
       </div>
 
@@ -1496,6 +1330,13 @@ export default function AdsManagerPage() {
           scroll={{ x: 'max-content', y: 'calc(100vh - 250px)' }}
           size="small"
           bordered
+          onChange={(pagination, filters, sorter) => {
+            if (sorter.field) {
+              setSortBy(sorter.field);
+              setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
+              setPage(1);
+            }
+          }}
           rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : 'table-row-light'}
           expandable={{
             expandedRowRender: record => null,
@@ -1509,7 +1350,7 @@ export default function AdsManagerPage() {
         <div className="bg-white border-top px-3 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
           <div className="d-flex align-items-center gap-3">
             <span className="smallest fw-bold text-zinc-500">
-              TOTAL {data.length.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
+              TOTAL {totalCount.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
             </span>
 
             <div style={{ height: '12px', width: '1px', background: '#e2e8f0' }}></div>

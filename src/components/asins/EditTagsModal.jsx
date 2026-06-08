@@ -57,7 +57,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [summary, setSummary] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  
+
   // Tag management states (viewMode: 'assign' | 'manage')
   const [viewMode, setViewMode] = useState('assign');
   const [newTagName, setNewTagName] = useState('');
@@ -171,7 +171,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
 
   // Group predefined tags by category dynamically
   const dynamicCategories = { 'All': [], 'Assigned': [...tags] };
-  
+
   predefinedTags.forEach(tag => {
     dynamicCategories['All'].push(tag.name);
     if (!dynamicCategories[tag.category]) {
@@ -188,8 +188,8 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
 
   // Filter tags by search and category
   const filteredTags = (() => {
-    let pool = activeCategory === 'All' 
-      ? dynamicCategories['All'] 
+    let pool = activeCategory === 'All'
+      ? dynamicCategories['All']
       : (dynamicCategories[activeCategory] || []);
     if (assignSearch.trim()) {
       pool = pool.filter(t => t.toLowerCase().includes(assignSearch.toLowerCase()));
@@ -311,9 +311,9 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
       render: (text, record) => {
         if (editingTagId === record.id) {
           return (
-            <Input 
-              value={editingTagName} 
-              onChange={e => setEditingTagName(e.target.value)} 
+            <Input
+              value={editingTagName}
+              onChange={e => setEditingTagName(e.target.value)}
               size="small"
             />
           );
@@ -328,9 +328,9 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
       render: (text, record) => {
         if (editingTagId === record.id) {
           return (
-            <Select 
-              value={editingTagCategory} 
-              onChange={setEditingTagCategory} 
+            <Select
+              value={editingTagCategory}
+              onChange={setEditingTagCategory}
               size="small"
               style={{ width: '120px' }}
             >
@@ -351,19 +351,19 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
         if (editingTagId === record.id) {
           return (
             <Space size="small">
-              <Button 
-                type="primary" 
-                shape="circle" 
-                icon={<Check size={14} />} 
-                size="small" 
-                onClick={() => handleSaveEdit(record.id)} 
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<Check size={14} />}
+                size="small"
+                onClick={() => handleSaveEdit(record.id)}
                 loading={submittingTag}
               />
-              <Button 
-                shape="circle" 
-                icon={<X size={14} />} 
-                size="small" 
-                onClick={handleCancelEdit} 
+              <Button
+                shape="circle"
+                icon={<X size={14} />}
+                size="small"
+                onClick={handleCancelEdit}
                 disabled={submittingTag}
               />
             </Space>
@@ -371,11 +371,11 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
         }
         return (
           <Space size="small">
-            <Button 
-              type="text" 
-              icon={<Edit3 size={14} />} 
-              size="small" 
-              onClick={() => handleStartEdit(record)} 
+            <Button
+              type="text"
+              icon={<Edit3 size={14} />}
+              size="small"
+              onClick={() => handleStartEdit(record)}
               disabled={submittingTag}
             />
             <Popconfirm
@@ -385,11 +385,11 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
               okText="Yes"
               cancelText="No"
             >
-              <Button 
-                type="text" 
-                danger 
-                icon={<Trash2 size={14} />} 
-                size="small" 
+              <Button
+                type="text"
+                danger
+                icon={<Trash2 size={14} />}
+                size="small"
                 disabled={submittingTag}
               />
             </Popconfirm>
@@ -418,10 +418,10 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             <Button key="cancel" onClick={onClose} disabled={saving}>
               Cancel
             </Button>,
-            <Button 
-              key="save" 
-              type="primary" 
-              onClick={handleSave} 
+            <Button
+              key="save"
+              type="primary"
+              onClick={handleSave}
               loading={saving}
               disabled={!hasChanges}
               icon={<Save size={14} />}
@@ -434,7 +434,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             </Button>
           ]
         }
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           {/* Subheader Metadata */}
@@ -442,7 +442,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
             <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
               ASIN Code: <Typography.Text strong>{asin.asinCode}</Typography.Text>
             </Typography.Text>
-            
+
             <Space>
               {loadingSummary ? (
                 <Typography.Text type="secondary" style={{ fontSize: '11px' }}>Loading summary...</Typography.Text>
@@ -465,11 +465,11 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                   <span>on {new Date(summary.recentChanges[0].createdAt).toLocaleDateString()}</span>
                 </Typography.Text>
               ) : null}
-              
-              <Button 
-                type="text" 
-                size="small" 
-                icon={<History size={14} />} 
+
+              <Button
+                type="text"
+                size="small"
+                icon={<History size={14} />}
                 onClick={() => setShowHistory(true)}
               >
                 Audit Log
@@ -529,7 +529,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                 <Typography.Paragraph strong style={{ marginBottom: '8px', fontSize: '12px' }}>
                   Select Predefined Tags:
                 </Typography.Paragraph>
-                
+
                 {/* Category selectors */}
                 <Space size="small" wrap style={{ marginBottom: '12px' }}>
                   {Object.keys(dynamicCategories).map(cat => {
@@ -629,8 +629,8 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
                     </Select>
                   </Form.Item>
                   <Form.Item>
-                    <Button 
-                      type="primary" 
+                    <Button
+                      type="primary"
                       htmlType="submit"
                       disabled={!newTagName.trim() || submittingTag}
                       icon={<Plus size={14} />}

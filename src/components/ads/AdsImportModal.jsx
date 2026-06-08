@@ -48,7 +48,7 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                 }
 
                 const backendUrl = `${import.meta.env.VITE_API_URL || '/api'}/upload/upload-ads`;
-                const config = { 
+                const config = {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     onUploadProgress: (progressEvent) => {
                         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -150,19 +150,19 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                 <Button key="cancel" onClick={onClose} disabled={uploading}>
                     Cancel
                 </Button>,
-                <Button 
-                    key="submit" 
-                    type="primary" 
-                    loading={uploading} 
-                    onClick={handleUpload} 
-                    disabled={fileList.length === 0} 
+                <Button
+                    key="submit"
+                    type="primary"
+                    loading={uploading}
+                    onClick={handleUpload}
+                    disabled={fileList.length === 0}
                     style={{ backgroundColor: '#18181b', borderColor: '#18181b' }}
                 >
                     Run Import
                 </Button>
             ]}
             width={550}
-            destroyOnClose
+            destroyOnHidden
             centered
         >
             <div className="py-3">
@@ -181,9 +181,9 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                     <Text strong className="d-block mb-1 text-zinc-700">
                         Report Reference Date
                     </Text>
-                    <DatePicker 
-                        value={selectedDate} 
-                        onChange={setSelectedDate} 
+                    <DatePicker
+                        value={selectedDate}
+                        onChange={setSelectedDate}
                         style={{ width: '100%', height: '38px', borderRadius: '6px' }}
                         format="YYYY-MM-DD"
                         allowClear={false}
@@ -233,10 +233,10 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                             {fileList.map((file) => {
                                 const fileStatus = statuses[file.uid] || { status: 'pending' };
                                 return (
-                                    <div 
-                                        key={file.uid} 
+                                    <div
+                                        key={file.uid}
                                         className="d-flex align-items-center justify-content-between p-2.5 rounded-3 border"
-                                        style={{ 
+                                        style={{
                                             background: '#f8fafc',
                                             borderColor: fileStatus.status === 'success' ? '#bbf7d0' : fileStatus.status === 'error' ? '#fecaca' : '#e2e8f0'
                                         }}
@@ -257,7 +257,7 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
 
                                         <div className="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
                                             {fileStatus.status === 'pending' && (
-                                                <button 
+                                                <button
                                                     className="btn btn-link p-1 text-zinc-400 hover-text-red-500 border-0 bg-transparent shadow-none"
                                                     onClick={() => uploadProps.onRemove(file)}
                                                     disabled={uploading}
@@ -272,8 +272,8 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                                                 </div>
                                             )}
                                             {fileStatus.status === 'success' && (
-                                                <span 
-                                                    className="badge" 
+                                                <span
+                                                    className="badge"
                                                     style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontSize: '10px', padding: '3px 6px', fontWeight: 600, borderRadius: '4px' }}
                                                     title={`Processed ${fileStatus.rows} rows`}
                                                 >
@@ -281,8 +281,8 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                                                 </span>
                                             )}
                                             {fileStatus.status === 'error' && (
-                                                <span 
-                                                    className="badge" 
+                                                <span
+                                                    className="badge"
                                                     style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '10px', padding: '3px 6px', fontWeight: 600, borderRadius: '4px' }}
                                                     title={fileStatus.error}
                                                 >

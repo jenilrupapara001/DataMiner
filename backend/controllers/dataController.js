@@ -63,21 +63,21 @@ exports.getAdsReport = async (req, res) => {
     try {
         const { asin, startDate, endDate, sellerId } = req.query;
         const pool = await getPool();
-        
+
         let whereClause = 'WHERE 1=1';
         const request = pool.request();
 
-        if (asin) { 
-            whereClause += " AND p.Asin = @asin"; 
-            request.input('asin', sql.VarChar, asin); 
+        if (asin) {
+            whereClause += " AND p.Asin = @asin";
+            request.input('asin', sql.VarChar, asin);
         }
-        if (startDate) { 
-            whereClause += " AND p.Date >= @startDate"; 
-            request.input('startDate', sql.Date, startDate); 
+        if (startDate) {
+            whereClause += " AND p.Date >= @startDate";
+            request.input('startDate', sql.Date, startDate);
         }
-        if (endDate) { 
-            whereClause += " AND p.Date <= @endDate"; 
-            request.input('endDate', sql.Date, endDate); 
+        if (endDate) {
+            whereClause += " AND p.Date <= @endDate";
+            request.input('endDate', sql.Date, endDate);
         }
         if (sellerId) {
             whereClause += " AND a.SellerId = @sellerId";
@@ -129,7 +129,7 @@ exports.getAdsReport = async (req, res) => {
                     history: []
                 };
             }
-            
+
             asinMap[key].ad_spend += Number(row.AdSpend || 0);
             asinMap[key].ad_sales += Number(row.AdSales || 0);
             asinMap[key].impressions += Number(row.Impressions || 0);
@@ -251,10 +251,10 @@ exports.getAdsReport = async (req, res) => {
             conversion_rate: row.Clicks > 0 ? (row.Orders / row.Clicks) * 100 : 0
         })).sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             data: asinList,
-            hierarchicalData, 
+            hierarchicalData,
             dailyData,
             allDailyRows
         });
@@ -272,28 +272,28 @@ exports.getSkuReport = async (req, res) => {
         const { startDate, endDate, sellerId, search, category, page = 1, limit = 50 } = req.query;
         const pool = await getPool();
         const request = pool.request();
-        
+
         let hasFilter = false;
         let whereClause = "WHERE 1=1";
-        
+
         if (sellerId) {
             whereClause += " AND a.SellerId = @sellerId";
             request.input('sellerId', sql.VarChar, sellerId);
             hasFilter = true;
         }
-        
+
         if (category && category !== 'all') {
             whereClause += " AND a.Category = @category";
             request.input('category', sql.VarChar, category);
             hasFilter = true;
         }
-        
+
         if (search) {
             whereClause += " AND (a.Sku LIKE @search OR a.AsinCode LIKE @search OR a.Title LIKE @search)";
             request.input('search', sql.VarChar, `%${search}%`);
             hasFilter = true;
         }
-        
+
         if (startDate) {
             request.input('startDate', sql.Date, startDate);
         }
@@ -455,8 +455,8 @@ exports.getSkuReport = async (req, res) => {
         `;
         const categoryResult = await request.query(categoryQuery);
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             data: result.recordset,
             pagination: {
                 total: totalCount,
@@ -479,15 +479,15 @@ exports.getParentAsinReport = async (req, res) => {
     try {
         const { startDate, endDate, sellerId } = req.query;
         const pool = await getPool();
-        
+
         const request = pool.request();
         let whereClause = "WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> ''";
-        
+
         if (sellerId) {
             whereClause += " AND a.SellerId = @sellerId";
             request.input('sellerId', sql.VarChar, sellerId);
         }
-        
+
         if (startDate) {
             request.input('startDate', sql.Date, startDate);
         }
@@ -517,7 +517,7 @@ exports.getParentAsinReport = async (req, res) => {
             GROUP BY a.ParentAsin
             ORDER BY total_revenue DESC
         `;
-        
+
         const result = await request.query(query);
         res.json({ success: true, data: result.recordset });
     } catch (error) {
@@ -534,16 +534,16 @@ exports.getMonthWiseReport = async (req, res) => {
         const { sellerId, year } = req.query;
         const pool = await getPool();
         const request = pool.request();
-        
+
         let whereClause = "WHERE 1=1";
         if (sellerId) {
             whereClause += " AND a.SellerId = @sellerId";
             request.input('sellerId', sql.VarChar, sellerId);
         }
-        
+
         const targetYear = year || new Date().getFullYear();
         request.input('year', sql.Int, targetYear);
-        
+
         const query = `
             SELECT 
                 FORMAT(p.Date, 'MMM yyyy') as month,
@@ -556,7 +556,7 @@ exports.getMonthWiseReport = async (req, res) => {
             GROUP BY FORMAT(p.Date, 'MMM yyyy'), MONTH(p.Date)
             ORDER BY MONTH(p.Date)
         `;
-        
+
         const result = await request.query(query);
         res.json({ success: true, data: result.recordset });
     } catch (error) {
@@ -593,27 +593,23 @@ exports.getCategories = async (req, res) => {
  */
 exports.getAdsManagerData = async (req, res) => {
     try {
-        const { groupBy = 'asin', startDate, endDate, search, sellerId } = req.query;
+        const { groupBy = 'asin', startDate, endDate, search, sellerId, page = 1, limit = 50, sortBy = 'sales', sortOrder = 'desc' } = req.query;
         const pool = await getPool();
-
-        // 1. Subquery to find the last 14 days of date range to pull history accurately
-        const dateLimit = startDate ? new Date(startDate) : new Date();
-        if (!startDate) dateLimit.setDate(dateLimit.getDate() - 14);
+        const request = pool.request();
 
         let whereClause = 'WHERE 1=1';
-        const request = pool.request();
 
         if (startDate) {
             whereClause += " AND p.Date >= @startDate";
             request.input('startDate', sql.Date, new Date(startDate));
         } else {
-            whereClause += " AND p.Date >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))"; // default to 30d
+            whereClause += " AND p.Date >= DATEADD(day, -30, DATEADD(minute, 330, GETUTCDATE()))";
         }
         if (endDate) {
             whereClause += " AND p.Date <= @endDate";
             request.input('endDate', sql.Date, new Date(endDate));
         }
-        
+
         if (search) {
             whereClause += " AND (p.Asin LIKE @search OR a.Sku LIKE @search OR a.Title LIKE @search)";
             request.input('search', sql.VarChar, `%${search}%`);
@@ -624,155 +620,198 @@ exports.getAdsManagerData = async (req, res) => {
             request.input('sellerId', sql.VarChar, sellerId);
         }
 
-        // Fetch raw data JOINED with parent-asin info
-        const result = await request.query(`
+        // 1. Get Global Chart Data (Aggregated by Date)
+        const globalChartQuery = `
             SELECT 
-                p.*,
-                a.ParentAsin,
-                a.Title,
-                a.ImageUrl,
-                a.Sku as MasterSku,
-                a.Category,
-                a.Brand
+                CONVERT(varchar, p.Date, 23) as date,
+                SUM(ISNULL(p.AdSpend, 0)) as spend,
+                SUM(ISNULL(p.AdSales, 0)) as sales,
+                SUM(ISNULL(p.Clicks, 0)) as clicks,
+                SUM(ISNULL(p.Impressions, 0)) as impressions,
+                SUM(ISNULL(p.Orders, 0)) as orders,
+                SUM(ISNULL(p.OrganicSales, 0)) as organicSales,
+                SUM(ISNULL(p.OrganicOrders, 0)) as organicOrders
             FROM AdsPerformance p
             LEFT JOIN Asins a ON p.Asin = a.AsinCode
             ${whereClause}
-            ORDER BY p.Date DESC
-        `);
+            GROUP BY CONVERT(varchar, p.Date, 23)
+            ORDER BY date ASC
+        `;
+        const globalChartResult = await request.query(globalChartQuery);
 
-        const rawData = result.recordset;
+        // 2. Count Total Rows (for Pagination)
+        const groupField = groupBy === 'parent' ? 'ISNULL(a.ParentAsin, p.Asin)' : 'p.Asin';
 
-        // Process aggregation map based on requested 'groupBy' (asin OR parent)
-        const groupMap = {};
+        const countQuery = `
+            SELECT COUNT(DISTINCT ${groupField}) as total
+            FROM AdsPerformance p
+            LEFT JOIN Asins a ON p.Asin = a.AsinCode
+            ${whereClause}
+        `;
+        const countResult = await request.query(countQuery);
+        const totalRows = countResult.recordset[0]?.total || 0;
 
-        rawData.forEach(row => {
-            // Resolve core key
-            let key;
-            if (groupBy === 'parent') {
-                key = row.ParentAsin || row.Asin; // Fallback to child if no parent assigned
-            } else {
-                key = row.Asin;
-            }
+        // 3. Paginated Aggregation CTE
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 50;
+        const offset = (pageNum - 1) * limitNum;
 
-            if (!groupMap[key]) {
-                groupMap[key] = {
-                    id: key,
-                    asin: groupBy === 'parent' ? null : row.Asin,
-                    parentAsin: row.ParentAsin || row.Asin,
+        let sortCol = 'sales';
+        if (sortBy === 'spend') sortCol = 'SUM(ISNULL(p.AdSpend, 0))';
+        else if (sortBy === 'sales') sortCol = 'SUM(ISNULL(p.AdSales, 0))';
+        else if (sortBy === 'totalSales') sortCol = 'SUM(ISNULL(p.AdSales, 0)) + SUM(ISNULL(p.OrganicSales, 0))';
+        else if (sortBy === 'impressions') sortCol = 'SUM(ISNULL(p.Impressions, 0))';
+        else if (sortBy === 'clicks') sortCol = 'SUM(ISNULL(p.Clicks, 0))';
+        else if (sortBy === 'acos') sortCol = 'CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) ELSE 0 END';
+        else if (sortBy === 'tacos') sortCol = 'CASE WHEN (SUM(ISNULL(p.AdSales, 0)) + SUM(ISNULL(p.OrganicSales, 0))) > 0 THEN (SUM(ISNULL(p.AdSpend, 0)) / (SUM(ISNULL(p.AdSales, 0)) + SUM(ISNULL(p.OrganicSales, 0)))) ELSE 0 END';
+        else if (sortBy === 'roas') sortCol = 'CASE WHEN SUM(ISNULL(p.AdSpend, 0)) > 0 THEN (SUM(ISNULL(p.AdSales, 0)) / SUM(ISNULL(p.AdSpend, 0))) ELSE 0 END';
+        else if (sortBy === 'orders') sortCol = 'SUM(ISNULL(p.Orders, 0))';
+        else if (sortBy === 'cvr') sortCol = 'CASE WHEN SUM(ISNULL(p.Clicks, 0)) > 0 THEN (SUM(ISNULL(p.Orders, 0)) / CAST(SUM(ISNULL(p.Clicks, 0)) AS FLOAT)) ELSE 0 END';
+        else if (sortBy === 'pageViews') sortCol = 'SUM(ISNULL(p.PageViews, 0))';
+        else if (sortBy === 'organicSales') sortCol = 'SUM(ISNULL(p.OrganicSales, 0))';
+        else sortCol = 'SUM(ISNULL(p.AdSales, 0))';
+
+        const sortDir = (sortOrder || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+        const pagedQuery = `
+            SELECT 
+                ${groupField} as groupKey,
+                MAX(a.Title) as title,
+                MAX(a.ImageUrl) as imageUrl,
+                MAX(a.Sku) as sku,
+                MAX(a.Category) as category,
+                MAX(a.Brand) as brand,
+                COUNT(DISTINCT p.Asin) as childCount,
+                SUM(ISNULL(p.AdSpend, 0)) as spend,
+                SUM(ISNULL(p.AdSales, 0)) as sales,
+                SUM(ISNULL(p.Clicks, 0)) as clicks,
+                SUM(ISNULL(p.Impressions, 0)) as impressions,
+                SUM(ISNULL(p.Orders, 0)) as orders,
+                SUM(ISNULL(p.OrganicSales, 0)) as organicSales,
+                SUM(ISNULL(p.OrganicOrders, 0)) as organicOrders,
+                SUM(ISNULL(p.PageViews, 0)) as pageViews,
+                SUM(ISNULL(p.Sessions, 0)) as sessions,
+                SUM(ISNULL(p.Conversions, 0)) as conversions
+            FROM AdsPerformance p
+            LEFT JOIN Asins a ON p.Asin = a.AsinCode
+            ${whereClause}
+            GROUP BY ${groupField}
+            ORDER BY ${sortCol} ${sortDir}
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${limitNum} ROWS ONLY
+        `;
+
+        const pagedResult = await request.query(pagedQuery);
+        const pagedRows = pagedResult.recordset;
+
+        // 4. Fetch Daily History just for the returned rows
+        let finalRows = [];
+        if (pagedRows.length > 0) {
+            const groupKeys = pagedRows.map(r => `'${r.groupKey.replace(/'/g, "''")}'`).join(',');
+            
+            const historyQuery = `
+                SELECT 
+                    ${ groupField } as groupKey,
+                CONVERT(varchar, p.Date, 23) as date,
+                SUM(ISNULL(p.AdSpend, 0)) as spend,
+                SUM(ISNULL(p.AdSales, 0)) as sales,
+                SUM(ISNULL(p.Clicks, 0)) as clicks,
+                SUM(ISNULL(p.Impressions, 0)) as impressions,
+                SUM(ISNULL(p.Orders, 0)) as orders,
+                SUM(ISNULL(p.OrganicSales, 0)) as organicSales,
+                SUM(ISNULL(p.OrganicOrders, 0)) as organicOrders,
+                SUM(ISNULL(p.PageViews, 0)) as pageViews,
+                SUM(ISNULL(p.Conversions, 0)) as conversions
+                FROM AdsPerformance p
+                LEFT JOIN Asins a ON p.Asin = a.AsinCode
+                ${ whereClause }
+                AND ${ groupField } IN(${ groupKeys })
+                GROUP BY ${ groupField }, CONVERT(varchar, p.Date, 23)
+                ORDER BY date ASC
+                `;
+            
+            const historyResult = await request.query(historyQuery);
+            const historyRows = historyResult.recordset;
+
+            finalRows = pagedRows.map(row => {
+                const history = historyRows.filter(h => h.groupKey === row.groupKey).map(h => ({
+                    date: h.date,
+                    spend: h.spend,
+                    sales: h.sales,
+                    clicks: h.clicks,
+                    impressions: h.impressions,
+                    orders: h.orders,
+                    organicSales: h.organicSales,
+                    organicOrders: h.organicOrders,
+                    pageViews: h.pageViews,
+                    conversions: h.conversions,
+                    totalSales: h.sales + h.organicSales,
+                    totalOrders: h.orders + h.organicOrders,
+                    acos: h.sales > 0 ? (h.spend / h.sales) * 100 : 0,
+                    tacos: (h.sales + h.organicSales) > 0 ? (h.spend / (h.sales + h.organicSales)) * 100 : 0,
+                    adSalesPct: (h.sales + h.organicSales) > 0 ? (h.sales / (h.sales + h.organicSales)) * 100 : 0,
+                    roas: h.spend > 0 ? (h.sales / h.spend) : 0,
+                    cvr: h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0
+                }));
+
+                const totalSales = row.sales + row.organicSales;
+                return {
+                    id: row.groupKey,
+                    asin: groupBy === 'parent' ? null : row.groupKey,
+                    parentAsin: groupBy === 'parent' ? row.groupKey : null,
                     isParentView: groupBy === 'parent',
-                    sku: row.MasterSku || row.AdvertisedSku || 'N/A',
-                    title: row.Title || 'Unknown Title',
-                    imageUrl: row.ImageUrl || '',
-                    category: row.Category,
-                    brand: row.Brand,
-                    
-                    // High level stats for table columns
-                    impressions: 0,
-                    clicks: 0,
-                    spend: 0,
-                    sales: 0,
-                    orders: 0,
-                    conversions: 0,
-                    organicSales: 0,
-                    organicOrders: 0,
-                    pageViews: 0,
-                    sessions: 0,
-                    
-                    // Storage for child breakdown if grouping by parent
-                    associatedAsins: new Set(),
-
-                    // Storage for timeline building
-                    historyData: {} 
+                    childCount: row.childCount,
+                    sku: groupBy === 'parent' ? 'PARENT' : (row.sku || 'N/A'),
+                    title: groupBy === 'parent' ? `Parent Group: ${row.groupKey}` : (row.title || 'Unknown Title'),
+                    imageUrl: row.imageUrl || '',
+                    category: row.category,
+                    brand: row.brand,
+                    impressions: row.impressions,
+                    clicks: row.clicks,
+                    spend: row.spend,
+                    sales: row.sales,
+                    orders: row.orders,
+                    conversions: row.conversions,
+                    organicSales: row.organicSales,
+                    organicOrders: row.organicOrders,
+                    pageViews: row.pageViews,
+                    sessions: row.sessions,
+                    totalSales,
+                    totalOrders: row.orders + row.organicOrders,
+                    acos: row.sales > 0 ? (row.spend / row.sales) * 100 : 0,
+                    tacos: totalSales > 0 ? (row.spend / totalSales) * 100 : 0,
+                    adSalesPct: totalSales > 0 ? (row.sales / totalSales) * 100 : 0,
+                    roas: row.spend > 0 ? (row.sales / row.spend) : 0,
+                    cvr: row.clicks > 0 ? (row.orders / row.clicks) * 100 : 0,
+                    ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
+                    cpc: row.clicks > 0 ? (row.spend / row.clicks) : 0,
+                    history: history,
+                    weekHistory: history
                 };
-            }
-
-            const target = groupMap[key];
-            
-            // Sum cumulative values for simple columns
-            target.impressions += Number(row.Impressions || 0);
-            target.clicks += Number(row.Clicks || 0);
-            target.spend += Number(row.AdSpend || 0);
-            target.sales += Number(row.AdSales || 0);
-            target.orders += Number(row.Orders || 0);
-            target.conversions += Number(row.Conversions || 0);
-            target.organicSales += Number(row.OrganicSales || 0);
-            target.organicOrders += Number(row.OrganicOrders || 0);
-            target.pageViews += Number(row.PageViews || 0);
-            target.sessions += Number(row.Sessions || 0);
-
-            if (groupBy === 'parent') {
-                target.associatedAsins.add(row.Asin);
-            }
-
-            // Capture distinct daily values for sparklines/history
-            const dStr = row.Date ? row.Date.toISOString().substring(0, 10) : 'Unknown';
-            if (!target.historyData[dStr]) {
-                target.historyData[dStr] = {
-                    date: dStr,
-                    impressions: 0,
-                    clicks: 0,
-                    spend: 0,
-                    sales: 0,
-                    orders: 0,
-                    organicSales: 0,
-                    organicOrders: 0,
-                    pageViews: 0,
-                    conversions: 0
-                };
-            }
-            
-            // Aggregate into history day slot (e.g. if multiple asins combine onto 1 parent date)
-            const daySlot = target.historyData[dStr];
-            daySlot.impressions += Number(row.Impressions || 0);
-            daySlot.clicks += Number(row.Clicks || 0);
-            daySlot.spend += Number(row.AdSpend || 0);
-            daySlot.sales += Number(row.AdSales || 0);
-            daySlot.orders += Number(row.Orders || 0);
-            daySlot.organicSales += Number(row.OrganicSales || 0);
-            daySlot.organicOrders += Number(row.OrganicOrders || 0);
-            daySlot.pageViews += Number(row.PageViews || 0);
-            daySlot.conversions += Number(row.Conversions || 0);
-        });
-
-        // Final transformation & calculation step (Calculated Rates like ACOS, ROAS, CVR)
-        const finalRows = Object.values(groupMap).map(item => {
-            // Simple calculated metrics totals
-            item.acos = item.sales > 0 ? (item.spend / item.sales) * 100 : 0;
-            item.roas = item.spend > 0 ? (item.sales / item.spend) : 0;
-            item.cvr = item.clicks > 0 ? (item.orders / item.clicks) * 100 : 0;
-            item.ctr = item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0;
-            item.cpc = item.clicks > 0 ? (item.spend / item.clicks) : 0;
-
-            if (item.isParentView) {
-                item.childCount = item.associatedAsins.size;
-                item.asin = Array.from(item.associatedAsins).join(', '); // Display list or generic label
-                delete item.associatedAsins;
-            }
-
-            // Flatten and sort daily history objects
-            const flatHistory = Object.values(item.historyData).sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            // Inject daily-calculated percentages (Acos per day etc)
-            flatHistory.forEach(h => {
-                h.acos = h.sales > 0 ? (h.spend / h.sales) * 100 : 0;
-                h.roas = h.spend > 0 ? (h.sales / h.spend) : 0;
-                h.cvr = h.clicks > 0 ? (h.orders / h.clicks) * 100 : 0;
             });
-
-            item.history = flatHistory;
-            
-            // Create "weekHistory" proxy that clones flatHistory so front-end code 
-            // logic loops flawlessly over the days just like standard ASIN manager.
-            item.weekHistory = flatHistory;
-            
-            delete item.historyData;
-            return item;
-        });
+        }
 
         res.json({
             success: true,
-            total: finalRows.length,
-            data: finalRows
+            total: totalRows,
+            page: pageNum,
+            limit: limitNum,
+            data: finalRows,
+            globalChartData: globalChartResult.recordset.map(day => {
+                const totalS = day.sales + day.organicSales;
+                return {
+                    ...day,
+                    totalSales: totalS,
+                    acos: day.sales > 0 ? (day.spend / day.sales) * 100 : 0,
+                    tacos: totalS > 0 ? (day.spend / totalS) * 100 : 0,
+                    adSalesPct: totalS > 0 ? (day.sales / totalS) * 100 : 0,
+                    roas: day.spend > 0 ? (day.sales / day.spend) : 0,
+                    cvr: day.clicks > 0 ? (day.orders / day.clicks) * 100 : 0,
+                    cpc: day.clicks > 0 ? (day.spend / day.clicks) : 0,
+                    ctr: day.impressions > 0 ? (day.clicks / day.impressions) * 100 : 0,
+                    totalOrders: day.orders + day.organicOrders
+                };
+            })
         });
 
     } catch (error) {
@@ -787,7 +826,7 @@ exports.globalSearch = async (req, res) => {
         if (!q) return res.json({ success: true, data: [] });
 
         const pool = await getPool();
-        const searchTerm = `%${q}%`;
+        const searchTerm = `% ${ q } % `;
 
         const asinsResult = await pool.request()
             .input('search', sql.NVarChar, searchTerm)
@@ -795,7 +834,7 @@ exports.globalSearch = async (req, res) => {
                 SELECT TOP 10 'asin' as type, Id, AsinCode as name, Title as description
                 FROM Asins
                 WHERE AsinCode LIKE @search OR Title LIKE @search
-            `);
+                `);
 
         const sellersResult = await pool.request()
             .input('search', sql.NVarChar, searchTerm)
@@ -803,7 +842,7 @@ exports.globalSearch = async (req, res) => {
                 SELECT TOP 10 'seller' as type, Id, Name as name, SellerId as description
                 FROM Sellers
                 WHERE Name LIKE @search OR SellerId LIKE @search
-            `);
+                `);
 
         res.json({
             success: true,
@@ -841,9 +880,9 @@ exports.getAdsPerformance = async (req, res) => {
 
         const result = await request.query(`
             SELECT * FROM AdsPerformance
-            ${whereClause}
+            ${ whereClause }
             ORDER BY Date DESC
-        `);
+                `);
 
         res.json({ success: true, data: result.recordset });
     } catch (error) {

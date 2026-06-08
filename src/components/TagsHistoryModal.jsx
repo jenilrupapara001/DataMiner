@@ -35,7 +35,7 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
     if (isOpen && asinId) {
       fetchHistory(1);
       fetchSummary();
-      
+
       const fetchPredefined = async () => {
         try {
           const res = await asinApi.getPredefinedTags();
@@ -132,9 +132,9 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
             </span>
             {record.user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <Avatar 
-                  size={24} 
-                  src={record.user.avatar} 
+                <Avatar
+                  size={24}
+                  src={record.user.avatar}
                   style={{ backgroundColor: '#f0f5ff', color: '#2f54eb', fontSize: '10px', fontWeight: 'bold' }}
                 >
                   {(record.user.firstName || record.userName || 'U')[0].toUpperCase()}
@@ -182,18 +182,18 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
       render: (_, record) => (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {record.removedTags?.map(tag => (
-            <Tag 
-              key={`rem-${tag}`} 
-              color="error" 
+            <Tag
+              key={`rem-${tag}`}
+              color="error"
               style={{ textDecoration: 'line-through', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
             >
               <MinusCircle size={10} /> {tag}
             </Tag>
           ))}
           {record.addedTags?.map(tag => (
-            <Tag 
-              key={`add-${tag}`} 
-              color="success" 
+            <Tag
+              key={`add-${tag}`}
+              color="success"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
             >
               <PlusCircle size={10} /> {tag}
@@ -239,16 +239,16 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
           Close
         </Button>
       ]}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: '12px' }}>
         {/* Summary Info Cards */}
         {summary && (
           <Row gutter={16}>
             <Col span={18}>
-              <Card 
-                size="small" 
-                title={<span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#8c8c8c', fontWeight: 'bold' }}>Current Tags</span>} 
+              <Card
+                size="small"
+                title={<span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#8c8c8c', fontWeight: 'bold' }}>Current Tags</span>}
                 style={{ background: '#fafafa', height: '100%' }}
               >
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -257,7 +257,7 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
                       const cat = getTagCategory(t);
                       const hex = getCategoryHexColor(cat);
                       return (
-                        <Tag 
+                        <Tag
                           key={t}
                           style={{
                             border: `1px solid ${hex}`,
@@ -285,9 +285,9 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
               </Card>
             </Col>
             <Col span={6}>
-              <Card 
-                size="small" 
-                title={<span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#ffffff', fontWeight: 'bold' }}>Total Changes</span>} 
+              <Card
+                size="small"
+                title={<span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#ffffff', fontWeight: 'bold' }}>Total Changes</span>}
                 style={{ background: '#4f46e5', color: '#ffffff', textAlign: 'center', height: '100%' }}
                 headStyle={{ borderBottom: 'none' }}
               >
