@@ -1731,8 +1731,12 @@ class MarketDataSyncService {
             let asins;
 
             if (options.targetAsins && Array.isArray(options.targetAsins)) {
-                console.log(`🎯 [TargetedSync] Using ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
-                asins = options.targetAsins.map(a => ({ AsinCode: a }));
+                console.log(`🎯 [TargetedSync] Validating ${options.targetAsins.length} provided ASINs for seller ${sellerId}...`);
+                const targetAsinsResult = await pool.request()
+                    .input('sellerId', sql.VarChar, sellerId)
+                    .input('targetAsinsJson', sql.NVarChar, JSON.stringify(options.targetAsins))
+                    .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive') AND (AsinCode IN (SELECT value FROM OPENJSON(@targetAsinsJson)) OR Id IN (SELECT value FROM OPENJSON(@targetAsinsJson)))`);
+                asins = targetAsinsResult.recordset;
             } else {
                 let asinQuery = "SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')";
 
