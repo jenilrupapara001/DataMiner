@@ -474,7 +474,62 @@ async function processExportJob(downloadId, params, userId) {
         let exportData = [];
         
         if (params.isHistorical) {
-            exportData = asins; // The SQL already formatted the columns perfectly
+            // Pivot historical data by ASIN
+            const pivotMap = new Map();
+            const uniqueDates = new Set();
+            
+            asins.forEach(row => {
+                if (row['Date']) uniqueDates.add(row['Date']);
+            });
+            
+            const sortedDates = Array.from(uniqueDates).sort();
+            
+            // First pass: group rows by ASIN
+            asins.forEach(row => {
+                const asin = row['ASIN Code'];
+                if (!pivotMap.has(asin)) {
+                    pivotMap.set(asin, {
+                        'ASIN Code': asin,
+                        'Product Title': row['Product Title'],
+                        'Brand': row['Brand'],
+                        _dates: new Map()
+                    });
+                }
+                const asinObj = pivotMap.get(asin);
+                if (row['Date']) {
+                    asinObj._dates.set(row['Date'], row);
+                }
+            });
+            
+            // Second pass: construct flat objects with grouped metric columns
+            exportData = Array.from(pivotMap.values()).map(asinObj => {
+                const finalObj = {
+                    'ASIN Code': asinObj['ASIN Code'],
+                    'Product Title': asinObj['Product Title'],
+                    'Brand': asinObj['Brand']
+                };
+                
+                // Group by metric, then date
+                const metrics = [
+                    { key: 'Price (₹)', name: 'Price (₹)' },
+                    { key: 'Best Seller Rank', name: 'BSR' },
+                    { key: 'Rating', name: 'Rating' },
+                    { key: 'Review Count', name: 'Reviews' },
+                    { key: 'BuyBox Winner', name: 'BuyBox Win' },
+                    { key: 'Stock Level', name: 'Stock' },
+                    { key: 'LQS Score', name: 'LQS' }
+                ];
+                
+                metrics.forEach(m => {
+                    sortedDates.forEach(d => {
+                        const row = asinObj._dates.get(d);
+                        finalObj[`${m.name} [${d}]`] = row ? row[m.key] : '';
+                    });
+                });
+                
+                return finalObj;
+            });
+            
         } else {
             // Map label mapping for standard live export
             const labelMapping = {};

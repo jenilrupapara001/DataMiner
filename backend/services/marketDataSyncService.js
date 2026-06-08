@@ -3751,7 +3751,8 @@ class MarketDataSyncService {
 
         // 0. Check Cache First
         if (this.taskIdCache.has(uuid)) {
-            return this.taskIdCache.get(uuid);
+            const cached = this.taskIdCache.get(uuid);
+            return cached === 'NOT_FOUND' ? null : cached;
         }
 
         try {
@@ -3803,6 +3804,9 @@ class MarketDataSyncService {
                 }
             }
 
+            // If not found in any group, cache negative result to prevent endless retries
+            console.warn(`⚠️ UUID ${uuid} could not be resolved to integer. Caching negative result.`);
+            this.taskIdCache.set(uuid, 'NOT_FOUND');
             return null;
         } catch (error) {
             if (error.response?.status === 429) {
