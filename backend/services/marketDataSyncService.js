@@ -1691,6 +1691,11 @@ class MarketDataSyncService {
             this.syncLocks.set(sellerId.toString(), true);
             const pool = await getPool();
 
+            const sellerResult = await pool.request()
+                .input('id', sql.VarChar, sellerId)
+                .query('SELECT Name FROM Sellers WHERE Id = @id');
+            const sellerName = sellerResult.recordset[0]?.Name || sellerId;
+
             // 1. Ensure Task Exists
             const taskId = await this.ensureTaskForSeller(sellerId);
             if (!taskId) {
@@ -1866,14 +1871,14 @@ class MarketDataSyncService {
                 }
             }
 
-            console.log(`✅ syncSellerAsinsToOctoparse completed for seller ${sellerId}`);
+            console.log(`✅ syncSellerAsinsToOctoparse completed for seller ${sellerName}`);
 
             await SystemLogService.log({
                 type: 'UPDATE',
                 entityType: 'SELLER',
                 entityId: sellerId,
-                entityTitle: `Marketplace Sync: Seller ${sellerId}`,
-                description: `Successfully synchronized marketplace data for seller ${sellerId}.`,
+                entityTitle: `Marketplace Sync: Seller ${sellerName}`,
+                description: `Successfully synchronized marketplace data for seller ${sellerName}.`,
                 metadata: { sellerId, options }
             });
             return true;

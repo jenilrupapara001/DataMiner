@@ -3,6 +3,7 @@ const { sql, getPool, generateId } = require('../database/db');
 const MarketSyncService = require('./marketDataSyncService');
 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
 const AutoTagService = require('./autoTagService');
+const SystemLogService = require('./SystemLogService');
 
 /**
  * Scheduler Service
@@ -498,6 +499,13 @@ class SchedulerService {
                     if (!seller) break;
 
                     console.log(`🚀 [ENTERPRISE] Worker starting seller: ${seller.Name} (${index + 1} of ${pendingSellers.length})...`);
+                    await SystemLogService.log({
+                        type: 'AUTOMATION_TASK',
+                        entityType: 'SELLER',
+                        entityId: seller.Id,
+                        entityTitle: seller.Name,
+                        description: `Automation task started for seller ${seller.Name}`
+                    }).catch(() => {});
 
                     let activeAsinsCount = asinCountMap[seller.Id] || 0;
 
@@ -560,10 +568,24 @@ class SchedulerService {
                         successful++;
                         completedSellers.add(seller.Id);
                         console.log(`✅ [ENTERPRISE] Successfully completed and exported data for ${seller.Name}!`);
+                        await SystemLogService.log({
+                            type: 'AUTOMATION_TASK',
+                            entityType: 'SELLER',
+                            entityId: seller.Id,
+                            entityTitle: seller.Name,
+                            description: `Automation task completed for seller ${seller.Name}. Records ingested: ${sellerStat.count}`
+                        }).catch(() => {});
                     } catch (err) {
                         sellerStat.status = 'FAILED';
                         sellerStat.error = err.message;
                         console.error(`❌ [ENTERPRISE] Failed for ${seller.Name}:`, err.message);
+                        await SystemLogService.log({
+                            type: 'AUTOMATION_TASK',
+                            entityType: 'SELLER',
+                            entityId: seller.Id,
+                            entityTitle: seller.Name,
+                            description: `Automation task failed for seller ${seller.Name}. Error: ${err.message}`
+                        }).catch(() => {});
                     } finally {
                         sellerStat.endTime = new Date();
                         await this.updateRunDetails(runId, details);
