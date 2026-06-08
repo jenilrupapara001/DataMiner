@@ -22,6 +22,7 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 const app = express();
+app.set('trust proxy', 1); // Trust the first proxy (e.g. Nginx) to securely read X-Forwarded-For headers
 app.use(cors({
   origin: [
     'http://localhost:5173',
