@@ -263,25 +263,28 @@ exports.syncAllAsins = async (req, res) => {
 
         // 1. Fetch Active, Error, Pending ASINs for assigned sellers
         let asinsQuery = "SELECT Id, SellerId FROM Asins WHERE (Status IS NULL OR Status != 'Inactive')";
+        const request = pool.request();
+
         if (!isGlobalUser) {
-            const sellerIdsStr = req.user.assignedSellers.map(id => `'${id}'`).join(',');
-            if (sellerIdsStr) {
-                asinsQuery += ` AND SellerId IN (${sellerIdsStr})`;
-            } else {
+            if (!req.user.assignedSellers || req.user.assignedSellers.length === 0) {
                 return res.json({ success: true, message: 'No active ASINs to sync (no assigned sellers)' });
             }
+            request.input('assignedSellersJson', sql.NVarChar, JSON.stringify(req.user.assignedSellers));
+            asinsQuery += ` AND SellerId IN (SELECT value FROM OPENJSON(@assignedSellersJson))`;
         }
 
-        const asinsResult = await pool.request().query(asinsQuery);
+        const asinsResult = await request.query(asinsQuery);
         const asins = asinsResult.recordset;
 
         if (asins.length === 0) {
             return res.json({ success: true, message: 'No active ASINs to sync' });
         }
 
-        // 2. Update ASIN statuses in bulk
-        const asinIdsStr = asins.map(a => `'${a.Id}'`).join(',');
-        await pool.request().query(`UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = dbo.GetEnvDate() WHERE Id IN (${asinIdsStr})`);
+        // 2. Update ASIN statuses in bulk (Prevent SQL Injection with OPENJSON)
+        const asinIdsArray = asins.map(a => a.Id);
+        await pool.request()
+            .input('asinIdsJson', sql.NVarChar, JSON.stringify(asinIdsArray))
+            .query(`UPDATE Asins SET ScrapeStatus = 'SCRAPING', Status = 'Scraping', UpdatedAt = dbo.GetEnvDate() WHERE Id IN (SELECT value FROM OPENJSON(@asinIdsJson))`);
 
         // 3. Process Sellers in background (Bulk sync approach)
         const sellerIds = [...new Set(asins.map(a => a.SellerId).filter(Boolean))];
@@ -307,6 +310,17 @@ exports.syncAllAsins = async (req, res) => {
                     return { sellerId, success: true };
                 } catch (err) {
                     console.error(`❌ Task trigger failed for seller ${sellerId}:`, err.message);
+                    
+                    // Revert status for ASINs belonging to this seller to prevent them getting stuck in SCRAPING
+                    try {
+                        const localPool = await getPool();
+                        await localPool.request()
+                            .input('sellerId', sql.VarChar, sellerId)
+                            .query("UPDATE Asins SET ScrapeStatus = 'FAILED', Status = 'Error', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND ScrapeStatus = 'SCRAPING'");
+                    } catch(revertErr) {
+                        console.error(`❌ Status revert failed for seller ${sellerId}:`, revertErr.message);
+                    }
+                    
                     return { sellerId, success: false, error: err.message };
                 }
             });
@@ -650,16 +664,17 @@ exports.getGlobalSyncTasks = async (req, res) => {
         const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
         
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
+        const request = pool.request();
+        
         if (!isGlobalUser) {
-            const sellerIdsStr = req.user.assignedSellers.map(id => `'${id}'`).join(',');
-            if (sellerIdsStr) {
-                query += ` AND Id IN (${sellerIdsStr})`;
-            } else {
+            if (!req.user.assignedSellers || req.user.assignedSellers.length === 0) {
                 return res.json({ success: true, tasks: [] });
             }
+            request.input('assignedSellersJson', sql.NVarChar, JSON.stringify(req.user.assignedSellers));
+            query += ` AND Id IN (SELECT value FROM OPENJSON(@assignedSellersJson))`;
         }
 
-        const sellersResult = await pool.request().query(query);
+        const sellersResult = await request.query(query);
         const sellers = sellersResult.recordset;
         
         if (sellers.length === 0) {
@@ -670,18 +685,27 @@ exports.getGlobalSyncTasks = async (req, res) => {
         const statuses = await marketDataSyncService.getBulkStatuses(taskIds);
         const statusMap = new Map(statuses.map(s => [s.taskId, s]));
 
-        const tasks = await Promise.all(sellers.map(async (seller) => {
-            const asinStatsResult = await pool.request()
-                .input('sellerId', sql.VarChar, seller.Id)
-                .query(`
-                    SELECT 
-                        COUNT(*) as count, 
-                        MAX(LastScraped) as lastScraped 
-                    FROM Asins 
-                    WHERE SellerId = @sellerId AND Status = 'Active'
-                `);
-            const asinStats = asinStatsResult.recordset[0];
+        // N+1 Fix: Get all stats in a single query
+        const sellerIdsArray = sellers.map(s => s.Id);
+        const asinStatsResult = await pool.request()
+            .input('sellerIdsJson', sql.NVarChar, JSON.stringify(sellerIdsArray))
+            .query(`
+                SELECT 
+                    SellerId,
+                    COUNT(*) as count, 
+                    MAX(LastScraped) as lastScraped 
+                FROM Asins 
+                WHERE Status = 'Active' AND SellerId IN (SELECT value FROM OPENJSON(@sellerIdsJson))
+                GROUP BY SellerId
+            `);
+            
+        const statsMap = new Map();
+        for (const row of asinStatsResult.recordset) {
+            statsMap.set(row.SellerId, { count: row.count, lastScraped: row.lastScraped });
+        }
 
+        const tasks = sellers.map((seller) => {
+            const asinStats = statsMap.get(seller.Id) || { count: 0, lastScraped: null };
             const remoteStatus = statusMap.get(seller.OctoparseId);
             
             // Map Octoparse status (1: Running, 0: Stopped/Paused, etc)
@@ -697,12 +721,12 @@ exports.getGlobalSyncTasks = async (req, res) => {
                 sellerName: seller.Name,
                 marketplace: seller.Marketplace,
                 taskId: seller.OctoparseId,
-                asinCount: asinStats?.count || 0,
-                lastSync: asinStats?.lastScraped || null,
+                asinCount: asinStats.count,
+                lastSync: asinStats.lastScraped,
                 status: status,
                 progress: remoteStatus?.progress || 0
             };
-        }));
+        });
 
         res.json({ success: true, tasks });
     } catch (error) {

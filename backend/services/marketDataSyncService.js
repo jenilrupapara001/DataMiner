@@ -179,47 +179,6 @@ class MarketDataSyncService {
         return true;
     }
 
-    async ensureTaskForSeller(sellerId) {
-        const pool = await getPool();
-        const sellerResult = await pool.request()
-            .input('sellerId', sql.VarChar, sellerId)
-            .query('SELECT Id, Name, OctoparseId, Marketplace FROM Sellers WHERE Id = @sellerId');
-
-        const seller = sellerResult.recordset[0];
-        if (!seller) {
-            throw new Error(`Seller not found: ${sellerId}`);
-        }
-
-        if (seller.OctoparseId) {
-            this.log('info', `Seller ${seller.Name} already has task: ${seller.OctoparseId}`);
-            return seller.OctoparseId;
-        }
-
-        const isAjio = seller.Marketplace && seller.Marketplace.toLowerCase() === 'ajio';
-
-        // Validate master task configuration before cloning
-        await this.validateMasterTask(isAjio);
-
-        const asinsResult = await pool.request()
-            .input('sellerId', sql.VarChar, sellerId)
-            .query("SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
-
-        if (asinsResult.recordset.length === 0) {
-            this.log('warn', `No active ASINs found for seller: ${sellerId}. Proceeding with task duplication anyway.`);
-        }
-
-        // Use the consolidated duplicateTask method
-        const newTaskId = await this.duplicateTask(seller.Name, isAjio);
-
-        await pool.request()
-            .input('newTaskId', sql.VarChar, newTaskId)
-            .input('sellerId', sql.VarChar, sellerId)
-            .query('UPDATE Sellers SET OctoparseId = @newTaskId, UpdatedAt = dbo.GetEnvDate() WHERE Id = @sellerId');
-
-        this.log('info', `Created new Octoparse task ${newTaskId} for seller ${seller.Name}`);
-        return newTaskId;
-    }
-
     /**
      * Checks if the service is configured with credentials.
      */
@@ -621,40 +580,6 @@ class MarketDataSyncService {
         }
         logDiag(`🛑 ALL VARIANTS FAILED for task ${taskId}.`);
         throw new Error(`Exhausted all 18 start variants. Check octoparse_sync_diagnostics.log for details.`);
-    }
-
-    /**
-     * Fetch unexported results for a task.
-     */
-    async fetchTaskResults(taskId) {
-        const token = await this.authenticate();
-        const paths = [
-            '/data/notexported',              // OpenAPI V3 spec
-            '/data/all',                       // Get all data by offset
-            '/api/notexporteddata/get',       // Legacy V1
-            '/task/data/notexporteddata'       // Alternative
-        ];
-
-        let lastErr = null;
-        for (const path of paths) {
-            try {
-                console.log(`📥 Trying Data Fetch at ${path} for task: ${taskId}...`);
-                const response = await axios.get(`${this.baseUrl}${path}`, {
-                    params: { taskId, size: '100' },
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.data?.data || Array.isArray(response.data)) {
-                    const dataObj = response.data.data;
-                    const dataList = dataObj?.data || dataObj?.current !== undefined ? dataObj : response.data;
-                    return Array.isArray(dataList) ? dataList : [];
-                }
-            } catch (err) {
-                lastErr = err.response?.data?.error?.message || err.message;
-                console.warn(`⚠️ Path ${path} failed: ${lastErr}`);
-            }
-        }
-        throw new Error(`Failed to fetch results from any known Octoparse endpoint: ${lastErr}`);
     }
 
     /**
@@ -1221,8 +1146,8 @@ class MarketDataSyncService {
         const MAX_REFILL_CYCLES = 10;       // Max times we will re-inject + re-run
         const STATUS_POLL_FAST = 60000;   // 1 min while task is fresh
         const STATUS_POLL_SLOW = 300000;  // 5 min for long-running tasks
-        const MAX_POLL_HOURS = 720;       // ~1 month
-        const MAX_POLL_ATTEMPTS = 1000000; // Uncapped attempts
+        const MAX_POLL_HOURS = 12;        // 12 hours max polling time
+        const MAX_POLL_ATTEMPTS = 120;    // ~10 hours of polling
         const API_COURTESY_DELAY = 3000;   // 3s between non-status API calls
 
         let refillCycle = 0;
@@ -1252,7 +1177,6 @@ class MarketDataSyncService {
             let taskFailed = false;
 
             while (attempts < MAX_POLL_ATTEMPTS) {
-                // Time limit check has been effectively removed per user request (720h limit)
                 if (Date.now() - pollStart > MAX_POLL_HOURS * 60 * 60 * 1000) {
                     console.error(`⏰ [AUTO] Task ${taskId} exceeded ${MAX_POLL_HOURS}h limit. Aborting.`);
                     return totalProcessed;
@@ -1642,6 +1566,14 @@ class MarketDataSyncService {
                     // Do not aggressively deduplicate empty URLs to avoid dropping items
                     if (!url || !seenUrls.has(url)) {
                         if (url) seenUrls.add(url);
+                        
+                        // OOM HARD LIMIT: Prevent node.js heap out of memory by checking BEFORE appending
+                        if (allResults.length >= 80000) {
+                            console.warn(`⚠️ Warning: Hard limit of 80,000 items reached for task ${taskId}. Truncating batch to prevent OOM.`);
+                            maxLoops = 0; // Break outer loop
+                            break;
+                        }
+                        
                         allResults.push(item);
                         newCount++;
                     }
@@ -1650,12 +1582,6 @@ class MarketDataSyncService {
                 // ANTI-INFINITE-LOOP: If the API ignores offset and returns the same items over and over
                 if (dataList.length > 0 && newCount === 0 && dedupePossible) {
                     console.warn(`⚠️ Anti-Loop Triggered: Fetched ${dataList.length} items but 0 were new. Breaking to prevent OOM.`);
-                    break;
-                }
-
-                // OOM HARD LIMIT: Prevent node.js heap out of memory
-                if (allResults.length > 80000) {
-                    console.warn(`⚠️ Warning: Hard limit of 80,000 items reached for task ${taskId}. Breaking to prevent OOM.`);
                     break;
                 }
 
@@ -1757,9 +1683,9 @@ class MarketDataSyncService {
             console.log(`🛡️ Sync already in progress for seller ${sellerId}. Skipping this trigger.`);
             return false;
         }
-        this.syncLocks.set(sellerId.toString(), true);
 
         try {
+            this.syncLocks.set(sellerId.toString(), true);
             const pool = await getPool();
 
             // 1. Ensure Task Exists
@@ -3287,14 +3213,6 @@ class MarketDataSyncService {
         return cleaned.length > 30 ? cleaned.substring(0, 27) + '...' : (cleaned || 'No deal found');
     }
 
-    _isValidSellerName(name) {
-        if (!name || typeof name !== 'string') return false;
-        const lower = name.toLowerCase().trim();
-        // Allow 'Details' as it often contains the price we want to show
-        const invalid = ['view details', 'details.', 'unknown'];
-        return !invalid.includes(lower) && lower.length > 0;
-    }
-
     /**
      * Clean stock level
      */
@@ -3743,13 +3661,6 @@ class MarketDataSyncService {
     }
 
     /**
-     * Small utility to wait for a specified time.
-     */
-    wait(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
      * Resolves a UUID taskId to its legacy integer ID by searching the group task list.
      */
     async resolveTaskIdToInteger(uuid, groupId = null) {
@@ -3862,10 +3773,12 @@ class MarketDataSyncService {
 
         try {
             const pool = await getPool();
-            const result = await pool.request().query(`
+            const result = await pool.request()
+                .input('asinCodesJson', sql.NVarChar, JSON.stringify(asinCodes))
+                .query(`
                 SELECT DISTINCT SellerId 
                 FROM Asins 
-                WHERE AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})
+                WHERE AsinCode IN (SELECT value FROM OPENJSON(@asinCodesJson))
             `);
 
             const sellerIds = result.recordset.map(r => r.SellerId);
@@ -3873,7 +3786,8 @@ class MarketDataSyncService {
             for (const sellerId of sellerIds) {
                 const sellerAsins = (await pool.request()
                     .input('sellerId', sql.VarChar, sellerId)
-                    .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${asinCodes.map(a => `'${a}'`).join(',')})`))
+                    .input('asinCodesJson', sql.NVarChar, JSON.stringify(asinCodes))
+                    .query(`SELECT AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (SELECT value FROM OPENJSON(@asinCodesJson))`))
                     .recordset.map(r => r.AsinCode);
 
                 await this.syncSellerAsinsToOctoparse(sellerId, { ...options, targetAsins: sellerAsins });

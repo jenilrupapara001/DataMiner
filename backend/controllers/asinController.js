@@ -403,10 +403,10 @@ exports.getAsins = async (req, res) => {
     const historyDays = parseInt(req.query.historyDays) || 14;
     const asinIds = asins.map(a => `'${a.Id}'`).join(',');
     const dailyHistoryResult = await pool.request().query(`
-      SELECT AsinId, Date, Price as price, BSR as bsr, 
+      SELECT AsinId, FORMAT(Date, 'yyyy-MM-dd') as dateStr, Price as price, BSR as bsr, 
              Rating as rating, ReviewCount as reviews, 
              StockLevel as stockLevel, LQS as lqs
-      FROM AsinHistory 
+      FROM AsinHistory WITH (NOLOCK)
       WHERE AsinId IN (${asinIds}) 
       AND Date >= DATEADD(day, -${historyDays}, dbo.GetEnvDate())
       ORDER BY Date ASC
@@ -415,9 +415,8 @@ exports.getAsins = async (req, res) => {
     const historyMap = {};
     dailyHistoryResult.recordset.forEach(h => {
       if (!historyMap[h.AsinId]) historyMap[h.AsinId] = [];
-      const dateStr = h.Date ? new Date(h.Date).toISOString().split('T')[0] : '';
       historyMap[h.AsinId].push({
-        date: dateStr,
+        date: h.dateStr || '',
         price: h.price || 0,
         bsr: h.bsr || 0,
         rating: h.rating || 0,
@@ -429,8 +428,8 @@ exports.getAsins = async (req, res) => {
 
     // [7.5] Fetch Week History for long-term trends
     const weekHistoryResult = await pool.request().query(`
-      SELECT AsinId, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
-      FROM AsinWeekHistory 
+      SELECT AsinId, FORMAT(WeekStartDate, 'yyyy-MM-dd') as dateStr, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
+      FROM AsinWeekHistory WITH (NOLOCK)
       WHERE AsinId IN (${asinIds}) 
       ORDER BY WeekStartDate ASC
     `);
@@ -440,7 +439,7 @@ exports.getAsins = async (req, res) => {
       if (!weekHistoryMap[h.AsinId]) weekHistoryMap[h.AsinId] = [];
       weekHistoryMap[h.AsinId].push({
         week: h.WeekStartDate ? `W${Math.ceil(new Date(h.WeekStartDate).getDate() / 7)}` : '',
-        date: h.WeekStartDate ? h.WeekStartDate.toISOString().split('T')[0] : '',
+        date: h.dateStr || '',
         price: h.price || 0,
         bsr: h.bsr || 0,
         rating: h.rating || 0,
