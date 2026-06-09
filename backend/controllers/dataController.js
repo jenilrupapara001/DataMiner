@@ -681,6 +681,7 @@ exports.getAdsManagerData = async (req, res) => {
                 MAX(a.Sku) as sku,
                 MAX(a.Category) as category,
                 MAX(a.Brand) as brand,
+                MAX(a.SellerId) as sellerId,
                 COUNT(DISTINCT p.Asin) as childCount,
                 SUM(ISNULL(p.AdSpend, 0)) as spend,
                 SUM(ISNULL(p.AdSales, 0)) as sales,
@@ -733,6 +734,33 @@ exports.getAdsManagerData = async (req, res) => {
             const historyResult = await request.query(historyQuery);
             const historyRows = historyResult.recordset;
 
+            // Fetch Targets for the sellers
+            const uniqueSellers = [...new Set(pagedRows.map(r => r.sellerId).filter(Boolean))].map(String);
+            let sellerTargets = [];
+            if (uniqueSellers.length > 0) {
+                const currentMonth = new Date().getMonth() + 1;
+                const currentYear = new Date().getFullYear();
+                
+                const targetsQuery = `
+                    SELECT t.SellerId, t.GoalType, ISNULL(b.TargetValue, t.TotalTargetValue) as TotalTargetValue
+                    FROM GmsTargets t
+                    LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH' AND b.PeriodValue = @currentMonth
+                    WHERE t.Year = @currentYear
+                      AND (
+                          (t.TargetType = 'MONTHLY' AND t.Month = @currentMonth) 
+                          OR 
+                          (t.TargetType = 'YEARLY')
+                      )
+                      AND t.SellerId IN (${uniqueSellers.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})
+                      AND t.GoalType IN ('ADS', 'ACOS')
+                `;
+                const tReq = pool.request();
+                tReq.input('currentMonth', sql.Int, currentMonth);
+                tReq.input('currentYear', sql.Int, currentYear);
+                const targetsResult = await tReq.query(targetsQuery);
+                sellerTargets = targetsResult.recordset;
+            }
+
             finalRows = pagedRows.map(row => {
                 const history = historyRows.filter(h => h.groupKey === row.groupKey).map(h => ({
                     date: h.date,
@@ -766,6 +794,9 @@ exports.getAdsManagerData = async (req, res) => {
                     imageUrl: row.imageUrl || '',
                     category: row.category,
                     brand: row.brand,
+                    sellerId: row.sellerId,
+                    adsTarget: sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ADS')?.TotalTargetValue || null,
+                    acosTarget: sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ACOS')?.TotalTargetValue || null,
                     impressions: row.impressions,
                     clicks: row.clicks,
                     spend: row.spend,

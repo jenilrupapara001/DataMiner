@@ -55,10 +55,10 @@
 }
 
 .sidebar-toggle:hover {
-    color: #0145f2;
-    border-color: #818cf8;
+    color: #171717;
+    border-color: #e5e5e5;
     background-color: #f8fafc;
-    box-shadow: 0 6px 16px rgba(1, 69, 242, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transform: translateY(-50%) scale(1.1);
 }
 
@@ -109,7 +109,7 @@
     transform: translateY(-50%);
     width: 3px;
     height: 18px;
-    background-color: var(--blue);
+    background-color: #171717;
     border-radius: 0 4px 4px 0;
 }
 
@@ -193,7 +193,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue) 0%, #0138cc 100%);
+    background: #171717;
     color: white;
     font-family: 'DM Sans', sans-serif;
     font-weight: 650;
@@ -202,7 +202,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(1, 69, 242, 0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-sider.ant-layout-sider-collapsed .user-row {

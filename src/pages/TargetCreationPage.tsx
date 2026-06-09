@@ -21,8 +21,7 @@ export const GOAL_TYPES = [
     { key: 'ADS', label: 'ADS Spend', unit: '₹', color: '#ef4444', bg: '#fef2f2' },
     { key: 'ACOS', label: 'ACOS', unit: '%', color: '#8b5cf6', bg: '#f5f3ff' },
     { key: 'NEW_RC', label: 'New RC', unit: '#', color: '#f59e0b', bg: '#fffbeb' },
-    { key: 'REVIEW', label: 'Reviews', unit: '#', color: '#3b82f6', bg: '#eff6ff' },
-    { key: 'RATING', label: 'Rating', unit: '★', color: '#eab308', bg: '#fefce8' },
+    { key: 'RNR', label: 'RNR', unit: '#', color: '#3b82f6', bg: '#eff6ff' },
     { key: 'PO_FULFILMENT', label: 'PO Fulfilment', unit: '%', color: '#06b6d4', bg: '#ecfeff' },
     { key: 'PO_DAYS', label: 'PO Days', unit: 'd', color: '#ec4899', bg: '#fdf2f8' },
     { key: 'SELLER_CENTRAL_BUSINESS', label: 'SC Business', unit: '₹', color: '#14b8a6', bg: '#f0fdfa' },
@@ -468,6 +467,20 @@ export default function TargetCreationPage() {
                     const newAdsTotal = +(newAdsCells.reduce((sum, cell) => sum + (cell.value || 0), 0)).toFixed(2);
                     newRows[adsRowIdx] = { ...adsRow, totalTarget: newAdsTotal, cells: newAdsCells };
                 }
+                const rnrRowIdx = newRows.findIndex(r => r.goalType === 'RNR');
+                if (rnrRowIdx !== -1) {
+                    const rnrRow = newRows[rnrRowIdx];
+                    const newRnrCells = updatedRow.cells.map((c, i) => {
+                        const currentRnrPct = rnrRow.cells[i]?.pct || 3;
+                        return {
+                            ...rnrRow.cells[i],
+                            value: +(c.value * (currentRnrPct / 100)).toFixed(2),
+                            pct: currentRnrPct
+                        };
+                    });
+                    const newRnrTotal = +(newRnrCells.reduce((sum, cell) => sum + (cell.value || 0), 0)).toFixed(2);
+                    newRows[rnrRowIdx] = { ...rnrRow, totalTarget: newRnrTotal, cells: newRnrCells };
+                }
             }
             return { ...s, rows: newRows };
         }));
@@ -504,10 +517,30 @@ export default function TargetCreationPage() {
         try {
             if (isEditMode) {
                 const updates: any[] = [];
+                const newPayloads: any[] = [];
+                
                 for (const section of sections) {
                     for (const r of (section.rows || [])) {
                         const targetId = r.targetId;
-                        if (!targetId || String(targetId).startsWith('gr_')) continue;
+                        if (!targetId || String(targetId).startsWith('gr_') || String(targetId).startsWith('row_')) {
+                            // Newly added row in edit mode
+                            if (r.goalType && r.totalTarget > 0) {
+                                newPayloads.push({
+                                    sellerId: section.sellerId, brandManager: section.brandManager || '',
+                                    goalType: r.goalType, targetType: section.targetType,
+                                    year: section.year, month: section.targetType === 'MONTHLY' ? section.month : null,
+                                    totalTargetValue: r.totalTarget,
+                                    breakdowns: r.cells.map((c: any, i: number) => ({
+                                        periodValue: i + 1,
+                                        percentageContribution: c.pct,
+                                        targetValue: c.value,
+                                        achievedValue: c.achievedValue || 0
+                                    }))
+                                });
+                            }
+                            continue;
+                        }
+                        
                         updates.push({
                             id: targetId,
                             totalTargetValue: r.totalTarget || 0,
@@ -521,6 +554,7 @@ export default function TargetCreationPage() {
                         });
                     }
                 }
+                
                 if (updates.length > 0) {
                     const success = await updateTargetsBulk(updates);
                     if (!success) {
@@ -528,6 +562,15 @@ export default function TargetCreationPage() {
                         return;
                     }
                 }
+                
+                if (newPayloads.length > 0) {
+                    const success = await createTargets(newPayloads);
+                    if (!success) {
+                        setSubmitting(false);
+                        return;
+                    }
+                }
+                
                 msgApi.success('Targets updated successfully!');
             } else {
                 const allPayloads: any[] = [];

@@ -976,11 +976,95 @@ export default function AdsManagerPage() {
         )
       },
       {
-        title: 'TARGET',
-        key: 'target',
-        width: 70,
-        align: 'center',
-        render: () => <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>
+        title: (
+          <div 
+            onClick={() => toggleCol('targets_group')}
+            className="d-flex align-items-center justify-content-center gap-1 w-100"
+            style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', minWidth: '90px' }}
+          >
+            <span style={{ fontSize: '10px', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TARGETS</span>
+            <ChevronRight size={12} style={{ color: '#94a3b8', transform: expandedCols['targets_group'] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+          </div>
+        ),
+        children: [
+          {
+            title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>MONTHLY</span>,
+            key: 'target_values',
+            width: 100,
+            align: 'left',
+            render: (_, record) => {
+              const adsTarget = record.adsTarget;
+              const acosTarget = record.acosTarget;
+              
+              if (adsTarget === null && acosTarget === null) {
+                return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>;
+              }
+              
+              return (
+                <div className="d-flex flex-column gap-1">
+                  {adsTarget !== null && (
+                    <Tooltip title="Monthly Ads Spend Target" placement="right">
+                      <div style={{ fontSize: '9.5px', background: '#ea580c15', color: '#ea580c', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
+                        S: ₹{adsTarget >= 1000 ? (adsTarget/1000).toFixed(1) + 'k' : adsTarget}/mo
+                      </div>
+                    </Tooltip>
+                  )}
+                  {acosTarget !== null && (
+                    <Tooltip title="Monthly ACOS Target" placement="right">
+                      <div style={{ fontSize: '9.5px', background: '#dc262615', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
+                        A: {acosTarget}%/mo
+                      </div>
+                    </Tooltip>
+                  )}
+                </div>
+              );
+            }
+          },
+          ...(expandedCols['targets_group'] ? [
+            {
+              title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
+              key: 'target_achieved',
+              width: 110,
+              align: 'left',
+              render: (_, record) => {
+                const adsTarget = record.adsTarget;
+                const acosTarget = record.acosTarget;
+                
+                if (adsTarget === null && acosTarget === null) {
+                  return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
+                }
+
+                const spend = record.spend || 0;
+                const acos = record.acos || 0;
+                
+                return (
+                  <div className="d-flex flex-column gap-1">
+                    {adsTarget !== null && (
+                      <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600 }}>
+                        <span style={{ color: spend > adsTarget ? '#ef4444' : '#10b981' }}>
+                          ₹{spend >= 1000 ? (spend/1000).toFixed(1) + 'k' : spend.toFixed(0)}
+                        </span>
+                        <span style={{ fontSize: '8px', color: '#94a3b8', marginLeft: '4px' }}>
+                          ({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)
+                        </span>
+                      </div>
+                    )}
+                    {acosTarget !== null && (
+                      <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600 }}>
+                        <span style={{ color: acos > acosTarget ? '#ef4444' : '#10b981' }}>
+                          {acos.toFixed(1)}%
+                        </span>
+                        <span style={{ fontSize: '8px', color: '#94a3b8', marginLeft: '4px' }}>
+                          ACOS
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+            }
+          ] : [])
+        ]
       }
     ];
 
@@ -995,10 +1079,38 @@ export default function AdsManagerPage() {
           align: 'right',
           sorter: true,
           sortOrder: sortBy === key ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
-          render: (val) => {
+          render: (val, record) => {
             const numVal = Number(val || 0);
+            
+            // Check if we have a target for this metric
+            let targetValue = null;
+            if (key === 'acos') targetValue = record.acosTarget;
+            else if (key === 'spend') targetValue = record.adsTarget;
+
+            const formattedVal = isCurrency ? `₹${numVal.toLocaleString('en-IN')}` : isPercent ? `${numVal.toFixed(2)}%` : numVal.toLocaleString();
+            
+            if (targetValue !== null && targetValue !== undefined) {
+              const formattedTarget = isCurrency ? `₹${targetValue.toLocaleString('en-IN')}` : isPercent ? `${targetValue.toFixed(2)}%` : targetValue.toLocaleString();
+              // ACOS is lower-is-better, Spend is also usually monitored but lets say lower/within target is better.
+              const isOverTarget = numVal > targetValue;
+              const color = isOverTarget ? '#ef4444' : '#10b981';
+              
+              return (
+                <Tooltip title={`Target: ${formattedTarget}`} placement="top">
+                  <div className="d-flex flex-column align-items-end" style={{ cursor: 'help' }}>
+                    <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
+                      {formattedVal}
+                    </span>
+                    <span style={{ fontSize: '8px', fontWeight: 700, color, padding: '1px 4px', borderRadius: '4px', background: `${color}15`, marginTop: '2px' }}>
+                      GOAL: {formattedTarget}
+                    </span>
+                  </div>
+                </Tooltip>
+              );
+            }
+
             return <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
-              {isCurrency ? `₹${numVal.toLocaleString('en-IN')}` : isPercent ? `${numVal.toFixed(2)}%` : numVal.toLocaleString()}
+              {formattedVal}
             </span>;
           }
         },

@@ -166,8 +166,8 @@ const Sidebar = () => {
                 theme={{
                     components: {
                         Menu: {
-                            itemSelectedColor: 'var(--blue)',
-                            itemSelectedBg: 'var(--bg-active-nav)',
+                            itemSelectedColor: '#171717',
+                            itemSelectedBg: '#f4f4f5',
                             itemHoverBg: 'var(--bg-hover)',
                             itemHoverColor: 'var(--text-primary)',
                             groupTitleColor: 'var(--text-muted)',

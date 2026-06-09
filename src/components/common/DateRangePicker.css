@@ -76,8 +76,8 @@
 }
 
 .preset-item.active {
-    background: #eff6ff;
-    color: #2563eb;
+    background: #f4f4f5;
+    color: #171717;
     font-weight: 600;
 }
 
@@ -120,9 +120,9 @@
 
 .custom-input-field:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: #10b981;
     background: #fff;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 .custom-input-text {
@@ -171,9 +171,9 @@
 }
 
 .date-input-box.active {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
-    color: #1d4ed8;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    color: #171717;
 }
 
 .input-cal-icon {
@@ -317,17 +317,17 @@
     border-radius: 8px !important;
 }
 
-/* In range — light blue fill, no radius */
+/* In range — light emerald fill, no radius */
 .react-datepicker__day--in-range {
-    background: #dbeafe !important;
-    color: #1d4ed8 !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+    color: #047857 !important;
     border-radius: 0 !important;
     font-weight: 500 !important;
 }
 
 /* Range start */
 .react-datepicker__day--range-start {
-    background: #3b82f6 !important;
+    background: #171717 !important;
     color: #ffffff !important;
     border-radius: 8px 0 0 8px !important;
     font-weight: 600 !important;
@@ -335,7 +335,7 @@
 
 /* Range end */
 .react-datepicker__day--range-end {
-    background: #3b82f6 !important;
+    background: #171717 !important;
     color: #ffffff !important;
     border-radius: 0 8px 8px 0 !important;
     font-weight: 600 !important;
@@ -348,7 +348,7 @@
 
 /* Selected (single date) */
 .react-datepicker__day--selected {
-    background: #3b82f6 !important;
+    background: #171717 !important;
     color: #ffffff !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
@@ -371,7 +371,7 @@
     font-weight: 700 !important;
     text-decoration: underline !important;
     text-underline-offset: 2px !important;
-    text-decoration-color: #3b82f6 !important;
+    text-decoration-color: #171717 !important;
 }
 
 /* ════════════════════════════
@@ -412,15 +412,15 @@
 }
 
 .btn-picker-save {
-    background: #3b82f6;
+    background: #171717;
     color: #ffffff;
     padding: 9px 28px;
-    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .btn-picker-save:hover {
-    background: #2563eb;
-    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    background: #333333;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 
 /* ════════════════════════════

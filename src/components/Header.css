@@ -64,8 +64,8 @@
 
 .search-bar-wrapper:hover,
 .search-bar-wrapper:focus-within {
-    border-color: #0145f260;
-    box-shadow: 0 0 0 3px rgba(1, 69, 242, 0.08);
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 .search-icon {
@@ -157,7 +157,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--blue);
+    background: #171717;
     color: white;
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
