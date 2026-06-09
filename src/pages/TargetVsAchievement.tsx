@@ -10,7 +10,7 @@ import {
 } from 'antd';
 import {
     Plus, Search, RefreshCw, Edit3, Trash2,
-    BarChart3, TrendingUp, X
+    BarChart3, TrendingUp, X, Upload as UploadIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTargetsData } from '../hooks/useTargetsData';
@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 import { getAchievementTier } from '../utils/targets';
 import { sellerApi } from '../services/api';
+import ImportTargetsModal from '../components/targets/ImportTargetsModal';
 
 const { Content } = Layout;
 const { Text, Title } = Typography;
@@ -463,6 +464,9 @@ const TargetVsAchievement = () => {
 
     const [sellers, setSellers] = useState<any[]>([]);
 
+    // ── NEW: Import modal state ────────────────────────────────────────
+    const [showImportModal, setShowImportModal] = useState(false);
+
     useEffect(() => {
         sellerApi.getAll({ limit: 500 })
             .then((res: any) => {
@@ -504,11 +508,18 @@ const TargetVsAchievement = () => {
         }));
     }, [user, sellers]);
 
+    // ── NEW: Build managers list for import modal ──────────────────────
+    const managersForImport = useMemo(() => {
+        const set = new Set<string>();
+        targets.forEach(t => { if (t.BrandManager) set.add(t.BrandManager); });
+        return Array.from(set).map(name => ({ id: name, name }));
+    }, [targets]);
+
     const [planType, setPlanType] = useState<'YEARLY' | 'MONTHLY'>('YEARLY');
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
     const [searchText, setSearchText] = useState('');
 
-    // ── NEW: Filter states ─────────────────────────────────────────────
+    // ── Filter states ──────────────────────────────────────────────────
     const [filterSeller, setFilterSeller] = useState<string>('');
     const [filterManager, setFilterManager] = useState<string>('');
     const [filterGoalType, setFilterGoalType] = useState<string>('');
@@ -764,6 +775,25 @@ const TargetVsAchievement = () => {
                             </Button>
                         </Tooltip>
 
+                        {/* ── NEW: Import Excel Button ──────────────── */}
+                        {perms.canCreate && (
+                            <Tooltip title="Import target achievements from Excel">
+                                <Button
+                                    icon={<UploadIcon size={14} />}
+                                    onClick={() => setShowImportModal(true)}
+                                    style={{
+                                        background: '#fff',
+                                        borderColor: '#10b981',
+                                        color: '#059669',
+                                        fontWeight: 600,
+                                        fontSize: 12,
+                                        boxShadow: '0 2px 6px rgba(16,185,129,0.15)'
+                                    }}>
+                                    Import Excel
+                                </Button>
+                            </Tooltip>
+                        )}
+
                         {perms.canCreate && (
                             <Button type="primary" icon={<Plus size={14} />}
                                 onClick={() => navigate('/target-achievement/create')}
@@ -798,7 +828,7 @@ const TargetVsAchievement = () => {
                             {' · '}
                             <Text strong>{totalGoalRows}</Text> goal rows
                         </Text>
-                        <Divider type="vertical" style={{ margin: 0 }} />
+                        <Divider orientation="vertical" style={{ margin: 0 }} />
                         <Space size={6}>
                             {[
                                 { label: 'Elite (100%+)', color: '#059669', bg: '#d1fae5' },
@@ -1141,6 +1171,21 @@ const TargetVsAchievement = () => {
                     )}
                 </div>
             </Content>
+
+            {/* ── NEW: Import Targets Modal ─────────────────────────── */}
+            <ImportTargetsModal
+                open={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onSuccess={() => {
+                    refresh();
+                    msgApi.success({
+                        content: 'Targets refreshed successfully',
+                        duration: 3
+                    });
+                }}
+                sellers={sellers}
+                managers={managersForImport}
+            />
 
             <style>{`
                 .target-achievement-container ::-webkit-scrollbar { width: 6px; height: 6px; }

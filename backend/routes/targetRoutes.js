@@ -7,6 +7,10 @@ router.get('/', authenticate, requirePermission('targets_view'), controller.getT
 router.post('/', authenticate, requirePermission('targets_create'), controller.createTargets);
 router.put('/', authenticate, requirePermission('targets_edit'), controller.updateTarget);
 router.put('/achievements', authenticate, requirePermission('targets_edit'), controller.updateAchievements);
+
+// ✅ NEW: Bulk import achievements from Excel
+router.post('/import-achievements', authenticate, requirePermission('targets_create'), controller.importAchievements);
+
 router.delete('/bulk', authenticate, requirePermission('targets_delete'), controller.deleteTargetsBulk);
 router.delete('/:id', authenticate, requirePermission('targets_delete'), controller.deleteTarget);
 
