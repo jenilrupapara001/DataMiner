@@ -736,28 +736,28 @@ exports.getAdsManagerData = async (req, res) => {
 
             // Fetch Targets for the sellers
             const uniqueSellers = [...new Set(pagedRows.map(r => r.sellerId).filter(Boolean))].map(String);
+            const historyMonths = [...new Set(historyRows.map(h => h.date.substring(0, 7)))].sort();
+            
             let sellerTargets = [];
-            if (uniqueSellers.length > 0) {
-                const currentMonth = new Date().getMonth() + 1;
-                const currentYear = new Date().getFullYear();
-                
+            if (uniqueSellers.length > 0 && historyMonths.length > 0) {
+                const monthConditions = historyMonths.map(ym => {
+                   const [y, m] = ym.split('-');
+                   return `(t.Year = ${parseInt(y, 10)} AND (
+                       (t.TargetType = 'MONTHLY' AND t.Month = ${parseInt(m, 10)}) 
+                       OR 
+                       (t.TargetType = 'YEARLY' AND b.PeriodValue = ${parseInt(m, 10)})
+                   ))`;
+                }).join(' OR ');
+
                 const targetsQuery = `
-                    SELECT t.SellerId, t.GoalType, ISNULL(b.TargetValue, t.TotalTargetValue) as TotalTargetValue
+                    SELECT t.SellerId, t.GoalType, ISNULL(b.PeriodValue, t.Month) as Month, t.Year, ISNULL(b.TargetValue, t.TotalTargetValue) as TotalTargetValue
                     FROM GmsTargets t
-                    LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH' AND b.PeriodValue = @currentMonth
-                    WHERE t.Year = @currentYear
-                      AND (
-                          (t.TargetType = 'MONTHLY' AND t.Month = @currentMonth) 
-                          OR 
-                          (t.TargetType = 'YEARLY')
-                      )
+                    LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH'
+                    WHERE (${monthConditions})
                       AND t.SellerId IN (${uniqueSellers.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})
                       AND t.GoalType IN ('ADS', 'ACOS')
                 `;
-                const tReq = pool.request();
-                tReq.input('currentMonth', sql.Int, currentMonth);
-                tReq.input('currentYear', sql.Int, currentYear);
-                const targetsResult = await tReq.query(targetsQuery);
+                const targetsResult = await request.query(targetsQuery);
                 sellerTargets = targetsResult.recordset;
             }
 
@@ -783,6 +783,29 @@ exports.getAdsManagerData = async (req, res) => {
                 }));
 
                 const totalSales = row.sales + row.organicSales;
+                
+                const monthlyStats = {};
+                historyMonths.forEach(ym => {
+                   const [y, mStr] = ym.split('-');
+                   const m = parseInt(mStr, 10);
+                   const year = parseInt(y, 10);
+                   
+                   const monthHistory = history.filter(h => h.date.startsWith(ym));
+                   const monthSpend = monthHistory.reduce((sum, h) => sum + h.spend, 0);
+                   const monthSales = monthHistory.reduce((sum, h) => sum + h.sales, 0);
+                   const monthAcos = monthSales > 0 ? (monthSpend / monthSales) * 100 : 0;
+                   
+                   const adsTarget = sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ADS' && t.Month === m && t.Year === year)?.TotalTargetValue || null;
+                   const acosTarget = sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ACOS' && t.Month === m && t.Year === year)?.TotalTargetValue || null;
+                   
+                   monthlyStats[ym] = {
+                       spend: monthSpend,
+                       acos: monthAcos,
+                       adsTarget,
+                       acosTarget
+                   };
+                });
+
                 return {
                     id: row.groupKey,
                     asin: groupBy === 'parent' ? null : row.groupKey,
@@ -795,8 +818,9 @@ exports.getAdsManagerData = async (req, res) => {
                     category: row.category,
                     brand: row.brand,
                     sellerId: row.sellerId,
-                    adsTarget: sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ADS')?.TotalTargetValue || null,
-                    acosTarget: sellerTargets.find(t => t.SellerId === row.sellerId && t.GoalType === 'ACOS')?.TotalTargetValue || null,
+                    monthlyStats,
+                    adsTarget: null, // Legacy, remove usage in frontend later
+                    acosTarget: null, // Legacy, remove usage in frontend later
                     impressions: row.impressions,
                     clicks: row.clicks,
                     spend: row.spend,

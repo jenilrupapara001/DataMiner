@@ -900,7 +900,7 @@ export default function AdsManagerPage() {
   }, [chartConfigMetrics, globalChartData]);
 
   const getAntColumns = () => {
-    const cols = [
+    const fixedLeftCols = [
       {
         title: 'IMAGE',
         dataIndex: 'imageUrl',
@@ -974,27 +974,40 @@ export default function AdsManagerPage() {
             <span className="smallest text-zinc-400 fw-semibold" style={{ marginTop: 2 }}>{record.brand} • {record.category}</span>
           </div>
         )
-      },
-      {
+      }
+    ];
+
+    const monthKeys = data.length > 0 && data[0].monthlyStats ? Object.keys(data[0].monthlyStats).sort() : [];
+    
+    const targetColumns = monthKeys.map(monthKey => {
+      const [year, month] = monthKey.split('-');
+      const date = new Date(year, parseInt(month) - 1);
+      const monthName = date.toLocaleString('default', { month: 'short' }).toUpperCase();
+      const groupKey = `targets_group_${monthKey}`;
+      
+      return {
         title: (
           <div 
-            onClick={() => toggleCol('targets_group')}
+            onClick={() => toggleCol(groupKey)}
             className="d-flex align-items-center justify-content-center gap-1 w-100"
             style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', minWidth: '90px' }}
           >
-            <span style={{ fontSize: '10px', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TARGETS</span>
-            <ChevronRight size={12} style={{ color: '#94a3b8', transform: expandedCols['targets_group'] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+            <span style={{ fontSize: '10px', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TARGETS: {monthName} {year}</span>
+            <ChevronRight size={12} style={{ color: '#94a3b8', transform: expandedCols[groupKey] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
           </div>
         ),
         children: [
           {
             title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>MONTHLY</span>,
-            key: 'target_values',
+            key: `target_values_${monthKey}`,
             width: 100,
             align: 'left',
             render: (_, record) => {
-              const adsTarget = record.adsTarget;
-              const acosTarget = record.acosTarget;
+              const stats = record.monthlyStats?.[monthKey];
+              if (!stats) return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
+              
+              const adsTarget = stats.adsTarget;
+              const acosTarget = stats.acosTarget;
               
               if (adsTarget === null && acosTarget === null) {
                 return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>;
@@ -1003,16 +1016,16 @@ export default function AdsManagerPage() {
               return (
                 <div className="d-flex flex-column gap-1">
                   {adsTarget !== null && (
-                    <Tooltip title="Monthly Ads Spend Target" placement="right">
+                    <Tooltip title={`${monthName} Ad Spend Target`} placement="right">
                       <div style={{ fontSize: '9.5px', background: '#ea580c15', color: '#ea580c', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
-                        S: ₹{adsTarget >= 1000 ? (adsTarget/1000).toFixed(1) + 'k' : adsTarget}/mo
+                        Ad Spend: ₹{adsTarget >= 1000 ? (adsTarget/1000).toFixed(1) + 'k' : adsTarget}/mo
                       </div>
                     </Tooltip>
                   )}
                   {acosTarget !== null && (
-                    <Tooltip title="Monthly ACOS Target" placement="right">
+                    <Tooltip title={`${monthName} ACOS Target`} placement="right">
                       <div style={{ fontSize: '9.5px', background: '#dc262615', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
-                        A: {acosTarget}%/mo
+                        ACOS: {acosTarget}%/mo
                       </div>
                     </Tooltip>
                   )}
@@ -1020,22 +1033,25 @@ export default function AdsManagerPage() {
               );
             }
           },
-          ...(expandedCols['targets_group'] ? [
+          ...(expandedCols[groupKey] ? [
             {
               title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
-              key: 'target_achieved',
+              key: `target_achieved_${monthKey}`,
               width: 110,
               align: 'left',
               render: (_, record) => {
-                const adsTarget = record.adsTarget;
-                const acosTarget = record.acosTarget;
+                const stats = record.monthlyStats?.[monthKey];
+                if (!stats) return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
+
+                const adsTarget = stats.adsTarget;
+                const acosTarget = stats.acosTarget;
                 
                 if (adsTarget === null && acosTarget === null) {
                   return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
                 }
 
-                const spend = record.spend || 0;
-                const acos = record.acos || 0;
+                const spend = stats.spend || 0;
+                const acos = stats.acos || 0;
                 
                 return (
                   <div className="d-flex flex-column gap-1">
@@ -1065,8 +1081,10 @@ export default function AdsManagerPage() {
             }
           ] : [])
         ]
-      }
-    ];
+      };
+    });
+
+    const cols = [...fixedLeftCols, ...targetColumns];
 
     const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false, themeColor = '#6366f1') => {
       const isExpanded = expandedCols[key];
