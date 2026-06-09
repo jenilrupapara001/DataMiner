@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/db';
-import { calculateProfits } from '../services/engine';
+import { calculateProfits, fetchKeepaData } from '../services/engine';
 import {
   Download, Trash2, Edit2, RefreshCw,
   Calculator, Search, Eye, RotateCcw, ChevronRight,
@@ -27,7 +27,6 @@ const ResultsPage = ({ asins, onNavigate }) => {
   const handleFetch = async (force) => {
     setIsFetching(true);
     try {
-      const { fetchKeepaData } = await import('../services/engine');
       await fetchKeepaData(asins, force);
       const updatedAsins = await db.getAsins();
       onNavigate('results');

@@ -11,6 +11,26 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    ssr: {
+      noExternal: [
+        'bootstrap',
+        'rsuite',
+        '@emotion/cache',
+        '@emotion/react',
+        'antd',
+        '@ant-design/cssinjs',
+      ],
+    },
+    optimizeDeps: {
+      include: [
+        'bootstrap',
+        'rsuite',
+        '@emotion/cache',
+        '@emotion/react',
+        'antd',
+        '@ant-design/cssinjs',
+      ],
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

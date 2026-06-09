@@ -4,7 +4,6 @@ import { Tooltip } from 'antd';
 import { asinApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import TagsHistoryModal from '../TagsHistoryModal';
-import EditTagsModal from './EditTagsModal';
 
 const DEFAULT_TAGS = [
     'Best Seller', 'Low Margin', 'High Margin', 'Needs Optimization',
@@ -24,6 +23,14 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
     const [saving, setSaving] = useState(false);
     const ref = useRef(null);
     const inputRef = useRef(null);
+
+    const [EditTagsModal, setEditTagsModal] = useState(null);
+
+    useEffect(() => {
+        if (showEditModal && !EditTagsModal) {
+            import('./EditTagsModal').then(mod => setEditTagsModal(() => mod.default));
+        }
+    }, [showEditModal]);
 
     // Parse tags from ASIN data
     useEffect(() => {
@@ -271,7 +278,7 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                 </div>
             </Tooltip>
 
-            {showEditModal && (
+            {showEditModal && EditTagsModal && (
                 <EditTagsModal
                     isOpen={showEditModal}
                     onClose={() => setShowEditModal(false)}
