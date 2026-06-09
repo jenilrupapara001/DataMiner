@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'rsuite/dist/rsuite-no-reset.min.css';
 import './styles/rsuite-overrides.css';
 import './index.css'
+import './styles/global-overrides.css'
 import App from './App.jsx'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CometChatProvider } from './CometChat/context/CometChatContext';

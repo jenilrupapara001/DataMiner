@@ -66,6 +66,8 @@ const DateRangePicker = ({
             placeholder={placeholder}
             cleanable={false}
             placement="bottomEnd"
+            preventOverflow={true}
+            container={() => document.body}
             caretAs={FaCalendar}
             style={{ width: compact ? 'auto' : 240 }}
         />

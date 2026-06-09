@@ -1588,7 +1588,6 @@ export default function AdsManagerPage() {
         .premium-ads-th {
           transition: background-color 0.2s ease, border 0.2s ease;
         }
-        /* Silky Smooth Fade-In For Expanded Grid Columns */
         .dynamic-col-cell {
           animation: slideFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
@@ -1596,7 +1595,6 @@ export default function AdsManagerPage() {
           from { opacity: 0; transform: translateX(-8px); }
           to { opacity: 1; transform: translateX(0); }
         }
-        /* Custom sleek system scrollbar */
         ::-webkit-scrollbar {
           width: 6px;
           height: 6px;
@@ -1617,7 +1615,6 @@ export default function AdsManagerPage() {
           flex: 1;
           overflow: hidden;
           background-color: #f4f7fe;
-          /* Counteract parent padding (1.5rem top, 2rem sides) from .routes-container in App.css */
           margin: -1.5rem -2rem -1.5rem -2rem; 
         }
         .ads-top-header {
@@ -1626,17 +1623,17 @@ export default function AdsManagerPage() {
           justify-content: space-between;
           padding: 10px 2rem;
           position: sticky;
-          top: -1.5rem; /* Offset the negative margin of container */
-          z-index: 50;
+          top: -1.5rem;
+          z-index: 100;
           background: #fff;
           border-bottom: 1px solid #e2e8f0;
           box-shadow: 0 1px 3px rgba(0,0,0,0.05);
           flex-shrink: 0;
           overflow: visible;
-          scrollbar-width: none; /* Hide scrollbar for Firefox */
+          scrollbar-width: none;
         }
         .ads-top-header::-webkit-scrollbar {
-          display: none; /* Hide scrollbar for Chrome, Safari, and Opera */
+          display: none;
         }
         .ads-header-left {
           display: flex;
@@ -1648,6 +1645,59 @@ export default function AdsManagerPage() {
           align-items: center;
           gap: 12px;
           flex-wrap: nowrap;
+        }
+        
+        /* ═══════════════════════════════════════════════════
+           FIX: Date Picker & Dropdown Z-Index Issues
+        ═══════════════════════════════════════════════════ */
+        
+        /* Force all Ant Design popups to render above the table */
+        .ant-picker-dropdown {
+          z-index: 9999 !important;
+        }
+        
+        .ant-select-dropdown {
+          z-index: 9999 !important;
+        }
+        
+        .ant-dropdown {
+          z-index: 9999 !important;
+        }
+        
+        .ant-tooltip {
+          z-index: 9998 !important;
+        }
+        
+        .ant-popover {
+          z-index: 9999 !important;
+        }
+        
+        /* Prevent table from creating stacking context conflicts */
+        .ads-page-container .ant-table-wrapper {
+          position: relative;
+          z-index: 1;
+        }
+        
+        .ads-page-container .ant-table-thead > tr > th {
+          z-index: 2 !important;
+        }
+        
+        .ads-page-container .ant-table-cell-fix-left,
+        .ads-page-container .ant-table-cell-fix-right {
+          z-index: 2 !important;
+        }
+        
+        .ads-page-container .ant-table-thead .ant-table-cell-fix-left,
+        .ads-page-container .ant-table-thead .ant-table-cell-fix-right {
+          z-index: 3 !important;
+        }
+        
+        /* Make sure modal stays on top */
+        .ant-modal-wrap {
+          z-index: 1050 !important;
+        }
+        .ant-modal-mask {
+          z-index: 1050 !important;
         }
       `}</style>
 

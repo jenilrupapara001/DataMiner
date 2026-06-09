@@ -1,0 +1,288 @@
+/* ═══════════════════════════════════════════════════════════════
+   🎯 GLOBAL Z-INDEX HIERARCHY (Project-Wide Standard)
+   ═══════════════════════════════════════════════════════════════
+   
+   Z-INDEX SCALE (USE THESE ONLY):
+   ┌─────────────────────────────────────────────┐
+   │  0-9        → Base content                  │
+   │  10-99      → Table cells, sticky elements  │
+   │  100-499    → Page headers, sticky bars     │
+   │  500-999    → Sidebars, drawers             │
+   │  1000-1049  → Fixed navigation              │
+   │  1050-1099  → Modals & overlays             │
+   │  1100-1199  → Modal content                 │
+   │  1200-1299  → Tooltips                      │
+   │  1300+      → Dropdowns, pickers, popovers  │
+   │  9999       → Critical popups (emergency)   │
+   └─────────────────────────────────────────────┘
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --z-base: 1;
+  --z-content: 10;
+  --z-table-cell: 20;
+  --z-table-header: 30;
+  --z-sticky-bar: 100;
+  --z-page-header: 200;
+  --z-sidebar: 500;
+  --z-fixed-nav: 1000;
+  --z-modal-mask: 1050;
+  --z-modal: 1060;
+  --z-tooltip: 1200;
+  --z-dropdown: 1300;
+  --z-picker: 1400;
+  --z-notification: 1500;
+  --z-critical: 9999;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🔧 ANT DESIGN COMPONENT Z-INDEX OVERRIDES (CRITICAL)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* All Popups, Pickers, Dropdowns → ALWAYS ON TOP */
+.ant-picker-dropdown,
+.ant-picker-dropdown-range,
+.ant-picker-panel-container {
+  z-index: var(--z-picker) !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12), 
+              0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.ant-select-dropdown {
+  z-index: var(--z-dropdown) !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.ant-dropdown,
+.ant-dropdown-menu {
+  z-index: var(--z-dropdown) !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+.ant-popover {
+  z-index: var(--z-dropdown) !important;
+}
+
+.ant-popover-inner {
+  background: #ffffff !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+}
+
+.ant-tooltip {
+  z-index: var(--z-tooltip) !important;
+}
+
+.ant-tooltip-inner {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Modal Layer */
+.ant-modal-mask {
+  z-index: var(--z-modal-mask) !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+.ant-modal-wrap {
+  z-index: var(--z-modal) !important;
+}
+
+/* Notifications & Messages */
+.ant-notification,
+.ant-message {
+  z-index: var(--z-notification) !important;
+}
+
+/* Drawer */
+.ant-drawer {
+  z-index: var(--z-modal-mask) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🛡️ FORCE OPAQUE BACKGROUNDS ON ALL POPUPS
+   ═══════════════════════════════════════════════════════════════ */
+
+.ant-picker-panel,
+.ant-picker-date-panel,
+.ant-picker-month-panel,
+.ant-picker-year-panel,
+.ant-picker-decade-panel,
+.ant-picker-week-panel,
+.ant-picker-time-panel,
+.ant-picker-datetime-panel,
+.ant-picker-footer,
+.ant-picker-ranges {
+  background-color: #ffffff !important;
+}
+
+.ant-picker-cell-inner {
+  background-color: transparent !important;
+}
+
+.ant-picker-cell-selected .ant-picker-cell-inner,
+.ant-picker-cell-range-start .ant-picker-cell-inner,
+.ant-picker-cell-range-end .ant-picker-cell-inner {
+  background-color: var(--ant-primary-color, #4f46e5) !important;
+  color: white !important;
+}
+
+/* Select Dropdown Items */
+.ant-select-item {
+  background-color: transparent !important;
+}
+
+.ant-select-item-option-active {
+  background-color: #f1f5f9 !important;
+}
+
+.ant-select-item-option-selected {
+  background-color: #eef2ff !important;
+  font-weight: 600 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   📊 TABLE Z-INDEX HIERARCHY (PREVENT OVERLAY ISSUES)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Table wrapper should NOT create stacking context above popups */
+.ant-table-wrapper {
+  position: relative;
+  z-index: var(--z-content);
+}
+
+.ant-table {
+  z-index: auto !important;
+}
+
+.ant-table-container {
+  z-index: auto !important;
+}
+
+/* Regular table cells */
+.ant-table-tbody > tr > td {
+  z-index: auto !important;
+}
+
+/* Sticky table headers */
+.ant-table-thead > tr > th {
+  z-index: var(--z-table-header) !important;
+}
+
+/* Fixed left/right columns (sticky columns) */
+.ant-table-cell-fix-left,
+.ant-table-cell-fix-right {
+  z-index: var(--z-table-cell) !important;
+}
+
+.ant-table-thead .ant-table-cell-fix-left,
+.ant-table-thead .ant-table-cell-fix-right {
+  z-index: var(--z-table-header) !important;
+}
+
+/* Sticky shadow indicators */
+.ant-table-cell-fix-left-last::after,
+.ant-table-cell-fix-right-first::after {
+  z-index: var(--z-table-cell) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🎨 PAGE LAYOUT — PREVENT OVERFLOW CLIPPING
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Root containers — allow popups to escape */
+#root,
+.app-container,
+.main-content,
+.page-container {
+  overflow: visible;
+}
+
+/* Routes container — content area */
+.routes-container {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Sticky page headers */
+.page-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-page-header);
+  background: #ffffff;
+  overflow: visible !important; /* CRITICAL: allow date picker to escape */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🔄 SCROLL CONTAINERS — PROPER OVERFLOW HANDLING
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Table scroll container should NOT clip popups */
+.ant-table-body,
+.ant-table-content {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar styling (consistent) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+::-webkit-scrollbar-corner {
+  background: #f8fafc;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🚫 FIX STACKING CONTEXT ISSUES (Critical for transforms/filters)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Any element with these creates a stacking context — be careful! */
+.no-stacking-context {
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+  will-change: auto !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   📱 RESPONSIVE OVERFLOW SAFETY
+   ═══════════════════════════════════════════════════════════════ */
+
+body {
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
