@@ -161,11 +161,15 @@ exports.updateAlertRule = async (req, res) => {
             SELECT * FROM AlertRules WHERE Id = @id;
         `);
 
-        if (result.recordset[1]?.length === 0) {
+        const records = result.recordsets && result.recordsets.length > 1 
+            ? result.recordsets[1] 
+            : result.recordset;
+
+        const rule = records && records[0];
+        if (!rule) {
             return res.status(404).json({ success: false, message: 'Rule not found' });
         }
 
-        const rule = result.recordset[1][0];
         res.json({ success: true, data: { ...rule, _id: rule.Id } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

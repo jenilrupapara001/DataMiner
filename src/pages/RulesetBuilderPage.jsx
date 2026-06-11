@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Layout, Button, Input, Select, Space, Typography, Tag, Tooltip, 
-  message, Divider, Card, Row, Col, Switch, Tabs, Alert, Collapse, InputNumber
+  message, Divider, Card, Row, Col, Switch, Tabs, Alert, Collapse, InputNumber, Popconfirm
 } from 'antd';
 import { 
   Zap, Save, X, Plus, Trash2, ChevronDown, ChevronUp, 
@@ -21,10 +22,6 @@ const { Title, Text } = Typography;
 const { Option, OptGroup } = Select;
 
 const RULE_TYPE_EXPLANATIONS = {
-  Bid: {
-    title: 'What is a Bid ruleset?',
-    body: 'Bid Management rulesets are simply an ordered set of rules that can be used to control bids of keywords and product targets. Rules will be evaluated in the order defined below, and the action corresponding to the first matching rule will be applied.'
-  },
   ASIN: {
     title: 'What is an ASIN ruleset?',
     body: 'ASIN rulesets evaluate your ASIN data and automatically take actions such as pausing ads, changing prices, updating inventory alerts, or modifying listing content.'
@@ -33,10 +30,6 @@ const RULE_TYPE_EXPLANATIONS = {
     title: 'What is a Product ruleset?',
     body: 'Product rulesets are an ordered set of rules that evaluate your ASIN data and automatically take actions. Rules are evaluated in order and the first matching action is applied.'
   },
-  Campaign: {
-    title: 'What is a Campaign ruleset?',
-    body: 'Campaign rulesets dynamically modify campaign-level properties including bidding strategy, placement modifiers, campaign state, budget, and Target ACoS based on defined criteria.'
-  },
   Inventory: {
     title: 'What is an Inventory ruleset?',
     body: 'Inventory rulesets monitor stock levels and sales velocity to trigger reorder alerts, pause ads for out-of-stock products, or adjust pricing.'
@@ -44,21 +37,14 @@ const RULE_TYPE_EXPLANATIONS = {
   Pricing: {
     title: 'What is a Pricing ruleset?',
     body: 'Pricing rulesets automatically adjust product prices based on competitor prices, BSR rank, buy box status, profit margins, and inventory levels.'
-  },
-  SOV: {
-    title: 'What is a SOV ruleset?',
-    body: 'Share of Voice rulesets manage impression share and bidding based on your keyword visibility targets.'
   }
 };
 
 const ruleTypeInfo = {
-  Bid: { icon: Target, color: '#3b82f6', bg: '#eff6ff' },
-  Campaign: { icon: BarChart, color: '#8b5cf6', bg: '#f5f3ff' },
   ASIN: { icon: Package, color: '#f59e0b', bg: '#fffbeb' },
   Product: { icon: Star, color: '#ec4899', bg: '#fdf2f8' },
   Inventory: { icon: Package, color: '#06b6d4', bg: '#ecfeff' },
-  Pricing: { icon: DollarSign, color: '#10b981', bg: '#f0fdf4' },
-  SOV: { icon: TrendingUp, color: '#6366f1', bg: '#e0e7ff' }
+  Pricing: { icon: DollarSign, color: '#10b981', bg: '#f0fdf4' }
 };
 
 const RulesetBuilderPage = () => {
@@ -68,11 +54,13 @@ const RulesetBuilderPage = () => {
   const [activeTab, setActiveTab] = useState('definition');
   const [error, setError] = useState(null);
   
-  const rulesetId = window.location.pathname.split('/').pop();
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const rulesetId = id;
 
   useEffect(() => {
-    if (rulesetId && rulesetId !== 'new' && rulesetId !== 'edit') {
-      loadRuleset();
+    if (rulesetId && rulesetId !== 'new') {
+      loadRuleset(rulesetId);
     } else {
       setLoading(false);
       setRuleset({
@@ -91,11 +79,11 @@ const RulesetBuilderPage = () => {
     }
   }, [rulesetId]);
 
-  const loadRuleset = async () => {
+  const loadRuleset = async (id) => {
     try {
       setLoading(true);
-      const data = await rulesetApi.getById(rulesetId);
-      setRuleset(data);
+      const data = await rulesetApi.getById(id);
+      setRuleset(data.data);
     } catch (err) {
       setError(err.message);
       message.error('Failed to load ruleset details');
@@ -110,11 +98,11 @@ const RulesetBuilderPage = () => {
       if (ruleset._id) {
         await rulesetApi.update(ruleset._id, ruleset);
         message.success('Ruleset saved successfully!');
+        navigate('/rule-sets');
       } else {
-        const created = await rulesetApi.create(ruleset);
+        await rulesetApi.create(ruleset);
         message.success('Ruleset created successfully!');
-        window.location.href = `/rule-sets/${created._id}/edit`;
-        return;
+        navigate('/rule-sets');
       }
     } catch (err) {
       message.error('Error saving: ' + err.message);
@@ -214,10 +202,6 @@ const RulesetBuilderPage = () => {
       label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={14} /> Definition</span>,
     },
     {
-      key: 'linked',
-      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Link2 size={14} /> Linked Campaigns</span>,
-    },
-    {
       key: 'preview',
       label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Eye size={14} /> Preview</span>,
     },
@@ -291,7 +275,7 @@ const RulesetBuilderPage = () => {
         <Row gutter={[24, 24]}>
           <Col xs={24} lg={16}>
             <Alert
-              message={explanation.title}
+              title={explanation.title}
               description={explanation.body}
               type="info"
               showIcon
@@ -394,7 +378,7 @@ const RulesetBuilderPage = () => {
                 </div>
               }
               style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-              bodyStyle={{ padding: 20 }}
+              styles={{ body: { padding: 20 } }}
             >
               {ruleset.rules.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '48px 24px', background: '#f8fafc', borderRadius: 8 }}>
@@ -453,7 +437,7 @@ const RulesetBuilderPage = () => {
                 style={{ borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 20 }}
               >
                 <Alert
-                  message="AI Audit Insights"
+                  title="AI Audit Insights"
                   description="Save your ruleset first to evaluate and get AI feedback on your criteria optimization."
                   type="warning"
                   showIcon
@@ -486,15 +470,7 @@ const RulesetBuilderPage = () => {
         </Row>
       )}
 
-      {activeTab === 'linked' && (
-        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
-          <Link2 size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
-          <Title level={5} style={{ margin: '0 0 8px', fontWeight: 600, color: '#475569' }}>Linked Campaigns</Title>
-          <Text style={{ color: '#94a3b8', fontSize: 12 }}>
-            Link campaigns or ASINs to this ruleset from the Advanced Settings tab.
-          </Text>
-        </Card>
-      )}
+
 
       {activeTab === 'preview' && (
         <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
@@ -673,7 +649,7 @@ const RuleCard = ({
         </div>
       }
       style={{ borderRadius: 8, borderLeft: '4px solid #3b82f6', borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}
-      bodyStyle={{ display: expanded ? 'block' : 'none', padding: 20 }}
+      styles={{ body: { display: expanded ? 'block' : 'none', padding: 20 } }}
     >
       <div style={{ marginBottom: 20 }}>
         <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Rule Name</Text>
@@ -708,6 +684,19 @@ const RuleCard = ({
           <Space direction="vertical" size={10} style={{ width: '100%' }}>
             {rule.conditions.map((condition, condIndex) => (
               <div key={condIndex} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: 8, borderRadius: 6, flexWrap: 'wrap' }}>
+                {condIndex > 0 ? (
+                  <Select
+                    value={condition.logicalOp || 'AND'}
+                    onChange={v => onUpdateCondition(condIndex, { logicalOp: v })}
+                    style={{ width: 80 }}
+                  >
+                    <Option value="AND">AND</Option>
+                    <Option value="OR">OR</Option>
+                  </Select>
+                ) : (
+                  <Tag color="blue" style={{ margin: 0, fontWeight: 700 }}>IF</Tag>
+                )}
+
                 <Select
                   value={condition.attribute || undefined}
                   onChange={v => onUpdateCondition(condIndex, { attribute: v })}
@@ -754,10 +743,6 @@ const RuleCard = ({
                       </>
                     )}
                   </>
-                )}
-
-                {condIndex > 0 && (
-                  <Tag color="orange" style={{ margin: 0, fontWeight: 700 }}>{condition.logicalOp}</Tag>
                 )}
 
                 <Button 

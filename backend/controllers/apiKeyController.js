@@ -136,7 +136,11 @@ exports.deleteKey = async (req, res) => {
             .input('id', sql.VarChar, id)
             .query("DELETE FROM ApiKeys WHERE Id = @id; SELECT @@ROWCOUNT as deleted");
 
-        if (result.recordset[1]?.[0]?.deleted === 0) {
+        const records = result.recordsets && result.recordsets.length > 1 
+            ? result.recordsets[1] 
+            : result.recordset;
+
+        if (!records || records[0]?.deleted === 0) {
             return res.status(404).json({ success: false, message: 'Key not found' });
         }
 

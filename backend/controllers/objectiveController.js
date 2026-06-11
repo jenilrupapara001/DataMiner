@@ -170,9 +170,14 @@ exports.updateObjective = async (req, res) => {
             SELECT * FROM Objectives WHERE Id = @id;
         `);
 
-        if (result.recordset[1]?.length === 0) return res.status(404).json({ success: false, message: 'Objective not found' });
+        const records = result.recordsets && result.recordsets.length > 1 
+            ? result.recordsets[1] 
+            : result.recordset;
 
-        res.json({ success: true, data: result.recordset[1][0] });
+        const obj = records && records[0];
+        if (!obj) return res.status(404).json({ success: false, message: 'Objective not found' });
+
+        res.json({ success: true, data: obj });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -258,9 +263,13 @@ exports.updateKeyResult = async (req, res) => {
             SELECT * FROM KeyResults WHERE Id = @id;
         `);
 
-        if (result.recordset[1]?.length === 0) return res.status(404).json({ success: false, message: 'Key result not found' });
+        const records = result.recordsets && result.recordsets.length > 1 
+            ? result.recordsets[1] 
+            : result.recordset;
 
-        const kr = result.recordset[1][0];
+        const kr = records && records[0];
+        if (!kr) return res.status(404).json({ success: false, message: 'Key result not found' });
+
         // Recalculate parent objective progress
         await recalcObjectiveProgress(kr.ObjectiveId);
 

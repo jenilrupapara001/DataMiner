@@ -2,23 +2,25 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/db';
 import { useSocket } from '../contexts/SocketContext';
 import { 
-  Card, Table, Input, Select, Badge, Avatar, Space, 
-  Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message
+  Card, Table, Input, Select, Badge, Avatar, Space, Row, Col, Statistic, DatePicker,
+  Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message, Layout
 } from 'antd';
 import { 
-  Clock, Search, ArrowRight, CheckCircle, 
+  Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
   PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
   Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
 const { Title, Text, Paragraph } = Typography;
+const { RangePicker } = DatePicker;
 
 const ActivityLog = () => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('ALL');
+    const [dateRange, setDateRange] = useState(null);
     const [selectedLog, setSelectedLog] = useState(null);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
     const socket = useSocket();
@@ -99,6 +101,14 @@ const ActivityLog = () => {
                 return { icon: <AlertTriangle size={14} />, color: '#dc2626', label: 'Error' };
             case 'IMPORT': 
                 return { icon: <ClipboardList size={14} />, color: '#06b6d4', label: 'Import' };
+            case 'AUTOMATION_TASK': 
+                return { icon: <Cpu size={14} />, color: '#6366f1', label: 'Automation Task' };
+            case 'TARGET_UPDATE': 
+                return { icon: <Edit3 size={14} />, color: '#0284c7', label: 'Target Update' };
+            case 'TARGET_IMPORT': 
+                return { icon: <ClipboardList size={14} />, color: '#0d9488', label: 'Target Import' };
+            case 'TARGET_DELETE': 
+                return { icon: <Trash2 size={14} />, color: '#e11d48', label: 'Target Delete' };
             default: 
                 return { icon: <Info size={14} />, color: '#64748b', label: t.replace('_', ' ') || 'System' };
         }
@@ -128,6 +138,15 @@ const ActivityLog = () => {
         });
     };
 
+    // Calculate metrics summaries
+    const metrics = useMemo(() => {
+        const total = logs.length;
+        const automations = logs.filter(l => l.type === 'AUTOMATION_TASK').length;
+        const security = logs.filter(l => l.type?.startsWith('AUTH_')).length;
+        const operations = logs.filter(l => ['CREATE', 'UPDATE', 'DELETE', 'TARGET_UPDATE', 'TARGET_DELETE', 'TARGET_IMPORT'].includes(l.type)).length;
+        return { total, automations, security, operations };
+    }, [logs]);
+
     const filteredLogs = useMemo(() => {
         return logs.filter(log => {
             const matchesSearch = searchQuery
@@ -136,9 +155,19 @@ const ActivityLog = () => {
                   (log.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
                 : true;
             const matchesType = filterType === 'ALL' || log.type === filterType;
-            return matchesSearch && matchesType;
+            
+            const matchesDate = !dateRange || !dateRange[0] || !dateRange[1]
+                ? true
+                : (() => {
+                    const logTime = new Date(log.createdAt).getTime();
+                    const start = new Date(dateRange[0].toString()).setHours(0, 0, 0, 0);
+                    const end = new Date(dateRange[1].toString()).setHours(23, 59, 59, 999);
+                    return logTime >= start && logTime <= end;
+                  })();
+
+            return matchesSearch && matchesType && matchesDate;
         });
-    }, [logs, searchQuery, filterType]);
+    }, [logs, searchQuery, filterType, dateRange]);
 
     const showDetails = (log) => {
         setSelectedLog(log);
@@ -150,16 +179,22 @@ const ActivityLog = () => {
         
         let data = metadata;
         if (typeof metadata === 'string') {
-            try { data = JSON.parse(metadata); } catch (e) { return <pre>{metadata}</pre>; }
+            try { data = JSON.parse(metadata); } catch (e) { return <pre style={{ margin: 0, padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>{metadata}</pre>; }
         }
 
-        if (typeof data !== 'object') return <pre>{JSON.stringify(data)}</pre>;
+        if (typeof data !== 'object') return <pre style={{ margin: 0, padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>{JSON.stringify(data)}</pre>;
 
         return (
             <Descriptions bordered size="small" column={1} className="metadata-descriptions">
                 {Object.entries(data).map(([key, value]) => (
                     <Descriptions.Item label={key.charAt(0).toUpperCase() + key.slice(1)} key={key}>
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        {typeof value === 'object' ? (
+                            <pre style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                {JSON.stringify(value, null, 2)}
+                            </pre>
+                        ) : (
+                            String(value)
+                        )}
                     </Descriptions.Item>
                 ))}
             </Descriptions>
@@ -171,16 +206,16 @@ const ActivityLog = () => {
             title: 'Timestamp',
             dataIndex: 'createdAt',
             key: 'createdAt',
-            width: 180,
+            width: 170,
             sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
             render: (val) => (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <Space size={4} style={{ color: '#1e293b', fontWeight: 500, fontSize: '12px' }}>
-                        <Clock size={12} />
+                        <Clock size={12} style={{ color: '#64748b' }} />
                         <span>{new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </Space>
                     <Text type="secondary" style={{ fontSize: '10px', marginLeft: '16px' }}>
-                        {new Date(val).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                        {new Date(val).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
                 </div>
             )
@@ -189,7 +224,7 @@ const ActivityLog = () => {
             title: 'Event',
             dataIndex: 'type',
             key: 'type',
-            width: 150,
+            width: 160,
             render: (type) => {
                 const conf = getTypeStyle(type);
                 return (
@@ -197,15 +232,16 @@ const ActivityLog = () => {
                         style={{ 
                             backgroundColor: `${conf.color}10`, 
                             color: conf.color, 
-                            borderColor: `${conf.color}20`,
+                            borderColor: `${conf.color}30`,
                             display: 'inline-flex', 
                             alignItems: 'center', 
                             gap: '6px', 
-                            borderRadius: '8px', 
-                            padding: '2px 10px',
-                            fontWeight: 700,
+                            borderRadius: '20px', 
+                            padding: '3px 12px',
+                            fontWeight: 600,
                             textTransform: 'uppercase',
-                            fontSize: '10px'
+                            fontSize: '10px',
+                            letterSpacing: '0.03em'
                         }}
                     >
                         {conf.icon}
@@ -224,7 +260,7 @@ const ActivityLog = () => {
                 return (
                     <Tag 
                         color={info.color} 
-                        style={{ borderRadius: '6px', fontSize: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        style={{ borderRadius: '6px', fontSize: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
                     >
                         {info.icon}
                         {type || 'SYSTEM'}
@@ -237,7 +273,7 @@ const ActivityLog = () => {
             key: 'activity',
             render: (_, record) => (
                 <div onClick={() => showDetails(record)} style={{ cursor: 'pointer' }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px', marginBottom: '2px' }}>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', marginBottom: '2px' }}>
                         {record.entityTitle || 'System Activity'}
                     </div>
                     <div style={{ color: '#64748b', fontSize: '12px', lineHeight: '1.4' }}>
@@ -249,21 +285,23 @@ const ActivityLog = () => {
         {
             title: 'Initiated By',
             key: 'user',
-            width: 200,
+            width: 190,
             render: (_, record) => {
                 const name = record.user?.firstName ? `${record.user.firstName} ${record.user.lastName || ''}` : (record.user?.username || 'System');
                 const email = record.user?.email || '';
                 const initial = name.charAt(0).toUpperCase();
+                const isSystem = name === 'System';
                 return (
                     <Space size="middle">
                         <Avatar 
-                            size={32} 
+                            size={28} 
                             style={{ 
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', 
+                                background: isSystem 
+                                    ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
+                                    : 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)', 
                                 color: '#fff', 
-                                fontWeight: 800, 
-                                fontSize: '12px',
-                                boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)'
+                                fontWeight: 600, 
+                                fontSize: '11px'
                             }}
                         >
                             {initial}
@@ -279,14 +317,14 @@ const ActivityLog = () => {
         {
             title: 'Action',
             key: 'actions',
-            width: 80,
+            width: 70,
             align: 'center',
             render: (_, record) => (
                 <Tooltip title="View Detailed Log">
                     <Button 
                         type="text" 
                         shape="circle" 
-                        icon={<Eye size={16} />} 
+                        icon={<Eye size={15} />} 
                         onClick={() => showDetails(record)}
                         style={{ color: '#6366f1' }}
                     />
@@ -299,106 +337,151 @@ const ActivityLog = () => {
         return <PageLoader message="Initializing Activity Streams..." />;
     }
 
+    const clearAllFilters = () => {
+        setSearchQuery('');
+        setFilterType('ALL');
+        setDateRange(null);
+    };
+
+    const hasActiveFilters = searchQuery !== '' || filterType !== 'ALL' || dateRange !== null;
+
     return (
-        <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: '100vh',
-            backgroundColor: '#f8fafc',
-            margin: '-1.5rem -2rem',
-            padding: '1.5rem 2rem',
-            fontFamily: "'DM Sans', sans-serif"
-        }}>
+        <div style={{ background: '#f8fafc', padding: '24px 32px', minHeight: 'calc(100vh - 72px)', overflowY: 'auto' }}>
             {/* HEADER AREA */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-end',
-                marginBottom: '2rem'
-            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                        <Activity size={14} />
-                        <span>System Intelligence</span>
-                        <ChevronRight size={12} />
-                        <span style={{ color: '#0f172a' }}>Strategy & Execution Log</span>
-                    </div>
-                    <Title level={2} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.03em', color: '#0f172a' }}>
+                    <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ padding: '6px', background: '#e0e7ff', color: '#4f46e5', borderRadius: 8, display: 'flex' }}>
+                            <Activity size={20} />
+                        </div>
                         Activity Streams
                     </Title>
-                    <Paragraph type="secondary" style={{ margin: '4px 0 0 0', fontSize: '14px' }}>
+                    <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 4 }}>
                         Real-time audit trail of all administrative and automated actions within the platform.
-                    </Paragraph>
+                    </Text>
                 </div>
                 
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <Button 
-                        onClick={loadLogs}
-                        loading={loading}
-                        icon={<RefreshCw size={16} />}
-                        style={{ 
-                            borderRadius: '12px', 
-                            height: '42px', 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            fontWeight: 700,
-                            padding: '0 20px',
-                            border: '1px solid #e2e8f0',
-                            backgroundColor: '#fff',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                        }}
-                    >
-                        SYNC STREAMS
-                    </Button>
-                </div>
+                <Button 
+                    type="primary"
+                    onClick={loadLogs}
+                    loading={loading}
+                    icon={<RefreshCw size={14} />}
+                    style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, borderRadius: 8, height: '36px' }}
+                >
+                    Sync Streams
+                </Button>
             </div>
+
+            {/* METRICS ROW */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                <Col xs={12} sm={12} md={6}>
+                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
+                        <Statistic
+                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>TOTAL STREAMS</span>}
+                            value={metrics.total}
+                            prefix={<Activity size={16} style={{ color: '#3b82f6', marginRight: 6, marginBottom: -2 }} />}
+                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={12} md={6}>
+                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
+                        <Statistic
+                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>AUTOMATIONS</span>}
+                            value={metrics.automations}
+                            prefix={<Cpu size={16} style={{ color: '#8b5cf6', marginRight: 6, marginBottom: -2 }} />}
+                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={12} md={6}>
+                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
+                        <Statistic
+                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>OPERATIONS</span>}
+                            value={metrics.operations}
+                            prefix={<Database size={16} style={{ color: '#06b6d4', marginRight: 6, marginBottom: -2 }} />}
+                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={12} sm={12} md={6}>
+                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
+                        <Statistic
+                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>SECURITY LOGS</span>}
+                            value={metrics.security}
+                            prefix={<Shield size={16} style={{ color: '#10b981', marginRight: 6, marginBottom: -2 }} />}
+                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
+                        />
+                    </Card>
+                </Col>
+            </Row>
 
             {/* FILTERS CARD */}
             <Card 
-                styles={{ body: { padding: '20px' } }} 
+                styles={{ body: { padding: '16px 20px' } }} 
                 style={{ 
-                    borderRadius: '20px', 
-                    border: '1px solid #f1f5f9', 
-                    boxShadow: '0 4px 20px -4px rgba(0,0,0,0.05)',
-                    marginBottom: '1.5rem',
-                    background: 'rgba(255, 255, 255, 0.8)',
-                    backdropFilter: 'blur(10px)'
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0', 
+                    marginBottom: '24px',
+                    background: '#fff',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
                 }}
             >
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 2, minWidth: 260 }}>
+                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>SEARCH BY PHRASE</Text>
                         <Input 
-                            placeholder="Trace events by description, entity, or user signature..."
-                            prefix={<Search size={18} style={{ color: '#94a3b8', marginRight: 8 }} />}
+                            placeholder="Trace events by description, entity, or user..."
+                            prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            style={{ 
-                                borderRadius: '12px', 
-                                height: '48px', 
-                                border: '1px solid #e2e8f0',
-                                fontSize: '14px'
-                            }}
+                            style={{ borderRadius: '8px', height: '38px' }}
                             allowClear
                         />
                     </div>
-                    <div style={{ width: '260px' }}>
+                    <div style={{ flex: 1.2, minWidth: 180 }}>
+                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>EVENT CATEGORY</Text>
                         <Select
                             value={filterType}
                             onChange={setFilterType}
-                            style={{ width: '100%', height: '48px' }}
-                            dropdownStyle={{ borderRadius: '12px', padding: '8px' }}
-                            suffixIcon={<Filter size={16} />}
+                            style={{ width: '100%', height: '38px' }}
+                            dropdownStyle={{ borderRadius: '8px' }}
                         >
                             <Select.Option value="ALL">All Event Manifests</Select.Option>
                             <Select.Option value="CREATE">Object Creation</Select.Option>
                             <Select.Option value="UPDATE">Update Transactions</Select.Option>
                             <Select.Option value="DELETE">Removal Operations</Select.Option>
                             <Select.Option value="IMPORT">Data Ingestion (Bulk)</Select.Option>
+                            <Select.Option value="AUTOMATION_TASK">Automation Tasks</Select.Option>
+                            <Select.Option value="TARGET_IMPORT">Target Ingestion</Select.Option>
+                            <Select.Option value="TARGET_UPDATE">Target Updates</Select.Option>
+                            <Select.Option value="TARGET_DELETE">Target Deletions</Select.Option>
+                            <Select.Option value="STATUS_CHANGE">Status Changes</Select.Option>
                             <Select.Option value="AUTH_SUCCESS">Identity Verification</Select.Option>
                             <Select.Option value="AUTH_FAILURE">Security Alerts</Select.Option>
                             <Select.Option value="SYSTEM_ERROR">System Exceptions</Select.Option>
                         </Select>
                     </div>
+                    <div style={{ flex: 1.5, minWidth: 220 }}>
+                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>DATE WINDOW</Text>
+                        <RangePicker 
+                            value={dateRange}
+                            onChange={setDateRange}
+                            style={{ width: '100%', height: '38px', borderRadius: '8px' }}
+                        />
+                    </div>
+                    {hasActiveFilters && (
+                        <div style={{ display: 'flex', alignSelf: 'flex-end', height: '38px' }}>
+                            <Button 
+                                onClick={clearAllFilters}
+                                type="text"
+                                danger
+                                style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                Clear
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </Card>
 
@@ -406,11 +489,12 @@ const ActivityLog = () => {
             <Card 
                 styles={{ body: { padding: 0 } }}
                 style={{ 
-                    borderRadius: '24px', 
-                    border: '1px solid #f1f5f9', 
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0', 
                     overflow: 'hidden',
-                    boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02)',
-                    background: '#fff'
+                    background: '#fff',
+                    marginBottom: '24px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
                 }}
             >
                 <Table
@@ -455,7 +539,7 @@ const ActivityLog = () => {
                             <Activity size={18} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '16px', fontWeight: 800 }}>Event Analysis</span>
+                            <span style={{ fontSize: '15px', fontWeight: 700 }}>Event Analysis</span>
                             <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>ID: {selectedLog?._id}</span>
                         </div>
                     </div>
@@ -469,16 +553,16 @@ const ActivityLog = () => {
                 ]}
                 width={650}
                 centered
-                styles={{ body: { padding: '24px' } }}
+                styles={{ body: { padding: '20px 24px' } }}
             >
                 {selectedLog && (
                     <div className="log-details-container">
-                        <Descriptions title="Overview" bordered column={2} size="small">
+                        <Descriptions title="" bordered column={2} size="small" style={{ marginBottom: '20px' }}>
                             <Descriptions.Item label="Event Type" span={1}>
                                 <Tag color={getTypeStyle(selectedLog.type).color}>{getTypeStyle(selectedLog.type).label}</Tag>
                             </Descriptions.Item>
                             <Descriptions.Item label="Entity" span={1}>
-                                <Text strong>{selectedLog.entityType}</Text>
+                                <Text strong>{selectedLog.entityType || 'SYSTEM'}</Text>
                             </Descriptions.Item>
                             <Descriptions.Item label="Timestamp" span={2}>
                                 {formatTime(selectedLog.createdAt)}
@@ -488,33 +572,32 @@ const ActivityLog = () => {
                             </Descriptions.Item>
                         </Descriptions>
 
-                        <div style={{ marginTop: '24px' }}>
+                        <div style={{ marginTop: '20px' }}>
                             <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
                                 Activity Description
                             </Text>
                             <div style={{ 
-                                padding: '16px', 
+                                padding: '14px 16px', 
                                 backgroundColor: '#f8fafc', 
-                                borderRadius: '12px', 
+                                borderRadius: '8px', 
                                 border: '1px solid #e2e8f0',
                                 color: '#1e293b',
-                                fontWeight: 600,
-                                fontSize: '14px',
+                                fontSize: '13px',
                                 lineHeight: '1.6'
                             }}>
-                                <div style={{ fontSize: '16px', fontWeight: 800, marginBottom: '4px' }}>{selectedLog.entityTitle}</div>
+                                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>{selectedLog.entityTitle}</div>
                                 {selectedLog.description}
                             </div>
                         </div>
 
-                        <div style={{ marginTop: '24px' }}>
+                        <div style={{ marginTop: '20px' }}>
                             <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
                                 Metadata & Technical Context
                             </Text>
                             <div className="metadata-scroll-container" style={{ 
-                                maxHeight: '300px', 
+                                maxHeight: '250px', 
                                 overflowY: 'auto',
-                                borderRadius: '12px',
+                                borderRadius: '8px',
                                 border: '1px solid #f1f5f9'
                             }}>
                                 {renderMetadata(selectedLog.metadata)}
@@ -525,8 +608,6 @@ const ActivityLog = () => {
             </Modal>
 
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&display=swap');
-
                 .premium-activity-row {
                     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
                 }
@@ -541,35 +622,35 @@ const ActivityLog = () => {
                     text-transform: uppercase !important;
                     letter-spacing: 0.05em !important;
                     border-bottom: 1px solid #f1f5f9 !important;
-                    padding: 16px 20px !important;
+                    padding: 14px 16px !important;
                 }
                 .ant-table-tbody > tr > td {
                     border-bottom: 1px solid #f8fafc !important;
-                    padding: 16px 20px !important;
+                    padding: 14px 16px !important;
                 }
                 .metadata-descriptions .ant-descriptions-item-label {
                     background-color: #f8fafc !important;
-                    width: 150px;
+                    width: 140px;
                     font-weight: 700 !important;
                     color: #64748b !important;
                 }
                 .metadata-descriptions .ant-descriptions-item-content {
                     font-family: 'JetBrains Mono', 'Menlo', monospace;
-                    font-size: 12px;
+                    font-size: 11px;
                     color: #4f46e5;
                 }
                 .ant-modal-content {
-                    border-radius: 24px !important;
+                    border-radius: 16px !important;
                     overflow: hidden;
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
                 }
                 .ant-modal-header {
-                    padding: 24px 24px 16px !important;
+                    padding: 20px 24px 14px !important;
                     border-bottom: 1px solid #f1f5f9 !important;
                     margin-bottom: 0 !important;
                 }
                 .ant-modal-footer {
-                    padding: 16px 24px 24px !important;
+                    padding: 14px 24px 20px !important;
                     border-top: 1px solid #f1f5f9 !important;
                     margin-top: 0 !important;
                 }

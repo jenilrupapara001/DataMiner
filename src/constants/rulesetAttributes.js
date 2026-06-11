@@ -1,34 +1,4 @@
 export const ATTRIBUTES_BY_TYPE = {
-  Bid: [
-    { value: 'orders', label: 'Orders', type: 'number', unit: '', group: 'Performance' },
-    { value: 'clicks', label: 'Clicks', type: 'number', unit: '', group: 'Performance' },
-    { value: 'impressions', label: 'Impressions', type: 'number', unit: '', group: 'Performance' },
-    { value: 'spend', label: 'Spend', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'sales', label: 'Sales', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'acos', label: 'ACoS', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'roas', label: 'ROAS', type: 'number', unit: 'x', group: 'Performance' },
-    { value: 'ctr', label: 'CTR', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'cvr', label: 'CVR', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'cpc', label: 'CPC', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'bid', label: 'Bid', type: 'number', unit: '₹', group: 'Bid' },
-    { value: 'keyword', label: 'Keyword', type: 'list', unit: '', group: 'Keyword' },
-    { value: 'match_type', label: 'Match Type', type: 'enum', unit: '', group: 'Keyword', options: ['Exact', 'Phrase', 'Broad'] },
-  ],
-
-  Campaign: [
-    { value: 'campaign_spend', label: 'Campaign Spend', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'campaign_sales', label: 'Campaign Sales', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'campaign_acos', label: 'Campaign ACoS', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'campaign_roas', label: 'Campaign ROAS', type: 'number', unit: 'x', group: 'Performance' },
-    { value: 'campaign_budget', label: 'Campaign Budget', type: 'number', unit: '₹', group: 'Campaign' },
-    { value: 'campaign_state', label: 'Campaign State', type: 'enum', unit: '', group: 'Campaign', options: ['Enabled', 'Paused', 'Archived'] },
-    { value: 'impressions', label: 'Impressions', type: 'number', unit: '', group: 'Performance' },
-    { value: 'clicks', label: 'Clicks', type: 'number', unit: '', group: 'Performance' },
-    { value: 'orders', label: 'Orders', type: 'number', unit: '', group: 'Performance' },
-    { value: 'bidding_strategy', label: 'Bidding Strategy', type: 'enum', unit: '', group: 'Campaign', options: ['Manual', 'Auto', 'Dynamic'] },
-    { value: 'days_running', label: 'Days Running', type: 'number', unit: 'days', group: 'Campaign' },
-  ],
-
   ASIN: [
     { value: 'orders', label: 'Orders', type: 'number', unit: '', group: 'Performance' },
     { value: 'units_sold', label: 'Units Sold', type: 'number', unit: '', group: 'Performance' },
@@ -98,16 +68,6 @@ export const ATTRIBUTES_BY_TYPE = {
     { value: 'stock_level', label: 'Stock Level', type: 'number', unit: 'units', group: 'Inventory' },
     { value: 'review_count', label: 'Review Count', type: 'number', unit: '', group: 'Listing' },
     { value: 'rating', label: 'Rating', type: 'number', unit: '★', group: 'Listing' },
-  ],
-
-  SOV: [
-    { value: 'impression_share', label: 'Impression Share', type: 'percent', unit: '%', group: 'Share' },
-    { value: 'share_of_voice', label: 'Share of Voice', type: 'percent', unit: '%', group: 'Share' },
-    { value: 'organic_rank', label: 'Organic Rank', type: 'number', unit: '', group: 'Ranking' },
-    { value: 'sponsored_rank', label: 'Sponsored Rank', type: 'number', unit: '', group: 'Ranking' },
-    { value: 'keyword_bid', label: 'Keyword Bid', type: 'number', unit: '₹', group: 'Bid' },
-    { value: 'keyword_state', label: 'Keyword State', type: 'enum', unit: '', group: 'Status', options: ['Active', 'Paused', 'Archived'] },
-    { value: 'search_volume', label: 'Search Volume', type: 'number', unit: '', group: 'Volume' },
   ]
 };
 

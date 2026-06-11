@@ -261,11 +261,16 @@ exports.updateMember = async (req, res) => {
         const updateSql = `UPDATE TeamMembers SET ${updates.join(', ')} WHERE TeamId = @teamId AND UserId = @userId; SELECT * FROM TeamMembers WHERE TeamId = @teamId AND UserId = @userId;`;
         const result = await request.query(updateSql);
 
-        if (result.recordset[1]?.length === 0) {
+        const records = result.recordsets && result.recordsets.length > 1 
+            ? result.recordsets[1] 
+            : result.recordset;
+
+        const member = records && records[0];
+        if (!member) {
             return res.status(404).json({ success: false, message: 'Member not found' });
         }
 
-        res.json({ success: true, data: result.recordset[1][0] });
+        res.json({ success: true, data: member });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -14,13 +14,10 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 const RULE_TYPE_INFO = [
-  { value: 'Bid', label: 'Bid Rules', icon: Target, color: '#3b82f6', bg: '#eff6ff', desc: 'Control keyword and product target bids' },
-  { value: 'Campaign', label: 'Campaign', icon: BarChart2, color: '#8b5cf6', bg: '#f5f3ff', desc: 'Modify campaign-level properties' },
   { value: 'ASIN', label: 'ASIN/Product', icon: Package, color: '#f59e0b', bg: '#fffbeb', desc: 'Evaluate ASIN data and take actions' },
   { value: 'Inventory', label: 'Inventory', icon: Package, color: '#06b6d4', bg: '#ecfeff', desc: 'Monitor stock and trigger reorder alerts' },
   { value: 'Pricing', label: 'Pricing', icon: DollarSign, color: '#10b981', bg: '#f0fdf4', desc: 'Adjust prices based on competitors' },
-  { value: 'Product', label: 'Product', icon: Star, color: '#ec4899', bg: '#fdf2f8', desc: 'Product-level rules and actions' },
-  { value: 'SOV', label: 'Share of Voice', icon: TrendingUp, color: '#6366f1', bg: '#e0e7ff', desc: 'Manage impression share' }
+  { value: 'Product', label: 'Product', icon: Star, color: '#ec4899', bg: '#fdf2f8', desc: 'Product-level rules and actions' }
 ];
 
 const RuleSetsPage = () => {
@@ -42,9 +39,11 @@ const RuleSetsPage = () => {
       if (filterType !== 'all') params.type = filterType;
       
       const response = await rulesetApi.getAll(params);
-      setRulesets(response.rulesets || []);
+      setRulesets(response.data || []);
       if (response.pagination) {
         setPagination(prev => ({ ...prev, ...response.pagination }));
+      } else {
+        setPagination(prev => ({ ...prev, total: (response.data || []).length }));
       }
     } catch (error) {
       console.error('Error loading rulesets:', error);
@@ -90,8 +89,9 @@ const RuleSetsPage = () => {
       setExecuting(rulesetId);
       message.info('Executing ruleset actions...');
       const result = await rulesetApi.execute(rulesetId);
+      const summary = result.data?.summary || result.summary;
       message.success(
-        `Execution Complete! Matched: ${result.summary?.totalMatched || 0}, Actioned: ${result.summary?.totalActioned || 0}`
+        `Execution Complete! Matched: ${summary?.totalMatched || 0}, Actioned: ${summary?.totalActioned || 0}`
       );
     } catch (error) {
       console.error('Error executing ruleset:', error);
@@ -104,7 +104,7 @@ const RuleSetsPage = () => {
   const handleDuplicate = async (ruleset) => {
     try {
       const result = await rulesetApi.duplicate(ruleset._id);
-      message.success(`Duplicated successfully! New ruleset: ${result.name}`);
+      message.success(`Duplicated successfully! New ruleset: ${result.data?.Name || result.data?.name || ''}`);
       loadRulesets();
     } catch (error) {
       console.error('Error duplicating ruleset:', error);
