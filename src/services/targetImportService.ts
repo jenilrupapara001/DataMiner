@@ -11,6 +11,7 @@ export interface ImportPayload {
         month: number;
         goalType: string;
         achievedValue: number;
+        targetValue: number;
     }>;
 }
 
@@ -55,6 +56,7 @@ export const targetImportApi = {
                 month: r.month,
                 goalType: r.goalType,
                 achievedValue: r.achieved,
+                targetValue: r.target,
             })),
         };
     },

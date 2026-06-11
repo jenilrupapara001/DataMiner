@@ -6,6 +6,7 @@ export interface ImportRowData {
     managerName?: string;
     month: string;       // "Jan 2025", "January 2025", "01/2025", etc.
     achieved: number;
+    target?: number;
     type: string;        // GMS, ADS, ACOS, etc.
     _rowIndex?: number;
     _errors?: string[];
@@ -18,6 +19,7 @@ export interface ParsedRow {
     year: number;
     month: number;
     achieved: number;
+    target: number;
     goalType: string;
     rowIndex: number;
     errors: string[];
@@ -29,7 +31,7 @@ const MONTH_NAMES_MAP: Record<string, number> = {
     'feb': 2, 'february': 2,
     'mar': 3, 'march': 3,
     'apr': 4, 'april': 4,
-    'may': 5,
+    'may': 5, 'may-2025': 5,
     'jun': 6, 'june': 6,
     'jul': 7, 'july': 7,
     'aug': 8, 'august': 8,
@@ -166,15 +168,15 @@ export async function readExcelFile(file: File): Promise<any[]> {
  */
 export function downloadTemplate() {
     const headers = [
-        ['Brand Name', 'ManagerId', 'Month', 'Achieved', 'Type']
+        ['Brand Name', 'ManagerId', 'Month', 'Target', 'Achieved', 'Type']
     ];
 
     const sampleRows = [
-        ['Lotus Premium', '', 'Jan 2025', 150000, 'GMS'],
-        ['Lotus Premium', '', 'Jan 2025', 25000, 'ADS'],
-        ['Lotus Premium', '', 'Jan 2025', 16.5, 'ACOS'],
-        ['Vardha Brand', 'mgr_001', 'Feb 2025', 280000, 'GMS'],
-        ['Vardha Brand', 'mgr_001', 'Feb 2025', 45000, 'ADS'],
+        ['Lotus Premium', '', 'Jan 2025', 150000, 120000, 'GMS'],
+        ['Lotus Premium', '', 'Jan 2025', 25000, 22000, 'ADS'],
+        ['Lotus Premium', '', 'Jan 2025', 16.5, 17.2, 'ACOS'],
+        ['Vardha Brand', 'mgr_001', 'Feb 2025', 280000, 290000, 'GMS'],
+        ['Vardha Brand', 'mgr_001', 'Feb 2025', 45000, 42000, 'ADS'],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([...headers, ...sampleRows]);
@@ -184,6 +186,7 @@ export function downloadTemplate() {
         { wch: 25 }, // Brand Name
         { wch: 18 }, // ManagerId
         { wch: 14 }, // Month
+        { wch: 14 }, // Target
         { wch: 14 }, // Achieved
         { wch: 12 }, // Type
     ];
@@ -199,7 +202,8 @@ export function downloadTemplate() {
         ['Brand Name', 'YES', 'Exact brand/seller name from database', 'Lotus Premium'],
         ['ManagerId', 'NO', 'Manager ID from database (auto-detected if blank)', 'mgr_001'],
         ['Month', 'YES', 'Month and year in any format', 'Jan 2025, 01/2025, 2025-01'],
-        ['Achieved', 'YES', 'Numeric achievement value', '150000'],
+        ['Target', 'YES', 'Numeric target value', '150000'],
+        ['Achieved', 'YES', 'Numeric achievement value', '120000'],
         ['Type', 'YES', 'Goal type code', 'GMS, ADS, ACOS, RNR'],
         [''],
         ['📌 VALID GOAL TYPES:'],
@@ -256,7 +260,8 @@ export function parseAndValidate(
             ''
         ).trim();
 
-        const monthRaw = normalizedRow['month'] ?? '';
+                const monthRaw = normalizedRow['month'] ?? '';
+        const targetRaw = normalizedRow['target'] ?? normalizedRow['targetvalue'] ?? '';
         const achievedRaw = normalizedRow['achieved'] ?? '';
         const typeRaw = normalizedRow['type'] ?? '';
 
@@ -297,6 +302,14 @@ export function parseAndValidate(
             if (month < 1 || month > 12) errors.push(`Month out of range: ${month}`);
         }
 
+        // ── Validate Target ───────────────────────────
+        const target = Number(targetRaw);
+        if (targetRaw !== '' && isNaN(target)) {
+            errors.push(`Target value is invalid: "${targetRaw}"`);
+        } else if (target < 0) {
+            errors.push('Target value cannot be negative');
+        }
+
         // ── Validate Achieved ─────────────────────────
         const achieved = Number(achievedRaw);
         if (achievedRaw === '' || isNaN(achieved)) {
@@ -317,6 +330,7 @@ export function parseAndValidate(
             managerName: resolvedManagerName,
             year,
             month,
+            target: isNaN(target) ? 0 : target,
             achieved: isNaN(achieved) ? 0 : achieved,
             goalType: goalType || '',
             rowIndex: idx + 2, // +2 because Excel rows start at 1 and header is row 1

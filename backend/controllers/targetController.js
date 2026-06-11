@@ -1,5 +1,6 @@
 const { getPool, sql, generateId } = require('../database/db');
 const { endOfMonth, startOfMonth, format, addDays } = require('date-fns');
+const SystemLogService = require('../services/SystemLogService');
 
 // Helper to calculate start and end dates for a specific month
 function getMonthRange(year, month) {
@@ -405,6 +406,22 @@ exports.createTargets = async (req, res) => {
             }
         }
 
+        try {
+            for (const targetConfig of targets) {
+                await SystemLogService.log({
+                    type: 'TARGET_CREATE',
+                    entityType: 'TARGET',
+                    entityId: targetConfig.sellerId,
+                    entityTitle: targetConfig.sellerId,
+                    user: req.user,
+                    description: `Created ${targetConfig.targetType} target for brand ${targetConfig.sellerId} (${targetConfig.goalType}, Year: ${targetConfig.year}, Total: ${targetConfig.totalTargetValue})`,
+                    metadata: { sellerId: targetConfig.sellerId, year: targetConfig.year, goalType: targetConfig.goalType, total: targetConfig.totalTargetValue }
+                });
+            }
+        } catch (logErr) {
+            console.error('Failed to log targets creation:', logErr);
+        }
+
         res.json({ success: true, message: "Targets saved and auto-distributed successfully!" });
     } catch (e) {
         console.error("createTargets error:", e);
@@ -450,6 +467,20 @@ exports.updateAchievements = async (req, res) => {
             await request.query(query);
         }
 
+        try {
+            await SystemLogService.log({
+                type: 'ACHIEVEMENT_UPDATE',
+                entityType: 'TARGET',
+                entityId: updates[0]?.breakdownId || 'BULK',
+                entityTitle: 'Target vs Achievement Breakdowns',
+                user: req.user,
+                description: `Updated/overrode target achievements values for ${updates.length} breakdowns`,
+                metadata: { count: updates.length }
+            });
+        } catch (logErr) {
+            console.error('Failed to log achievements update:', logErr);
+        }
+
         res.json({ success: true, message: "Values overridden and saved successfully!" });
     } catch (e) {
         console.error("updateAchievements error:", e);
@@ -464,9 +495,32 @@ exports.deleteTarget = async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await getPool();
+
+        const targetInfo = await pool.request()
+            .input('id', sql.VarChar, id)
+            .query('SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id = @id');
+        const target = targetInfo.recordset[0];
+
         await pool.request()
             .input('id', sql.VarChar, id)
             .query('DELETE FROM GmsTargets WHERE Id = @id');
+
+        try {
+            if (target) {
+                await SystemLogService.log({
+                    type: 'TARGET_DELETE',
+                    entityType: 'TARGET',
+                    entityId: id,
+                    entityTitle: target.SellerId,
+                    user: req.user,
+                    description: `Deleted ${target.TargetType} target for brand ${target.SellerId} (${target.GoalType}, Year: ${target.Year})`,
+                    metadata: { targetId: id, sellerId: target.SellerId, year: target.Year, goalType: target.GoalType }
+                });
+            }
+        } catch (logErr) {
+            console.error('Failed to log target deletion:', logErr);
+        }
+
         res.json({ success: true, message: "Target deleted successfully!" });
     } catch (e) {
         console.error("deleteTarget error:", e);
@@ -491,9 +545,28 @@ exports.deleteTargetsBulk = async (req, res) => {
             request.input(`id${index}`, sql.VarChar, id);
             parameters.push(`@id${index}`);
         });
+
+        const targetInfo = await pool.request().query(`SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`);
+        const targets = targetInfo.recordset;
         
         const query = `DELETE FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`;
         await request.query(query);
+
+        try {
+            for (const t of targets) {
+                await SystemLogService.log({
+                    type: 'TARGET_DELETE',
+                    entityType: 'TARGET',
+                    entityId: 'BULK',
+                    entityTitle: t.SellerId,
+                    user: req.user,
+                    description: `Deleted ${t.TargetType} target for brand ${t.SellerId} (${t.GoalType}, Year: ${t.Year}) via bulk delete`,
+                    metadata: { sellerId: t.SellerId, year: t.Year, goalType: t.GoalType }
+                });
+            }
+        } catch (logErr) {
+            console.error('Failed to log bulk target deletion:', logErr);
+        }
         
         res.json({ success: true, message: "Bulk targets deleted successfully!" });
     } catch (e) {
@@ -546,8 +619,9 @@ exports.importAchievements = async (req, res) => {
                 sellerNameToCode.set(String(s.Name).toLowerCase().trim(), s.SellerId);
             }
             if (s.SellerId && s.Id) {
-                sellerCodeToInternalId.set(s.SellerId, s.Id);
-                internalIdToSellerCode.set(s.Id, s.SellerId);
+                const cleanId = String(s.Id).toLowerCase().trim();
+                sellerCodeToInternalId.set(s.SellerId, cleanId);
+                internalIdToSellerCode.set(cleanId, s.SellerId);
             }
         });
 
@@ -562,9 +636,11 @@ exports.importAchievements = async (req, res) => {
                     us.SellerId   AS InternalSellerId,
                     u.FirstName,
                     u.LastName,
-                    u.Id          AS UserId
+                    u.Id          AS UserId,
+                    r.Name        AS RoleName
                 FROM UserSellers us
                 INNER JOIN Users u ON u.Id = us.UserId
+                LEFT JOIN Roles r ON u.RoleId = r.Id
                 WHERE u.IsActive = 1
             `);
 
@@ -574,9 +650,14 @@ exports.importAchievements = async (req, res) => {
                 const managerName = `${row.FirstName || ''} ${row.LastName || ''}`.trim();
                 if (!managerName || !row.InternalSellerId) return;
 
-                const sellerCode = internalIdToSellerCode.get(row.InternalSellerId);
-                if (sellerCode && !sellerCodeToManagerName.has(sellerCode)) {
-                    sellerCodeToManagerName.set(sellerCode, managerName);
+                const cleanInternalSellerId = String(row.InternalSellerId).toLowerCase().trim();
+                const sellerCode = internalIdToSellerCode.get(cleanInternalSellerId);
+                if (sellerCode) {
+                    const role = String(row.RoleName || '').toLowerCase();
+                    // Prioritize Brand Manager or manager roles over admin/viewer if multiple assignments exist
+                    if (!sellerCodeToManagerName.has(sellerCode) || role === 'brand manager' || role === 'brand_manager' || role === 'manager') {
+                        sellerCodeToManagerName.set(sellerCode, managerName);
+                    }
                 }
             });
 
@@ -606,6 +687,7 @@ exports.importAchievements = async (req, res) => {
                     month,
                     goalType,
                     achievedValue,
+                    targetValue,
                     managerName: payloadManagerName,
                     managerId: payloadManagerId
                 } = row;
@@ -638,12 +720,6 @@ exports.importAchievements = async (req, res) => {
                     continue;
                 }
 
-                if (achievedValue === undefined || achievedValue === null || isNaN(Number(achievedValue))) {
-                    errors.push({ row: rowNum, reason: 'Invalid achieved value' });
-                    skipped++;
-                    continue;
-                }
-
                 const numYear = parseInt(year, 10);
                 const numMonth = parseInt(month, 10);
 
@@ -653,75 +729,19 @@ exports.importAchievements = async (req, res) => {
                     continue;
                 }
 
-                const numericAchieved = parseFloat(achievedValue);
+                const numericAchieved = (achievedValue !== undefined && achievedValue !== null) ? parseFloat(achievedValue) : 0;
+                const numericTarget = (targetValue !== undefined && targetValue !== null) ? parseFloat(targetValue) : 0;
 
-                // ══════════════════════════════════════
-                // STEP 1: Find existing MONTHLY target
-                // ══════════════════════════════════════
-                const monthlyResult = await transaction.request()
-                    .input('sellerId', sql.NVarChar, sellerId)
-                    .input('year', sql.Int, numYear)
-                    .input('month', sql.Int, numMonth)
-                    .input('goalType', sql.VarChar, goalType)
-                    .query(`
-                        SELECT TOP 1 t.Id
-                        FROM GmsTargets t
-                        WHERE t.SellerId = @sellerId
-                          AND t.Year = @year
-                          AND t.Month = @month
-                          AND t.GoalType = @goalType
-                          AND t.TargetType = 'MONTHLY'
-                    `);
-
-                if (monthlyResult.recordset.length > 0) {
-                    const targetId = monthlyResult.recordset[0].Id;
-
-                    const perWeek = numericAchieved / 4;
-                    const perDay = perWeek / 7;
-
-                    await transaction.request()
-                        .input('achieved', sql.Decimal(18, 2), perWeek)
-                        .input('targetId', sql.VarChar, targetId)
-                        .input('periodType', sql.VarChar, 'WEEK')
-                        .query(`
-                            UPDATE GmsTargetBreakdowns
-                            SET AchievedValue = @achieved
-                            WHERE TargetId = @targetId AND PeriodType = @periodType
-                        `);
-
-                    await transaction.request()
-                        .input('achieved', sql.Decimal(18, 2), perDay)
-                        .input('targetId', sql.VarChar, targetId)
-                        .input('periodType', sql.VarChar, 'DAY')
-                        .query(`
-                            UPDATE GmsTargetBreakdowns
-                            SET AchievedValue = @achieved
-                            WHERE TargetId = @targetId AND PeriodType = @periodType
-                        `);
-
-                    if (brandManagerVal) {
-                        await transaction.request()
-                            .input('brandManager', sql.NVarChar, brandManagerVal)
-                            .input('id', sql.VarChar, targetId)
-                            .query(`
-                                UPDATE GmsTargets
-                                SET BrandManager = ISNULL(NULLIF(BrandManager, ''), @brandManager),
-                                    UpdatedAt = dbo.GetEnvDate()
-                                WHERE Id = @id
-                            `);
-                    } else {
-                        await transaction.request()
-                            .input('id', sql.VarChar, targetId)
-                            .query(`UPDATE GmsTargets SET UpdatedAt = dbo.GetEnvDate() WHERE Id = @id`);
-                    }
-
-                    updated++;
+                if (isNaN(numericAchieved) || isNaN(numericTarget)) {
+                    errors.push({ row: rowNum, reason: 'Invalid achieved/target value' });
+                    skipped++;
                     continue;
                 }
 
                 // ══════════════════════════════════════
-                // STEP 2: Try YEARLY target with matching month breakdown
+                // FIND OR CREATE YEARLY target
                 // ══════════════════════════════════════
+                let yearlyTargetId = null;
                 const yearlyResult = await transaction.request()
                     .input('sellerId', sql.NVarChar, sellerId)
                     .input('year', sql.Int, numYear)
@@ -734,149 +754,186 @@ exports.importAchievements = async (req, res) => {
                           AND TargetType = 'YEARLY'
                     `);
 
+                let isNewYearlyTarget = false;
                 if (yearlyResult.recordset.length > 0) {
-                    const yearlyTargetId = yearlyResult.recordset[0].Id;
-
-                    const monthBreakdownResult = await transaction.request()
-                        .input('targetId', sql.VarChar, yearlyTargetId)
-                        .input('periodValue', sql.Int, numMonth)
+                    yearlyTargetId = yearlyResult.recordset[0].Id;
+                } else {
+                    // Create new YEARLY target
+                    yearlyTargetId = generateId();
+                    isNewYearlyTarget = true;
+                    await transaction.request()
+                        .input('id', sql.VarChar, yearlyTargetId)
+                        .input('sellerId', sql.NVarChar, sellerId)
+                        .input('brandManager', sql.NVarChar, brandManagerVal)
+                        .input('targetType', sql.VarChar, 'YEARLY')
+                        .input('year', sql.Int, numYear)
+                        .input('totalTargetValue', sql.Decimal(18, 2), 0)
+                        .input('goalType', sql.VarChar, goalType)
                         .query(`
-                            SELECT TOP 1 Id FROM GmsTargetBreakdowns
-                            WHERE TargetId = @targetId
-                              AND PeriodType = 'MONTH'
-                              AND PeriodValue = @periodValue
+                            INSERT INTO GmsTargets
+                                (Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
+                            VALUES
+                                (@id, @sellerId, @brandManager, @targetType, @year, NULL, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
                         `);
 
-                    if (monthBreakdownResult.recordset.length > 0) {
-                        const monthBreakdownId = monthBreakdownResult.recordset[0].Id;
-                        const perWeek = numericAchieved / 4;
-                        const perDay = perWeek / 7;
+                    // Also initialize breakdowns for all 12 months, 48 weeks, and 336 days to 0!
+                    const allInitRows = [];
+                    for (let m = 1; m <= 12; m++) {
+                        const monthlyBreakdownId = generateId();
+                        allInitRows.push({
+                            id: monthlyBreakdownId,
+                            targetId: yearlyTargetId,
+                            periodType: 'MONTH',
+                            periodValue: m,
+                            targetValue: 0,
+                            achievedValue: 0,
+                            percentage: 0,
+                            specificDate: null
+                        });
 
-                        await transaction.request()
-                            .input('achieved', sql.Decimal(18, 2), numericAchieved)
-                            .input('id', sql.VarChar, monthBreakdownId)
-                            .query(`
-                                UPDATE GmsTargetBreakdowns
-                                SET AchievedValue = @achieved WHERE Id = @id
-                            `);
+                        for (let w = 1; w <= 4; w++) {
+                            const compositeWeekValue = m * 10 + w;
+                            allInitRows.push({
+                                id: generateId(),
+                                targetId: yearlyTargetId,
+                                periodType: 'WEEK',
+                                periodValue: compositeWeekValue,
+                                targetValue: 0,
+                                achievedValue: 0,
+                                percentage: 25.00,
+                                specificDate: null
+                            });
 
-                        const pvMin = numMonth * 10 + 1;
-                        const pvMax = numMonth * 10 + 4;
+                            const weekStartRange = getWeekRange(numYear, m, w);
+                            let currentDay = new Date(weekStartRange.startDate);
 
-                        await transaction.request()
-                            .input('achieved', sql.Decimal(18, 2), perWeek)
-                            .input('targetId', sql.VarChar, yearlyTargetId)
-                            .input('pvMin', sql.Int, pvMin)
-                            .input('pvMax', sql.Int, pvMax)
-                            .query(`
-                                UPDATE GmsTargetBreakdowns
-                                SET AchievedValue = @achieved
-                                WHERE TargetId = @targetId
-                                  AND PeriodType = 'WEEK'
-                                  AND PeriodValue BETWEEN @pvMin AND @pvMax
-                            `);
-
-                        const { startDate, endDate } = getMonthRange(numYear, numMonth);
-                        await transaction.request()
-                            .input('achieved', sql.Decimal(18, 2), perDay)
-                            .input('targetId', sql.VarChar, yearlyTargetId)
-                            .input('startDate', sql.Date, startDate)
-                            .input('endDate', sql.Date, endDate)
-                            .query(`
-                                UPDATE GmsTargetBreakdowns
-                                SET AchievedValue = @achieved
-                                WHERE TargetId = @targetId
-                                  AND PeriodType = 'DAY'
-                                  AND SpecificDate >= @startDate
-                                  AND SpecificDate <= @endDate
-                            `);
-
-                        if (brandManagerVal) {
-                            await transaction.request()
-                                .input('brandManager', sql.NVarChar, brandManagerVal)
-                                .input('id', sql.VarChar, yearlyTargetId)
-                                .query(`
-                                    UPDATE GmsTargets
-                                    SET BrandManager = ISNULL(NULLIF(BrandManager, ''), @brandManager),
-                                        UpdatedAt = dbo.GetEnvDate()
-                                    WHERE Id = @id
-                                `);
-                        } else {
-                            await transaction.request()
-                                .input('id', sql.VarChar, yearlyTargetId)
-                                .query(`UPDATE GmsTargets SET UpdatedAt = dbo.GetEnvDate() WHERE Id = @id`);
+                            for (let d = 1; d <= 7; d++) {
+                                allInitRows.push({
+                                    id: generateId(),
+                                    targetId: yearlyTargetId,
+                                    periodType: 'DAY',
+                                    periodValue: d,
+                                    targetValue: 0,
+                                    achievedValue: 0,
+                                    percentage: null,
+                                    specificDate: format(currentDay, 'yyyy-MM-dd')
+                                });
+                                currentDay = addDays(currentDay, 1);
+                            }
                         }
+                    }
 
-                        updated++;
-                        continue;
+                    // Bulk insert the initialization rows in chunks of 50
+                    const CHUNK_SIZE = 50;
+                    for (let cIdx = 0; cIdx < allInitRows.length; cIdx += CHUNK_SIZE) {
+                        const chunk = allInitRows.slice(cIdx, cIdx + CHUNK_SIZE);
+                        const values = [];
+                        const insertRequest = transaction.request();
+
+                        chunk.forEach((row, idx) => {
+                            insertRequest.input(`id_${idx}`, sql.VarChar, row.id);
+                            insertRequest.input(`tid_${idx}`, sql.VarChar, row.targetId);
+                            insertRequest.input(`pt_${idx}`, sql.VarChar, row.periodType);
+                            insertRequest.input(`pv_${idx}`, sql.Int, row.periodValue);
+                            insertRequest.input(`tv_${idx}`, sql.Decimal(18, 2), row.targetValue);
+                            insertRequest.input(`av_${idx}`, sql.Decimal(18, 2), row.achievedValue);
+                            insertRequest.input(`pc_${idx}`, sql.Decimal(5, 2), row.percentage);
+                            insertRequest.input(`sd_${idx}`, sql.Date, row.specificDate);
+
+                            values.push(`(@id_${idx}, @tid_${idx}, @pt_${idx}, @pv_${idx}, @sd_${idx}, @tv_${idx}, @av_${idx}, @pc_${idx})`);
+                        });
+
+                        const insertQuery = `
+                            INSERT INTO GmsTargetBreakdowns (Id, TargetId, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue, PercentageContribution)
+                            VALUES ${values.join(', ')}
+                        `;
+                        await insertRequest.query(insertQuery);
                     }
                 }
 
                 // ══════════════════════════════════════
-                // STEP 3: Create new MONTHLY target + breakdowns
+                // UPDATE SPECIFIC MONTH AND AUTO-DISTRIBUTE
                 // ══════════════════════════════════════
-                const newTargetId = generateId();
+                const perWeekTarget = numericTarget / 4;
+                const perWeekAchieved = numericAchieved / 4;
+                const perDayTarget = perWeekTarget / 7;
+                const perDayAchieved = perWeekAchieved / 7;
 
+                // Update Month breakdown
                 await transaction.request()
-                    .input('id', sql.VarChar, newTargetId)
-                    .input('sellerId', sql.NVarChar, sellerId)
-                    .input('brandManager', sql.NVarChar, brandManagerVal)
-                    .input('targetType', sql.VarChar, 'MONTHLY')
-                    .input('year', sql.Int, numYear)
-                    .input('month', sql.Int, numMonth)
-                    .input('totalTargetValue', sql.Decimal(18, 2), 0)
-                    .input('goalType', sql.VarChar, goalType)
+                    .input('target', sql.Decimal(18, 2), numericTarget)
+                    .input('achieved', sql.Decimal(18, 2), numericAchieved)
+                    .input('targetId', sql.VarChar, yearlyTargetId)
+                    .input('periodValue', sql.Int, numMonth)
                     .query(`
-                        INSERT INTO GmsTargets
-                            (Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
-                        VALUES
-                            (@id, @sellerId, @brandManager, @targetType, @year, @month, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
+                        UPDATE GmsTargetBreakdowns
+                        SET TargetValue = @target, AchievedValue = @achieved
+                        WHERE TargetId = @targetId
+                          AND PeriodType = 'MONTH'
+                          AND PeriodValue = @periodValue
                     `);
 
-                const perWeekAchievement = numericAchieved / 4;
-                const perDayAchievement = perWeekAchievement / 7;
+                // Update 4 Weeks breakdowns
+                const pvMin = numMonth * 10 + 1;
+                const pvMax = numMonth * 10 + 4;
+                await transaction.request()
+                    .input('target', sql.Decimal(18, 2), perWeekTarget)
+                    .input('achieved', sql.Decimal(18, 2), perWeekAchieved)
+                    .input('targetId', sql.VarChar, yearlyTargetId)
+                    .input('pvMin', sql.Int, pvMin)
+                    .input('pvMax', sql.Int, pvMax)
+                    .query(`
+                        UPDATE GmsTargetBreakdowns
+                        SET TargetValue = @target, AchievedValue = @achieved
+                        WHERE TargetId = @targetId
+                          AND PeriodType = 'WEEK'
+                          AND PeriodValue BETWEEN @pvMin AND @pvMax
+                    `);
 
-                for (let w = 1; w <= 4; w++) {
-                    const weekId = generateId();
-                    await transaction.request()
-                        .input('id', sql.VarChar, weekId)
-                        .input('targetId', sql.VarChar, newTargetId)
-                        .input('periodType', sql.VarChar, 'WEEK')
-                        .input('periodValue', sql.Int, w)
-                        .input('targetValue', sql.Decimal(18, 2), 0)
-                        .input('achievedValue', sql.Decimal(18, 2), perWeekAchievement)
-                        .input('percentage', sql.Decimal(5, 2), 25.00)
-                        .query(`
-                            INSERT INTO GmsTargetBreakdowns
-                                (Id, TargetId, PeriodType, PeriodValue, TargetValue, AchievedValue, PercentageContribution)
-                            VALUES
-                                (@id, @targetId, @periodType, @periodValue, @targetValue, @achievedValue, @percentage)
-                        `);
+                // Update 28 Days breakdowns
+                const { startDate, endDate } = getMonthRange(numYear, numMonth);
+                await transaction.request()
+                    .input('target', sql.Decimal(18, 2), perDayTarget)
+                    .input('achieved', sql.Decimal(18, 2), perDayAchieved)
+                    .input('targetId', sql.VarChar, yearlyTargetId)
+                    .input('startDate', sql.Date, startDate)
+                    .input('endDate', sql.Date, endDate)
+                    .query(`
+                        UPDATE GmsTargetBreakdowns
+                        SET TargetValue = @target, AchievedValue = @achieved
+                        WHERE TargetId = @targetId
+                          AND PeriodType = 'DAY'
+                          AND SpecificDate >= @startDate
+                          AND SpecificDate <= @endDate
+                    `);
 
-                    const weekRange = getWeekRange(numYear, numMonth, w);
-                    let currentDay = new Date(weekRange.startDate);
+                // Update BrandManager and TotalTargetValue of the Yearly Target
+                const sumResult = await transaction.request()
+                    .input('targetId', sql.VarChar, yearlyTargetId)
+                    .query(`
+                        SELECT SUM(ISNULL(TargetValue, 0)) AS TotalTarget
+                        FROM GmsTargetBreakdowns
+                        WHERE TargetId = @targetId AND PeriodType = 'MONTH'
+                    `);
+                const calculatedTotalTarget = sumResult.recordset[0].TotalTarget || 0;
 
-                    for (let d = 1; d <= 7; d++) {
-                        const dayId = generateId();
-                        await transaction.request()
-                            .input('id', sql.VarChar, dayId)
-                            .input('targetId', sql.VarChar, newTargetId)
-                            .input('periodType', sql.VarChar, 'DAY')
-                            .input('periodValue', sql.Int, d)
-                            .input('specificDate', sql.Date, format(currentDay, 'yyyy-MM-dd'))
-                            .input('targetValue', sql.Decimal(18, 2), 0)
-                            .input('achievedValue', sql.Decimal(18, 2), perDayAchievement)
-                            .query(`
-                                INSERT INTO GmsTargetBreakdowns
-                                    (Id, TargetId, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue)
-                                VALUES
-                                    (@id, @targetId, @periodType, @periodValue, @specificDate, @targetValue, @achievedValue)
-                            `);
-                        currentDay = addDays(currentDay, 1);
-                    }
+                await transaction.request()
+                    .input('brandManager', sql.NVarChar, brandManagerVal)
+                    .input('totalTarget', sql.Decimal(18, 2), calculatedTotalTarget)
+                    .input('id', sql.VarChar, yearlyTargetId)
+                    .query(`
+                        UPDATE GmsTargets
+                        SET BrandManager = ISNULL(NULLIF(BrandManager, ''), @brandManager),
+                            TotalTargetValue = @totalTarget,
+                            UpdatedAt = dbo.GetEnvDate()
+                        WHERE Id = @id
+                    `);
+
+                if (isNewYearlyTarget) {
+                    imported++;
+                } else {
+                    updated++;
                 }
-
-                imported++;
             } catch (err) {
                 console.error(`[Import] Row ${rowNum} error:`, err.message);
                 errors.push({
@@ -885,9 +942,24 @@ exports.importAchievements = async (req, res) => {
                 });
                 skipped++;
             }
+
         }
 
         await transaction.commit();
+
+        try {
+            await SystemLogService.log({
+                type: 'TARGET_IMPORT',
+                entityType: 'TARGET',
+                entityId: 'IMPORT',
+                entityTitle: 'Excel Bulk Import',
+                user: req.user,
+                description: `Bulk imported target achievements from Excel: ${imported} created, ${updated} updated, ${skipped} skipped`,
+                metadata: { imported, updated, skipped, errorsCount: errors.length }
+            });
+        } catch (logErr) {
+            console.error('Failed to log Excel targets import:', logErr);
+        }
 
         const totalProcessed = imported + updated;
         const success = errors.length === 0 && totalProcessed > 0;
@@ -937,9 +1009,15 @@ exports.updateTarget = async (req, res) => {
 
                 for (const update of updates) {
                     const { targetId: uTargetId, totalTargetValue: uTotalTargetValue, breakdowns: uBreakdowns } = update;
-                    if (!uTargetId || uTotalTargetValue === undefined || !Array.isArray(uBreakdowns)) {
+                    if (!uTargetId || !Array.isArray(uBreakdowns)) {
                         await transaction.rollback();
                         return res.status(400).json({ success: false, message: "Invalid payload inside updates array." });
+                    }
+
+                    // Auto-calculate the total target value from uBreakdowns
+                    let calculatedTotalTarget = 0;
+                    for (const breakdownItem of uBreakdowns) {
+                        calculatedTotalTarget += parseFloat(breakdownItem.targetValue) || 0;
                     }
 
                     // 1. Fetch the existing target record
@@ -958,7 +1036,7 @@ exports.updateTarget = async (req, res) => {
                     // 2. Update TotalTargetValue on GmsTargets
                     await transaction.request()
                         .input(`tId_up_${uTargetId}`, sql.VarChar, uTargetId)
-                        .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), uTotalTargetValue)
+                        .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), calculatedTotalTarget)
                         .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId_up_${uTargetId}`);
 
                     // 3. Clear existing breakdowns
@@ -971,7 +1049,7 @@ exports.updateTarget = async (req, res) => {
                         for (const breakdownItem of uBreakdowns) {
                             const { periodValue, targetValue, achievedValue } = breakdownItem;
                             const monthlyBreakdownId = generateId();
-                            const percentageContribution = uTotalTargetValue > 0 ? (targetValue / uTotalTargetValue) * 100 : 0;
+                            const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
 
                             const monthlyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
                             const weeklyAchieved = monthlyAchieved !== null ? monthlyAchieved / 4 : null;
@@ -1030,7 +1108,7 @@ exports.updateTarget = async (req, res) => {
                         // MONTHLY: breakdowns are weekly values
                         for (const breakdownItem of uBreakdowns) {
                             const { periodValue, targetValue, achievedValue } = breakdownItem;
-                            const percentageContribution = uTotalTargetValue > 0 ? (targetValue / uTotalTargetValue) * 100 : 0;
+                            const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
 
                             const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
                             const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
@@ -1098,6 +1176,23 @@ exports.updateTarget = async (req, res) => {
                 }
 
                 await transaction.commit();
+
+                try {
+                    for (const update of updates) {
+                        await SystemLogService.log({
+                            type: 'TARGET_UPDATE',
+                            entityType: 'TARGET',
+                            entityId: update.targetId,
+                            entityTitle: 'Bulk Target Edit',
+                            user: req.user,
+                            description: `Bulk updated targets for target ID ${update.targetId}`,
+                            metadata: { targetId: update.targetId }
+                        });
+                    }
+                } catch (logErr) {
+                    console.error('Failed to log bulk targets update:', logErr);
+                }
+
                 return res.json({ success: true, message: "All targets updated and distributed successfully!" });
             } catch (innerErr) {
                 await transaction.rollback();
@@ -1106,8 +1201,8 @@ exports.updateTarget = async (req, res) => {
         }
 
         // Single update fallback
-        if (!targetId || totalTargetValue === undefined || !Array.isArray(breakdowns)) {
-            return res.status(400).json({ success: false, message: "Invalid payload: targetId, totalTargetValue, and breakdowns array required." });
+        if (!targetId || !Array.isArray(breakdowns)) {
+            return res.status(400).json({ success: false, message: "Invalid payload: targetId and breakdowns array required." });
         }
 
         const pool = await getPool();
@@ -1115,10 +1210,16 @@ exports.updateTarget = async (req, res) => {
         await transaction.begin();
 
         try {
+            // Auto-calculate the total target value from breakdowns
+            let calculatedTotalTarget = 0;
+            for (const breakdownItem of breakdowns) {
+                calculatedTotalTarget += parseFloat(breakdownItem.targetValue) || 0;
+            }
+
             // 1. Fetch the existing target record
             const targetResult = await transaction.request()
                 .input('targetId', sql.VarChar, targetId)
-                .query('SELECT Id, SellerId, TargetType, Year, Month FROM GmsTargets WHERE Id = @targetId');
+                .query('SELECT Id, SellerId, TargetType, Year, Month, GoalType FROM GmsTargets WHERE Id = @targetId');
             
             const target = targetResult.recordset[0];
             if (!target) {
@@ -1126,12 +1227,12 @@ exports.updateTarget = async (req, res) => {
                 return res.status(404).json({ success: false, message: "Target not found." });
             }
 
-            const { TargetType: targetType, Year: year, Month: month } = target;
+            const { TargetType: targetType, Year: year, Month: month, SellerId: sellerId, GoalType: goalType } = target;
 
             // 2. Update TotalTargetValue on GmsTargets
             await transaction.request()
                 .input('targetId', sql.VarChar, targetId)
-                .input('totalTargetValue', sql.Decimal(18, 2), totalTargetValue)
+                .input('totalTargetValue', sql.Decimal(18, 2), calculatedTotalTarget)
                 .query('UPDATE GmsTargets SET TotalTargetValue = @totalTargetValue, UpdatedAt = dbo.GetEnvDate() WHERE Id = @targetId');
 
             // 3. Clear existing breakdowns
@@ -1146,7 +1247,7 @@ exports.updateTarget = async (req, res) => {
                 for (const breakdownItem of breakdowns) {
                     const { periodValue, targetValue, achievedValue } = breakdownItem;
                     const monthlyBreakdownId = generateId();
-                    const percentageContribution = totalTargetValue > 0 ? (targetValue / totalTargetValue) * 100 : 0;
+                    const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
 
                     const monthlyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
                     const weeklyAchieved = monthlyAchieved !== null ? monthlyAchieved / 4 : null;
@@ -1205,7 +1306,7 @@ exports.updateTarget = async (req, res) => {
                 // MONTHLY: breakdowns are weekly values
                 for (const breakdownItem of breakdowns) {
                     const { periodValue, targetValue, achievedValue } = breakdownItem;
-                    const percentageContribution = totalTargetValue > 0 ? (targetValue / totalTargetValue) * 100 : 0;
+                    const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
 
                     const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
                     const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
@@ -1272,6 +1373,21 @@ exports.updateTarget = async (req, res) => {
             }
 
             await transaction.commit();
+
+            try {
+                await SystemLogService.log({
+                    type: 'TARGET_UPDATE',
+                    entityType: 'TARGET',
+                    entityId: targetId,
+                    entityTitle: sellerId,
+                    user: req.user,
+                    description: `Updated target for brand ${sellerId} (${goalType}, Year: ${year}, New Total: ${calculatedTotalTarget})`,
+                    metadata: { targetId, sellerId, year, goalType, total: calculatedTotalTarget }
+                });
+            } catch (logErr) {
+                console.error('Failed to log target update:', logErr);
+            }
+
             res.json({ success: true, message: "Target updated and auto-redistributed successfully!" });
         } catch (innerErr) {
             await transaction.rollback();
