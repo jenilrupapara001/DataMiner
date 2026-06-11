@@ -64,9 +64,6 @@ function fmtVal(v: number, unit: string): string {
     if (unit === 'd') return `${Math.round(v)}d`;
     return `${Math.round(v)}`;
 }
-
-// ─── Period cell ──────────────────────────────────────────────────────────────
-
 const PeriodCell = memo(({
     target, achieved, unit, color, isAcos = false
 }: {
@@ -78,40 +75,23 @@ const PeriodCell = memo(({
     const achColor = !hasData ? '#d1d5db' : isAcos ? (achieved <= target ? '#059669' : '#ef4444') : (achieved > 0 ? tier.color : '#ef4444');
 
     return (
-        <div style={{ padding: '5px 8px', minWidth: 82 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 12, lineHeight: 1 }}>T:</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: hasData ? '#1e293b' : '#e2e8f0' }}>
-                    {hasData ? fmtVal(target, unit) : '—'}
-                </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', minWidth: 12, lineHeight: 1 }}>A:</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: achColor }}>
-                    {hasData ? fmtVal(achieved, unit) : '—'}
-                </span>
-            </div>
-            {hasData && (
-                <>
-                    <div style={{ marginTop: 4, height: 2, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{
-                            height: '100%', width: `${Math.min(pct, 100)}%`,
-                            background: tier.color, borderRadius: 99
-                        }} />
-                    </div>
-                    <div style={{ marginTop: 3, textAlign: 'right' }}>
-                        <span style={{
-                            fontSize: 9, fontWeight: 800, color: tier.color,
-                            background: `${tier.color}12`,
-                            border: `1px solid ${tier.color}20`,
-                            borderRadius: 20, padding: '0px 5px',
-                            lineHeight: '14px', display: 'inline-block'
-                        }}>
-                            {pct}%
-                        </span>
-                    </div>
-                </>
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '8px 12px', fontSize: 12 }}>
+            <span style={{ flex: 1, textAlign: 'left', fontWeight: 600, color: hasData ? '#1e293b' : '#cbd5e1' }}>
+                {hasData ? fmtVal(target, unit) : '—'}
+            </span>
+            <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, color: achColor }}>
+                {hasData ? fmtVal(achieved, unit) : '—'}
+            </span>
+            <span style={{
+                flex: 1, textAlign: 'right',
+                fontSize: 10, fontWeight: 800, color: hasData ? tier.color : '#cbd5e1',
+                background: hasData ? `${tier.color}12` : 'transparent',
+                border: hasData ? `1px solid ${tier.color}20` : 'none',
+                borderRadius: 4, padding: '1px 4px',
+                minWidth: 36, display: 'inline-block'
+            }}>
+                {hasData ? `${pct}%` : '—'}
+            </span>
         </div>
     );
 });
@@ -120,13 +100,13 @@ const PeriodCell = memo(({
 
 const GoalDataRow = memo(({
     record, goalRow, periods, isFirst, isLast,
-    brandRowSpan, isSelected, onSelectChange, onEdit, onDelete, perms, sellerName
+    isSelected, onSelectChange, onEdit, onDelete, perms, sellerName, rowKey
 }: {
     record: any; goalRow: any; periods: string[];
-    isFirst: boolean; isLast: boolean; brandRowSpan: number;
+    isFirst: boolean; isLast: boolean;
     isSelected: boolean; onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void; perms: any;
-    sellerName?: string;
+    sellerName?: string; rowKey: string;
 }) => {
     const displayName = sellerName || record.SellerId || '?';
     const goalType = resolveGoalType(goalRow);
@@ -150,116 +130,94 @@ const GoalDataRow = memo(({
         return [];
     })();
 
-    const cellBg = isFirst ? '#fff' : '#fcfdff';
-    const rowBorder = isLast ? '1px solid #e2e8f0' : '1px solid #f1f5f9';
+    const cellBg = '#fff';
+    const rowBorder = '1px solid #e2e8f0';
 
     return (
         <tr style={{ borderBottom: rowBorder }}>
 
-            {/* Checkbox — rowSpan */}
-            {isFirst && (
-                <td rowSpan={brandRowSpan} style={{
-                    padding: '12px 12px', verticalAlign: 'middle', textAlign: 'center',
-                    background: '#fff', borderRight: '1px solid #f1f5f9',
-                    borderBottom: '1px solid #e2e8f0',
-                    position: 'sticky', left: 0, zIndex: 2, width: 46, minWidth: 46
-                }}>
-                    <Checkbox
-                        checked={isSelected}
-                        onChange={e => onSelectChange(record._groupId, e.target.checked)}
-                    />
-                </td>
-            )}
+            {/* Checkbox */}
+            <td style={{
+                padding: '12px 12px', verticalAlign: 'middle', textAlign: 'center',
+                background: '#fff', borderRight: '1px solid #f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                position: 'sticky', left: 0, zIndex: 2, width: 46, minWidth: 46
+            }}>
+                <Checkbox
+                    checked={isSelected}
+                    onChange={e => onSelectChange(rowKey, e.target.checked)}
+                />
+            </td>
 
-            {/* Brand Name (manager + plan type inline) */}
-            {isFirst && (
-                <td rowSpan={brandRowSpan} style={{
-                    padding: '12px 16px', verticalAlign: 'middle',
-                    background: '#fff', borderRight: '1px solid #f1f5f9',
-                    borderBottom: '1px solid #e2e8f0',
-                    position: 'sticky', left: 46, zIndex: 2, minWidth: 220
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <div style={{
-                            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-                            background: `linear-gradient(135deg, ${meta.color}15, ${meta.color}30)`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 13, fontWeight: 700, color: meta.color,
-                            border: `1px solid ${meta.color}25`,
-                            boxShadow: `0 2px 8px -2px ${meta.color}20`, marginTop: 1
-                        }}>
-                            {(displayName)[0].toUpperCase()}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
+            {/* Brand Name */}
+            <td style={{
+                padding: '12px 16px', verticalAlign: 'middle',
+                background: '#fff', borderRight: '1px solid #f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                position: 'sticky', left: 46, zIndex: 2, minWidth: 180
+            }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
+                    {displayName}
+                </div>
+            </td>
+
+            {/* Brand Manager */}
+            <td style={{
+                padding: '12px 16px', verticalAlign: 'middle',
+                background: '#fff', borderRight: '1px solid #f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                minWidth: 150
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {record.BrandManager ? (
+                        <>
                             <div style={{
-                                fontWeight: 700, fontSize: 13, color: '#1e293b',
-                                lineHeight: '16px', whiteSpace: 'nowrap',
-                                overflow: 'hidden', textOverflow: 'ellipsis'
+                                width: 18, height: 18, borderRadius: '50%',
+                                background: '#e0e7ff', flexShrink: 0,
+                                fontSize: 9, fontWeight: 700, color: '#4f46e5',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: '1px solid #c7d2fe'
                             }}>
-                                {displayName}
+                                {record.BrandManager[0].toUpperCase()}
                             </div>
-                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-                                {record.Year}{record.Month ? ` · ${MONTHS_SHORT[record.Month - 1]}` : ''}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
-                                {record.BrandManager ? (
-                                    <>
-                                        <div style={{
-                                            width: 18, height: 18, borderRadius: '50%',
-                                            background: '#e0e7ff', flexShrink: 0,
-                                            fontSize: 9, fontWeight: 700, color: '#4f46e5',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            border: '1px solid #c7d2fe'
-                                        }}>
-                                            {record.BrandManager[0].toUpperCase()}
-                                        </div>
-                                        <Text style={{
-                                            fontSize: 11, color: '#475569', fontWeight: 500,
-                                            whiteSpace: 'nowrap', overflow: 'hidden',
-                                            textOverflow: 'ellipsis', maxWidth: 130
-                                        }}>
-                                            {record.BrandManager}
-                                        </Text>
-                                    </>
-                                ) : (
-                                    <Text style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>
-                                        Unassigned
-                                    </Text>
-                                )}
-                            </div>
-                            <div style={{ marginTop: 5 }}>
-                                <Tag style={{
-                                    borderRadius: 20, fontWeight: 600, fontSize: 9,
-                                    border: 'none', margin: 0, padding: '1px 7px',
-                                    lineHeight: '16px',
-                                    background: record.TargetType === 'YEARLY' ? '#e0e7ff' : '#d1fae5',
-                                    color: record.TargetType === 'YEARLY' ? '#4f46e5' : '#059669',
-                                }}>
-                                    {record.TargetType === 'YEARLY' ? 'Yearly' : 'Monthly'}
-                                </Tag>
-                            </div>
-                        </div>
-                    </div>
-                </td>
-            )}
+                            <Text style={{
+                                fontSize: 12, color: '#475569', fontWeight: 500,
+                                whiteSpace: 'nowrap', overflow: 'hidden',
+                                textOverflow: 'ellipsis', maxWidth: 130
+                            }}>
+                                {record.BrandManager}
+                            </Text>
+                        </>
+                    ) : (
+                        <Text style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
+                            Unassigned
+                        </Text>
+                    )}
+                </div>
+            </td>
+
+            {/* Plan Type (Yearly/Monthly) */}
+            <td style={{
+                padding: '12px 16px', verticalAlign: 'middle',
+                background: '#fff', borderRight: '1px solid #f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                minWidth: 120
+            }}>
+                <div style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>
+                    {record.TargetType === 'YEARLY' ? 'Yearly' : 'Monthly'}
+                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>
+                        ({record.Year}{record.Month ? ` · ${MONTHS_SHORT[record.Month - 1]}` : ''})
+                    </span>
+                </div>
+            </td>
 
             {/* Goal Type */}
             <td style={{
                 padding: '10px 14px', verticalAlign: 'middle',
                 background: cellBg, borderRight: '1px solid #f1f5f9', width: 130
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                        background: meta.bg, display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: 11, fontWeight: 700, color: meta.color,
-                        border: `1px solid ${meta.color}20`
-                    }}>
-                        {meta.unit}
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>
-                        {meta.label}
-                    </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>
+                    {meta.label} ({meta.unit})
                 </div>
             </td>
 
@@ -271,9 +229,6 @@ const GoalDataRow = memo(({
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
                     {fmtVal(total, meta.unit)}
                 </div>
-                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
-                    {meta.label} Goal
-                </div>
             </td>
 
             {/* Sales Achieved */}
@@ -281,20 +236,10 @@ const GoalDataRow = memo(({
                 padding: '10px 16px', verticalAlign: 'middle', textAlign: 'right',
                 background: cellBg, borderRight: '1px solid #f1f5f9', width: 150
             }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? (goalType === 'ACOS' ? (overallAch <= total ? '#059669' : '#ef4444') : tier.color) : '#ef4444' }}>
-                    {fmtVal(overallAch, meta.unit)}
-                </div>
-                <div style={{ marginTop: 5 }}>
-                    <Progress
-                        percent={Math.min(overallPct, 100)}
-                        strokeColor={tier.color}
-                        railColor="#f1f5f9"
-                        size={[80, 4]}
-                        showInfo={false}
-                        strokeLinecap="round"
-                    />
-                </div>
-                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? (goalType === 'ACOS' ? (overallAch <= total ? '#059669' : '#ef4444') : tier.color) : '#ef4444' }}>
+                        {fmtVal(overallAch, meta.unit)}
+                    </span>
                     <span style={{
                         fontSize: 10, fontWeight: 800, color: tier.color,
                         background: `${tier.color}12`,
@@ -304,15 +249,6 @@ const GoalDataRow = memo(({
                     }}>
                         {overallPct}%
                     </span>
-                    {goalType === 'ACOS' ? (
-                        overallPct <= 100 && overallPct > 0 && (
-                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
-                        )
-                    ) : (
-                        overallPct >= 100 && (
-                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
-                        )
-                    )}
                 </div>
             </td>
 
@@ -322,59 +258,93 @@ const GoalDataRow = memo(({
                 const bd = breakdowns.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
                 const tgt = bd?.TargetValue ?? bd?.targetValue ?? 0;
                 const ach = bd?.AchievedValue ?? bd?.achievedValue ?? 0;
+
+                const hasData = tgt > 0;
+                const pct = hasData ? Math.round((ach / tgt) * 100) : 0;
+                const tier = getAchievementTier(pct, goalType === 'ACOS');
+                const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#059669' : '#ef4444') : (ach > 0 ? tier.color : '#ef4444'));
+
                 return (
-                    <td key={idx} style={{
-                        padding: 0, borderRight: '1px solid #f1f5f9',
-                        verticalAlign: 'middle', background: cellBg, minWidth: 82
-                    }}>
-                        <PeriodCell target={tgt} achieved={ach} unit={meta.unit} color={meta.color} isAcos={goalType === 'ACOS'} />
-                    </td>
+                    <React.Fragment key={idx}>
+                        {/* TGT Cell */}
+                        <td style={{
+                            padding: '8px 12px', borderRight: '1px solid #f1f5f9',
+                            verticalAlign: 'middle', background: cellBg, minWidth: 60, textAlign: 'right',
+                            fontWeight: 600, color: hasData ? '#1e293b' : '#cbd5e1', fontSize: 12
+                        }}>
+                            {hasData ? fmtVal(tgt, meta.unit) : '—'}
+                        </td>
+                        {/* ACH Cell */}
+                        <td style={{
+                            padding: '8px 12px', borderRight: '1px solid #f1f5f9',
+                            verticalAlign: 'middle', background: cellBg, minWidth: 60, textAlign: 'right',
+                            fontWeight: 600, color: achColor, fontSize: 12
+                        }}>
+                            {hasData ? fmtVal(ach, meta.unit) : '—'}
+                        </td>
+                        {/* % Cell */}
+                        <td style={{
+                            padding: '8px 12px', borderRight: '1px solid #f1f5f9',
+                            verticalAlign: 'middle', background: cellBg, minWidth: 60, textAlign: 'right',
+                            fontSize: 10, fontWeight: 800, color: hasData ? tier.color : '#cbd5e1'
+                        }}>
+                            {hasData && (
+                                <span style={{
+                                    background: `${tier.color}12`,
+                                    border: `1px solid ${tier.color}20`,
+                                    borderRadius: 4, padding: '2px 6px',
+                                    display: 'inline-block'
+                                }}>
+                                    {pct}%
+                                </span>
+                            )}
+                            {!hasData && '—'}
+                        </td>
+                    </React.Fragment>
                 );
             })}
 
-            {/* Actions — rowSpan */}
-            {isFirst && (
-                <td rowSpan={brandRowSpan} style={{
-                    padding: '0 12px', verticalAlign: 'middle', textAlign: 'center',
-                    background: '#fff', borderLeft: '1px solid #f1f5f9',
-                    borderBottom: '1px solid #e2e8f0',
-                    position: 'sticky', right: 0, zIndex: 2, width: 80
-                }}>
-                    <Space orientation="vertical" size={6} align="center">
-                        {perms.canEdit && (
-                            <Tooltip title="Edit targets" placement="left">
-                                <Button
-                                    type="primary" shape="circle" size="small"
-                                    icon={<Edit3 size={13} />}
-                                    onClick={() => onEdit(record)}
-                                    style={{
-                                        background: '#4f46e5', borderColor: '#4f46e5',
-                                        width: 30, height: 30,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        boxShadow: '0 2px 8px rgba(79,70,229,0.15)'
-                                    }}
+            {/* Actions */}
+            <td style={{
+                padding: '0 12px', verticalAlign: 'middle', textAlign: 'center',
+                background: '#fff', borderLeft: '1px solid #f1f5f9',
+                borderBottom: '1px solid #e2e8f0',
+                position: 'sticky', right: 0, zIndex: 2, width: 80
+            }}>
+                <Space size={6} align="center">
+                    {perms.canEdit && (
+                        <Tooltip title="Edit targets" placement="left">
+                            <Button
+                                type="primary" shape="circle" size="small"
+                                icon={<Edit3 size={13} />}
+                                onClick={() => onEdit(record)}
+                                style={{
+                                    background: '#4f46e5', borderColor: '#4f46e5',
+                                    width: 30, height: 30,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: '0 2px 8px rgba(79,70,229,0.15)'
+                                }}
+                            />
+                        </Tooltip>
+                    )}
+                    {perms.canDelete && (
+                        <Popconfirm
+                            title="Delete all targets for this brand?"
+                            description={`This permanently deletes all targets for ${displayName}.`}
+                            onConfirm={() => onDelete(record)}
+                            okText="Delete" cancelText="Cancel"
+                            okButtonProps={{ danger: true }} placement="left"
+                        >
+                            <Tooltip title="Delete" placement="left">
+                                <Button danger shape="circle" size="small"
+                                    icon={<Trash2 size={13} />}
+                                    style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 />
                             </Tooltip>
-                        )}
-                        {perms.canDelete && (
-                            <Popconfirm
-                                title="Delete all targets for this brand?"
-                                description={`This permanently deletes all ${brandRowSpan} goal row(s) for ${displayName}.`}
-                                onConfirm={() => onDelete(record)}
-                                okText="Delete All" cancelText="Cancel"
-                                okButtonProps={{ danger: true }} placement="left"
-                            >
-                                <Tooltip title="Delete" placement="left">
-                                    <Button danger shape="circle" size="small"
-                                        icon={<Trash2 size={13} />}
-                                        style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    />
-                                </Tooltip>
-                            </Popconfirm>
-                        )}
-                    </Space>
-                </td>
-            )}
+                        </Popconfirm>
+                    )}
+                </Space>
+            </td>
         </tr>
     );
 });
@@ -395,7 +365,7 @@ const GroupedTable = memo(({
     if (groups.length === 0) {
         return (
             <tr>
-                <td colSpan={4 + periods.length + 1}
+                <td colSpan={7 + (periods.length * 3) + 1}
                     style={{ padding: '64px 24px', textAlign: 'center', background: '#fff' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                         <div style={{
@@ -432,23 +402,26 @@ const GroupedTable = memo(({
                         targetRecordId: group._groupId
                     }];
 
-                return rows.map((goalRow: any, rowIdx: number) => (
-                    <GoalDataRow
-                        key={`${group._groupId}_${rowIdx}`}
-                        record={group}
-                        goalRow={goalRow}
-                        periods={periods}
-                        isFirst={rowIdx === 0}
-                        isLast={rowIdx === rows.length - 1}
-                        brandRowSpan={rows.length}
-                        isSelected={selectedRowKeys.includes(group._groupId)}
-                        onSelectChange={onSelectChange}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        perms={perms}
-                        sellerName={sellerMap.get(group.SellerId) || group.SellerId}
-                    />
-                ));
+                return rows.map((goalRow: any, rowIdx: number) => {
+                    const rowKey = goalRow.targetRecordId || `${group._groupId}__${resolveGoalType(goalRow)}`;
+                    return (
+                        <GoalDataRow
+                            key={rowKey}
+                            rowKey={rowKey}
+                            record={group}
+                            goalRow={goalRow}
+                            periods={periods}
+                            isFirst={rowIdx === 0}
+                            isLast={rowIdx === rows.length - 1}
+                            isSelected={selectedRowKeys.includes(rowKey)}
+                            onSelectChange={onSelectChange}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            perms={perms}
+                            sellerName={sellerMap.get(group.SellerId) || group.SellerId}
+                        />
+                    );
+                });
             })}
         </>
     );
@@ -547,11 +520,14 @@ const TargetVsAchievement = () => {
     // ── Derived filter options from actual data ────────────────────────
 
     const availableSellers = useMemo(() => {
-        const ids = [...new Set(targets.map(t => t.SellerId).filter(Boolean))];
-        return ids.map(id => ({
-            value: id,
-            label: sellerMap.get(id) || id
-        })).sort((a, b) => a.label.localeCompare(b.label));
+        const ids = [...new Set(targets.map(t => t.SellerId as string).filter(Boolean))];
+        return ids.map(id => {
+            const labelStr = (sellerMap.get(id as string) || id || '') as string;
+            return {
+                value: id,
+                label: labelStr
+            };
+        }).sort((a, b) => a.label.localeCompare(b.label));
     }, [targets, sellerMap]);
 
     const availableManagers = useMemo(() => {
@@ -706,10 +682,12 @@ const TargetVsAchievement = () => {
 
     const headerCols = [
         { label: '', w: 46, sticky: true, left: 0, isCheckbox: true },
-        { label: 'Brand Name', w: 220, sticky: true, left: 46 },
+        { label: 'Brand Name', w: 180, sticky: true, left: 46 },
+        { label: 'Manager', w: 150, sticky: false },
+        { label: 'Yearly/Monthly', w: 120, sticky: false },
         { label: 'Goal Type', w: 130, sticky: false },
         { label: 'Target Goal', w: 130, sticky: false },
-        { label: 'Sales Achieved', w: 150, sticky: false },
+        { label: 'Achieved Goal', w: 150, sticky: false },
     ];
 
     return (
@@ -898,7 +876,7 @@ const TargetVsAchievement = () => {
                         style={{ minWidth: 160 }}
                         size="small"
                         options={availableGoalTypes.map(gt => {
-                            const m = getMeta(gt);
+                            const m = getMeta(gt as string);
                             return {
                                 label: (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1007,7 +985,7 @@ const TargetVsAchievement = () => {
                             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                     {headerCols.map((col, i) => (
-                                        <th key={i} style={{
+                                        <th key={i} rowSpan={2} style={{
                                             padding: col.isCheckbox ? '12px 12px' : '12px 16px',
                                             textAlign: i >= 3 ? 'right' : col.isCheckbox ? 'center' : 'left',
                                             fontSize: 11, fontWeight: 600, color: '#475569',
@@ -1023,19 +1001,51 @@ const TargetVsAchievement = () => {
                                                 <Checkbox
                                                     checked={
                                                         paginatedGroups.length > 0 &&
-                                                        paginatedGroups.every(g => selectedRowKeys.includes(g._groupId))
+                                                        paginatedGroups.every(g => {
+                                                            const rws = g.goalRows || [];
+                                                            return rws.every((r: any) => {
+                                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                return selectedRowKeys.includes(rKey);
+                                                            });
+                                                        })
                                                     }
                                                     indeterminate={
-                                                        paginatedGroups.some(g => selectedRowKeys.includes(g._groupId)) &&
-                                                        !paginatedGroups.every(g => selectedRowKeys.includes(g._groupId))
+                                                        paginatedGroups.some(g => {
+                                                            const rws = g.goalRows || [];
+                                                            return rws.some((r: any) => {
+                                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                return selectedRowKeys.includes(rKey);
+                                                            });
+                                                        }) && !(
+                                                            paginatedGroups.every(g => {
+                                                                const rws = g.goalRows || [];
+                                                                return rws.every((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    return selectedRowKeys.includes(rKey);
+                                                                });
+                                                            })
+                                                        )
                                                     }
                                                     onChange={e => {
                                                         if (e.target.checked) {
                                                             const nk = [...selectedRowKeys];
-                                                            paginatedGroups.forEach(g => { if (!nk.includes(g._groupId)) nk.push(g._groupId); });
+                                                            paginatedGroups.forEach(g => {
+                                                                const rws = g.goalRows || [];
+                                                                rws.forEach((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    if (!nk.includes(rKey)) nk.push(rKey);
+                                                                });
+                                                            });
                                                             setSelectedRowKeys(nk);
                                                         } else {
-                                                            const pk = paginatedGroups.map(g => g._groupId);
+                                                            const pk: string[] = [];
+                                                            paginatedGroups.forEach(g => {
+                                                                const rws = g.goalRows || [];
+                                                                rws.forEach((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    pk.push(rKey);
+                                                                });
+                                                            });
                                                             setSelectedRowKeys(selectedRowKeys.filter(k => !pk.includes(k)));
                                                         }
                                                     }}
@@ -1044,21 +1054,18 @@ const TargetVsAchievement = () => {
                                         </th>
                                     ))}
                                     {periods.map((p, i) => (
-                                        <th key={i} style={{
-                                            padding: '8px 6px', textAlign: 'center',
+                                        <th key={i} colSpan={3} style={{
+                                            padding: '8px 12px', textAlign: 'center',
                                             fontSize: 11, fontWeight: 600, color: '#475569',
                                             background: '#f8fafc',
                                             borderRight: '1px solid #f1f5f9',
                                             borderBottom: '1px solid #e2e8f0',
-                                            minWidth: 82, whiteSpace: 'nowrap'
+                                            minWidth: 180, whiteSpace: 'nowrap'
                                         }}>
-                                            <div style={{ fontWeight: 600 }}>{p}</div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 2, fontSize: 8, color: '#94a3b8', fontWeight: 700 }}>
-                                                <span>T</span><span>A</span>
-                                            </div>
+                                            <div style={{ fontWeight: 600, fontSize: 12 }}>{p}</div>
                                         </th>
                                     ))}
-                                    <th style={{
+                                    <th rowSpan={2} style={{
                                         padding: '12px 12px', textAlign: 'center',
                                         fontSize: 11, fontWeight: 600, color: '#475569',
                                         letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -1070,11 +1077,20 @@ const TargetVsAchievement = () => {
                                         Actions
                                     </th>
                                 </tr>
+                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                    {periods.map((p, i) => (
+                                        <React.Fragment key={i}>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
+                                        </React.Fragment>
+                                    ))}
+                                </tr>
                             </thead>
                             <tbody>
                                 {loading && grouped.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4 + periods.length + 1}
+                                        <td colSpan={7 + (periods.length * 3) + 1}
                                             style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
                                             Loading targets...
                                         </td>
@@ -1107,12 +1123,24 @@ const TargetVsAchievement = () => {
                             animation: 'slideUp 0.3s cubic-bezier(0.16,1,0.3,1)'
                         }}>
                             <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>
-                                {selectedRowKeys.length} {selectedRowKeys.length === 1 ? 'brand' : 'brands'} selected
+                                {selectedRowKeys.length} {selectedRowKeys.length === 1 ? 'row' : 'rows'} selected
                             </Text>
                             <Divider type="vertical" style={{ background: '#334155', margin: 0, height: 20 }} />
                             <Button type="primary" size="small" icon={<Edit3 size={12} />}
                                 onClick={() => {
-                                    const recs = grouped.filter(g => selectedRowKeys.includes(g._groupId));
+                                    const recs = grouped.filter(g => {
+                                        const rws = g.goalRows || [];
+                                        return rws.some((r: any) => {
+                                            const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                            return selectedRowKeys.includes(rKey);
+                                        });
+                                    }).map(g => {
+                                        const selectedRows = (g.goalRows || []).filter((r: any) => {
+                                            const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                            return selectedRowKeys.includes(rKey);
+                                        });
+                                        return { ...g, goalRows: selectedRows };
+                                    });
                                     handleEdit(recs);
                                 }}
                                 style={{ background: '#6366f1', borderColor: '#6366f1', fontSize: 12, fontWeight: 600 }}>
@@ -1121,11 +1149,25 @@ const TargetVsAchievement = () => {
                             {perms.canDelete && (
                                 <Popconfirm
                                     title="Delete all selected targets?"
-                                    description={`Permanently deletes all targets for the ${selectedRowKeys.length} selected brand(s).`}
+                                    description={`Permanently deletes all targets for the ${selectedRowKeys.length} selected row(s).`}
                                     onConfirm={async () => {
-                                        const recs = grouped.filter(g => selectedRowKeys.includes(g._groupId));
+                                        const recs = grouped.filter(g => {
+                                            const rws = g.goalRows || [];
+                                            return rws.some((r: any) => {
+                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                return selectedRowKeys.includes(rKey);
+                                            });
+                                        });
                                         const allIds: string[] = [];
-                                        recs.forEach(r => { if (r._allTargetIds) allIds.push(...r._allTargetIds); });
+                                        recs.forEach(g => {
+                                            const rws = g.goalRows || [];
+                                            rws.forEach((r: any) => {
+                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                if (selectedRowKeys.includes(rKey) && r.targetRecordId) {
+                                                    allIds.push(r.targetRecordId);
+                                                }
+                                            });
+                                        });
                                         if (allIds.length) { await deleteTargets(allIds); setSelectedRowKeys([]); }
                                     }}
                                     okText="Delete All" cancelText="Cancel"
