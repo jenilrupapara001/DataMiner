@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/db';
 import { useSocket } from '../contexts/SocketContext';
-import { 
-  Card, Table, Input, Select, Badge, Avatar, Space, Row, Col, Statistic, DatePicker,
-  Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message, Layout
+import {
+    Card, Table, Input, Select, Badge, Avatar, Space, Row, Col, Statistic, DatePicker,
+    Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message, Layout
 } from 'antd';
-import { 
-  Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
-  PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
-  Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle
+import {
+    Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
+    PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
+    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
@@ -32,7 +32,7 @@ const ActivityLog = () => {
     // Real-time socket sync
     useEffect(() => {
         if (!socket) return;
-        
+
         const handleNewSystemLog = (data) => {
             if (!data) return;
             const normalized = {
@@ -46,7 +46,7 @@ const ActivityLog = () => {
                 metadata: data.metadata || data.Metadata || null
             };
             setLogs(prev => [normalized, ...prev]);
-            
+
             message.info({
                 content: `Activity Stream: ${normalized.entityTitle || 'System Activity'} - ${normalized.description}`,
                 icon: <Activity size={16} style={{ color: '#4f46e5' }} />,
@@ -83,33 +83,33 @@ const ActivityLog = () => {
     const getTypeStyle = (type = '') => {
         const t = type || '';
         switch (t) {
-            case 'CREATE': 
+            case 'CREATE':
                 return { icon: <PlusCircle size={14} />, color: '#10b981', label: 'Creation' };
-            case 'UPDATE': 
+            case 'UPDATE':
                 return { icon: <Edit3 size={14} />, color: '#3b82f6', label: 'Update' };
-            case 'DELETE': 
+            case 'DELETE':
                 return { icon: <Trash2 size={14} />, color: '#ef4444', label: 'Deletion' };
-            case 'STATUS_CHANGE': 
+            case 'STATUS_CHANGE':
                 return { icon: <Activity size={14} />, color: '#f59e0b', label: 'Status' };
-            case 'AUTH_SUCCESS': 
+            case 'AUTH_SUCCESS':
                 return { icon: <LogIn size={14} />, color: '#10b981', label: 'Login Success' };
-            case 'AUTH_FAILURE': 
+            case 'AUTH_FAILURE':
                 return { icon: <XCircle size={14} />, color: '#ef4444', label: 'Login Failure' };
-            case 'AUTH_LOGOUT': 
+            case 'AUTH_LOGOUT':
                 return { icon: <LogOut size={14} />, color: '#64748b', label: 'Logout' };
-            case 'SYSTEM_ERROR': 
+            case 'SYSTEM_ERROR':
                 return { icon: <AlertTriangle size={14} />, color: '#dc2626', label: 'Error' };
-            case 'IMPORT': 
+            case 'IMPORT':
                 return { icon: <ClipboardList size={14} />, color: '#06b6d4', label: 'Import' };
-            case 'AUTOMATION_TASK': 
+            case 'AUTOMATION_TASK':
                 return { icon: <Cpu size={14} />, color: '#6366f1', label: 'Automation Task' };
-            case 'TARGET_UPDATE': 
+            case 'TARGET_UPDATE':
                 return { icon: <Edit3 size={14} />, color: '#0284c7', label: 'Target Update' };
-            case 'TARGET_IMPORT': 
+            case 'TARGET_IMPORT':
                 return { icon: <ClipboardList size={14} />, color: '#0d9488', label: 'Target Import' };
-            case 'TARGET_DELETE': 
+            case 'TARGET_DELETE':
                 return { icon: <Trash2 size={14} />, color: '#e11d48', label: 'Target Delete' };
-            default: 
+            default:
                 return { icon: <Info size={14} />, color: '#64748b', label: t.replace('_', ' ') || 'System' };
         }
     };
@@ -151,11 +151,11 @@ const ActivityLog = () => {
         return logs.filter(log => {
             const matchesSearch = searchQuery
                 ? (log.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  (log.entityTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  (log.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+                (log.entityTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (log.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
                 : true;
             const matchesType = filterType === 'ALL' || log.type === filterType;
-            
+
             const matchesDate = !dateRange || !dateRange[0] || !dateRange[1]
                 ? true
                 : (() => {
@@ -163,7 +163,7 @@ const ActivityLog = () => {
                     const start = new Date(dateRange[0].toString()).setHours(0, 0, 0, 0);
                     const end = new Date(dateRange[1].toString()).setHours(23, 59, 59, 999);
                     return logTime >= start && logTime <= end;
-                  })();
+                })();
 
             return matchesSearch && matchesType && matchesDate;
         });
@@ -176,7 +176,7 @@ const ActivityLog = () => {
 
     const renderMetadata = (metadata) => {
         if (!metadata) return <Text type="secondary">No technical data available.</Text>;
-        
+
         let data = metadata;
         if (typeof metadata === 'string') {
             try { data = JSON.parse(metadata); } catch (e) { return <pre style={{ margin: 0, padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>{metadata}</pre>; }
@@ -228,15 +228,15 @@ const ActivityLog = () => {
             render: (type) => {
                 const conf = getTypeStyle(type);
                 return (
-                    <Tag 
-                        style={{ 
-                            backgroundColor: `${conf.color}10`, 
-                            color: conf.color, 
+                    <Tag
+                        style={{
+                            backgroundColor: `${conf.color}10`,
+                            color: conf.color,
                             borderColor: `${conf.color}30`,
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            gap: '6px', 
-                            borderRadius: '20px', 
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            borderRadius: '20px',
                             padding: '3px 12px',
                             fontWeight: 600,
                             textTransform: 'uppercase',
@@ -258,8 +258,8 @@ const ActivityLog = () => {
             render: (type) => {
                 const info = getEntityInfo(type);
                 return (
-                    <Tag 
-                        color={info.color} 
+                    <Tag
+                        color={info.color}
                         style={{ borderRadius: '6px', fontSize: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
                     >
                         {info.icon}
@@ -293,14 +293,14 @@ const ActivityLog = () => {
                 const isSystem = name === 'System';
                 return (
                     <Space size="middle">
-                        <Avatar 
-                            size={28} 
-                            style={{ 
-                                background: isSystem 
+                        <Avatar
+                            size={28}
+                            style={{
+                                background: isSystem
                                     ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-                                    : 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)', 
-                                color: '#fff', 
-                                fontWeight: 600, 
+                                    : 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
+                                color: '#fff',
+                                fontWeight: 600,
                                 fontSize: '11px'
                             }}
                         >
@@ -321,10 +321,10 @@ const ActivityLog = () => {
             align: 'center',
             render: (_, record) => (
                 <Tooltip title="View Detailed Log">
-                    <Button 
-                        type="text" 
-                        shape="circle" 
-                        icon={<Eye size={15} />} 
+                    <Button
+                        type="text"
+                        shape="circle"
+                        icon={<Eye size={15} />}
                         onClick={() => showDetails(record)}
                         style={{ color: '#6366f1' }}
                     />
@@ -360,8 +360,8 @@ const ActivityLog = () => {
                         Real-time audit trail of all administrative and automated actions within the platform.
                     </Text>
                 </div>
-                
-                <Button 
+
+                <Button
                     type="primary"
                     onClick={loadLogs}
                     loading={loading}
@@ -417,11 +417,11 @@ const ActivityLog = () => {
             </Row>
 
             {/* FILTERS CARD */}
-            <Card 
-                styles={{ body: { padding: '16px 20px' } }} 
-                style={{ 
-                    borderRadius: '12px', 
-                    border: '1px solid #e2e8f0', 
+            <Card
+                styles={{ body: { padding: '16px 20px' } }}
+                style={{
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
                     marginBottom: '24px',
                     background: '#fff',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
@@ -430,7 +430,7 @@ const ActivityLog = () => {
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ flex: 2, minWidth: 260 }}>
                         <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>SEARCH BY PHRASE</Text>
-                        <Input 
+                        <Input
                             placeholder="Trace events by description, entity, or user..."
                             prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
                             value={searchQuery}
@@ -464,7 +464,7 @@ const ActivityLog = () => {
                     </div>
                     <div style={{ flex: 1.5, minWidth: 220 }}>
                         <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>DATE WINDOW</Text>
-                        <RangePicker 
+                        <RangePicker
                             value={dateRange}
                             onChange={setDateRange}
                             style={{ width: '100%', height: '38px', borderRadius: '8px' }}
@@ -472,7 +472,7 @@ const ActivityLog = () => {
                     </div>
                     {hasActiveFilters && (
                         <div style={{ display: 'flex', alignSelf: 'flex-end', height: '38px' }}>
-                            <Button 
+                            <Button
                                 onClick={clearAllFilters}
                                 type="text"
                                 danger
@@ -486,11 +486,11 @@ const ActivityLog = () => {
             </Card>
 
             {/* DATA TABLE CARD */}
-            <Card 
+            <Card
                 styles={{ body: { padding: 0 } }}
-                style={{ 
-                    borderRadius: '12px', 
-                    border: '1px solid #e2e8f0', 
+                style={{
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
                     overflow: 'hidden',
                     background: '#fff',
                     marginBottom: '24px',
@@ -513,8 +513,8 @@ const ActivityLog = () => {
                     scroll={{ x: 'max-content' }}
                     locale={{
                         emptyText: (
-                            <Empty 
-                                image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                            <Empty
+                                image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description={<Text type="secondary">No system events matched your filter criteria.</Text>}
                             />
                         )
@@ -526,13 +526,13 @@ const ActivityLog = () => {
             <Modal
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ 
-                            width: '32px', 
-                            height: '32px', 
-                            borderRadius: '8px', 
-                            backgroundColor: '#f1f5f9', 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                        <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            backgroundColor: '#f1f5f9',
+                            display: 'flex',
+                            alignItems: 'center',
                             justifyContent: 'center',
                             color: '#6366f1'
                         }}>
@@ -576,10 +576,10 @@ const ActivityLog = () => {
                             <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
                                 Activity Description
                             </Text>
-                            <div style={{ 
-                                padding: '14px 16px', 
-                                backgroundColor: '#f8fafc', 
-                                borderRadius: '8px', 
+                            <div style={{
+                                padding: '14px 16px',
+                                backgroundColor: '#f8fafc',
+                                borderRadius: '8px',
                                 border: '1px solid #e2e8f0',
                                 color: '#1e293b',
                                 fontSize: '13px',
@@ -594,8 +594,8 @@ const ActivityLog = () => {
                             <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
                                 Metadata & Technical Context
                             </Text>
-                            <div className="metadata-scroll-container" style={{ 
-                                maxHeight: '250px', 
+                            <div className="metadata-scroll-container" style={{
+                                maxHeight: '250px',
                                 overflowY: 'auto',
                                 borderRadius: '8px',
                                 border: '1px solid #f1f5f9'
