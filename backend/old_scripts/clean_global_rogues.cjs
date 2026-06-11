@@ -1,4 +1,4 @@
-const { getPool, sql } = require('./database/db');
+const { getPool, sql } = require('../database/db');
 
 async function cleanGlobalRogueAsins() {
     console.log("Starting global cleanup of mistakenly ingested 'ghost' ASINs...");

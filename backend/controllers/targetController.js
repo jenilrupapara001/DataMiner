@@ -241,10 +241,26 @@ exports.getTargets = async (req, res) => {
 
             // Total overall achievement
             let overallAchieved = 0;
+            const isAverageGoal = ['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(goalType);
+
             if (targetType === 'YEARLY') {
-                overallAchieved = monthlyBreakdown.reduce((sum, item) => sum + (item.AchievedValue || 0), 0);
+                if (isAverageGoal) {
+                    const activeMonths = monthlyBreakdown.filter(item => (item.AchievedValue || 0) > 0);
+                    overallAchieved = activeMonths.length > 0
+                        ? activeMonths.reduce((sum, item) => sum + (item.AchievedValue || 0), 0) / activeMonths.length
+                        : 0;
+                } else {
+                    overallAchieved = monthlyBreakdown.reduce((sum, item) => sum + (item.AchievedValue || 0), 0);
+                }
             } else {
-                overallAchieved = weeklyBreakdown.reduce((sum, item) => sum + (item.AchievedValue || 0), 0);
+                if (isAverageGoal) {
+                    const activeWeeks = weeklyBreakdown.filter(item => (item.AchievedValue || 0) > 0);
+                    overallAchieved = activeWeeks.length > 0
+                        ? activeWeeks.reduce((sum, item) => sum + (item.AchievedValue || 0), 0) / activeWeeks.length
+                        : 0;
+                } else {
+                    overallAchieved = weeklyBreakdown.reduce((sum, item) => sum + (item.AchievedValue || 0), 0);
+                }
             }
 
             enrichedTargets.push({
@@ -546,7 +562,7 @@ exports.deleteTargetsBulk = async (req, res) => {
             parameters.push(`@id${index}`);
         });
 
-        const targetInfo = await pool.request().query(`SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`);
+        const targetInfo = await request.query(`SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`);
         const targets = targetInfo.recordset;
         
         const query = `DELETE FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`;
@@ -605,18 +621,32 @@ exports.importAchievements = async (req, res) => {
 
         // ─── 1) Load all sellers ───────────────────────────────
         const sellersResult = await pool.request().query(`
-            SELECT Id, SellerId, Name
+            SELECT Id, SellerId, Name, Marketplace
             FROM Sellers
             WHERE SellerId IS NOT NULL
         `);
 
         const sellerNameToCode = new Map();         // "lotus premium" → "AMAZON_LOTUS"
+        const sellerNameToCodeWithMarketplace = new Map(); // "lotus premium_amazon.in" → "AMAZON_LOTUS"
         const sellerCodeToInternalId = new Map();   // "AMAZON_LOTUS" → Sellers.Id (UUID)
         const internalIdToSellerCode = new Map();   // Sellers.Id → "AMAZON_LOTUS"
 
         sellersResult.recordset.forEach(s => {
-            if (s.Name && s.SellerId) {
-                sellerNameToCode.set(String(s.Name).toLowerCase().trim(), s.SellerId);
+            const nameLower = String(s.Name || '').toLowerCase().trim();
+            const codeLower = String(s.SellerId || '').toLowerCase().trim();
+            const marketplaceLower = String(s.Marketplace || '').toLowerCase().trim();
+
+            if (nameLower && s.SellerId) {
+                sellerNameToCode.set(nameLower, s.SellerId);
+                if (marketplaceLower) {
+                    sellerNameToCodeWithMarketplace.set(`${nameLower}_${marketplaceLower}`, s.SellerId);
+                }
+            }
+            if (codeLower && s.SellerId) {
+                sellerNameToCode.set(codeLower, s.SellerId);
+                if (marketplaceLower) {
+                    sellerNameToCodeWithMarketplace.set(`${codeLower}_${marketplaceLower}`, s.SellerId);
+                }
             }
             if (s.SellerId && s.Id) {
                 const cleanId = String(s.Id).toLowerCase().trim();
@@ -626,42 +656,60 @@ exports.importAchievements = async (req, res) => {
         });
 
         // ─── 2) Load UserSellers → manager names ───────────────
-        // UserSellers links Users.Id → Sellers.Id (internal UUID)
-        // We resolve manager by SellerId (string code) for easy lookup later
+        // We resolve manager directly by joining UserSellers, Users, Sellers and Roles
         const sellerCodeToManagerName = new Map();  // "AMAZON_LOTUS" → "Chintan Patel"
+        const sellerNameToManagerName = new Map();  // "lotus premium" → "Chintan Patel"
+        const sellerNameToManagerNameWithMarketplace = new Map(); // "lotus premium_amazon.in" → "Chintan Patel"
 
         try {
             const assignmentsResult = await pool.request().query(`
                 SELECT
-                    us.SellerId   AS InternalSellerId,
+                    s.SellerId    AS SellerCode,
+                    s.Name        AS SellerName,
+                    s.Marketplace AS Marketplace,
                     u.FirstName,
                     u.LastName,
                     u.Id          AS UserId,
                     r.Name        AS RoleName
                 FROM UserSellers us
                 INNER JOIN Users u ON u.Id = us.UserId
+                INNER JOIN Sellers s ON us.SellerId = s.Id
                 LEFT JOIN Roles r ON u.RoleId = r.Id
-                WHERE u.IsActive = 1
+                WHERE u.IsActive = 1 AND s.SellerId IS NOT NULL
             `);
 
             console.log(`[Import] Loaded ${assignmentsResult.recordset.length} user-seller assignments`);
 
             assignmentsResult.recordset.forEach(row => {
                 const managerName = `${row.FirstName || ''} ${row.LastName || ''}`.trim();
-                if (!managerName || !row.InternalSellerId) return;
+                if (!managerName) return;
 
-                const cleanInternalSellerId = String(row.InternalSellerId).toLowerCase().trim();
-                const sellerCode = internalIdToSellerCode.get(cleanInternalSellerId);
-                if (sellerCode) {
-                    const role = String(row.RoleName || '').toLowerCase();
+                const role = String(row.RoleName || '').toLowerCase();
+                const marketplaceLower = String(row.Marketplace || '').toLowerCase().trim();
+
+                if (row.SellerCode) {
+                    const sellerCode = String(row.SellerCode).trim();
                     // Prioritize Brand Manager or manager roles over admin/viewer if multiple assignments exist
                     if (!sellerCodeToManagerName.has(sellerCode) || role === 'brand manager' || role === 'brand_manager' || role === 'manager') {
                         sellerCodeToManagerName.set(sellerCode, managerName);
+                        if (marketplaceLower) {
+                            sellerNameToManagerNameWithMarketplace.set(`${sellerCode.toLowerCase()}_${marketplaceLower}`, managerName);
+                        }
+                    }
+                }
+
+                if (row.SellerName) {
+                    const sellerNameKey = String(row.SellerName).toLowerCase().trim();
+                    if (!sellerNameToManagerName.has(sellerNameKey) || role === 'brand manager' || role === 'brand_manager' || role === 'manager') {
+                        sellerNameToManagerName.set(sellerNameKey, managerName);
+                        if (marketplaceLower) {
+                            sellerNameToManagerNameWithMarketplace.set(`${sellerNameKey}_${marketplaceLower}`, managerName);
+                        }
                     }
                 }
             });
 
-            console.log(`[Import] Mapped ${sellerCodeToManagerName.size} sellers to managers`);
+            console.log(`[Import] Mapped ${sellerCodeToManagerName.size} code sellers and ${sellerNameToManagerName.size} name sellers to managers`);
         } catch (err) {
             console.error('[Import] Failed to load UserSellers:', err.message);
         }
@@ -689,19 +737,27 @@ exports.importAchievements = async (req, res) => {
                     achievedValue,
                     targetValue,
                     managerName: payloadManagerName,
-                    managerId: payloadManagerId
+                    managerId: payloadManagerId,
+                    marketplace
                 } = row;
+
+                const marketplaceLower = marketplace ? String(marketplace).toLowerCase().trim() : '';
 
                 // ─── Resolve sellerId from brandName if not provided ──
                 let sellerId = payloadSellerId;
                 if (!sellerId && brandName) {
-                    sellerId = sellerNameToCode.get(String(brandName).toLowerCase().trim());
+                    const brandKey = String(brandName).toLowerCase().trim();
+                    if (marketplaceLower && sellerNameToCodeWithMarketplace.has(`${brandKey}_${marketplaceLower}`)) {
+                        sellerId = sellerNameToCodeWithMarketplace.get(`${brandKey}_${marketplaceLower}`);
+                    } else {
+                        sellerId = sellerNameToCode.get(brandKey);
+                    }
                 }
 
                 if (!sellerId) {
                     errors.push({
                         row: rowNum,
-                        reason: `Brand "${brandName || 'N/A'}" not found in Sellers table`
+                        reason: `Brand "${brandName || 'N/A'}"${marketplace ? ' on platform ' + marketplace : ''} not found in Sellers table`
                     });
                     skipped++;
                     continue;
@@ -709,8 +765,17 @@ exports.importAchievements = async (req, res) => {
 
                 // ─── Auto-resolve brand manager from seller ─────────
                 let brandManagerVal = payloadManagerName || payloadManagerId || null;
-                if (!brandManagerVal && sellerCodeToManagerName.has(sellerId)) {
-                    brandManagerVal = sellerCodeToManagerName.get(sellerId);
+                if (!brandManagerVal) {
+                    const brandKey = brandName ? String(brandName).toLowerCase().trim() : '';
+                    if (marketplaceLower && sellerId && sellerNameToManagerNameWithMarketplace.has(`${sellerId.toLowerCase()}_${marketplaceLower}`)) {
+                        brandManagerVal = sellerNameToManagerNameWithMarketplace.get(`${sellerId.toLowerCase()}_${marketplaceLower}`);
+                    } else if (marketplaceLower && brandKey && sellerNameToManagerNameWithMarketplace.has(`${brandKey}_${marketplaceLower}`)) {
+                        brandManagerVal = sellerNameToManagerNameWithMarketplace.get(`${brandKey}_${marketplaceLower}`);
+                    } else if (sellerId && sellerCodeToManagerName.has(sellerId)) {
+                        brandManagerVal = sellerCodeToManagerName.get(sellerId);
+                    } else if (brandKey && sellerNameToManagerName.has(brandKey)) {
+                        brandManagerVal = sellerNameToManagerName.get(brandKey);
+                    }
                 }
 
                 // ─── Field validation ─────────────────────────────

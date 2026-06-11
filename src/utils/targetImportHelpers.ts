@@ -8,6 +8,7 @@ export interface ImportRowData {
     achieved: number;
     target?: number;
     type: string;        // GMS, ADS, ACOS, etc.
+    marketplace?: string;
     _rowIndex?: number;
     _errors?: string[];
 }
@@ -21,6 +22,7 @@ export interface ParsedRow {
     achieved: number;
     target: number;
     goalType: string;
+    marketplace: string;
     rowIndex: number;
     errors: string[];
     isValid: boolean;
@@ -168,15 +170,15 @@ export async function readExcelFile(file: File): Promise<any[]> {
  */
 export function downloadTemplate() {
     const headers = [
-        ['Brand Name', 'ManagerId', 'Month', 'Target', 'Achieved', 'Type']
+        ['Brand Name', 'ManagerId', 'Month', 'Target', 'Achieved', 'Type', 'Marketplace']
     ];
 
     const sampleRows = [
-        ['Lotus Premium', '', 'Jan 2025', 150000, 120000, 'GMS'],
-        ['Lotus Premium', '', 'Jan 2025', 25000, 22000, 'ADS'],
-        ['Lotus Premium', '', 'Jan 2025', 16.5, 17.2, 'ACOS'],
-        ['Vardha Brand', 'mgr_001', 'Feb 2025', 280000, 290000, 'GMS'],
-        ['Vardha Brand', 'mgr_001', 'Feb 2025', 45000, 42000, 'ADS'],
+        ['Lotus Premium', '', 'Jan 2025', 150000, 120000, 'GMS', 'amazon.in'],
+        ['Lotus Premium', '', 'Jan 2025', 25000, 22000, 'ADS', 'amazon.in'],
+        ['Lotus Premium', '', 'Jan 2025', 16.5, 17.2, 'ACOS', 'amazon.in'],
+        ['Vardha Brand', 'mgr_001', 'Feb 2025', 280000, 290000, 'GMS', 'amazon.in'],
+        ['Vardha Brand', 'mgr_001', 'Feb 2025', 45000, 42000, 'ADS', 'amazon.in'],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([...headers, ...sampleRows]);
@@ -189,6 +191,7 @@ export function downloadTemplate() {
         { wch: 14 }, // Target
         { wch: 14 }, // Achieved
         { wch: 12 }, // Type
+        { wch: 15 }, // Marketplace
     ];
 
     const wb = XLSX.utils.book_new();
@@ -251,6 +254,8 @@ export function parseAndValidate(
         const brandName = String(
             normalizedRow['brandname'] ??
             normalizedRow['brand'] ??
+            normalizedRow['sellername'] ??
+            normalizedRow['seller'] ??
             ''
         ).trim();
 
@@ -264,6 +269,7 @@ export function parseAndValidate(
         const targetRaw = normalizedRow['target'] ?? normalizedRow['targetvalue'] ?? '';
         const achievedRaw = normalizedRow['achieved'] ?? '';
         const typeRaw = normalizedRow['type'] ?? '';
+        const marketplaceRaw = String(normalizedRow['marketplace'] ?? normalizedRow['market'] ?? normalizedRow['platform'] ?? '').trim().toLowerCase();
 
         // ── Validate Brand Name ───────────────────────
         if (!brandName) errors.push('Brand Name is required');
@@ -333,6 +339,7 @@ export function parseAndValidate(
             target: isNaN(target) ? 0 : target,
             achieved: isNaN(achieved) ? 0 : achieved,
             goalType: goalType || '',
+            marketplace: marketplaceRaw,
             rowIndex: idx + 2, // +2 because Excel rows start at 1 and header is row 1
             errors,
             isValid: errors.length === 0,

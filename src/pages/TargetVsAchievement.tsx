@@ -68,14 +68,14 @@ function fmtVal(v: number, unit: string): string {
 // ─── Period cell ──────────────────────────────────────────────────────────────
 
 const PeriodCell = memo(({
-    target, achieved, unit, color
+    target, achieved, unit, color, isAcos = false
 }: {
-    target: number; achieved: number; unit: string; color: string;
+    target: number; achieved: number; unit: string; color: string; isAcos?: boolean;
 }) => {
     const hasData = target > 0;
     const pct = hasData ? Math.round((achieved / target) * 100) : 0;
-    const tier = getAchievementTier(pct);
-    const achColor = !hasData ? '#d1d5db' : achieved > 0 ? tier.color : '#ef4444';
+    const tier = getAchievementTier(pct, isAcos);
+    const achColor = !hasData ? '#d1d5db' : isAcos ? (achieved <= target ? '#059669' : '#ef4444') : (achieved > 0 ? tier.color : '#ef4444');
 
     return (
         <div style={{ padding: '5px 8px', minWidth: 82 }}>
@@ -134,7 +134,7 @@ const GoalDataRow = memo(({
     const total = goalRow.totalTarget || goalRow.TotalTargetValue || 0;
     const overallAch = goalRow.overallAchieved || 0;
     const overallPct = total > 0 ? Math.round((overallAch / total) * 100) : 0;
-    const tier = getAchievementTier(overallPct);
+    const tier = getAchievementTier(overallPct, goalType === 'ACOS');
 
     const breakdowns: any[] = (() => {
         const monthly = goalRow.monthlyBreakdown;
@@ -281,7 +281,7 @@ const GoalDataRow = memo(({
                 padding: '10px 16px', verticalAlign: 'middle', textAlign: 'right',
                 background: cellBg, borderRight: '1px solid #f1f5f9', width: 150
             }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? tier.color : '#ef4444' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? (goalType === 'ACOS' ? (overallAch <= total ? '#059669' : '#ef4444') : tier.color) : '#ef4444' }}>
                     {fmtVal(overallAch, meta.unit)}
                 </div>
                 <div style={{ marginTop: 5 }}>
@@ -304,8 +304,14 @@ const GoalDataRow = memo(({
                     }}>
                         {overallPct}%
                     </span>
-                    {overallPct >= 100 && (
-                        <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
+                    {goalType === 'ACOS' ? (
+                        overallPct <= 100 && overallPct > 0 && (
+                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
+                        )
+                    ) : (
+                        overallPct >= 100 && (
+                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>✓</span>
+                        )
                     )}
                 </div>
             </td>
@@ -321,7 +327,7 @@ const GoalDataRow = memo(({
                         padding: 0, borderRight: '1px solid #f1f5f9',
                         verticalAlign: 'middle', background: cellBg, minWidth: 82
                     }}>
-                        <PeriodCell target={tgt} achieved={ach} unit={meta.unit} color={meta.color} />
+                        <PeriodCell target={tgt} achieved={ach} unit={meta.unit} color={meta.color} isAcos={goalType === 'ACOS'} />
                     </td>
                 );
             })}

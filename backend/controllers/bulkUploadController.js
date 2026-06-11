@@ -215,56 +215,62 @@ exports.catalogSync = async (req, res) => {
                 childAsin = childAsin || sku;
 
                 const brandName = getValue(row, ['Brand', 'Seller', 'Brand Name', 'brand', 'seller_name', 'brand_name', 'Brand_Name']).toString().trim();
+                const marketplaceVal = getValue(row, ['Marketplace', 'Market Place', 'marketplace', 'market_place', 'Platform', 'platform']).toString().trim().toLowerCase();
                 const rawPrice = getValue(row, ['Price', 'PPrice', 'price', 'ASP (GROSS)', 'ASP(GROSS)', 'ASP GROSS', 'ASP_GROSS', 'asp_gross', 'asp (gross)', 'MRP', 'Selling Price', 'Uploaded Price', 'selling_price']);
                 const rawDate = getValue(row, ['Release Date', 'Release_Date', 'Released Date', 'date', 'updated_at', 'Realeased date', 'Launch Date', 'Launch_Date']);
                 
                 const uploadedPrice = parseFloat(rawPrice) || null;
 
                 // 1. Resolve Seller ID & Marketplace
-                let rowSellerId = sellerId;
+                let rowSellerId = null;
                 let rowMarketplace = null;
 
-                // Seed from default if available
-                if (sellerId && sellerId !== 'all') {
+                if (brandName) {
+                    const brandLower = brandName.toLowerCase();
+                    const cacheKey = marketplaceVal ? `${brandLower}_${marketplaceVal}` : brandLower;
+                    
+                    if (sellerMapByBrand.has(cacheKey)) {
+                        const sInfo = sellerMapByBrand.get(cacheKey);
+                        rowSellerId = sInfo.id;
+                        rowMarketplace = sInfo.marketplace;
+                    } else {
+                        // Look up seller by name or SellerId (code)
+                        let query = 'SELECT Id, Marketplace FROM Sellers WHERE (Name = @name OR SellerId = @name)';
+                        if (marketplaceVal) {
+                            query += ' AND (LOWER(Marketplace) = @marketplace OR LOWER(Marketplace) LIKE @marketplace + \'%\')';
+                        }
+                        const request = pool.request().input('name', sql.NVarChar, brandName);
+                        if (marketplaceVal) {
+                            request.input('marketplace', sql.VarChar, marketplaceVal);
+                        }
+                        const sellerLookup = await request.query(query);
+
+                        if (sellerLookup.recordset.length > 0) {
+                            rowSellerId = sellerLookup.recordset[0].Id;
+                            rowMarketplace = sellerLookup.recordset[0].Marketplace;
+                            sellerMapByBrand.set(cacheKey, { id: rowSellerId, marketplace: rowMarketplace });
+                        } else {
+                            results.skipped++;
+                            results.errors.push({ asin: childAsin, reason: `Seller/Brand "${brandName}"${marketplaceVal ? ' on platform ' + marketplaceVal : ''} not found in database.` });
+                            continue;
+                        }
+                    }
+                } else if (sellerId && sellerId !== 'all') {
+                    // No brand name provided in row, use default selected seller
+                    rowSellerId = sellerId;
                     for (const val of sellerMapByBrand.values()) {
                         if (val.id === sellerId) {
                             rowMarketplace = val.marketplace;
                             break;
                         }
                     }
-                }
-
-                if (brandName) {
-                    const brandLower = brandName.toLowerCase();
-                    if (sellerMapByBrand.has(brandLower)) {
-                        const sInfo = sellerMapByBrand.get(brandLower);
-                        rowSellerId = sInfo.id;
-                        rowMarketplace = sInfo.marketplace;
-                    } else {
-                        // Look up seller by name
-                        const sellerLookup = await pool.request()
-                            .input('name', sql.NVarChar, brandName)
-                            .query('SELECT Id, Marketplace FROM Sellers WHERE Name = @name');
-
-                        if (sellerLookup.recordset.length > 0) {
-                            rowSellerId = sellerLookup.recordset[0].Id;
-                            rowMarketplace = sellerLookup.recordset[0].Marketplace;
-                            sellerMapByBrand.set(brandLower, { id: rowSellerId, marketplace: rowMarketplace });
-                        } else if (!rowSellerId || rowSellerId === 'all') {
-                            results.skipped++;
-                            results.errors.push({ asin: childAsin, reason: `Seller/Brand "${brandName}" not found in database.` });
-                            continue;
+                    if (!rowMarketplace) {
+                        const mLookup = await pool.request()
+                            .input('sid', sql.VarChar, rowSellerId)
+                            .query('SELECT Marketplace FROM Sellers WHERE Id = @sid');
+                        if (mLookup.recordset.length > 0) {
+                            rowMarketplace = mLookup.recordset[0].Marketplace;
                         }
-                    }
-                }
-
-                // If we still don't have marketplace, fetch it for the rowSellerId
-                if (rowSellerId && rowSellerId !== 'all' && !rowMarketplace) {
-                    const mLookup = await pool.request()
-                        .input('sid', sql.VarChar, rowSellerId)
-                        .query('SELECT Marketplace FROM Sellers WHERE Id = @sid');
-                    if (mLookup.recordset.length > 0) {
-                        rowMarketplace = mLookup.recordset[0].Marketplace;
                     }
                 }
 

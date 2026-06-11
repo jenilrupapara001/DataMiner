@@ -12,6 +12,7 @@ export interface ImportPayload {
         goalType: string;
         achievedValue: number;
         targetValue: number;
+        marketplace?: string;
     }>;
 }
 
@@ -57,6 +58,7 @@ export const targetImportApi = {
                 goalType: r.goalType,
                 achievedValue: r.achieved,
                 targetValue: r.target,
+                marketplace: r.marketplace,
             })),
         };
     },
