@@ -10,8 +10,7 @@ import {
 } from 'antd';
 import {
     Plus, Search, RefreshCw, Edit3, Trash2,
-    BarChart3, TrendingUp, X, Upload as UploadIcon,
-    ChevronLeft, ChevronRight
+    BarChart3, TrendingUp, X, Upload as UploadIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTargetsData } from '../hooks/useTargetsData';
@@ -65,7 +64,6 @@ function fmtVal(v: number, unit: string): string {
     if (unit === 'd') return `${Math.round(v)}d`;
     return `${Math.round(v)}`;
 }
-
 const PeriodCell = memo(({
     target, achieved, unit, color, isAcos = false
 }: {
@@ -102,15 +100,13 @@ const PeriodCell = memo(({
 
 const GoalDataRow = memo(({
     record, goalRow, periods, isFirst, isLast,
-    isSelected, onSelectChange, onEdit, onDelete, perms, sellerName, rowKey,
-    collapsedPeriods
+    isSelected, onSelectChange, onEdit, onDelete, perms, sellerName, rowKey
 }: {
     record: any; goalRow: any; periods: string[];
     isFirst: boolean; isLast: boolean;
     isSelected: boolean; onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void; perms: any;
     sellerName?: string; rowKey: string;
-    collapsedPeriods: Set<number>;
 }) => {
     const displayName = sellerName || record.SellerId || '?';
     const goalType = resolveGoalType(goalRow);
@@ -259,48 +255,15 @@ const GoalDataRow = memo(({
             {/* Period cells */}
             {periods.map((_, idx) => {
                 const pv = idx + 1;
-                const isCollapsed = collapsedPeriods.has(pv);
                 const bd = breakdowns.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
                 const tgt = bd?.TargetValue ?? bd?.targetValue ?? 0;
                 const ach = bd?.AchievedValue ?? bd?.achievedValue ?? 0;
 
                 const hasData = tgt > 0;
                 const pct = hasData ? Math.round((ach / tgt) * 100) : 0;
-                const periodTier = getAchievementTier(pct, goalType === 'ACOS');
-                const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#059669' : '#ef4444') : (ach > 0 ? periodTier.color : '#ef4444'));
+                const tier = getAchievementTier(pct, goalType === 'ACOS');
+                const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#059669' : '#ef4444') : (ach > 0 ? tier.color : '#ef4444'));
 
-                // ── NEW: Collapsed view = single narrow column with just % ──
-                if (isCollapsed) {
-                    return (
-                        <td key={idx} style={{
-                            padding: '8px 4px', borderRight: '1px solid #f1f5f9',
-                            verticalAlign: 'middle', background: '#fafbff', textAlign: 'center',
-                            minWidth: 40, maxWidth: 40, width: 40,
-                            fontSize: 10, fontWeight: 800, color: hasData ? periodTier.color : '#cbd5e1'
-                        }}>
-                            {hasData ? (
-                                <Tooltip title={
-                                    <div>
-                                        <div><strong>Target:</strong> {fmtVal(tgt, meta.unit)}</div>
-                                        <div><strong>Achieved:</strong> {fmtVal(ach, meta.unit)}</div>
-                                        <div><strong>%:</strong> {pct}%</div>
-                                    </div>
-                                }>
-                                    <span style={{
-                                        background: `${periodTier.color}15`,
-                                        border: `1px solid ${periodTier.color}30`,
-                                        borderRadius: 4, padding: '2px 4px',
-                                        display: 'inline-block', cursor: 'help'
-                                    }}>
-                                        {pct}%
-                                    </span>
-                                </Tooltip>
-                            ) : '—'}
-                        </td>
-                    );
-                }
-
-                // ── Expanded view = 3 columns (TGT, ACH, %) ──
                 return (
                     <React.Fragment key={idx}>
                         {/* TGT Cell */}
@@ -323,12 +286,12 @@ const GoalDataRow = memo(({
                         <td style={{
                             padding: '8px 12px', borderRight: '1px solid #f1f5f9',
                             verticalAlign: 'middle', background: cellBg, minWidth: 60, textAlign: 'right',
-                            fontSize: 10, fontWeight: 800, color: hasData ? periodTier.color : '#cbd5e1'
+                            fontSize: 10, fontWeight: 800, color: hasData ? tier.color : '#cbd5e1'
                         }}>
                             {hasData && (
                                 <span style={{
-                                    background: `${periodTier.color}12`,
-                                    border: `1px solid ${periodTier.color}20`,
+                                    background: `${tier.color}12`,
+                                    border: `1px solid ${tier.color}20`,
                                     borderRadius: 4, padding: '2px 6px',
                                     display: 'inline-block'
                                 }}>
@@ -389,15 +352,13 @@ const GoalDataRow = memo(({
 // ─── Grouped table ────────────────────────────────────────────────────────────
 
 const GroupedTable = memo(({
-    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete, sellerMap,
-    collapsedPeriods
+    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete, sellerMap
 }: {
     groups: any[]; planType: 'YEARLY' | 'MONTHLY';
     perms: any; selectedRowKeys: string[];
     onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void;
     sellerMap: Map<string, string>;
-    collapsedPeriods: Set<number>;
 }) => {
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
@@ -458,7 +419,6 @@ const GroupedTable = memo(({
                             onDelete={onDelete}
                             perms={perms}
                             sellerName={sellerMap.get(group.SellerId) || group.SellerId}
-                            collapsedPeriods={collapsedPeriods}
                         />
                     );
                 });
@@ -547,9 +507,6 @@ const TargetVsAchievement = () => {
     const [pageSize, setPageSize] = useState(20);
     const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
 
-    // ── NEW: Collapsed columns state ─────────────────────────────────
-    const [collapsedPeriods, setCollapsedPeriods] = useState<Set<number>>(new Set());
-
     const handleSelectChange = useCallback((key: string, checked: boolean) => {
         setSelectedRowKeys(prev => checked ? [...prev, key] : prev.filter(k => k !== key));
     }, []);
@@ -559,66 +516,6 @@ const TargetVsAchievement = () => {
         setSelectedRowKeys([]);
         setPage(1);
     }, [planType, filterYear, searchText, filterSeller, filterManager, filterGoalType]);
-
-    // ── NEW: Auto-collapse past columns, keep current expanded ──
-    useEffect(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1; // 1-12
-        const newCollapsed = new Set<number>();
-
-        if (planType === 'YEARLY') {
-            // For yearly view - collapse all months except current month
-            if (filterYear === currentYear) {
-                for (let m = 1; m <= 12; m++) {
-                    if (m !== currentMonth) newCollapsed.add(m);
-                }
-            } else if (filterYear < currentYear) {
-                // Past year - collapse all
-                for (let m = 1; m <= 12; m++) newCollapsed.add(m);
-            }
-            // Future year - keep all expanded
-        } else {
-            // For monthly view - calculate which week we're in
-            if (filterYear === currentYear) {
-                const today = now.getDate();
-                let currentWeek = 1;
-                if (today <= 7) currentWeek = 1;
-                else if (today <= 14) currentWeek = 2;
-                else if (today <= 21) currentWeek = 3;
-                else if (today <= 28) currentWeek = 4;
-                else currentWeek = 5;
-
-                // Collapse past weeks only if viewing current month
-                // (we don't have month filter in this code, so just collapse past weeks)
-                for (let w = 1; w <= 5; w++) {
-                    if (w < currentWeek) newCollapsed.add(w);
-                }
-            }
-        }
-
-        setCollapsedPeriods(newCollapsed);
-    }, [planType, filterYear]);
-
-    const togglePeriod = useCallback((num: number) => {
-        setCollapsedPeriods(prev => {
-            const next = new Set(prev);
-            if (next.has(num)) next.delete(num);
-            else next.add(num);
-            return next;
-        });
-    }, []);
-
-    const expandAllPeriods = useCallback(() => {
-        setCollapsedPeriods(new Set());
-    }, []);
-
-    const collapseAllPeriods = useCallback(() => {
-        const periodsCount = planType === 'YEARLY' ? 12 : 5;
-        const all = new Set<number>();
-        for (let i = 1; i <= periodsCount; i++) all.add(i);
-        setCollapsedPeriods(all);
-    }, [planType]);
 
     // ── Derived filter options from actual data ────────────────────────
 
@@ -793,26 +690,6 @@ const TargetVsAchievement = () => {
         { label: 'Achieved Goal', w: 150, sticky: false },
     ];
 
-    // ── NEW: Check if it's current period for highlighting ──
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const today = now.getDate();
-    let currentWeek = 1;
-    if (today <= 7) currentWeek = 1;
-    else if (today <= 14) currentWeek = 2;
-    else if (today <= 21) currentWeek = 3;
-    else if (today <= 28) currentWeek = 4;
-    else currentWeek = 5;
-
-    const isPeriodCurrent = (pv: number) => {
-        if (planType === 'YEARLY') {
-            return filterYear === currentYear && pv === currentMonth;
-        } else {
-            return filterYear === currentYear && pv === currentWeek;
-        }
-    };
-
     return (
         <Layout
             className="target-achievement-container"
@@ -935,32 +812,6 @@ const TargetVsAchievement = () => {
                             {' · '}
                             <Text strong>{totalGoalRows}</Text> goal rows
                         </Text>
-
-                        {/* ── NEW: Expand/Collapse All Columns Buttons ── */}
-                        <Divider type="vertical" style={{ margin: 0 }} />
-                        <Space.Compact size="small">
-                            <Tooltip title="Expand all period columns">
-                                <Button
-                                    size="small"
-                                    onClick={expandAllPeriods}
-                                    icon={<ChevronLeft size={11} />}
-                                    style={{ fontSize: 11, fontWeight: 600 }}
-                                >
-                                    Expand All
-                                </Button>
-                            </Tooltip>
-                            <Tooltip title="Collapse all period columns">
-                                <Button
-                                    size="small"
-                                    onClick={collapseAllPeriods}
-                                    icon={<ChevronRight size={11} />}
-                                    style={{ fontSize: 11, fontWeight: 600 }}
-                                >
-                                    Collapse All
-                                </Button>
-                            </Tooltip>
-                        </Space.Compact>
-
                         <Divider orientation="vertical" style={{ margin: 0 }} />
                         <Space size={6}>
                             {[
@@ -1202,61 +1053,18 @@ const TargetVsAchievement = () => {
                                             ) : col.label}
                                         </th>
                                     ))}
-                                    {/* ── UPDATED: Period header columns with collapse support ── */}
-                                    {periods.map((p, i) => {
-                                        const pv = i + 1;
-                                        const isCollapsed = collapsedPeriods.has(pv);
-                                        const isCurrent = isPeriodCurrent(pv);
-
-                                        return (
-                                            <th
-                                                key={i}
-                                                colSpan={isCollapsed ? 1 : 3}
-                                                onClick={() => togglePeriod(pv)}
-                                                style={{
-                                                    padding: '8px 8px', textAlign: 'center',
-                                                    fontSize: 11, fontWeight: 600,
-                                                    color: isCurrent ? '#2563eb' : '#475569',
-                                                    background: isCurrent ? '#eff6ff' : '#f8fafc',
-                                                    borderRight: '1px solid #f1f5f9',
-                                                    borderBottom: '1px solid #e2e8f0',
-                                                    borderTop: isCurrent ? '2px solid #2563eb' : 'none',
-                                                    minWidth: isCollapsed ? 40 : 180,
-                                                    maxWidth: isCollapsed ? 40 : 'auto',
-                                                    whiteSpace: 'nowrap',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    userSelect: 'none'
-                                                }}
-                                                className="period-header-clickable"
-                                            >
-                                                {isCollapsed ? (
-                                                    <Tooltip title={`Click to expand ${p}`}>
-                                                        <div style={{
-                                                            writingMode: 'vertical-rl',
-                                                            transform: 'rotate(180deg)',
-                                                            fontSize: 10, fontWeight: 800,
-                                                            color: isCurrent ? '#2563eb' : '#64748b',
-                                                            padding: '4px 0'
-                                                        }}>
-                                                            {p}
-                                                        </div>
-                                                    </Tooltip>
-                                                ) : (
-                                                    <Tooltip title="Click to collapse">
-                                                        <div>
-                                                            <div style={{ fontWeight: 600, fontSize: 12 }}>{p}</div>
-                                                            {isCurrent && (
-                                                                <div style={{ fontSize: 9, color: '#2563eb', fontWeight: 700, marginTop: 2 }}>
-                                                                    ● CURRENT
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </Tooltip>
-                                                )}
-                                            </th>
-                                        );
-                                    })}
+                                    {periods.map((p, i) => (
+                                        <th key={i} colSpan={3} style={{
+                                            padding: '8px 12px', textAlign: 'center',
+                                            fontSize: 11, fontWeight: 600, color: '#475569',
+                                            background: '#f8fafc',
+                                            borderRight: '1px solid #f1f5f9',
+                                            borderBottom: '1px solid #e2e8f0',
+                                            minWidth: 180, whiteSpace: 'nowrap'
+                                        }}>
+                                            <div style={{ fontWeight: 600, fontSize: 12 }}>{p}</div>
+                                        </th>
+                                    ))}
                                     <th rowSpan={2} style={{
                                         padding: '12px 12px', textAlign: 'center',
                                         fontSize: 11, fontWeight: 600, color: '#475569',
@@ -1270,30 +1078,13 @@ const TargetVsAchievement = () => {
                                     </th>
                                 </tr>
                                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    {/* ── UPDATED: Sub-headers also conditional on collapse state ── */}
-                                    {periods.map((p, i) => {
-                                        const pv = i + 1;
-                                        const isCollapsed = collapsedPeriods.has(pv);
-
-                                        if (isCollapsed) {
-                                            return (
-                                                <th key={i} style={{
-                                                    fontSize: 8, fontWeight: 700, color: '#94a3b8',
-                                                    textAlign: 'center', borderRight: '1px solid #f1f5f9',
-                                                    padding: '4px 2px', background: '#f8fafc'
-                                                }}>
-                                                    %
-                                                </th>
-                                            );
-                                        }
-                                        return (
-                                            <React.Fragment key={i}>
-                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
-                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
-                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
-                                            </React.Fragment>
-                                        );
-                                    })}
+                                    {periods.map((p, i) => (
+                                        <React.Fragment key={i}>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
+                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
+                                        </React.Fragment>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1314,7 +1105,6 @@ const TargetVsAchievement = () => {
                                         onEdit={handleEdit}
                                         onDelete={handleDelete}
                                         sellerMap={sellerMap}
-                                        collapsedPeriods={collapsedPeriods}
                                     />
                                 )}
                             </tbody>
@@ -1456,9 +1246,6 @@ const TargetVsAchievement = () => {
                 tbody td { transition: background 0.12s ease; }
                 .ant-btn { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
                 .ant-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,70,229,0.25) !important; }
-                .period-header-clickable:hover {
-                    background: #eef2ff !important;
-                }
                 @keyframes slideUp {
                     from { transform: translate(-50%, 20px); opacity: 0; }
                     to   { transform: translate(-50%, 0);    opacity: 1; }
