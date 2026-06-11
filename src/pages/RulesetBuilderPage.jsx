@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Zap, Save, X, Plus, Trash2, Copy, ChevronDown, ChevronUp, 
+  Layout, Button, Input, Select, Space, Typography, Tag, Tooltip, 
+  message, Divider, Card, Row, Col, Switch, Tabs, Alert, Collapse, InputNumber
+} from 'antd';
+import { 
+  Zap, Save, X, Plus, Trash2, ChevronDown, ChevronUp, 
   FileText, Link2, Eye, Clock, Sliders, BarChart, Lightbulb,
   AlertTriangle, CheckCircle, Info, Play, RefreshCw, ArrowLeft,
-  ToggleLeft, ToggleRight, HelpCircle, Tag, Target, Package,
-  DollarSign, TrendingUp, Activity, Star, Settings
+  Tag as TagIcon, Target, Package, DollarSign, TrendingUp, Star, Settings, HelpCircle
 } from 'lucide-react';
 import { rulesetApi } from '../services/api';
 import { 
@@ -13,26 +16,30 @@ import {
 } from '../constants/rulesetAttributes';
 import { ACTIONS_BY_TYPE } from '../constants/rulesetActions';
 
+const { Content } = Layout;
+const { Title, Text } = Typography;
+const { Option, OptGroup } = Select;
+
 const RULE_TYPE_EXPLANATIONS = {
   Bid: {
     title: 'What is a Bid ruleset?',
-    body: 'Bid Management rulesets are simply an **ordered** set of rules that can be used to control bids of keywords and product targets. You can define the rules below and associate these with specific campaigns from the campaigns tab above. Rules will be evaluated **in the order defined below**, one after the other, and the action corresponding to **the first matching rule** will be applied to all **keywords, or product targets** in the associated campaigns.'
+    body: 'Bid Management rulesets are simply an ordered set of rules that can be used to control bids of keywords and product targets. Rules will be evaluated in the order defined below, and the action corresponding to the first matching rule will be applied.'
   },
   ASIN: {
     title: 'What is an ASIN ruleset?',
-    body: 'Product rulesets are an **ordered** set of rules that evaluate your ASIN data and automatically take actions such as pausing ads, changing prices, updating inventory alerts, or modifying listing content. Rules are evaluated **in the order defined below** and the action of the **first matching rule** is applied to all matched ASINs.'
+    body: 'ASIN rulesets evaluate your ASIN data and automatically take actions such as pausing ads, changing prices, updating inventory alerts, or modifying listing content.'
   },
   Product: {
     title: 'What is a Product ruleset?',
-    body: 'Product rulesets are an **ordered** set of rules that evaluate your ASIN data and automatically take actions such as pausing ads, changing prices, updating inventory alerts, or modifying listing content. Rules are evaluated **in the order defined below** and the action of the **first matching rule** is applied to all matched ASINs.'
+    body: 'Product rulesets are an ordered set of rules that evaluate your ASIN data and automatically take actions. Rules are evaluated in order and the first matching action is applied.'
   },
   Campaign: {
     title: 'What is a Campaign ruleset?',
-    body: 'Campaign rulesets dynamically modify campaign-level properties including bidding strategy, placement modifiers, campaign state, budget, and Target ACoS based on the criteria you define.'
+    body: 'Campaign rulesets dynamically modify campaign-level properties including bidding strategy, placement modifiers, campaign state, budget, and Target ACoS based on defined criteria.'
   },
   Inventory: {
     title: 'What is an Inventory ruleset?',
-    body: 'Inventory rulesets monitor stock levels and sales velocity to trigger reorder alerts, pause ads for out-of-stock products, or adjust pricing based on inventory thresholds.'
+    body: 'Inventory rulesets monitor stock levels and sales velocity to trigger reorder alerts, pause ads for out-of-stock products, or adjust pricing.'
   },
   Pricing: {
     title: 'What is a Pricing ruleset?',
@@ -44,23 +51,14 @@ const RULE_TYPE_EXPLANATIONS = {
   }
 };
 
-const TABS = [
-  { id: 'definition', label: 'Ruleset Definition', icon: FileText },
-  { id: 'linked', label: 'Linked Campaigns', icon: Link2 },
-  { id: 'preview', label: 'Preview', icon: Eye },
-  { id: 'history', label: 'Change History', icon: Clock },
-  { id: 'advanced', label: 'Advanced Settings', icon: Sliders },
-  { id: 'analytics', label: 'Analytics', icon: BarChart }
-];
-
 const ruleTypeInfo = {
-  Bid: { icon: Target, color: '#3b82f6' },
-  Campaign: { icon: BarChart, color: '#8b5cf6' },
-  ASIN: { icon: Package, color: '#f59e0b' },
-  Product: { icon: Star, color: '#ec4899' },
-  Inventory: { icon: Package, color: '#06b6d4' },
-  Pricing: { icon: DollarSign, color: '#10b981' },
-  SOV: { icon: TrendingUp, color: '#6366f1' }
+  Bid: { icon: Target, color: '#3b82f6', bg: '#eff6ff' },
+  Campaign: { icon: BarChart, color: '#8b5cf6', bg: '#f5f3ff' },
+  ASIN: { icon: Package, color: '#f59e0b', bg: '#fffbeb' },
+  Product: { icon: Star, color: '#ec4899', bg: '#fdf2f8' },
+  Inventory: { icon: Package, color: '#06b6d4', bg: '#ecfeff' },
+  Pricing: { icon: DollarSign, color: '#10b981', bg: '#f0fdf4' },
+  SOV: { icon: TrendingUp, color: '#6366f1', bg: '#e0e7ff' }
 };
 
 const RulesetBuilderPage = () => {
@@ -71,7 +69,6 @@ const RulesetBuilderPage = () => {
   const [error, setError] = useState(null);
   
   const rulesetId = window.location.pathname.split('/').pop();
-  const isNew = rulesetId === 'new' || rulesetId === 'edit';
 
   useEffect(() => {
     if (rulesetId && rulesetId !== 'new' && rulesetId !== 'edit') {
@@ -101,6 +98,7 @@ const RulesetBuilderPage = () => {
       setRuleset(data);
     } catch (err) {
       setError(err.message);
+      message.error('Failed to load ruleset details');
     } finally {
       setLoading(false);
     }
@@ -111,14 +109,15 @@ const RulesetBuilderPage = () => {
       setSaving(true);
       if (ruleset._id) {
         await rulesetApi.update(ruleset._id, ruleset);
+        message.success('Ruleset saved successfully!');
       } else {
         const created = await rulesetApi.create(ruleset);
+        message.success('Ruleset created successfully!');
         window.location.href = `/rule-sets/${created._id}/edit`;
         return;
       }
-      alert('Ruleset saved successfully!');
     } catch (err) {
-      alert('Error saving: ' + err.message);
+      message.error('Error saving: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -136,6 +135,7 @@ const RulesetBuilderPage = () => {
       ...ruleset,
       rules: [...ruleset.rules, newRule]
     });
+    message.success('New rule added');
   };
 
   const handleUpdateRule = (index, updates) => {
@@ -145,10 +145,10 @@ const RulesetBuilderPage = () => {
   };
 
   const handleDeleteRule = (index) => {
-    if (!confirm('Delete this rule?')) return;
     const newRules = ruleset.rules.filter((_, i) => i !== index);
     newRules.forEach((r, i) => r.order = i);
     setRuleset({ ...ruleset, rules: newRules });
+    message.info('Rule removed');
   };
 
   const handleAddCondition = (ruleIndex) => {
@@ -201,388 +201,402 @@ const RulesetBuilderPage = () => {
 
   if (loading) {
     return (
-      <div className="page-container d-flex align-items-center justify-content-center" style={{ minHeight: '400px' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
+      <div style={{ textAlign: 'center', padding: '128px 0', background: '#f8fafc', minHeight: 'calc(100vh - 72px)' }}>
+        <RefreshCw size={24} className="animate-spin text-primary" style={{ color: '#4f46e5', animation: 'spin 1.5s linear infinite' }} />
+        <Text style={{ display: 'block', marginTop: 12, color: '#94a3b8' }}>Loading ruleset details...</Text>
       </div>
     );
   }
 
+  const tabsItems = [
+    {
+      key: 'definition',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><FileText size={14} /> Definition</span>,
+    },
+    {
+      key: 'linked',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Link2 size={14} /> Linked Campaigns</span>,
+    },
+    {
+      key: 'preview',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Eye size={14} /> Preview</span>,
+    },
+    {
+      key: 'history',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={14} /> Change History</span>,
+    },
+    {
+      key: 'advanced',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Sliders size={14} /> Advanced Settings</span>,
+    },
+    {
+      key: 'analytics',
+      label: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><BarChart size={14} /> Analytics</span>,
+    }
+  ];
+
   return (
-    <div className="page-container pb-5">
-      <div className="page-header mb-4">
-        <div className="d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-3">
-            <button 
-              className="btn btn-light rounded-circle"
-              onClick={() => window.location.href = '/rule-sets'}
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div className="d-flex align-items-center gap-2">
-              <div 
-                className="p-2 rounded-lg"
-                style={{ backgroundColor: (ruleTypeInfo[ruleset?.type]?.color || '#6366f1') + '20' }}
-              >
-                <TypeIcon size={20} style={{ color: ruleTypeInfo[ruleset?.type]?.color || '#6366f1' }} />
-              </div>
-              <input
-                type="text"
-                className="form-control border-0 fw-bold fs-5"
-                value={ruleset.name}
-                onChange={(e) => setRuleset({ ...ruleset, name: e.target.value })}
-                style={{ maxWidth: '400px' }}
-              />
+    <Layout style={{ minHeight: 'calc(100vh - 72px)', background: '#f8fafc', padding: '24px 32px' }}>
+      {/* ── Page Header ──────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button 
+            shape="circle" 
+            icon={<ArrowLeft size={16} />} 
+            onClick={() => window.location.href = '/rule-sets'} 
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              padding: 8,
+              borderRadius: 8,
+              background: ruleTypeInfo[ruleset?.type]?.bg || '#ede9fe',
+              color: ruleTypeInfo[ruleset?.type]?.color || '#4f46e5',
+              display: 'flex'
+            }}>
+              <TypeIcon size={18} />
             </div>
-          </div>
-          <div className="d-flex align-items-center gap-3">
-            <label className="d-flex align-items-center gap-2 mb-0">
-              <span className="text-muted small">Active</span>
-              <button 
-                className="btn btn-link p-0"
-                onClick={() => setRuleset({ ...ruleset, isActive: !ruleset.isActive })}
-              >
-                {ruleset.isActive ? 
-                  <ToggleRight size={28} className="text-success" /> : 
-                  <ToggleLeft size={28} className="text-muted" />
-                }
-              </button>
-            </label>
-            <button 
-              className="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              <Save size={18} />
-              {saving ? 'Saving...' : 'Save Ruleset'}
-            </button>
+            <Input
+              value={ruleset.name}
+              onChange={e => setRuleset({ ...ruleset, name: e.target.value })}
+              style={{ fontWeight: 700, fontSize: 16, border: 'none', background: 'transparent', width: 300, padding: '4px 8px' }}
+            />
           </div>
         </div>
+
+        <Space size={16}>
+          <Space size={6}>
+            <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Active</Text>
+            <Switch 
+              checked={ruleset.isActive}
+              onChange={checked => setRuleset({ ...ruleset, isActive: checked })}
+              size="small"
+            />
+          </Space>
+          <Button 
+            type="primary" 
+            icon={<Save size={14} />} 
+            loading={saving}
+            onClick={handleSave}
+            style={{ background: '#4f46e5', borderColor: '#4f46e5', borderRadius: 20 }}
+          >
+            {saving ? 'Saving...' : 'Save Ruleset'}
+          </Button>
+        </Space>
       </div>
 
-      <div className="mb-4">
-        <ul className="nav nav-underline">
-          {TABS.map(tab => (
-            <li className="nav-item" key={tab.id}>
-              <button
-                className={`nav-link d-flex align-items-center gap-2 ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <tab.icon size={16} />
-                {tab.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabsItems} style={{ marginBottom: 20 }} />
 
       {activeTab === 'definition' && (
-        <div className="row">
-          <div className="col-lg-8">
-            <div className="alert alert-info d-flex align-items-start gap-3 mb-4" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-              <div className="p-2 bg-info-subtle rounded-lg">
-                <HelpCircle size={20} className="text-info" />
-              </div>
-              <div>
-                <h6 className="fw-bold mb-1">{explanation.title}</h6>
-                <p className="mb-0 small">{explanation.body}</p>
-              </div>
-            </div>
+        <Row gutter={[24, 24]}>
+          <Col xs={24} lg={16}>
+            <Alert
+              message={explanation.title}
+              description={explanation.body}
+              type="info"
+              showIcon
+              icon={<HelpCircle style={{ color: '#3b82f6' }} />}
+              style={{
+                marginBottom: 20,
+                borderRadius: 8,
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe'
+              }}
+            />
 
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-body p-4">
-                <h6 className="fw-bold mb-4">Basic Settings</h6>
-                <div className="row g-3">
-                  <div className="col-md-4">
-                    <label className="form-label small fw-bold">Type</label>
-                    <select
-                      className="form-select"
-                      value={ruleset.type}
-                      onChange={(e) => setRuleset({ ...ruleset, type: e.target.value })}
-                    >
-                      {Object.keys(ATTRIBUTES_BY_TYPE).map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-md-4">
-                    <label className="form-label small fw-bold">Using data from</label>
-                    <select
-                      className="form-select"
-                      value={ruleset.usingDataFrom}
-                      onChange={(e) => setRuleset({ ...ruleset, usingDataFrom: e.target.value })}
-                    >
-                      {DATE_RANGES.map(d => (
-                        <option key={d.value} value={d.value}>{d.label}</option>
-                      ))}
-                    </select>
-                    <small className="text-muted">Number of days of data based on which the rule will be evaluated.</small>
-                  </div>
-                  <div className="col-md-4">
-                    <label className="form-label small fw-bold">Exclude</label>
-                    <select
-                      className="form-select"
-                      value={ruleset.excludeDays}
-                      onChange={(e) => setRuleset({ ...ruleset, excludeDays: e.target.value })}
-                    >
-                      {EXCLUDE_OPTIONS.map(d => (
-                        <option key={d.value} value={d.value}>{d.label}</option>
-                      ))}
-                    </select>
-                    <small className="text-muted">Number of days of data to exclude.</small>
-                  </div>
-                  <div className="col-md-4">
-                    <label className="form-label small fw-bold">Run Frequency</label>
-                    <select
-                      className="form-select"
-                      value={ruleset.runFrequency}
-                      onChange={(e) => setRuleset({ ...ruleset, runFrequency: e.target.value })}
-                    >
-                      {FREQUENCY_OPTIONS.map(f => (
-                        <option key={f.value} value={f.value}>{f.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {['Daily', 'Weekly'].includes(ruleset.runFrequency) && (
-                    <div className="col-md-4">
-                      <label className="form-label small fw-bold">Time</label>
-                      <select
-                        className="form-select"
-                        value={ruleset.runTime}
-                        onChange={(e) => setRuleset({ ...ruleset, runTime: e.target.value })}
-                      >
-                        {TIME_OPTIONS.map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-4">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <div>
-                    <h6 className="fw-bold mb-1">Rules</h6>
-                    <p className="text-muted small mb-0">
-                      Add multiple rules and they will be executed in order. Each rule will match the ASINs based on the criteria, and apply the corresponding action.
-                    </p>
-                  </div>
-                  <button 
-                    className="btn btn-primary btn-sm d-flex align-items-center gap-1 rounded-pill px-3"
-                    onClick={handleAddRule}
+            {/* Basic Settings */}
+            <Card title="Basic Settings" style={{ borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 20 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
+                  <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Type</Text>
+                  <Select
+                    value={ruleset.type}
+                    onChange={v => setRuleset({ ...ruleset, type: v })}
+                    style={{ width: '100%' }}
                   >
-                    <Plus size={16} /> Add Rule
-                  </button>
-                </div>
-
-                {ruleset.rules.length === 0 ? (
-                  <div className="text-center py-5 bg-light rounded-3">
-                    <FileText size={32} className="text-muted mb-2" />
-                    <p className="text-muted mb-2">No rules defined yet</p>
-                    <button className="btn btn-primary btn-sm" onClick={handleAddRule}>
-                      <Plus size={16} className="me-1" /> Add First Rule
-                    </button>
-                  </div>
-                ) : (
-                  <div className="d-flex flex-column gap-3">
-                    {ruleset.rules.map((rule, ruleIndex) => (
-                      <RuleCard
-                        key={ruleIndex}
-                        rule={rule}
-                        ruleIndex={ruleIndex}
-                        type={ruleset.type}
-                        attributes={getAttributesForType(ruleset.type)}
-                        actions={getActionsForType(ruleset.type)}
-                        onUpdate={(updates) => handleUpdateRule(ruleIndex, updates)}
-                        onDelete={() => handleDeleteRule(ruleIndex)}
-                        onAddCondition={() => handleAddCondition(ruleIndex)}
-                        onUpdateCondition={(condIndex, condUpdates) => handleUpdateCondition(ruleIndex, condIndex, condUpdates)}
-                        onDeleteCondition={(condIndex) => handleDeleteCondition(ruleIndex, condIndex)}
-                        getAttributeType={getAttributeType}
-                        getOperatorsForAttribute={getOperatorsForAttribute}
-                        moveUp={ruleIndex > 0 ? () => {
-                          const newRules = [...ruleset.rules];
-                          [newRules[ruleIndex - 1], newRules[ruleIndex]] = [newRules[ruleIndex], newRules[ruleIndex - 1]];
-                          newRules.forEach((r, i) => r.order = i);
-                          setRuleset({ ...ruleset, rules: newRules });
-                        } : null}
-                        moveDown={ruleIndex < ruleset.rules.length - 1 ? () => {
-                          const newRules = [...ruleset.rules];
-                          [newRules[ruleIndex], newRules[ruleIndex + 1]] = [newRules[ruleIndex + 1], newRules[ruleIndex]];
-                          newRules.forEach((r, i) => r.order = i);
-                          setRuleset({ ...ruleset, rules: newRules });
-                        } : null}
-                      />
+                    {Object.keys(ATTRIBUTES_BY_TYPE).map(t => (
+                      <Option key={t} value={t}>{t}</Option>
                     ))}
-                  </div>
+                  </Select>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Using data from</Text>
+                  <Select
+                    value={ruleset.usingDataFrom}
+                    onChange={v => setRuleset({ ...ruleset, usingDataFrom: v })}
+                    style={{ width: '100%' }}
+                  >
+                    {DATE_RANGES.map(d => (
+                      <Option key={d.value} value={d.value}>{d.label}</Option>
+                    ))}
+                  </Select>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Exclude</Text>
+                  <Select
+                    value={ruleset.excludeDays}
+                    onChange={v => setRuleset({ ...ruleset, excludeDays: v })}
+                    style={{ width: '100%' }}
+                  >
+                    {EXCLUDE_OPTIONS.map(d => (
+                      <Option key={d.value} value={d.value}>{d.label}</Option>
+                    ))}
+                  </Select>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Run Frequency</Text>
+                  <Select
+                    value={ruleset.runFrequency}
+                    onChange={v => setRuleset({ ...ruleset, runFrequency: v })}
+                    style={{ width: '100%' }}
+                  >
+                    {FREQUENCY_OPTIONS.map(f => (
+                      <Option key={f.value} value={f.value}>{f.label}</Option>
+                    ))}
+                  </Select>
+                </Col>
+                {['Daily', 'Weekly'].includes(ruleset.runFrequency) && (
+                  <Col xs={24} md={8}>
+                    <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Time</Text>
+                    <Select
+                      value={ruleset.runTime}
+                      onChange={v => setRuleset({ ...ruleset, runTime: v })}
+                      style={{ width: '100%' }}
+                    >
+                      {TIME_OPTIONS.map(t => (
+                        <Option key={t} value={t}>{t}</Option>
+                      ))}
+                    </Select>
+                  </Col>
                 )}
-              </div>
-            </div>
-          </div>
+              </Row>
+            </Card>
 
-          <div className="col-lg-4">
-            <div className="card border-0 shadow-sm sticky-top" style={{ top: '20px' }}>
-              <div className="card-body p-4">
-                <h6 className="fw-bold mb-3">
-                  <Lightbulb size={18} className="me-2" style={{ color: '#06b6d4' }} />
-                  Ruleset Audit Summary
-                </h6>
-                <div className="alert alert-light">
-                  <p className="small mb-2">Enhance and refine your ruleset with AI Intelligence.</p>
-                  <p className="text-muted small mb-0">Save your ruleset to run the AI Audit.</p>
+            {/* Rules Cards Container */}
+            <Card 
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <div>
+                    <Text strong style={{ fontSize: 14, color: '#1e293b' }}>Rules</Text>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginTop: 2 }}>
+                      Add multiple rules evaluated sequentially. First matched rule takes action.
+                    </div>
+                  </div>
+                  <Button 
+                    type="primary" 
+                    size="small" 
+                    icon={<Plus size={14} />} 
+                    onClick={handleAddRule}
+                    style={{ background: '#4f46e5', borderColor: '#4f46e5', borderRadius: 4 }}
+                  >
+                    Add Rule
+                  </Button>
                 </div>
-                <button className="btn btn-outline-dark btn-sm w-100 rounded-pill">
+              }
+              style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
+              bodyStyle={{ padding: 20 }}
+            >
+              {ruleset.rules.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 24px', background: '#f8fafc', borderRadius: 8 }}>
+                  <FileText size={32} color="#cbd5e1" style={{ marginBottom: 12 }} />
+                  <Text style={{ display: 'block', color: '#94a3b8', fontSize: 12, marginBottom: 12 }}>No rules defined yet</Text>
+                  <Button type="dashed" icon={<Plus size={14} />} onClick={handleAddRule}>
+                    Add First Rule
+                  </Button>
+                </div>
+              ) : (
+                <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  {ruleset.rules.map((rule, ruleIndex) => (
+                    <RuleCard
+                      key={ruleIndex}
+                      rule={rule}
+                      ruleIndex={ruleIndex}
+                      type={ruleset.type}
+                      attributes={getAttributesForType(ruleset.type)}
+                      actions={getActionsForType(ruleset.type)}
+                      onUpdate={(updates) => handleUpdateRule(ruleIndex, updates)}
+                      onDelete={() => handleDeleteRule(ruleIndex)}
+                      onAddCondition={() => handleAddCondition(ruleIndex)}
+                      onUpdateCondition={(condIndex, condUpdates) => handleUpdateCondition(ruleIndex, condIndex, condUpdates)}
+                      onDeleteCondition={(condIndex) => handleDeleteCondition(ruleIndex, condIndex)}
+                      getAttributeType={getAttributeType}
+                      getOperatorsForAttribute={getOperatorsForAttribute}
+                      moveUp={ruleIndex > 0 ? () => {
+                        const newRules = [...ruleset.rules];
+                        [newRules[ruleIndex - 1], newRules[ruleIndex]] = [newRules[ruleIndex], newRules[ruleIndex - 1]];
+                        newRules.forEach((r, i) => r.order = i);
+                        setRuleset({ ...ruleset, rules: newRules });
+                      } : null}
+                      moveDown={ruleIndex < ruleset.rules.length - 1 ? () => {
+                        const newRules = [...ruleset.rules];
+                        [newRules[ruleIndex], newRules[ruleIndex + 1]] = [newRules[ruleIndex + 1], newRules[ruleIndex]];
+                        newRules.forEach((r, i) => r.order = i);
+                        setRuleset({ ...ruleset, rules: newRules });
+                      } : null}
+                    />
+                  ))}
+                </Space>
+              )}
+            </Card>
+          </Col>
+
+          {/* Audit Sidebar */}
+          <Col xs={24} lg={8}>
+            <div style={{ position: 'sticky', top: 20 }}>
+              <Card 
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Lightbulb size={16} color="#06b6d4" />
+                    <Text strong style={{ fontSize: 13 }}>Ruleset Audit Summary</Text>
+                  </div>
+                }
+                style={{ borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 20 }}
+              >
+                <Alert
+                  message="AI Audit Insights"
+                  description="Save your ruleset first to evaluate and get AI feedback on your criteria optimization."
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16, borderRadius: 8 }}
+                />
+                
+                <Button block type="dashed" style={{ borderRadius: 8 }}>
                   Generate Audit
-                </button>
-                
-                <hr />
-                
-                <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted small">Rules</span>
-                  <span className="fw-bold">{ruleset.rules.length}</span>
+                </Button>
+
+                <Divider style={{ margin: '16px 0' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>Total Rules</Text>
+                  <Text strong style={{ fontSize: 12, color: '#1e293b' }}>{ruleset.rules.length}</Text>
                 </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted small">Active Rules</span>
-                  <span className="fw-bold">{ruleset.rules.filter(r => r.isActive).length}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>Active Rules</Text>
+                  <Text strong style={{ fontSize: 12, color: '#1e293b' }}>{ruleset.rules.filter(r => r.isActive).length}</Text>
                 </div>
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted small">Conditions</span>
-                  <span className="fw-bold">
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>Conditions</Text>
+                  <Text strong style={{ fontSize: 12, color: '#1e293b' }}>
                     {ruleset.rules.reduce((sum, r) => sum + (r.conditions?.length || 0), 0)}
-                  </span>
+                  </Text>
                 </div>
-              </div>
+              </Card>
             </div>
-          </div>
-        </div>
+          </Col>
+        </Row>
       )}
 
       {activeTab === 'linked' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4 text-center py-5">
-            <Link2 size={48} className="text-muted mb-3" />
-            <h5>Linked Campaigns</h5>
-            <p className="text-muted">
-              Link campaigns or ASINs to this ruleset from the Advanced Settings tab.
-            </p>
-          </div>
-        </div>
+        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
+          <Link2 size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
+          <Title level={5} style={{ margin: '0 0 8px', fontWeight: 600, color: '#475569' }}>Linked Campaigns</Title>
+          <Text style={{ color: '#94a3b8', fontSize: 12 }}>
+            Link campaigns or ASINs to this ruleset from the Advanced Settings tab.
+          </Text>
+        </Card>
       )}
 
       {activeTab === 'preview' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4 text-center py-5">
-            <Eye size={48} className="text-muted mb-3" />
-            <h5>Preview Mode</h5>
-            <p className="text-muted">
-              Run a dry preview to see what this ruleset would do without making any changes.
-            </p>
-            <button className="btn btn-primary">
-              <Play size={16} className="me-2" /> Run Preview
-            </button>
-          </div>
-        </div>
+        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
+          <Eye size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
+          <Title level={5} style={{ margin: '0 0 8px', fontWeight: 600, color: '#475569' }}>Preview Mode</Title>
+          <Text style={{ color: '#94a3b8', fontSize: 12, display: 'block', marginBottom: 16 }}>
+            Run a dry preview to see what this ruleset would do without making any changes.
+          </Text>
+          <Button type="primary" icon={<Play size={14} />} style={{ background: '#4f46e5', borderColor: '#4f46e5' }}>
+            Run Preview
+          </Button>
+        </Card>
       )}
 
       {activeTab === 'history' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4 text-center py-5">
-            <Clock size={48} className="text-muted mb-3" />
-            <h5>Change History</h5>
-            <p className="text-muted">
-              View the execution history of this ruleset.
-            </p>
-          </div>
-        </div>
+        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
+          <Clock size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
+          <Title level={5} style={{ margin: '0 0 8px', fontWeight: 600, color: '#475569' }}>Change History</Title>
+          <Text style={{ color: '#94a3b8', fontSize: 12 }}>
+            View the execution history of this ruleset.
+          </Text>
+        </Card>
       )}
 
       {activeTab === 'advanced' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4">
-            <h6 className="fw-bold mb-4">Advanced Settings</h6>
-            <div className="row g-3">
-              <div className="col-md-6">
-                <label className="form-label small fw-bold">Apply to</label>
-                <select
-                  className="form-select"
-                  value={ruleset.scope?.applyTo || 'all'}
-                  onChange={(e) => setRuleset({ 
-                    ...ruleset, 
-                    scope: { ...ruleset.scope, applyTo: e.target.value } 
-                  })}
-                >
-                  <option value="all">All ASINs</option>
-                  <option value="selected">Selected Only</option>
-                  <option value="tagged">Tagged Only</option>
-                </select>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label small fw-bold">Conflict Resolution</label>
-                <select
-                  className="form-select"
-                  value={ruleset.conflictResolution || 'first'}
-                  onChange={(e) => setRuleset({ ...ruleset, conflictResolution: e.target.value })}
-                >
-                  <option value="first">First ruleset wins</option>
-                  <option value="restrictive">Most restrictive action wins</option>
-                  <option value="aggressive">Most aggressive action wins</option>
-                </select>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label small fw-bold d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
+        <Card title="Advanced Settings" style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}>
+          <Row gutter={[16, 24]}>
+            <Col xs={24} md={12}>
+              <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Apply to</Text>
+              <Select
+                value={ruleset.scope?.applyTo || 'all'}
+                onChange={v => setRuleset({ ...ruleset, scope: { ...ruleset.scope, applyTo: v } })}
+                style={{ width: '100%' }}
+              >
+                <Option value="all">All ASINs</Option>
+                <Option value="selected">Selected Only</Option>
+                <Option value="tagged">Tagged Only</Option>
+              </Select>
+            </Col>
+            <Col xs={24} md={12}>
+              <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Conflict Resolution</Text>
+              <Select
+                value={ruleset.conflictResolution || 'first'}
+                onChange={v => setRuleset({ ...ruleset, conflictResolution: v })}
+                style={{ width: '100%' }}
+              >
+                <Option value="first">First ruleset wins</Option>
+                <Option value="restrictive">Most restrictive action wins</Option>
+                <Option value="aggressive">Most aggressive action wins</Option>
+              </Select>
+            </Col>
+            <Col xs={24} md={12}>
+              <Space direction="vertical">
+                <Space>
+                  <Switch 
                     checked={ruleset.emailOnRun || false}
-                    onChange={(e) => setRuleset({ ...ruleset, emailOnRun: e.target.checked })}
+                    onChange={v => setRuleset({ ...ruleset, emailOnRun: v })}
+                    size="small"
                   />
-                  Email me when this ruleset runs
-                </label>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label small fw-bold d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
+                  <Text style={{ fontSize: 12, color: '#475569' }}>Email me when this ruleset runs</Text>
+                </Space>
+                <Space>
+                  <Switch 
                     checked={ruleset.emailOnAction || false}
-                    onChange={(e) => setRuleset({ ...ruleset, emailOnAction: e.target.checked })}
+                    onChange={v => setRuleset({ ...ruleset, emailOnAction: v })}
+                    size="small"
                   />
-                  Email me when actions are applied
-                </label>
-              </div>
-              {ruleset.emailOnRun || ruleset.emailOnAction ? (
-                <div className="col-md-6">
-                  <label className="form-label small fw-bold">Email Address</label>
-                  <input
-                    type="email"
-                    className="form-control"
-                    value={ruleset.emailAddress || ''}
-                    onChange={(e) => setRuleset({ ...ruleset, emailAddress: e.target.value })}
-                    placeholder="your@email.com"
-                  />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
+                  <Text style={{ fontSize: 12, color: '#475569' }}>Email me when actions are applied</Text>
+                </Space>
+              </Space>
+            </Col>
+            {(ruleset.emailOnRun || ruleset.emailOnAction) && (
+              <Col xs={24} md={12}>
+                <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Email Address</Text>
+                <Input
+                  type="email"
+                  value={ruleset.emailAddress || ''}
+                  onChange={e => setRuleset({ ...ruleset, emailAddress: e.target.value })}
+                  placeholder="your@email.com"
+                />
+              </Col>
+            )}
+          </Row>
+        </Card>
       )}
 
       {activeTab === 'analytics' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4 text-center py-5">
-            <BarChart size={48} className="text-muted mb-3" />
-            <h5>Analytics</h5>
-            <p className="text-muted">
-              View performance analytics for this ruleset after it has been executed.
-            </p>
-          </div>
-        </div>
+        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', textAlign: 'center', padding: '48px 24px' }}>
+          <BarChart size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
+          <Title level={5} style={{ margin: '0 0 8px', fontWeight: 600, color: '#475569' }}>Analytics</Title>
+          <Text style={{ color: '#94a3b8', fontSize: 12 }}>
+            View performance analytics for this ruleset after it has been executed.
+          </Text>
+        </Card>
       )}
-    </div>
+      
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Layout>
   );
 };
 
@@ -599,8 +613,6 @@ const RuleCard = ({
   onDeleteCondition,
   getAttributeType,
   getOperatorsForAttribute,
-  moveUp,
-  moveDown
 }) => {
   const [expanded, setExpanded] = useState(true);
 
@@ -625,194 +637,190 @@ const RuleCard = ({
   }, [actions]);
 
   return (
-    <div className="card border-0 shadow-sm" style={{ borderLeft: '4px solid #3b82f6', borderRadius: '8px' }}>
-      <div 
-        className="card-header bg-white border-0 d-flex justify-content-between align-items-center py-3 px-4"
-        style={{ cursor: 'pointer' }}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="d-flex align-items-center gap-3">
-          {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          <span className="fw-bold">{rule.name || `Rule ${ruleIndex + 1}`}</span>
-          <span className="badge bg-light text-dark">{rule.conditions?.length || 0} conditions</span>
+    <Card 
+      title={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <Text strong style={{ fontSize: 13, color: '#1e293b' }}>
+              {rule.name || `Rule ${ruleIndex + 1}`}
+            </Text>
+            <Tag style={{ borderRadius: 12, margin: 0, fontSize: 10 }}>{rule.conditions?.length || 0} conditions</Tag>
+          </div>
+          <Space size={6}>
+            <Switch 
+              checked={rule.isActive}
+              onChange={checked => onUpdate({ isActive: checked })}
+              size="small"
+            />
+            <Popconfirm
+              title="Remove this rule?"
+              description="Are you sure you want to delete this rule?"
+              onConfirm={onDelete}
+              okText="Delete"
+              cancelText="Cancel"
+              okButtonProps={{ danger: true }}
+            >
+              <Button 
+                type="text" 
+                danger 
+                size="small" 
+                icon={<Trash2 size={13} />}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              />
+            </Popconfirm>
+          </Space>
         </div>
-        <div className="d-flex gap-1">
-          {moveUp && (
-            <button className="btn btn-sm btn-light" onClick={(e) => { e.stopPropagation(); moveUp(); }} title="Move up">
-              ↑
-            </button>
-          )}
-          {moveDown && (
-            <button className="btn btn-sm btn-light" onClick={(e) => { e.stopPropagation(); moveDown(); }} title="Move down">
-              ↓
-            </button>
-          )}
-          <button className="btn btn-sm btn-light" onClick={(e) => { e.stopPropagation(); onUpdate({ isActive: !rule.isActive }); }} title={rule.isActive ? 'Disable' : 'Enable'}>
-            {rule.isActive ? <ToggleRight size={16} className="text-success" /> : <ToggleLeft size={16} className="text-muted" />}
-          </button>
-          <button className="btn btn-sm btn-light" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete">
-            <Trash2 size={14} className="text-danger" />
-          </button>
+      }
+      style={{ borderRadius: 8, borderLeft: '4px solid #3b82f6', borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}
+      bodyStyle={{ display: expanded ? 'block' : 'none', padding: 20 }}
+    >
+      <div style={{ marginBottom: 20 }}>
+        <Text strong style={{ fontSize: 11, color: '#475569', display: 'block', marginBottom: 6 }}>Rule Name</Text>
+        <Input
+          value={rule.name}
+          onChange={e => onUpdate({ name: e.target.value })}
+          placeholder="Enter rule name"
+          style={{ maxWidth: 400 }}
+        />
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+          Used to describe why an automated action was triggered.
         </div>
       </div>
 
-      {expanded && (
-        <div className="card-body py-3 px-4">
-          <div className="row g-3 mb-4">
-            <div className="col-md-6">
-              <label className="form-label small fw-bold">Rule Name</label>
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                value={rule.name}
-                onChange={(e) => onUpdate({ name: e.target.value })}
-                placeholder="Enter rule name"
-              />
-              <small className="text-muted">This name will be used to indicate 'why' a change was made.</small>
-            </div>
+      {/* Conditions Section */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <Text strong style={{ fontSize: 12, color: '#1e293b' }}>Criteria (AND)</Text>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>Conditions must all match for the rule to trigger.</div>
           </div>
+          <Button type="dashed" size="small" icon={<Plus size={12} />} onClick={onAddCondition}>
+            Add Condition
+          </Button>
+        </div>
 
-          <div className="mb-4">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <div>
-                <h6 className="fw-bold mb-0">Criteria</h6>
-                <small className="text-muted">Each condition will be AND'd together.</small>
-              </div>
-            </div>
-
-            {(rule.conditions || []).length === 0 ? (
-              <div className="text-center py-3 bg-light rounded-2">
-                <p className="text-muted small mb-2">No conditions defined</p>
-                <button className="btn btn-sm btn-outline-primary" onClick={onAddCondition}>
-                  <Plus size={14} className="me-1" /> Add Condition
-                </button>
-              </div>
-            ) : (
-              <div className="d-flex flex-column gap-2">
-                {rule.conditions.map((condition, condIndex) => (
-                  <div key={condIndex} className="d-flex align-items-center gap-2 p-2 bg-light rounded-2">
-                    <select
-                      className="form-select form-select-sm"
-                      style={{ width: '180px' }}
-                      value={condition.attribute}
-                      onChange={(e) => onUpdateCondition(condIndex, { attribute: e.target.value })}
-                    >
-                      <option value="">Select Attribute</option>
-                      {Object.entries(groupedAttributes).map(([group, attrs]) => (
-                        <optgroup key={group} label={group}>
-                          {attrs.map(attr => (
-                            <option key={attr.value} value={attr.value}>{attr.label}</option>
-                          ))}
-                        </optgroup>
+        {(rule.conditions || []).length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '16px', background: '#f8fafc', borderRadius: 6 }}>
+            <Text type="secondary" style={{ fontSize: 11 }}>No conditions defined yet.</Text>
+          </div>
+        ) : (
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            {rule.conditions.map((condition, condIndex) => (
+              <div key={condIndex} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', padding: 8, borderRadius: 6, flexWrap: 'wrap' }}>
+                <Select
+                  value={condition.attribute || undefined}
+                  onChange={v => onUpdateCondition(condIndex, { attribute: v })}
+                  placeholder="Select Attribute"
+                  style={{ minWidth: 180 }}
+                >
+                  {Object.entries(groupedAttributes).map(([group, attrs]) => (
+                    <OptGroup key={group} label={group}>
+                      {attrs.map(attr => (
+                        <Option key={attr.value} value={attr.value}>{attr.label}</Option>
                       ))}
-                    </select>
-                    
-                    <select
-                      className="form-select form-select-sm"
-                      style={{ width: '140px' }}
-                      value={condition.operator}
-                      onChange={(e) => onUpdateCondition(condIndex, { operator: e.target.value })}
-                      disabled={!condition.attribute}
-                    >
-                      {getOperatorsForAttribute(condition.attribute).map(op => (
-                        <option key={op.value} value={op.value}>{op.label}</option>
-                      ))}
-                    </select>
+                    </OptGroup>
+                  ))}
+                </Select>
 
-                    {!['is empty', 'is not empty'].includes(condition.operator) && (
+                <Select
+                  value={condition.operator}
+                  onChange={v => onUpdateCondition(condIndex, { operator: v })}
+                  disabled={!condition.attribute}
+                  style={{ minWidth: 120 }}
+                >
+                  {getOperatorsForAttribute(condition.attribute).map(op => (
+                    <Option key={op.value} value={op.value}>{op.label}</Option>
+                  ))}
+                </Select>
+
+                {!['is empty', 'is not empty'].includes(condition.operator) && (
+                  <>
+                    <InputNumber
+                      placeholder="Value"
+                      value={condition.value}
+                      onChange={v => onUpdateCondition(condIndex, { value: v })}
+                      style={{ width: 100 }}
+                    />
+                    {condition.operator === 'between' && (
                       <>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          style={{ width: '100px' }}
-                          placeholder="Value"
-                          value={condition.value ?? ''}
-                          onChange={(e) => onUpdateCondition(condIndex, { value: e.target.value ? parseFloat(e.target.value) : null })}
+                        <Text style={{ fontSize: 11, color: '#94a3b8' }}>and</Text>
+                        <InputNumber
+                          placeholder="Max Value"
+                          value={condition.value2}
+                          onChange={v => onUpdateCondition(condIndex, { value2: v })}
+                          style={{ width: 100 }}
                         />
-                        {condition.operator === 'between' && (
-                          <input
-                            type="number"
-                            className="form-control form-select-sm"
-                            style={{ width: '100px' }}
-                            placeholder="Value 2"
-                            value={condition.value2 ?? ''}
-                            onChange={(e) => onUpdateCondition(condIndex, { value2: e.target.value ? parseFloat(e.target.value) : null })}
-                          />
-                        )}
                       </>
                     )}
+                  </>
+                )}
 
-                    {condIndex > 0 && (
-                      <span className="badge bg-secondary">{condition.logicalOp}</span>
-                    )}
+                {condIndex > 0 && (
+                  <Tag color="orange" style={{ margin: 0, fontWeight: 700 }}>{condition.logicalOp}</Tag>
+                )}
 
-                    <button
-                      className="btn btn-sm btn-light text-danger"
-                      onClick={() => onDeleteCondition(condIndex)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-
-                <button className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onClick={onAddCondition}>
-                  <Plus size={14} /> Add Condition
-                </button>
+                <Button 
+                  type="text" 
+                  danger 
+                  size="small" 
+                  icon={<X size={14} />} 
+                  onClick={() => onDeleteCondition(condIndex)} 
+                  style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                />
               </div>
-            )}
-          </div>
+            ))}
+          </Space>
+        )}
+      </div>
 
-          <div>
-            <h6 className="fw-bold mb-2">Action</h6>
-            <small className="text-muted d-block mb-2">Specify what action to take when the criteria is met.</small>
-            
-            <div className="d-flex align-items-center gap-2 p-2 bg-light rounded-2">
-              <select
-                className="form-select form-select-sm"
-                style={{ width: '200px' }}
-                value={rule.action?.actionType || ''}
-                onChange={(e) => onUpdate({ 
-                  action: { 
-                    ...rule.action, 
-                    actionType: e.target.value,
-                    value: null,
-                    value2: null
-                  } 
-                })}
-              >
-                <option value="">Select Action</option>
-                {Object.entries(groupedActions).map(([group, acts]) => (
-                  <optgroup key={group} label={group}>
-                    {acts.map(act => (
-                      <option key={act.value} value={act.value}>{act.label}</option>
-                    ))}
-                  </optgroup>
+      {/* Action Section */}
+      <div>
+        <Text strong style={{ fontSize: 12, color: '#1e293b', display: 'block', marginBottom: 4 }}>Action</Text>
+        <Text style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 12 }}>Action to execute on matched criteria.</Text>
+        
+        <Space size={8} style={{ background: '#f8fafc', padding: 12, borderRadius: 6, width: '100%' }}>
+          <Select
+            value={rule.action?.actionType || undefined}
+            onChange={v => onUpdate({ 
+              action: { 
+                ...rule.action, 
+                actionType: v,
+                value: null,
+                value2: null
+              } 
+            })}
+            placeholder="Select Action"
+            style={{ minWidth: 200 }}
+          >
+            {Object.entries(groupedActions).map(([group, acts]) => (
+              <OptGroup key={group} label={group}>
+                {acts.map(act => (
+                  <Option key={act.value} value={act.value}>{act.label}</Option>
                 ))}
-              </select>
+              </OptGroup>
+            ))}
+          </Select>
 
-              {rule.action?.actionType && 
-                actions.find(a => a.value === rule.action?.actionType)?.hasValue && (
-                <>
-                  <input
-                    type="number"
-                    className="form-control form-control-sm"
-                    style={{ width: '100px' }}
-                    placeholder="Value"
-                    value={rule.action?.value ?? ''}
-                    onChange={(e) => onUpdate({
-                      action: { ...rule.action, value: e.target.value ? parseFloat(e.target.value) : null }
-                    })}
-                  />
-                  <span className="text-muted small">
-                    {actions.find(a => a.value === rule.action?.actionType)?.unit}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          {rule.action?.actionType && 
+            actions.find(a => a.value === rule.action?.actionType)?.hasValue && (
+            <>
+              <InputNumber
+                placeholder="Value"
+                value={rule.action?.value}
+                onChange={v => onUpdate({
+                  action: { ...rule.action, value: v }
+                })}
+                style={{ width: 120 }}
+              />
+              <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                {actions.find(a => a.value === rule.action?.actionType)?.unit}
+              </Text>
+            </>
+          )}
+        </Space>
+      </div>
+    </Card>
   );
 };
 

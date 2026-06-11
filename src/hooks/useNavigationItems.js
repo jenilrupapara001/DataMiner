@@ -144,6 +144,16 @@ export function useNavigationItems() {
         // SECTION: AUTOMATION & TASKS
         const automationItems = filterNull([
             guard(
+                isAdmin || isGlobalUser || hasPermission('rules_view'),
+                {
+                    key: 'rule-sets',
+                    label: 'Rule Sets',
+                    path: '/rule-sets',
+                    icon: Zap,
+                    section: 'automation',
+                }
+            ),
+            guard(
                 isAdmin || isGlobalUser || hasPermission('actions_view'),
                 {
                     key: 'workflows',
