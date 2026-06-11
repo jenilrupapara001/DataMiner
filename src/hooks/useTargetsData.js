@@ -217,7 +217,9 @@ export function useTargetsData(customNotificationApi) {
             const res = await targetsApi.updateBulk(updates.map(u => ({
                 targetId: u.id,
                 totalTargetValue: u.totalTargetValue,
-                breakdowns: u.breakdowns
+                breakdowns: u.breakdowns,
+                month: u.month,
+                targetType: u.targetType
             })));
 
             if (res?.success) {

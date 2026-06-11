@@ -30,6 +30,23 @@ const { Option } = Select;
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKS_SHORT = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4', 'Wk 5'];
 
+const getWeekHeadersForMonth = (year: number, month: number) => {
+    const monthShortNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthLabel = monthShortNames[month - 1];
+    const lastDay = new Date(year, month, 0).getDate();
+    
+    const weeks = [
+        `W1 (1-7 ${monthLabel})`,
+        `W2 (8-14 ${monthLabel})`,
+        `W3 (15-21 ${monthLabel})`,
+        `W4 (22-28 ${monthLabel})`
+    ];
+    if (lastDay > 28) {
+        weeks.push(`W5 (29-${lastDay} ${monthLabel})`);
+    }
+    return weeks;
+};
+
 const GOAL_META: Record<string, { label: string; unit: string; color: string; bg: string }> = {
     GMS: { label: 'GMS', unit: '₹', color: '#4f46e5', bg: '#ede9fe' },
     ADS: { label: 'ADS', unit: '₹', color: '#2563eb', bg: '#dbeafe' },
@@ -100,13 +117,15 @@ const PeriodCell = memo(({
 
 const GoalDataRow = memo(({
     record, goalRow, periods, isFirst, isLast,
-    isSelected, onSelectChange, onEdit, onDelete, perms, sellerName, rowKey
+    isSelected, onSelectChange, onEdit, onDelete, perms, sellerName, rowKey,
+    collapsedMonths
 }: {
     record: any; goalRow: any; periods: string[];
     isFirst: boolean; isLast: boolean;
     isSelected: boolean; onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void; perms: any;
     sellerName?: string; rowKey: string;
+    collapsedMonths?: number[];
 }) => {
     const displayName = sellerName || record.SellerId || '?';
     const goalType = resolveGoalType(goalRow);
@@ -204,10 +223,13 @@ const GoalDataRow = memo(({
                 minWidth: 120
             }}>
                 <div style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>
-                    {record.TargetType === 'YEARLY' ? 'Yearly' : 'Monthly'}
-                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>
-                        ({record.Year}{record.Month ? ` · ${MONTHS_SHORT[record.Month - 1]}` : ''})
-                    </span>
+                    {record.TargetType === 'YEARLY' ? (
+                        <span>Yearly ({record.Year})</span>
+                    ) : (
+                        <Tag color="purple" style={{ fontWeight: 700, fontSize: 11, padding: '2px 8px', borderRadius: 4, margin: 0 }}>
+                            {MONTHS_SHORT[record.Month - 1]}-{record.Year.toString().slice(-2)}
+                        </Tag>
+                    )}
                 </div>
             </td>
 
@@ -255,6 +277,8 @@ const GoalDataRow = memo(({
             {/* Period cells */}
             {periods.map((_, idx) => {
                 const pv = idx + 1;
+                const isCollapsed = record.TargetType === 'YEARLY' && collapsedMonths?.includes(pv);
+
                 const bd = breakdowns.find((b: any) => (b.PeriodValue ?? b.periodValue) === pv);
                 const tgt = bd?.TargetValue ?? bd?.targetValue ?? 0;
                 const ach = bd?.AchievedValue ?? bd?.achievedValue ?? 0;
@@ -263,6 +287,18 @@ const GoalDataRow = memo(({
                 const pct = hasData ? Math.round((ach / tgt) * 100) : 0;
                 const tier = getAchievementTier(pct, goalType === 'ACOS');
                 const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#059669' : '#ef4444') : (ach > 0 ? tier.color : '#ef4444'));
+
+                if (isCollapsed) {
+                    return (
+                        <td key={idx} style={{
+                            padding: '8px 4px', borderRight: '1px solid #f1f5f9',
+                            verticalAlign: 'middle', background: cellBg, minWidth: 40, textAlign: 'center',
+                            fontSize: 10, fontWeight: 700, color: hasData ? tier.color : '#cbd5e1'
+                        }}>
+                            {hasData ? `${pct}%` : '—'}
+                        </td>
+                    );
+                }
 
                 return (
                     <React.Fragment key={idx}>
@@ -352,13 +388,14 @@ const GoalDataRow = memo(({
 // ─── Grouped table ────────────────────────────────────────────────────────────
 
 const GroupedTable = memo(({
-    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete, sellerMap
+    groups, planType, perms, selectedRowKeys, onSelectChange, onEdit, onDelete, sellerMap, collapsedMonths
 }: {
     groups: any[]; planType: 'YEARLY' | 'MONTHLY';
     perms: any; selectedRowKeys: string[];
     onSelectChange: (key: string, checked: boolean) => void;
     onEdit: (r: any) => void; onDelete: (g: any) => void;
     sellerMap: Map<string, string>;
+    collapsedMonths?: number[];
 }) => {
     const periods = planType === 'YEARLY' ? MONTHS_SHORT : WEEKS_SHORT;
 
@@ -419,6 +456,7 @@ const GroupedTable = memo(({
                             onDelete={onDelete}
                             perms={perms}
                             sellerName={sellerMap.get(group.SellerId) || group.SellerId}
+                            collapsedMonths={collapsedMonths}
                         />
                     );
                 });
@@ -496,6 +534,11 @@ const TargetVsAchievement = () => {
 
     const [planType, setPlanType] = useState<'YEARLY' | 'MONTHLY'>('YEARLY');
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+    const [expandedMonths, setExpandedMonths] = useState<number[]>([new Date().getMonth() + 1]);
+    const [collapsedMonths, setCollapsedMonths] = useState<number[]>(() => {
+        const cur = new Date().getMonth() + 1;
+        return Array.from({ length: 12 }, (_, i) => i + 1).filter(m => m !== cur);
+    });
     const [searchText, setSearchText] = useState('');
 
     // ── Filter states ──────────────────────────────────────────────────
@@ -553,8 +596,45 @@ const TargetVsAchievement = () => {
     // ── Group + filter targets ─────────────────────────────────────────
 
     const grouped = useMemo(() => {
-        const filtered = targets
-            .filter(t => t.TargetType === planType)
+        let filtered = [];
+        if (planType === 'MONTHLY') {
+            // Retrieve YEARLY targets and construct virtual monthly targets
+            const yearlyTargets = targets.filter(t => t.TargetType === 'YEARLY');
+            
+            yearlyTargets.forEach(t => {
+                const monthlyBreakdown = t.monthlyBreakdown || [];
+                const weeklyBreakdown = t.weeklyBreakdown || [];
+                
+                // For each month 1 to 12
+                for (let m = 1; m <= 12; m++) {
+                    const mBd = monthlyBreakdown.find((b: any) => b.PeriodValue === m);
+                    if (mBd && (mBd.TargetValue || 0) > 0) {
+                        const virtTarget = {
+                            ...t,
+                            Id: `${t.Id}__M${m}`,
+                            TargetType: 'MONTHLY',
+                            Month: m,
+                            TotalTargetValue: mBd.TargetValue || 0,
+                            overallAchieved: mBd.AchievedValue || 0,
+                            monthlyBreakdown: [mBd],
+                            // Filter weekly breakdowns belonging to this month
+                            // PeriodValue composite values: m * 10 + w. Map them to 1, 2, 3, 4, 5
+                            weeklyBreakdown: weeklyBreakdown
+                                .filter((wBd: any) => Math.floor(wBd.PeriodValue / 10) === m)
+                                .map((wBd: any) => ({
+                                    ...wBd,
+                                    PeriodValue: wBd.PeriodValue % 10
+                                }))
+                        };
+                        filtered.push(virtTarget);
+                    }
+                }
+            });
+        } else {
+            filtered = targets.filter(t => t.TargetType === 'YEARLY');
+        }
+
+        filtered = filtered
             .filter(t => !filterYear || Number(t.Year || 0) === filterYear)
             // RBAC Filter
             .filter(t => {
@@ -606,7 +686,10 @@ const TargetVsAchievement = () => {
                 });
             }
             const g = map.get(key)!;
-            g._allTargetIds.push(t.Id);
+            const originalId = t.Id.includes('__M') ? t.Id.split('__M')[0] : t.Id;
+            if (!g._allTargetIds.includes(originalId)) {
+                g._allTargetIds.push(originalId);
+            }
 
             const gt = resolveGoalType(t);
             // Goal type filter — applied at goalRow level
@@ -703,13 +786,13 @@ const TargetVsAchievement = () => {
             {msgCtx}
 
             {/* ── Page Header ──────────────────────────────────────── */}
-            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '20px 32px 14px' }}>
+            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 24px 8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                     <div>
-                        <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: 20 }}>
+                        <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: 18 }}>
                             Target v/s Achievements
                         </Title>
-                        <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 1 }}>
                             Manage revenue targets, distribution splits, and sales achievements.
                         </Text>
                     </div>
@@ -791,9 +874,9 @@ const TargetVsAchievement = () => {
 
             {/* ── Toolbar with search + filters ───────────────────── */}
             <div style={{
-                background: '#fff', padding: '12px 32px',
+                background: '#fff', padding: '8px 24px',
                 borderBottom: '1px solid #f1f5f9',
-                display: 'flex', flexDirection: 'column', gap: 10
+                display: 'flex', flexDirection: 'column', gap: 8
             }}>
                 {/* Row 1: Search + stats + legend */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -977,46 +1060,31 @@ const TargetVsAchievement = () => {
                     overflow: 'hidden', display: 'flex', flexDirection: 'column',
                     height: '100%', position: 'relative'
                 }}>
-                    <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
-                        <table style={{
-                            borderCollapse: 'collapse', width: '100%',
-                            minWidth: periods.length * 85 + 560
-                        }}>
-                            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    {headerCols.map((col, i) => (
-                                        <th key={i} rowSpan={2} style={{
-                                            padding: col.isCheckbox ? '12px 12px' : '12px 16px',
-                                            textAlign: i >= 3 ? 'right' : col.isCheckbox ? 'center' : 'left',
-                                            fontSize: 11, fontWeight: 600, color: '#475569',
-                                            letterSpacing: '0.06em', textTransform: 'uppercase',
-                                            background: '#f8fafc',
-                                            borderRight: '1px solid #f1f5f9',
-                                            borderBottom: '1px solid #e2e8f0',
-                                            whiteSpace: 'nowrap',
-                                            ...(col.sticky ? { position: 'sticky', left: col.left, zIndex: 6 } : {}),
-                                            width: col.w, minWidth: col.w
-                                        }}>
-                                            {col.isCheckbox ? (
-                                                <Checkbox
-                                                    checked={
-                                                        paginatedGroups.length > 0 &&
-                                                        paginatedGroups.every(g => {
-                                                            const rws = g.goalRows || [];
-                                                            return rws.every((r: any) => {
-                                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
-                                                                return selectedRowKeys.includes(rKey);
-                                                            });
-                                                        })
-                                                    }
-                                                    indeterminate={
-                                                        paginatedGroups.some(g => {
-                                                            const rws = g.goalRows || [];
-                                                            return rws.some((r: any) => {
-                                                                const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
-                                                                return selectedRowKeys.includes(rKey);
-                                                            });
-                                                        }) && !(
+                    {planType === 'YEARLY' ? (
+                        <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+                            <table style={{
+                                borderCollapse: 'collapse', width: '100%',
+                                minWidth: (12 - collapsedMonths.length) * 180 + collapsedMonths.length * 40 + 560
+                            }}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        {headerCols.map((col, i) => (
+                                            <th key={i} rowSpan={2} style={{
+                                                padding: col.isCheckbox ? '12px 12px' : '12px 16px',
+                                                textAlign: i >= 3 ? 'right' : col.isCheckbox ? 'center' : 'left',
+                                                fontSize: 11, fontWeight: 600, color: '#475569',
+                                                letterSpacing: '0.06em', textTransform: 'uppercase',
+                                                background: '#f8fafc',
+                                                borderRight: '1px solid #f1f5f9',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                whiteSpace: 'nowrap',
+                                                ...(col.sticky ? { position: 'sticky', left: col.left, zIndex: 6 } : {}),
+                                                width: col.w, minWidth: col.w
+                                            }}>
+                                                {col.isCheckbox ? (
+                                                    <Checkbox
+                                                        checked={
+                                                            paginatedGroups.length > 0 &&
                                                             paginatedGroups.every(g => {
                                                                 const rws = g.goalRows || [];
                                                                 return rws.every((r: any) => {
@@ -1024,92 +1092,268 @@ const TargetVsAchievement = () => {
                                                                     return selectedRowKeys.includes(rKey);
                                                                 });
                                                             })
-                                                        )
-                                                    }
-                                                    onChange={e => {
-                                                        if (e.target.checked) {
-                                                            const nk = [...selectedRowKeys];
-                                                            paginatedGroups.forEach(g => {
-                                                                const rws = g.goalRows || [];
-                                                                rws.forEach((r: any) => {
-                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
-                                                                    if (!nk.includes(rKey)) nk.push(rKey);
-                                                                });
-                                                            });
-                                                            setSelectedRowKeys(nk);
-                                                        } else {
-                                                            const pk: string[] = [];
-                                                            paginatedGroups.forEach(g => {
-                                                                const rws = g.goalRows || [];
-                                                                rws.forEach((r: any) => {
-                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
-                                                                    pk.push(rKey);
-                                                                });
-                                                            });
-                                                            setSelectedRowKeys(selectedRowKeys.filter(k => !pk.includes(k)));
                                                         }
-                                                    }}
-                                                />
-                                            ) : col.label}
-                                        </th>
-                                    ))}
-                                    {periods.map((p, i) => (
-                                        <th key={i} colSpan={3} style={{
-                                            padding: '8px 12px', textAlign: 'center',
+                                                        indeterminate={
+                                                            paginatedGroups.some(g => {
+                                                                const rws = g.goalRows || [];
+                                                                return rws.some((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    return selectedRowKeys.includes(rKey);
+                                                                });
+                                                            }) && !(
+                                                                paginatedGroups.every(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    return rws.every((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        return selectedRowKeys.includes(rKey);
+                                                                    });
+                                                                })
+                                                            )
+                                                        }
+                                                        onChange={e => {
+                                                            if (e.target.checked) {
+                                                                const nk = [...selectedRowKeys];
+                                                                paginatedGroups.forEach(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    rws.forEach((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        if (!nk.includes(rKey)) nk.push(rKey);
+                                                                    });
+                                                                });
+                                                                setSelectedRowKeys(nk);
+                                                            } else {
+                                                                const pk: string[] = [];
+                                                                paginatedGroups.forEach(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    rws.forEach((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        pk.push(rKey);
+                                                                    });
+                                                                });
+                                                                setSelectedRowKeys(selectedRowKeys.filter(k => !pk.includes(k)));
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : col.label}
+                                            </th>
+                                        ))}
+                                        {periods.map((p, i) => {
+                                            const monthNum = i + 1;
+                                            const isCollapsed = collapsedMonths.includes(monthNum);
+                                            return (
+                                                <th key={i} colSpan={isCollapsed ? 1 : 3} rowSpan={isCollapsed ? 2 : 1} style={{
+                                                    padding: '8px 12px', textAlign: 'center',
+                                                    fontSize: 11, fontWeight: 600, color: '#475569',
+                                                    background: '#f8fafc',
+                                                    borderRight: '1px solid #f1f5f9',
+                                                    borderBottom: '1px solid #e2e8f0',
+                                                    minWidth: isCollapsed ? 40 : 180, whiteSpace: 'nowrap'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                                        <span style={{ fontSize: 12, fontWeight: 600 }}>{p}</span>
+                                                        <Button 
+                                                            type="text" 
+                                                            size="small" 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setCollapsedMonths(prev => 
+                                                                    prev.includes(monthNum) ? prev.filter(m => m !== monthNum) : [...prev, monthNum]
+                                                                );
+                                                            }}
+                                                            style={{ fontSize: 9, padding: '0 4px', height: 16, width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}
+                                                        >
+                                                            {isCollapsed ? '+' : '−'}
+                                                        </Button>
+                                                    </div>
+                                                </th>
+                                            );
+                                        })}
+                                        <th rowSpan={2} style={{
+                                            padding: '12px 12px', textAlign: 'center',
                                             fontSize: 11, fontWeight: 600, color: '#475569',
+                                            letterSpacing: '0.06em', textTransform: 'uppercase',
                                             background: '#f8fafc',
-                                            borderRight: '1px solid #f1f5f9',
+                                            borderLeft: '1px solid #f1f5f9',
                                             borderBottom: '1px solid #e2e8f0',
-                                            minWidth: 180, whiteSpace: 'nowrap'
+                                            position: 'sticky', right: 0, zIndex: 6, width: 80
                                         }}>
-                                            <div style={{ fontWeight: 600, fontSize: 12 }}>{p}</div>
+                                            Actions
                                         </th>
-                                    ))}
-                                    <th rowSpan={2} style={{
-                                        padding: '12px 12px', textAlign: 'center',
-                                        fontSize: 11, fontWeight: 600, color: '#475569',
-                                        letterSpacing: '0.06em', textTransform: 'uppercase',
-                                        background: '#f8fafc',
-                                        borderLeft: '1px solid #f1f5f9',
-                                        borderBottom: '1px solid #e2e8f0',
-                                        position: 'sticky', right: 0, zIndex: 6, width: 80
-                                    }}>
-                                        Actions
-                                    </th>
-                                </tr>
-                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    {periods.map((p, i) => (
-                                        <React.Fragment key={i}>
-                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
-                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
-                                            <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
-                                        </React.Fragment>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading && grouped.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7 + (periods.length * 3) + 1}
-                                            style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
-                                            Loading targets...
-                                        </td>
                                     </tr>
-                                ) : (
-                                    <GroupedTable
-                                        groups={paginatedGroups}
-                                        planType={planType}
-                                        perms={perms}
-                                        selectedRowKeys={selectedRowKeys}
-                                        onSelectChange={handleSelectChange}
-                                        onEdit={handleEdit}
-                                        onDelete={handleDelete}
-                                        sellerMap={sellerMap}
-                                    />
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        {periods.map((p, i) => {
+                                            const monthNum = i + 1;
+                                            const isCollapsed = collapsedMonths.includes(monthNum);
+                                            if (isCollapsed) return null;
+                                            return (
+                                                <React.Fragment key={i}>
+                                                    <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
+                                                    <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
+                                                    <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading && grouped.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7 + (periods.length * 3) + 1}
+                                                style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
+                                                Loading targets...
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        <GroupedTable
+                                            groups={paginatedGroups}
+                                            planType={planType}
+                                            perms={perms}
+                                            selectedRowKeys={selectedRowKeys}
+                                            onSelectChange={handleSelectChange}
+                                            onEdit={handleEdit}
+                                            onDelete={handleDelete}
+                                            sellerMap={sellerMap}
+                                            collapsedMonths={collapsedMonths}
+                                        />
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+                            <table style={{
+                                borderCollapse: 'collapse', width: '100%',
+                                minWidth: WEEKS_SHORT.length * 180 + 560
+                            }}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        {headerCols.map((col, i) => (
+                                            <th key={i} rowSpan={2} style={{
+                                                padding: col.isCheckbox ? '12px 12px' : '12px 16px',
+                                                textAlign: i >= 3 ? 'right' : col.isCheckbox ? 'center' : 'left',
+                                                fontSize: 11, fontWeight: 600, color: '#475569',
+                                                letterSpacing: '0.06em', textTransform: 'uppercase',
+                                                background: '#f8fafc',
+                                                borderRight: '1px solid #f1f5f9',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                whiteSpace: 'nowrap',
+                                                ...(col.sticky ? { position: 'sticky', left: col.left, zIndex: 6 } : {}),
+                                                width: col.w, minWidth: col.w
+                                            }}>
+                                                {col.isCheckbox ? (
+                                                    <Checkbox
+                                                        checked={
+                                                            paginatedGroups.length > 0 &&
+                                                            paginatedGroups.every(g => {
+                                                                const rws = g.goalRows || [];
+                                                                return rws.every((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    return selectedRowKeys.includes(rKey);
+                                                                });
+                                                            })
+                                                        }
+                                                        indeterminate={
+                                                            paginatedGroups.some(g => {
+                                                                const rws = g.goalRows || [];
+                                                                return rws.some((r: any) => {
+                                                                    const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                    return selectedRowKeys.includes(rKey);
+                                                                });
+                                                            }) && !(
+                                                                paginatedGroups.every(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    return rws.every((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        return selectedRowKeys.includes(rKey);
+                                                                    });
+                                                                })
+                                                            )
+                                                        }
+                                                        onChange={e => {
+                                                            if (e.target.checked) {
+                                                                const nk = [...selectedRowKeys];
+                                                                paginatedGroups.forEach(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    rws.forEach((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        if (!nk.includes(rKey)) nk.push(rKey);
+                                                                    });
+                                                                });
+                                                                setSelectedRowKeys(nk);
+                                                            } else {
+                                                                const pk: string[] = [];
+                                                                paginatedGroups.forEach(g => {
+                                                                    const rws = g.goalRows || [];
+                                                                    rws.forEach((r: any) => {
+                                                                        const rKey = r.targetRecordId || `${g._groupId}__${resolveGoalType(r)}`;
+                                                                        pk.push(rKey);
+                                                                    });
+                                                                });
+                                                                setSelectedRowKeys(selectedRowKeys.filter(k => !pk.includes(k)));
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : col.label}
+                                            </th>
+                                        ))}
+                                        {WEEKS_SHORT.map((p, i) => (
+                                            <th key={i} colSpan={3} style={{
+                                                padding: '8px 12px', textAlign: 'center',
+                                                fontSize: 11, fontWeight: 600, color: '#475569',
+                                                background: '#f8fafc',
+                                                borderRight: '1px solid #f1f5f9',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                minWidth: 180, whiteSpace: 'nowrap'
+                                            }}>
+                                                <div style={{ fontWeight: 600, fontSize: 12 }}>{p}</div>
+                                            </th>
+                                        ))}
+                                        <th rowSpan={2} style={{
+                                            padding: '12px 12px', textAlign: 'center',
+                                            fontSize: 11, fontWeight: 600, color: '#475569',
+                                            letterSpacing: '0.06em', textTransform: 'uppercase',
+                                            background: '#f8fafc',
+                                            borderLeft: '1px solid #f1f5f9',
+                                            borderBottom: '1px solid #e2e8f0',
+                                            position: 'sticky', right: 0, zIndex: 6, width: 80
+                                        }}>
+                                            Actions
+                                        </th>
+                                    </tr>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        {WEEKS_SHORT.map((p, i) => (
+                                            <React.Fragment key={i}>
+                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>TGT</th>
+                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>ACH</th>
+                                                <th style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textAlign: 'right', borderRight: '1px solid #f1f5f9', padding: '4px 8px' }}>%</th>
+                                            </React.Fragment>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading && grouped.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7 + (WEEKS_SHORT.length * 3) + 1}
+                                                style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
+                                                Loading targets...
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        <GroupedTable
+                                            groups={paginatedGroups}
+                                            planType={planType}
+                                            perms={perms}
+                                            selectedRowKeys={selectedRowKeys}
+                                            onSelectChange={handleSelectChange}
+                                            onEdit={handleEdit}
+                                            onDelete={handleDelete}
+                                            sellerMap={sellerMap}
+                                        />
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
                     {/* Floating Bulk Actions Bar */}
                     {selectedRowKeys.length > 0 && (

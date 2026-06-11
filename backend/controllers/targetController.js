@@ -33,6 +33,71 @@ function getWeekRange(year, month, weekNumber) {
     };
 }
 
+
+// Helper to verify user access to seller codes (e.g. 'AMAZON_LOTUS')
+// req.user.assignedSellers holds the Sellers.Id (UUIDs). We need to resolve codes.
+const checkSellerAccess = async (user, sellerIdOrIds) => {
+    const userRole = user?.role?.name || user?.role || '';
+    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    if (isGlobalUser) return true;
+
+    const assignedSellers = user?.assignedSellers || [];
+    if (assignedSellers.length === 0) return false;
+
+    const pool = await getPool();
+    const ids = Array.isArray(sellerIdOrIds) ? sellerIdOrIds : [sellerIdOrIds];
+
+    const result = await pool.request().query('SELECT Id, SellerId FROM Sellers');
+    const sellerCodeToId = {};
+    result.recordset.forEach(s => {
+        if (s.Id && s.SellerId) {
+            sellerCodeToId[s.SellerId.toLowerCase()] = s.Id.toLowerCase();
+            sellerCodeToId[s.Id.toLowerCase()] = s.Id.toLowerCase();
+        }
+    });
+
+    const cleanAssigned = assignedSellers.map(id => id.toLowerCase());
+
+    for (const sid of ids) {
+        if (!sid) continue;
+        const cleanSid = sid.toString().toLowerCase();
+        const resolvedId = sellerCodeToId[cleanSid] || cleanSid;
+        if (!cleanAssigned.includes(resolvedId)) {
+            return false;
+        }
+    }
+    return true;
+};
+
+const getSellerIdsByTargetIds = async (targetIds) => {
+    if (!targetIds || targetIds.length === 0) return [];
+    const pool = await getPool();
+    const request = pool.request();
+    const placeholders = targetIds.map((id, idx) => {
+        request.input(`tId_${idx}`, sql.VarChar, id);
+        return `@tId_${idx}`;
+    });
+    const result = await request.query(`SELECT DISTINCT SellerId FROM GmsTargets WHERE Id IN (${placeholders.join(',')})`);
+    return result.recordset.map(r => r.SellerId);
+};
+
+const getSellerIdsByBreakdownIds = async (breakdownIds) => {
+    if (!breakdownIds || breakdownIds.length === 0) return [];
+    const pool = await getPool();
+    const request = pool.request();
+    const placeholders = breakdownIds.map((id, idx) => {
+        request.input(`bId_${idx}`, sql.VarChar, id);
+        return `@bId_${idx}`;
+    });
+    const result = await request.query(`
+        SELECT DISTINCT t.SellerId 
+        FROM GmsTargetBreakdowns b
+        JOIN GmsTargets t ON b.TargetId = t.Id
+        WHERE b.Id IN (${placeholders.join(',')})
+    `);
+    return result.recordset.map(r => r.SellerId);
+};
+
 /**
  * Get all targets with achievements merged dynamically
  */
@@ -289,6 +354,12 @@ exports.createTargets = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid payload: targets array required." });
         }
 
+        const sellerIdsToValidate = targets.map(t => t.sellerId);
+        const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for these seller(s)." });
+        }
+
         const pool = await getPool();
 
         for (const targetConfig of targets) {
@@ -455,6 +526,13 @@ exports.updateAchievements = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid payload: updates array required." });
         }
 
+        const breakdownIds = updates.map(u => u.breakdownId);
+        const sellerIdsToValidate = await getSellerIdsByBreakdownIds(breakdownIds);
+        const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for these seller(s)." });
+        }
+
         const pool = await getPool();
 
         for (const update of updates) {
@@ -510,6 +588,12 @@ exports.updateAchievements = async (req, res) => {
 exports.deleteTarget = async (req, res) => {
     try {
         const { id } = req.params;
+        const sellerIdsToValidate = await getSellerIdsByTargetIds([id]);
+        const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for this seller." });
+        }
+
         const pool = await getPool();
 
         const targetInfo = await pool.request()
@@ -553,6 +637,12 @@ exports.deleteTargetsBulk = async (req, res) => {
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ success: false, message: "Invalid payload: ids array required." });
         }
+        const sellerIdsToValidate = await getSellerIdsByTargetIds(ids);
+        const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for these seller(s)." });
+        }
+
         const pool = await getPool();
         
         const request = pool.request();
@@ -758,6 +848,16 @@ exports.importAchievements = async (req, res) => {
                     errors.push({
                         row: rowNum,
                         reason: `Brand "${brandName || 'N/A'}"${marketplace ? ' on platform ' + marketplace : ''} not found in Sellers table`
+                    });
+                    skipped++;
+                    continue;
+                }
+
+                const hasAccess = await checkSellerAccess(req.user, sellerId);
+                if (!hasAccess) {
+                    errors.push({
+                        row: rowNum,
+                        reason: `Access denied: You do not have permission for seller "${sellerId}"`
                     });
                     skipped++;
                     continue;
@@ -1061,10 +1161,17 @@ exports.importAchievements = async (req, res) => {
  */
 exports.updateTarget = async (req, res) => {
     try {
-        const { targetId, totalTargetValue, breakdowns, updates } = req.body;
+        const { targetId, totalTargetValue, breakdowns, updates, month: bodyMonth, targetType: bodyTargetType } = req.body;
 
         // Bulk updates branch
         if (updates && Array.isArray(updates)) {
+            const targetIdsToValidate = updates.map(u => u.targetId);
+            const sellerIdsToValidate = await getSellerIdsByTargetIds(targetIdsToValidate);
+            const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+            if (!hasAccess) {
+                return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for these seller(s)." });
+            }
+
             const pool = await getPool();
             const transaction = pool.transaction();
             await transaction.begin();
@@ -1073,7 +1180,7 @@ exports.updateTarget = async (req, res) => {
                 const allRows = [];
 
                 for (const update of updates) {
-                    const { targetId: uTargetId, totalTargetValue: uTotalTargetValue, breakdowns: uBreakdowns } = update;
+                    const { targetId: uTargetId, totalTargetValue: uTotalTargetValue, breakdowns: uBreakdowns, month: uMonth, targetType: uTargetType } = update;
                     if (!uTargetId || !Array.isArray(uBreakdowns)) {
                         await transaction.rollback();
                         return res.status(400).json({ success: false, message: "Invalid payload inside updates array." });
@@ -1096,21 +1203,109 @@ exports.updateTarget = async (req, res) => {
                         return res.status(404).json({ success: false, message: `Target ${uTargetId} not found.` });
                     }
 
-                    const { TargetType: targetType, Year: year, Month: month } = target;
+                    const { Year: year } = target;
 
-                    // 2. Update TotalTargetValue on GmsTargets
-                    await transaction.request()
-                        .input(`tId_up_${uTargetId}`, sql.VarChar, uTargetId)
-                        .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), calculatedTotalTarget)
-                        .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId_up_${uTargetId}`);
+                    if (uTargetType === 'MONTHLY' && uMonth) {
+                        // A. Update the Month breakdown itself
+                        await transaction.request()
+                            .input('tId', sql.VarChar, uTargetId)
+                            .input('month', sql.Int, uMonth)
+                            .input('val', sql.Decimal(18, 2), calculatedTotalTarget)
+                            .query(`
+                                UPDATE GmsTargetBreakdowns 
+                                SET TargetValue = @val 
+                                WHERE TargetId = @tId AND PeriodType = 'MONTH' AND PeriodValue = @month
+                            `);
 
-                    // 3. Clear existing breakdowns
-                    await transaction.request()
-                        .input(`tId_del_${uTargetId}`, sql.VarChar, uTargetId)
-                        .query(`DELETE FROM GmsTargetBreakdowns WHERE TargetId = @tId_del_${uTargetId}`);
+                        // B. Clear only the week and day breakdowns for this month
+                        const minWeek = uMonth * 10 + 1;
+                        const maxWeek = uMonth * 10 + 5;
+                        await transaction.request()
+                            .input('tId', sql.VarChar, uTargetId)
+                            .input('minW', sql.Int, minWeek)
+                            .input('maxW', sql.Int, maxWeek)
+                            .query(`
+                                DELETE FROM GmsTargetBreakdowns 
+                                WHERE TargetId = @tId AND PeriodType = 'WEEK' AND PeriodValue BETWEEN @minW AND @maxW
+                            `);
 
-                    // 4. Build all breakdown rows in memory
-                    if (targetType === 'YEARLY') {
+                        const { startDate: mStart, endDate: mEnd } = getMonthRange(year, uMonth);
+                        await transaction.request()
+                            .input('tId', sql.VarChar, uTargetId)
+                            .input('start', sql.Date, mStart)
+                            .input('end', sql.Date, mEnd)
+                            .query(`
+                                DELETE FROM GmsTargetBreakdowns 
+                                WHERE TargetId = @tId AND PeriodType = 'DAY' 
+                                  AND SpecificDate >= @start AND SpecificDate <= @end
+                            `);
+
+                        // C. Distribute the new weeks and days
+                        for (const breakdownItem of uBreakdowns) {
+                            const { periodValue, targetValue, achievedValue } = breakdownItem; // periodValue is 1 to 5
+                            const compositeWeekValue = uMonth * 10 + periodValue;
+                            const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
+                            const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
+                            const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
+
+                            allRows.push({
+                                id: generateId(),
+                                targetId: uTargetId,
+                                periodType: 'WEEK',
+                                periodValue: compositeWeekValue,
+                                targetValue: parseFloat(targetValue) || 0,
+                                achievedValue: weeklyAchieved,
+                                percentage: percentageContribution,
+                                specificDate: null
+                            });
+
+                            // Distribute to 7 Days
+                            const weeklyTarget = parseFloat(targetValue) || 0;
+                            const dailyTarget = weeklyTarget / 7;
+                            const weekStartRange = getWeekRange(year, uMonth, periodValue);
+                            let currentDay = new Date(weekStartRange.startDate);
+
+                            for (let d = 1; d <= 7; d++) {
+                                allRows.push({
+                                    id: generateId(),
+                                    targetId: uTargetId,
+                                    periodType: 'DAY',
+                                    periodValue: d,
+                                    targetValue: dailyTarget,
+                                    achievedValue: dailyAchieved,
+                                    percentage: null,
+                                    specificDate: format(currentDay, 'yyyy-MM-dd')
+                                });
+                                currentDay = addDays(currentDay, 1);
+                            }
+                        }
+
+                        // D. Re-sum and update the Yearly Target's total value
+                        const sumResult = await transaction.request()
+                            .input('tId', sql.VarChar, uTargetId)
+                            .query(`
+                                SELECT SUM(ISNULL(TargetValue, 0)) AS TotalTarget
+                                FROM GmsTargetBreakdowns
+                                WHERE TargetId = @tId AND PeriodType = 'MONTH'
+                            `);
+                        const calculatedYearlyTarget = sumResult.recordset[0].TotalTarget || 0;
+
+                        await transaction.request()
+                            .input('tId', sql.VarChar, uTargetId)
+                            .input('ttVal', sql.Decimal(18, 2), calculatedYearlyTarget)
+                            .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId`);
+
+                    } else {
+                        // Standard Yearly update (existing logic)
+                        await transaction.request()
+                            .input(`tId_up_${uTargetId}`, sql.VarChar, uTargetId)
+                            .input(`ttVal_${uTargetId}`, sql.Decimal(18, 2), calculatedTotalTarget)
+                            .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal_${uTargetId}, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId_up_${uTargetId}`);
+
+                        await transaction.request()
+                            .input(`tId_del_${uTargetId}`, sql.VarChar, uTargetId)
+                            .query(`DELETE FROM GmsTargetBreakdowns WHERE TargetId = @tId_del_${uTargetId}`);
+
                         for (const breakdownItem of uBreakdowns) {
                             const { periodValue, targetValue, achievedValue } = breakdownItem;
                             const monthlyBreakdownId = generateId();
@@ -1120,7 +1315,6 @@ exports.updateTarget = async (req, res) => {
                             const weeklyAchieved = monthlyAchieved !== null ? monthlyAchieved / 4 : null;
                             const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
 
-                            // Month row
                             allRows.push({
                                 id: monthlyBreakdownId,
                                 targetId: uTargetId,
@@ -1132,7 +1326,6 @@ exports.updateTarget = async (req, res) => {
                                 specificDate: null
                             });
 
-                             // Distribute to 4 Weeks
                              const monthlyTarget = parseFloat(targetValue) || 0;
                              const weeklyTarget = monthlyTarget / 4;
 
@@ -1149,7 +1342,6 @@ exports.updateTarget = async (req, res) => {
                                       specificDate: null
                                   });
 
-                                  // Distribute to 7 Days
                                   const dailyTarget = weeklyTarget / 7;
                                   const weekStartRange = getWeekRange(year, periodValue, w);
                                   let currentDay = new Date(weekStartRange.startDate);
@@ -1169,51 +1361,10 @@ exports.updateTarget = async (req, res) => {
                                   }
                               }
                         }
-                    } else {
-                        // MONTHLY: breakdowns are weekly values
-                        for (const breakdownItem of uBreakdowns) {
-                            const { periodValue, targetValue, achievedValue } = breakdownItem;
-                            const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
-
-                            const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
-                            const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
-
-                            // Week row
-                            allRows.push({
-                                id: generateId(),
-                                targetId: uTargetId,
-                                periodType: 'WEEK',
-                                periodValue,
-                                targetValue: parseFloat(targetValue) || 0,
-                                achievedValue: weeklyAchieved,
-                                percentage: percentageContribution,
-                                specificDate: null
-                            });
-
-                            // Distribute to 7 Days
-                            const weeklyTarget = parseFloat(targetValue) || 0;
-                            const dailyTarget = weeklyTarget / 7;
-                            const weekStartRange = getWeekRange(year, month, periodValue);
-                            let currentDay = new Date(weekStartRange.startDate);
-
-                            for (let d = 1; d <= 7; d++) {
-                                allRows.push({
-                                    id: generateId(),
-                                    targetId: uTargetId,
-                                    periodType: 'DAY',
-                                    periodValue: d,
-                                    targetValue: dailyTarget,
-                                    achievedValue: dailyAchieved,
-                                    percentage: null,
-                                    specificDate: format(currentDay, 'yyyy-MM-dd')
-                                });
-                                currentDay = addDays(currentDay, 1);
-                            }
-                        }
                     }
                 }
 
-                // 5. Batch insert all rows in chunks
+                // Batch insert allRows in chunks
                 const CHUNK_SIZE = 50;
                 for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
                     const chunk = allRows.slice(i, i + CHUNK_SIZE);
@@ -1270,18 +1421,22 @@ exports.updateTarget = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid payload: targetId and breakdowns array required." });
         }
 
+        const sellerIdsToValidate = await getSellerIdsByTargetIds([targetId]);
+        const hasAccess = await checkSellerAccess(req.user, sellerIdsToValidate);
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Access denied: You do not have permissions for this seller." });
+        }
+
         const pool = await getPool();
         const transaction = pool.transaction();
         await transaction.begin();
 
         try {
-            // Auto-calculate the total target value from breakdowns
             let calculatedTotalTarget = 0;
             for (const breakdownItem of breakdowns) {
                 calculatedTotalTarget += parseFloat(breakdownItem.targetValue) || 0;
             }
 
-            // 1. Fetch the existing target record
             const targetResult = await transaction.request()
                 .input('targetId', sql.VarChar, targetId)
                 .query('SELECT Id, SellerId, TargetType, Year, Month, GoalType FROM GmsTargets WHERE Id = @targetId');
@@ -1292,23 +1447,110 @@ exports.updateTarget = async (req, res) => {
                 return res.status(404).json({ success: false, message: "Target not found." });
             }
 
-            const { TargetType: targetType, Year: year, Month: month, SellerId: sellerId, GoalType: goalType } = target;
+            const { TargetType: targetType, Year: year, GoalType: goalType, SellerId: sellerId } = target;
 
-            // 2. Update TotalTargetValue on GmsTargets
-            await transaction.request()
-                .input('targetId', sql.VarChar, targetId)
-                .input('totalTargetValue', sql.Decimal(18, 2), calculatedTotalTarget)
-                .query('UPDATE GmsTargets SET TotalTargetValue = @totalTargetValue, UpdatedAt = dbo.GetEnvDate() WHERE Id = @targetId');
-
-            // 3. Clear existing breakdowns
-            await transaction.request()
-                .input('targetId', sql.VarChar, targetId)
-                .query('DELETE FROM GmsTargetBreakdowns WHERE TargetId = @targetId');
-
-            // 4. Build all breakdown rows in memory, then batch insert
             const allRows = [];
 
-            if (targetType === 'YEARLY') {
+            if ((bodyTargetType === 'MONTHLY' || targetType === 'MONTHLY') && bodyMonth) {
+                // A. Update specific Month breakdown target value
+                await transaction.request()
+                    .input('tId', sql.VarChar, targetId)
+                    .input('month', sql.Int, bodyMonth)
+                    .input('val', sql.Decimal(18, 2), calculatedTotalTarget)
+                    .query(`
+                        UPDATE GmsTargetBreakdowns 
+                        SET TargetValue = @val 
+                        WHERE TargetId = @tId AND PeriodType = 'MONTH' AND PeriodValue = @month
+                    `);
+
+                // B. Clear week and day breakdowns for this month
+                const minWeek = bodyMonth * 10 + 1;
+                const maxWeek = bodyMonth * 10 + 5;
+                await transaction.request()
+                    .input('tId', sql.VarChar, targetId)
+                    .input('minW', sql.Int, minWeek)
+                    .input('maxW', sql.Int, maxWeek)
+                    .query(`
+                        DELETE FROM GmsTargetBreakdowns 
+                        WHERE TargetId = @tId AND PeriodType = 'WEEK' AND PeriodValue BETWEEN @minW AND @maxW
+                    `);
+
+                const { startDate: mStart, endDate: mEnd } = getMonthRange(year, bodyMonth);
+                await transaction.request()
+                    .input('tId', sql.VarChar, targetId)
+                    .input('start', sql.Date, mStart)
+                    .input('end', sql.Date, mEnd)
+                    .query(`
+                        DELETE FROM GmsTargetBreakdowns 
+                        WHERE TargetId = @tId AND PeriodType = 'DAY' 
+                          AND SpecificDate >= @start AND SpecificDate <= @end
+                    `);
+
+                // C. Distribute the new weeks and days
+                for (const breakdownItem of breakdowns) {
+                    const { periodValue, targetValue, achievedValue } = breakdownItem; // periodValue is 1 to 5
+                    const compositeWeekValue = bodyMonth * 10 + periodValue;
+                    const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
+                    const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
+                    const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
+
+                    allRows.push({
+                        id: generateId(),
+                        targetId,
+                        periodType: 'WEEK',
+                        periodValue: compositeWeekValue,
+                        targetValue: parseFloat(targetValue) || 0,
+                        achievedValue: weeklyAchieved,
+                        percentage: percentageContribution,
+                        specificDate: null
+                    });
+
+                    const weeklyTarget = parseFloat(targetValue) || 0;
+                    const dailyTarget = weeklyTarget / 7;
+                    const weekStartRange = getWeekRange(year, bodyMonth, periodValue);
+                    let currentDay = new Date(weekStartRange.startDate);
+
+                    for (let d = 1; d <= 7; d++) {
+                        allRows.push({
+                            id: generateId(),
+                            targetId,
+                            periodType: 'DAY',
+                            periodValue: d,
+                            targetValue: dailyTarget,
+                            achievedValue: dailyAchieved,
+                            percentage: null,
+                            specificDate: format(currentDay, 'yyyy-MM-dd')
+                        });
+                        currentDay = addDays(currentDay, 1);
+                    }
+                }
+
+                // D. Re-sum and update the Yearly Target's total value
+                const sumResult = await transaction.request()
+                    .input('tId', sql.VarChar, targetId)
+                    .query(`
+                        SELECT SUM(ISNULL(TargetValue, 0)) AS TotalTarget
+                        FROM GmsTargetBreakdowns
+                        WHERE TargetId = @tId AND PeriodType = 'MONTH'
+                    `);
+                const calculatedYearlyTarget = sumResult.recordset[0].TotalTarget || 0;
+
+                await transaction.request()
+                    .input('tId', sql.VarChar, targetId)
+                    .input('ttVal', sql.Decimal(18, 2), calculatedYearlyTarget)
+                    .query(`UPDATE GmsTargets SET TotalTargetValue = @ttVal, UpdatedAt = dbo.GetEnvDate() WHERE Id = @tId`);
+
+            } else {
+                // Standard Yearly update
+                await transaction.request()
+                    .input('targetId', sql.VarChar, targetId)
+                    .input('totalTargetValue', sql.Decimal(18, 2), calculatedTotalTarget)
+                    .query('UPDATE GmsTargets SET TotalTargetValue = @totalTargetValue, UpdatedAt = dbo.GetEnvDate() WHERE Id = @targetId');
+
+                await transaction.request()
+                    .input('targetId', sql.VarChar, targetId)
+                    .query('DELETE FROM GmsTargetBreakdowns WHERE TargetId = @targetId');
+
                 for (const breakdownItem of breakdowns) {
                     const { periodValue, targetValue, achievedValue } = breakdownItem;
                     const monthlyBreakdownId = generateId();
@@ -1318,7 +1560,6 @@ exports.updateTarget = async (req, res) => {
                     const weeklyAchieved = monthlyAchieved !== null ? monthlyAchieved / 4 : null;
                     const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
 
-                    // Month row
                     allRows.push({
                         id: monthlyBreakdownId,
                         targetId,
@@ -1330,7 +1571,6 @@ exports.updateTarget = async (req, res) => {
                         specificDate: null
                     });
 
-                     // Distribute to 4 Weeks
                      const monthlyTarget = parseFloat(targetValue) || 0;
                      const weeklyTarget = monthlyTarget / 4;
 
@@ -1347,7 +1587,6 @@ exports.updateTarget = async (req, res) => {
                               specificDate: null
                           });
 
-                          // Distribute to 7 Days
                           const dailyTarget = weeklyTarget / 7;
                           const weekStartRange = getWeekRange(year, periodValue, w);
                           let currentDay = new Date(weekStartRange.startDate);
@@ -1367,50 +1606,8 @@ exports.updateTarget = async (req, res) => {
                           }
                       }
                 }
-            } else {
-                // MONTHLY: breakdowns are weekly values
-                for (const breakdownItem of breakdowns) {
-                    const { periodValue, targetValue, achievedValue } = breakdownItem;
-                    const percentageContribution = calculatedTotalTarget > 0 ? (targetValue / calculatedTotalTarget) * 100 : 0;
-
-                    const weeklyAchieved = (achievedValue !== undefined && achievedValue !== null) ? (parseFloat(achievedValue) || 0) : null;
-                    const dailyAchieved = weeklyAchieved !== null ? weeklyAchieved / 7 : null;
-
-                    // Week row
-                    allRows.push({
-                        id: generateId(),
-                        targetId,
-                        periodType: 'WEEK',
-                        periodValue,
-                        targetValue: parseFloat(targetValue) || 0,
-                        achievedValue: weeklyAchieved,
-                        percentage: percentageContribution,
-                        specificDate: null
-                    });
-
-                    // Distribute to 7 Days
-                    const weeklyTarget = parseFloat(targetValue) || 0;
-                    const dailyTarget = weeklyTarget / 7;
-                    const weekStartRange = getWeekRange(year, month, periodValue);
-                    let currentDay = new Date(weekStartRange.startDate);
-
-                    for (let d = 1; d <= 7; d++) {
-                        allRows.push({
-                            id: generateId(),
-                            targetId,
-                            periodType: 'DAY',
-                            periodValue: d,
-                            targetValue: dailyTarget,
-                            achievedValue: dailyAchieved,
-                            percentage: null,
-                            specificDate: format(currentDay, 'yyyy-MM-dd')
-                        });
-                        currentDay = addDays(currentDay, 1);
-                    }
-                }
             }
 
-            // 5. Batch insert all rows (chunks of 50 to stay under SQL param limits)
             const CHUNK_SIZE = 50;
             for (let i = 0; i < allRows.length; i += CHUNK_SIZE) {
                 const chunk = allRows.slice(i, i + CHUNK_SIZE);

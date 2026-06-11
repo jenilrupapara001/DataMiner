@@ -543,6 +543,8 @@ export default function TargetCreationPage() {
                         
                         updates.push({
                             id: targetId,
+                            month: section.targetType === 'MONTHLY' ? section.month : null,
+                            targetType: section.targetType,
                             totalTargetValue: r.totalTarget || 0,
                             breakdowns: r.cells.map((c: any, i: number) => ({
                                 periodValue: i + 1,
