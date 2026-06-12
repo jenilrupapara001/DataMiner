@@ -179,8 +179,12 @@ export const useDashboardStore = create<DashboardState>()(
         {
             name: 'dash-cache',
             partialize: (state) => ({
-                // Persist only cache, not volatile connection state
-                cache: state.cache,
+                // Persist only non-bulky cache details to avoid localStorage QuotaExceededError
+                cache: {
+                    ...INITIAL_CACHE,
+                    syncTimestamp: state.cache.syncTimestamp,
+                    filteredAsins: state.cache.filteredAsins,
+                },
             }),
         }
     )

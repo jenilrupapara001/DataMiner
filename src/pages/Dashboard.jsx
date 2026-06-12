@@ -19,7 +19,7 @@ import { format } from 'date-fns';
 
 const Chart = lazy(() => import('react-apexcharts'));
 
-import api from '../services/api';
+import api, { marketSyncApi } from '../services/api';
 import { db } from '../services/db';
 import { SkeletonChart } from '../components/common/Skeleton';
 import { useAuth } from '../contexts/AuthContext';
@@ -209,7 +209,7 @@ const Dashboard = () => {
   const loadScrapeTasks = useCallback(async () => {
     setScrapeLoading(true);
     try {
-      const res = await api.marketSyncApi.getSyncTasks();
+      const res = await marketSyncApi.getSyncTasks();
       setScrapeTasks(res?.tasks || []);
     } catch (err) {
       console.error('Failed to load scrape tasks for dashboard', err);
@@ -898,7 +898,7 @@ const Dashboard = () => {
               <Button 
                 block 
                 size="middle" 
-                onClick={() => api.marketSyncApi.ingestAllResults().then(() => alert('Pipeline ingestion started'))}
+                onClick={() => marketSyncApi.ingestAllResults().then(() => alert('Pipeline ingestion started'))}
                 style={{
                   height: '38px',
                   borderRadius: '6px',
