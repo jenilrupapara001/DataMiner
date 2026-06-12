@@ -14,6 +14,7 @@ import { Search, ChevronDown, Check, Loader2, X } from 'lucide-react';
  */
 const InfiniteScrollSelect = ({
     fetchData,
+    fetchItem,
     onSelect,
     value,
     placeholder = "Select an option...",
@@ -101,19 +102,28 @@ const InfiniteScrollSelect = ({
 
     // Handle initial selection sync if options aren't loaded yet
     useEffect(() => {
-        if (value && !selectedLabel) {
-            // Find in current options
-            const selected = options.find(opt => opt[valueKey] === value);
-            if (selected) {
-                setSelectedLabel(selected[labelKey]);
-            } else if (!isOpen) {
-                // If closed and has value but no label, maybe fetch details or just show value
-                // For simplicity, we assume labels are eventually matched
+        const syncLabel = async () => {
+            if (value && !selectedLabel) {
+                // Find in current options
+                const selected = options.find(opt => opt[valueKey] === value);
+                if (selected) {
+                    setSelectedLabel(selected[labelKey]);
+                } else if (fetchItem) {
+                    try {
+                        const item = await fetchItem(value);
+                        if (item) {
+                            setSelectedLabel(item[labelKey]);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching selected item label:', e);
+                    }
+                }
+            } else if (!value) {
+                setSelectedLabel('');
             }
-        } else if (!value) {
-            setSelectedLabel('');
-        }
-    }, [value, options, valueKey, labelKey, isOpen, selectedLabel]);
+        };
+        syncLabel();
+    }, [value, options, valueKey, labelKey, fetchItem, selectedLabel]);
 
     // Intersection Observer for Infinite Scroll
     useEffect(() => {

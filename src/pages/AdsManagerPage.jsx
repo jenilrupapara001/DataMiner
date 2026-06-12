@@ -517,6 +517,19 @@ export default function AdsManagerPage() {
     }
   }, []);
 
+  const fetchSellerItem = useCallback(async (id) => {
+    try {
+      const response = await sellerApi.getById(id);
+      if (response.success && response.seller) {
+        return response.seller;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error fetching seller by ID:', err);
+      return null;
+    }
+  }, []);
+
   // 0. Aggregated summary for Top View
   const summaryData = useMemo(() => {
     const sum = {
@@ -920,6 +933,7 @@ export default function AdsManagerPage() {
             <div style={{ width: '100%', fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
               <InfiniteScrollSelect
                 fetchData={fetchSellerDropdownData}
+                fetchItem={fetchSellerItem}
                 value={selectedSeller}
                 onSelect={(val) => setSelectedSeller(val)}
                 placeholder="All Sellers"
@@ -955,12 +969,14 @@ export default function AdsManagerPage() {
         title: 'SKU',
         dataIndex: 'sku',
         key: 'sku',
+        fixed: 'left',
         width: 110,
         render: (sku, record) => record.isParent ? <span className="badge bg-zinc-100 text-zinc-600 border px-2 py-1 rounded" style={{ fontSize: '9px' }}>GROUP</span> : <span style={{ fontWeight: 600, color: '#475569', fontSize: '10px' }}>{sku}</span>
       },
       {
         title: 'PRODUCT DETAILS',
         key: 'productDetails',
+        fixed: 'left',
         width: 200,
         render: (_, record) => (
           <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
@@ -978,16 +994,16 @@ export default function AdsManagerPage() {
     ];
 
     const monthKeys = data.length > 0 && data[0].monthlyStats ? Object.keys(data[0].monthlyStats).sort() : [];
-    
+
     const targetColumns = monthKeys.map(monthKey => {
       const [year, month] = monthKey.split('-');
       const date = new Date(year, parseInt(month) - 1);
       const monthName = date.toLocaleString('default', { month: 'short' }).toUpperCase();
       const groupKey = `targets_group_${monthKey}`;
-      
+
       return {
         title: (
-          <div 
+          <div
             onClick={() => toggleCol(groupKey)}
             className="d-flex align-items-center justify-content-center gap-1 w-100"
             style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', minWidth: '90px' }}
@@ -1005,20 +1021,20 @@ export default function AdsManagerPage() {
             render: (_, record) => {
               const stats = record.monthlyStats?.[monthKey];
               if (!stats) return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
-              
+
               const adsTarget = stats.adsTarget;
               const acosTarget = stats.acosTarget;
-              
+
               if (adsTarget === null && acosTarget === null) {
                 return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>;
               }
-              
+
               return (
                 <div className="d-flex flex-column gap-1">
                   {adsTarget !== null && (
                     <Tooltip title={`${monthName} Ad Spend Target`} placement="right">
                       <div style={{ fontSize: '9.5px', background: '#ea580c15', color: '#ea580c', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
-                        Ad Spend: ₹{adsTarget >= 1000 ? (adsTarget/1000).toFixed(1) + 'k' : adsTarget}/mo
+                        Ad Spend: ₹{adsTarget >= 1000 ? (adsTarget / 1000).toFixed(1) + 'k' : adsTarget}/mo
                       </div>
                     </Tooltip>
                   )}
@@ -1045,20 +1061,20 @@ export default function AdsManagerPage() {
 
                 const adsTarget = stats.adsTarget;
                 const acosTarget = stats.acosTarget;
-                
+
                 if (adsTarget === null && acosTarget === null) {
                   return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
                 }
 
                 const spend = stats.spend || 0;
                 const acos = stats.acos || 0;
-                
+
                 return (
                   <div className="d-flex flex-column gap-1">
                     {adsTarget !== null && (
                       <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600 }}>
                         <span style={{ color: spend > adsTarget ? '#ef4444' : '#10b981' }}>
-                          ₹{spend >= 1000 ? (spend/1000).toFixed(1) + 'k' : spend.toFixed(0)}
+                          ₹{spend >= 1000 ? (spend / 1000).toFixed(1) + 'k' : spend.toFixed(0)}
                         </span>
                         <span style={{ fontSize: '8px', color: '#94a3b8', marginLeft: '4px' }}>
                           ({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)
@@ -1099,20 +1115,20 @@ export default function AdsManagerPage() {
           sortOrder: sortBy === key ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
           render: (val, record) => {
             const numVal = Number(val || 0);
-            
+
             // Check if we have a target for this metric
             let targetValue = null;
             if (key === 'acos') targetValue = record.acosTarget;
             else if (key === 'spend') targetValue = record.adsTarget;
 
             const formattedVal = isCurrency ? `₹${numVal.toLocaleString('en-IN')}` : isPercent ? `${numVal.toFixed(2)}%` : numVal.toLocaleString();
-            
+
             if (targetValue !== null && targetValue !== undefined) {
               const formattedTarget = isCurrency ? `₹${targetValue.toLocaleString('en-IN')}` : isPercent ? `${targetValue.toFixed(2)}%` : targetValue.toLocaleString();
               // ACOS is lower-is-better, Spend is also usually monitored but lets say lower/within target is better.
               const isOverTarget = numVal > targetValue;
               const color = isOverTarget ? '#ef4444' : '#10b981';
-              
+
               return (
                 <Tooltip title={`Target: ${formattedTarget}`} placement="top">
                   <div className="d-flex flex-column align-items-end" style={{ cursor: 'help' }}>

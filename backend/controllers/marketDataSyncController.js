@@ -693,7 +693,7 @@ exports.getGlobalSyncTasks = async (req, res) => {
                 SELECT 
                     SellerId,
                     COUNT(*) as count, 
-                    MAX(LastScraped) as lastScraped 
+                    MAX(LastScrapedAt) as lastScraped 
                 FROM Asins 
                 WHERE Status = 'Active' AND SellerId IN (SELECT value FROM OPENJSON(@sellerIdsJson))
                 GROUP BY SellerId

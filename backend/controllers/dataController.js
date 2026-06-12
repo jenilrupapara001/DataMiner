@@ -61,12 +61,16 @@ exports.getSizeShare = async (req, res) => {
  */
 exports.getAdsReport = async (req, res) => {
     try {
-        const { asin, startDate, endDate, sellerId } = req.query;
+        const { asin, startDate, endDate, sellerId, reportType = 'daily' } = req.query;
         const pool = await getPool();
 
         let whereClause = 'WHERE 1=1';
         const request = pool.request();
 
+        if (reportType) {
+            whereClause += " AND p.ReportType = @reportType";
+            request.input('reportType', sql.VarChar, reportType);
+        }
         if (asin) {
             whereClause += " AND p.Asin = @asin";
             request.input('asin', sql.VarChar, asin);
@@ -593,11 +597,16 @@ exports.getCategories = async (req, res) => {
  */
 exports.getAdsManagerData = async (req, res) => {
     try {
-        const { groupBy = 'asin', startDate, endDate, search, sellerId, page = 1, limit = 50, sortBy = 'sales', sortOrder = 'desc' } = req.query;
+        const { groupBy = 'asin', startDate, endDate, search, sellerId, page = 1, limit = 50, sortBy = 'sales', sortOrder = 'desc', reportType = 'daily' } = req.query;
         const pool = await getPool();
         const request = pool.request();
 
         let whereClause = 'WHERE 1=1';
+
+        if (reportType) {
+            whereClause += " AND p.ReportType = @reportType";
+            request.input('reportType', sql.VarChar, reportType);
+        }
 
         if (startDate) {
             whereClause += " AND p.Date >= @startDate";

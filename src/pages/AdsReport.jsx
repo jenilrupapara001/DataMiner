@@ -143,7 +143,8 @@ const AdsReport = () => {
         startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
         endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
         rangeType,
-        asin: selectedAsin
+        asin: selectedAsin,
+        reportType
       };
 
       // Clean params: remove null/undefined/string "null"

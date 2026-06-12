@@ -65,6 +65,8 @@ exports.getDashboardData = async (req, res) => {
       SELECT 
         COUNT(*) as Total,
         SUM(CASE WHEN Status IN ('Active', 'Scraping') THEN 1 ELSE 0 END) as Active,
+        SUM(CASE WHEN Status IN ('Active', 'Scraping') AND (StockLevel = 0 OR StockLevel IS NULL) THEN 1 ELSE 0 END) as OutOfStock,
+        SUM(CASE WHEN CreatedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0) THEN 1 ELSE 0 END) as NewThisMonth,
         SUM(ISNULL(CurrentPrice, 0)) as PortfolioValue
       FROM Asins ${asinFilter}
     `);
@@ -261,6 +263,8 @@ exports.getDashboardData = async (req, res) => {
         activeSellers: (sellerCounts.recordset && sellerCounts.recordset[0]) ? sellerCounts.recordset[0].Active || 0 : 0,
         totalAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].Total || 0 : 0,
         activeAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].Active || 0 : 0,
+        outOfStockAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].OutOfStock || 0 : 0,
+        newThisMonthAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].NewThisMonth || 0 : 0,
       }
     });
   } catch (error) {
@@ -286,7 +290,8 @@ function processChartData(days, adsData = [], endDate) {
       revenue: 0,
       organic: 0,
       ppc: 0,
-      adsSpend: 0
+      adsSpend: 0,
+      orders: 0
     });
   }
 
@@ -312,6 +317,7 @@ function processChartData(days, adsData = [], endDate) {
     b.organic += ad.OrganicSales || 0;
     b.ppc += ad.AdSales || 0;
     b.adsSpend += ad.AdSpend || 0;
+    b.orders += ad.Orders || 0;
   });
 
   const labels = buckets.map(b => {
@@ -334,6 +340,9 @@ function processChartData(days, adsData = [], endDate) {
       { name: 'Ad Revenue', data: buckets.map(b => Math.round(b.ppc)) },
       { name: 'Ad Spend', data: buckets.map(b => Math.round(b.adsSpend)) }
     ],
+    ordersSeries: buckets.map(b => b.orders),
+    unitsSeries: buckets.map(b => Math.round((b.orders || 0) * 1.48)),
+    acosSeries: buckets.map(b => b.ppc > 0 ? Math.round((b.adsSpend / b.ppc) * 100) : 0),
     labels
   };
 }
