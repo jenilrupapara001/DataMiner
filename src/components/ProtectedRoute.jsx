@@ -41,10 +41,12 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
     }
 
     const currentPath = window.location.pathname;
+    const roleName = (user?.role?.name || user?.role?.displayName || '').toString().toLowerCase().trim();
+    const isBrandManager = roleName === 'brand manager' || roleName === 'brand_manager';
 
     // Automatic login redirection to authorized page for restricted roles
     if (currentPath === '/' || currentPath === '/dashboard') {
-        if (!hasPermission('dashboard_view')) {
+        if (!hasPermission('dashboard_view') && !isBrandManager) {
             return <Navigate to="/asin-tracker" replace />;
         }
     }
@@ -58,15 +60,15 @@ const ProtectedRoute = ({ children, permission, requiredRole }) => {
     if (permission) {
         const permissionsToCheck = Array.isArray(permission) ? permission : [permission];
         
-        const roleName = (user?.role?.name || user?.role?.displayName || '').toString().toLowerCase().trim();
-        const isBrandManager = roleName === 'brand manager' || roleName === 'brand_manager';
-        
         // If checking monthlyreport_view, we also allow access for targets_view
         if (permissionsToCheck.includes('monthlyreport_view')) {
             permissionsToCheck.push('targets_view');
         }
+        if (permissionsToCheck.includes('dashboard_view') && isBrandManager) {
+            permissionsToCheck.push('targets_view');
+        }
 
-        const hasAccess = permissionsToCheck.some(p => hasPermission(p)) || (isBrandManager && permissionsToCheck.includes('monthlyreport_view'));
+        const hasAccess = permissionsToCheck.some(p => hasPermission(p)) || (isBrandManager && (permissionsToCheck.includes('monthlyreport_view') || permissionsToCheck.includes('dashboard_view')));
 
         if (!hasAccess) {
             return <Navigate to="/unauthorized" replace />;

@@ -28,6 +28,8 @@ import { useRefresh } from '../contexts/RefreshContext';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import { useDashboardOrchestration } from '../hooks/useDashboardOrchestration';
 import { useSocket } from '../contexts/SocketContext';
+import { useTargetPermissions } from '../hooks/useTargetPermissions';
+const TargetVsAchievementDashboard = lazy(() => import('./TargetVsAchievementDashboard'));
 
 const { Text, Title } = Typography;
 
@@ -357,6 +359,19 @@ const Dashboard = () => {
   }, []);
 
   const showSkeleton = (orch.isLoadingKpis || !orch.isHydrated) && !skeletonTimeout;
+  const { isBrandManager } = useTargetPermissions();
+
+  if (isBrandManager) {
+    return (
+      <Suspense fallback={
+        <div style={{ padding: '32px' }}>
+          <Skeleton active paragraph={{ rows: 8 }} />
+        </div>
+      }>
+        <TargetVsAchievementDashboard />
+      </Suspense>
+    );
+  }
 
   if (showSkeleton) {
     return (

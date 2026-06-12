@@ -17,7 +17,6 @@ import { useTargetPermissions } from '../hooks/useTargetPermissions';
 import { sellerApi } from '../services/api';
 import { PermissionGuard } from '../components/common/PermissionGuard';
 import { ReadOnlyBanner } from '../components/targets/ReadOnlyBanner';
-import { ConnectionBanner } from './TargetVsAchievement';
 import Chart from 'react-apexcharts';
 import {
     ResponsiveContainer,
@@ -152,6 +151,19 @@ function getAchievementTier(pct) {
     if (pct >= 50) return { label: 'ON TRACK', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' };
     return { label: 'CRITICAL', color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' };
 }
+
+export const ConnectionBanner = memo(({ targets }) => {
+    if (!targets || targets.length > 0) return null;
+    return (
+        <div style={{
+            padding: '10px 16px', background: '#fffbeb',
+            border: '1px solid #fde68a', borderRadius: 8,
+            marginBottom: 12, fontSize: 12, fontWeight: 500, color: '#92400e'
+        }}>
+            ⚠ No target data loaded. Create targets or check your connection.
+        </div>
+    );
+});
 
 const TargetVsAchievementDashboard = () => {
     const navigate = useNavigate();

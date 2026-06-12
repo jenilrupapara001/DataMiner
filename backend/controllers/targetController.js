@@ -115,7 +115,7 @@ exports.getTargets = async (req, res) => {
         if (!isGlobalUser && req.user) {
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s.Id || s).toString());
             const bmName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim();
-            const bmId = req.user.Id || req.user._id;
+            const bmId = req.user.Id || req.user._id || req.user.id;
 
             const orParts = [];
             if (assignedSellerIds.length > 0) {
@@ -128,6 +128,10 @@ exports.getTargets = async (req, res) => {
             if (bmName) {
                 request.input('bmName', sql.NVarChar, bmName);
                 orParts.push(`t.BrandManager = @bmName`);
+            }
+            if (bmId) {
+                request.input('bmId', sql.VarChar, bmId);
+                orParts.push(`t.UserId = @bmId`);
             }
             if (orParts.length > 0) {
                 whereClause += ` AND (${orParts.join(' OR ')})`;
@@ -362,6 +366,16 @@ exports.createTargets = async (req, res) => {
 
         const pool = await getPool();
 
+        // Match brandManager name string to UserId
+        const usersResult = await pool.request().query("SELECT Id, FirstName, LastName FROM Users");
+        const nameToUserId = {};
+        usersResult.recordset.forEach(u => {
+            const fullName = `${u.FirstName || ''} ${u.LastName || ''}`.trim().toLowerCase();
+            if (fullName) {
+                nameToUserId[fullName] = u.Id;
+            }
+        });
+
         for (const targetConfig of targets) {
             const { 
                 sellerId, brandManager, targetType, year, month, 
@@ -369,16 +383,19 @@ exports.createTargets = async (req, res) => {
             } = targetConfig;
 
             const targetId = generateId();
+            const bmLower = (brandManager || '').trim().toLowerCase();
+            const resolvedUserId = nameToUserId[bmLower] || req.user?.Id || req.user?._id || req.user?.id || null;
 
-            // 1. Insert main Target record with GoalType
+            // 1. Insert main Target record with GoalType and UserId
             const mainQuery = `
-                INSERT INTO GmsTargets (Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
-                VALUES (@id, @sellerId, @brandManager, @targetType, @year, @month, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
+                INSERT INTO GmsTargets (Id, SellerId, BrandManager, UserId, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
+                VALUES (@id, @sellerId, @brandManager, @userId, @targetType, @year, @month, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
             `;
             await pool.request()
                 .input('id', sql.VarChar, targetId)
                 .input('sellerId', sql.NVarChar, sellerId)
                 .input('brandManager', sql.NVarChar, brandManager || null)
+                .input('userId', sql.VarChar, resolvedUserId)
                 .input('targetType', sql.VarChar, targetType)
                 .input('year', sql.Int, year)
                 .input('month', sql.Int, month || null)
@@ -709,6 +726,16 @@ exports.importAchievements = async (req, res) => {
 
         const pool = await getPool();
 
+        // Load users to match brandManager name string to UserId
+        const usersResult = await pool.request().query("SELECT Id, FirstName, LastName FROM Users");
+        const nameToUserId = {};
+        usersResult.recordset.forEach(u => {
+            const fullName = `${u.FirstName || ''} ${u.LastName || ''}`.trim().toLowerCase();
+            if (fullName) {
+                nameToUserId[fullName] = u.Id;
+            }
+        });
+
         // ─── 1) Load all sellers ───────────────────────────────
         const sellersResult = await pool.request().query(`
             SELECT Id, SellerId, Name, Marketplace
@@ -923,22 +950,26 @@ exports.importAchievements = async (req, res) => {
                 if (yearlyResult.recordset.length > 0) {
                     yearlyTargetId = yearlyResult.recordset[0].Id;
                 } else {
-                    // Create new YEARLY target
+                    const bmLower = (brandManagerVal || '').trim().toLowerCase();
+                    const resolvedUserId = nameToUserId[bmLower] || req.user?.Id || req.user?._id || req.user?.id || null;
+
+                    // Create new YEARLY target with UserId
                     yearlyTargetId = generateId();
                     isNewYearlyTarget = true;
                     await transaction.request()
                         .input('id', sql.VarChar, yearlyTargetId)
                         .input('sellerId', sql.NVarChar, sellerId)
                         .input('brandManager', sql.NVarChar, brandManagerVal)
+                        .input('userId', sql.VarChar, resolvedUserId)
                         .input('targetType', sql.VarChar, 'YEARLY')
                         .input('year', sql.Int, numYear)
                         .input('totalTargetValue', sql.Decimal(18, 2), 0)
                         .input('goalType', sql.VarChar, goalType)
                         .query(`
                             INSERT INTO GmsTargets
-                                (Id, SellerId, BrandManager, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
+                                (Id, SellerId, BrandManager, UserId, TargetType, Year, Month, TotalTargetValue, GoalType, CreatedAt, UpdatedAt)
                             VALUES
-                                (@id, @sellerId, @brandManager, @targetType, @year, NULL, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
+                                (@id, @sellerId, @brandManager, @userId, @targetType, @year, NULL, @totalTargetValue, @goalType, dbo.GetEnvDate(), dbo.GetEnvDate())
                         `);
 
                     // Also initialize breakdowns for all 12 months, 48 weeks, and 336 days to 0!
