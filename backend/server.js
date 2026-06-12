@@ -125,6 +125,7 @@ const bulkRoutes = require('./routes/bulkRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const scheduledRunRoutes = require('./routes/scheduledRunRoutes');
 const targetRoutes = require('./routes/targetRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -159,6 +160,7 @@ app.use('/api/bulk', bulkRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/scheduled-runs', scheduledRunRoutes);
 app.use('/api/targets', targetRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {

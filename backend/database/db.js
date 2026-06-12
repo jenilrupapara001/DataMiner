@@ -38,15 +38,47 @@ function getPool() {
                 const locStr = d.toLocaleString('en-US', { timeZone: tz });
                 const offsetMins = Math.round((new Date(locStr) - new Date(utcStr)) / 60000);
                 
-                // Inject the Global Env Date UDF
-                await pool.request().query(`
-                    CREATE OR ALTER FUNCTION dbo.GetEnvDate()
-                    RETURNS DATETIME2
-                    AS
-                    BEGIN
-                        RETURN DATEADD(minute, ${offsetMins}, GETUTCDATE())
-                    END
-                `);
+                // Inject the Global Env Date UDF - check if exists first to avoid constraint issues
+                try {
+                    const checkResult = await pool.request().query(`
+                        SELECT OBJECT_ID(N'dbo.GetEnvDate', N'FN') AS FuncId
+                    `);
+                    
+                    if (!checkResult.recordset[0]?.FuncId) {
+                        // Function doesn't exist, create it
+                        await pool.request().query(`
+                            CREATE FUNCTION dbo.GetEnvDate()
+                            RETURNS DATETIME2
+                            AS
+                            BEGIN
+                                RETURN DATEADD(minute, ${offsetMins}, GETUTCDATE())
+                            END
+                        `);
+                    } else {
+                        // Function exists, try to alter but continue if constrained
+                        try {
+                            await pool.request().query(`
+                                ALTER FUNCTION dbo.GetEnvDate()
+                                RETURNS DATETIME2
+                                AS
+                                BEGIN
+                                    RETURN DATEADD(minute, ${offsetMins}, GETUTCDATE())
+                                END
+                            `);
+                        } catch (alterErr) {
+                            // Function is likely bound by a constraint - use existing definition
+                            if (!alterErr.message.includes('referenced by object')) {
+                                throw alterErr;
+                            }
+                            console.log('ℹ️  dbo.GetEnvDate exists with constraints - using existing definition');
+                        }
+                    }
+                } catch (err) {
+                    // Only log but don't throw - existing function can still be used
+                    if (!err.message.includes('referenced by object')) {
+                        console.error('❌ SQL UDF setup warning:', err.message);
+                    }
+                }
                 
                 return pool;
             })

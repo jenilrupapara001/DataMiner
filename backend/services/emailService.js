@@ -98,8 +98,37 @@ const sendOverdueReminder = async (user, action) => {
     return sendEmail(user.email, subject, html);
 };
 
+const sendAdminEmail = async (to, subject, html, fromName = 'Super Admin') => {
+    try {
+        const pool = await getPool();
+        const fromRes = await pool.request()
+            .query("SELECT [Value] FROM SystemSettings WHERE [Key] = 'smtpUser'");
+        
+        const fromEmail = fromRes.recordset[0]?.Value || process.env.SMTP_USER;
+        
+        const transporter = await getTransporter();
+        if (!transporter) {
+            throw new Error('SMTP configuration not found');
+        }
+
+        const info = await transporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to,
+            subject,
+            html
+        });
+
+        console.log('Admin email sent: %s', info.messageId);
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        console.error('Error sending admin email:', error);
+        throw error;
+    }
+};
+
 module.exports = {
     sendEmail,
     sendTaskAssignmentEmail,
-    sendOverdueReminder
+    sendOverdueReminder,
+    sendAdminEmail
 };

@@ -20,4 +20,7 @@ router.delete('/:id', authenticate, requirePermission('users_manage'), userContr
 router.put('/:id/toggle-status', authenticate, requirePermission('users_manage'), userController.toggleUserStatus);
 router.put('/:id/reset-password', authenticate, requirePermission('users_manage'), userController.resetUserPassword);
 
+// Admin send email
+router.post('/send-email', authenticate, requirePermission('users_manage'), userController.sendEmailToUser);
+
 module.exports = router;

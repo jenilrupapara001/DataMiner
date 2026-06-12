@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const { createNotification } = require('../controllers/notificationController');
+const WebhookService = require('../services/WebhookService');
 
 /**
  * Get alerts for current user
@@ -325,6 +326,22 @@ exports.createAlert = async (alertData) => {
                 );
             }
         }
+
+        // Fire Pabbly webhook
+        const eventKey = alertData.severity === 'HIGH' || alertData.severity === 'CRITICAL'
+            ? 'alert.critical'
+            : 'alert.triggered';
+        WebhookService.fire(eventKey, {
+            id,
+            title: alertData.title,
+            message: alertData.message,
+            type: alertData.type,
+            severity: alertData.severity || 'MEDIUM',
+            sellerId: alertData.sellerId,
+            asinId: alertData.asinId || null,
+            ruleId: alertData.ruleId || null,
+            dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/alerts`,
+        });
 
         return { id, ...alertData };
     } catch (error) {

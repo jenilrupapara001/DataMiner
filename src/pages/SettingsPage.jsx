@@ -1,34 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    Card, 
-    Input, 
-    InputNumber, 
-    Switch, 
-    TimePicker, 
-    Button, 
-    Typography, 
-    Space, 
-    Row, 
-    Col, 
-    Select, 
-    Tooltip, 
-    message, 
-    notification, 
-    Divider, 
-    Alert, 
-    Progress, 
-    List,
-    Badge,
-    Form,
-    Modal,
-    Tag
+import {
+    Card, Input, InputNumber, Switch, TimePicker, Button,
+    Typography, Space, Row, Col, Select, Tooltip, message,
+    notification, Divider, Alert, Progress, List, Tag, Modal
 } from 'antd';
-import { 
-    Cloud, Mail, Clock, Sliders, Bell, 
-    User, HelpCircle, CheckCircle2, Info, 
-    AlertTriangle, Terminal, Save, Send, 
-    RefreshCw, Link2, ExternalLink, Settings,
-    Lock, AlertOctagon, Cpu
+import {
+    Cloud, Mail, Clock, Sliders, Bell, User, HelpCircle,
+    CheckCircle2, Info, AlertTriangle, Terminal, Save, Send,
+    RefreshCw, Link2, ExternalLink, Settings, Lock, Cpu
 } from 'lucide-react';
 import { db } from '../services/db';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
@@ -37,8 +16,119 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 dayjs.extend(customParseFormat);
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { Option } = Select;
+
+const SectionCard = ({ icon: Icon, iconColor = '#475569', title, children, extra }) => (
+    <Card
+        style={{
+            borderRadius: 6,
+            border: '1px solid #e5e7eb',
+            marginBottom: 16
+        }}
+        styles={{
+            header: {
+                padding: '14px 20px',
+                borderBottom: '1px solid #f1f5f9',
+                minHeight: 'auto',
+                background: '#fafbfc'
+            },
+            body: { padding: 20 }
+        }}
+        title={
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10
+            }}>
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10
+                }}>
+                    <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 5,
+                        background: '#f8fafc',
+                        border: '1px solid #e5e7eb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: iconColor
+                    }}>
+                        <Icon size={14} strokeWidth={2} />
+                    </div>
+                    <span style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        letterSpacing: '-0.01em'
+                    }}>
+                        {title}
+                    </span>
+                </div>
+                {extra}
+            </div>
+        }
+    >
+        {children}
+    </Card>
+);
+
+const FieldLabel = ({ children }) => (
+    <div style={{
+        fontSize: 11,
+        fontWeight: 700,
+        color: '#475569',
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        marginBottom: 6
+    }}>
+        {children}
+    </div>
+);
+
+const FieldHelp = ({ children }) => (
+    <Text style={{
+        fontSize: 11,
+        display: 'block',
+        marginTop: 5,
+        color: '#94a3b8',
+        fontWeight: 500,
+        lineHeight: 1.4
+    }}>
+        {children}
+    </Text>
+);
+
+const ToggleRow = ({ title, description, checked, onChange }) => (
+    <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '14px 16px',
+        background: '#fafbfc',
+        borderRadius: 6,
+        border: '1px solid #e5e7eb'
+    }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+                fontWeight: 600,
+                color: '#0f172a',
+                fontSize: 13,
+                marginBottom: 2
+            }}>
+                {title}
+            </div>
+            <div style={{ color: '#64748b', fontSize: 11, fontWeight: 500 }}>
+                {description}
+            </div>
+        </div>
+        <Switch checked={checked} onChange={onChange} />
+    </div>
+);
 
 const SettingsPage = () => {
     const [settings, setSettings] = useState({
@@ -66,8 +156,6 @@ const SettingsPage = () => {
     const [saving, setSaving] = useState(false);
     const [testingOctoparse, setTestingOctoparse] = useState(false);
     const [testResult, setTestResult] = useState(null);
-    
-    // Test Email Modal states
     const [emailModalVisible, setEmailModalVisible] = useState(false);
     const [testTargetEmail, setTestTargetEmail] = useState('');
     const [sendingTestEmail, setSendingTestEmail] = useState(false);
@@ -90,10 +178,7 @@ const SettingsPage = () => {
         try {
             const dbSettings = await db.getSettings();
             if (dbSettings && Object.keys(dbSettings).length > 0) {
-                setSettings(prev => ({
-                    ...prev,
-                    ...dbSettings
-                }));
+                setSettings(prev => ({ ...prev, ...dbSettings }));
             }
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -104,10 +189,7 @@ const SettingsPage = () => {
     };
 
     const handleFieldChange = (name, value) => {
-        setSettings(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setSettings(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
@@ -115,15 +197,15 @@ const SettingsPage = () => {
         try {
             await db.updateSettings(settings);
             notificationApi.success({
-                message: 'Configuration Synchronized',
-                description: 'System parameters have been updated and applied across the automation node.',
+                message: 'Configuration Saved',
+                description: 'All settings have been updated successfully.',
                 placement: 'topRight',
-                icon: <CheckCircle2 size={20} style={{ color: '#10b981' }} />
+                icon: <CheckCircle2 size={20} style={{ color: '#15803d' }} />
             });
         } catch (error) {
             notificationApi.error({
-                message: 'Save Error',
-                description: error.message || 'Failed to commit configuration changes.',
+                message: 'Save Failed',
+                description: error.message || 'Failed to save configuration changes.',
                 placement: 'topRight'
             });
         } finally {
@@ -134,23 +216,20 @@ const SettingsPage = () => {
     const handleTestOctoparse = async () => {
         setTestingOctoparse(true);
         setTestResult(null);
-
-        // Simulate Octoparse API test
         await new Promise(resolve => setTimeout(resolve, 1500));
-
         if (settings.octoparseApiKey && settings.octoparseTaskId) {
-            setTestResult({ success: true, message: 'Octoparse API handshake verified successfully!' });
-            messageApi.success('API connection verified!');
+            setTestResult({ success: true, message: 'Connection verified successfully' });
+            messageApi.success('API connection verified');
         } else {
-            setTestResult({ success: false, message: 'Connection failed: Verify your API Key and Task ID.' });
-            messageApi.error('Invalid API details.');
+            setTestResult({ success: false, message: 'Connection failed. Verify credentials.' });
+            messageApi.error('Invalid API details');
         }
         setTestingOctoparse(false);
     };
 
     const handleSendTestEmail = async () => {
         if (!testTargetEmail) {
-            messageApi.warning('Please enter an email address.');
+            messageApi.warning('Please enter an email address');
             return;
         }
         setSendingTestEmail(true);
@@ -163,16 +242,16 @@ const SettingsPage = () => {
             if (res?.success) {
                 notificationApi.success({
                     message: 'Test Email Sent',
-                    description: `Test broadcast dispatched to ${testTargetEmail} successfully!`,
+                    description: `Email dispatched to ${testTargetEmail}`,
                     placement: 'topRight'
                 });
                 setEmailModalVisible(false);
             } else {
-                throw new Error(res?.message || 'Gateway rejected dispatch packet');
+                throw new Error(res?.message || 'Email dispatch failed');
             }
         } catch (err) {
             notificationApi.error({
-                message: 'SMTP Broadcast Failed',
+                message: 'SMTP Test Failed',
                 description: err.message,
                 placement: 'topRight'
             });
@@ -190,589 +269,594 @@ const SettingsPage = () => {
     ];
 
     if (loading) {
-        return <PageLoader message="Loading System Core Environment..." />;
+        return <PageLoader message="Loading configuration..." />;
     }
 
     return (
-        <div className="settings-page-container">
+        <div className="settings-pro">
             {messageContextHolder}
             {notificationContextHolder}
 
             <style>{`
-                .settings-page-container {
-                    display: flex;
-                    flex-direction: column;
-                    min-height: 100vh;
-                    background-color: #f8fafc;
-                    margin: -1.5rem -2rem;
+                .settings-pro {
+                    background: #fafafa;
+                    min-height: calc(100vh - 60px);
+                    padding: 24px 28px 40px;
                 }
-                .settings-header {
-                    background: #ffffff;
-                    padding: 20px 32px;
-                    border-bottom: 1px solid #e2e8f0;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+                .settings-pro .ant-input,
+                .settings-pro .ant-input-password,
+                .settings-pro .ant-input-number,
+                .settings-pro .ant-picker {
+                    border-radius: 6px !important;
                 }
-                .settings-content {
-                    padding: 32px;
-                }
-                .settings-card {
-                    border-radius: 16px !important;
-                    border: 1px solid #e2e8f0 !important;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-                    overflow: hidden;
-                }
-                .settings-card .ant-card-head {
-                    background-color: #fafafa !important;
-                    border-bottom: 1px solid #e2e8f0 !important;
-                    padding: 16px 24px !important;
-                }
-                .settings-card-title {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    font-weight: 700 !important;
-                    font-size: 15px !important;
-                    color: #1e293b;
-                }
-                .form-section-title {
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #64748b;
-                    margin-bottom: 8px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.02em;
-                }
-                .glass-card {
-                    background: #ffffff !important;
+                .settings-pro .ant-input-number-input {
+                    height: 38px !important;
                 }
                 .xpath-code {
                     background: #f1f5f9;
-                    padding: 4px 8px;
-                    border-radius: 6px;
-                    font-family: SFMono-Regular, Consolas, Menlo, monospace;
-                    font-size: 11.5px;
-                    color: #ef4444;
-                    border: 1px solid #e2e8f0;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-family: JetBrains Mono, Consolas, monospace;
+                    font-size: 11px;
+                    color: #475569;
+                    border: 1px solid #e5e7eb;
+                    display: inline-block;
+                    word-break: break-all;
                 }
                 .help-link {
                     color: #475569;
                     font-weight: 500;
-                    transition: all 0.2s ease;
+                    transition: all 0.15s;
                     display: flex;
                     align-items: center;
-                    gap: 8px;
-                    padding: 12px;
-                    border-radius: 8px;
+                    gap: 10px;
+                    padding: 10px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    text-decoration: none;
                 }
                 .help-link:hover {
-                    background: #f1f5f9;
-                    color: #2563eb;
+                    background: #f8fafc;
+                    color: #0f172a;
+                }
+                .scheduler-box {
+                    background: #fafbfc;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    padding: 18px;
+                }
+                .save-footer {
+                    border-top: 1px solid #e5e7eb;
+                    background: #ffffff;
+                    padding: 16px 28px;
+                    margin: 24px -28px -40px;
+                    display: flex;
+                    justify-content: flex-end;
+                    align-items: center;
+                    gap: 12px;
+                }
+                @keyframes spin-animation {
+                    to { transform: rotate(360deg); }
+                }
+                .spin-animation {
+                    animation: spin-animation 1s linear infinite;
                 }
             `}</style>
 
-            {/* 1. STICKY HEADER */}
-            <div className="settings-header">
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <div style={{ background: '#EFF6FF', color: '#2563EB', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Settings size={18} />
-                        </div>
-                        <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>System Configuration</Title>
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>Deploy environment variables, dispatch endpoints, and automation time intervals.</Text>
+            {/* Page Title */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 24
+            }}>
+                <div style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 6,
+                    background: '#1e293b',
+                    border: '1px solid #0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff'
+                }}>
+                    <Settings size={18} strokeWidth={2} />
                 </div>
-                <Button 
-                    type="primary" 
-                    icon={<Save size={16} />} 
-                    onClick={handleSave} 
-                    loading={saving}
-                    style={{ height: 40, borderRadius: 8, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px' }}
+                <div>
+                    <div style={{
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        letterSpacing: '-0.2px'
+                    }}>
+                        System Configuration
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                        Environment variables, integrations, and automation schedules
+                    </div>
+                </div>
+            </div>
+
+            <Row gutter={[20, 0]}>
+                {/* LEFT COLUMN */}
+                <Col xs={24} lg={16}>
+                    {/* Scraper Integration */}
+                    <SectionCard icon={Cloud} iconColor="#1d4ed8" title="Scraper Integration">
+                        <Alert
+                            message="Octoparse Cloud Integration"
+                            description={
+                                <span>
+                                    Connect to Octoparse for automated ASIN data extraction.
+                                    Obtain credentials from{' '}
+                                    <a href="https://www.octoparse.com" target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: '#1d4ed8' }}>
+                                        octoparse.com
+                                    </a>.
+                                </span>
+                            }
+                            type="info"
+                            showIcon
+                            icon={<Info size={14} strokeWidth={2} />}
+                            style={{ marginBottom: 20, borderRadius: 6 }}
+                        />
+                        <Row gutter={[16, 16]}>
+                            <Col span={24}>
+                                <FieldLabel>API Key</FieldLabel>
+                                <Input.Password
+                                    placeholder="Enter Octoparse API key"
+                                    value={settings.octoparseApiKey}
+                                    onChange={e => handleFieldChange('octoparseApiKey', e.target.value)}
+                                    prefix={<Lock size={13} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                                    style={{ height: 38 }}
+                                />
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Task ID</FieldLabel>
+                                <Input
+                                    placeholder="e.g. e8266a91-..."
+                                    value={settings.octoparseTaskId}
+                                    onChange={e => handleFieldChange('octoparseTaskId', e.target.value)}
+                                    prefix={<Terminal size={13} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                                    style={{ height: 38 }}
+                                />
+                                <FieldHelp>Specific crawling task identifier</FieldHelp>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Poll Interval (ms)</FieldLabel>
+                                <InputNumber
+                                    placeholder="300000"
+                                    value={settings.scrapePollInterval}
+                                    onChange={val => handleFieldChange('scrapePollInterval', val)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={60000}
+                                />
+                                <FieldHelp>Minimum: 60000ms (1 minute)</FieldHelp>
+                            </Col>
+                            <Col span={24}>
+                                <Divider style={{ margin: '8px 0' }} />
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    <Button
+                                        icon={<RefreshCw size={13} strokeWidth={2} className={testingOctoparse ? 'spin-animation' : ''} />}
+                                        loading={testingOctoparse}
+                                        onClick={handleTestOctoparse}
+                                        style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}
+                                    >
+                                        Test Connection
+                                    </Button>
+                                    {testResult && (
+                                        <Tag
+                                            color={testResult.success ? 'success' : 'error'}
+                                            style={{ borderRadius: 4, padding: '3px 10px', border: 'none', fontWeight: 600, fontSize: 11 }}
+                                        >
+                                            {testResult.message}
+                                        </Tag>
+                                    )}
+                                </div>
+                            </Col>
+                        </Row>
+                    </SectionCard>
+
+                    {/* SMTP Configuration */}
+                    <SectionCard icon={Mail} iconColor="#b91c1c" title="SMTP Configuration">
+                        <Paragraph style={{ color: '#64748b', fontSize: 12, marginBottom: 16 }}>
+                            Configure mail relay for outbound notifications, reports, and security alerts.
+                        </Paragraph>
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>SMTP Host</FieldLabel>
+                                <Input
+                                    placeholder="smtp.mail.com"
+                                    value={settings.smtpHost}
+                                    onChange={e => handleFieldChange('smtpHost', e.target.value)}
+                                    style={{ height: 38 }}
+                                />
+                            </Col>
+                            <Col xs={12} md={6}>
+                                <FieldLabel>Port</FieldLabel>
+                                <Input
+                                    placeholder="587"
+                                    value={settings.smtpPort}
+                                    onChange={e => handleFieldChange('smtpPort', e.target.value)}
+                                    style={{ height: 38 }}
+                                />
+                            </Col>
+                            <Col xs={12} md={6}>
+                                <FieldLabel>Encryption</FieldLabel>
+                                <Select
+                                    value={settings.smtpSecure}
+                                    onChange={val => handleFieldChange('smtpSecure', val)}
+                                    style={{ width: '100%', height: 38 }}
+                                >
+                                    <Option value="tls">STARTTLS</Option>
+                                    <Option value="ssl">SSL</Option>
+                                </Select>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Username</FieldLabel>
+                                <Input
+                                    placeholder="user@company.com"
+                                    value={settings.smtpUser}
+                                    onChange={e => handleFieldChange('smtpUser', e.target.value)}
+                                    style={{ height: 38 }}
+                                />
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Password</FieldLabel>
+                                <Input.Password
+                                    placeholder="Enter password"
+                                    value={settings.smtpPass}
+                                    onChange={e => handleFieldChange('smtpPass', e.target.value)}
+                                    style={{ height: 38 }}
+                                />
+                            </Col>
+                            <Col span={24}>
+                                <Divider style={{ margin: '8px 0' }} />
+                                <Button
+                                    icon={<Send size={13} strokeWidth={2} />}
+                                    onClick={() => setEmailModalVisible(true)}
+                                    style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}
+                                >
+                                    Send Test Email
+                                </Button>
+                            </Col>
+                        </Row>
+                    </SectionCard>
+
+                    {/* Automation Schedules */}
+                    <SectionCard icon={Clock} iconColor="#a16207" title="Automation Schedules">
+                        <Alert
+                            message="Scheduled Pipeline Jobs"
+                            description="Configure automated data extraction schedules for each marketplace. Adjust time slots to avoid API rate limits."
+                            type="warning"
+                            showIcon
+                            icon={<Cpu size={14} strokeWidth={2} />}
+                            style={{ marginBottom: 20, borderRadius: 6 }}
+                        />
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={12}>
+                                <div className="scheduler-box">
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginBottom: 14
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FF9900', display: 'inline-block' }} />
+                                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>Amazon</span>
+                                        </div>
+                                        <Switch
+                                            size="small"
+                                            checked={settings.AUTOMATION_AMAZON_ENABLED !== false && settings.AUTOMATION_AMAZON_ENABLED !== 'false'}
+                                            onChange={checked => handleFieldChange('AUTOMATION_AMAZON_ENABLED', checked)}
+                                        />
+                                    </div>
+                                    <FieldLabel>Schedule Time</FieldLabel>
+                                    <TimePicker
+                                        format="HH:mm"
+                                        style={{ width: '100%', height: 38 }}
+                                        value={settings.AUTOMATION_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_SCHEDULE_TIME, 'HH:mm') : null}
+                                        onChange={(time, timeStr) => handleFieldChange('AUTOMATION_SCHEDULE_TIME', timeStr)}
+                                        allowClear={false}
+                                    />
+                                    <FieldHelp>Daily execution time for Amazon pipeline jobs</FieldHelp>
+                                </div>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <div className="scheduler-box">
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginBottom: 14
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#0891b2', display: 'inline-block' }} />
+                                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>AJIO</span>
+                                        </div>
+                                        <Switch
+                                            size="small"
+                                            checked={settings.AUTOMATION_AJIO_ENABLED !== false && settings.AUTOMATION_AJIO_ENABLED !== 'false'}
+                                            onChange={checked => handleFieldChange('AUTOMATION_AJIO_ENABLED', checked)}
+                                        />
+                                    </div>
+                                    <FieldLabel>Schedule Time</FieldLabel>
+                                    <TimePicker
+                                        format="HH:mm"
+                                        style={{ width: '100%', height: 38 }}
+                                        value={settings.AUTOMATION_AJIO_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_AJIO_SCHEDULE_TIME, 'HH:mm') : null}
+                                        onChange={(time, timeStr) => handleFieldChange('AUTOMATION_AJIO_SCHEDULE_TIME', timeStr)}
+                                        allowClear={false}
+                                    />
+                                    <FieldHelp>Daily execution time for AJIO pipeline jobs</FieldHelp>
+                                </div>
+                            </Col>
+                        </Row>
+                    </SectionCard>
+
+                    {/* Catalog Quality Thresholds */}
+                    <SectionCard icon={Sliders} iconColor="#6d28d9" title="Catalog Quality Thresholds">
+                        <Paragraph style={{ color: '#64748b', fontSize: 12, marginBottom: 16 }}>
+                            Listing Quality Score (LQS) engine thresholds. ASINs below these values trigger automatic review alerts.
+                        </Paragraph>
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Minimum LQS Score</FieldLabel>
+                                <InputNumber
+                                    value={settings.minLqsScore}
+                                    onChange={v => handleFieldChange('minLqsScore', v)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={0}
+                                    max={100}
+                                />
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Minimum Title Length</FieldLabel>
+                                <InputNumber
+                                    value={settings.minTitleLength}
+                                    onChange={v => handleFieldChange('minTitleLength', v)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={0}
+                                />
+                                <FieldHelp>Characters</FieldHelp>
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Minimum Image Count</FieldLabel>
+                                <InputNumber
+                                    value={settings.minImageCount}
+                                    onChange={v => handleFieldChange('minImageCount', v)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={0}
+                                />
+                            </Col>
+                            <Col xs={24} md={12}>
+                                <FieldLabel>Minimum Description Length</FieldLabel>
+                                <InputNumber
+                                    value={settings.minDescLength}
+                                    onChange={v => handleFieldChange('minDescLength', v)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={0}
+                                />
+                                <FieldHelp>Characters</FieldHelp>
+                            </Col>
+                        </Row>
+                    </SectionCard>
+
+                    {/* Notifications */}
+                    <SectionCard icon={Bell} iconColor="#15803d" title="Notifications">
+                        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                            <ToggleRow
+                                title="In-App Notifications"
+                                description="Show slide-in notifications within the application"
+                                checked={settings.notifications}
+                                onChange={checked => handleFieldChange('notifications', checked)}
+                            />
+                            <ToggleRow
+                                title="Daily Email Reports"
+                                description="Receive execution logs and summaries via email"
+                                checked={settings.emailReports}
+                                onChange={checked => handleFieldChange('emailReports', checked)}
+                            />
+                        </Space>
+                    </SectionCard>
+                </Col>
+
+                {/* RIGHT COLUMN */}
+                <Col xs={24} lg={8}>
+                    {/* Account Information */}
+                    <SectionCard icon={User} title="Account Information">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div>
+                                <div style={{
+                                    fontSize: 11, color: '#64748b', fontWeight: 600,
+                                    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4
+                                }}>
+                                    License Tier
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enterprise</span>
+                                    <Tag style={{
+                                        margin: 0, background: '#f0fdf4', color: '#15803d',
+                                        border: '1px solid #bbf7d0', fontWeight: 700, fontSize: 10,
+                                        borderRadius: 4, padding: '1px 8px', textTransform: 'uppercase'
+                                    }}>
+                                        Active
+                                    </Tag>
+                                </div>
+                            </div>
+                            <Divider style={{ margin: '4px 0' }} />
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>API Usage</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>0 / 10</span>
+                                </div>
+                                <Progress percent={0} strokeColor="#1e293b" showInfo={false} strokeWidth={6} style={{ margin: 0 }} />
+                            </div>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Catalog ASINs</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>6 / 1,000</span>
+                                </div>
+                                <Progress percent={0.6} strokeColor="#15803d" showInfo={false} strokeWidth={6} style={{ margin: 0 }} />
+                            </div>
+                        </div>
+                    </SectionCard>
+
+                    {/* XPath Reference */}
+                    <SectionCard icon={Terminal} title="XPath Reference">
+                        <Paragraph style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>
+                            Standard extraction selectors for Octoparse configuration:
+                        </Paragraph>
+                        <List
+                            dataSource={xpathsHelp}
+                            split={false}
+                            renderItem={item => (
+                                <div style={{ padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                        <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 12 }}>{item.title}</span>
+                                        <Tooltip title="Copy XPath">
+                                            <Button
+                                                type="text"
+                                                size="small"
+                                                icon={<Link2 size={12} style={{ color: '#94a3b8' }} />}
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(item.xpath);
+                                                    messageApi.success(`${item.title} XPath copied`);
+                                                }}
+                                                style={{ height: 22, width: 22, padding: 0 }}
+                                            />
+                                        </Tooltip>
+                                    </div>
+                                    <code className="xpath-code">{item.xpath}</code>
+                                </div>
+                            )}
+                        />
+                    </SectionCard>
+
+                    {/* Resources */}
+                    <SectionCard icon={HelpCircle} title="Resources">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <a href="#" className="help-link">
+                                <Terminal size={14} strokeWidth={2} />
+                                <span>API Documentation</span>
+                                <ExternalLink size={11} style={{ marginLeft: 'auto', opacity: 0.4 }} />
+                            </a>
+                            <a href="#" className="help-link">
+                                <Info size={14} strokeWidth={2} />
+                                <span>Support Center</span>
+                                <ExternalLink size={11} style={{ marginLeft: 'auto', opacity: 0.4 }} />
+                            </a>
+                            <a href="https://www.octoparse.com" target="_blank" rel="noopener noreferrer" className="help-link">
+                                <Cloud size={14} strokeWidth={2} />
+                                <span>Octoparse Console</span>
+                                <ExternalLink size={11} style={{ marginLeft: 'auto', opacity: 0.4 }} />
+                            </a>
+                        </div>
+                    </SectionCard>
+                </Col>
+            </Row>
+
+            {/* SAVE FOOTER (Bottom of page) */}
+            <div className="save-footer">
+                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginRight: 'auto' }}>
+                    All changes require saving to take effect
+                </span>
+                <Button
+                    onClick={loadSettings}
+                    style={{
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 12,
+                        height: 38,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                    }}
+                    icon={<RefreshCw size={13} strokeWidth={2} />}
                 >
-                    Commit Changes
+                    Reset
+                </Button>
+                <Button
+                    type="primary"
+                    icon={<Save size={14} strokeWidth={2} />}
+                    onClick={handleSave}
+                    loading={saving}
+                    style={{
+                        background: '#1e293b',
+                        borderColor: '#1e293b',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        borderRadius: 6,
+                        height: 38,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingInline: 20
+                    }}
+                >
+                    Save Configuration
                 </Button>
             </div>
 
-            {/* 2. CONTENT GRID */}
-            <div className="settings-content">
-                <Row gutter={[24, 24]}>
-                    {/* Left Column - Configuration Forms */}
-                    <Col xs={24} lg={16}>
-                        <Space direction="vertical" size={24} style={{ width: '100%' }}>
-                            
-                            {/* Octoparse API */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <Cloud size={18} style={{ color: '#3B82F6' }} />
-                                        <span>Scraper Engine Integration</span>
-                                    </div>
-                                }
-                            >
-                                <Alert
-                                    message="Cloud Integration Layer"
-                                    description={<span>Connect to the Octoparse cluster for real-time scraping of Amazon ASIN structures. Obtain your token from <a href="https://www.octoparse.com" target="_blank" rel="noreferrer" style={{fontWeight: 600}}>octoparse.com</a>.</span>}
-                                    type="info"
-                                    showIcon
-                                    style={{ marginBottom: 24, borderRadius: 10 }}
-                                    icon={<Info size={16} />}
-                                />
-                                
-                                <Row gutter={[20, 20]}>
-                                    <Col span={24}>
-                                        <div className="form-section-title">API Security Token</div>
-                                        <Input.Password 
-                                            placeholder="Enter Octoparse API Key"
-                                            value={settings.octoparseApiKey}
-                                            onChange={e => handleFieldChange('octoparseApiKey', e.target.value)}
-                                            prefix={<Lock size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Active Task ID</div>
-                                        <Input 
-                                            placeholder="e.g. e8266a91-..."
-                                            value={settings.octoparseTaskId}
-                                            onChange={e => handleFieldChange('octoparseTaskId', e.target.value)}
-                                            prefix={<Terminal size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                        <Text type="secondary" style={{ fontSize: 11.5, display: 'block', marginTop: 6 }}>The specific crawling node identifier.</Text>
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Status Check Interval (ms)</div>
-                                        <InputNumber 
-                                            placeholder="300000"
-                                            value={settings.scrapePollInterval}
-                                            onChange={val => handleFieldChange('scrapePollInterval', val)}
-                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
-                                            min={60000}
-                                        />
-                                        <Text type="secondary" style={{ fontSize: 11.5, display: 'block', marginTop: 6 }}>Interval for backend cron checks (Min: 60000ms).</Text>
-                                    </Col>
-                                    <Col span={24}>
-                                        <Divider style={{ margin: '12px 0' }} />
-                                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                            <Button 
-                                                icon={<RefreshCw size={14} />} 
-                                                loading={testingOctoparse} 
-                                                onClick={handleTestOctoparse}
-                                                style={{ borderRadius: 8, fontWeight: 500 }}
-                                            >
-                                                Verify Node Link
-                                            </Button>
-                                            {testResult && (
-                                                <Tag color={testResult.success ? 'success' : 'error'} style={{ borderRadius: 6, padding: '4px 12px', border: 'none', fontWeight: 500 }}>
-                                                    {testResult.message}
-                                                </Tag>
-                                            )}
-                                        </div>
-                                    </Col>
-                                </Row>
-                            </Card>
-
-                            {/* SMTP Gateway */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <Mail size={18} style={{ color: '#ec4899' }} />
-                                        <span>SMTP Dispatch Gateway</span>
-                                    </div>
-                                }
-                            >
-                                <Paragraph style={{ color: '#64748b', marginBottom: 20 }}>
-                                    Assign transport relay hosts to empower direct outbound alerting, daily PDF digests, and security notices.
-                                </Paragraph>
-
-                                <Row gutter={[20, 20]}>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Relay Host</div>
-                                        <Input 
-                                            placeholder="smtp.mail.com"
-                                            value={settings.smtpHost}
-                                            onChange={e => handleFieldChange('smtpHost', e.target.value)}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                    </Col>
-                                    <Col xs={12} md={6}>
-                                        <div className="form-section-title">Port</div>
-                                        <Input 
-                                            placeholder="587"
-                                            value={settings.smtpPort}
-                                            onChange={e => handleFieldChange('smtpPort', e.target.value)}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                    </Col>
-                                    <Col xs={12} md={6}>
-                                        <div className="form-section-title">Crypt Mode</div>
-                                        <Select 
-                                            value={settings.smtpSecure} 
-                                            onChange={val => handleFieldChange('smtpSecure', val)}
-                                            style={{ width: '100%', height: 42 }}
-                                            dropdownStyle={{ borderRadius: 8 }}
-                                        >
-                                            <Option value="tls">STARTTLS</Option>
-                                            <Option value="ssl">Implicit SSL</Option>
-                                        </Select>
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Transport User</div>
-                                        <Input 
-                                            placeholder="relayer@corp.com"
-                                            value={settings.smtpUser}
-                                            onChange={e => handleFieldChange('smtpUser', e.target.value)}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Transport Password</div>
-                                        <Input.Password 
-                                            placeholder="🔑 Enter password"
-                                            value={settings.smtpPass}
-                                            onChange={e => handleFieldChange('smtpPass', e.target.value)}
-                                            style={{ height: 42, borderRadius: 8 }}
-                                        />
-                                    </Col>
-                                    <Col span={24}>
-                                        <Divider style={{ margin: '8px 0' }} />
-                                        <Button 
-                                            icon={<Send size={14} />} 
-                                            onClick={() => setEmailModalVisible(true)}
-                                            style={{ borderRadius: 8, fontWeight: 500 }}
-                                        >
-                                            Fire Test Broadcast
-                                        </Button>
-                                    </Col>
-                                </Row>
-                            </Card>
-
-                            {/* Pipeline Automation */}
-                            <Card 
-                                className="settings-card glass-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <Clock size={18} style={{ color: '#f59e0b' }} />
-                                        <span>Background Pipeline Schedules</span>
-                                    </div>
-                                }
-                            >
-                                <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: 12, padding: '16px', marginBottom: 24, display: 'flex', gap: 12 }}>
-                                    <div style={{ color: '#D97706', flexShrink: 0 }}><Cpu size={18} /></div>
-                                    <div>
-                                        <div style={{ fontWeight: 600, color: '#92400E', fontSize: 13 }}>Pipeline Cron Scheduler</div>
-                                        <div style={{ color: '#B45309', fontSize: 12.5 }}>Trigger synchronized automatic data mining across global store clusters. Adjust slot buffers to avoid node throttle.</div>
-                                    </div>
-                                </div>
-
-                                <Row gutter={[24, 24]}>
-                                    <Col xs={24} md={12}>
-                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                                                <Badge color="#FF9900" />
-                                                <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Amazon Scheduler</div>
-                                                <Switch 
-                                                    size="small"
-                                                    checked={settings.AUTOMATION_AMAZON_ENABLED !== false && settings.AUTOMATION_AMAZON_ENABLED !== 'false'}
-                                                    onChange={checked => handleFieldChange('AUTOMATION_AMAZON_ENABLED', checked)}
-                                                    style={{ marginLeft: 'auto' }}
-                                                />
-                                            </div>
-                                            <div className="form-section-title">Routine Dispatch Lock</div>
-                                            <TimePicker 
-                                                format="HH:mm"
-                                                style={{ width: '100%', height: 42, borderRadius: 8 }}
-                                                value={settings.AUTOMATION_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_SCHEDULE_TIME, 'HH:mm') : null}
-                                                onChange={(time, timeStr) => handleFieldChange('AUTOMATION_SCHEDULE_TIME', timeStr)}
-                                                allowClear={false}
-                                            />
-                                            <Text type="secondary" style={{ display: 'block', fontSize: 11.5, marginTop: 8 }}>Routine launch slot for all Amazon catalog pipelines.</Text>
-                                        </div>
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 20 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                                                <Badge color="#06B6D4" />
-                                                <div style={{ fontWeight: 700, color: '#334155', fontSize: 14 }}>Ajio Scheduler</div>
-                                                <Switch 
-                                                    size="small"
-                                                    checked={settings.AUTOMATION_AJIO_ENABLED !== false && settings.AUTOMATION_AJIO_ENABLED !== 'false'}
-                                                    onChange={checked => handleFieldChange('AUTOMATION_AJIO_ENABLED', checked)}
-                                                    style={{ marginLeft: 'auto' }}
-                                                />
-                                            </div>
-                                            <div className="form-section-title">Routine Dispatch Lock</div>
-                                            <TimePicker 
-                                                format="HH:mm"
-                                                style={{ width: '100%', height: 42, borderRadius: 8 }}
-                                                value={settings.AUTOMATION_AJIO_SCHEDULE_TIME ? dayjs(settings.AUTOMATION_AJIO_SCHEDULE_TIME, 'HH:mm') : null}
-                                                onChange={(time, timeStr) => handleFieldChange('AUTOMATION_AJIO_SCHEDULE_TIME', timeStr)}
-                                                allowClear={false}
-                                            />
-                                            <Text type="secondary" style={{ display: 'block', fontSize: 11.5, marginTop: 8 }}>Routine launch slot for Ajio infrastructure indexes.</Text>
-                                        </div>
-                                    </Col>
-                                </Row>
-                            </Card>
-
-                            {/* Catalog Tuning Rules */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <Sliders size={18} style={{ color: '#8b5cf6' }} />
-                                        <span>Catalog Optimization Limits</span>
-                                    </div>
-                                }
-                            >
-                                <Paragraph style={{ color: '#64748b', marginBottom: 24 }}>
-                                    Design thresholds utilized by the Listing Quality Score (LQS) engine. ASINs that drop below these boundaries trigger dynamic correction tickets automatically.
-                                </Paragraph>
-
-                                <Row gutter={[20, 20]}>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Minimum Target LQS</div>
-                                        <InputNumber 
-                                            value={settings.minLqsScore}
-                                            onChange={v => handleFieldChange('minLqsScore', v)}
-                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
-                                            min={0}
-                                            max={100}
-                                        />
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Minimum Title Chars</div>
-                                        <InputNumber 
-                                            value={settings.minTitleLength}
-                                            onChange={v => handleFieldChange('minTitleLength', v)}
-                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
-                                            min={0}
-                                        />
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Minimum Gallery Photos</div>
-                                        <InputNumber 
-                                            value={settings.minImageCount}
-                                            onChange={v => handleFieldChange('minImageCount', v)}
-                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
-                                            min={0}
-                                        />
-                                    </Col>
-                                    <Col xs={24} md={12}>
-                                        <div className="form-section-title">Min Description Length</div>
-                                        <InputNumber 
-                                            value={settings.minDescLength}
-                                            onChange={v => handleFieldChange('minDescLength', v)}
-                                            style={{ width: '100%', height: 42, borderRadius: 8, paddingTop: 4 }}
-                                            min={0}
-                                        />
-                                    </Col>
-                                </Row>
-                            </Card>
-
-                            {/* Notification Subscriptions */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <Bell size={18} style={{ color: '#10B981' }} />
-                                        <span>Broadcasting & Notices</span>
-                                    </div>
-                                }
-                            >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13.5 }}>Interactive Application Signals</div>
-                                            <div style={{ color: '#64748b', fontSize: 12 }}>Receive slide-ins and audio notifications inside the main app dashboard.</div>
-                                        </div>
-                                        <Switch 
-                                            checked={settings.notifications}
-                                            onChange={checked => handleFieldChange('notifications', checked)}
-                                        />
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13.5 }}>Daily Execution Logs (PDF)</div>
-                                            <div style={{ color: '#64748b', fontSize: 12 }}>Collect raw scraper execution sheets via scheduled secure email.</div>
-                                        </div>
-                                        <Switch 
-                                            checked={settings.emailReports}
-                                            onChange={checked => handleFieldChange('emailReports', checked)}
-                                        />
-                                    </div>
-                                </div>
-                            </Card>
-
-                        </Space>
-                    </Col>
-
-                    {/* Right Column - Info & Helpers */}
-                    <Col xs={24} lg={8}>
-                        <Space direction="vertical" size={24} style={{ width: '100%' }}>
-                            
-                            {/* Allocation Details */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <User size={16} />
-                                        <span>Licensing & Allocation</span>
-                                    </div>
-                                }
-                            >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                                    <div>
-                                        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Tier Level</Text>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                            <span style={{ fontSize: 18, fontWeight: 800, color: '#0F172A' }}>Enterprise Pro</span>
-                                            <Tag color="blue" style={{ border: 'none', borderRadius: 6, fontWeight: 700, padding: '2px 10px' }}>ACTIVE</Tag>
-                                        </div>
-                                    </div>
-                                    
-                                    <Divider style={{ margin: '4px 0' }} />
-                                    
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>API LIMITS TODAY</Text>
-                                            <Text style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>0 / 10 Nodes</Text>
-                                        </div>
-                                        <Progress percent={0} strokeColor="#2563eb" showInfo={false} strokeWidth={8} style={{ margin: 0 }} />
-                                    </div>
-
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>ACTIVE CATALOG ASINS</Text>
-                                            <Text style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>6 / 1000 Items</Text>
-                                        </div>
-                                        <Progress percent={0.6} strokeColor="#10b981" showInfo={false} strokeWidth={8} style={{ margin: 0 }} />
-                                    </div>
-                                </div>
-                            </Card>
-
-                            {/* XPath Guides */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <HelpCircle size={16} />
-                                        <span>Scrape Pattern Blueprint</span>
-                                    </div>
-                                }
-                            >
-                                <Paragraph style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
-                                    Apply the following precise XPaths inside your Octoparse Cloud extraction node to ensure accurate attribute mapping:
-                                </Paragraph>
-                                <List
-                                    dataSource={xpathsHelp}
-                                    renderItem={item => (
-                                        <List.Item style={{ padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                            <div style={{ width: '100%' }}>
-                                                <div style={{ fontWeight: 600, color: '#334155', fontSize: 12.5, marginBottom: 4 }}>{item.title}</div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <code className="xpath-code">{item.xpath}</code>
-                                                    <Tooltip title="Copy Path">
-                                                        <Button 
-                                                            type="text" 
-                                                            size="small" 
-                                                            icon={<Link2 size={13} style={{ color: '#94a3b8' }} />} 
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(item.xpath);
-                                                                messageApi.success(`${item.title} XPath copied!`);
-                                                            }}
-                                                            style={{ height: 24, width: 24, padding: 0 }}
-                                                        />
-                                                    </Tooltip>
-                                                </div>
-                                            </div>
-                                        </List.Item>
-                                    )}
-                                />
-                            </Card>
-
-                            {/* Platform Support */}
-                            <Card 
-                                className="settings-card" 
-                                variant="borderless"
-                                title={
-                                    <div className="settings-card-title">
-                                        <HelpCircle size={16} />
-                                        <span>Resource Hub</span>
-                                    </div>
-                                }
-                                styles={{ body: { padding: '12px' } }}
-                            >
-                                <a href="#" className="help-link">
-                                    <Terminal size={16} />
-                                    <span style={{ fontSize: 13.5 }}>API Specifications</span>
-                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
-                                </a>
-                                <a href="#" className="help-link">
-                                    <Info size={16} />
-                                    <span style={{ fontSize: 13.5 }}>Service Matrix Support</span>
-                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
-                                </a>
-                                <a href="https://www.octoparse.com" target="_blank" rel="noopener noreferrer" className="help-link">
-                                    <Cloud size={16} />
-                                    <span style={{ fontSize: 13.5 }}>Octoparse Panel</span>
-                                    <ExternalLink size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />
-                                </a>
-                            </Card>
-
-                        </Space>
-                    </Col>
-                </Row>
-            </div>
-
-            {/* SMTP TEST EMAIL MODAL */}
+            {/* Test Email Modal */}
             <Modal
-                title={<div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}><Send size={16} style={{ color: '#4f46e5' }} /> <span>Test SMTP Handshake</span></div>}
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                            width: 28, height: 28, borderRadius: 5,
+                            background: '#f8fafc', border: '1px solid #e5e7eb',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#475569'
+                        }}>
+                            <Send size={14} strokeWidth={2} />
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                            Test SMTP Configuration
+                        </span>
+                    </div>
+                }
                 open={emailModalVisible}
                 onCancel={() => setEmailModalVisible(false)}
                 footer={[
-                    <Button key="cancel" onClick={() => setEmailModalVisible(false)} style={{ borderRadius: 6 }}>Cancel</Button>,
-                    <Button 
-                        key="send" 
-                        type="primary" 
-                        loading={sendingTestEmail} 
-                        onClick={handleSendTestEmail}
-                        style={{ borderRadius: 6, fontWeight: 600 }}
+                    <Button
+                        key="cancel"
+                        onClick={() => setEmailModalVisible(false)}
+                        style={{ borderRadius: 6, fontWeight: 600, fontSize: 12 }}
                     >
-                        Launch Broadcast
+                        Cancel
+                    </Button>,
+                    <Button
+                        key="send"
+                        type="primary"
+                        loading={sendingTestEmail}
+                        onClick={handleSendTestEmail}
+                        icon={<Send size={12} strokeWidth={2} />}
+                        style={{
+                            borderRadius: 6, fontWeight: 600, fontSize: 12,
+                            background: '#1e293b', borderColor: '#1e293b',
+                            display: 'inline-flex', alignItems: 'center', gap: 6
+                        }}
+                    >
+                        Send Test
                     </Button>
                 ]}
-                width={400}
+                width={420}
                 centered
             >
-                <div style={{ padding: '12px 0' }}>
-                    <Paragraph type="secondary" style={{ fontSize: 12.5, marginBottom: 16 }}>
-                        Fires a test dispatch packet over the current relay transport configurations to verify handshake parameters.
+                <div style={{ padding: '8px 0' }}>
+                    <Paragraph style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                        Send a test email to verify SMTP relay configuration.
                     </Paragraph>
-                    <div className="form-section-title">Destination Email</div>
-                    <Input 
-                        placeholder="your@email.com" 
-                        value={testTargetEmail} 
+                    <FieldLabel>Recipient Email</FieldLabel>
+                    <Input
+                        placeholder="you@company.com"
+                        value={testTargetEmail}
                         onChange={e => setTestTargetEmail(e.target.value)}
-                        style={{ height: 40, borderRadius: 8 }}
-                        prefix={<Mail size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
+                        prefix={<Mail size={13} style={{ color: '#94a3b8', marginRight: 4 }} />}
+                        style={{ height: 38 }}
                     />
                 </div>
             </Modal>
-
         </div>
     );
 };

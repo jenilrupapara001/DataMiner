@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const bcrypt = require('bcryptjs');
+const { sendAdminEmail } = require('../services/emailService');
 
 /**
  * Get all users with filters, pagination, and role/seller info
@@ -791,6 +792,59 @@ exports.getManagers = async (req, res) => {
       }))
     });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.sendEmailToUser = async (req, res) => {
+  try {
+    const { userId, subject, html, message } = req.body;
+    
+    if (!userId && !req.body.to) {
+      return res.status(400).json({ success: false, message: 'User ID or recipient email required' });
+    }
+
+    let to;
+    let userName = 'User';
+
+    if (req.body.to) {
+      to = req.body.to;
+    } else {
+      const pool = await getPool();
+      const userResult = await pool.request()
+        .input('id', sql.VarChar, userId)
+        .query('SELECT Email, FirstName, LastName FROM Users WHERE Id = @id');
+
+      if (userResult.recordset.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const user = userResult.recordset[0];
+      to = user.Email;
+      userName = user.FirstName || 'User';
+    }
+
+    const finalSubject = subject || 'Message from Super Admin';
+    const finalHtml = html || `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Message from Super Admin</h2>
+        <p>Hello ${userName},</p>
+        <p>${message || ''}</p>
+        <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+          <p style="margin: 0; font-size: 12px; color: #666;">Sent via RetailOps Dashboard</p>
+        </div>
+      </div>
+    `;
+
+    const result = await sendAdminEmail(to, finalSubject, finalHtml, 'RetailOps Super Admin');
+    
+    res.json({ 
+      success: true, 
+      message: 'Email sent successfully',
+      data: { messageId: result.messageId, to }
+    });
+  } catch (error) {
+    console.error('Send email error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

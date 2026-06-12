@@ -845,6 +845,15 @@ class DatabaseService {
   async getSystemLogs() {
     return this.request('/logs', { method: 'GET' }, null);
   }
+
+  // ── Webhook CRUD ──────────────────────────────────────────────────────────
+  async getWebhooks()            { return this.request('/webhooks', { method: 'GET' }, null); }
+  async createWebhook(data)      { return this.request('/webhooks', { method: 'POST', body: JSON.stringify(data) }, null); }
+  async updateWebhook(id, data)  { return this.request(`/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(data) }, null); }
+  async deleteWebhook(id)        { return this.request(`/webhooks/${id}`, { method: 'DELETE' }, null); }
+  async testWebhook(id)          { return this.request(`/webhooks/${id}/test`, { method: 'POST', body: '{}' }, null); }
+  async getWebhookLogs(whId)     { return this.request(`/webhooks/logs${whId ? `?webhookId=${whId}` : ''}`, { method: 'GET' }, null); }
+  async getWebhookEventTypes()   { return this.request('/webhooks/events', { method: 'GET' }, null); }
 }
 
 export const db = new DatabaseService();

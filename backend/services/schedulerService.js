@@ -4,6 +4,7 @@ const MarketSyncService = require('./marketDataSyncService');
 const { syncSellerFromKeepaInternal } = require('../controllers/sellerAsinTrackerController');
 const AutoTagService = require('./autoTagService');
 const SystemLogService = require('./SystemLogService');
+const WebhookService = require('./WebhookService');
 
 /**
  * Scheduler Service
@@ -353,8 +354,41 @@ class SchedulerService {
                     );
                     CREATE INDEX IX_GoalTemplates_OwnerId ON GoalTemplates(OwnerId);
                 END
+
+                IF OBJECT_ID(N'dbo.Webhooks', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE Webhooks (
+                        Id VARCHAR(24) PRIMARY KEY,
+                        Name NVARCHAR(255) NOT NULL,
+                        Url NVARCHAR(1000) NOT NULL,
+                        Events NVARCHAR(MAX) DEFAULT '["*"]',
+                        Description NVARCHAR(MAX),
+                        IsActive BIT DEFAULT 1,
+                        CreatedBy VARCHAR(24),
+                        CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate(),
+                        UpdatedAt DATETIME2 DEFAULT dbo.GetEnvDate()
+                    );
+                    CREATE INDEX IX_Webhooks_IsActive ON Webhooks(IsActive);
+                END
+
+                IF OBJECT_ID(N'dbo.WebhookLogs', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE WebhookLogs (
+                        Id VARCHAR(50) PRIMARY KEY,
+                        WebhookId VARCHAR(24),
+                        Event NVARCHAR(100),
+                        HttpStatus INT,
+                        DurationMs INT,
+                        Response NVARCHAR(MAX),
+                        Attempt INT DEFAULT 1,
+                        Success BIT DEFAULT 0,
+                        CreatedAt DATETIME2 DEFAULT dbo.GetEnvDate()
+                    );
+                    CREATE INDEX IX_WebhookLogs_WebhookId ON WebhookLogs(WebhookId);
+                    CREATE INDEX IX_WebhookLogs_CreatedAt ON WebhookLogs(CreatedAt);
+                END
             `);
-            console.log('✅ ScheduledRuns, TaskTemplates, and GoalTemplates tables verified/created successfully.');
+            console.log('✅ ScheduledRuns, TaskTemplates, GoalTemplates, Webhooks, WebhookLogs tables verified/created successfully.');
         } catch (err) {
             console.error('❌ Failed to ensure required database tables exist:', err.message);
         }
@@ -660,6 +694,17 @@ class SchedulerService {
             } catch (notifErr) {
                 console.error('Failed to create notification:', notifErr.message);
             }
+
+            // Pabbly webhook — report.asin_sync_complete
+            WebhookService.fire('report.asin_sync_complete', {
+                runId,
+                marketplace,
+                totalSellers: result.totalSellers,
+                successful: result.successful,
+                duration: result.duration,
+                timestamp: new Date().toISOString(),
+                dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/scheduled-runs`,
+            });
 
             return result;
         } catch (error) {

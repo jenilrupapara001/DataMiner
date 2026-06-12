@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const WebhookService = require('../services/WebhookService');
 
 /**
  * Get objectives with hierarchy
@@ -139,6 +140,16 @@ exports.createObjective = async (req, res) => {
             .query("SELECT * FROM Objectives WHERE Id = @id");
 
         res.status(201).json({ success: true, data: { ...result.recordset[0], _id: objectiveId } });
+
+        // Pabbly webhook
+        WebhookService.fire('okr.objective_created', {
+            id: objectiveId,
+            title,
+            description: description || '',
+            sellerId: sellerId || null,
+            createdBy: { id: createdBy },
+            dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/objectives`,
+        });
     } catch (error) {
         console.error('Error creating objective:', error);
         res.status(500).json({ success: false, message: error.message });
@@ -273,6 +284,18 @@ exports.updateKeyResult = async (req, res) => {
         // Recalculate parent objective progress
         await recalcObjectiveProgress(kr.ObjectiveId);
 
+        // Pabbly webhook
+        const progressPct = kr.TargetValue > 0 ? Math.round((kr.CurrentValue / kr.TargetValue) * 100) : 0;
+        WebhookService.fire('okr.key_result_updated', {
+            id: kr.Id,
+            title: kr.Title,
+            objectiveId: kr.ObjectiveId,
+            currentValue: kr.CurrentValue,
+            targetValue: kr.TargetValue,
+            progress: progressPct,
+            dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/objectives`,
+        });
+
         res.json({ success: true, data: kr });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -329,6 +352,20 @@ async function recalcObjectiveProgress(objectiveId) {
         .input('id', sql.VarChar, objectiveId)
         .input('progress', sql.Decimal(5,2), overall)
         .query("UPDATE Objectives SET Progress = @progress, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id");
+
+    // Fire okr.objective_completed if 100%
+    if (overall >= 100) {
+        const objRes = await pool.request()
+            .input('id', sql.VarChar, objectiveId)
+            .query("SELECT Title FROM Objectives WHERE Id = @id");
+        const objTitle = objRes.recordset[0]?.Title || 'Objective';
+        WebhookService.fire('okr.objective_completed', {
+            id: objectiveId,
+            title: objTitle,
+            progress: overall,
+            dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/objectives`,
+        });
+    }
 }
 
 // Additional stubs

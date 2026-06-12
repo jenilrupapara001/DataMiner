@@ -56,6 +56,7 @@ const RolesPage = lazy(() => import('./pages/RolesPage'));
 const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage'));
 const FileManagerPage = lazy(() => import('./pages/FileManagerPage'));
 const TeamManagementPage = lazy(() => import('./pages/TeamManagementPage'));
+const WebhookSettingsPage = lazy(() => import('./pages/WebhookSettingsPage'));
 
 // Minimal full-screen spinner — used only for the outer auth Suspense boundary
 // (login / register pages are tiny; the skeleton would be jarring there)
@@ -165,6 +166,7 @@ function AppRoutes() {
                   <Route path="/target-achievement/create" element={<ProtectedRoute permission="monthlyreport_edit"><TargetCreationPage /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
                   <Route path="/tasks" element={<ProtectedRoute permission="tasks_view"><TasksPage /></ProtectedRoute>} />
+                  <Route path="/webhooks" element={<ProtectedRoute permission="rules_manage"><WebhookSettingsPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/profile/:id" element={<ProfilePage />} />

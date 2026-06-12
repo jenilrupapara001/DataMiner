@@ -1,50 +1,31 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
 import {
-  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col, Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag, message
+  Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col,
+  Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag, message, DatePicker
 } from 'antd';
 const { Title, Text } = Typography;
-import axios from 'axios';
+const { RangePicker } = DatePicker;
 import {
-  Package,
-  Activity,
-  TrendingUp,
-  TrendingDown,
-  Table as TableIcon,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  RefreshCw,
-  Search,
-  Eye,
-  LayoutGrid,
-  BarChart3,
-  Target,
-  Calendar,
-  Layers,
-  TrendingUp as TrendUpIcon,
-  FileBarChart,
-  X,
-  Image as ImageIcon,
-  CheckSquare,
-  Square,
-  Filter,
-  Store
+  Package, Activity, TrendingUp, TrendingDown,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  Download, RefreshCw, Search, Eye, BarChart3, Target,
+  Calendar, Layers, TrendingUp as TrendUpIcon,
+  FileBarChart, Image as ImageIcon, Filter
 } from 'lucide-react';
 import { adsApi, sellerApi } from '../services/api';
 import InfiniteScrollSelect from '../components/common/InfiniteScrollSelect';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
-import EmptyState from '../components/common/EmptyState';
 import AdsImportModal from '../components/ads/AdsImportModal';
 import Chart from 'react-apexcharts';
 import { CHART_COLORS, areaChartOptions } from '../utils/chartTheme';
-import DateRangePicker from '../components/common/DateRangePicker';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import { format } from 'date-fns';
+import dayjs from 'dayjs';
 
-// Define canonical metrics dictionary for custom dashboard selector from screenshot
+// ═══════════════════════════════════════════════════════════════
+// METRIC MAP
+// ═══════════════════════════════════════════════════════════════
 const METRIC_MAP = {
   spend: { label: 'Ads Spend', color: '#4f46e5', type: 'currency', seriesType: 'column' },
   sales: { label: 'Ads Sales', color: '#10b981', type: 'currency', seriesType: 'column' },
@@ -64,13 +45,12 @@ const METRIC_MAP = {
   clicks: { label: 'Clicks', color: '#94a3b8', type: 'number', seriesType: 'column' }
 };
 
-// Utility helper: generate history matrix for the dynamic table headers
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
 const generateHistoryStructureFromDates = (sortedDates) => {
   if (!sortedDates || sortedDates.length === 0) return [{ label: 'N/A', dates: [] }];
-
-  // Cap to maximum 7-10 recent dates
   const recentDates = sortedDates.slice(-7);
-
   return [{
     label: 'Last 7 Days',
     dates: recentDates.map(dateStr => {
@@ -93,18 +73,10 @@ const normalizeDateStr = (dateInput) => {
       if (typeof dateInput === 'string') return dateInput.substring(0, 10);
       return '';
     }
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   } catch (e) {
     return '';
   }
-};
-
-const formatCurrency = (val) => {
-  if (typeof val !== 'number') return '-';
-  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(val);
 };
 
 const formatCompact = (val) => {
@@ -114,45 +86,33 @@ const formatCompact = (val) => {
   return val.toFixed(2);
 };
 
-// Generic Trend Badge
 const TrendBadge = ({ value, prevValue, isInverted = false }) => {
-  if (!prevValue) return <span style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600 }}>-</span>;
-
+  if (!prevValue) return <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600 }}>-</span>;
   const diff = value - prevValue;
   if (Math.abs(diff) < 0.01) {
-    return <div className="d-flex align-items-center gap-1 text-zinc-400" style={{ fontSize: '9px', fontWeight: 600 }}>
-      <Activity size={10} />
-      <span>STABLE</span>
+    return <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9, fontWeight: 600, color: '#94a3b8' }}>
+      <Activity size={10} /> STABLE
     </div>;
   }
-
   const isGood = isInverted ? diff < 0 : diff > 0;
   const Icon = isGood ? TrendingUp : TrendingDown;
   const color = isGood ? '#059669' : '#dc2626';
-
-
-
   return (
-    <div className="d-flex align-items-center gap-0.5 fw-bold" style={{ fontSize: '9px', color }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9, fontWeight: 700, color }}>
       <Icon size={10} />
-      <span>{isGood ? 'HIGH' : 'LOW'}</span>
+      {isGood ? 'HIGH' : 'LOW'}
     </div>
   );
 };
 
-// Standard mini sparkline helper using simple CSS linear-gradient for visualization mock or basic visual indicator
 const MiniSpark = ({ data, color }) => {
-  if (!data || data.length < 2) return <div style={{ width: '100%', height: '12px' }} />;
+  if (!data || data.length < 2) return <div style={{ width: '100%', height: 12 }} />;
   const max = Math.max(...data) || 1;
-  const points = data.map((val, i) => `${(i / (data.length - 1)) * 100}% ${100 - (val / max * 100)}%`).join(', ');
-
   return (
-    <div style={{ width: '100%', height: '14px', overflow: 'hidden', opacity: 0.8 }}>
+    <div style={{ width: '100%', height: 14, overflow: 'hidden', opacity: 0.8 }}>
       <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
         <polyline
-          fill="none"
-          stroke={color}
-          strokeWidth="8"
+          fill="none" stroke={color} strokeWidth="8"
           points={data.map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v / max) * 90)}`).join(' ')}
         />
       </svg>
@@ -160,9 +120,9 @@ const MiniSpark = ({ data, color }) => {
   );
 };
 
-// ---------------------------------------------------------
-// Analytics History Modal for viewing full historical breakdown
-// ---------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════
+// HISTORY MODAL
+// ═══════════════════════════════════════════════════════════════
 const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   if (!rowData) return null;
 
@@ -180,300 +140,119 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   };
 
-  // Try to find a valid image in child ASINs if parent doesn't have one
   const displayImage = rowData.imageUrl || (rowData.children && rowData.children.find(c => c.imageUrl)?.imageUrl);
-
-  // Sort history descending (newest first)
   const fullHistory = [...(rowData.history || rowData.weekHistory || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Compute aggregated stats
-  const totalSpend = Number(rowData.spend || 0);
-  const totalSales = Number(rowData.sales || 0);
-  const totalClicks = Number(rowData.clicks || 0);
-  const totalImpressions = Number(fullHistory.reduce((sum, d) => sum + Number(d.impressions || 0), 0));
-  const totalOrders = Number(rowData.orders || 0);
-
-  const blendedAcos = totalSales > 0 ? (totalSpend / totalSales) * 100 : 0;
-  const blendedRoas = totalSpend > 0 ? totalSales / totalSpend : 0;
-  const blendedCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-  const blendedCvr = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
-
-  // Table columns definition for Ant Design Table
   const columns = [
     {
-      title: 'Date',
-      dataIndex: 'date',
-      key: 'date',
-      width: '180px',
-      render: (dateStr) => {
-        return (
-          <div className="d-flex align-items-center gap-2">
-            <Calendar size={13} className="text-indigo-500" />
-            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569' }}>
-              {safeFormatDate(dateStr)}
-            </span>
-          </div>
-        );
-      },
+      title: 'Date', dataIndex: 'date', key: 'date', width: 180,
+      render: (dateStr) => (
+        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569', fontSize: 12 }}>
+          {safeFormatDate(dateStr)}
+        </span>
+      ),
       sorter: (a, b) => new Date(a.date) - new Date(b.date),
     },
-    {
-      title: 'Impressions',
-      dataIndex: 'impressions',
-      key: 'impressions',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.impressions || 0) - Number(b.impressions || 0),
-    },
-    {
-      title: 'Clicks',
-      dataIndex: 'clicks',
-      key: 'clicks',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.clicks || 0) - Number(b.clicks || 0),
-    },
-    {
-      title: 'Spend',
-      dataIndex: 'spend',
-      key: 'spend',
-      align: 'right',
-      render: (val) => (
-        <span style={{ color: '#ef4444', fontWeight: 600 }}>
-          ₹{Number(val || 0).toFixed(2)}
-        </span>
-      ),
-      sorter: (a, b) => Number(a.spend || 0) - Number(b.spend || 0),
-    },
-    {
-      title: 'Ad Sales',
-      dataIndex: 'sales',
-      key: 'sales',
-      align: 'right',
-      render: (val) => (
-        <span style={{ color: '#10b981', fontWeight: 700 }}>
-          ₹{Number(val || 0).toFixed(2)}
-        </span>
-      ),
-      sorter: (a, b) => Number(a.sales || 0) - Number(b.sales || 0),
-    },
-    {
-      title: 'ACOS',
-      dataIndex: 'acos',
-      key: 'acos',
-      align: 'right',
-      render: (val) => {
-        const v = Number(val || 0);
-        return `${v.toFixed(2)}%`;
-      },
-      sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0),
-    },
-    {
-      title: 'TACOS',
-      dataIndex: 'tacos',
-      key: 'tacos',
-      align: 'right',
-      render: (val) => {
-        const v = Number(val || 0);
-        return `${v.toFixed(2)}%`;
-      },
-      sorter: (a, b) => Number(a.tacos || 0) - Number(b.tacos || 0),
-    },
-    {
-      title: 'ROAS',
-      dataIndex: 'roas',
-      key: 'roas',
-      align: 'right',
-      render: (val) => {
-        const v = Number(val || 0);
-        return `${v.toFixed(2)}`;
-      },
-      sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0),
-    },
-    {
-      title: 'Orders',
-      dataIndex: 'orders',
-      key: 'orders',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0),
-    },
-    {
-      title: 'Organic Orders',
-      dataIndex: 'organicOrders',
-      key: 'organicOrders',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.organicOrders || 0) - Number(b.organicOrders || 0),
-    },
-    {
-      title: 'Total Orders',
-      dataIndex: 'totalOrders',
-      key: 'totalOrders',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.totalOrders || 0) - Number(b.totalOrders || 0),
-    },
-    {
-      title: 'Ads Sales (%)',
-      dataIndex: 'adSalesPct',
-      key: 'adSalesPct',
-      align: 'right',
-      render: (val) => {
-        const v = Number(val || 0);
-        return `${v.toFixed(2)}%`;
-      },
-      sorter: (a, b) => Number(a.adSalesPct || 0) - Number(b.adSalesPct || 0),
-    },
-    {
-      title: 'CVR',
-      dataIndex: 'cvr',
-      key: 'cvr',
-      align: 'center',
-      render: (val) => (
-        <span style={{ fontWeight: 600, color: '#6366f1' }}>
-          {Number(val || 0).toFixed(2)}%
-        </span>
-      ),
-      sorter: (a, b) => Number(a.cvr || 0) - Number(b.cvr || 0),
-    },
-    {
-      title: 'Page Views',
-      dataIndex: 'pageViews',
-      key: 'pageViews',
-      align: 'right',
-      render: (val) => Number(val || 0).toLocaleString(),
-      sorter: (a, b) => Number(a.pageViews || 0) - Number(b.pageViews || 0),
-    },
-    {
-      title: 'Organic Sales',
-      dataIndex: 'organicSales',
-      key: 'organicSales',
-      align: 'right',
-      render: (val) => `₹${Number(val || 0).toFixed(2)}`,
-      sorter: (a, b) => Number(a.organicSales || 0) - Number(b.organicSales || 0),
-    }
+    { title: 'Impressions', dataIndex: 'impressions', key: 'impressions', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.impressions || 0) - Number(b.impressions || 0) },
+    { title: 'Clicks', dataIndex: 'clicks', key: 'clicks', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.clicks || 0) - Number(b.clicks || 0) },
+    { title: 'Spend', dataIndex: 'spend', key: 'spend', align: 'right', render: (val) => <span style={{ color: '#b91c1c', fontWeight: 600 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.spend || 0) - Number(b.spend || 0) },
+    { title: 'Ad Sales', dataIndex: 'sales', key: 'sales', align: 'right', render: (val) => <span style={{ color: '#15803d', fontWeight: 700 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.sales || 0) - Number(b.sales || 0) },
+    { title: 'ACOS', dataIndex: 'acos', key: 'acos', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0) },
+    { title: 'TACOS', dataIndex: 'tacos', key: 'tacos', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.tacos || 0) - Number(b.tacos || 0) },
+    { title: 'ROAS', dataIndex: 'roas', key: 'roas', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0) },
+    { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0) },
+    { title: 'Organic Orders', dataIndex: 'organicOrders', key: 'organicOrders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.organicOrders || 0) - Number(b.organicOrders || 0) },
+    { title: 'Total Orders', dataIndex: 'totalOrders', key: 'totalOrders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.totalOrders || 0) - Number(b.totalOrders || 0) },
+    { title: 'CVR', dataIndex: 'cvr', key: 'cvr', align: 'center', render: (val) => <span style={{ fontWeight: 600, color: '#475569' }}>{Number(val || 0).toFixed(2)}%</span>, sorter: (a, b) => Number(a.cvr || 0) - Number(b.cvr || 0) },
+    { title: 'Page Views', dataIndex: 'pageViews', key: 'pageViews', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.pageViews || 0) - Number(b.pageViews || 0) },
+    { title: 'Organic Sales', dataIndex: 'organicSales', key: 'organicSales', align: 'right', render: (val) => `₹${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.organicSales || 0) - Number(b.organicSales || 0) }
   ];
 
   return (
     <Modal
-      open={isOpen}
-      onCancel={onClose}
-      footer={null}
-      width={1200}
-      centered
-      style={{ top: 20 }}
-      styles={{
-        content: { borderRadius: '16px', padding: 0, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' },
-        body: { padding: 0 }
-      }}
+      open={isOpen} onCancel={onClose} footer={null} width={1200} centered
+      styles={{ content: { borderRadius: 8, padding: 0, overflow: 'hidden' }, body: { padding: 0 } }}
     >
-      <div className="d-flex flex-column" style={{ height: '85vh', overflow: 'hidden' }}>
-        {/* Modal Header */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white shrink-0">
-          <div className="d-flex align-items-center gap-3">
-            {displayImage ? (
-              <img
-                src={displayImage}
-                alt=""
-                className="rounded-3 border object-fit-contain bg-white"
-                style={{ width: '52px', height: '52px', padding: '2px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-              />
-            ) : (
-              <div className="rounded-3 border bg-light d-flex align-items-center justify-content-center text-zinc-400" style={{ width: '52px', height: '52px' }}>
-                <ImageIcon size={22} />
-              </div>
-            )}
-            <div>
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-zinc-900 text-white fw-bold px-2 rounded-2" style={{ fontSize: '11px' }}>
-                  {rowData.asin || rowData.id}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '85vh', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          {displayImage ? (
+            <img src={displayImage} alt="" style={{ width: 48, height: 48, borderRadius: 6, border: '1px solid #e5e7eb', objectFit: 'contain', background: '#ffffff' }} />
+          ) : (
+            <div style={{ width: 48, height: 48, borderRadius: 6, border: '1px solid #e5e7eb', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <ImageIcon size={20} />
+            </div>
+          )}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#0f172a', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>
+                {rowData.asin || rowData.id}
+              </span>
+              {rowData.sku && rowData.sku !== 'PARENT' ? (
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>SKU: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>{rowData.sku}</span></span>
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#475569', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase' }}>
+                  Parent · {rowData.childCount || 0} children
                 </span>
-                {rowData.sku && rowData.sku !== 'PARENT' ? (
-                  <Text type="secondary" style={{ fontSize: '12px', fontWeight: 500 }}>
-                    SKU: <span className="font-monospace fw-bold text-zinc-800">{rowData.sku}</span>
-                  </Text>
-                ) : (
-                  <span className="badge bg-indigo-50 text-indigo-700 fw-bold px-2 rounded-2" style={{ fontSize: '10px' }}>
-                    PARENT GROUP • {rowData.childCount || 0} CHILDREN
-                  </span>
-                )}
-              </div>
-              <h5 className="mb-0 fw-bold text-dark text-truncate mt-1" style={{ maxWidth: '800px', fontSize: '15px', letterSpacing: '-0.01em' }}>
-                {rowData.title || 'Detailed Advertisement Timeline'}
-              </h5>
+              )}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', maxWidth: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {rowData.title || 'Advertisement Timeline'}
             </div>
           </div>
         </div>
 
-        {/* Modal Chart Visualizer (Fixed at 220px to match old design vertical flow) */}
+        {/* Chart */}
         {fullHistory.length > 0 && (
-          <div className="px-4 py-2 border-bottom bg-white shrink-0" style={{ height: '220px' }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #e5e7eb', height: 200, flexShrink: 0 }}>
             <Chart
-              type="area"
-              height="100%"
+              type="area" height="100%"
               series={[
                 { name: 'Ad Sales', data: [...fullHistory].reverse().map(d => Number(d.sales || 0).toFixed(0)) },
                 { name: 'Ad Spend', data: [...fullHistory].reverse().map(d => Number(d.spend || 0).toFixed(0)) }
               ]}
               options={{
                 ...areaChartOptions(val => '₹' + Number(val).toLocaleString('en-IN')),
-                colors: ['#10B981', '#EF4444'], // green for sales, red for spend
+                colors: ['#15803d', '#b91c1c'],
                 chart: { ...areaChartOptions().chart, toolbar: { show: false }, sparkline: { enabled: false } },
-                stroke: { curve: 'smooth', width: 2.2 },
+                stroke: { curve: 'smooth', width: 2 },
                 xaxis: {
                   categories: [...fullHistory].reverse().map(d => safeFormatDateShort(d.date)),
                   labels: { style: { fontSize: '9px', fontWeight: 600 } },
-                  axisBorder: { show: false },
-                  axisTicks: { show: false }
+                  axisBorder: { show: false }, axisTicks: { show: false }
                 },
-                yaxis: {
-                  labels: {
-                    style: { fontSize: '9px', fontWeight: 500 },
-                    formatter: (v) => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v
-                  }
-                },
+                yaxis: { labels: { style: { fontSize: '9px' }, formatter: (v) => v >= 100000 ? (v / 100000).toFixed(1) + 'L' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v } },
                 legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '10px', fontWeight: 700 }
               }}
             />
           </div>
         )}
 
-
-        {/* Modal Table Body (Scrollable, just like the old design!) */}
-        <div className="flex-grow-1 overflow-auto bg-white position-relative p-3">
+        {/* Table */}
+        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
           {fullHistory.length === 0 ? (
-            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-zinc-400">
-              <Calendar size={48} className="mb-3 opacity-20" />
-              <span className="fw-medium">No historical tracking available for this period.</span>
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <Calendar size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+              <span style={{ fontSize: 12, fontWeight: 500 }}>No historical data available</span>
             </div>
           ) : (
-            <div className="border rounded-3 overflow-hidden shadow-sm bg-white">
-              <Table
-                dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
-                columns={columns}
-                pagination={{
-                  pageSize: 10,
-                  showSizeChanger: false,
-                  size: 'small',
-                  style: { padding: '8px 16px', margin: 0, borderTop: '1px solid #f0f0f0' }
-                }}
-                size="small"
-                className="modern-timeline-table"
-                rowClassName="ah-tr"
-                scroll={{ x: 'max-content' }}
-              />
-            </div>
+            <Table
+              dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
+              columns={columns}
+              pagination={{ pageSize: 10, showSizeChanger: false, size: 'small', style: { padding: '8px 16px', margin: 0 } }}
+              size="small" scroll={{ x: 'max-content' }}
+              className="pro-modal-table"
+            />
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-4 py-3 border-top bg-light d-flex justify-content-between align-items-center shrink-0" style={{ backgroundColor: '#f8fafc' }}>
-          <div className="text-zinc-500 font-monospace" style={{ fontSize: '11px', fontWeight: 500 }}>
-            {fullHistory.length} Days Recorded Timeline
-          </div>
-          <Button onClick={onClose} type="primary" style={{ backgroundColor: '#18181b', borderColor: '#18181b', fontWeight: 700, borderRadius: '6px' }}>
-            Close Window
+        {/* Footer */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: '#fafbfc' }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace', fontWeight: 500 }}>
+            {fullHistory.length} days recorded
+          </span>
+          <Button onClick={onClose} type="primary" style={{ background: '#1e293b', borderColor: '#1e293b', fontWeight: 600, borderRadius: 6, fontSize: 12 }}>
+            Close
           </Button>
         </div>
       </div>
@@ -481,60 +260,40 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
   );
 };
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
 export default function AdsManagerPage() {
   const { startDate, endDate, updateDateRange } = useDateRange();
   const { setPageTitle } = usePageTitle();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
 
-  useEffect(() => {
-    setPageTitle('Ads Manager');
-  }, [setPageTitle]);
+  useEffect(() => { setPageTitle('Ads Manager'); }, [setPageTitle]);
 
-  // State for dynamic multi-metric chart customization from screenshot
   const [chartConfigMetrics, setChartConfigMetrics] = useState(['spend', 'sales', 'acos']);
-
-  // Seller selection state
   const [selectedSeller, setSelectedSeller] = useState(() => localStorage.getItem('selectedSeller') || '');
 
-  useEffect(() => {
-    localStorage.setItem('selectedSeller', selectedSeller);
-  }, [selectedSeller]);
+  useEffect(() => { localStorage.setItem('selectedSeller', selectedSeller); }, [selectedSeller]);
 
   const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
     try {
       const response = await sellerApi.getAll({ page, limit: 1000, search });
-      if (response.success) {
-        return {
-          data: response.data.sellers || [],
-          hasMore: response.data.pagination?.page < response.data.pagination?.totalPages
-        };
-      }
+      if (response.success) return { data: response.data.sellers || [], hasMore: response.data.pagination?.page < response.data.pagination?.totalPages };
       return { data: [], hasMore: false };
-    } catch (err) {
-      console.error('Error fetching sellers for dropdown:', err);
-      return { data: [], hasMore: false };
-    }
+    } catch (err) { return { data: [], hasMore: false }; }
   }, []);
 
   const fetchSellerItem = useCallback(async (id) => {
     try {
       const response = await sellerApi.getById(id);
-      if (response.success && response.seller) {
-        return response.seller;
-      }
+      if (response.success && response.seller) return response.seller;
       return null;
-    } catch (err) {
-      console.error('Error fetching seller by ID:', err);
-      return null;
-    }
+    } catch (err) { return null; }
   }, []);
 
-  // 0. Aggregated summary for Top View
   const summaryData = useMemo(() => {
-    const sum = {
-      impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, pageViews: 0, organicSales: 0, organicOrders: 0, totalOrders: 0
-    };
+    const sum = { impressions: 0, clicks: 0, spend: 0, sales: 0, orders: 0, pageViews: 0, organicSales: 0, organicOrders: 0, totalOrders: 0 };
     data.forEach(d => {
       sum.impressions += Number(d.impressions || 0);
       sum.clicks += Number(d.clicks || 0);
@@ -545,8 +304,6 @@ export default function AdsManagerPage() {
       sum.organicSales += Number(d.organicSales || 0);
       sum.organicOrders += Number(d.organicOrders || 0);
     });
-
-    // Extended Derived Metrics
     sum.totalSales = sum.sales + sum.organicSales;
     sum.acos = sum.sales > 0 ? (sum.spend / sum.sales) * 100 : 0;
     sum.roas = sum.spend > 0 ? (sum.sales / sum.spend) : 0;
@@ -556,56 +313,38 @@ export default function AdsManagerPage() {
     sum.tacos = sum.totalSales > 0 ? (sum.spend / sum.totalSales) * 100 : 0;
     sum.adSalesPct = sum.totalSales > 0 ? (sum.sales / sum.totalSales) * 100 : 0;
     sum.totalOrders = sum.orders + sum.organicOrders;
-
     return sum;
   }, [data]);
 
-  // Filtering and Grouping States
   const [groupBy, setGroupBy] = useState('asin');
   const [expandedParents, setExpandedParents] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
+
+  const tableScrollY = useMemo(() => {
+    return showDashboardCharts ? 'calc(100vh - 660px)' : 'calc(100vh - 245px)';
+  }, [showDashboardCharts]);
+
+
 
   const toggleParentExpand = (parentAsin) => {
     setExpandedParents(prev => {
       const next = new Set(prev);
-      if (next.has(parentAsin)) {
-        next.delete(parentAsin);
-      } else {
-        next.add(parentAsin);
-      }
+      next.has(parentAsin) ? next.delete(parentAsin) : next.add(parentAsin);
       return next;
     });
   };
 
-  useEffect(() => {
-    setExpandedParents(new Set());
-    setPage(1);
-  }, [groupBy]);
+  useEffect(() => { setExpandedParents(new Set()); setPage(1); }, [groupBy]);
 
-
-
-  // Visual Collapsible Columns Tracking
   const [expandedCols, setExpandedCols] = useState({
-    totalSales: false,
-    impressions: false,
-    clicks: false,
-    spend: false,
-    sales: false,
-    acos: false,
-    tacos: false,
-    adSalesPct: false,
-    roas: false,
-    orders: false,
-    cvr: false,
-    pageViews: false,
-    organicSales: false
+    totalSales: false, impressions: false, clicks: false, spend: false,
+    sales: false, acos: false, tacos: false, adSalesPct: false,
+    roas: false, orders: false, cvr: false, pageViews: false, organicSales: false
   });
 
-  // Pagination state for performance optimization
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalCount, setTotalCount] = useState(0);
@@ -613,22 +352,12 @@ export default function AdsManagerPage() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [globalChartData, setGlobalChartData] = useState([]);
 
-  const toggleCol = (colKey) => {
-    setExpandedCols(prev => ({ ...prev, [colKey]: !prev[colKey] }));
-  };
+  const toggleCol = (colKey) => { setExpandedCols(prev => ({ ...prev, [colKey]: !prev[colKey] })); };
 
-  // 1. Fetch Ads Aggregated Data
   const fetchAdsData = useCallback(async () => {
     try {
       setLoading(true);
-      const params = {
-        groupBy: groupBy, // Let backend handle grouping!
-        search: searchQuery,
-        page: page,
-        limit: pageSize,
-        sortBy: sortBy,
-        sortOrder: sortOrder
-      };
+      const params = { groupBy, search: searchQuery, page, limit: pageSize, sortBy, sortOrder };
       if (selectedSeller) params.sellerId = selectedSeller;
       if (startDate) params.startDate = format(startDate, 'yyyy-MM-dd');
       if (endDate) params.endDate = format(endDate, 'yyyy-MM-dd');
@@ -646,348 +375,127 @@ export default function AdsManagerPage() {
     }
   }, [groupBy, searchQuery, startDate, endDate, selectedSeller, page, pageSize, sortBy, sortOrder]);
 
-  useEffect(() => {
-    fetchAdsData();
-  }, [fetchAdsData]);
+  useEffect(() => { fetchAdsData(); }, [fetchAdsData]);
 
-  // 2. Determine historical date header structure based on available dataset
   const historyStructure = useMemo(() => {
     if (data.length === 0) return [{ label: 'W1', dates: [] }];
-
     const dateMap = new Map();
     data.forEach(row => {
-      if (row.weekHistory) {
-        row.weekHistory.forEach(h => {
-          const dk = normalizeDateStr(h.date);
-          if (dk) dateMap.set(dk, true);
-        });
-      }
+      if (row.weekHistory) row.weekHistory.forEach(h => { const dk = normalizeDateStr(h.date); if (dk) dateMap.set(dk, true); });
     });
-
-    const sortedDates = Array.from(dateMap.keys()).sort();
-    return generateHistoryStructureFromDates(sortedDates);
+    return generateHistoryStructureFromDates(Array.from(dateMap.keys()).sort());
   }, [data]);
 
   const activeDates = historyStructure[0]?.dates || [];
 
-  // Table styles derived from AsinManagerPage design
-  const thStyle = {
-    fontSize: '0.66rem',
-    fontWeight: 800,
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    color: '#18181b', // Zinc-900 for super sharp contrast
-    padding: '6px 8px',
-    background: '#ffffff',
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-    whiteSpace: 'nowrap',
-    border: '1px solid #f1f5f9'
-  };
-
-  const tdStyle = {
-    padding: '6px 8px',
-    fontSize: '0.7rem',
-    borderBottom: '1px solid #f1f5f9',
-    verticalAlign: 'middle',
-    color: '#000000', // Perfect black text
-    fontWeight: 500,
-    height: '32px',
-    borderLeft: '1px solid #f1f5f9',
-    borderRight: '1px solid #f1f5f9',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  };
-
-  // Helper to construct dynamic column header grouping
-  const renderHeaderGroup = (title, colorHue, icon, expandedKey, width = '80px') => {
-    const isExpanded = expandedCols[expandedKey];
-    // Total subcols = AVG + TRN = 2 cols. Reverted as requested.
-    const baseCols = 2;
-    const activeDays = activeDates.length;
-    const colSpan = isExpanded ? baseCols + activeDays : baseCols;
-
-    const colors = {
-      slate: { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' },
-      blue: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-      emerald: { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' },
-      amber: { bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
-      indigo: { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe' },
-      cyan: { bg: '#ecfeff', text: '#0891b2', border: '#a5f3fc' },
-      purple: { bg: '#faf5ff', text: '#7c3aed', border: '#e9d5ff' },
-      pink: { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8' }
-    };
-
-    const c = colors[colorHue] || colors.slate;
-
-    return (
-      <th colSpan={colSpan} style={{ ...thStyle, textAlign: 'center', background: c.bg, color: c.text, borderBottom: `2px solid ${c.border}` }}>
-        <div className="d-flex align-items-center justify-content-center gap-1.5 py-0.5">
-          {icon}
-          <span style={{ fontWeight: 800 }}>{title}</span>
-          <button
-            onClick={() => toggleCol(expandedKey)}
-            className="btn p-0 border-0 d-flex align-items-center justify-content-center hover-scale"
-            style={{ color: c.text, cursor: 'pointer', opacity: 0.7, transition: 'all 0.2s' }}
-          >
-            {isExpanded ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </button>
-        </div>
-      </th>
-    );
-  };
-
-  // Small sub-header cell builder (Row 2 of table header)
-  const renderSubHeaders = (colorHue, expandedKey) => {
-    const isExpanded = expandedCols[expandedKey];
-    const colors = {
-      slate: { bg: '#f1f5f9', text: '#475569' },
-      blue: { bg: '#eff6ff', text: '#2563eb' },
-      emerald: { bg: '#ecfdf5', text: '#059669' },
-      amber: { bg: '#fffbeb', text: '#b45309' },
-      indigo: { bg: '#eef2ff', text: '#4338ca' },
-      cyan: { bg: '#ecfeff', text: '#0891b2' },
-      purple: { bg: '#faf5ff', text: '#7c3aed' },
-      pink: { bg: '#fdf2f8', text: '#db2777' }
-    };
-    const c = colors[colorHue] || colors.slate;
-
-    return (
-      <>
-        <th style={{ ...thStyle, width: '68px', textAlign: 'right', background: c.bg, color: c.text }}>AVG</th>
-        <th style={{ ...thStyle, width: '52px', textAlign: 'center', background: c.bg, color: c.text }}>TRN</th>
-        {isExpanded && activeDates.map(d => (
-          <th key={d.raw} className="dynamic-col-cell premium-ads-th" style={{ ...thStyle, width: '50px', textAlign: 'center', fontSize: '8px', background: c.bg, color: c.text }}>
-            {d.label}
-          </th>
-        ))}
-      </>
-    );
-  };
-
-  // RENDER Row Data Cells dynamically
-  const renderCells = (row, dataKey, colorHue, expandedKey, isCurrency = false, isPercent = false) => {
-    const isExpanded = expandedCols[expandedKey];
-    const history = row.weekHistory || [];
-
-    // Extract values map keyed by date
-    const dateVals = {};
-    history.forEach(h => { dateVals[normalizeDateStr(h.date)] = Number(h[dataKey] || 0); });
-
-    const currentVal = row[dataKey] || 0;
-
-    // Calculate a naive avg of history for the Trend Check
-    const pastVals = Object.values(dateVals);
-    const avg = pastVals.length > 0 ? pastVals.reduce((a, b) => a + b, 0) / pastVals.length : 0;
-
-    const textCol = isCurrency ? '#047857' : '#000000';
-
-    const formatVal = (v) => {
-      if (isPercent) return v.toFixed(2) + '%';
-      if (isCurrency) return '₹' + formatCompact(v);
-      return formatCompact(v);
-    };
-
-    // Determine trend simply by comparing current (last entry in pastVals or row val) vs Avg
-    const lastHistVal = pastVals.length > 0 ? pastVals[pastVals.length - 1] : currentVal;
-    const prevHistVal = pastVals.length > 1 ? pastVals[pastVals.length - 2] : avg;
-
-    // Inverted logic: For ACOS and Spend, "LOWER IS BETTER". But user wanted HIGH/LOW badges anyway based on sheer trend.
-    const isTrendInverted = (dataKey === 'acos' || dataKey === 'spend');
-
-    return (
-      <>
-        {/* Main Stat Cell */}
-        <td
-          style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: textCol, background: '#fff', cursor: 'pointer' }}
-          onClick={() => setActiveHistoryRow(row)}
-          title="Click to view full history"
-        >
-          {formatVal(currentVal)}
-        </td>
-        {/* Trend Status Cell */}
-        <td
-          style={{ ...tdStyle, textAlign: 'center', background: '#fff', padding: '2px', cursor: 'pointer' }}
-          onClick={() => setActiveHistoryRow(row)}
-          title="Click to view full history"
-        >
-          <TrendBadge value={lastHistVal} prevValue={prevHistVal} isInverted={isTrendInverted} />
-        </td>
-
-        {/* Expandable Day Cells */}
-        {isExpanded && activeDates.map(d => {
-          const val = dateVals[d.raw] || 0;
-          return (
-            <td
-              key={d.raw}
-              className="dynamic-col-cell"
-              style={{ ...tdStyle, textAlign: 'center', fontSize: '9px', background: '#fcfcfc', color: '#64748b', cursor: 'pointer' }}
-              onClick={() => setActiveHistoryRow(row)}
-              title="Click to view full history"
-            >
-              {formatVal(val)}
-            </td>
-          );
-        })}
-      </>
-    );
-  };
-
-  // Data is already paginated and processed by the backend!
-  const processedData = data;
   const paginatedData = data;
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
-      // Scroll to top of table container
-      const tableContainer = document.getElementById('ads-table-container');
-      if (tableContainer) tableContainer.scrollTop = 0;
+    if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+  };
+
+  // Date picker handler
+  const handleDateChange = (dates) => {
+    if (dates && dates[0] && dates[1]) {
+      updateDateRange({
+        startDate: dates[0].toDate(),
+        endDate: dates[1].toDate(),
+        rangeType: 'custom'
+      });
     }
   };
 
-  const handleSortChange = (col) => {
-    const isDesc = sortBy === col && sortOrder === 'desc';
-    setSortOrder(isDesc ? 'asc' : 'desc');
-    setSortBy(col);
-    setPage(1);
-  };
-
-  // Generate dynamic Dual-Axis series mapping based on selected metrics from toolbar
   const dynamicChartState = useMemo(() => {
     if (!globalChartData || globalChartData.length === 0) return { series: [], yaxis: [], colors: [] };
-
     const series = chartConfigMetrics.map(metricKey => {
       const config = METRIC_MAP[metricKey];
       return {
-        name: config.label,
-        type: config.seriesType,
+        name: config.label, type: config.seriesType,
         data: globalChartData.map(d => Number(d[metricKey] || 0).toFixed(config.type === 'currency' ? 2 : config.type === 'number' ? 0 : 2))
       };
     });
-
     const colors = chartConfigMetrics.map(m => METRIC_MAP[m].color);
-
-    // ApexCharts requires a matching config per series to align dual axes correctly
     const yaxis = chartConfigMetrics.map((mKey, idx) => {
       const config = METRIC_MAP[mKey];
       const isPercent = ['percent', 'ratio'].includes(config.type);
       const isCurrency = config.type === 'currency';
-
-      // We only want to SHOW one logical Axis label on the left and one on the right
-      // To avoid 5 axes cluttering the screen, we hide all except the first left and first right one.
       const firstNonPctIdx = chartConfigMetrics.findIndex(k => !['percent', 'ratio'].includes(METRIC_MAP[k].type));
       const firstPctIdx = chartConfigMetrics.findIndex(k => ['percent', 'ratio'].includes(METRIC_MAP[k].type));
       const shouldShow = idx === firstNonPctIdx || idx === firstPctIdx;
-
       return {
-        seriesName: config.label,
-        opposite: isPercent,
-        show: shouldShow,
-        axisTicks: { show: false },
-        axisBorder: { show: false },
-        title: {
-          style: { fontSize: '9px', fontWeight: 600, color: config.color }
-        },
+        seriesName: config.label, opposite: isPercent, show: shouldShow,
+        axisTicks: { show: false }, axisBorder: { show: false },
+        title: { style: { fontSize: '9px', fontWeight: 600, color: config.color } },
         labels: {
-          show: shouldShow,
-          style: { fontSize: '10px', fontWeight: 500, colors: '#64748b' },
+          show: shouldShow, style: { fontSize: '10px', fontWeight: 500, colors: '#64748b' },
           formatter: (v) => {
             const val = Number(v);
             if (isPercent) return val.toFixed(1) + '%';
-            if (isCurrency) {
-              if (val >= 100000) return (val / 100000).toFixed(1) + 'L';
-              if (val >= 1000) return (val / 1000).toFixed(1) + 'k';
-              return val.toFixed(0);
-            }
+            if (isCurrency) { if (val >= 100000) return (val / 100000).toFixed(1) + 'L'; if (val >= 1000) return (val / 1000).toFixed(1) + 'k'; return val.toFixed(0); }
             return val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0);
           }
         }
       };
     });
-
     return { series, yaxis, colors };
   }, [chartConfigMetrics, globalChartData]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // COLUMN BUILDER
+  // ═══════════════════════════════════════════════════════════════
   const getAntColumns = () => {
     const fixedLeftCols = [
       {
-        title: 'IMAGE',
-        dataIndex: 'imageUrl',
-        key: 'imageUrl',
-        fixed: 'left',
-        width: 60,
+        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', fixed: 'left', width: 60,
         render: (url, record) => (
-          <div style={{ width: '40px', height: '40px', margin: 'auto', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
-            {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={16} className="text-zinc-300" />}
+          <div style={{ width: 40, height: 40, margin: 'auto', background: '#f8fafc', borderRadius: 4, border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
+            {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={14} style={{ color: '#cbd5e1' }} />}
           </div>
         )
       },
       {
         title: (
-          <div className="d-flex flex-column align-items-stretch gap-1">
-            <span className="text-zinc-500 smallest fw-bold text-start" style={{ letterSpacing: '0.05em', fontSize: '9px' }}>SELLER ACCOUNT</span>
-            <div style={{ width: '100%', fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
-              <InfiniteScrollSelect
-                fetchData={fetchSellerDropdownData}
-                fetchItem={fetchSellerItem}
-                value={selectedSeller}
-                onSelect={(val) => setSelectedSeller(val)}
-                placeholder="All Sellers"
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Seller Account</span>
+            <div style={{ fontWeight: 'normal' }} onClick={(e) => e.stopPropagation()}>
+              <InfiniteScrollSelect fetchData={fetchSellerDropdownData} fetchItem={fetchSellerItem} value={selectedSeller} onSelect={(val) => setSelectedSeller(val)} placeholder="All Sellers" />
             </div>
           </div>
         ),
-        key: 'identifier',
-        fixed: 'left',
-        width: 185,
+        key: 'identifier', fixed: 'left', width: 185,
         render: (_, record) => {
           const isParentRow = record.isParent === true;
           return (
-            <div className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
               {isParentRow && (
-                <div
-                  onClick={(e) => { e.stopPropagation(); toggleParentExpand(record.asin); }}
-                  className="d-flex align-items-center justify-content-center bg-zinc-100 hover-bg-zinc-200 rounded text-zinc-600"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer', flexShrink: 0 }}
-                >
+                <div onClick={(e) => { e.stopPropagation(); toggleParentExpand(record.asin); }}
+                  style={{ width: 18, height: 18, borderRadius: 4, background: '#f1f5f9', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
                   {expandedParents.has(record.asin) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </div>
               )}
-              <div className="d-flex flex-column gap-0.5">
-                <Text strong code style={{ fontSize: 10, color: '#18181b', padding: '1px 4px' }}>{record.asin}</Text>
-                {isParentRow && <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded smallest fw-bold" style={{ width: 'fit-content', fontSize: '8.5px' }}>{record.childCount} CHILDREN</span>}
+              <div>
+                <Text strong code style={{ fontSize: 10, color: '#0f172a', padding: '1px 4px' }}>{record.asin}</Text>
+                {isParentRow && <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '1px 6px', borderRadius: 4, width: 'fit-content', marginTop: 2 }}>{record.childCount} CHILDREN</div>}
               </div>
             </div>
           );
         }
       },
       {
-        title: 'SKU',
-        dataIndex: 'sku',
-        key: 'sku',
-        fixed: 'left',
-        width: 110,
-        render: (sku, record) => record.isParent ? <span className="badge bg-zinc-100 text-zinc-600 border px-2 py-1 rounded" style={{ fontSize: '9px' }}>GROUP</span> : <span style={{ fontWeight: 600, color: '#475569', fontSize: '10px' }}>{sku}</span>
+        title: 'SKU', dataIndex: 'sku', key: 'sku', fixed: 'left', width: 110,
+        render: (sku, record) => record.isParent
+          ? <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>GROUP</span>
+          : <span style={{ fontWeight: 600, color: '#475569', fontSize: 10 }}>{sku}</span>
       },
       {
-        title: 'PRODUCT DETAILS',
-        key: 'productDetails',
-        fixed: 'left',
-        width: 200,
+        title: 'PRODUCT DETAILS', key: 'productDetails', fixed: 'left', width: 200,
         render: (_, record) => (
-          <div className="d-flex flex-column" style={{ maxWidth: '200px' }}>
-            <Text
-              strong
-              style={{ fontSize: 11, color: '#27272a' }}
-              ellipsis={{ tooltip: record.title || 'Loading title...' }}
-            >
-              {record.title || 'Loading title from marketplace...'}
+          <div style={{ maxWidth: 200 }}>
+            <Text strong style={{ fontSize: 11, color: '#0f172a' }} ellipsis={{ tooltip: record.title || 'Loading...' }}>
+              {record.title || 'Loading title...'}
             </Text>
-            <span className="smallest text-zinc-400 fw-semibold" style={{ marginTop: 2 }}>{record.brand} • {record.category}</span>
+            <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 2 }}>{record.brand} · {record.category}</div>
           </div>
         )
       }
@@ -1003,172 +511,91 @@ export default function AdsManagerPage() {
 
       return {
         title: (
-          <div
-            onClick={() => toggleCol(groupKey)}
-            className="d-flex align-items-center justify-content-center gap-1 w-100"
-            style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', minWidth: '90px' }}
-          >
-            <span style={{ fontSize: '10px', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TARGETS: {monthName} {year}</span>
-            <ChevronRight size={12} style={{ color: '#94a3b8', transform: expandedCols[groupKey] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+          <div onClick={() => toggleCol(groupKey)} style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 90 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Targets: {monthName} {year}</span>
+            <ChevronRight size={11} style={{ color: '#94a3b8', transform: expandedCols[groupKey] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
           </div>
         ),
         children: [
           {
-            title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>MONTHLY</span>,
-            key: `target_values_${monthKey}`,
-            width: 100,
-            align: 'left',
+            title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>MONTHLY</span>,
+            key: `target_values_${monthKey}`, width: 100, align: 'left',
             render: (_, record) => {
               const stats = record.monthlyStats?.[monthKey];
-              if (!stats) return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
-
+              if (!stats) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>-</span>;
               const adsTarget = stats.adsTarget;
               const acosTarget = stats.acosTarget;
-
-              if (adsTarget === null && acosTarget === null) {
-                return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>NOT SET</span>;
-              }
-
+              if (adsTarget === null && acosTarget === null) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>NOT SET</span>;
               return (
-                <div className="d-flex flex-column gap-1">
-                  {adsTarget !== null && (
-                    <Tooltip title={`${monthName} Ad Spend Target`} placement="right">
-                      <div style={{ fontSize: '9.5px', background: '#ea580c15', color: '#ea580c', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
-                        Ad Spend: ₹{adsTarget >= 1000 ? (adsTarget / 1000).toFixed(1) + 'k' : adsTarget}/mo
-                      </div>
-                    </Tooltip>
-                  )}
-                  {acosTarget !== null && (
-                    <Tooltip title={`${monthName} ACOS Target`} placement="right">
-                      <div style={{ fontSize: '9.5px', background: '#dc262615', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', width: 'fit-content' }}>
-                        ACOS: {acosTarget}%/mo
-                      </div>
-                    </Tooltip>
-                  )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {adsTarget !== null && <div style={{ fontSize: 9, background: '#fffbeb', color: '#a16207', padding: '2px 6px', borderRadius: 4, fontWeight: 700, width: 'fit-content', border: '1px solid #fde68a' }}>Spend: ₹{adsTarget >= 1000 ? (adsTarget / 1000).toFixed(1) + 'k' : adsTarget}/mo</div>}
+                  {acosTarget !== null && <div style={{ fontSize: 9, background: '#fef2f2', color: '#b91c1c', padding: '2px 6px', borderRadius: 4, fontWeight: 700, width: 'fit-content', border: '1px solid #fecaca' }}>ACOS: {acosTarget}%/mo</div>}
                 </div>
               );
             }
           },
-          ...(expandedCols[groupKey] ? [
-            {
-              title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
-              key: `target_achieved_${monthKey}`,
-              width: 110,
-              align: 'left',
-              render: (_, record) => {
-                const stats = record.monthlyStats?.[monthKey];
-                if (!stats) return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
-
-                const adsTarget = stats.adsTarget;
-                const acosTarget = stats.acosTarget;
-
-                if (adsTarget === null && acosTarget === null) {
-                  return <span style={{ color: '#cbd5e1', fontSize: '9px', fontWeight: 600 }}>-</span>;
-                }
-
-                const spend = stats.spend || 0;
-                const acos = stats.acos || 0;
-
-                return (
-                  <div className="d-flex flex-column gap-1">
-                    {adsTarget !== null && (
-                      <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600 }}>
-                        <span style={{ color: spend > adsTarget ? '#ef4444' : '#10b981' }}>
-                          ₹{spend >= 1000 ? (spend / 1000).toFixed(1) + 'k' : spend.toFixed(0)}
-                        </span>
-                        <span style={{ fontSize: '8px', color: '#94a3b8', marginLeft: '4px' }}>
-                          ({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)
-                        </span>
-                      </div>
-                    )}
-                    {acosTarget !== null && (
-                      <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600 }}>
-                        <span style={{ color: acos > acosTarget ? '#ef4444' : '#10b981' }}>
-                          {acos.toFixed(1)}%
-                        </span>
-                        <span style={{ fontSize: '8px', color: '#94a3b8', marginLeft: '4px' }}>
-                          ACOS
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+          ...(expandedCols[groupKey] ? [{
+            title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
+            key: `target_achieved_${monthKey}`, width: 110, align: 'left',
+            render: (_, record) => {
+              const stats = record.monthlyStats?.[monthKey];
+              if (!stats) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>-</span>;
+              const { adsTarget, acosTarget, spend = 0, acos = 0 } = stats;
+              if (adsTarget === null && acosTarget === null) return <span style={{ color: '#cbd5e1', fontSize: 9 }}>-</span>;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {adsTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: spend > adsTarget ? '#b91c1c' : '#15803d' }}>₹{spend >= 1000 ? (spend / 1000).toFixed(1) + 'k' : spend.toFixed(0)}</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)</span></div>}
+                  {acosTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: acos > acosTarget ? '#b91c1c' : '#15803d' }}>{acos.toFixed(1)}%</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>ACOS</span></div>}
+                </div>
+              );
             }
-          ] : [])
+          }] : [])
         ]
       };
     });
 
     const cols = [...fixedLeftCols, ...targetColumns];
 
-    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false, themeColor = '#6366f1') => {
+    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false, themeColor = '#475569') => {
       const isExpanded = expandedCols[key];
       const children = [
         {
-          title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>AVG</span>,
-          key: key,
-          dataIndex: key,
-          width: 80,
-          align: 'right',
-          sorter: true,
+          title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>AVG</span>,
+          key, dataIndex: key, width: 80, align: 'right', sorter: true,
           sortOrder: sortBy === key ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
           render: (val, record) => {
             const numVal = Number(val || 0);
-
-            // Check if we have a target for this metric
             let targetValue = null;
             if (key === 'acos') targetValue = record.acosTarget;
             else if (key === 'spend') targetValue = record.adsTarget;
-
             const formattedVal = isCurrency ? `₹${numVal.toLocaleString('en-IN')}` : isPercent ? `${numVal.toFixed(2)}%` : numVal.toLocaleString();
 
             if (targetValue !== null && targetValue !== undefined) {
               const formattedTarget = isCurrency ? `₹${targetValue.toLocaleString('en-IN')}` : isPercent ? `${targetValue.toFixed(2)}%` : targetValue.toLocaleString();
-              // ACOS is lower-is-better, Spend is also usually monitored but lets say lower/within target is better.
               const isOverTarget = numVal > targetValue;
-              const color = isOverTarget ? '#ef4444' : '#10b981';
-
+              const color = isOverTarget ? '#b91c1c' : '#15803d';
               return (
-                <Tooltip title={`Target: ${formattedTarget}`} placement="top">
-                  <div className="d-flex flex-column align-items-end" style={{ cursor: 'help' }}>
-                    <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
-                      {formattedVal}
-                    </span>
-                    <span style={{ fontSize: '8px', fontWeight: 700, color, padding: '1px 4px', borderRadius: '4px', background: `${color}15`, marginTop: '2px' }}>
-                      GOAL: {formattedTarget}
-                    </span>
+                <Tooltip title={`Target: ${formattedTarget}`}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', cursor: 'help' }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a' }}>{formattedVal}</span>
+                    <span style={{ fontSize: 8, fontWeight: 700, color, padding: '1px 4px', borderRadius: 4, background: `${color}12`, marginTop: 2 }}>GOAL: {formattedTarget}</span>
                   </div>
                 </Tooltip>
               );
             }
-
-            return <span className="fw-bold" style={{ fontSize: '10.5px', color: '#1e293b' }}>
-              {formattedVal}
-            </span>;
+            return <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a' }}>{formattedVal}</span>;
           }
         },
         {
-          title: <span style={{ fontSize: '8px', fontWeight: 700, color: '#64748b' }}>TREND</span>,
-          key: `${key}_trn`,
-          width: 65,
-          align: 'center',
+          title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>TREND</span>,
+          key: `${key}_trn`, width: 65, align: 'center',
           render: (_, record) => {
             const history = record.weekHistory || record.history || [];
-            if (history.length === 0) return <span className="text-zinc-300">-</span>;
+            if (history.length === 0) return <span style={{ color: '#cbd5e1' }}>-</span>;
             const values = history.map(h => Number(h[key] || 0));
-            if (values.every(v => v === 0)) return <span className="text-zinc-300">-</span>;
-
-            const first = values[0];
-            const last = values[values.length - 1];
-            const isGood = key === 'acos' ? last < first : last > first;
-            const color = isGood ? '#10b981' : '#ef4444';
-
-            return (
-              <div style={{ width: '40px', margin: 'auto' }}>
-                <MiniSpark data={values} color={color} />
-              </div>
-            );
+            if (values.every(v => v === 0)) return <span style={{ color: '#cbd5e1' }}>-</span>;
+            const isGood = key === 'acos' ? values[values.length - 1] < values[0] : values[values.length - 1] > values[0];
+            return <div style={{ width: 40, margin: 'auto' }}><MiniSpark data={values} color={isGood ? '#15803d' : '#b91c1c'} /></div>;
           }
         }
       ];
@@ -1176,15 +603,13 @@ export default function AdsManagerPage() {
       if (isExpanded) {
         activeDates.forEach(d => {
           children.push({
-            title: <div className="text-center" style={{ fontSize: '9px', lineHeight: '1.1' }}><div className="text-zinc-400">{d.month}</div><div className="fw-bold text-zinc-700">{d.day}</div></div>,
-            key: `${key}_${d.raw}`,
-            width: 70,
-            align: 'right',
+            title: <div style={{ textAlign: 'center', fontSize: 9, lineHeight: 1.1 }}><div style={{ color: '#94a3b8' }}>{d.month}</div><div style={{ fontWeight: 700, color: '#475569' }}>{d.day}</div></div>,
+            key: `${key}_${d.raw}`, width: 70, align: 'right',
             render: (_, record) => {
               const hist = record.weekHistory?.find(h => normalizeDateStr(h.date) === d.raw);
               const val = hist ? (hist[key] || 0) : 0;
-              if (val === 0) return <span className="text-zinc-300">-</span>;
-              return <span className="fw-semibold" style={{ fontSize: '10px', color: '#475569' }}>
+              if (val === 0) return <span style={{ color: '#cbd5e1' }}>-</span>;
+              return <span style={{ fontSize: 10, fontWeight: 600, color: '#475569' }}>
                 {isCurrency ? `₹${val.toLocaleString('en-IN')}` : isPercent ? `${val.toFixed(2)}%` : val.toLocaleString()}
               </span>;
             }
@@ -1194,334 +619,268 @@ export default function AdsManagerPage() {
 
       return {
         title: (
-          <div
-            className="d-flex align-items-center justify-content-center gap-1.5 cursor-pointer py-1 px-2 rounded-2"
-            style={{
-              background: `${themeColor}0d`,
-              border: `1.5px solid ${themeColor}26`,
-              color: themeColor,
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleCol(key)}
-          >
+          <div onClick={() => toggleCol(key)} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
+            background: '#f8fafc', border: '1px solid #e5e7eb',
+            color: '#475569', transition: 'all 0.15s'
+          }}>
             {icon}
-            <span style={{ fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.03em' }}>{title}</span>
-            <div className="bg-white rounded-circle ms-1 p-0.5 shadow-sm d-flex align-items-center justify-content-center" style={{ border: `1.5px solid ${themeColor}1a`, display: 'flex' }}>
-              {isExpanded ? <ChevronLeft size={9} style={{ color: themeColor }} /> : <ChevronRight size={9} style={{ color: themeColor }} />}
-            </div>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em' }}>{title}</span>
+            {isExpanded ? <ChevronLeft size={9} /> : <ChevronRight size={9} />}
           </div>
         ),
         children
       };
     };
 
-    cols.push(buildMetricGroup('TOTAL SALES', 'totalSales', <FileBarChart size={12} />, true, false, '#0284c7'));
-    cols.push(buildMetricGroup('ORDERS', 'orders', <Layers size={12} />, false, false, '#7c3aed'));
-    cols.push(buildMetricGroup('SPEND', 'spend', <BarChart3 size={12} />, true, false, '#ea580c'));
-    cols.push(buildMetricGroup('CLICKS', 'clicks', <TrendUpIcon size={12} />, false, false, '#2563eb'));
-    cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={12} />, false, false, '#475569'));
-    cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={12} />, false, false, '#d97706'));
-    cols.push(buildMetricGroup('ACOS', 'acos', <Target size={12} />, false, true, '#dc2626'));
-    cols.push(buildMetricGroup('TACOS', 'tacos', <Target size={12} />, false, true, '#0284c7'));
-    cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={12} />, true, false, '#16a34a'));
-    cols.push(buildMetricGroup('AD SALES %', 'adSalesPct', <Layers size={12} />, false, true, '#ea580c'));
-    cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={12} />, false, true, '#0d9488'));
-    cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={12} />, true, false, '#059669'));
-    cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={12} />, false, false, '#db2777'));
+    cols.push(buildMetricGroup('TOTAL SALES', 'totalSales', <FileBarChart size={11} />, true, false));
+    cols.push(buildMetricGroup('ORDERS', 'orders', <Layers size={11} />, false, false));
+    cols.push(buildMetricGroup('SPEND', 'spend', <BarChart3 size={11} />, true, false));
+    cols.push(buildMetricGroup('CLICKS', 'clicks', <TrendUpIcon size={11} />, false, false));
+    cols.push(buildMetricGroup('IMPRESSIONS', 'impressions', <Eye size={11} />, false, false));
+    cols.push(buildMetricGroup('ROAS', 'roas', <RefreshCw size={11} />, false, false));
+    cols.push(buildMetricGroup('ACOS', 'acos', <Target size={11} />, false, true));
+    cols.push(buildMetricGroup('TACOS', 'tacos', <Target size={11} />, false, true));
+    cols.push(buildMetricGroup('AD SALES', 'sales', <FileBarChart size={11} />, true, false));
+    cols.push(buildMetricGroup('AD SALES %', 'adSalesPct', <Layers size={11} />, false, true));
+    cols.push(buildMetricGroup('CVR', 'cvr', <Activity size={11} />, false, true));
+    cols.push(buildMetricGroup('ORGANIC', 'organicSales', <BarChart3 size={11} />, true, false));
+    cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={11} />, false, false));
 
     cols.push({
-      title: 'ACTIONS',
-      key: 'actions',
-      width: 80,
-      fixed: 'right',
-      align: 'center',
+      title: 'ACTIONS', key: 'actions', width: 60, fixed: 'right', align: 'center',
       render: (_, record) => (
         <Tooltip title="View Details">
-          <Button
-            type="text" size="small"
-            icon={<Eye size={14} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveHistoryRow(record);
-            }}
-          />
+          <Button type="text" size="small" icon={<Eye size={13} />}
+            onClick={(e) => { e.stopPropagation(); setActiveHistoryRow(record); }} />
         </Tooltip>
       )
     });
 
     return cols;
   };
+
+  const calculatedTableWidth = useMemo(() => {
+    const cols = getAntColumns();
+    let total = 0;
+    const traverse = (c) => {
+      if (c.children && c.children.length > 0) {
+        c.children.forEach(traverse);
+      } else {
+        total += typeof c.width === 'number' ? c.width : 150;
+      }
+    };
+    cols.forEach(traverse);
+    return total;
+  }, [expandedCols, activeDates, data, selectedSeller, groupBy]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="ads-page-container">
+    <div className="ads-pro-page">
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
+
       <AdsImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         selectedSeller={selectedSeller}
-        onComplete={() => {
-          setShowImportModal(false);
-          fetchAdsData();
-        }}
+        onComplete={() => { setShowImportModal(false); fetchAdsData(); }}
       />
 
-      {/* COMPACT DASHBOARD FILTERS HEADER */}
-      <div className="ads-top-header py-2">
-        <div className="d-flex align-items-center gap-3">
-          <h1 className="m-0 fw-bolder text-dark d-none d-md-block" style={{ fontSize: '18px', letterSpacing: '-0.01em' }}>Ads Manager</h1>
+      {/* HEADER */}
+      <div className="ads-header-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 6, background: '#1e293b', border: '1px solid #0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff' }}>
+            <BarChart3 size={16} strokeWidth={2} />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>Ads Manager</div>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Campaign performance and ASIN-level analytics</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Input.Search
-            placeholder="Search ASIN, SKU or Title..."
+            placeholder="Search ASIN, SKU..."
             allowClear
             onSearch={setSearchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: 240 }}
-            className="modern-search"
+            style={{ width: 220, borderRadius: 6 }}
           />
-        </div>
-
-        <Space className="ads-header-right" size={12}>
-          {/* Modern Ant Segmented Tab */}
-          <Segmented
-            value={groupBy}
-            onChange={(val) => setGroupBy(val)}
-            options={[
-              { label: 'ASIN Level', value: 'asin' },
-              { label: 'Parent Level', value: 'parent' }
+          <Segmented value={groupBy} onChange={setGroupBy}
+            options={[{ label: 'ASIN Level', value: 'asin' }, { label: 'Parent Level', value: 'parent' }]}
+          />
+          <RangePicker
+            value={startDate && endDate ? [dayjs(startDate), dayjs(endDate)] : null}
+            onChange={handleDateChange}
+            format="DD MMM YYYY"
+            style={{ borderRadius: 6 }}
+            presets={[
+              { label: 'Last 7 Days', value: [dayjs().subtract(6, 'day'), dayjs()] },
+              { label: 'Last 30 Days', value: [dayjs().subtract(29, 'day'), dayjs()] },
+              { label: 'This Month', value: [dayjs().startOf('month'), dayjs()] },
+              { label: 'Last Month', value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
             ]}
           />
-
-          {/* Elegant Shared DateRangePicker from Header */}
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onDateChange={(type, s, e) => updateDateRange({ startDate: s, endDate: e, rangeType: type })}
-          />
-
-          <Button
-            onClick={fetchAdsData}
-            loading={loading}
-            icon={<RefreshCw size={14} />}
-            className="fw-bold"
-          >
-            REFRESH
+          <Button onClick={fetchAdsData} loading={loading} icon={<RefreshCw size={13} strokeWidth={2} />}
+            style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
+            Refresh
           </Button>
-
-          <Button
-            type="primary"
-            onClick={() => setShowImportModal(true)}
-            icon={<Download size={14} />}
-            className="fw-bold d-flex align-items-center justify-content-center gap-2"
-            style={{
-              backgroundColor: '#4f46e5',
-              borderColor: '#4f46e5',
-              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)'
-            }}
-          >
-            IMPORT ADS
+          <Button type="primary" onClick={() => setShowImportModal(true)} icon={<Download size={13} strokeWidth={2} />}
+            style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
+            Import
           </Button>
-        </Space>
+        </div>
       </div>
 
-      {/* ANALYTICS MODULE AREA - COMPACT RECTANGULAR PILLS STYLE */}
-      <div className="flex-shrink-0 overflow-hidden bg-light border-bottom" style={{ maxHeight: showDashboardCharts ? '48px' : '0px', transition: 'all 0.3s ease', opacity: showDashboardCharts ? 1 : 0 }}>
-        <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
+      {/* KPI STRIP */}
+      <div className="ads-kpi-strip" style={{ maxHeight: showDashboardCharts ? 48 : 0, opacity: showDashboardCharts ? 1 : 0 }}>
+        <div className="ads-kpi-scroll">
           {[
-            { label: 'Ads Spend', key: 'spend', color: '#4f46e5' },
-            { label: 'Ads Revenue', key: 'sales', color: '#16a34a' },
-            { label: 'Ads Sales', key: 'sales', color: '#10b981' },
+            { label: 'Ads Spend', key: 'spend', color: '#1e293b' },
+            { label: 'Ads Sales', key: 'sales', color: '#15803d' },
             { label: 'Organic Sales', key: 'organicSales', color: '#059669' },
-            { label: 'ACOS', key: 'acos', color: '#dc2626' },
-            { label: 'TACOS', key: 'tacos', color: '#0284c7' },
-            { label: 'Ads Orders', key: 'orders', color: '#9333ea' },
-            { label: 'Organic Orders', key: 'organicOrders', color: '#db2777' },
-            { label: 'Ads Sales (%)', key: 'adSalesPct', color: '#ea580c' },
-            { label: 'Total Orders', key: 'totalOrders', color: '#7c3aed' }
+            { label: 'ACOS', key: 'acos', color: '#b91c1c' },
+            { label: 'TACOS', key: 'tacos', color: '#0891b2' },
+            { label: 'ROAS', key: 'roas', color: '#a16207' },
+            { label: 'Ads Orders', key: 'orders', color: '#6d28d9' },
+            { label: 'Total Orders', key: 'totalOrders', color: '#475569' },
           ].map((kpi, idx) => {
             const meta = METRIC_MAP[kpi.key] || {};
             const val = summaryData[kpi.key] || 0;
-            const isCurr = meta.type === 'currency';
-            const isPct = meta.type === 'percent';
-            const isRatio = meta.type === 'ratio';
-            const formattedVal = isCurr ? '₹' + formatCompact(val) : isRatio ? val.toFixed(2) : isPct ? val.toFixed(1) + '%' : formatCompact(val);
-
+            const formatted = meta.type === 'currency' ? '₹' + formatCompact(val) : meta.type === 'ratio' ? val.toFixed(2) : meta.type === 'percent' ? val.toFixed(1) + '%' : formatCompact(val);
             return (
-              <div
-                key={idx}
-                className="bg-white border shadow-sm d-flex align-items-center gap-2 px-3 hover-up-mild"
-                style={{
-                  height: '32px',
-                  minWidth: 'max-content',
-                  flexShrink: 0,
-                  borderRadius: '6px',
-                  borderColor: '#e4e4e7'
-                }}
-              >
-                <div
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: kpi.color,
-                    flexShrink: 0
-                  }}
-                />
-                <span className="text-uppercase fw-bold" style={{ fontSize: '10px', letterSpacing: '0.03em', color: kpi.color, whiteSpace: 'nowrap' }}>
-                  {kpi.label}
-                </span>
-                <span className="fw-bolder ms-1" style={{ fontSize: '11px', color: '#09090b' }}>
-                  {formattedVal}
-                </span>
+              <div key={idx} style={{
+                height: 32, minWidth: 'max-content', flexShrink: 0, borderRadius: 4,
+                border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex',
+                alignItems: 'center', gap: 8, padding: '0 12px'
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: kpi.color }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: kpi.color, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{kpi.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{formatted}</span>
               </div>
             );
           })}
-
-
         </div>
       </div>
 
-      {/* CHART WRAPPER - COMPACT VERTICAL FOOTPRINT */}
-      <div className="flex-shrink-0 overflow-hidden bg-light" style={{ maxHeight: showDashboardCharts ? '420px' : '0px', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', opacity: showDashboardCharts ? 1 : 0 }}>
-        <div className="px-3 py-2">
-          <Card
-            styles={{ body: { padding: '10px 12px 12px 12px' } }}
-            style={{ borderRadius: '12px', boxShadow: '0 4px 12px -2px rgba(0,0,0,0.04)', overflow: 'hidden' }}
-          >
-            <div className="px-1 py-1 d-flex align-items-center justify-content-between border-bottom mb-2">
-              <div className="d-flex align-items-center gap-2">
-                <div style={{ width: '4px', height: '14px', background: '#4F46E5', borderRadius: '4px' }}></div>
-                <Text strong style={{ color: '#1e293b', fontSize: '13px' }}>Campaign Trends & Breakdown</Text>
+      {/* CHART */}
+      <div className="ads-chart-area" style={{ maxHeight: showDashboardCharts ? 420 : 0, opacity: showDashboardCharts ? 1 : 0 }}>
+        <div style={{ padding: '8px 16px' }}>
+          <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb' }} styles={{ body: { padding: '10px 14px' } }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 3, height: 14, background: '#1e293b', borderRadius: 2 }} />
+                <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Campaign Trends</Text>
               </div>
-
-              <Select
-                mode="multiple"
-                value={chartConfigMetrics}
-                onChange={(val) => setChartConfigMetrics(val)}
-                style={{ minWidth: 220, maxWidth: 320 }}
-                size="small"
-                placeholder="Select active metrics"
+              <Select mode="multiple" value={chartConfigMetrics} onChange={setChartConfigMetrics}
+                style={{ minWidth: 200, maxWidth: 320 }} size="small" placeholder="Select metrics"
                 maxTagCount="responsive"
-                classNames={{ popup: { root: "premium-chart-dropdown" } }}
-                options={Object.keys(METRIC_MAP).map(k => ({
-                  label: METRIC_MAP[k].label,
-                  value: k
-                }))}
+                options={Object.keys(METRIC_MAP).map(k => ({ label: METRIC_MAP[k].label, value: k }))}
               />
             </div>
-
-            <div style={{ height: '320px' }}>
+            <div style={{ height: 320 }}>
               {dynamicChartState.series.length > 0 ? (
-                <Chart
-                  height="100%"
-                  type="line"
-                  series={dynamicChartState.series}
+                <Chart height="100%" type="line" series={dynamicChartState.series}
                   options={{
-                    chart: {
-                      type: 'line',
-                      toolbar: { show: true, tools: { download: false } },
-                      zoom: { enabled: false },
-                      fontFamily: 'inherit'
-                    },
-                    stroke: {
-                      width: dynamicChartState.series.map(s => s.type === 'line' ? 2.5 : 0),
-                      curve: 'smooth'
-                    },
+                    chart: { type: 'line', toolbar: { show: false }, zoom: { enabled: false }, fontFamily: 'Inter, system-ui, sans-serif' },
+                    stroke: { width: dynamicChartState.series.map(s => s.type === 'line' ? 2.5 : 0), curve: 'smooth' },
                     colors: dynamicChartState.colors,
-                    plotOptions: {
-                      bar: { columnWidth: '45%', borderRadius: 4 }
-                    },
-                    fill: {
-                      opacity: dynamicChartState.series.map(s => s.type === 'line' ? 1 : 0.85)
-                    },
+                    plotOptions: { bar: { columnWidth: '45%', borderRadius: 3 } },
+                    fill: { opacity: dynamicChartState.series.map(s => s.type === 'line' ? 1 : 0.85) },
                     markers: { size: dynamicChartState.series.map(s => s.type === 'line' ? 3 : 0), strokeWidth: 1 },
                     dataLabels: { enabled: false },
                     xaxis: {
                       categories: globalChartData.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
-                      axisBorder: { show: false },
-                      axisTicks: { show: false },
+                      axisBorder: { show: false }, axisTicks: { show: false },
                       labels: { style: { colors: '#64748b', fontWeight: 600, fontSize: '10px' } }
                     },
                     yaxis: dynamicChartState.yaxis,
                     grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { top: 5, right: 15, bottom: 10, left: 15 } },
-                    legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '10px', markers: { radius: 12 }, height: 25 },
+                    legend: { show: true, position: 'top', horizontalAlign: 'center', fontWeight: 700, fontSize: '10px', markers: { radius: 2 } },
                     tooltip: { shared: true, intersect: false, theme: 'light' }
                   }}
                 />
               ) : (
-                <div className="h-100 d-flex align-items-center justify-content-center text-muted fw-bold small bg-light rounded-3">SELECT METRICS TO VIEW CHART</div>
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontWeight: 600, fontSize: 12, background: '#f8fafc', borderRadius: 4 }}>
+                  Select metrics to view chart
+                </div>
               )}
             </div>
           </Card>
         </div>
       </div>
 
-      {/* TABULAR / DASHBOARD TOGGLE CONTROLS */}
-      <div className="bg-white border-top border-bottom px-3 py-2 d-flex align-items-center justify-content-between" style={{ zIndex: 10, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-        <div className="d-flex align-items-center gap-3">
-          <Button
-            type={showDashboardCharts ? 'primary' : 'default'}
-            icon={showDashboardCharts ? <ChevronUp size={14} /> : <BarChart3 size={14} />}
-            onClick={() => setShowDashboardCharts(!showDashboardCharts)}
-            className="fw-bold d-flex align-items-center justify-content-center gap-1.5"
-            style={showDashboardCharts ? { background: '#4F46E5', border: 'none' } : {}}
-          >
-            {showDashboardCharts ? 'HIDE ANALYTICS' : 'VIEW ANALYTICS'}
-          </Button>
-        </div>
-
-        <div className="small text-muted fw-bold bg-light px-3 py-1 rounded-pill border" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
-          Showing <span className="text-indigo-600 fw-bolder">{paginatedData.length}</span> results of <span className="text-dark fw-bolder">{totalCount}</span>
-        </div>
+      {/* TOGGLE BAR */}
+      <div style={{
+        background: '#ffffff', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb',
+        padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0
+      }}>
+        <Button
+          type={showDashboardCharts ? 'primary' : 'default'}
+          icon={showDashboardCharts ? <ChevronUp size={13} /> : <BarChart3 size={13} />}
+          onClick={() => setShowDashboardCharts(!showDashboardCharts)}
+          style={showDashboardCharts ? { background: '#1e293b', borderColor: '#1e293b', fontWeight: 600, fontSize: 12, borderRadius: 6, height: 32 } : { fontWeight: 600, fontSize: 12, borderRadius: 6, height: 32 }}
+        >
+          {showDashboardCharts ? 'Hide Analytics' : 'View Analytics'}
+        </Button>
+        <span style={{
+          fontSize: 10, fontWeight: 600, color: '#64748b', background: '#f8fafc',
+          border: '1px solid #e5e7eb', padding: '4px 12px', borderRadius: 20
+        }}>
+          Showing <span style={{ color: '#0f172a', fontWeight: 700 }}>{paginatedData.length}</span> of <span style={{ color: '#0f172a', fontWeight: 700 }}>{totalCount}</span>
+        </span>
       </div>
 
-      {/* MAIN TABLE CONTAINER */}
-      <div className="flex-grow-1 overflow-hidden d-flex flex-column bg-white">
-        <Table
-          columns={getAntColumns()}
-          dataSource={paginatedData}
-          rowKey={(record) => record.id || record.asin}
-          loading={loading}
-          pagination={false}
-          scroll={{ x: 'max-content', y: 'calc(100vh - 250px)' }}
-          size="small"
-          bordered
-          onChange={(pagination, filters, sorter) => {
-            if (sorter.field) {
-              setSortBy(sorter.field);
-              setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
-              setPage(1);
-            }
-          }}
-          rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : 'table-row-light'}
-          expandable={{
-            expandedRowRender: record => null,
-            rowExpandable: record => record.isParent,
-            expandedRowKeys: Array.from(expandedParents),
-            expandIcon: () => null
-          }}
-        />
+      {/* TABLE */}
+      <div className="ads-table-wrapper">
+        <div className="ads-table-scroll-area">
+          <Table
+            columns={getAntColumns()}
+            dataSource={paginatedData}
+            rowKey={(record) => record.id || record.asin}
+            loading={loading}
+            pagination={false}
+            scroll={{ x: calculatedTableWidth, y: tableScrollY }}
+            size="small"
+            bordered
+            onChange={(pagination, filters, sorter) => {
+              if (sorter.field) {
+                setSortBy(sorter.field);
+                setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
+                setPage(1);
+              }
+            }}
+            rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : ''}
+            expandable={{
+              expandedRowRender: () => null,
+              rowExpandable: record => record.isParent,
+              expandedRowKeys: Array.from(expandedParents),
+              expandIcon: () => null
+            }}
+          />
+        </div>
 
-        {/* Table Footer / Meta Status & PAGINATION */}
-        <div className="bg-white border-top px-3 py-2 d-flex align-items-center justify-content-between" style={{ flexShrink: 0 }}>
-          <div className="d-flex align-items-center gap-3">
-            <span className="smallest fw-bold text-zinc-500">
-              TOTAL {totalCount.toLocaleString()} {groupBy === 'parent' ? 'ENTRIES' : 'ASINs'}
+        {/* FOOTER */}
+        <div className="ads-table-footer">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+              {totalCount.toLocaleString()} {groupBy === 'parent' ? 'entries' : 'ASINs'} total
             </span>
-
-            <div style={{ height: '12px', width: '1px', background: '#e2e8f0' }}></div>
-
-            <div className="d-flex align-items-center gap-2">
-              <span className="smallest fw-semibold text-zinc-500">Rows per page:</span>
+            <div style={{ height: 12, width: 1, background: '#e5e7eb' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Rows:</span>
               <select
-                className="form-select form-select-sm border-0 bg-transparent fw-bold"
-                style={{ fontSize: '0.7rem', width: 'auto', paddingRight: '20px', cursor: 'pointer' }}
                 value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: 11, cursor: 'pointer', color: '#0f172a' }}
               >
                 <option value={25}>25</option>
                 <option value={50}>50</option>
@@ -1531,193 +890,193 @@ export default function AdsManagerPage() {
             </div>
           </div>
 
-          {/* PAGINATION CONTROLS */}
           {totalPages > 1 && (
-            <div className="d-flex align-items-center gap-2">
-              <button
-                className="btn btn-sm border-0 bg-zinc-100 text-zinc-600 d-flex align-items-center justify-content-center"
-                style={{ width: '24px', height: '24px', padding: 0, opacity: page === 1 ? 0.5 : 1 }}
-                disabled={page === 1}
-                onClick={() => handlePageChange(page - 1)}
-              >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => handlePageChange(page - 1)} disabled={page === 1}
+                style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1 }}>
                 <ChevronLeft size={14} />
               </button>
-
-              <div className="d-flex align-items-center gap-1">
-                <span className="smallest fw-bold text-indigo-600">PAGE {page}</span>
-                <span className="smallest fw-semibold text-zinc-400">OF {totalPages}</span>
-              </div>
-
-              <button
-                className="btn btn-sm border-0 bg-zinc-100 text-zinc-600 d-flex align-items-center justify-content-center"
-                style={{ width: '24px', height: '24px', padding: 0, opacity: page === totalPages ? 0.5 : 1 }}
-                disabled={page === totalPages}
-                onClick={() => handlePageChange(page + 1)}
-              >
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>
+                {page} <span style={{ color: '#94a3b8', fontWeight: 500 }}>of {totalPages}</span>
+              </span>
+              <button onClick={() => handlePageChange(page + 1)} disabled={page === totalPages}
+                style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.4 : 1 }}>
                 <ChevronRight size={14} />
               </button>
             </div>
           )}
 
-          <div className="d-flex gap-3 align-items-center">
-            <div className="d-flex align-items-center gap-1.5">
-              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />
-              <span className="smallest fw-semibold text-zinc-500" style={{ fontSize: '9px', letterSpacing: '0.02em' }}>LIVE SYNC</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d' }} />
+            <span style={{ fontSize: 9, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Live</span>
           </div>
         </div>
       </div>
 
+      {/* STYLES */}
       <style>{`
-        .table-row-hover:hover {
-          background-color: #f8fafc !important;
-        }
-        .table-row-hover:hover td {
-          background-color: #f8fafc !important;
-        }
-        .bg-gradient-primary {
-          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        }
-        .hover-scale:hover {
-          transform: scale(1.2);
-        }
-        .shadow-inner {
-          box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
-        }
-        .smallest {
-          font-size: 0.65rem;
-        }
-        .hover-up-mild {
-          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .hover-up-mild:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 24px -10px rgba(79,70,229,0.15), 0 4px 6px -2px rgba(0,0,0,0.02) !important;
-        }
-        .hover-bg-light:hover {
-          background-color: #f8fafc !important;
-        }
-        .premium-chart-dropdown .ant-select-item-option-selected {
-          background-color: #EEF2FF !important;
-          font-weight: bold;
-        }
-        .premium-ads-th {
-          transition: background-color 0.2s ease, border 0.2s ease;
-        }
-        .dynamic-col-cell {
-          animation: slideFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-        @keyframes slideFadeIn {
-          from { opacity: 0; transform: translateX(-8px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        ::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #f8fafc;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
-        }
-        .ads-page-container {
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-          overflow: hidden;
-          background-color: #f4f7fe;
-          margin: -1.5rem -2rem -1.5rem -2rem; 
-        }
-        .ads-top-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 2rem;
-          position: sticky;
-          top: -1.5rem;
-          z-index: 100;
-          background: #fff;
-          border-bottom: 1px solid #e2e8f0;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-          flex-shrink: 0;
-          overflow: visible;
-          scrollbar-width: none;
-        }
-        .ads-top-header::-webkit-scrollbar {
-          display: none;
-        }
-        .ads-header-left {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        .ads-header-right {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex-wrap: nowrap;
-        }
-        
-        /* ═══════════════════════════════════════════════════
-           FIX: Date Picker & Dropdown Z-Index Issues
-        ═══════════════════════════════════════════════════ */
-        
-        /* Force all Ant Design popups to render above the table */
-        .ant-picker-dropdown {
-          z-index: 9999 !important;
-        }
-        
-        .ant-select-dropdown {
-          z-index: 9999 !important;
-        }
-        
-        .ant-dropdown {
-          z-index: 9999 !important;
-        }
-        
-        .ant-tooltip {
-          z-index: 9998 !important;
-        }
-        
-        .ant-popover {
-          z-index: 9999 !important;
-        }
-        
-        /* Prevent table from creating stacking context conflicts */
-        .ads-page-container .ant-table-wrapper {
-          position: relative;
-          z-index: 1;
-        }
-        
-        .ads-page-container .ant-table-thead > tr > th {
-          z-index: 2 !important;
-        }
-        
-        .ads-page-container .ant-table-cell-fix-left,
-        .ads-page-container .ant-table-cell-fix-right {
-          z-index: 2 !important;
-        }
-        
-        .ads-page-container .ant-table-thead .ant-table-cell-fix-left,
-        .ads-page-container .ant-table-thead .ant-table-cell-fix-right {
-          z-index: 3 !important;
-        }
-        
-        /* Make sure modal stays on top */
-        .ant-modal-wrap {
-          z-index: 1050 !important;
-        }
-        .ant-modal-mask {
-          z-index: 1050 !important;
-        }
-      `}</style>
+.ads-pro-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    background: #fafafa;
+    margin: -1.5rem -2rem;
+    height: calc(100vh - 60px);
+}
+.ads-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+    overflow: visible;
+    z-index: 100;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.ads-kpi-strip {
+    flex-shrink: 0;
+    overflow: hidden;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+.ads-kpi-scroll {
+    padding: 8px 16px 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.ads-kpi-scroll::-webkit-scrollbar {
+    display: none;
+}
+.ads-chart-area {
+    flex-shrink: 0;
+    overflow: hidden;
+    background: #f8fafc;
+    transition: all 0.3s ease;
+}
+.ads-table-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    background: #ffffff;
+    overflow: hidden;
+    position: relative;
+}
+.ads-table-scroll-area {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
 
-      {/* Detailed View Model Portal */}
+.ads-table-scroll-area .ant-table-body {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+}
+.ads-table-scroll-area .ant-table-content {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+}
+.ads-table-scroll-area .ant-table-body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+.ads-table-scroll-area .ant-table-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+.table-row-alt > td {
+    background: #fafbfc !important;
+}
+.ads-table-footer {
+    flex-shrink: 0 !important;
+    padding: 10px 16px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+}
+.ant-picker-dropdown {
+    z-index: 9999 !important;
+}
+.ant-select-dropdown {
+    z-index: 9999 !important;
+}
+.ant-tooltip {
+    z-index: 9998 !important;
+}
+.ant-modal-wrap {
+    z-index: 1050 !important;
+}
+.ant-modal-mask {
+    z-index: 1050 !important;
+}
+.ant-table-cell-fix-left,
+.ant-table-cell-fix-right {
+    background: #ffffff !important;
+    z-index: 2 !important;
+}
+.table-row-alt .ant-table-cell-fix-left,
+.table-row-alt .ant-table-cell-fix-right {
+    background: #fafbfc !important;
+}
+.ant-table-thead .ant-table-cell-fix-left,
+.ant-table-thead .ant-table-cell-fix-right {
+    background: #f8fafc !important;
+    z-index: 6 !important;
+}
+.ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+    background: #f8fafc !important;
+}
+@media (max-width: 768px) {
+    .ads-pro-page {
+        margin: -0.75rem;
+        height: auto;
+        overflow: visible;
+    }
+    .ads-table-wrapper {
+        min-height: 400px;
+    }
+}
+`}</style>
+
       <AdsHistoryModal
         isOpen={!!activeHistoryRow}
         onClose={() => setActiveHistoryRow(null)}

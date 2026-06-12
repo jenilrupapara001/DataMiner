@@ -427,6 +427,9 @@ export const userApi = {
   },
   getManagers: async () => {
     return api.get('/users/managers');
+  },
+  sendEmail: async (data) => {
+    return api.post('/users/send-email', data);
   }
 };
 

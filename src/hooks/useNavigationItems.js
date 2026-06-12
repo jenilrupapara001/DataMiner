@@ -7,7 +7,7 @@ import {
     Target, TrendingUp, Calendar, PieChart,
     Settings, Activity, FileText, Layers,
     ShoppingBag, Zap, Bell, FolderOpen,
-    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse
+    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse, Webhook
 } from 'lucide-react';
 
 export function useNavigationItems() {
@@ -320,6 +320,16 @@ export function useNavigationItems() {
                     label: 'Settings',
                     path: '/settings',
                     icon: Settings,
+                    section: 'system',
+                }
+            ),
+            guard(
+                isAdmin || hasPermission('rules_manage'),
+                {
+                    key: 'webhooks',
+                    label: 'Webhooks',
+                    path: '/webhooks',
+                    icon: Webhook,
                     section: 'system',
                 }
             ),

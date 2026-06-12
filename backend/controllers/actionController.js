@@ -4,6 +4,7 @@ const SocketService = require('../services/socketService');
 const SystemLogService = require('../services/SystemLogService');
 const hierarchyService = require('../services/hierarchyService');
 const AIService = require('../services/AIService');
+const WebhookService = require('../services/WebhookService');
 
 
 // Expose getPool for route handlers
@@ -446,6 +447,24 @@ exports.createAction = async (req, res) => {
                 description: `Created new action: ${rest.title}`
             });
 
+            // Pabbly / Webhook notification
+            const webhookPayload = {
+                id: actionId,
+                title: rest.title,
+                type: rest.type || 'TASK',
+                priority: rest.priority || 'MEDIUM',
+                status: 'PENDING',
+                description: rest.description || '',
+                deadline: rest.deadline || null,
+                asinCount: (rest.asins || []).length,
+                createdBy: { id: userId },
+                dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/tasks`,
+            };
+            WebhookService.fire('task.created', webhookPayload);
+            if (rest.assignedTo) {
+                WebhookService.fire('task.assigned', { ...webhookPayload, assignedTo: { id: rest.assignedTo } });
+            }
+
             res.status(201).json({ success: true, data: newAction.recordset[0] });
         }
     } catch (error) {
@@ -524,6 +543,37 @@ exports.updateAction = async (req, res) => {
                 req.params.id,
                 `You have been assigned an action: ${action.Title}`
             );
+            // Pabbly webhook
+            WebhookService.fire('task.assigned', {
+                id: req.params.id,
+                title: action.Title,
+                priority: action.Priority,
+                type: action.Type,
+                assignedTo: { id: req.body.assignedTo },
+                dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/tasks`,
+            });
+        }
+        // Fire task.started webhook if status changed to IN_PROGRESS
+        if (req.body.status === 'IN_PROGRESS') {
+            WebhookService.fire('task.started', {
+                id: req.params.id,
+                title: action.Title,
+                priority: action.Priority,
+                type: action.Type,
+                startedBy: { id: userId },
+                dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/tasks`,
+            });
+        }
+        // Fire task.completed webhook if status changed to COMPLETED
+        if (req.body.status === 'COMPLETED') {
+            WebhookService.fire('task.completed', {
+                id: req.params.id,
+                title: action.Title,
+                priority: action.Priority,
+                type: action.Type,
+                completedBy: { id: userId },
+                dashboardUrl: `${process.env.FRONTEND_URL || 'https://data.brandcentral.in'}/tasks`,
+            });
         }
 
         // Log activity
@@ -601,6 +651,14 @@ exports.deleteAction = async (req, res) => {
             entityTitle: action.Title,
             user: req.user._id,
             description: `Deleted action: ${action.Title}`
+        });
+
+        // Pabbly webhook
+        WebhookService.fire('task.deleted', {
+            id: req.params.id,
+            title: action.Title,
+            type: action.Type,
+            deletedBy: { id: req.user.Id || req.user._id },
         });
 
         try { sendSseEvent('deleted', { id: req.params.id }); } catch (e) {}

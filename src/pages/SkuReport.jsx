@@ -1,119 +1,146 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
-import { 
-    IndianRupee, Package, Percent, Activity, TrendingUp, PieChart, 
-    Filter, BarChart3, Download, Search, RefreshCw, Layers, Target, Coins 
+import {
+    IndianRupee, Package, Percent, Activity, TrendingUp, PieChart as PieChartIcon,
+    Filter, BarChart3, Download, Search, RefreshCw, Layers, Target, Coins,
+    ArrowUpRight, ArrowDownRight, Database, Hash, ExternalLink
 } from 'lucide-react';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { format } from 'date-fns';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { 
-    Space, Button, Table, Card, Progress, Row, Col, Tag, Typography, 
-    Input, Select, Skeleton 
+import {
+    Space, Button, Table, Card, Progress, Row, Col, Tag, Typography,
+    Input, Select, Skeleton, Tooltip, Divider, Empty
 } from 'antd';
 import { usePageTitle } from '../contexts/PageTitleContext';
+import DateRangePicker from '../components/common/DateRangePicker';
 
-const { Text, Title } = Typography;
-
-// Lazy-load ApexCharts for performance optimization
+const { Text } = Typography;
 const Chart = React.lazy(() => import('react-apexcharts'));
 
-// Helper to sanitize long category names for legend presentation
 const formatCategoryName = (name) => {
     if (!name) return 'General';
     const parts = name.split(' - ');
-    if (parts.length > 1) {
-        return parts[parts.length - 1];
-    }
+    if (parts.length > 1) return parts[parts.length - 1];
     return name.length > 18 ? name.substring(0, 18) + '...' : name;
 };
 
-// 1. KPI Skeleton Placeholder Component
-const KpiSkeleton = () => (
-    <Row gutter={[16, 16]}>
-        {[1, 2, 3, 4].map((i) => (
-            <Col key={i} xs={24} sm={12} md={6}>
-                <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', height: 106 }} styles={{ body: { padding: '16px 20px' } }}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <Skeleton.Button active shape="square" size="large" style={{ width: 38, height: 38, borderRadius: 10 }} />
-                        <div style={{ flex: 1 }}>
-                            <Skeleton active title={{ width: 80 }} paragraph={{ rows: 1, width: 140 }} />
-                        </div>
+const formatCurrency = (val) => {
+    if (val === undefined || val === null || isNaN(val)) return '₹0';
+    const num = Math.round(val);
+    if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr`;
+    if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L`;
+    if (num >= 1000) return `₹${(num / 1000).toFixed(1)}K`;
+    return `₹${num.toLocaleString('en-IN')}`;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STAT CARD
+// ═══════════════════════════════════════════════════════════════
+const StatCard = ({ icon: Icon, label, value, sublabel, color = '#1e293b' }) => (
+    <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb' }} styles={{ body: { padding: '16px 18px' } }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+                width: 36, height: 36, borderRadius: 6,
+                background: '#f8fafc', border: '1px solid #e5e7eb',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color
+            }}>
+                <Icon size={16} strokeWidth={2} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                    fontSize: 11, fontWeight: 600, color: '#64748b',
+                    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3
+                }}>
+                    {label}
+                </div>
+                <div style={{
+                    fontSize: 20, fontWeight: 700, color: '#0f172a',
+                    letterSpacing: '-0.3px', lineHeight: 1
+                }}>
+                    {value}
+                </div>
+                {sublabel && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginTop: 4 }}>
+                        {sublabel}
                     </div>
-                </Card>
-            </Col>
-        ))}
-    </Row>
+                )}
+            </div>
+        </div>
+    </Card>
 );
 
-// 2. Charts Skeleton Placeholder Component
-const ChartSkeleton = () => (
-    <Row gutter={[16, 16]}>
-        <Col xs={24} lg={16}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', height: 380 }} styles={{ body: { padding: '24px' } }}>
-                <Skeleton active title={{ width: 220 }} paragraph={{ rows: 8 }} />
-            </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', height: 380 }} styles={{ body: { padding: '24px' } }}>
-                <Skeleton active title={{ width: 180 }} paragraph={{ rows: 8 }} />
-            </Card>
-        </Col>
-    </Row>
+// ═══════════════════════════════════════════════════════════════
+// SECTION CARD
+// ═══════════════════════════════════════════════════════════════
+const SectionCard = ({ title, subtitle, icon: Icon, extra, children, noPadding = false }) => (
+    <Card
+        style={{ borderRadius: 6, border: '1px solid #e5e7eb', height: '100%' }}
+        styles={{
+            header: { padding: '12px 18px', borderBottom: '1px solid #f1f5f9', minHeight: 'auto', background: '#fafbfc' },
+            body: { padding: noPadding ? 0 : 18 }
+        }}
+        title={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {Icon && (
+                        <div style={{
+                            width: 26, height: 26, borderRadius: 5,
+                            background: '#f8fafc', border: '1px solid #e5e7eb',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569'
+                        }}>
+                            <Icon size={13} strokeWidth={2} />
+                        </div>
+                    )}
+                    <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                            {title}
+                        </div>
+                        {subtitle && <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 1 }}>{subtitle}</div>}
+                    </div>
+                </div>
+                {extra}
+            </div>
+        }
+    >
+        {children}
+    </Card>
 );
 
-// 3. Table Skeleton Placeholder Component
-const TableSkeleton = () => (
-    <Row gutter={[16, 16]}>
-        <Col xs={24} lg={6}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', height: 420 }} styles={{ body: { padding: '20px' } }}>
-                <Skeleton active title={{ width: 120 }} paragraph={{ rows: 8 }} />
-            </Card>
-        </Col>
-        <Col xs={24} lg={18}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', height: 420 }} styles={{ body: { padding: '20px' } }}>
-                <Skeleton active title={{ width: 200 }} paragraph={{ rows: 8 }} />
-            </Card>
-        </Col>
-    </Row>
+const FieldLabel = ({ children }) => (
+    <div style={{
+        fontSize: 11, fontWeight: 700, color: '#475569',
+        textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6
+    }}>
+        {children}
+    </div>
 );
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
 const SkuReport = () => {
-    const { startDate, endDate, rangeType } = useDateRange();
+    const { startDate, endDate, rangeType, updateDateRange } = useDateRange();
     const [searchParams] = useSearchParams();
     const initialAsin = searchParams.get('asin') || '';
     const navigate = useNavigate();
     const { setPageTitle } = usePageTitle();
 
-    // 1. Pagination & Search/Filter states
     const [searchTerm, setSearchTerm] = useState(initialAsin);
-    const [filters, setFilters] = useState({
-        category: 'all',
-        searchTerm: initialAsin
-    });
+    const [filters, setFilters] = useState({ category: 'all', searchTerm: initialAsin });
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [totalCount, setTotalCount] = useState(0);
-
-    // 2. Data states
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [kpiSummary, setKpiSummary] = useState({
-        total_revenue: 0,
-        units_sold: 0,
-        ad_sales: 0,
-        ad_spend: 0,
-        clicks: 0,
-        impressions: 0,
-        sessions: 0
+        total_revenue: 0, units_sold: 0, ad_sales: 0, ad_spend: 0,
+        clicks: 0, impressions: 0, sessions: 0
     });
     const [categoryMix, setCategoryMix] = useState([]);
 
-    useEffect(() => {
-        setPageTitle('SKU Intelligence');
-    }, [setPageTitle]);
+    useEffect(() => { setPageTitle('SKU Report'); }, [setPageTitle]);
 
-    // Update searchTerm if asin param changes
     useEffect(() => {
         if (initialAsin) {
             setSearchTerm(initialAsin);
@@ -122,42 +149,35 @@ const SkuReport = () => {
         }
     }, [initialAsin]);
 
-    // Debounce search input to avoid hitting backend database on every keystroke
     useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
+        const t = setTimeout(() => {
             setFilters(prev => ({ ...prev, searchTerm }));
             setCurrentPage(1);
         }, 400);
-        return () => clearTimeout(delayDebounceFn);
+        return () => clearTimeout(t);
     }, [searchTerm]);
 
-    // Fetch analytical data from Server with server-side filtering & paging
     const loadSkuData = useCallback(async () => {
         setLoading(true);
         try {
             const params = {
                 startDate: startDate ? format(startDate, 'yyyy-MM-dd') : null,
                 endDate: endDate ? format(endDate, 'yyyy-MM-dd') : null,
-                rangeType,
-                search: filters.searchTerm,
-                category: filters.category,
-                page: currentPage,
-                limit: pageSize
+                rangeType, search: filters.searchTerm, category: filters.category,
+                page: currentPage, limit: pageSize
             };
-
             const cleanParams = Object.fromEntries(
                 Object.entries(params).filter(([_, v]) => v !== null && v !== undefined && v !== 'null')
             );
-
             const query = new URLSearchParams(cleanParams).toString();
             const response = await api.get(`/data/sku-report?${query}`);
-            
+
             const rawData = response.data || [];
             const mappedData = rawData.map((item, idx) => ({
                 id: (currentPage - 1) * pageSize + idx + 1,
                 sku: item.sku || 'N/A',
                 asin: item.asin || 'N/A',
-                title: item.title || 'Product ' + (idx + 1),
+                title: item.title || `Product ${idx + 1}`,
                 category: item.category || 'General',
                 revenue: item.total_revenue || 0,
                 units: item.units_sold || 0,
@@ -173,464 +193,529 @@ const SkuReport = () => {
 
             setData(mappedData);
             setTotalCount(response.pagination?.total || 0);
-            
-            if (response.kpis) {
-                setKpiSummary(response.kpis);
-            }
-            if (response.categories) {
-                setCategoryMix(response.categories);
-            }
+            if (response.kpis) setKpiSummary(response.kpis);
+            if (response.categories) setCategoryMix(response.categories);
         } catch (error) {
             console.error('Failed to load SKU data:', error);
         }
         setLoading(false);
     }, [startDate, endDate, rangeType, filters.searchTerm, filters.category, currentPage, pageSize]);
 
-    useEffect(() => {
-        loadSkuData();
-    }, [loadSkuData]);
+    useEffect(() => { loadSkuData(); }, [loadSkuData]);
 
-    // Build Premium KPI Summary metrics with mapped sessions
     const kpis = useMemo(() => {
         const adSales = kpiSummary.ad_sales || 0;
         const adSpend = kpiSummary.ad_spend || 0;
         const acos = adSales > 0 ? ((adSpend / adSales) * 100).toFixed(1) : '0.0';
-        const conversionRate = kpiSummary.clicks > 0 ? ((kpiSummary.units_sold / kpiSummary.clicks) * 100).toFixed(1) : '0.0';
-
         return [
-            { 
-                title: 'Total Revenue', 
-                value: `₹${(kpiSummary.total_revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 
-                icon: IndianRupee, 
-                color: '#4f46e5', 
-                bg: '#f5f3ff', 
-                label: 'Combined Channel Sales' 
-            },
-            { 
-                title: 'Units Sold', 
-                value: (kpiSummary.units_sold || 0).toLocaleString(), 
-                icon: Package, 
-                color: '#8b5cf6', 
-                bg: '#f5f3ff', 
-                label: 'Units dispatched' 
-            },
-            { 
-                title: 'Ad Spend & ACoS', 
-                value: `₹${(kpiSummary.ad_spend || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 
-                icon: Coins, 
-                color: '#f59e0b', 
-                bg: '#fffbeb', 
-                label: `Avg ACoS: ${acos}%` 
-            },
-            { 
-                title: 'Listing Sessions', 
-                value: (kpiSummary.sessions || 0).toLocaleString(), 
-                icon: Activity, 
-                color: '#10b981', 
-                bg: '#ecfdf5', 
-                label: `Total unique sessions` 
-            },
+            { label: 'Total Revenue', value: formatCurrency(kpiSummary.total_revenue), icon: IndianRupee, sublabel: 'Combined channel sales', color: '#1e293b' },
+            { label: 'Units Sold', value: (kpiSummary.units_sold || 0).toLocaleString('en-IN'), icon: Package, sublabel: 'Units dispatched', color: '#1e293b' },
+            { label: 'Ad Spend', value: formatCurrency(adSpend), icon: Coins, sublabel: `ACOS: ${acos}%`, color: '#a16207' },
+            { label: 'Sessions', value: (kpiSummary.sessions || 0).toLocaleString('en-IN'), icon: Activity, sublabel: 'Unique listing views', color: '#15803d' }
         ];
     }, [kpiSummary]);
 
     const handleExport = () => {
-        const headers = ['SKU', 'ASIN', 'Product Name', 'Category', 'Revenue', 'Units Sold', 'AOV', 'Conversion Rate', 'Status'];
+        const headers = ['SKU', 'ASIN', 'Product', 'Category', 'Revenue', 'Units', 'AOV', 'Conversion', 'Status'];
         const csvRows = [headers.join(',')];
         data.forEach(r => {
             csvRows.push([
-                r.sku, 
-                r.asin, 
-                `"${(r.title || '').replace(/"/g, '""')}"`, 
-                r.category, 
-                r.revenue, 
-                r.units, 
-                r.aov, 
-                `${r.conversion}%`, 
-                r.status
+                r.sku, r.asin, `"${(r.title || '').replace(/"/g, '""')}"`,
+                r.category, r.revenue, r.units, r.aov, `${r.conversion}%`, r.status
             ].join(','));
         });
         const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); 
-        a.href = url; 
+        const a = document.createElement('a');
+        a.href = url;
         a.download = `sku_report_${format(new Date(), 'yyyy-MM-dd')}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url);
     };
+
+    const performanceChartOptions = useMemo(() => ({
+        chart: { type: 'line', toolbar: { show: false }, background: 'transparent', fontFamily: 'Inter, system-ui, sans-serif' },
+        colors: ['#1e293b', '#15803d'],
+        stroke: { curve: 'smooth', width: [0, 2.5] },
+        plotOptions: { bar: { columnWidth: '50%', borderRadius: 4 } },
+        dataLabels: { enabled: false },
+        xaxis: {
+            categories: data.slice(0, 10).map(d => d.sku.length > 14 ? d.sku.substring(0, 14) + '...' : d.sku),
+            labels: { style: { colors: '#64748b', fontSize: '10px', fontWeight: 600 }, rotate: -25 },
+            axisBorder: { show: false }, axisTicks: { show: false }
+        },
+        yaxis: [
+            { labels: { formatter: (v) => formatCurrency(v), style: { colors: '#64748b', fontSize: '10px', fontWeight: 600 } } },
+            { opposite: true, labels: { style: { colors: '#64748b', fontSize: '10px', fontWeight: 600 } } }
+        ],
+        tooltip: { theme: 'light', shared: true, intersect: false, y: { formatter: (val, { seriesIndex }) => seriesIndex === 0 ? formatCurrency(val) : val } },
+        grid: { show: true, borderColor: '#f1f5f9', strokeDashArray: 4, xaxis: { lines: { show: false } } },
+        legend: { show: true, position: 'top', horizontalAlign: 'right', fontSize: '11px', fontWeight: 600 }
+    }), [data]);
+
+    const donutLabels = categoryMix.length > 0 ? categoryMix.map(c => formatCategoryName(c.category)) : ['General'];
+    const donutSeries = categoryMix.length > 0 ? categoryMix.map(c => c.revenue) : [0.001];
+
+    const donutOptions = useMemo(() => ({
+        chart: { fontFamily: 'Inter, system-ui, sans-serif' },
+        labels: donutLabels,
+        colors: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'],
+        legend: { position: 'bottom', fontSize: '11px', fontWeight: 600, markers: { radius: 2 }, itemMargin: { horizontal: 6, vertical: 3 } },
+        dataLabels: { enabled: false },
+        stroke: { show: true, width: 2, colors: ['#ffffff'] },
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '72%',
+                    labels: {
+                        show: true,
+                        value: { fontSize: '16px', fontWeight: 700, color: '#0f172a', formatter: (val) => formatCurrency(Number(val)) },
+                        total: {
+                            show: true, label: 'Total', color: '#64748b', fontSize: '11px', fontWeight: 600,
+                            formatter: (w) => formatCurrency(w.globals.seriesTotals.reduce((a, b) => a + b, 0))
+                        }
+                    }
+                }
+            }
+        },
+        tooltip: { y: { formatter: (val) => formatCurrency(val) } }
+    }), [donutLabels]);
 
     const columns = [
         {
             title: 'SKU / ASIN',
             dataIndex: 'sku',
             key: 'sku',
-            width: 220,
+            width: 200,
             sorter: (a, b) => (a.sku || '').localeCompare(b.sku || ''),
             render: (sku, record) => (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Text strong style={{ fontSize: '13px', color: '#0f172a', letterSpacing: '-0.01em' }}>{sku}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px', marginTop: 2 }}>{record.asin}</Text>
+                <div>
+                    <span style={{
+                        fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600,
+                        color: '#0f172a', background: '#f8fafc', border: '1px solid #e5e7eb',
+                        padding: '2px 8px', borderRadius: 4, display: 'inline-block'
+                    }}>
+                        {sku}
+                    </span>
+                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, fontFamily: 'monospace' }}>
+                        {record.asin}
+                    </div>
                 </div>
             )
         },
         {
-            title: 'Product Title',
+            title: 'Product',
             dataIndex: 'title',
             key: 'title',
             ellipsis: true,
             sorter: (a, b) => (a.title || '').localeCompare(b.title || ''),
-            render: (title) => <Text style={{ fontSize: '12.5px', color: '#334155', fontWeight: 500 }}>{title || 'Unknown Product'}</Text>
+            render: (title) => <Text style={{ fontSize: 12, color: '#334155', fontWeight: 500 }}>{title || 'N/A'}</Text>
         },
         {
             title: 'Category',
             dataIndex: 'category',
             key: 'category',
-            width: 140,
+            width: 130,
             sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
-            render: (category) => <Tag color="blue" style={{ borderRadius: 6, fontWeight: 700, fontSize: '11px' }}>{category || 'General'}</Tag>
+            render: (cat) => (
+                <span style={{
+                    fontSize: 10, fontWeight: 700, color: '#475569', background: '#f1f5f9',
+                    border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 4,
+                    textTransform: 'uppercase', letterSpacing: '0.03em'
+                }}>
+                    {cat || 'General'}
+                </span>
+            )
         },
         {
             title: 'Revenue',
             dataIndex: 'revenue',
             key: 'revenue',
-            width: 130,
+            width: 120,
+            align: 'right',
             sorter: (a, b) => a.revenue - b.revenue,
-            render: (revenue) => <Text style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>₹{revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+            render: (val) => <Text style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(val)}</Text>
         },
         {
-            title: 'Units Sold',
+            title: 'Units',
             dataIndex: 'units',
             key: 'units',
-            width: 100,
+            width: 90,
+            align: 'right',
             sorter: (a, b) => a.units - b.units,
-            render: (units) => <Text style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569' }}>{units}</Text>
+            render: (val) => <Text style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{val.toLocaleString('en-IN')}</Text>
         },
         {
-            title: 'Conversion',
+            title: 'CVR',
             dataIndex: 'conversion',
             key: 'conversion',
-            width: 120,
+            width: 90,
+            align: 'center',
             sorter: (a, b) => parseFloat(a.conversion) - parseFloat(b.conversion),
-            render: (conversion) => (
-                <Tag 
-                    color={parseFloat(conversion) >= 15 ? 'success' : parseFloat(conversion) >= 5 ? 'warning' : 'default'} 
-                    style={{ borderRadius: 6, fontWeight: 700, fontSize: '11px', padding: '1px 6px' }}
-                >
-                    {conversion}%
-                </Tag>
-            )
+            render: (val) => {
+                const v = parseFloat(val);
+                const isGood = v >= 15;
+                return (
+                    <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: isGood ? '#15803d' : v >= 5 ? '#a16207' : '#b91c1c',
+                        background: isGood ? '#f0fdf4' : v >= 5 ? '#fffbeb' : '#fef2f2',
+                        border: `1px solid ${isGood ? '#bbf7d0' : v >= 5 ? '#fde68a' : '#fecaca'}`,
+                        padding: '2px 8px', borderRadius: 4
+                    }}>
+                        {val}%
+                    </span>
+                );
+            }
         },
         {
             title: 'Status',
-            dataIndex: 'status',
             key: 'status',
-            width: 100,
-            align: 'right',
+            width: 80,
+            align: 'center',
             render: () => (
-                <Tag 
-                    color="green" 
-                    variant="filled" 
-                    style={{ borderRadius: 8, fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', padding: '2px 8px' }}
-                >
+                <span style={{
+                    fontSize: 10, fontWeight: 700, color: '#15803d',
+                    background: '#f0fdf4', border: '1px solid #bbf7d0',
+                    padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase'
+                }}>
                     Active
-                </Tag>
+                </span>
             )
         }
     ];
 
-    const performanceChartOptions = {
-        chart: { type: 'line', toolbar: { show: false }, background: 'transparent' },
-        colors: ['#4F46E5', '#10B981'],
-        stroke: { curve: 'smooth', width: [3, 3] },
-        plotOptions: { bar: { columnWidth: '35%', borderRadius: 6 } },
-        dataLabels: { enabled: false },
-        xaxis: {
-            categories: data.slice(0, 10).map(d => d.sku.length > 15 ? d.sku.substring(0, 15) + '...' : d.sku),
-            labels: { style: { colors: '#64748b', fontSize: '9px', fontWeight: 600 } },
-            axisBorder: { show: false },
-            axisTicks: { show: false }
-        },
-        yaxis: [
-            { title: { text: 'Revenue (₹)', style: { color: '#64748b', fontWeight: 600 } }, labels: { style: { colors: '#64748b' } } },
-            { opposite: true, title: { text: 'Units', style: { color: '#64748b', fontWeight: 600 } }, labels: { style: { colors: '#64748b' } } }
-        ],
-        tooltip: { theme: 'light', shared: true, intersect: false },
-        grid: { show: true, borderColor: '#f1f5f9', strokeDashArray: 4 }
-    };
-
-    // Calculate dynamic donut series & labels with clean formatting
-    const donutLabels = categoryMix.length > 0 ? categoryMix.map(c => formatCategoryName(c.category)) : ['General'];
-    const donutSeries = categoryMix.length > 0 ? categoryMix.map(c => c.revenue) : [0.001];
+    const isInitialLoad = loading && data.length === 0;
 
     return (
-        <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                
-                {/* 1. TOP DYNAMIC WORKBAR */}
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    background: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 12,
-                    padding: '10px 16px',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                }}>
-                    <Space size={4}>
-                        <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory</Text>
-                        <span style={{ color: '#cbd5e1', fontSize: 11 }}>/</span>
-                        <Text strong style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0f172a' }}>SKU Intelligence Analysis</Text>
-                    </Space>
+        <div className="sku-report-pro">
+            <style>{`
+                .sku-report-pro {
+                    background: #fafafa;
+                    min-height: calc(100vh - 60px);
+                    padding: 24px 28px;
+                }
+                .pro-table .ant-table-thead > tr > th {
+                    background: #f8fafc !important;
+                    font-size: 11px !important;
+                    font-weight: 700 !important;
+                    color: #475569 !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.04em !important;
+                    border-bottom: 1px solid #e5e7eb !important;
+                    padding: 10px 16px !important;
+                }
+                .pro-table .ant-table-tbody > tr > td {
+                    border-bottom: 1px solid #f1f5f9 !important;
+                    padding: 10px 16px !important;
+                }
+                .pro-table .ant-table-tbody > tr:hover > td {
+                    background: #fafbfc !important;
+                }
+                @keyframes spin-animation {
+                    to { transform: rotate(360deg); }
+                }
+                .spin-animation {
+                    animation: spin-animation 1s linear infinite;
+                }
+            `}</style>
 
-                    <Button 
-                        icon={<RefreshCw size={13} className={loading ? 'spin text-primary' : ''} />} 
-                        onClick={loadSkuData}
-                        shape="circle"
-                        style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderColor: '#cbd5e1' }}
-                    />
+            {/* Header */}
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginBottom: 20, flexWrap: 'wrap', gap: 12
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                        width: 38, height: 38, borderRadius: 6, background: '#1e293b',
+                        border: '1px solid #0f172a', display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', color: '#ffffff'
+                    }}>
+                        <Layers size={18} strokeWidth={2} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>
+                            SKU Performance Report
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                            Product-level analytics and conversion metrics
+                        </div>
+                    </div>
                 </div>
-
-                {/* 2. DYNAMIC KPI ROW (SKELETON OR ACTUAL CONTENT) */}
-                {loading && data.length === 0 ? (
-                    <KpiSkeleton />
-                ) : (
-                    <Row gutter={[16, 16]}>
-                        {kpis.map((k, i) => (
-                            <Col key={i} xs={24} sm={12} md={6}>
-                                <Card 
-                                    style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
-                                    styles={{ body: { padding: '16px 20px' } }}
-                                >
-                                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                        <div style={{ background: k.bg, color: k.color, padding: 10, borderRadius: 10, display: 'flex' }}>
-                                            <k.icon size={18} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{k.title}</div>
-                                            <h2 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 20, letterSpacing: '-0.02em' }}>{k.value}</h2>
-                                            <Text type="secondary" style={{ fontSize: 11 }}>{k.label}</Text>
-                                        </div>
-                                    </div>
-                                </Card>
-                            </Col>
-                        ))}
-                    </Row>
-                )}
-
-                {/* 3. CHARTS ROW (SKELETON OR ACTUAL CONTENT) */}
-                {loading && data.length === 0 ? (
-                    <ChartSkeleton />
-                ) : (
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24} lg={16}>
-                            <Card
-                                title={<span style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, letterSpacing: '-0.01em' }}>Top Performing SKUs (Revenue vs. Volume)</span>}
-                                extra={<Tag color="purple" style={{ borderRadius: 10, fontWeight: 700, fontSize: '10px' }}>CURRENT PAGE TOP 10</Tag>}
-                                style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
-                                styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '12px 20px' } }}
-                            >
-                                <div style={{ height: '320px' }}>
-                                    <Suspense fallback={<Skeleton active paragraph={{ rows: 8 }} />}>
-                                        <Chart
-                                            options={performanceChartOptions}
-                                            series={[
-                                                { name: 'Revenue', type: 'column', data: data.slice(0, 10).map(d => d.revenue) },
-                                                { name: 'Units', type: 'line', data: data.slice(0, 10).map(d => d.units) }
-                                            ]}
-                                            type="line"
-                                            height="100%"
-                                        />
-                                    </Suspense>
-                                </div>
-                            </Card>
-                        </Col>
-
-                        <Col xs={24} lg={8}>
-                            <Card
-                                title={<span style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, letterSpacing: '-0.01em' }}>Category Revenue Mix</span>}
-                                style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
-                                styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '12px 20px' } }}
-                            >
-                                <div style={{ height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Suspense fallback={<Skeleton active paragraph={{ rows: 8 }} />}>
-                                        <Chart
-                                            options={{
-                                                labels: donutLabels,
-                                                colors: ['#4F46E5', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'],
-                                                legend: { position: 'bottom', labels: { colors: '#64748b', useSeriesColors: false } },
-                                                dataLabels: { enabled: false },
-                                                stroke: { show: false },
-                                                plotOptions: { 
-                                                    pie: { 
-                                                        donut: { 
-                                                            size: '75%', 
-                                                            labels: { 
-                                                                show: true, 
-                                                                value: {
-                                                                    show: true,
-                                                                    fontSize: '15px',
-                                                                    fontWeight: '800',
-                                                                    color: '#0f172a',
-                                                                    formatter: (val) => `₹${Math.round(Number(val)).toLocaleString()}`
-                                                                },
-                                                                total: { 
-                                                                    show: true, 
-                                                                    label: 'TOTAL', 
-                                                                    color: '#64748b', 
-                                                                    fontSize: '11px', 
-                                                                    fontWeight: '700', 
-                                                                    formatter: (w) => {
-                                                                        const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                                                        return `₹${Math.round(sum).toLocaleString()}`;
-                                                                    } 
-                                                                } 
-                                                            } 
-                                                        } 
-                                                    } 
-                                                }
-                                            }}
-                                            series={donutSeries}
-                                            type="donut"
-                                            width="100%"
-                                            height={300}
-                                        />
-                                    </Suspense>
-                                </div>
-                            </Card>
-                        </Col>
-                    </Row>
-                )}
-
-                {/* 4. FILTERS & DATA LEDGER COLUMN GRID (SKELETON OR ACTUAL CONTENT) */}
-                {loading && data.length === 0 ? (
-                    <TableSkeleton />
-                ) : (
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24} lg={6}>
-                            <Card
-                                title={<span style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, letterSpacing: '-0.01em' }}>Optimization Filters</span>}
-                                style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)', height: '100%' }}
-                                styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '12px 20px' } }}
-                            >
-                                <Space orientation="vertical" size={20} style={{ width: '100%' }}>
-                                    <div>
-                                        <Text strong style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Search Inventory</Text>
-                                        <Input 
-                                            size="large"
-                                            placeholder="SKU, ASIN..."
-                                            prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
-                                            value={searchTerm}
-                                            onChange={e => setSearchTerm(e.target.value)}
-                                            style={{ borderRadius: 8 }}
-                                            allowClear
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <Text strong style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Brand / Category</Text>
-                                        <Select 
-                                            size="large"
-                                            style={{ width: '100%' }}
-                                            value={filters.category}
-                                            onChange={val => {
-                                                setFilters(prev => ({ ...prev, category: val }));
-                                                setCurrentPage(1);
-                                            }}
-                                            options={[
-                                                { value: 'all', label: 'All Categories' },
-                                                { value: 'General', label: 'General' },
-                                                { value: 'Clothing', label: 'Clothing' },
-                                                { value: 'Footwear', label: 'Footwear' },
-                                                { value: 'Accessories', label: 'Accessories' }
-                                            ]}
-                                        />
-                                    </div>
-
-                                    <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, padding: 16 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                                            <div style={{ background: '#4f46e5', color: '#ffffff', padding: 6, borderRadius: 8, display: 'flex' }}>
-                                                <Target size={14} />
-                                            </div>
-                                            <Text strong style={{ color: '#4f46e5', fontSize: 11.5 }}>Conversion Target: 15%</Text>
-                                        </div>
-                                        <Progress 
-                                            percent={45} 
-                                            strokeColor="#4f46e5"
-                                            size="small"
-                                            showInfo={false}
-                                        />
-                                        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 11, color: '#64748b' }}>
-                                            Average Performance: <span style={{ color: '#0f172a', fontWeight: 800 }}>{((kpiSummary.units_sold / (kpiSummary.clicks || 1)) * 100).toFixed(1)}%</span>
-                                        </div>
-                                    </div>
-                                </Space>
-                            </Card>
-                        </Col>
-
-                        <Col xs={24} lg={18}>
-                            <Card
-                                title={<span style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, letterSpacing: '-0.01em' }}>SKU Performance Ledger</span>}
-                                extra={
-                                    <Button 
-                                        type="primary"
-                                        shape="round"
-                                        icon={<Download size={13} />}
-                                        onClick={handleExport}
-                                        style={{ 
-                                            background: '#4f46e5', 
-                                            borderColor: '#4f46e5', 
-                                            fontWeight: 700,
-                                            fontSize: 12,
-                                            height: 32,
-                                            display: 'flex',
-                                            alignItems: 'center'
-                                        }}
-                                    >
-                                        Export Dataset
-                                    </Button>
-                                }
-                                style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}
-                                styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '12px 20px' }, body: { padding: 0 } }}
-                            >
-                                <Table 
-                                    dataSource={data}
-                                    columns={columns}
-                                    rowKey={record => record.sku + record.asin}
-                                    loading={loading}
-                                    pagination={{
-                                        current: currentPage,
-                                        pageSize: pageSize,
-                                        total: totalCount,
-                                        onChange: (page, size) => {
-                                            setCurrentPage(page);
-                                            setPageSize(size);
-                                        },
-                                        showSizeChanger: true,
-                                        pageSizeOptions: ['10', '20', '50', '100'],
-                                        showTotal: (total, range) => <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Viewing {range[0]}-{range[1]} of {total} listings</span>,
-                                        placement: 'bottomRight'
-                                    }}
-                                    scroll={{ x: 800 }}
-                                    size="small"
-                                    className="custom-table-ant"
-                                    locale={{
-                                        emptyText: (
-                                            <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-                                                <Layers className="mb-2 opacity-25" size={32} />
-                                                <div style={{ fontSize: 12, fontWeight: 600 }}>No inventory records found</div>
-                                            </div>
-                                        )
-                                    }}
-                                />
-                            </Card>
-                        </Col>
-                    </Row>
-                )}
-
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <DateRangePicker
+                        startDate={startDate}
+                        endDate={endDate}
+                        onDateChange={(type, s, e) => updateDateRange({ startDate: s, endDate: e, rangeType: type })}
+                    />
+                    <Button
+                        icon={<Download size={13} strokeWidth={2} />}
+                        onClick={handleExport}
+                        style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}
+                    >
+                        Export
+                    </Button>
+                    <Button
+                        type="primary"
+                        icon={<RefreshCw size={13} strokeWidth={2} className={loading ? 'spin-animation' : ''} />}
+                        onClick={loadSkuData}
+                        style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}
+                    >
+                        Refresh
+                    </Button>
+                </div>
             </div>
-        </>
+
+            {/* KPIs */}
+            {isInitialLoad ? (
+                <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                    {[1, 2, 3, 4].map(i => (
+                        <Col key={i} xs={24} sm={12} md={6}>
+                            <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb' }} styles={{ body: { padding: 18 } }}>
+                                <Skeleton active paragraph={{ rows: 2 }} />
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+            ) : (
+                <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                    {kpis.map((k, i) => (
+                        <Col key={i} xs={24} sm={12} md={6}>
+                            <StatCard {...k} />
+                        </Col>
+                    ))}
+                </Row>
+            )}
+
+            {/* Charts */}
+            {isInitialLoad ? (
+                <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                    <Col xs={24} lg={16}>
+                        <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', height: 360 }} styles={{ body: { padding: 20 } }}>
+                            <Skeleton active paragraph={{ rows: 8 }} />
+                        </Card>
+                    </Col>
+                    <Col xs={24} lg={8}>
+                        <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', height: 360 }} styles={{ body: { padding: 20 } }}>
+                            <Skeleton active paragraph={{ rows: 8 }} />
+                        </Card>
+                    </Col>
+                </Row>
+            ) : (
+                <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                    <Col xs={24} lg={16}>
+                        <SectionCard
+                            title="Revenue vs Volume"
+                            subtitle="Top 10 SKUs on current page"
+                            icon={BarChart3}
+                            extra={
+                                <span style={{
+                                    fontSize: 10, fontWeight: 700, color: '#475569', background: '#f1f5f9',
+                                    border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 4,
+                                    textTransform: 'uppercase', letterSpacing: '0.04em'
+                                }}>
+                                    Current Page
+                                </span>
+                            }
+                        >
+                            <div style={{ height: 300 }}>
+                                <Suspense fallback={<Skeleton active paragraph={{ rows: 6 }} />}>
+                                    <Chart
+                                        options={performanceChartOptions}
+                                        series={[
+                                            { name: 'Revenue', type: 'column', data: data.slice(0, 10).map(d => d.revenue) },
+                                            { name: 'Units', type: 'line', data: data.slice(0, 10).map(d => d.units) }
+                                        ]}
+                                        type="line"
+                                        height="100%"
+                                    />
+                                </Suspense>
+                            </div>
+                        </SectionCard>
+                    </Col>
+                    <Col xs={24} lg={8}>
+                        <SectionCard title="Category Distribution" icon={PieChartIcon}>
+                            <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Suspense fallback={<Skeleton active paragraph={{ rows: 6 }} />}>
+                                    <Chart options={donutOptions} series={donutSeries} type="donut" width="100%" height={280} />
+                                </Suspense>
+                            </div>
+                        </SectionCard>
+                    </Col>
+                </Row>
+            )}
+
+            {/* Filters + Table */}
+            {isInitialLoad ? (
+                <Row gutter={[12, 12]}>
+                    <Col xs={24} lg={6}>
+                        <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', height: 400 }} styles={{ body: { padding: 18 } }}>
+                            <Skeleton active paragraph={{ rows: 6 }} />
+                        </Card>
+                    </Col>
+                    <Col xs={24} lg={18}>
+                        <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', height: 400 }} styles={{ body: { padding: 18 } }}>
+                            <Skeleton active paragraph={{ rows: 8 }} />
+                        </Card>
+                    </Col>
+                </Row>
+            ) : (
+                <Row gutter={[12, 12]}>
+                    {/* Filter Sidebar */}
+                    <Col xs={24} lg={6}>
+                        <SectionCard title="Filters" icon={Filter}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                <div>
+                                    <FieldLabel>Search</FieldLabel>
+                                    <Input
+                                        prefix={<Search size={13} style={{ color: '#94a3b8' }} />}
+                                        placeholder="SKU or ASIN..."
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        allowClear
+                                        style={{ borderRadius: 6 }}
+                                    />
+                                </div>
+                                <div>
+                                    <FieldLabel>Category</FieldLabel>
+                                    <Select
+                                        style={{ width: '100%' }}
+                                        value={filters.category}
+                                        onChange={val => {
+                                            setFilters(prev => ({ ...prev, category: val }));
+                                            setCurrentPage(1);
+                                        }}
+                                        options={[
+                                            { value: 'all', label: 'All Categories' },
+                                            { value: 'General', label: 'General' },
+                                            { value: 'Clothing', label: 'Clothing' },
+                                            { value: 'Footwear', label: 'Footwear' },
+                                            { value: 'Accessories', label: 'Accessories' }
+                                        ]}
+                                    />
+                                </div>
+
+                                <Divider style={{ margin: '4px 0' }} />
+
+                                {/* Conversion Target */}
+                                <div style={{
+                                    background: '#f8fafc', border: '1px solid #e5e7eb',
+                                    borderRadius: 6, padding: 14
+                                }}>
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10
+                                    }}>
+                                        <Target size={13} strokeWidth={2} style={{ color: '#475569' }} />
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>
+                                            Conversion Target: 15%
+                                        </span>
+                                    </div>
+                                    <Progress
+                                        percent={Math.min(100, ((kpiSummary.units_sold / (kpiSummary.clicks || 1)) * 100 / 15) * 100)}
+                                        strokeColor="#1e293b"
+                                        size="small"
+                                        showInfo={false}
+                                    />
+                                    <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#64748b' }}>
+                                        Current: <span style={{ color: '#0f172a', fontWeight: 700 }}>
+                                            {((kpiSummary.units_sold / (kpiSummary.clicks || 1)) * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Summary */}
+                                <div style={{
+                                    background: '#f8fafc', border: '1px solid #e5e7eb',
+                                    borderRadius: 6, padding: 14
+                                }}>
+                                    <div style={{
+                                        fontSize: 10, fontWeight: 700, color: '#64748b',
+                                        textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8
+                                    }}>
+                                        Filter Summary
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {[
+                                            { label: 'Showing', value: `${data.length} of ${totalCount}` },
+                                            { label: 'Revenue', value: formatCurrency(data.reduce((s, d) => s + d.revenue, 0)) },
+                                            { label: 'Units', value: data.reduce((s, d) => s + d.units, 0).toLocaleString('en-IN') }
+                                        ].map((item, i) => (
+                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                                <span style={{ color: '#64748b' }}>{item.label}</span>
+                                                <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </SectionCard>
+                    </Col>
+
+                    {/* Data Table */}
+                    <Col xs={24} lg={18}>
+                        <SectionCard
+                            title="SKU Performance Ledger"
+                            subtitle={`${totalCount} SKUs total`}
+                            icon={Database}
+                            noPadding
+                            extra={
+                                <Button
+                                    size="small"
+                                    type="primary"
+                                    icon={<Download size={11} strokeWidth={2} />}
+                                    onClick={handleExport}
+                                    style={{
+                                        background: '#1e293b', borderColor: '#1e293b', borderRadius: 4,
+                                        fontWeight: 600, fontSize: 11, height: 28
+                                    }}
+                                >
+                                    Export
+                                </Button>
+                            }
+                        >
+                            <Table
+                                dataSource={data}
+                                columns={columns}
+                                rowKey={record => record.sku + record.asin}
+                                loading={loading}
+                                className="pro-table"
+                                pagination={{
+                                    current: currentPage,
+                                    pageSize,
+                                    total: totalCount,
+                                    onChange: (page, size) => { setCurrentPage(page); setPageSize(size); },
+                                    showSizeChanger: true,
+                                    pageSizeOptions: ['10', '20', '50'],
+                                    showTotal: (total, range) => (
+                                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                                            {range[0]}-{range[1]} of {total} SKUs
+                                        </span>
+                                    ),
+                                    style: { padding: '12px 16px', margin: 0 }
+                                }}
+                                scroll={{ x: 900 }}
+                                size="middle"
+                                locale={{
+                                    emptyText: (
+                                        <div style={{ padding: 48, textAlign: 'center' }}>
+                                            <Layers size={32} style={{ color: '#cbd5e1', marginBottom: 12 }} />
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                                                No SKUs found
+                                            </div>
+                                            <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                                Adjust filters or refresh data
+                                            </div>
+                                        </div>
+                                    )
+                                }}
+                            />
+                        </SectionCard>
+                    </Col>
+                </Row>
+            )}
+        </div>
     );
 };
 
