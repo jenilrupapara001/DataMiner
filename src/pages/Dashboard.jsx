@@ -55,6 +55,28 @@ const getAlertColor = (type = '') => {
   return '#3b82f6';
 };
 
+// Indian Currency Formatter helpers
+const formatIndianCurrency = (val) => {
+  if (val === undefined || val === null || isNaN(val)) return '₹0';
+  return `₹${Math.round(val).toLocaleString('en-IN')}`;
+};
+
+const formatIndianCurrencyShort = (val) => {
+  if (val === undefined || val === null || isNaN(val)) return '₹0';
+  const num = Math.round(val);
+  const absNum = Math.abs(num);
+  if (absNum >= 10000000) { // Crore
+    return `₹${(num / 10000000).toFixed(2).replace(/\.?0+$/, '')}Cr`;
+  }
+  if (absNum >= 100000) { // Lakh
+    return `₹${(num / 100000).toFixed(2).replace(/\.?0+$/, '')}L`;
+  }
+  if (absNum >= 1000) {
+    return `₹${(num / 1000).toFixed(1).replace(/\.?0+$/, '')}k`;
+  }
+  return `₹${num}`;
+};
+
 // Sparkline renderer for clean visual indicators
 const Sparkline = ({ data, color }) => {
   const width = 240;
@@ -102,17 +124,21 @@ const cardStyle = {
 };
 
 const Dashboard = () => {
-  const { isGlobalUser } = useAuth();
+  const { user } = useAuth();
   const { startDate, endDate, rangeType } = useDateRange();
   const { refreshCount } = useRefresh();
   const { setPageTitle } = usePageTitle();
+  const { isBrandManager } = useTargetPermissions();
 
-  useEffect(() => { setPageTitle('Market Intelligence'); }, [setPageTitle]);
+  useEffect(() => { setPageTitle('Unified Operations Dashboard'); }, [setPageTitle]);
 
   const [sellers, setSellers] = useState([]);
   const [selectedSellerId, setSelectedSellerId] = useState('all');
   const [activityLogs, setActivityLogs] = useState([]);
+  const [scrapeTasks, setScrapeTasks] = useState([]);
+  const [scrapeLoading, setScrapeLoading] = useState(false);
 
+  // Fetch Sellers list
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
@@ -130,6 +156,41 @@ const Dashboard = () => {
     return () => controller.abort();
   }, []);
 
+  // Filter sellers list for the selector based on user permissions (RBAC)
+  const userSellers = useMemo(() => {
+    if (!user) return [];
+    const roleName = (user.role?.name || user.role || '').toString().toLowerCase().trim();
+    const isMgr = roleName === 'brand manager' || roleName === 'brand_manager' || isBrandManager;
+
+    if (isMgr) {
+      const assigned = user.assignedSellers || [];
+      return assigned.map(s => {
+        const sid = s.sellerId || s.SellerId || s._id || s.Id || s;
+        const match = sellers.find(x => (x._id || x.id) === sid);
+        return {
+          id: sid,
+          name: match?.name || s.name || s.SellerName || sid
+        };
+      });
+    }
+
+    return sellers.map(s => ({
+      id: s._id || s.id,
+      name: s.name || s.SellerName || s._id || s.id
+    }));
+  }, [user, sellers, isBrandManager]);
+
+  // Set the first assigned seller as default for brand managers
+  useEffect(() => {
+    if (userSellers.length > 0 && selectedSellerId === 'all') {
+      const roleName = (user?.role?.name || user?.role || '').toString().toLowerCase().trim();
+      const isMgr = roleName === 'brand manager' || roleName === 'brand_manager' || isBrandManager;
+      if (isMgr) {
+        setSelectedSellerId(userSellers[0].id);
+      }
+    }
+  }, [userSellers, selectedSellerId, user, isBrandManager]);
+
   const orch = useDashboardOrchestration({
     sellerId: selectedSellerId,
     startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
@@ -143,6 +204,19 @@ const Dashboard = () => {
   useEffect(() => {
     if (refreshCount > 0) refetchRef.current?.();
   }, [refreshCount]);
+
+  // Load real Octoparse sync tasks
+  const loadScrapeTasks = useCallback(async () => {
+    setScrapeLoading(true);
+    try {
+      const res = await api.marketSyncApi.getSyncTasks();
+      setScrapeTasks(res?.tasks || []);
+    } catch (err) {
+      console.error('Failed to load scrape tasks for dashboard', err);
+    } finally {
+      setScrapeLoading(false);
+    }
+  }, []);
 
   // Load live activity logs for Recent Alerts
   const loadLiveLogs = useCallback(async () => {
@@ -166,9 +240,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadLiveLogs();
-    const interval = setInterval(loadLiveLogs, 30000);
+    loadScrapeTasks();
+    const interval = setInterval(() => {
+      loadLiveLogs();
+      loadScrapeTasks();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [loadLiveLogs]);
+  }, [loadLiveLogs, loadScrapeTasks]);
 
   useEffect(() => {
     if (!socket) return;
@@ -189,6 +267,33 @@ const Dashboard = () => {
 
   const kpisRaw = useMemo(() => Array.isArray(orch.kpis) ? orch.kpis : [], [orch.kpis]);
   const topProducts = useMemo(() => Array.isArray(orch.topProducts) ? orch.topProducts : [], [orch.topProducts]);
+
+  // Target values logic
+  const targetStats = useMemo(() => {
+    const targetsList = orch.targets || [];
+    let totalTarget = 0;
+    let totalAchieved = 0;
+    const brandSet = new Set();
+
+    const filtered = selectedSellerId === 'all'
+      ? targetsList
+      : targetsList.filter(t => (t.SellerId || '').toString().toLowerCase() === selectedSellerId.toLowerCase());
+
+    filtered.forEach(t => {
+      totalTarget += (t.TotalTargetValue || 0);
+      totalAchieved += (t.overallAchieved || 0);
+      if (t.SellerId) brandSet.add(t.SellerId);
+    });
+
+    const achievementRate = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
+    return {
+      totalTarget,
+      totalAchieved,
+      achievementRate,
+      brandCount: brandSet.size,
+      list: filtered
+    };
+  }, [orch.targets, selectedSellerId]);
 
   // Dynamic KPI calculations from database raw series
   const adSalesVal = useMemo(() => {
@@ -212,21 +317,35 @@ const Dashboard = () => {
     if (adSalesVal > 0) {
       return ((adSpendVal / adSalesVal) * 100).toFixed(1);
     }
-    // Fallback if sales is 0 but we have spend (100% or more) or mock default
     if (adSpendVal > 0) return '100.0';
     return '18.2';
   }, [adSalesVal, adSpendVal]);
 
   const getKpiValue = (index, defaultVal) => {
-    if (index === 0 && adSalesVal > 0) return `₹${adSalesVal.toLocaleString('en-IN')}`;
+    let rawVal = defaultVal;
+    if (index === 0 && adSalesVal > 0) return formatIndianCurrency(adSalesVal);
     if (index === 1 && totalOrdersVal !== 8420) return totalOrdersVal.toLocaleString('en-IN');
     if (index === 2) return `${dynamicAcos}%`;
     if (index === 3 && totalOrdersVal !== 8420) return Math.round(totalOrdersVal * 1.48).toLocaleString('en-IN');
 
     if (kpisRaw && kpisRaw[index]) {
-      return kpisRaw[index].value;
+      rawVal = kpisRaw[index].value;
     }
-    return defaultVal;
+    
+    // Parse potential string values with dollar symbols or units to Indian format
+    if (typeof rawVal === 'string') {
+      const isCurrencyStr = rawVal.startsWith('$') || rawVal.startsWith('₹') || kpisRaw[index]?.title?.toLowerCase()?.includes('revenue') || kpisRaw[index]?.title?.toLowerCase()?.includes('spend');
+      if (isCurrencyStr) {
+        const cleaned = parseFloat(rawVal.replace(/[^0-9.-]/g, ''));
+        if (!isNaN(cleaned)) {
+          let multiplier = 1;
+          if (rawVal.toLowerCase().includes('k')) multiplier = 1000;
+          else if (rawVal.toLowerCase().includes('m')) multiplier = 1000000;
+          return formatIndianCurrency(cleaned * multiplier);
+        }
+      }
+    }
+    return rawVal;
   };
 
   const getKpiTrend = (index, defaultTrend) => {
@@ -248,26 +367,21 @@ const Dashboard = () => {
   // Dynamic Top ASINs mapping with mockup fallbacks
   const displayAsins = useMemo(() => {
     const mockAsins = [
-      { title: 'Copper Bottle 1L', subtitle: 'B0C9X1A2IN · Ayur Life', lqs: 91 },
-      { title: 'Yoga Mat Pro', subtitle: 'B0B7M9K3IN · FlexWell', lqs: 76 },
-      { title: 'Kitchen Storage Set', subtitle: 'B09N2Q8DIN · HomeStack', lqs: 63 },
-      { title: 'LED Study Lamp', subtitle: 'B0D1P554IN · BrightDesk', lqs: 88 }
+      { title: 'Copper Bottle 1L', subtitle: 'B0C9X1A2IN · Ayur Life', units: 1250 },
+      { title: 'Yoga Mat Pro', subtitle: 'B0B7M9K3IN · FlexWell', units: 890 },
+      { title: 'Kitchen Storage Set', subtitle: 'B09N2Q8DIN · HomeStack', units: 620 },
+      { title: 'LED Study Lamp', subtitle: 'B0D1P554IN · BrightDesk', units: 540 }
     ];
 
-    const result = [];
-    for (let i = 0; i < 4; i++) {
-      if (topProducts && topProducts[i]) {
-        const p = topProducts[i];
-        result.push({
-          title: p.title || 'Unknown Product',
-          subtitle: `${p.asin || ''} · ${p.sku || ''}`,
-          trend: p.trend || (p.lqs > 80 ? 'up' : 'down')
-        });
-      } else {
-        result.push(mockAsins[i]);
-      }
+    if (!topProducts || topProducts.length === 0) {
+      return mockAsins;
     }
-    return result;
+
+    return topProducts.map(p => ({
+      title: p.title || 'Unknown Product',
+      subtitle: `${p.asin || ''} · ${p.sku || ''}`,
+      units: p.units || 0
+    })).sort((a, b) => b.units - a.units);
   }, [topProducts]);
 
   // Dynamic Alerts list backed by live activity logs
@@ -327,7 +441,7 @@ const Dashboard = () => {
       curve: 'smooth',
       width: [3, 2]
     },
-    colors: ['#3b82f6', '#818cf8'],
+    colors: ['#2563eb', '#f59e0b'],
     xaxis: {
       categories: chartLabels,
       axisBorder: { show: false },
@@ -339,7 +453,7 @@ const Dashboard = () => {
     yaxis: {
       labels: {
         style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 500 },
-        formatter: (val) => val === 0 ? '0' : val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val
+        formatter: (val) => val === 0 ? '0' : formatIndianCurrencyShort(val)
       }
     },
     grid: {
@@ -348,8 +462,13 @@ const Dashboard = () => {
       xaxis: { lines: { show: false } },
       yaxis: { lines: { show: true } }
     },
-    legend: { show: false },
-    tooltip: { theme: 'light' }
+    legend: { show: true, position: 'top', horizontalAlign: 'right' },
+    tooltip: { 
+      theme: 'light',
+      y: {
+        formatter: (val) => formatIndianCurrency(val)
+      }
+    }
   };
 
   const [skeletonTimeout, setSkeletonTimeout] = useState(false);
@@ -359,19 +478,6 @@ const Dashboard = () => {
   }, []);
 
   const showSkeleton = (orch.isLoadingKpis || !orch.isHydrated) && !skeletonTimeout;
-  const { isBrandManager } = useTargetPermissions();
-
-  if (isBrandManager) {
-    return (
-      <Suspense fallback={
-        <div style={{ padding: '32px' }}>
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </div>
-      }>
-        <TargetVsAchievementDashboard />
-      </Suspense>
-    );
-  }
 
   if (showSkeleton) {
     return (
@@ -406,8 +512,10 @@ const Dashboard = () => {
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        marginBottom: '28px'
+        alignItems: 'center',
+        marginBottom: '28px',
+        flexWrap: 'wrap',
+        gap: '16px'
       }}>
         <div>
           <span style={{
@@ -422,51 +530,130 @@ const Dashboard = () => {
           </span>
           <Title level={1} style={{
             margin: '4px 0 0',
-            fontWeight: 700,
+            fontWeight: 800,
             fontSize: '26px',
             color: '#0f172a',
             letterSpacing: '-0.02em'
           }}>
-            Marketplace health, execution, and risk
+            Unified Operations Dashboard
           </Title>
         </div>
         
-        <Button 
-          type="primary"
-          onClick={() => orch.forceRefresh?.()}
-          loading={orch.isLoadingKpis}
-          style={{
-            background: '#2563eb',
-            borderColor: '#2563eb',
-            borderRadius: '6px',
-            fontWeight: 600,
-            height: '36px',
-            fontSize: '13px'
-          }}
-        >
-          Run sync
-        </Button>
+        <Space size={12}>
+          {/* Brand/Seller Selector with RBAC restriction */}
+          <Select
+            value={selectedSellerId}
+            onChange={setSelectedSellerId}
+            style={{ width: 220, height: '38px' }}
+            dropdownStyle={{ borderRadius: '8px' }}
+          >
+            {userSellers.length > 1 && <Select.Option value="all">All Brands</Select.Option>}
+            {userSellers.map(s => (
+              <Select.Option key={s.id} value={s.id}>
+                {s.name}
+              </Select.Option>
+            ))}
+          </Select>
+
+          <Button 
+            type="primary"
+            onClick={() => {
+              orch.forceRefresh?.();
+              loadScrapeTasks();
+            }}
+            loading={orch.isLoadingKpis}
+            style={{
+              background: '#2563eb',
+              borderColor: '#2563eb',
+              borderRadius: '6px',
+              fontWeight: 600,
+              height: '38px',
+              fontSize: '13px'
+            }}
+          >
+            Run sync
+          </Button>
+        </Space>
       </div>
 
-      {/* ── KPI Row ── */}
+      {/* ── Targets KPI Row ── */}
+      <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
+        Revenue Targets & Achievements
+      </span>
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+        {/* Total Revenue Target */}
+        <Col xs={24} sm={12} md={6}>
+          <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Total Target Pool</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#2563eb' }}>
+                {formatIndianCurrency(targetStats.totalTarget)}
+              </span>
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+              Across {targetStats.brandCount} plans
+            </span>
+          </Card>
+        </Col>
+
+        {/* Total Sales Achieved */}
+        <Col xs={24} sm={12} md={6}>
+          <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Sales Achieved</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
+                {formatIndianCurrency(targetStats.totalAchieved)}
+              </span>
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+              Paced cumulative sales
+            </span>
+          </Card>
+        </Col>
+
+        {/* Target Achievement Rate */}
+        <Col xs={24} sm={12} md={12}>
+          <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Overall Pacing Achievement Rate</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 8px' }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, color: targetStats.achievementRate >= 80 ? '#10b981' : targetStats.achievementRate >= 50 ? '#f59e0b' : '#ef4444' }}>
+                {targetStats.achievementRate.toFixed(1)}%
+              </span>
+            </div>
+            <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${Math.min(targetStats.achievementRate, 100)}%`, 
+                height: '100%', 
+                background: targetStats.achievementRate >= 80 ? '#10b981' : targetStats.achievementRate >= 50 ? '#f59e0b' : '#ef4444',
+                borderRadius: '4px'
+              }} />
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ── Marketplace & Ads KPI Row ── */}
+      <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
+        Marketplace & Advertising (Ads) KPIs
+      </span>
       <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
         {/* Card 1: Revenue */}
         <Col xs={24} sm={12} md={6}>
           <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Revenue</span>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Ad Sales (Revenue)</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
-              <span style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a' }}>
-                {getKpiValue(0, '₹1.2Cr')}
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                {getKpiValue(0, '₹0')}
               </span>
               <span style={{ 
                 fontSize: '12px', 
                 fontWeight: 600, 
                 color: isPositiveTrend(0, true) ? '#10b981' : '#ef4444' 
               }}>
-                {getKpiTrend(0, '+12.4% vs prior')}
+                {getKpiTrend(0, '+0%')}
               </span>
             </div>
-            <Sparkline data={[30, 40, 35, 50, 49, 60, 70, 91, 125]} color="#3b82f6" />
+            <Sparkline data={[30, 40, 35, 50, 49, 60, 70, 91, 125]} color="#2563eb" />
           </Card>
         </Col>
 
@@ -475,18 +662,18 @@ const Dashboard = () => {
           <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Orders</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
-              <span style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a' }}>
-                {getKpiValue(1, '8,420')}
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                {getKpiValue(1, '0')}
               </span>
               <span style={{ 
                 fontSize: '12px', 
                 fontWeight: 600, 
                 color: isPositiveTrend(1, true) ? '#10b981' : '#ef4444' 
               }}>
-                {getKpiTrend(1, '+8.1% vs prior')}
+                {getKpiTrend(1, '+0%')}
               </span>
             </div>
-            <Sparkline data={[50, 45, 60, 55, 70, 65, 80, 85, 95]} color="#3b82f6" />
+            <Sparkline data={[50, 45, 60, 55, 70, 65, 80, 85, 95]} color="#2563eb" />
           </Card>
         </Col>
 
@@ -495,18 +682,18 @@ const Dashboard = () => {
           <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>ACoS</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
-              <span style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a' }}>
-                {getKpiValue(2, '18.2%')}
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                {getKpiValue(2, '0%')}
               </span>
               <span style={{ 
                 fontSize: '12px', 
                 fontWeight: 600, 
                 color: isPositiveTrend(2, false) ? '#10b981' : '#ef4444' 
               }}>
-                {getKpiTrend(2, '-2.7% vs prior')}
+                {getKpiTrend(2, '-0%')}
               </span>
             </div>
-            <Sparkline data={[70, 65, 60, 50, 55, 45, 40, 35, 30]} color="#3b82f6" />
+            <Sparkline data={[70, 65, 60, 50, 55, 45, 40, 35, 30]} color="#10b981" />
           </Card>
         </Col>
 
@@ -515,18 +702,18 @@ const Dashboard = () => {
           <Card styles={{ body: { padding: '20px 24px' } }} style={cardStyle}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Units Sold</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0 12px' }}>
-              <span style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a' }}>
-                {getKpiValue(3, '12.5k')}
+              <span style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                {getKpiValue(3, '0')}
               </span>
               <span style={{ 
                 fontSize: '12px', 
                 fontWeight: 600, 
                 color: isPositiveTrend(3, true) ? '#10b981' : '#ef4444' 
               }}>
-                {getKpiTrend(3, '+15.8% vs prior')}
+                {getKpiTrend(3, '+0%')}
               </span>
             </div>
-            <Sparkline data={[20, 30, 25, 40, 35, 50, 45, 60, 75]} color="#3b82f6" />
+            <Sparkline data={[20, 30, 25, 40, 35, 50, 45, 60, 75]} color="#2563eb" />
           </Card>
         </Col>
       </Row>
@@ -562,7 +749,7 @@ const Dashboard = () => {
             style={cardStyle}
             styles={{ body: { padding: '8px 24px' } }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '280px', overflowY: 'auto', paddingRight: '8px' }}>
               {displayAsins.map((asin, index) => (
                 <div 
                   key={index}
@@ -583,8 +770,8 @@ const Dashboard = () => {
                     </span>
                   </div>
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>
-                      LQS {asin.lqs}
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>
+                      Orders: {asin.units?.toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>
@@ -640,109 +827,100 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Quick Actions Column */}
+        {/* Real Octoparse Sync & Pipeline Status Column */}
         <Col xs={24} lg={12}>
           <Card 
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Quick Actions</span>
-                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>Templates for recurring execution</span>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Data Pipeline Sync Tasks</span>
+                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>Real-time Octoparse extractions</span>
               </div>
             }
             style={cardStyle}
             styles={{ body: { padding: '20px 24px' } }}
           >
-            {/* Grid of buttons */}
-            <Row gutter={[12, 12]} style={{ marginBottom: '20px' }}>
-              {[
-                { label: 'Create Task', icon: Target },
-                { label: 'Upload Report', icon: FileBarChart },
-                { label: 'Generate Image', icon: Zap },
-                { label: 'Preview 4-week Plan', icon: TrendingUp }
-              ].map((btn, idx) => (
-                <Col span={12} key={idx}>
-                  <Button 
-                    block
-                    style={{
-                      height: '42px',
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '320px', overflowY: 'auto' }}>
+              {scrapeLoading && scrapeTasks.length === 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
+                  <Skeleton active paragraph={{ rows: 3 }} />
+                </div>
+              ) : scrapeTasks.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                  No active extraction pipeline tasks setup.
+                </div>
+              ) : (
+                scrapeTasks.slice(0, 5).map((task) => {
+                  let tagColor = 'default';
+                  if (task.status === 'RUNNING') tagColor = 'processing';
+                  else if (task.status === 'COMPLETED') tagColor = 'success';
+                  else if (task.status === 'FAILED') tagColor = 'error';
+
+                  return (
+                    <div key={task.sellerId} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
                       borderRadius: '8px',
                       border: '1px solid #e2e8f0',
-                      fontWeight: 600,
-                      color: '#334155',
-                      fontSize: '13px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    <btn.icon size={15} style={{ color: '#64748b' }} />
-                    {btn.label}
-                  </Button>
-                </Col>
-              ))}
-            </Row>
+                      background: '#ffffff'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13.5px', fontWeight: 650, color: '#1e293b' }}>
+                          {task.sellerName || 'Amazon Sync'}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          {task.asinCount || 0} ASINs · {task.progress || 0}% complete
+                        </span>
+                      </div>
+                      <Tag 
+                        color={tagColor}
+                        style={{
+                          fontWeight: 600,
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          padding: '2px 10px',
+                          margin: 0
+                        }}
+                      >
+                        {task.status || 'IDLE'}
+                      </Tag>
+                    </div>
+                  );
+                })
+              )}
+            </div>
 
-            {/* Running Tasks list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Task 1 */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#ffffff'
-              }}>
-                <span style={{ fontSize: '13.5px', fontWeight: 500, color: '#334155' }}>
-                  Refresh parent ASIN report
-                </span>
-                <Tag 
-                  color="processing"
-                  style={{
-                    background: '#eff6ff',
-                    color: '#2563eb',
-                    border: 'none',
-                    fontWeight: 600,
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    padding: '2px 10px',
-                    margin: 0
-                  }}
-                >
-                  In progress
-                </Tag>
-              </div>
+            <Divider style={{ margin: '16px 0' }} />
 
-              {/* Task 2 */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#ffffff'
-              }}>
-                <span style={{ fontSize: '13.5px', fontWeight: 500, color: '#334155' }}>
-                  Generate AI lifestyle image set
-                </span>
-                <Tag 
-                  style={{
-                    background: '#f1f5f9',
-                    color: '#64748b',
-                    border: 'none',
-                    fontWeight: 600,
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    padding: '2px 10px',
-                    margin: 0
-                  }}
-                >
-                  Queued
-                </Tag>
-              </div>
+            {/* Quick action triggers */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button 
+                block 
+                size="middle" 
+                onClick={() => api.marketSyncApi.ingestAllResults().then(() => alert('Pipeline ingestion started'))}
+                style={{
+                  height: '38px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px'
+                }}
+              >
+                Trigger Pipeline Ingestion
+              </Button>
+              <Button 
+                block 
+                type="dashed"
+                onClick={() => loadScrapeTasks()}
+                style={{
+                  height: '38px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px'
+                }}
+              >
+                Refresh Tasks
+              </Button>
             </div>
           </Card>
         </Col>

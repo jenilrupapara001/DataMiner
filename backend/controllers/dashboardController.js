@@ -208,7 +208,7 @@ exports.getDashboardData = async (req, res) => {
       .input('startDate', sql.Date, startDate)
       .input('endDate', sql.Date, endDate)
       .query(`
-      SELECT TOP 10 
+      SELECT TOP 200 
         A.Id, A.AsinCode, A.Sku, A.Title, A.Category, A.CurrentPrice,
         S.Name as SellerName,
         SUM(ISNULL(AP.AdSales, 0)) as TotalAdSales,
@@ -217,10 +217,10 @@ exports.getDashboardData = async (req, res) => {
         SUM(ISNULL(AP.Orders, 0)) as TotalOrders
       FROM Asins A
       JOIN Sellers S ON A.SellerId = S.Id
-      LEFT JOIN AdsPerformance AP ON A.AsinCode = AP.Asin AND AP.Date BETWEEN @startDate AND @endDate
+      LEFT JOIN AdsPerformance AP ON A.AsinCode = AP.Asin
       ${asinFilter}
       GROUP BY A.Id, A.AsinCode, A.Sku, A.Title, A.Category, A.CurrentPrice, S.Name
-      ORDER BY TotalAdSales DESC
+      ORDER BY TotalOrders DESC
     `);
 
     const tableData = topAsinsResult.recordset.map(asin => {

@@ -51,6 +51,27 @@ const COLOR = {
     border: '#e2e8f0',
 };
 
+const formatIndianCurrency = (val) => {
+    if (val === undefined || val === null || isNaN(val)) return '₹0';
+    return `₹${Math.round(val).toLocaleString('en-IN')}`;
+};
+
+const formatIndianCurrencyShort = (val) => {
+    if (val === undefined || val === null || isNaN(val)) return '₹0';
+    const num = Math.round(val);
+    const absNum = Math.abs(num);
+    if (absNum >= 10000000) { // Crore
+        return `₹${(num / 10000000).toFixed(2).replace(/\.?0+$/, '')}Cr`;
+    }
+    if (absNum >= 100000) { // Lakh
+        return `₹${(num / 100000).toFixed(2).replace(/\.?0+$/, '')}L`;
+    }
+    if (absNum >= 1000) {
+        return `₹${(num / 1000).toFixed(1).replace(/\.?0+$/, '')}k`;
+    }
+    return `₹${num}`;
+};
+
 // ─── Custom Eased Counter Animation ─────────────────────────────
 const AnimatedCounter = memo(({ end, duration = 1.0, isCurrency = false, suffix = "", prefix = "" }) => {
     const [count, setCount] = useState(0);
@@ -88,7 +109,7 @@ const AnimatedCounter = memo(({ end, duration = 1.0, isCurrency = false, suffix 
     const formatted = useMemo(() => {
         const val = Math.round(count);
         if (isCurrency) {
-            return `₹${val.toLocaleString('en-IN')}`;
+            return formatIndianCurrency(val);
         }
         return val.toLocaleString('en-IN');
     }, [count, isCurrency]);
@@ -827,10 +848,10 @@ const TargetVsAchievementDashboard = () => {
                                             fontSize={11}
                                             tickLine={false}
                                             axisLine={false}
-                                            tickFormatter={(val) => `₹${(val / 1000).toFixed(0)}k`}
+                                            tickFormatter={(val) => formatIndianCurrencyShort(val)}
                                         />
                                         <RechartsTooltip
-                                            formatter={(val) => [`₹${Math.round(val).toLocaleString('en-IN')}`, '']}
+                                            formatter={(val) => [formatIndianCurrency(val), '']}
                                             contentStyle={{ borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}
                                         />
                                         <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
@@ -934,7 +955,7 @@ const TargetVsAchievementDashboard = () => {
                                             yaxis: {
                                                 labels: {
                                                     style: { fontSize: '11px', fontWeight: 600, colors: '#64748b' },
-                                                    formatter: (val) => val >= 100000 ? '₹' + (val / 100000).toFixed(1) + 'L' : val >= 1000 ? '₹' + (val / 1000).toFixed(1) + 'k' : '₹' + val
+                                                    formatter: (val) => formatIndianCurrencyShort(val)
                                                 }
                                             },
                                             colors: ['#4f46e5', '#10b981'],
@@ -944,7 +965,7 @@ const TargetVsAchievementDashboard = () => {
                                             },
                                             legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px', fontWeight: 600, markers: { radius: 12 } },
                                             tooltip: {
-                                                y: { formatter: (val) => '₹' + val.toLocaleString('en-IN') }
+                                                y: { formatter: (val) => formatIndianCurrency(val) }
                                             }
                                         }}
                                     />
@@ -986,7 +1007,7 @@ const TargetVsAchievementDashboard = () => {
                                             xaxis: {
                                                 labels: {
                                                     style: { fontSize: '10px', fontWeight: 600, colors: '#64748b' },
-                                                    formatter: (val) => val >= 100000 ? '₹' + (val / 100000).toFixed(1) + 'L' : val >= 1000 ? '₹' + (val / 1000).toFixed(1) + 'k' : '₹' + val
+                                                    formatter: (val) => formatIndianCurrencyShort(val)
                                                 }
                                             },
                                             yaxis: {
@@ -1000,7 +1021,7 @@ const TargetVsAchievementDashboard = () => {
                                             },
                                             legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px', fontWeight: 600, markers: { radius: 12 } },
                                             tooltip: {
-                                                y: { formatter: (val) => '₹' + val.toLocaleString('en-IN') }
+                                                y: { formatter: (val) => formatIndianCurrency(val) }
                                             }
                                         }}
                                     />
