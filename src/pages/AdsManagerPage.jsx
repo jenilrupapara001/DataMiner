@@ -86,6 +86,22 @@ const formatCompact = (val) => {
   return val.toFixed(2);
 };
 
+const getColumnWidth = (column) => {
+  if (typeof column.width === 'number') return column.width;
+  if (typeof column.width === 'string') {
+    const parsed = Number.parseInt(column.width, 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 150;
+};
+
+const calculateColumnsWidth = (columns) => columns.reduce((total, column) => {
+  if (column.children?.length > 0) {
+    return total + column.children.reduce((childTotal, child) => childTotal + getColumnWidth(child), 0);
+  }
+  return total + getColumnWidth(column);
+}, 0);
+
 const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   if (!prevValue) return <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600 }}>-</span>;
   const diff = value - prevValue;
@@ -153,19 +169,19 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
       ),
       sorter: (a, b) => new Date(a.date) - new Date(b.date),
     },
-    { title: 'Impressions', dataIndex: 'impressions', key: 'impressions', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.impressions || 0) - Number(b.impressions || 0) },
-    { title: 'Clicks', dataIndex: 'clicks', key: 'clicks', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.clicks || 0) - Number(b.clicks || 0) },
-    { title: 'Spend', dataIndex: 'spend', key: 'spend', align: 'right', render: (val) => <span style={{ color: '#b91c1c', fontWeight: 600 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.spend || 0) - Number(b.spend || 0) },
-    { title: 'Ad Sales', dataIndex: 'sales', key: 'sales', align: 'right', render: (val) => <span style={{ color: '#15803d', fontWeight: 700 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.sales || 0) - Number(b.sales || 0) },
-    { title: 'ACOS', dataIndex: 'acos', key: 'acos', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0) },
-    { title: 'TACOS', dataIndex: 'tacos', key: 'tacos', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.tacos || 0) - Number(b.tacos || 0) },
-    { title: 'ROAS', dataIndex: 'roas', key: 'roas', align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0) },
-    { title: 'Orders', dataIndex: 'orders', key: 'orders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0) },
-    { title: 'Organic Orders', dataIndex: 'organicOrders', key: 'organicOrders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.organicOrders || 0) - Number(b.organicOrders || 0) },
-    { title: 'Total Orders', dataIndex: 'totalOrders', key: 'totalOrders', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.totalOrders || 0) - Number(b.totalOrders || 0) },
-    { title: 'CVR', dataIndex: 'cvr', key: 'cvr', align: 'center', render: (val) => <span style={{ fontWeight: 600, color: '#475569' }}>{Number(val || 0).toFixed(2)}%</span>, sorter: (a, b) => Number(a.cvr || 0) - Number(b.cvr || 0) },
-    { title: 'Page Views', dataIndex: 'pageViews', key: 'pageViews', align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.pageViews || 0) - Number(b.pageViews || 0) },
-    { title: 'Organic Sales', dataIndex: 'organicSales', key: 'organicSales', align: 'right', render: (val) => `₹${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.organicSales || 0) - Number(b.organicSales || 0) }
+    { title: 'Impressions', dataIndex: 'impressions', key: 'impressions', width: 100, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.impressions || 0) - Number(b.impressions || 0) },
+    { title: 'Clicks', dataIndex: 'clicks', key: 'clicks', width: 90, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.clicks || 0) - Number(b.clicks || 0) },
+    { title: 'Spend', dataIndex: 'spend', key: 'spend', width: 120, align: 'right', render: (val) => <span style={{ color: '#b91c1c', fontWeight: 600 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.spend || 0) - Number(b.spend || 0) },
+    { title: 'Ad Sales', dataIndex: 'sales', key: 'sales', width: 120, align: 'right', render: (val) => <span style={{ color: '#15803d', fontWeight: 700 }}>₹{Number(val || 0).toFixed(2)}</span>, sorter: (a, b) => Number(a.sales || 0) - Number(b.sales || 0) },
+    { title: 'ACOS', dataIndex: 'acos', key: 'acos', width: 90, align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.acos || 0) - Number(b.acos || 0) },
+    { title: 'TACOS', dataIndex: 'tacos', key: 'tacos', width: 90, align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}%`, sorter: (a, b) => Number(a.tacos || 0) - Number(b.tacos || 0) },
+    { title: 'ROAS', dataIndex: 'roas', key: 'roas', width: 80, align: 'right', render: (val) => `${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.roas || 0) - Number(b.roas || 0) },
+    { title: 'Orders', dataIndex: 'orders', key: 'orders', width: 90, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.orders || 0) - Number(b.orders || 0) },
+    { title: 'Organic Orders', dataIndex: 'organicOrders', key: 'organicOrders', width: 110, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.organicOrders || 0) - Number(b.organicOrders || 0) },
+    { title: 'Total Orders', dataIndex: 'totalOrders', key: 'totalOrders', width: 110, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.totalOrders || 0) - Number(b.totalOrders || 0) },
+    { title: 'CVR', dataIndex: 'cvr', key: 'cvr', width: 80, align: 'center', render: (val) => <span style={{ fontWeight: 600, color: '#475569' }}>{Number(val || 0).toFixed(2)}%</span>, sorter: (a, b) => Number(a.cvr || 0) - Number(b.cvr || 0) },
+    { title: 'Page Views', dataIndex: 'pageViews', key: 'pageViews', width: 100, align: 'right', render: (val) => Number(val || 0).toLocaleString(), sorter: (a, b) => Number(a.pageViews || 0) - Number(b.pageViews || 0) },
+    { title: 'Organic Sales', dataIndex: 'organicSales', key: 'organicSales', width: 120, align: 'right', render: (val) => `₹${Number(val || 0).toFixed(2)}`, sorter: (a, b) => Number(a.organicSales || 0) - Number(b.organicSales || 0) }
   ];
 
   return (
@@ -240,7 +256,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
               dataSource={fullHistory.map((d, idx) => ({ ...d, key: idx }))}
               columns={columns}
               pagination={{ pageSize: 10, showSizeChanger: false, size: 'small', style: { padding: '8px 16px', margin: 0 } }}
-              size="small" scroll={{ x: 'max-content' }}
+              size="small" scroll={{ x: calculateColumnsWidth(columns), y: 'calc(85vh - 330px)' }}
               className="pro-modal-table"
             />
           )}
@@ -489,13 +505,16 @@ export default function AdsManagerPage() {
           : <span style={{ fontWeight: 600, color: '#475569', fontSize: 10 }}>{sku}</span>
       },
       {
-        title: 'PRODUCT DETAILS', key: 'productDetails', fixed: 'left', width: 200,
+        title: 'PRODUCT DETAILS', key: 'productDetails', fixed: 'left', width: 320,
+        ellipsis: true,
         render: (_, record) => (
-          <div style={{ maxWidth: 200 }}>
-            <Text strong style={{ fontSize: 11, color: '#0f172a' }} ellipsis={{ tooltip: record.title || 'Loading...' }}>
+          <div style={{ width: '100%', maxWidth: 308, overflow: 'hidden' }}>
+            <Text strong style={{ fontSize: 11, color: '#0f172a', display: 'block' }} ellipsis={{ tooltip: record.title || 'Loading...' }}>
               {record.title || 'Loading title...'}
             </Text>
-            <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 2 }}>{record.brand} · {record.category}</div>
+            <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 2, display: 'block' }} ellipsis={{ tooltip: `${record.brand} · ${record.category}` }}>
+              {record.brand} · {record.category}
+            </Text>
           </div>
         )
       }
@@ -508,18 +527,37 @@ export default function AdsManagerPage() {
       const date = new Date(year, parseInt(month) - 1);
       const monthName = date.toLocaleString('default', { month: 'short' }).toUpperCase();
       const groupKey = `targets_group_${monthKey}`;
+      const valuesWidth = 100;
+      const achievedWidth = 110;
+      const achievedColumn = expandedCols[groupKey] ? {
+        title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
+        key: `target_achieved_${monthKey}`, width: achievedWidth, align: 'left',
+        render: (_, record) => {
+          const stats = record.monthlyStats?.[monthKey];
+          if (!stats) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>-</span>;
+          const { adsTarget, acosTarget, spend = 0, acos = 0 } = stats;
+          if (adsTarget === null && acosTarget === null) return <span style={{ color: '#cbd5e1', fontSize: 9 }}>-</span>;
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {adsTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: spend > adsTarget ? '#b91c1c' : '#15803d' }}>₹{spend >= 1000 ? (spend / 1000).toFixed(1) + 'k' : spend.toFixed(0)}</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)</span></div>}
+              {acosTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: acos > acosTarget ? '#b91c1c' : '#15803d' }}>{acos.toFixed(1)}%</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>ACOS</span></div>}
+            </div>
+          );
+        }
+      } : null;
 
       return {
         title: (
-          <div onClick={() => toggleCol(groupKey)} style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 90 }}>
+          <div onClick={() => toggleCol(groupKey)} style={{ cursor: 'pointer', background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: valuesWidth }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Targets: {monthName} {year}</span>
             <ChevronRight size={11} style={{ color: '#94a3b8', transform: expandedCols[groupKey] ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
           </div>
         ),
+        width: valuesWidth + (achievedColumn ? achievedWidth : 0),
         children: [
           {
             title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>MONTHLY</span>,
-            key: `target_values_${monthKey}`, width: 100, align: 'left',
+            key: `target_values_${monthKey}`, width: valuesWidth, align: 'left',
             render: (_, record) => {
               const stats = record.monthlyStats?.[monthKey];
               if (!stats) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>-</span>;
@@ -534,34 +572,22 @@ export default function AdsManagerPage() {
               );
             }
           },
-          ...(expandedCols[groupKey] ? [{
-            title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
-            key: `target_achieved_${monthKey}`, width: 110, align: 'left',
-            render: (_, record) => {
-              const stats = record.monthlyStats?.[monthKey];
-              if (!stats) return <span style={{ color: '#cbd5e1', fontSize: 9, fontWeight: 600 }}>-</span>;
-              const { adsTarget, acosTarget, spend = 0, acos = 0 } = stats;
-              if (adsTarget === null && acosTarget === null) return <span style={{ color: '#cbd5e1', fontSize: 9 }}>-</span>;
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {adsTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: spend > adsTarget ? '#b91c1c' : '#15803d' }}>₹{spend >= 1000 ? (spend / 1000).toFixed(1) + 'k' : spend.toFixed(0)}</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>({adsTarget > 0 ? ((spend / adsTarget) * 100).toFixed(0) : 0}%)</span></div>}
-                  {acosTarget !== null && <div style={{ fontSize: 9, fontWeight: 600 }}><span style={{ color: acos > acosTarget ? '#b91c1c' : '#15803d' }}>{acos.toFixed(1)}%</span> <span style={{ fontSize: 8, color: '#94a3b8' }}>ACOS</span></div>}
-                </div>
-              );
-            }
-          }] : [])
+          ...(achievedColumn ? [achievedColumn] : [])
         ]
       };
     });
 
     const cols = [...fixedLeftCols, ...targetColumns];
 
-    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false, themeColor = '#475569') => {
+    const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false) => {
       const isExpanded = expandedCols[key];
+      const avgWidth = 80;
+      const trendWidth = 65;
+      const dateWidth = 70;
       const children = [
         {
           title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>AVG</span>,
-          key, dataIndex: key, width: 80, align: 'right', sorter: true,
+          key, dataIndex: key, width: avgWidth, align: 'right', sorter: true,
           sortOrder: sortBy === key ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
           render: (val, record) => {
             const numVal = Number(val || 0);
@@ -588,7 +614,7 @@ export default function AdsManagerPage() {
         },
         {
           title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>TREND</span>,
-          key: `${key}_trn`, width: 65, align: 'center',
+          key: `${key}_trn`, width: trendWidth, align: 'center',
           render: (_, record) => {
             const history = record.weekHistory || record.history || [];
             if (history.length === 0) return <span style={{ color: '#cbd5e1' }}>-</span>;
@@ -604,7 +630,7 @@ export default function AdsManagerPage() {
         activeDates.forEach(d => {
           children.push({
             title: <div style={{ textAlign: 'center', fontSize: 9, lineHeight: 1.1 }}><div style={{ color: '#94a3b8' }}>{d.month}</div><div style={{ fontWeight: 700, color: '#475569' }}>{d.day}</div></div>,
-            key: `${key}_${d.raw}`, width: 70, align: 'right',
+            key: `${key}_${d.raw}`, width: dateWidth, align: 'right',
             render: (_, record) => {
               const hist = record.weekHistory?.find(h => normalizeDateStr(h.date) === d.raw);
               const val = hist ? (hist[key] || 0) : 0;
@@ -623,13 +649,14 @@ export default function AdsManagerPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
             background: '#f8fafc', border: '1px solid #e5e7eb',
-            color: '#475569', transition: 'all 0.15s'
+            color: '#475569', transition: 'all 0.15s', minWidth: avgWidth + trendWidth
           }}>
             {icon}
             <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em' }}>{title}</span>
             {isExpanded ? <ChevronLeft size={9} /> : <ChevronRight size={9} />}
           </div>
         ),
+        width: avgWidth + trendWidth + (activeDates.length * dateWidth),
         children
       };
     };
@@ -661,19 +688,9 @@ export default function AdsManagerPage() {
     return cols;
   };
 
-  const calculatedTableWidth = useMemo(() => {
-    const cols = getAntColumns();
-    let total = 0;
-    const traverse = (c) => {
-      if (c.children && c.children.length > 0) {
-        c.children.forEach(traverse);
-      } else {
-        total += typeof c.width === 'number' ? c.width : 150;
-      }
-    };
-    cols.forEach(traverse);
-    return total;
-  }, [expandedCols, activeDates, data, selectedSeller, groupBy]);
+  const tableColumns = useMemo(() => getAntColumns(), [activeDates, data, expandedCols, selectedSeller]);
+
+  const calculatedTableWidth = useMemo(() => calculateColumnsWidth(tableColumns), [tableColumns]);
 
   // ═══════════════════════════════════════════════════════════════
   // RENDER
@@ -843,7 +860,7 @@ export default function AdsManagerPage() {
       <div className="ads-table-wrapper">
         <div className="ads-table-scroll-area">
           <Table
-            columns={getAntColumns()}
+            columns={tableColumns}
             dataSource={paginatedData}
             rowKey={(record) => record.id || record.asin}
             loading={loading}
@@ -983,14 +1000,6 @@ export default function AdsManagerPage() {
     position: relative;
 }
 
-.ads-table-scroll-area .ant-table-body {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-}
-.ads-table-scroll-area .ant-table-content {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-}
 .ads-table-scroll-area .ant-table-body::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -1050,20 +1059,22 @@ export default function AdsManagerPage() {
 .ant-table-cell-fix-left,
 .ant-table-cell-fix-right {
     background: #ffffff !important;
-    z-index: 2 !important;
+    z-index: 10 !important;
 }
 .table-row-alt .ant-table-cell-fix-left,
 .table-row-alt .ant-table-cell-fix-right {
     background: #fafbfc !important;
+    z-index: 10 !important;
 }
 .ant-table-thead .ant-table-cell-fix-left,
 .ant-table-thead .ant-table-cell-fix-right {
     background: #f8fafc !important;
-    z-index: 6 !important;
+    z-index: 12 !important;
 }
 .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
 .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
     background: #f8fafc !important;
+    z-index: 10 !important;
 }
 @media (max-width: 768px) {
     .ads-pro-page {
