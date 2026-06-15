@@ -10,7 +10,7 @@ if (!fs.existsSync(EXPORTS_DIR)) {
 }
 
 const updateDownloadStatus = async (pool, id, status, progress, filePath = null) => {
-    let q = `UPDATE Downloads SET Status = @status, Progress = @progress, UpdatedAt = dbo.GetEnvDate()`;
+    let q = `UPDATE Downloads SET Status = @status, Progress = @progress`;
     if (filePath) { q += `, FilePath = @filePath`; }
     q += ` WHERE Id = @id`;
 
@@ -35,8 +35,8 @@ exports.startAdsExport = async (req, res) => {
 
         // 1. Create Download Record
         const insertQuery = `
-            INSERT INTO Downloads (Id, UserId, Status, Progress, Type, Format, Filters, FileName, CreatedAt, UpdatedAt)
-            VALUES (@id, @userId, 'pending', 0, 'ads', @format, @filters, @fileName, dbo.GetEnvDate(), dbo.GetEnvDate())
+            INSERT INTO Downloads (Id, UserId, FileName, FilePath, Format, Status, Params, CreatedAt)
+            VALUES (@id, @userId, @fileName, '', @format, 'pending', @params, dbo.GetEnvDate())
         `;
         const fileName = `ads_export_${Date.now()}.${format}`;
 
@@ -44,7 +44,7 @@ exports.startAdsExport = async (req, res) => {
             .input('id', sql.VarChar, downloadId)
             .input('userId', sql.VarChar, userId)
             .input('format', sql.VarChar, format)
-            .input('filters', sql.NVarChar, JSON.stringify({ sellerId, startDate, endDate, search, groupBy }))
+            .input('params', sql.NVarChar, JSON.stringify({ sellerId, startDate, endDate, search, groupBy }))
             .input('fileName', sql.VarChar, fileName)
             .query(insertQuery);
 
@@ -94,19 +94,21 @@ async function processAdsExportJob(downloadId, params) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 20);
 
+    const isParentGroup = groupBy === 'parent';
     const query = `
         SELECT 
-            p.*,
-            a.ParentAsin,
-            a.Title,
-            a.ImageUrl,
-            a.Sku as MasterSku,
-            a.Category,
-            a.Brand
+            ${isParentGroup ? 'COALESCE(a.ParentAsin, p.Asin)' : 'p.Asin'} as [ASIN],
+            COALESCE(MAX(a.Sku), MAX(p.AdvertisedSku), 'N/A') as [SKU],
+            COALESCE(MAX(a.Title), 'Unknown Title') as [Title],
+            SUM(ISNULL(p.AdSpend, 0)) as Spend,
+            SUM(ISNULL(p.AdSales, 0)) as Sales,
+            SUM(ISNULL(p.Orders, 0)) as Orders,
+            SUM(ISNULL(p.Impressions, 0)) as Impressions,
+            SUM(ISNULL(p.Clicks, 0)) as Clicks
         FROM AdsPerformance p
         LEFT JOIN Asins a ON p.Asin = a.AsinCode
         ${whereClause}
-        ORDER BY p.Date DESC
+        GROUP BY ${isParentGroup ? 'COALESCE(a.ParentAsin, p.Asin)' : 'p.Asin'}
     `;
 
     const result = await request.query(query);
@@ -114,37 +116,30 @@ async function processAdsExportJob(downloadId, params) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 40);
 
-    // Grouping Logic
-    const groupMap = {};
-    rawData.forEach(row => {
-        let key = groupBy === 'parent' ? (row.ParentAsin || row.Asin) : row.Asin;
-        if (!groupMap[key]) {
-            groupMap[key] = {
-                ASIN: key,
-                SKU: row.MasterSku || row.AdvertisedSku || 'N/A',
-                Title: row.Title || 'Unknown Title',
-                Spend: 0,
-                Sales: 0,
-                Orders: 0,
-                Impressions: 0,
-                Clicks: 0
-            };
-        }
-        const target = groupMap[key];
-        target.Spend += Number(row.AdSpend || 0);
-        target.Sales += Number(row.AdSales || 0);
-        target.Orders += Number(row.Orders || 0);
-        target.Impressions += Number(row.Impressions || 0);
-        target.Clicks += Number(row.Clicks || 0);
-    });
+    const exportData = rawData.map(row => {
+        const Spend = Number(row.Spend || 0);
+        const Sales = Number(row.Sales || 0);
+        const Orders = Number(row.Orders || 0);
+        const Impressions = Number(row.Impressions || 0);
+        const Clicks = Number(row.Clicks || 0);
 
-    const exportData = Object.values(groupMap).map(row => {
-        row.ACOS = row.Sales > 0 ? ((row.Spend / row.Sales) * 100).toFixed(2) + '%' : '0%';
-        row.ROAS = row.Spend > 0 ? (row.Sales / row.Spend).toFixed(2) : '0.00';
-        row.CVR = row.Clicks > 0 ? ((row.Orders / row.Clicks) * 100).toFixed(2) + '%' : '0%';
-        row.Spend = '₹' + row.Spend.toFixed(2);
-        row.Sales = '₹' + row.Sales.toFixed(2);
-        return row;
+        const ACOS = Sales > 0 ? ((Spend / Sales) * 100).toFixed(2) + '%' : '0%';
+        const ROAS = Spend > 0 ? (Sales / Spend).toFixed(2) : '0.00';
+        const CVR = Clicks > 0 ? ((Orders / Clicks) * 100).toFixed(2) + '%' : '0%';
+
+        return {
+            ASIN: row.ASIN,
+            SKU: row.SKU,
+            Title: row.Title,
+            Spend: '₹' + Spend.toFixed(2),
+            Sales: '₹' + Sales.toFixed(2),
+            Orders,
+            Impressions,
+            Clicks,
+            ACOS,
+            ROAS,
+            CVR
+        };
     });
 
     await updateDownloadStatus(pool, downloadId, 'processing', 70);
