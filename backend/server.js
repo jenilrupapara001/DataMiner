@@ -584,10 +584,6 @@ server.listen(PORT, () => {
     const schedulerService = require('./services/schedulerService');
     schedulerService.init();
 
-    try {
-      const { syncAllToCometChat } = require('./services/cometChatService');
-      syncAllToCometChat();
-    } catch (err) { }
     
     console.log('👑 Primary Node Worker [0] initialized schedulers and background tasks.');
   } else {

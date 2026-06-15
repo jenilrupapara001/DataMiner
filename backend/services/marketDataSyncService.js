@@ -1206,13 +1206,16 @@ class MarketDataSyncService {
             let ingestedCount = 0;
 
             try {
-                const rawData = await this.retrieveResults(taskId);
-                if (rawData && rawData.length > 0) {
-                    console.log(`📦 [AUTO] ${cycleLabel} — ${rawData.length} rows fetched. Ingesting...`);
-                    const batchResult = await this.processBatchResults(sellerId, rawData);
-                    ingestedCount = batchResult?.updatedCount || 0;
+                // Fetch and process batch-by-batch
+                await this.retrieveResults(taskId, null, async (chunkData) => {
+                    console.log(`📦 [AUTO] ${cycleLabel} — Ingesting ${chunkData.length} records...`);
+                    const batchResult = await this.processBatchResults(sellerId, chunkData);
+                    ingestedCount += batchResult?.updatedCount || 0;
+                });
+
+                if (ingestedCount > 0) {
                     totalProcessed += ingestedCount;
-                    console.log(`✅ [AUTO] ${cycleLabel} — Ingested ${ingestedCount} records.`);
+                    console.log(`✅ [AUTO] ${cycleLabel} — Ingested total of ${ingestedCount} records.`);
 
                     // Update Seller metadata
                     try {
@@ -1514,7 +1517,7 @@ class MarketDataSyncService {
     /**
      * Polls and retrieves results from a completed sync task with auto-pagination.
      */
-    async retrieveResults(taskId, executionId = null) {
+    async retrieveResults(taskId, executionId = null, onBatch = null) {
         let allResults = [];
         let offset = 0;
         const size = 1000;
@@ -1540,24 +1543,22 @@ class MarketDataSyncService {
                     }
                 }
 
+                if (!dataList || dataList.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
                 // Deduplicate: Only add items we haven't seen before (by URL)
                 let newCount = 0;
                 let dedupePossible = false;
+                const chunkItems = [];
                 for (const item of dataList) {
                     const url = item.Original_URL || item.url || '';
                     if (url) dedupePossible = true;
                     // Do not aggressively deduplicate empty URLs to avoid dropping items
                     if (!url || !seenUrls.has(url)) {
                         if (url) seenUrls.add(url);
-                        
-                        // OOM HARD LIMIT: Prevent node.js heap out of memory by checking BEFORE appending
-                        if (allResults.length >= 80000) {
-                            console.warn(`⚠️ Warning: Hard limit of 80,000 items reached for task ${taskId}. Truncating batch to prevent OOM.`);
-                            maxLoops = 0; // Break outer loop
-                            break;
-                        }
-                        
-                        allResults.push(item);
+                        chunkItems.push(item);
                         newCount++;
                     }
                 }
@@ -1566,6 +1567,21 @@ class MarketDataSyncService {
                 if (dataList.length > 0 && newCount === 0 && dedupePossible) {
                     console.warn(`⚠️ Anti-Loop Triggered: Fetched ${dataList.length} items but 0 were new. Breaking to prevent OOM.`);
                     break;
+                }
+
+                if (chunkItems.length > 0) {
+                    if (onBatch) {
+                        // Process the batch immediately
+                        await onBatch(chunkItems);
+                    } else {
+                        // OOM HARD LIMIT: Prevent node.js heap out of memory by checking BEFORE appending
+                        if (allResults.length + chunkItems.length >= 80000) {
+                            console.warn(`⚠️ Warning: Hard limit of 80,000 items reached for task ${taskId}. Truncating batch to prevent OOM.`);
+                            maxLoops = 0; // Break outer loop
+                            break;
+                        }
+                        allResults.push(...chunkItems);
+                    }
                 }
 
                 // CRITICAL FIX: We no longer stop early if a batch is empty.
@@ -1579,11 +1595,6 @@ class MarketDataSyncService {
                         offset += size;
                     }
                 }
-            }
-
-            // Log sample of what we got
-            if (allResults.length > 0) {
-                // Silent sample log
             }
 
             return allResults;
@@ -1697,11 +1708,15 @@ class MarketDataSyncService {
             // 2.1 PRE-SYNC CLEANUP: Fetch pending data and clear it to prevent duplication
             try {
                 console.log(`🧹 [Pre-Sync] Checking for pending data in task ${taskId}...`);
-                const pendingData = await this.retrieveResults(taskId);
-                if (pendingData && pendingData.length > 0) {
-                    console.log(`📦 Found ${pendingData.length} pending items. Processing before clearing...`);
-                    await this.processBatchResults(sellerId, pendingData);
-                }
+                let preSyncProcessed = 0;
+                await this.retrieveResults(taskId, null, async (chunkData) => {
+                    if (chunkData && chunkData.length > 0) {
+                        console.log(`📦 Found ${chunkData.length} pending items in chunk. Processing...`);
+                        const batchResult = await this.processBatchResults(sellerId, chunkData);
+                        preSyncProcessed += batchResult?.updatedCount || 0;
+                    }
+                });
+                console.log(`✅ [Pre-Sync] Finished processing pending data (${preSyncProcessed} records updated).`);
                 await this.markDataAsExported(taskId);
                 console.log(`🧹 [Pre-Sync] Clearing task data in Octoparse cloud for task ${taskId}...`);
                 await this.clearTaskData(taskId).catch(() => { });

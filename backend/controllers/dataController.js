@@ -717,57 +717,63 @@ exports.getAdsManagerData = async (req, res) => {
         // 4. Fetch Daily History just for the returned rows
         let finalRows = [];
         if (pagedRows.length > 0) {
-            const groupKeys = pagedRows.map(r => `'${r.groupKey.replace(/'/g, "''")}'`).join(',');
-            
-            const historyQuery = `
-                SELECT 
-                    ${ groupField } as groupKey,
-                CONVERT(varchar, p.Date, 23) as date,
-                SUM(ISNULL(p.AdSpend, 0)) as spend,
-                SUM(ISNULL(p.AdSales, 0)) as sales,
-                SUM(ISNULL(p.Clicks, 0)) as clicks,
-                SUM(ISNULL(p.Impressions, 0)) as impressions,
-                SUM(ISNULL(p.Orders, 0)) as orders,
-                SUM(ISNULL(p.OrganicSales, 0)) as organicSales,
-                SUM(ISNULL(p.OrganicOrders, 0)) as organicOrders,
-                SUM(ISNULL(p.PageViews, 0)) as pageViews,
-                SUM(ISNULL(p.Conversions, 0)) as conversions
-                FROM AdsPerformance p
-                LEFT JOIN Asins a ON p.Asin = a.AsinCode
-                ${ whereClause }
-                AND ${ groupField } IN(${ groupKeys })
-                GROUP BY ${ groupField }, CONVERT(varchar, p.Date, 23)
-                ORDER BY date ASC
-                `;
-            
-            const historyResult = await request.query(historyQuery);
-            const historyRows = historyResult.recordset;
-
-            // Fetch Targets for the sellers
-            const uniqueSellers = [...new Set(pagedRows.map(r => r.sellerId).filter(Boolean))].map(String);
-            const historyMonths = [...new Set(historyRows.map(h => h.date.substring(0, 7)))].sort();
-            
+            let historyRows = [];
             let sellerTargets = [];
-            if (uniqueSellers.length > 0 && historyMonths.length > 0) {
-                const monthConditions = historyMonths.map(ym => {
-                   const [y, m] = ym.split('-');
-                   return `(t.Year = ${parseInt(y, 10)} AND (
-                       (t.TargetType = 'MONTHLY' AND t.Month = ${parseInt(m, 10)}) 
-                       OR 
-                       (t.TargetType = 'YEARLY' AND b.PeriodValue = ${parseInt(m, 10)})
-                   ))`;
-                }).join(' OR ');
+            let historyMonths = [];
 
-                const targetsQuery = `
-                    SELECT t.SellerId, t.GoalType, ISNULL(b.PeriodValue, t.Month) as Month, t.Year, ISNULL(b.TargetValue, t.TotalTargetValue) as TotalTargetValue
-                    FROM GmsTargets t
-                    LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH'
-                    WHERE (${monthConditions})
-                      AND t.SellerId IN (${uniqueSellers.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})
-                      AND t.GoalType IN ('ADS', 'ACOS')
-                `;
-                const targetsResult = await request.query(targetsQuery);
-                sellerTargets = targetsResult.recordset;
+            const validGroupKeys = pagedRows.map(r => r.groupKey).filter(Boolean);
+            if (validGroupKeys.length > 0) {
+                const groupKeys = validGroupKeys.map(key => `'${String(key).replace(/'/g, "''")}'`).join(',');
+                
+                const historyQuery = `
+                    SELECT 
+                        ${ groupField } as groupKey,
+                    CONVERT(varchar, p.Date, 23) as date,
+                    SUM(ISNULL(p.AdSpend, 0)) as spend,
+                    SUM(ISNULL(p.AdSales, 0)) as sales,
+                    SUM(ISNULL(p.Clicks, 0)) as clicks,
+                    SUM(ISNULL(p.Impressions, 0)) as impressions,
+                    SUM(ISNULL(p.Orders, 0)) as orders,
+                    SUM(ISNULL(p.OrganicSales, 0)) as organicSales,
+                    SUM(ISNULL(p.OrganicOrders, 0)) as organicOrders,
+                    SUM(ISNULL(p.PageViews, 0)) as pageViews,
+                    SUM(ISNULL(p.Conversions, 0)) as conversions
+                    FROM AdsPerformance p
+                    LEFT JOIN Asins a ON p.Asin = a.AsinCode
+                    ${ whereClause }
+                    AND ${ groupField } IN(${ groupKeys })
+                    GROUP BY ${ groupField }, CONVERT(varchar, p.Date, 23)
+                    ORDER BY date ASC
+                    `;
+                
+                const historyResult = await request.query(historyQuery);
+                historyRows = historyResult.recordset;
+
+                // Fetch Targets for the sellers
+                const uniqueSellers = [...new Set(pagedRows.map(r => r.sellerId).filter(Boolean))].map(String);
+                historyMonths = [...new Set(historyRows.map(h => h.date.substring(0, 7)))].sort();
+                
+                if (uniqueSellers.length > 0 && historyMonths.length > 0) {
+                    const monthConditions = historyMonths.map(ym => {
+                       const [y, m] = ym.split('-');
+                       return `(t.Year = ${parseInt(y, 10)} AND (
+                           (t.TargetType = 'MONTHLY' AND t.Month = ${parseInt(m, 10)}) 
+                           OR 
+                           (t.TargetType = 'YEARLY' AND b.PeriodValue = ${parseInt(m, 10)})
+                       ))`;
+                    }).join(' OR ');
+
+                    const targetsQuery = `
+                        SELECT t.SellerId, t.GoalType, ISNULL(b.PeriodValue, t.Month) as Month, t.Year, ISNULL(b.TargetValue, t.TotalTargetValue) as TotalTargetValue
+                        FROM GmsTargets t
+                        LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH'
+                        WHERE (${monthConditions})
+                          AND t.SellerId IN (${uniqueSellers.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})
+                          AND t.GoalType IN ('ADS', 'ACOS')
+                    `;
+                    const targetsResult = await request.query(targetsQuery);
+                    sellerTargets = targetsResult.recordset;
+                }
             }
 
             finalRows = pagedRows.map(row => {

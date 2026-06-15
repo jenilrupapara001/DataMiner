@@ -14,17 +14,6 @@ class RecurringTaskScheduler {
             await this.checkAndNotifyOverdueTasks();
         });
 
-        // Run CometChat full sync every 6 hours
-        cron.schedule('0 */6 * * *', async () => {
-            // Silent background sync
-            try {
-                const { syncAllToCometChat } = require('./cometChatService');
-                await syncAllToCometChat();
-            } catch (err) {
-                console.error('Background CometChat sync failed:', err);
-            }
-        });
-
         // Run Keepa Seller ASIN auto-discovery every 12 hours
         cron.schedule('0 */12 * * *', async () => {
             console.log('[Keepa] Running scheduled seller ASIN sync...');
