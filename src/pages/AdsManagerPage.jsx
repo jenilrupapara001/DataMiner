@@ -463,7 +463,7 @@ export default function AdsManagerPage() {
   const getAntColumns = () => {
     const fixedLeftCols = [
       {
-        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', width: 'auto',
+        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', fixed: 'left', width: 60,
         render: (url, record) => (
           <div style={{ width: 40, height: 40, margin: 'auto', background: '#f8fafc', borderRadius: 4, border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
             {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={14} style={{ color: '#cbd5e1' }} />}
@@ -479,7 +479,7 @@ export default function AdsManagerPage() {
             </div>
           </div>
         ),
-        key: 'identifier', width: 185,
+        key: 'identifier', fixed: 'left', width: 185,
         render: (_, record) => {
           const isParentRow = record.isParent === true;
           return (
@@ -499,13 +499,13 @@ export default function AdsManagerPage() {
         }
       },
       {
-        title: 'SKU', dataIndex: 'sku', key: 'sku', width: 110,
+        title: 'SKU', dataIndex: 'sku', key: 'sku', fixed: 'left', width: 110,
         render: (sku, record) => record.isParent
           ? <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>GROUP</span>
           : <span style={{ fontWeight: 600, color: '#475569', fontSize: 10 }}>{sku}</span>
       },
       {
-        title: 'PRODUCT DETAILS', key: 'productDetails', width: 320,
+        title: 'PRODUCT DETAILS', key: 'productDetails', fixed: 'left', width: 320,
         ellipsis: true,
         render: (_, record) => (
           <div style={{ width: '100%', maxWidth: 308, overflow: 'hidden' }}>
@@ -676,7 +676,7 @@ export default function AdsManagerPage() {
     cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={11} />, false, false));
 
     cols.push({
-      title: 'ACTIONS', key: 'actions', width: 'auto', align: 'center',
+      title: 'ACTIONS', key: 'actions', fixed: 'right', width: 60, align: 'center',
       render: (_, record) => (
         <Tooltip title="View Details">
           <Button type="text" size="small" icon={<Eye size={13} />}
@@ -1056,25 +1056,48 @@ export default function AdsManagerPage() {
 .ant-modal-mask {
     z-index: 1050 !important;
 }
-.ant-table-cell-fix-left,
-.ant-table-cell-fix-right {
+/* ===== Fixed Column Styling — No Overlap ===== */
+.ads-table-scroll-area .ant-table-cell-fix-left,
+.ads-table-scroll-area .ant-table-cell-fix-right {
     background: #ffffff !important;
-    z-index: 10 !important;
+    z-index: 4 !important;
 }
-.table-row-alt .ant-table-cell-fix-left,
-.table-row-alt .ant-table-cell-fix-right {
+.ads-table-scroll-area .table-row-alt .ant-table-cell-fix-left,
+.ads-table-scroll-area .table-row-alt .ant-table-cell-fix-right {
     background: #fafbfc !important;
-    z-index: 10 !important;
 }
-.ant-table-thead .ant-table-cell-fix-left,
-.ant-table-thead .ant-table-cell-fix-right {
+.ads-table-scroll-area .ant-table-thead .ant-table-cell-fix-left,
+.ads-table-scroll-area .ant-table-thead .ant-table-cell-fix-right {
     background: #f8fafc !important;
     z-index: 12 !important;
 }
-.ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
-.ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
-    background: #f8fafc !important;
-    z-index: 10 !important;
+.ads-table-scroll-area .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ads-table-scroll-area .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+    background: #eef2ff !important;
+}
+/* Shadow separator on last fixed-left column */
+.ads-table-scroll-area .ant-table-cell-fix-left-last::after {
+    position: absolute !important;
+    top: 0 !important;
+    right: -1px !important;
+    bottom: -1px !important;
+    width: 20px !important;
+    content: '' !important;
+    pointer-events: none !important;
+    box-shadow: inset 10px 0 8px -8px rgba(15, 23, 42, 0.1) !important;
+    transform: translateX(100%) !important;
+}
+/* Shadow separator on first fixed-right column */
+.ads-table-scroll-area .ant-table-cell-fix-right-first::after {
+    position: absolute !important;
+    top: 0 !important;
+    left: -1px !important;
+    bottom: -1px !important;
+    width: 20px !important;
+    content: '' !important;
+    pointer-events: none !important;
+    box-shadow: inset -10px 0 8px -8px rgba(15, 23, 42, 0.1) !important;
+    transform: translateX(-100%) !important;
 }
 @media (max-width: 768px) {
     .ads-pro-page {

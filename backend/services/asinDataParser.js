@@ -152,12 +152,40 @@ class AsinDataParser {
     }
 
     /**
-     * Check if A+ content exists (non-empty HTML)
+     * Check if A+ content exists (supports HTML strings, parsed JSON arrays/objects, or stringified JSON)
      */
     static hasAplus(html) {
         if (!html) return false;
-        const textContent = html.replace(/<[^>]+>/g, '').trim();
-        return textContent.length > 50;
+        
+        // Handle pre-parsed JSON objects or arrays
+        if (typeof html === 'object') {
+            if (Array.isArray(html)) return html.length > 0;
+            return Object.keys(html).length > 0;
+        }
+        
+        if (typeof html !== 'string') {
+            html = String(html);
+        }
+        
+        const trimmed = html.trim();
+        
+        // If it's a boolean-like string
+        const lower = trimmed.toLowerCase();
+        if (lower === 'true' || lower === 'yes' || lower === '1') return true;
+        if (lower === 'false' || lower === 'no' || lower === '0') return false;
+
+        // Handle stringified JSON arrays/objects
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.length > 0;
+                return Object.keys(parsed).length > 0;
+            } catch (e) {}
+        }
+
+        // Handle standard HTML string
+        const textContent = trimmed.replace(/<[^>]+>/g, '').trim();
+        return textContent.length > 50 || trimmed.toLowerCase().includes('aplus-v2') || trimmed.toLowerCase().includes('aplus-module');
     }
 
     /**
@@ -280,7 +308,8 @@ class AsinDataParser {
         const rawReviews = parsed['review count'] || parsed.Review_count || parsed.review_count || parsed.ReviewCount || '';
         const reviewCount = this.parseReviewCount(rawReviews);
 
-        const hasAplus = this.hasAplus(parsed.A_plus || '');
+        const rawAplus = parsed.A_plus || parsed.aplus || parsed.aplus_content || parsed.has_aplus || parsed.hasAplus || '';
+        const hasAplus = this.hasAplus(rawAplus);
         
         // Bullet points
         const bulletPoints = this.parseBulletPoints(parsed.bp_all || '');

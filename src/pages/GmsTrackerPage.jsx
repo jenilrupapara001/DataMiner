@@ -970,8 +970,8 @@ export default function GmsTrackerPage() {
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Row gutter={[10, 10]}>
-            {[1, 2, 3, 4, 5, 6, 7].map(i => (
-              <Col key={i} xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <Col key={i} xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
                 <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', height: 110 }} styles={{ body: { padding: 12 } }}>
                   <Skeleton active paragraph={{ rows: 2 }} title={false} />
                 </Card>
@@ -989,7 +989,7 @@ export default function GmsTrackerPage() {
         <>
           <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
             {/* Card 1: Ordered Revenue */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
               <Card
                 className="gms-kpi-card"
                 style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
@@ -1027,7 +1027,7 @@ export default function GmsTrackerPage() {
             </Col>
 
             {/* Card 2: Ordered Units */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
               <Card
                 className="gms-kpi-card"
                 style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
@@ -1064,46 +1064,8 @@ export default function GmsTrackerPage() {
               </Card>
             </Col>
 
-            {/* Card 3: Net Revenue (Shipped) */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-              <Card
-                className="gms-kpi-card"
-                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
-                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Net Rev (Shipped)</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444' }}>
-                    {percentageChanges.shippedRevenue >= 0 ? '+' : ''}{percentageChanges.shippedRevenue.toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-                  ₹{kpiMetrics.shippedRevenue.toLocaleString('en-IN')}
-                </div>
-                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-                  <Chart
-                    options={{
-                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                      stroke: { curve: 'smooth', width: 1.5 },
-                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                      colors: [percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444'],
-                      tooltip: { enabled: false }
-                    }}
-                    series={[{ name: 'Net Revenue', data: sparklineData.shippedRevenue }]}
-                    type="area"
-                    height={38}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
-                  </span>
-                </div>
-              </Card>
-            </Col>
-
-            {/* Card 4: Shipped Units */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            {/* Card 3: Shipped Units */}
+            <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
               <Card
                 className="gms-kpi-card"
                 style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
@@ -1140,8 +1102,8 @@ export default function GmsTrackerPage() {
               </Card>
             </Col>
 
-            {/* Card 5: Customer Returns */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            {/* Card 4: Customer Returns */}
+            <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
               <Card
                 className="gms-kpi-card"
                 style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
@@ -1178,8 +1140,8 @@ export default function GmsTrackerPage() {
               </Card>
             </Col>
 
-            {/* Card 6: Return Ratio */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+            {/* Card 5: Return Ratio */}
+            <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
               <Card
                 className="gms-kpi-card"
                 style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
@@ -1204,44 +1166,6 @@ export default function GmsTrackerPage() {
                       tooltip: { enabled: false }
                     }}
                     series={[{ name: 'Return Ratio', data: sparklineData.returnRatio }]}
-                    type="area"
-                    height={38}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
-                  </span>
-                </div>
-              </Card>
-            </Col>
-
-            {/* Card 7: Shipped Profit */}
-            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-              <Card
-                className="gms-kpi-card"
-                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
-                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Shipped Profit</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444' }}>
-                    {percentageChanges.profit >= 0 ? '+' : ''}{percentageChanges.profit.toFixed(1)}%
-                  </span>
-                </div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: kpiMetrics.profit >= 0 ? '#15803d' : '#dc2626', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-                  ₹{kpiMetrics.profit.toLocaleString('en-IN')}
-                </div>
-                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-                  <Chart
-                    options={{
-                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                      stroke: { curve: 'smooth', width: 1.5 },
-                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                      colors: [percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444'],
-                      tooltip: { enabled: false }
-                    }}
-                    series={[{ name: 'Shipped Profit', data: sparklineData.profit }]}
                     type="area"
                     height={38}
                   />

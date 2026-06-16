@@ -2983,35 +2983,71 @@ class MarketDataSyncService {
     }
 
     _detectAplusContent(rawData) {
-        // Priority 1: Explicit boolean/flag fields
+        if (!rawData) return false;
+        
+        // Priority 1: Explicit boolean/flag/object fields
         const explicitFlags = ['has_aplus', 'A_plus', 'aplus', 'hasAplus', 'isAplus'];
         for (const flag of explicitFlags) {
             const val = rawData[flag];
+            if (val === undefined || val === null) continue;
+            
             if (typeof val === 'boolean') return val;
+            if (typeof val === 'number') return val > 0;
+            if (typeof val === 'object') {
+                if (Array.isArray(val)) return val.length > 0;
+                return Object.keys(val).length > 0;
+            }
             if (typeof val === 'string') {
-                const lower = val.toLowerCase();
+                const trimmed = val.trim();
+                const lower = trimmed.toLowerCase();
                 if (lower === 'true' || lower === 'yes' || lower === '1') return true;
                 if (lower === 'false' || lower === 'no' || lower === '0') return false;
+                
+                // If it's a JSON string representing an array or object
+                if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) return parsed.length > 0;
+                        return Object.keys(parsed).length > 0;
+                    } catch (e) {}
+                }
             }
         }
 
-        // Priority 2: Check A_plus field for A+ markers
-        const aplusContent = this._getFromRaw(rawData, ['A_plus', 'aplus_content', 'product_description'], '');
-        if (aplusContent && typeof aplusContent === 'string') {
-            const aplusMarkers = [
-                'aplus-v2', 'aplus-standard', 'aplus-module', 'launchpad-module',
-                'apm-', 'aplus-content-wrapper', 'productDescription_feature_div'
-            ];
+        // Priority 2: Check aplus/A_plus field or description for A+ markers
+        const aplusContent = this._getFromRaw(rawData, ['A_plus', 'aplus_content', 'aplus', 'product_description'], '');
+        if (aplusContent) {
+            if (typeof aplusContent === 'object') {
+                if (Array.isArray(aplusContent)) return aplusContent.length > 0;
+                return Object.keys(aplusContent).length > 0;
+            }
+            if (typeof aplusContent === 'string') {
+                const trimmed = aplusContent.trim();
+                
+                // Handle stringified JSON
+                if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) return parsed.length > 0;
+                        return Object.keys(parsed).length > 0;
+                    } catch (e) {}
+                }
+                
+                const aplusMarkers = [
+                    'aplus-v2', 'aplus-standard', 'aplus-module', 'launchpad-module',
+                    'apm-', 'aplus-content-wrapper', 'productDescription_feature_div'
+                ];
 
-            for (const marker of aplusMarkers) {
-                if (aplusContent.toLowerCase().includes(marker.toLowerCase())) {
+                for (const marker of aplusMarkers) {
+                    if (trimmed.toLowerCase().includes(marker.toLowerCase())) {
+                        return true;
+                    }
+                }
+
+                // If content has significant length and HTML structure
+                if (trimmed.length > 300 && (trimmed.includes('<div') || trimmed.includes('<img'))) {
                     return true;
                 }
-            }
-
-            // If content has significant length and HTML structure
-            if (aplusContent.length > 300 && (aplusContent.includes('<div') || aplusContent.includes('<img'))) {
-                return true;
             }
         }
 

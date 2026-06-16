@@ -399,19 +399,55 @@ exports.getAsins = async (req, res) => {
       return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } });
     }
 
-    // [7] Fetch Daily History for these ASINs (Dynamic Range)
+    // [7] Fetch all history data IN PARALLEL to avoid sequential timeouts
     const historyDays = parseInt(req.query.historyDays) || 14;
     const asinIds = asins.map(a => `'${a.Id}'`).join(',');
-    const dailyHistoryResult = await pool.request().query(`
-      SELECT AsinId, FORMAT(Date, 'yyyy-MM-dd') as dateStr, Price as price, BSR as bsr, 
-             Rating as rating, ReviewCount as reviews, 
-             StockLevel as stockLevel, LQS as lqs
-      FROM AsinHistory WITH (NOLOCK)
-      WHERE AsinId IN (${asinIds}) 
-      AND Date >= DATEADD(day, -${historyDays}, dbo.GetEnvDate())
-      ORDER BY Date ASC
-    `);
-    
+    const asinCodes = asins.map(a => `'${a.AsinCode}'`).join(',');
+
+    const [dailyHistoryResult, weekHistoryResult, subBsrHistoryResult, monthsResult, monthlyOrdersResult] = await Promise.all([
+      // [7.1] Daily History
+      pool.request().query(`
+        SELECT AsinId, FORMAT(Date, 'yyyy-MM-dd') as dateStr, Price as price, BSR as bsr, 
+               Rating as rating, ReviewCount as reviews, 
+               StockLevel as stockLevel, LQS as lqs
+        FROM AsinHistory WITH (NOLOCK)
+        WHERE AsinId IN (${asinIds}) 
+        AND Date >= DATEADD(day, -${historyDays}, dbo.GetEnvDate())
+        ORDER BY Date ASC
+      `),
+      // [7.2] Week History
+      pool.request().query(`
+        SELECT AsinId, FORMAT(WeekStartDate, 'yyyy-MM-dd') as dateStr, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
+        FROM AsinWeekHistory WITH (NOLOCK)
+        WHERE AsinId IN (${asinIds}) 
+        ORDER BY WeekStartDate ASC
+      `),
+      // [7.3] Sub BSR History
+      pool.request().query(`
+        SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
+        FROM SubBsrHistory WITH (NOLOCK)
+        WHERE AsinId IN (${asinIds})
+        AND Date >= DATEADD(day, -14, dbo.GetEnvDate())
+        ORDER BY Date ASC, CreatedAt DESC
+      `),
+      // [7.4] Available months
+      pool.request().query(`
+        SELECT DISTINCT ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month 
+        FROM AdsPerformance WITH (NOLOCK)
+        WHERE Month IS NOT NULL OR Date IS NOT NULL
+        ORDER BY Month ASC
+      `),
+      // [7.5] Monthly orders
+      pool.request().query(`
+        SELECT Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month, SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as Orders
+        FROM AdsPerformance WITH (NOLOCK)
+        WHERE Asin IN (${asinCodes})
+        AND (Month IS NOT NULL OR Date IS NOT NULL)
+        GROUP BY Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1))
+      `)
+    ]);
+
+    // Process daily history
     const historyMap = {};
     dailyHistoryResult.recordset.forEach(h => {
       if (!historyMap[h.AsinId]) historyMap[h.AsinId] = [];
@@ -426,14 +462,7 @@ exports.getAsins = async (req, res) => {
       });
     });
 
-    // [7.5] Fetch Week History for long-term trends
-    const weekHistoryResult = await pool.request().query(`
-      SELECT AsinId, FORMAT(WeekStartDate, 'yyyy-MM-dd') as dateStr, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
-      FROM AsinWeekHistory WITH (NOLOCK)
-      WHERE AsinId IN (${asinIds}) 
-      ORDER BY WeekStartDate ASC
-    `);
-    
+    // Process week history
     const weekHistoryMap = {};
     weekHistoryResult.recordset.forEach(h => {
       if (!weekHistoryMap[h.AsinId]) weekHistoryMap[h.AsinId] = [];
@@ -447,15 +476,7 @@ exports.getAsins = async (req, res) => {
       });
     });
 
-    // [7.6] Fetch Sub BSR History for detailed category trends
-    const subBsrHistoryResult = await pool.request().query(`
-      SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
-      FROM SubBsrHistory
-      WHERE AsinId IN (${asinIds})
-      AND Date >= DATEADD(day, -14, dbo.GetEnvDate())
-      ORDER BY Date ASC, CreatedAt DESC
-    `);
-
+    // Process sub BSR history
     const subBsrHistoryMap = {};
     subBsrHistoryResult.recordset.forEach(h => {
       if (!subBsrHistoryMap[h.AsinId]) subBsrHistoryMap[h.AsinId] = [];
@@ -467,34 +488,17 @@ exports.getAsins = async (req, res) => {
       });
     });
 
-    // [7.7] Fetch monthly orders for collapsible Orders column
-    const monthsResult = await pool.request().query(`
-      SELECT DISTINCT ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month 
-      FROM AdsPerformance 
-      WHERE Month IS NOT NULL OR Date IS NOT NULL
-      ORDER BY Month ASC
-    `);
+    // Process months and monthly orders
     const availableMonths = monthsResult.recordset.map(r => {
       return r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
     });
 
     const monthlyOrdersMap = {};
-    if (asins.length > 0) {
-      const asinCodes = asins.map(a => `'${a.AsinCode}'`).join(',');
-      const monthlyOrdersResult = await pool.request().query(`
-        SELECT Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month, SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as Orders
-        FROM AdsPerformance
-        WHERE Asin IN (${asinCodes})
-        AND (Month IS NOT NULL OR Date IS NOT NULL)
-        GROUP BY Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1))
-      `);
-      
-      monthlyOrdersResult.recordset.forEach(r => {
-        if (!monthlyOrdersMap[r.Asin]) monthlyOrdersMap[r.Asin] = {};
-        const monthStr = r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
-        monthlyOrdersMap[r.Asin][monthStr] = r.Orders;
-      });
-    }
+    monthlyOrdersResult.recordset.forEach(r => {
+      if (!monthlyOrdersMap[r.Asin]) monthlyOrdersMap[r.Asin] = {};
+      const monthStr = r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
+      monthlyOrdersMap[r.Asin][monthStr] = r.Orders;
+    });
 
     // [8] Process for frontend
     const processedAsins = asins.map(a => {

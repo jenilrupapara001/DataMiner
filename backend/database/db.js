@@ -17,6 +17,7 @@ const config = {
     },
     requestTimeout: 120000,
     connectionTimeout: 60000,
+    cancelTimeout: 10000,
     pool: {
         max: 200,
         min: 10,
