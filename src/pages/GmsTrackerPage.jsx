@@ -32,13 +32,13 @@ const generateSeedData = () => [];
 const getAsinTrend = (asinRow, type, gmsData) => {
   let currentVal = 0;
   let previousVal = 0;
-  
+
   if (type === 'month') {
     const months = Object.keys(asinRow.monthlyRev).sort();
     if (months.length < 1) return null;
     const latestMonth = months[months.length - 1];
     currentVal = asinRow.monthlyRev[latestMonth] || 0;
-    
+
     const prevMonthStr = dayjs(latestMonth + '-01').subtract(1, 'month').format('YYYY-MM');
     // Sum from raw data to support previous month if not in current filters
     const prevMonthData = gmsData.filter(d => d.asin === asinRow.asin && d.date.startsWith(prevMonthStr));
@@ -48,12 +48,12 @@ const getAsinTrend = (asinRow, type, gmsData) => {
     if (weeks.length < 1) return null;
     const latestWeek = weeks[weeks.length - 1];
     currentVal = asinRow.weeklyRev[latestWeek] || 0;
-    
+
     const [year, weekStr] = latestWeek.split('-W');
     const prevWeekDateObj = dayjs().year(parseInt(year)).isoWeek(parseInt(weekStr)).subtract(1, 'week');
     const prevWeekNum = prevWeekDateObj.isoWeek();
     const prevWeekKey = `${prevWeekDateObj.format('YYYY')}-W${String(prevWeekNum).padStart(2, '0')}`;
-    
+
     // Sum from raw data to support previous week
     const prevWeekData = gmsData.filter(d => {
       if (d.asin !== asinRow.asin) return false;
@@ -68,12 +68,12 @@ const getAsinTrend = (asinRow, type, gmsData) => {
     if (days.length < 1) return null;
     const latestDay = days[days.length - 1];
     currentVal = asinRow.dailyRev[latestDay] || 0;
-    
+
     const prevDayStr = dayjs(latestDay).subtract(1, 'day').format('YYYY-MM-DD');
     const prevDayData = gmsData.filter(d => d.asin === asinRow.asin && d.date === prevDayStr);
     previousVal = prevDayData.reduce((sum, d) => sum + d.orderedRevenue, 0);
   }
-  
+
   if (!previousVal) return null;
   return ((currentVal - previousVal) / previousVal) * 100;
 };
@@ -183,13 +183,13 @@ export default function GmsTrackerPage() {
         setUploadProgress(100);
         setUploadStatus('Processing completed successfully!');
         message.success(`Successfully uploaded GMS report: ${res.processed} rows processed, ${res.skipped} skipped.`);
-        
+
         // Reload fresh data from database
         const freshGms = await gmsApi.getAll();
         if (freshGms.success && freshGms.data) {
           setGmsData(freshGms.data);
         }
-        
+
         setTimeout(() => {
           setIsUploadOpen(false);
           setIsUploading(false);
@@ -214,21 +214,21 @@ export default function GmsTrackerPage() {
   const filteredData = useMemo(() => {
     return gmsData.filter(item => {
       const itemDate = dayjs(item.date);
-      const isWithinDate = (startDate && endDate) 
+      const isWithinDate = (startDate && endDate)
         ? (itemDate.isSame(dayjs(startDate), 'day') || itemDate.isAfter(dayjs(startDate))) &&
-          (itemDate.isSame(dayjs(endDate), 'day') || itemDate.isBefore(dayjs(endDate)))
+        (itemDate.isSame(dayjs(endDate), 'day') || itemDate.isBefore(dayjs(endDate)))
         : true;
-      
-      const isBrandMatch = selectedBrands.length > 0 
-        ? (selectedBrands.includes(item.brand) || selectedBrands.includes(item.dbBrand)) 
+
+      const isBrandMatch = selectedBrands.length > 0
+        ? (selectedBrands.includes(item.brand) || selectedBrands.includes(item.dbBrand))
         : true;
       const isAsinMatch = selectedAsins.length > 0 ? selectedAsins.includes(item.asin) : true;
-      
+
       const isSearchMatch = searchQuery
         ? (item.asin && item.asin.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (item.productTitle && item.productTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (item.brand && item.brand.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (item.dbBrand && item.dbBrand.toLowerCase().includes(searchQuery.toLowerCase()))
+        (item.productTitle && item.productTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.brand && item.brand.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.dbBrand && item.dbBrand.toLowerCase().includes(searchQuery.toLowerCase()))
         : true;
 
       return isWithinDate && isBrandMatch && isAsinMatch && isSearchMatch;
@@ -272,7 +272,7 @@ export default function GmsTrackerPage() {
   const sparklineData = useMemo(() => {
     const sortedDates = [...new Set(filteredData.map(d => d.date))].sort();
     const dateMap = {};
-    
+
     filteredData.forEach(d => {
       if (!dateMap[d.date]) {
         dateMap[d.date] = {
@@ -307,10 +307,10 @@ export default function GmsTrackerPage() {
       netRev.push(Math.round(day.shippedRevenue));
       shipUnits.push(Math.round(day.shippedUnits));
       returns.push(Math.round(day.customerReturns));
-      
+
       const r = day.orderedUnits > 0 ? (day.customerReturns / day.orderedUnits) * 100 : 0;
       ratio.push(parseFloat(r.toFixed(2)));
-      
+
       profit.push(Math.round(day.shippedRevenue - day.shippedCOGS));
     });
 
@@ -527,8 +527,8 @@ export default function GmsTrackerPage() {
       };
 
       const monthTitle = (
-        <span 
-          style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} 
+        <span
+          style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
           onClick={toggleMonth}
         >
           <span style={{ fontSize: 10, color: '#4f46e5', fontWeight: 900 }}>
@@ -581,8 +581,8 @@ export default function GmsTrackerPage() {
         };
 
         const weekTitle = (
-          <span 
-            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }} 
+          <span
+            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
             onClick={toggleWeek}
           >
             <span style={{ fontSize: 9, color: '#4f46e5', fontWeight: 900 }}>
@@ -625,32 +625,67 @@ export default function GmsTrackerPage() {
           };
         }
 
-        // Expanded Week: show day columns and trends
-        const dayCols = week.days.map(dayStr => ({
-          title: dayjs(dayStr).format('DD MMM'),
-          key: `day-${dayStr}`,
-          align: 'right',
-          width: 100,
-          render: (_, record) => {
-            const rev = record.dailyRev[dayStr] || 0;
-            return rev ? `₹${rev.toLocaleString('en-IN')}` : '-';
-          },
-          sorter: (a, b) => (a.dailyRev[dayStr] || 0) - (b.dailyRev[dayStr] || 0)
-        }));
+        // Expanded Week: show day columns with interleaved DoD trend columns
+        // Layout: Day1 | Day2 | Trend(1→2) | Day3 | Trend(2→3) | ...
+        const sortedDays = [...week.days].sort();
+        const dayCols = [];
 
-        // DoD Trend
-        dayCols.push({
-          title: 'DoD Trend',
-          key: `dod-trend-${week.key}`,
-          align: 'center',
-          width: 110,
-          render: (_, record) => {
-            const trend = getAsinTrend(record, 'day', gmsData);
-            if (trend === null) return <span style={{ color: '#94a3b8' }}>-</span>;
-            const isUp = trend >= 0;
-            return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {trend.toFixed(1)}%</Tag>;
-          },
-          sorter: (a, b) => (getAsinTrend(a, 'day', gmsData) || 0) - (getAsinTrend(b, 'day', gmsData) || 0)
+        sortedDays.forEach((dayStr, idx) => {
+          // Add the day column
+          dayCols.push({
+            title: dayjs(dayStr).format('DD MMM'),
+            key: `day-${dayStr}`,
+            align: 'right',
+            width: 100,
+            render: (_, record) => {
+              const rev = record.dailyRev[dayStr] || 0;
+              return rev ? `₹${rev.toLocaleString('en-IN')}` : '-';
+            },
+            sorter: (a, b) => (a.dailyRev[dayStr] || 0) - (b.dailyRev[dayStr] || 0)
+          });
+
+          // After the 2nd day onward, add a DoD trend column between prev day and current day
+          if (idx > 0) {
+            const prevDayStr = sortedDays[idx - 1];
+            const currDayStr = dayStr;
+            const trendLabel = `${dayjs(prevDayStr).format('DD')}→${dayjs(currDayStr).format('DD')}`;
+
+            dayCols.push({
+              title: <Tooltip title={`Trend: ${dayjs(prevDayStr).format('DD MMM')} → ${dayjs(currDayStr).format('DD MMM')}`}>
+                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 700, whiteSpace: 'nowrap' }}>▸ {trendLabel}</span>
+              </Tooltip>,
+              key: `dod-trend-${prevDayStr}-${currDayStr}`,
+              align: 'center',
+              width: 90,
+              render: (_, record) => {
+                const prevRev = record.dailyRev[prevDayStr] || 0;
+                const currRev = record.dailyRev[currDayStr] || 0;
+
+                if (!prevRev && !currRev) return <span style={{ color: '#94a3b8' }}>-</span>;
+                if (!prevRev) return <Tag color="success" style={{ border: 'none', fontWeight: 700, fontSize: 11 }}>NEW</Tag>;
+
+                const change = ((currRev - prevRev) / prevRev) * 100;
+                const isUp = change >= 0;
+                return (
+                  <Tag
+                    color={isUp ? 'success' : 'error'}
+                    style={{ border: 'none', fontWeight: 700, fontSize: 11, margin: 0 }}
+                  >
+                    {isUp ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%
+                  </Tag>
+                );
+              },
+              sorter: (a, b) => {
+                const aPrev = a.dailyRev[prevDayStr] || 0;
+                const aCurr = a.dailyRev[currDayStr] || 0;
+                const bPrev = b.dailyRev[prevDayStr] || 0;
+                const bCurr = b.dailyRev[currDayStr] || 0;
+                const aChange = aPrev ? ((aCurr - aPrev) / aPrev) * 100 : 0;
+                const bChange = bPrev ? ((bCurr - bPrev) / bPrev) * 100 : 0;
+                return aChange - bChange;
+              }
+            });
+          }
         });
 
         // Week Total
@@ -871,10 +906,10 @@ export default function GmsTrackerPage() {
         </div>
         <Space size={8}>
           {(isAdmin || isGlobalUser || hasPermission('gms_tracker_import')) && (
-            <Button 
-              type="primary" 
-              icon={<UploadOutlined />} 
-              onClick={() => setIsUploadOpen(true)} 
+            <Button
+              type="primary"
+              icon={<UploadOutlined />}
+              onClick={() => setIsUploadOpen(true)}
               style={{ background: '#0f172a', borderColor: '#0f172a', borderRadius: 6, fontWeight: 600, height: 32, fontSize: 12 }}
             >
               Upload GMS Data
@@ -884,8 +919,8 @@ export default function GmsTrackerPage() {
       </div>
 
       {/* COMPACT FILTER PANEL */}
-      <Card 
-        style={{ marginBottom: 8, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }} 
+      <Card
+        style={{ marginBottom: 8, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }}
         styles={{ body: { padding: '6px 12px' } }}
       >
         <Row gutter={[8, 8]} align="middle">
@@ -953,315 +988,315 @@ export default function GmsTrackerPage() {
       ) : (
         <>
           <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
-        {/* Card 1: Ordered Revenue */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Ordered Revenue</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#22c55e' }}>
-                +{percentageChanges.orderedRevenue.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              ₹{kpiMetrics.orderedRevenue.toLocaleString('en-IN')}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+            {/* Card 1: Ordered Revenue */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Ordered Revenue</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#22c55e' }}>
+                    +{percentageChanges.orderedRevenue.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  ₹{kpiMetrics.orderedRevenue.toLocaleString('en-IN')}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: ['#22c55e'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Ordered Revenue', data: sparklineData.orderedRevenue }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 2: Ordered Units */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Ordered Units</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.orderedUnits >= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.orderedUnits >= 0 ? '+' : ''}{percentageChanges.orderedUnits.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  {kpiMetrics.orderedUnits.toLocaleString()}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.orderedUnits >= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Ordered Units', data: sparklineData.orderedUnits }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 3: Net Revenue (Shipped) */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Net Rev (Shipped)</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.shippedRevenue >= 0 ? '+' : ''}{percentageChanges.shippedRevenue.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  ₹{kpiMetrics.shippedRevenue.toLocaleString('en-IN')}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Net Revenue', data: sparklineData.shippedRevenue }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 4: Shipped Units */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Shipped Units</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.shippedUnits >= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.shippedUnits >= 0 ? '+' : ''}{percentageChanges.shippedUnits.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  {kpiMetrics.shippedUnits.toLocaleString()}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.shippedUnits >= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Shipped Units', data: sparklineData.shippedUnits }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 5: Customer Returns */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Customer Returns</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.customerReturns <= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.customerReturns >= 0 ? '+' : ''}{percentageChanges.customerReturns.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: kpiMetrics.customerReturns > 0 ? '#dc2626' : '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  {kpiMetrics.customerReturns.toLocaleString()}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.customerReturns <= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Customer Returns', data: sparklineData.customerReturns }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 6: Return Ratio */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Return Ratio</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.returnRatio <= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.returnRatio >= 0 ? '+' : ''}{percentageChanges.returnRatio.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: (kpiMetrics.returnRatio || 0) > 10 ? '#dc2626' : '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  {(kpiMetrics.returnRatio || 0).toFixed(2)}%
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.returnRatio <= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Return Ratio', data: sparklineData.returnRatio }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+
+            {/* Card 7: Shipped Profit */}
+            <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
+              <Card
+                className="gms-kpi-card"
+                style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }}
+                styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Shipped Profit</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444' }}>
+                    {percentageChanges.profit >= 0 ? '+' : ''}{percentageChanges.profit.toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: kpiMetrics.profit >= 0 ? '#15803d' : '#dc2626', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                  ₹{kpiMetrics.profit.toLocaleString('en-IN')}
+                </div>
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                  <Chart
+                    options={{
+                      chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                      stroke: { curve: 'smooth', width: 1.5 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
+                      colors: [percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444'],
+                      tooltip: { enabled: false }
+                    }}
+                    series={[{ name: 'Shipped Profit', data: sparklineData.profit }]}
+                    type="area"
+                    height={38}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                  </span>
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* GRAPH CHART VIEW */}
+          {filteredData.length > 0 ? (
+            <Card style={{ marginBottom: 8, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }} styles={{ body: { padding: '8px 12px' } }}>
+              <div style={{ marginBottom: 4 }}>
+                <Text strong style={{ fontSize: 11, color: '#0f172a' }}>Ordered Revenue Trend Timeline</Text>
+              </div>
               <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: ['#22c55e'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Ordered Revenue', data: sparklineData.orderedRevenue }]}
+                options={chartSeries.options}
+                series={chartSeries.series}
                 type="area"
-                height={38}
+                height={180}
               />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
+            </Card>
+          ) : null}
 
-        {/* Card 2: Ordered Units */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Ordered Units</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.orderedUnits >= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.orderedUnits >= 0 ? '+' : ''}{percentageChanges.orderedUnits.toFixed(1)}%
-              </span>
+          {/* DATA HORIZONTAL GRID */}
+          <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }} styles={{ body: { padding: 0 } }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text strong style={{ fontSize: 11, color: '#0f172a' }}>Spreadsheet Data Matrix</Text>
+              <Tooltip title="Horizontal breakdown of Ordered Revenue by Month, Week, and Day.">
+                <InfoCircleOutlined style={{ color: '#94a3b8', fontSize: 11 }} />
+              </Tooltip>
             </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              {kpiMetrics.orderedUnits.toLocaleString()}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.orderedUnits >= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Ordered Units', data: sparklineData.orderedUnits }]}
-                type="area"
-                height={38}
+            {tableDataSource.length > 0 ? (
+              <Table
+                columns={tableColumns}
+                dataSource={tableDataSource}
+                pagination={{ pageSize: 12, showSizeChanger: true, size: 'small' }}
+                size="small"
+                scroll={{ x: 'max-content' }}
+                bordered
+                className="gms-tracker-table"
+                style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}
               />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
+            ) : (
+              <div style={{ padding: 30, textAlign: 'center' }}>
+                <Empty description="No data loaded. Click 'Upload GMS Data' to upload your report file." />
+              </div>
+            )}
           </Card>
-        </Col>
-
-        {/* Card 3: Net Revenue (Shipped) */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Net Rev (Shipped)</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.shippedRevenue >= 0 ? '+' : ''}{percentageChanges.shippedRevenue.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              ₹{kpiMetrics.shippedRevenue.toLocaleString('en-IN')}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.shippedRevenue >= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Net Revenue', data: sparklineData.shippedRevenue }]}
-                type="area"
-                height={38}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 4: Shipped Units */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Shipped Units</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.shippedUnits >= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.shippedUnits >= 0 ? '+' : ''}{percentageChanges.shippedUnits.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              {kpiMetrics.shippedUnits.toLocaleString()}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.shippedUnits >= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Shipped Units', data: sparklineData.shippedUnits }]}
-                type="area"
-                height={38}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 5: Customer Returns */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Customer Returns</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.customerReturns <= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.customerReturns >= 0 ? '+' : ''}{percentageChanges.customerReturns.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: kpiMetrics.customerReturns > 0 ? '#dc2626' : '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              {kpiMetrics.customerReturns.toLocaleString()}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.customerReturns <= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Customer Returns', data: sparklineData.customerReturns }]}
-                type="area"
-                height={38}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 6: Return Ratio */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Return Ratio</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.returnRatio <= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.returnRatio >= 0 ? '+' : ''}{percentageChanges.returnRatio.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: (kpiMetrics.returnRatio || 0) > 10 ? '#dc2626' : '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              {(kpiMetrics.returnRatio || 0).toFixed(2)}%
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.returnRatio <= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Return Ratio', data: sparklineData.returnRatio }]}
-                type="area"
-                height={38}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
-
-        {/* Card 7: Shipped Profit */}
-        <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
-          <Card 
-            className="gms-kpi-card" 
-            style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', overflow: 'hidden' }} 
-            styles={{ body: { padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%' } }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Shipped Profit</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444' }}>
-                {percentageChanges.profit >= 0 ? '+' : ''}{percentageChanges.profit.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: kpiMetrics.profit >= 0 ? '#15803d' : '#dc2626', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
-              ₹{kpiMetrics.profit.toLocaleString('en-IN')}
-            </div>
-            <div style={{ marginTop: 'auto', marginBottom: 4 }}>
-              <Chart
-                options={{
-                  chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                  stroke: { curve: 'smooth', width: 1.5 },
-                  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] } },
-                  colors: [percentageChanges.profit >= 0 ? '#22c55e' : '#ef4444'],
-                  tooltip: { enabled: false }
-                }}
-                series={[{ name: 'Shipped Profit', data: sparklineData.profit }]}
-                type="area"
-                height={38}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 6, marginTop: 4 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                See more details <span style={{ fontSize: 8 }}>&gt;</span>
-              </span>
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* GRAPH CHART VIEW */}
-      {filteredData.length > 0 ? (
-        <Card style={{ marginBottom: 8, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }} styles={{ body: { padding: '8px 12px' } }}>
-          <div style={{ marginBottom: 4 }}>
-            <Text strong style={{ fontSize: 11, color: '#0f172a' }}>Ordered Revenue Trend Timeline</Text>
-          </div>
-          <Chart
-            options={chartSeries.options}
-            series={chartSeries.series}
-            type="area"
-            height={180}
-          />
-        </Card>
-      ) : null}
-
-      {/* DATA HORIZONTAL GRID */}
-      <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.01)' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text strong style={{ fontSize: 11, color: '#0f172a' }}>Spreadsheet Data Matrix</Text>
-          <Tooltip title="Horizontal breakdown of Ordered Revenue by Month, Week, and Day.">
-            <InfoCircleOutlined style={{ color: '#94a3b8', fontSize: 11 }} />
-          </Tooltip>
-        </div>
-        {tableDataSource.length > 0 ? (
-          <Table
-            columns={tableColumns}
-            dataSource={tableDataSource}
-            pagination={{ pageSize: 12, showSizeChanger: true, size: 'small' }}
-            size="small"
-            scroll={{ x: 'max-content' }}
-            bordered
-            className="gms-tracker-table"
-            style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}
-          />
-        ) : (
-          <div style={{ padding: 30, textAlign: 'center' }}>
-            <Empty description="No data loaded. Click 'Upload GMS Data' to upload your report file." />
-          </div>
-        )}
-      </Card>
-    </>
-  )}
+        </>
+      )}
 
       {/* FILE UPLOAD MODAL WITH COMPLETE DATE PICKER */}
       <Modal

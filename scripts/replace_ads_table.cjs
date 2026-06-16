@@ -13,7 +13,7 @@ const columnsCode = `
         title: 'IMAGE',
         dataIndex: 'imageUrl',
         key: 'imageUrl',
-        fixed: 'left',
+        
         width: 60,
         render: (url, record) => (
           <div style={{ width: '40px', height: '40px', margin: 'auto', background: '#f1f5f9', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
@@ -36,7 +36,7 @@ const columnsCode = `
           </div>
         ),
         key: 'identifier',
-        fixed: 'left',
+        
         width: 185,
         render: (_, record) => {
           const isParentRow = record.isParent === true;
@@ -173,8 +173,8 @@ const startIdx = code.indexOf(tableStartString);
 const endIdx = code.indexOf(tableEndString);
 
 if (startIdx === -1 || endIdx === -1) {
-    console.error("Could not find table boundaries");
-    process.exit(1);
+  console.error("Could not find table boundaries");
+  process.exit(1);
 }
 
 const tableReplacement = `      {/* MAIN TABLE CONTAINER */}

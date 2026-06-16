@@ -463,7 +463,7 @@ export default function AdsManagerPage() {
   const getAntColumns = () => {
     const fixedLeftCols = [
       {
-        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', fixed: 'left', width: 60,
+        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', width: 'auto',
         render: (url, record) => (
           <div style={{ width: 40, height: 40, margin: 'auto', background: '#f8fafc', borderRadius: 4, border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
             {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={14} style={{ color: '#cbd5e1' }} />}
@@ -479,7 +479,7 @@ export default function AdsManagerPage() {
             </div>
           </div>
         ),
-        key: 'identifier', fixed: 'left', width: 185,
+        key: 'identifier', width: 185,
         render: (_, record) => {
           const isParentRow = record.isParent === true;
           return (
@@ -499,13 +499,13 @@ export default function AdsManagerPage() {
         }
       },
       {
-        title: 'SKU', dataIndex: 'sku', key: 'sku', fixed: 'left', width: 110,
+        title: 'SKU', dataIndex: 'sku', key: 'sku', width: 110,
         render: (sku, record) => record.isParent
           ? <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>GROUP</span>
           : <span style={{ fontWeight: 600, color: '#475569', fontSize: 10 }}>{sku}</span>
       },
       {
-        title: 'PRODUCT DETAILS', key: 'productDetails', fixed: 'left', width: 320,
+        title: 'PRODUCT DETAILS', key: 'productDetails', width: 320,
         ellipsis: true,
         render: (_, record) => (
           <div style={{ width: '100%', maxWidth: 308, overflow: 'hidden' }}>
@@ -676,7 +676,7 @@ export default function AdsManagerPage() {
     cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={11} />, false, false));
 
     cols.push({
-      title: 'ACTIONS', key: 'actions', width: 60, fixed: 'right', align: 'center',
+      title: 'ACTIONS', key: 'actions', width: 'auto', align: 'center',
       render: (_, record) => (
         <Tooltip title="View Details">
           <Button type="text" size="small" icon={<Eye size={13} />}
