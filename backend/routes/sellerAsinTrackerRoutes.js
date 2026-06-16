@@ -60,4 +60,13 @@ router.post('/sync/:sellerId', requireAnyPermission(['sellers_manage', 'sellers_
 // POST /api/seller-tracker/sync-all    — sync all sellers from Keepa
 router.post('/sync-all', requireAnyPermission(['sellers_manage']), ctrl.syncAll);
 
+// GET /api/seller-tracker/:sellerId/activities — list activities for a seller
+router.get('/:sellerId/activities', requireAnyPermission(['sellers_view', 'sellers_manage']), ctrl.getSellerActivities);
+
+// GET /api/seller-tracker/:sellerId/tasks — list tasks for a seller
+router.get('/:sellerId/tasks', requireAnyPermission(['sellers_view', 'sellers_manage']), ctrl.getSellerTasks);
+
+// POST /api/seller-tracker/:sellerId/tasks — create a task for a seller
+router.post('/:sellerId/tasks', requireAnyPermission(['sellers_manage']), ctrl.createSellerTask);
+
 module.exports = router;

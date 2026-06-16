@@ -14,7 +14,8 @@ import {
 import {
   Card, Typography, Space, Button, Input,
   Select, Table, Tag, Avatar, Tooltip, Alert,
-  message, Tabs, Empty, Spin, ConfigProvider, Divider
+  message, Tabs, Empty, Spin, ConfigProvider, Divider,
+  Modal, Form, DatePicker
 } from 'antd';
 import api from '../services/api';
 
@@ -599,6 +600,36 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
   const [activeTab, setActiveTab] = useState('activity');
   const [search, setSearch] = useState('');
   const [lqsFilter, setLqsFilter] = useState('');
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [submittingTask, setSubmittingTask] = useState(false);
+  const [form] = Form.useForm();
+
+  const handleCreateTask = async (values) => {
+    setSubmittingTask(true);
+    try {
+      const res = await api.sellerTrackerApi.createSellerTask(seller._id, {
+        title: values.title,
+        description: values.description,
+        priority: values.priority,
+        category: values.category,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : null,
+        assignee: values.assignee || null
+      });
+      if (res.success) {
+        message.success('Task created successfully');
+        setIsTaskModalOpen(false);
+        form.resetFields();
+        // Refresh local data loaders
+        await Promise.all([loadUpcomingTasks(), loadActivities()]);
+      } else {
+        message.error(res.message || 'Failed to create task');
+      }
+    } catch (e) {
+      message.error(`Failed to create task: ${e.message}`);
+    } finally {
+      setSubmittingTask(false);
+    }
+  };
 
   const loadAsins = useCallback(async () => {
     if (!seller) return;
@@ -613,132 +644,28 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
     }
   }, [seller]);
 
-  // Mock activity data
   const loadActivities = useCallback(async () => {
-    const mockActivities = [
-      {
-        id: '1',
-        type: 'SYNC_COMPLETED',
-        title: 'Keepa synchronization completed',
-        description: `Successfully synced ${seller?.dbAsinCount || 0} ASINs from marketplace`,
-        timestamp: new Date(Date.now() - 1000 * 60 * 5),
-        metadata: { Added: '3', Updated: '12', Failed: '0' }
-      },
-      {
-        id: '2',
-        type: 'ASIN_ADDED',
-        title: 'New ASIN registered: B09WKL916R',
-        description: 'Product added to tracking catalog',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30),
-        priority: 'HIGH'
-      },
-      {
-        id: '3',
-        type: 'PRICE_CHANGE',
-        title: 'Price modifications detected on 5 ASINs',
-        description: 'Average price decreased by 8.5% over last 24 hours',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-        metadata: { ASINs: '5', Impact: 'INR 2,400' }
-      },
-      {
-        id: '4',
-        type: 'STOCK_LOW',
-        title: 'Inventory threshold alert',
-        description: '3 products below minimum stock threshold of 50 units',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4),
-        priority: 'HIGH'
-      },
-      {
-        id: '5',
-        type: 'LQS_UPDATED',
-        title: 'Listing Quality Score improvement',
-        description: 'Average LQS increased from 72 to 78',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8),
-        metadata: { Previous: '72', Current: '78' }
-      },
-      {
-        id: '6',
-        type: 'TASK_COMPLETED',
-        title: 'Image optimization task completed',
-        description: 'Updated product imagery for 12 SKUs',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 12)
-      },
-      {
-        id: '7',
-        type: 'MANAGER_ASSIGNED',
-        title: 'Brand Manager assigned to account',
-        description: 'Sandip Kathiriya assigned as primary contact',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24)
-      },
-      {
-        id: '8',
-        type: 'REVIEW_RECEIVED',
-        title: '15 new customer reviews received',
-        description: 'Average rating maintained at 4.3 of 5.0',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 36),
-        metadata: { Rating: '4.3/5', Count: '15' }
-      },
-      {
-        id: '9',
-        type: 'SYNC_STARTED',
-        title: 'Scheduled daily synchronization initiated',
-        description: 'Automated job triggered by scheduler',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48)
+    if (!seller) return;
+    try {
+      const res = await api.sellerTrackerApi.getSellerActivities(seller._id);
+      if (res.success) {
+        setActivities(res.data || []);
       }
-    ];
-    setActivities(mockActivities);
+    } catch (e) {
+      console.error('Failed to load activities:', e.message);
+    }
   }, [seller]);
 
   const loadUpcomingTasks = useCallback(async () => {
-    const now = new Date();
-    const mockTasks = [
-      {
-        id: 't1',
-        title: 'Review ACOS performance for B09WKL916R',
-        description: 'Current ACOS at 28% requires optimization review',
-        dueDate: new Date(now.getTime() - 86400000),
-        priority: 'HIGH',
-        category: 'Advertising',
-        assignee: 'Sandip Kathiriya'
-      },
-      {
-        id: 't2',
-        title: 'Update product titles for SEO optimization',
-        description: 'Implement updated keyword strategy for top 10 ASINs',
-        dueDate: new Date(now.getTime() + 0),
-        priority: 'HIGH',
-        category: 'Content',
-        assignee: 'Jay Patel'
-      },
-      {
-        id: 't3',
-        title: 'Inventory replenishment assessment',
-        description: 'Verify stock levels for fast-moving SKUs',
-        dueDate: new Date(now.getTime() + 86400000),
-        priority: 'MEDIUM',
-        category: 'Inventory',
-        assignee: 'Sandip Kathiriya'
-      },
-      {
-        id: 't4',
-        title: 'A+ Content compliance audit',
-        description: 'Verify all premium content meets marketplace standards',
-        dueDate: new Date(now.getTime() + 3 * 86400000),
-        priority: 'MEDIUM',
-        category: 'Content',
-        assignee: 'Jay Patel'
-      },
-      {
-        id: 't5',
-        title: 'Monthly performance review preparation',
-        description: 'Compile metrics for stakeholder review meeting',
-        dueDate: new Date(now.getTime() + 7 * 86400000),
-        priority: 'LOW',
-        category: 'Reporting',
-        assignee: 'Sandip Kathiriya'
+    if (!seller) return;
+    try {
+      const res = await api.sellerTrackerApi.getSellerTasks(seller._id);
+      if (res.success) {
+        setUpcomingTasks(res.data || []);
       }
-    ];
-    setUpcomingTasks(mockTasks);
+    } catch (e) {
+      console.error('Failed to load upcoming tasks:', e.message);
+    }
   }, [seller]);
 
   useEffect(() => {
@@ -1010,6 +937,7 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
               icon={<Plus size={13} strokeWidth={2} />}
+              onClick={() => setIsTaskModalOpen(true)}
               style={{
                 fontSize: 12,
                 fontWeight: 600,
@@ -1408,14 +1336,14 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {[
-                  { icon: RefreshCw, label: 'Synchronize Now' },
-                  { icon: Plus, label: 'Create New Task' },
-                  { icon: FileText, label: 'View Reports' },
-                  { icon: SettingsIcon, label: 'Configuration' }
+                  { icon: RefreshCw, label: 'Synchronize Now', onClick: () => onSync(seller._id) },
+                  { icon: Plus, label: 'Create New Task', onClick: () => setIsTaskModalOpen(true) },
+                  { icon: FileText, label: 'View Reports', onClick: () => message.info('Report generation is automated under overview.') },
+                  { icon: SettingsIcon, label: 'Configuration', onClick: () => message.info('Configuration settings are updated via global admin panel.') }
                 ].map((action, i) => {
                   const ActionIcon = action.icon;
                   return (
-                    <button key={i} className="quick-action-pro" style={{
+                    <button key={i} onClick={action.onClick} className="quick-action-pro" style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 10,
@@ -1441,6 +1369,96 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
           </div>
         )}
       </div>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+            <ClipboardList size={18} style={{ color: '#1e293b' }} />
+            Create Manual Task
+          </div>
+        }
+        open={isTaskModalOpen}
+        onCancel={() => {
+          setIsTaskModalOpen(false);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        confirmLoading={submittingTask}
+        okText="Create Task"
+        cancelText="Cancel"
+        okButtonProps={{
+          style: { background: '#1e293b', borderColor: '#1e293b', fontWeight: 600 }
+        }}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleCreateTask}
+          initialValues={{ priority: 'MEDIUM', category: 'Content' }}
+          style={{ marginTop: 16 }}
+        >
+          <Form.Item
+            name="title"
+            label="Task Title"
+            rules={[{ required: true, message: 'Please enter a task title' }]}
+          >
+            <Input placeholder="e.g. Optimize image gallery for ASINs" maxLength={100} />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="Description"
+          >
+            <Input.TextArea placeholder="Provide detailed instructions or context..." rows={3} maxLength={500} />
+          </Form.Item>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item
+              name="priority"
+              label="Priority"
+              rules={[{ required: true }]}
+            >
+              <Select options={[
+                { value: 'LOW', label: 'Low' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'HIGH', label: 'High' }
+              ]} />
+            </Form.Item>
+
+            <Form.Item
+              name="category"
+              label="Category"
+              rules={[{ required: true }]}
+            >
+              <Select options={[
+                { value: 'Content', label: 'Content Optimization' },
+                { value: 'Inventory', label: 'Inventory Sync / Stock' },
+                { value: 'Advertising', label: 'PPC / Advertising' },
+                { value: 'Pricing', label: 'Pricing Strategy' },
+                { value: 'Reporting', label: 'Performance Report' },
+                { value: 'Other', label: 'Other' }
+              ]} />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item
+              name="dueDate"
+              label="Due Date"
+              rules={[{ required: true, message: 'Please select a due date' }]}
+            >
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
+              name="assignee"
+              label="Assignee"
+            >
+              <Input placeholder="e.g. Sandip Kathiriya" />
+            </Form.Item>
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 };

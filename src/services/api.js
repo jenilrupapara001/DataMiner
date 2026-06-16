@@ -1508,6 +1508,15 @@ const api = {
     },
     syncAll: async () => {
       return api.post('/seller-tracker/sync-all');
+    },
+    getSellerActivities: async (sellerId) => {
+      return api.get(`/seller-tracker/${sellerId}/activities`);
+    },
+    getSellerTasks: async (sellerId) => {
+      return api.get(`/seller-tracker/${sellerId}/tasks`);
+    },
+    createSellerTask: async (sellerId, taskData) => {
+      return api.post(`/seller-tracker/${sellerId}/tasks`, taskData);
     }
   }
 };
@@ -1740,4 +1749,66 @@ export const targetsApi = {
         invalidateCachePattern('targets');
         return res.json();
     }
+};
+
+export const gmsApi = {
+  upload: async (file, date, onProgress) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('date', date);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/upload/upload-gms`);
+      
+      const headers = getAuthHeader();
+      Object.keys(headers).forEach(k => {
+        xhr.setRequestHeader(k, headers[k]);
+      });
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (e) {
+            resolve({ success: true });
+          }
+        } else {
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            reject(new Error(errData.error || xhr.statusText || 'Upload failed'));
+          } catch (e) {
+            reject(new Error(xhr.statusText || 'Upload failed'));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send(formData);
+    });
+  },
+
+  getAll: async () => {
+    const res = await fetch(`${API_BASE}/upload/gms-data`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch GMS data');
+    return res.json();
+  },
+
+  clearAll: async () => {
+    const res = await fetch(`${API_BASE}/upload/gms-clear`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to clear GMS data');
+    return res.json();
+  }
 };

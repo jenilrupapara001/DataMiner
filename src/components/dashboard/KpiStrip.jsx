@@ -133,210 +133,61 @@ const CircularProgress = memo(({ percent = 0, color = '#10b981', size = 60 }) =>
 // ═══════════════════════════════════════════════════════════════
 const KpiCard = memo(({ card, isLast }) => {
     const {
-        label, value, subValue, trend, isPositive, icon, color, gradient,
-        sparkline, showProgress, progressValue, badge, accentLeft
+        label, value, subValue, trend, isPositive, color, sparkline, showProgress, progressValue
     } = card;
+
+    const trendVal = trend ? trend.split(' ')[0] : '';
+    const hasPercent = trendVal.includes('%');
+    const displayTrend = hasPercent ? `${isPositive ? '+' : '-'}${trendVal.replace(/[+-]/g, '')}` : trendVal;
+    const indicatorColor = isPositive ? '#22c55e' : '#ef4444';
 
     return (
         <div
             className="kpi-premium-card"
             style={{
-                position: 'relative',
-                borderRadius: 16,
-                background: '#ffffff',
+                borderRadius: 8,
                 border: '1px solid #e2e8f0',
+                background: '#ffffff',
                 overflow: 'hidden',
-                height: 145,
+                height: 135,
                 display: 'flex',
                 flexDirection: 'column',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 cursor: 'default'
             }}
         >
-            {/* Left accent strip */}
-            {accentLeft && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    bottom: 0,
-                    width: 3,
-                    background: gradient || color,
-                }} />
-            )}
-
-            {/* Top accent strip */}
-            {!accentLeft && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 3,
-                    background: gradient || color,
-                    borderRadius: '16px 16px 0 0'
-                }} />
-            )}
-
-            {/* Content area */}
-            <div style={{
-                padding: '14px 16px 10px',
-                flexGrow: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between'
-            }}>
-                {/* Top section: Label + Icon */}
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: 8
-                }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                            fontSize: 10,
-                            fontWeight: 800,
-                            color: '#94a3b8',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.08em',
-                            marginBottom: 2,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                        }}>
-                            {label}
-                        </div>
-                        {badge && (
-                            <span style={{
-                                display: 'inline-block',
-                                fontSize: 9,
-                                fontWeight: 700,
-                                color: color,
-                                background: `${color}15`,
-                                padding: '1px 6px',
-                                borderRadius: 4,
-                                marginTop: 2
-                            }}>
-                                {badge}
-                            </span>
-                        )}
-                    </div>
-                    <div style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 10,
-                        background: `${color}12`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: color,
-                        flexShrink: 0
-                    }}>
-                        {icon}
-                    </div>
+            <div style={{ padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: indicatorColor }}>
+                        {displayTrend}
+                    </span>
                 </div>
-
-                {/* Middle: Value */}
-                <div style={{ marginBottom: 6 }}>
-                    <div style={{
-                        fontSize: 22,
-                        fontWeight: 800,
-                        color: '#0f172a',
-                        letterSpacing: '-0.5px',
-                        lineHeight: 1.1,
-                        marginBottom: 2,
-                        wordBreak: 'break-all'
-                    }}>
-                        {value}
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                    {value}
+                </div>
+                {subValue && (
+                    <div style={{ fontSize: 9.5, color: '#94a3b8', fontWeight: 500, marginBottom: 4 }}>
+                        {subValue}
                     </div>
-                    {subValue && (
-                        <div style={{
-                            fontSize: 11,
-                            color: '#94a3b8',
-                            fontWeight: 500,
-                            marginTop: 2
-                        }}>
-                            {subValue}
+                )}
+                <div style={{ marginTop: 'auto', marginBottom: 4 }}>
+                    {showProgress ? (
+                        <div style={{ height: 5, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(progressValue, 100)}%`, background: color, borderRadius: 3 }} />
                         </div>
+                    ) : sparkline ? (
+                        <PremiumSparkline data={sparkline} color={indicatorColor} height={32} />
+                    ) : (
+                        <PremiumSparkline data={[10, 15, 12, 18, 16, 22, 20]} color={indicatorColor} height={32} />
                     )}
                 </div>
-
-                {/* Bottom: Trend */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 3,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: isPositive ? '#059669' : '#dc2626',
-                        background: isPositive ? '#d1fae5' : '#fee2e2',
-                        padding: '2px 7px',
-                        borderRadius: 12,
-                        whiteSpace: 'nowrap'
-                    }}>
-                        {isPositive ? <ArrowUpRight size={11} strokeWidth={2.5} /> : <ArrowDownRight size={11} strokeWidth={2.5} />}
-                        {trend?.split(' ')[0]}
-                    </span>
-                    <span style={{
-                        fontSize: 10,
-                        color: '#94a3b8',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                    }}>
-                        {trend?.split(' ').slice(1).join(' ')}
-                    </span>
-                </div>
             </div>
-
-            {/* Bottom visualization: Sparkline OR Progress Bar */}
-            {showProgress ? (
-                <div style={{
-                    padding: '0 16px 12px',
-                    marginTop: 'auto'
-                }}>
-                    <div style={{
-                        height: 6,
-                        background: '#f1f5f9',
-                        borderRadius: 3,
-                        overflow: 'hidden',
-                        position: 'relative'
-                    }}>
-                        <div style={{
-                            height: '100%',
-                            width: `${Math.min(progressValue, 100)}%`,
-                            background: gradient || color,
-                            borderRadius: 3,
-                            transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
-                            boxShadow: `0 0 12px ${color}40`
-                        }} />
-                    </div>
-                </div>
-            ) : sparkline ? (
-                <div style={{
-                    marginTop: 'auto',
-                    width: '100%',
-                    height: 36,
-                    borderTop: '1px solid #f8fafc'
-                }}>
-                    <PremiumSparkline data={sparkline} color={color} height={36} />
-                </div>
-            ) : (
-                <div style={{
-                    height: 36,
-                    marginTop: 'auto',
-                    background: `linear-gradient(180deg, transparent 0%, ${color}08 100%)`,
-                    borderTop: '1px solid #f8fafc',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
-                    <Sparkles size={14} style={{ color: `${color}50` }} />
-                </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', padding: '6px 12px', background: '#ffffff' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                    See more details <span style={{ fontSize: 8 }}>&gt;</span>
+                </span>
+            </div>
         </div>
     );
 });
@@ -442,7 +293,7 @@ const KpiStrip = ({
         {
             label: 'PACING RATE',
             value: `${achievementRate.toFixed(1)}%`,
-            subValue: achievementRate >= 100 ? '🏆 Elite' : achievementRate >= 80 ? '⭐ High' : achievementRate >= 50 ? '✅ On Track' : '⚠️ Critical',
+            subValue: achievementRate >= 100 ? 'Elite' : achievementRate >= 80 ? 'High' : achievementRate >= 50 ? 'On Track' : 'Critical',
             trend: achievementRate >= 100 ? 'Outperforming' : achievementRate >= 50 ? 'On Schedule' : 'Below Target',
             isPositive: achievementRate >= 50,
             icon: <Award size={16} strokeWidth={2.5} />,

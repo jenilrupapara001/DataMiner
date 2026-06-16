@@ -166,13 +166,13 @@ const Sidebar = () => {
                 theme={{
                     components: {
                         Menu: {
-                            itemSelectedColor: '#171717',
-                            itemSelectedBg: '#f4f4f5',
+                            itemSelectedColor: '#4f46e5',
+                            itemSelectedBg: 'rgba(79, 70, 229, 0.08)',
                             itemHoverBg: 'var(--bg-hover)',
                             itemHoverColor: 'var(--text-primary)',
                             groupTitleColor: 'var(--text-muted)',
-                            groupTitleFontSize: 10,
-                            itemHeight: 38,
+                            groupTitleFontSize: 9,
+                            itemHeight: 32,
                             iconSize: 16,
                             itemPaddingInline: 16,
                         },

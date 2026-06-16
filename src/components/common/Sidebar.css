@@ -80,8 +80,10 @@
     font-weight: 700 !important;
     letter-spacing: 0.06em !important;
     text-transform: uppercase !important;
-    padding: 14px 16px 4px !important;
+    padding: 6px 16px 2px !important;
     transition: opacity 0.15s;
+    color: #4f46e5 !important; /* Make group titles pop with color */
+    opacity: 0.85;
 }
 
 /* Individual Menu Items Styling */
@@ -98,7 +100,8 @@
 /* Selected Menu Item Indicator Accent */
 .sidebar-sider .ant-menu-item-selected {
     font-weight: 600 !important;
-    background-color: var(--bg-active-nav) !important;
+    background-color: rgba(79, 70, 229, 0.08) !important;
+    color: #4f46e5 !important;
 }
 
 .sidebar-sider .ant-menu-item-selected::after {
@@ -108,8 +111,8 @@
     top: 50%;
     transform: translateY(-50%);
     width: 3px;
-    height: 18px;
-    background-color: #171717;
+    height: 16px;
+    background-color: #4f46e5;
     border-radius: 0 4px 4px 0;
 }
 

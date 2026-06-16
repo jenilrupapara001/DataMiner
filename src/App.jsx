@@ -34,6 +34,7 @@ const ProfitLossPage = lazy(() => import('./pages/ProfitLossPage'));
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AsinManagerPage = lazy(() => import('./pages/AsinManagerPage'));
 const AdsManagerPage = lazy(() => import('./pages/AdsManagerPage'));
+const GmsTrackerPage = lazy(() => import('./pages/GmsTrackerPage'));
 const ActionsPage = lazy(() => import('./pages/ActionsPage.jsx'));
 const SellerAsinTrackerPage = lazy(() => import('./pages/SellerAsinTrackerPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
@@ -138,6 +139,7 @@ function AppRoutes() {
                   <Route path="/ads-report" element={<ProtectedRoute permission="adsreport_view"><AdsReport /></ProtectedRoute>} />
                   <Route path="/asin-tracker" element={<ProtectedRoute permission="asinmanager_view"><AsinManagerPage /></ProtectedRoute>} />
                   <Route path="/ads-manager" element={<ProtectedRoute permission="adsreport_view"><AdsManagerPage /></ProtectedRoute>} />
+                  <Route path="/gms-tracker" element={<ProtectedRoute permission="gms_tracker_view"><GmsTrackerPage /></ProtectedRoute>} />
                   <Route path="/profit-loss" element={<ProtectedRoute permission="pnlreport_view"><ProfitLossPage /></ProtectedRoute>} />
                   <Route path="/inventory" element={<ProtectedRoute permission="inventoryreport_view"><InventoryPage /></ProtectedRoute>} />
                   <Route path="/actions" element={<ProtectedRoute permission="actions_view"><ActionsPage /></ProtectedRoute>} />

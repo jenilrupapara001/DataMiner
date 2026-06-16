@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const uploadController = require('../controllers/uploadController');
+const { authenticate, requirePermission } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads'),
@@ -17,7 +18,12 @@ const fileFilter = (req, file, cb) => {
     'application/json'
   ];
 
-  if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.csv') || file.originalname.endsWith('.json')) {
+  const ext = file.originalname.toLowerCase();
+  if (allowedTypes.includes(file.mimetype) || 
+      ext.endsWith('.csv') || 
+      ext.endsWith('.json') || 
+      ext.endsWith('.xlsx') || 
+      ext.endsWith('.xls')) {
     cb(null, true);
   } else {
     cb(new Error('Only Excel (.xlsx, .xls), CSV, and JSON files are accepted'), false);
@@ -38,5 +44,10 @@ router.post('/upload/upload-monthly', upload.single('file'), uploadController.up
 router.post('/upload/upload-ads', upload.single('file'), uploadController.uploadAdsData);
 router.post('/upload/octoparse', upload.single('file'), uploadController.uploadOctoparseData);
 router.get('/upload/upload-stats', uploadController.getUploadStats);
+
+// GMS endpoints
+router.post('/upload/upload-gms', authenticate, requirePermission('gms_tracker_import'), upload.single('file'), uploadController.uploadGmsData);
+router.get('/upload/gms-data', authenticate, requirePermission('gms_tracker_view'), uploadController.getGmsData);
+router.post('/upload/gms-clear', authenticate, requirePermission('gms_tracker_export'), uploadController.clearGmsData);
 
 module.exports = router;

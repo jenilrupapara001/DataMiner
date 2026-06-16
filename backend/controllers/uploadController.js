@@ -640,3 +640,235 @@ exports.uploadAsinMapping = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.uploadGmsData = async (req, res) => {
+  let filePath = null;
+  let tempTableName = null;
+  const pool = await getPool();
+
+  try {
+    if (!req.file) throw new Error('No file uploaded');
+    filePath = req.file.path;
+    
+    const isCSV = filePath.toLowerCase().endsWith('.csv');
+    let workbook = XLSX.readFile(filePath, isCSV ? { raw: true } : {});
+    let sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+    sheet = null;
+    workbook = null;
+
+    const reportDate = req.body.date; // 'YYYY-MM-DD'
+    if (!reportDate) throw new Error('Date is required');
+
+    const userRole = req.user.role?.name || req.user.role;
+    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
+    let allowedAsins = null;
+
+    if (!isGlobalUser) {
+      const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
+      if (assignedSellerIds.length === 0) {
+        throw new Error('You do not have any assigned sellers.');
+      }
+      const allowedAsinsResult = await pool.request()
+        .query(`SELECT AsinCode FROM Asins WHERE SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`);
+      allowedAsins = new Set(allowedAsinsResult.recordset.map(r => r.AsinCode.toUpperCase()));
+    }
+
+    const columnsList = [
+      { name: 'Asin', type: sql.VarChar(50), required: true },
+      { name: 'Date', type: sql.Date, required: true },
+      { name: 'Brand', type: sql.NVarChar(255) },
+      { name: 'StoreCode', type: sql.NVarChar(50) },
+      { name: 'OrderedRevenue', type: sql.Decimal(18, 2) },
+      { name: 'OrderedUnits', type: sql.Int },
+      { name: 'ShippedRevenue', type: sql.Decimal(18, 2) },
+      { name: 'ShippedCOGS', type: sql.Decimal(18, 2) },
+      { name: 'ShippedUnits', type: sql.Int },
+      { name: 'CustomerReturns', type: sql.Int }
+    ];
+
+    tempTableName = `##TempGms_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+    const colDefs = columnsList.map(col => {
+      let typeStr = 'NVARCHAR(MAX)';
+      if (col.type === sql.Int) {
+        typeStr = 'INT';
+      } else if (col.type === sql.Date) {
+        typeStr = 'DATE';
+      } else if (col.type.type === sql.VarChar) {
+        typeStr = `VARCHAR(${col.type.length || 255})`;
+      } else if (col.type.type === sql.Decimal) {
+        typeStr = `DECIMAL(${col.type.precision || 18}, ${col.type.scale || 4})`;
+      } else if (col.type.type === sql.NVarChar) {
+        typeStr = `NVARCHAR(${col.type.length || 255})`;
+      }
+      return `[${col.name}] ${typeStr} ${col.required ? 'NOT NULL' : 'NULL'}`;
+    }).join(', ');
+
+    await pool.request().query(`CREATE TABLE ${tempTableName} (${colDefs})`);
+
+    const table = new sql.Table(tempTableName);
+    columnsList.forEach(c => table.columns.add(c.name, c.type, { nullable: !c.required }));
+
+    const uniqueRowMap = new Map();
+    let skippedCount = 0;
+
+    for (const row of jsonData) {
+      let asin = findValue(row, ['asin', 'ASIN', 'Jio Code', 'jio_code', 'jiocode']);
+      if (!asin) { skippedCount++; continue; }
+      asin = asin.replace(/^"+|"+$/g, '').trim().toUpperCase();
+
+      if (allowedAsins && !allowedAsins.has(asin)) {
+        skippedCount++;
+        continue;
+      }
+
+      const parseNum = (val) => {
+        if (!val) return 0;
+        const cleaned = val.toString().replace(/[^0-9.-]/g, '');
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
+      const brand = findValue(row, ['brand', 'Brand', 'Seller Name', 'Seller']) || 'Generic';
+      const storeCode = findValue(row, ['storecode', 'store code', 'store_code', 'marketplace']) || 'IN';
+      const orderedRevenue = parseNum(findValue(row, ['ordered revenue', 'ordered_revenue', 'revenue']));
+      const orderedUnits = Math.floor(parseNum(findValue(row, ['ordered units', 'ordered_units', 'units'])));
+      const shippedRevenue = parseNum(findValue(row, ['shipped revenue', 'shipped_revenue']));
+      const shippedCOGS = parseNum(findValue(row, ['shipped cogs', 'shipped_cogs', 'cogs']));
+      const shippedUnits = Math.floor(parseNum(findValue(row, ['shipped units', 'shipped_units'])));
+      const customerReturns = Math.floor(parseNum(findValue(row, ['customer returns', 'customer_returns', 'returns'])));
+
+      const parsedDate = parseDate(reportDate);
+
+      const compositeKey = `${asin}|${reportDate}`;
+      uniqueRowMap.set(compositeKey, [
+        asin, parsedDate, brand, storeCode,
+        orderedRevenue, orderedUnits, shippedRevenue,
+        shippedCOGS, shippedUnits, customerReturns
+      ]);
+    }
+
+    for (const values of uniqueRowMap.values()) {
+      table.rows.add(...values);
+    }
+
+    const uniqueCount = uniqueRowMap.size;
+
+    if (uniqueCount > 0) {
+      await pool.request().bulk(table);
+
+      // Perform atomic MERGE / UPSERT into GmsDailyPerformance
+      const updateCols = columnsList
+        .filter(c => !['Asin', 'Date'].includes(c.name))
+        .map(c => `T.[${c.name}] = S.[${c.name}]`)
+        .join(', ');
+
+      const insertColNames = columnsList.map(c => `[${c.name}]`).join(', ');
+      const insertColVals = columnsList.map(c => `S.[${c.name}]`).join(', ');
+
+      await executeWithRetry(async () => {
+        await pool.request().query(`
+          MERGE GmsDailyPerformance WITH (HOLDLOCK) AS T
+          USING ${tempTableName} AS S
+          ON (T.Asin = S.Asin AND T.Date = S.Date)
+          WHEN MATCHED THEN
+            UPDATE SET ${updateCols}, T.UpdatedAt = dbo.GetEnvDate()
+          WHEN NOT MATCHED THEN
+            INSERT (Id, ${insertColNames}, CreatedAt, UpdatedAt)
+            VALUES (SUBSTRING(LOWER(REPLACE(CAST(NEWID() AS VARCHAR(36)), '-', '')), 1, 24), ${insertColVals}, dbo.GetEnvDate(), dbo.GetEnvDate());
+        `);
+      });
+    }
+
+    res.json({
+      success: true,
+      processed: uniqueCount,
+      skipped: skippedCount,
+      duplicatesCondensed: jsonData.length - uniqueCount - skippedCount,
+      errors: 0
+    });
+
+  } catch (err) {
+    console.error("❌ GMS Upload Failed:", err);
+    res.status(500).json({ 
+      error: "GMS Ingestion Pipeline Error", 
+      details: err.message 
+    });
+  } finally {
+    if (tempTableName) {
+      try { 
+        await pool.request().query(`IF OBJECT_ID('tempdb..${tempTableName}') IS NOT NULL DROP TABLE ${tempTableName}`);
+      } catch(e) {}
+    }
+    if (filePath && fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+  }
+};
+
+exports.getGmsData = async (req, res) => {
+  try {
+    const userRole = req.user.role?.name || req.user.role;
+    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
+    let whereClause = '';
+
+    if (!isGlobalUser) {
+      const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
+      if (assignedSellerIds.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+      whereClause = `WHERE a.SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+    }
+
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        g.Date as date,
+        g.Asin as asin,
+        g.Brand as brand,
+        g.StoreCode as storeCode,
+        g.OrderedRevenue as orderedRevenue,
+        g.OrderedUnits as orderedUnits,
+        g.ShippedRevenue as shippedRevenue,
+        g.ShippedCOGS as shippedCOGS,
+        g.ShippedUnits as shippedUnits,
+        g.CustomerReturns as customerReturns,
+        s.Name as dbBrand,
+        a.Title as productTitle
+      FROM GmsDailyPerformance g
+      LEFT JOIN Asins a ON g.Asin = a.AsinCode
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      ${whereClause}
+      ORDER BY g.Date DESC
+    `);
+    
+    // Format Date object to YYYY-MM-DD avoiding timezone shifts
+    const formatted = result.recordset.map(row => {
+      if (!row.date) return { ...row, date: null };
+      const d = new Date(row.date);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const localDate = new Date(d.getTime() - tzOffset);
+      return {
+        ...row,
+        date: localDate.toISOString().split('T')[0]
+      };
+    });
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    console.error("❌ Gms fetch error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch GMS data" });
+  }
+};
+
+exports.clearGmsData = async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request().query("DELETE FROM GmsDailyPerformance");
+    res.json({ success: true, message: "GMS Performance data cleared successfully" });
+  } catch (error) {
+    console.error("❌ Gms clear error:", error);
+    res.status(500).json({ success: false, message: "Failed to clear GMS data" });
+  }
+};

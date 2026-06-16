@@ -110,6 +110,16 @@ export function useNavigationItems() {
                 }
             ),
             guard(
+                isAdmin || isGlobalUser || hasPermission('gms_tracker_view'),
+                {
+                    key: 'gms-tracker',
+                    label: 'GMS Tracker',
+                    path: '/gms-tracker',
+                    icon: TrendingUp,
+                    section: 'catalog',
+                }
+            ),
+            guard(
                 isAdmin || isGlobalUser || isBrandManager || hasPermission('asintracker_view'),
                 {
                     key: 'seller-tracker',

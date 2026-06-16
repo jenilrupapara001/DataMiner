@@ -1,11 +1,7 @@
-/**
- * Seller ASIN Tracker Controller
- * Uses Keepa API to auto-discover and sync ASINs for each seller.
- */
-
 const { sql, getPool, generateId } = require('../database/db');
 const { getSellerAsins, getTokenStatus, getDomainId, isValidSellerId } = require('../services/keepaService');
 const MarketSyncService = require('../services/marketDataSyncService');
+const SystemLogService = require('../services/SystemLogService');
 
 
 /**
@@ -200,6 +196,19 @@ const syncSellerFromKeepa = async (seller) => {
             .query('UPDATE Sellers SET KeepaAsinCount = @Count, LastKeepaSync = dbo.GetEnvDate(), UpdatedAt = dbo.GetEnvDate() WHERE Id = @Id');
     }
 
+    // Log Sync Event to SystemLogs
+    await SystemLogService.log({
+        type: 'SYNC_COMPLETED',
+        entityType: 'Seller',
+        entityId: seller.Id,
+        entityTitle: 'Keepa synchronization completed',
+        description: `Successfully synced keepa catalog for ${seller.name}. Discovered ${newAsins.length} new ASINs.`,
+        metadata: {
+            added: newAsins.length,
+            total: keepaAsins.length
+        }
+    });
+
     return {
         added: newAsins.length,
         total: keepaAsins.length,
@@ -239,6 +248,14 @@ exports.syncSeller = async (req, res) => {
         res.json({ success: true, seller: seller.name, ...result });
     } catch (error) {
         console.error('[SellerTracker] syncSeller error:', error.message);
+        await SystemLogService.log({
+            type: 'SYNC_FAILED',
+            entityType: 'Seller',
+            entityId: req.params.sellerId,
+            entityTitle: 'Keepa synchronization failed',
+            description: `Keepa sync failed for seller ID ${req.params.sellerId}: ${error.message}`,
+            metadata: { error: error.message }
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -321,3 +338,157 @@ async function notifySellerUsers(sellerId, sellerName, newAsinsCount) {
 
 // Export for scheduler use
 module.exports.syncSellerFromKeepaInternal = syncSellerFromKeepa;
+
+/**
+ * GET /api/seller-tracker/:sellerId/activities
+ * Returns recent activity logs for a given seller.
+ */
+exports.getSellerActivities = async (req, res) => {
+    try {
+        const { sellerId } = req.params;
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .query(`
+                SELECT TOP 50 l.Id as id, l.Type as type, l.EntityTitle as title, l.Description as description, 
+                       l.Metadata as metadata, l.CreatedAt as timestamp
+                FROM SystemLogs l
+                WHERE l.EntityId = @sellerId OR l.EntityId IN (
+                    SELECT Id FROM Asins WHERE SellerId = @sellerId
+                )
+                ORDER BY l.CreatedAt DESC
+            `);
+            
+        const activities = result.recordset.map(r => {
+            let metadataParsed = null;
+            if (r.metadata) {
+                try {
+                    metadataParsed = JSON.parse(r.metadata);
+                } catch (e) {
+                    metadataParsed = r.metadata;
+                }
+            }
+            return {
+                id: r.id,
+                type: r.type,
+                title: r.title,
+                description: r.description,
+                timestamp: r.timestamp,
+                metadata: metadataParsed
+            };
+        });
+
+        res.json({ success: true, data: activities });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * GET /api/seller-tracker/:sellerId/tasks
+ * Returns upcoming tasks associated with a given seller.
+ */
+exports.getSellerTasks = async (req, res) => {
+    try {
+        const { sellerId } = req.params;
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .query(`
+                SELECT Id as id, Title as title, Description as description, Category as category,
+                       Priority as priority, Status as status, AssignedTo as assignee, DueDate as dueDate
+                FROM Tasks
+                WHERE SellerId = @sellerId
+                ORDER BY CreatedAt DESC
+            `);
+        res.json({ success: true, data: result.recordset });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * POST /api/seller-tracker/:sellerId/tasks
+ * Creates a new task for a seller in both Tasks and Actions tables.
+ */
+exports.createSellerTask = async (req, res) => {
+    try {
+        const { sellerId } = req.params;
+        const { title, description, category, priority, assignee, dueDate } = req.body;
+        const creatorId = (req.user?._id || req.user?.id || '').toString();
+
+        const pool = await getPool();
+
+        // Fetch seller Name
+        const sellerResult = await pool.request()
+            .input('id', sql.VarChar, sellerId)
+            .query('SELECT Name FROM Sellers WHERE Id = @id');
+        if (sellerResult.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: 'Seller not found' });
+        }
+        const sellerName = sellerResult.recordset[0].Name;
+
+        const taskId = generateId();
+
+        // 1. Insert into Tasks
+        await pool.request()
+            .input('id', sql.VarChar, taskId)
+            .input('title', sql.NVarChar, title)
+            .input('description', sql.NVarChar, description || '')
+            .input('category', sql.NVarChar, category || 'Manual')
+            .input('priority', sql.NVarChar, priority || 'Medium')
+            .input('status', sql.NVarChar, 'To-Do')
+            .input('type', sql.NVarChar, 'Manual')
+            .input('sellerId', sql.VarChar, sellerId)
+            .input('sellerName', sql.NVarChar, sellerName)
+            .input('createdBy', sql.VarChar, creatorId)
+            .input('assignedTo', sql.VarChar, assignee || null)
+            .input('dueDate', sql.DateTime2, dueDate ? new Date(dueDate) : null)
+            .query(`
+                INSERT INTO Tasks (Id, Title, Description, Category, Priority, Status, Type,
+                    SellerId, SellerName, CreatedBy, AssignedTo, DueDate, CreatedAt, UpdatedAt)
+                VALUES (@id, @title, @description, @category, @priority, @status, @type,
+                    @sellerId, @sellerName, @createdBy, @assignedTo, @dueDate, dbo.GetEnvDate(), dbo.GetEnvDate())
+            `);
+
+        // 2. Insert into Actions
+        const asinsJson = JSON.stringify([]);
+        const stageJson = JSON.stringify({ current: 'PENDING', history: [] });
+        const timeTrackingJson = JSON.stringify({ startDate: new Date(), deadline: dueDate ? new Date(dueDate) : null, timeLimit: 60 });
+        const actionPriority = (priority || 'MEDIUM').toUpperCase();
+
+        await pool.request()
+            .input('actionId', sql.VarChar, taskId)
+            .input('actionTitle', sql.NVarChar, title)
+            .input('actionDesc', sql.NVarChar, description || '')
+            .input('actionType', sql.NVarChar, category || 'TASK')
+            .input('actionPriority', sql.NVarChar, actionPriority)
+            .input('actionStatus', sql.NVarChar, 'PENDING')
+            .input('actionSellerId', sql.VarChar, sellerId)
+            .input('actionCreatedBy', sql.VarChar, creatorId)
+            .input('actionAssignedTo', sql.VarChar, assignee || null)
+            .input('actionAsins', sql.NVarChar, asinsJson)
+            .input('actionStage', sql.NVarChar, stageJson)
+            .input('actionTimeTracking', sql.NVarChar, timeTrackingJson)
+            .input('dueDate', sql.DateTime2, dueDate ? new Date(dueDate) : null)
+            .query(`
+                INSERT INTO Actions (Id, Title, Description, Type, Priority, Status, SellerId, CreatedBy, AssignedTo, Asins, Stage, TimeTracking, DueDate, CreatedAt, UpdatedAt)
+                VALUES (@actionId, @actionTitle, @actionDesc, @actionType, @actionPriority, @actionStatus, @actionSellerId, @actionCreatedBy, @actionAssignedTo, @actionAsins, @actionStage, @actionTimeTracking, @dueDate, dbo.GetEnvDate(), dbo.GetEnvDate())
+            `);
+
+        // Log task creation
+        await SystemLogService.log({
+            type: 'TASK_CREATED',
+            entityType: 'Seller',
+            entityId: sellerId,
+            entityTitle: 'New task created',
+            description: `Manual task "${title}" created for seller ${sellerName}.`,
+            user: req.user
+        });
+
+        res.json({ success: true, taskId, message: 'Task created successfully' });
+    } catch (err) {
+        console.error('Failed to create task:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
