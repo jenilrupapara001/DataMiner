@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card, Row, Col, Table, Button, DatePicker, Select,
-  Upload, Modal, Typography, Space, Input, Tag, Tooltip, message, Empty, Progress
+  Upload, Modal, Typography, Space, Input, Tag, Tooltip, message, Empty, Progress, Skeleton
 } from 'antd';
 import {
   UploadOutlined, FilterOutlined,
@@ -84,6 +84,7 @@ const getAsinTrend = (asinRow, type, gmsData) => {
 export default function GmsTrackerPage() {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [gmsData, setGmsData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadDate, setUploadDate] = useState(dayjs());
   const [selectedBrands, setSelectedBrands] = useState([]);
@@ -105,39 +106,31 @@ export default function GmsTrackerPage() {
 
   // Fetch Brands/Sellers, ASINs & GMS Tracker data from Database
   useEffect(() => {
-    const fetchSellers = async () => {
+    const loadAllData = async () => {
+      setLoading(true);
       try {
-        const res = await sellerApi.getAll({ limit: 1000 });
-        if (res.success && res.data?.sellers) {
-          setDbSellers(res.data.sellers);
+        const [sellersRes, asinsRes, gmsRes] = await Promise.all([
+          sellerApi.getAll({ limit: 1000 }).catch(() => null),
+          asinApi.getAllWithoutPagination().catch(() => null),
+          gmsApi.getAll().catch(() => null)
+        ]);
+
+        if (sellersRes && sellersRes.success && sellersRes.data?.sellers) {
+          setDbSellers(sellersRes.data.sellers);
+        }
+        if (asinsRes && asinsRes.success && asinsRes.data) {
+          setDbAsins(asinsRes.data.asins || asinsRes.data || []);
+        }
+        if (gmsRes && gmsRes.success && gmsRes.data) {
+          setGmsData(gmsRes.data);
         }
       } catch (err) {
-        console.error('Failed to fetch sellers from db:', err);
+        console.error('Failed to load initial GMS data:', err);
+      } finally {
+        setLoading(false);
       }
     };
-    const fetchAsins = async () => {
-      try {
-        const res = await asinApi.getAllWithoutPagination();
-        if (res.success && res.data) {
-          setDbAsins(res.data.asins || res.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch ASINs from db:', err);
-      }
-    };
-    const fetchGmsData = async () => {
-      try {
-        const res = await gmsApi.getAll();
-        if (res.success && res.data) {
-          setGmsData(res.data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch GMS data from db:', err);
-      }
-    };
-    fetchSellers();
-    fetchAsins();
-    fetchGmsData();
+    loadAllData();
   }, []);
 
   const clearAllData = () => {
@@ -939,7 +932,27 @@ export default function GmsTrackerPage() {
       </Card>
 
       {/* SUMMARY STATS CARDS */}
-      <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Row gutter={[10, 10]}>
+            {[1, 2, 3, 4, 5, 6, 7].map(i => (
+              <Col key={i} xs={24} sm={12} md={6} lg={6} xl={3.4}>
+                <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', height: 110 }} styles={{ body: { padding: 12 } }}>
+                  <Skeleton active paragraph={{ rows: 2 }} title={false} />
+                </Card>
+              </Col>
+            ))}
+          </Row>
+          <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', padding: 16 }}>
+            <Skeleton active paragraph={{ rows: 6 }} />
+          </Card>
+          <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', background: '#ffffff', padding: 16 }}>
+            <Skeleton active paragraph={{ rows: 8 }} />
+          </Card>
+        </div>
+      ) : (
+        <>
+          <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
         {/* Card 1: Ordered Revenue */}
         <Col xs={24} sm={12} md={6} lg={6} xl={3.4}>
           <Card 
@@ -1247,6 +1260,8 @@ export default function GmsTrackerPage() {
           </div>
         )}
       </Card>
+    </>
+  )}
 
       {/* FILE UPLOAD MODAL WITH COMPLETE DATE PICKER */}
       <Modal
