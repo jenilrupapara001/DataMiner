@@ -143,7 +143,7 @@ exports.getTargets = async (req, res) => {
                 t.Id, t.SellerId, t.BrandManager, t.TargetType, t.Year, t.Month, t.TotalTargetValue, t.GoalType, t.CreatedAt,
                 s.Name AS SellerName
             FROM GmsTargets t
-            LEFT JOIN Sellers s ON t.SellerId = s.SellerId
+            LEFT JOIN Sellers s ON t.SellerId = s.Id
             ${whereClause}
             ORDER BY t.CreatedAt DESC
         `;
@@ -197,16 +197,16 @@ exports.getTargets = async (req, res) => {
             statsRequest.input('maxDate', sql.Date, `${maxYear}-12-31`);
 
             const dailyQuery = `
-                SELECT s.SellerId AS ReadableSellerId, p.Date,
+                SELECT s.Id AS ReadableSellerId, p.Date,
                        SUM(ISNULL(p.AdSpend, 0)) as AdSpend,
                        SUM(ISNULL(p.AdSales, 0)) as AdSales,
                        SUM(ISNULL(p.OrganicSales, 0)) as OrganicSales
                 FROM Asins a
                 INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
                 INNER JOIN Sellers s ON a.SellerId = s.Id
-                WHERE s.SellerId IN (${sellerParams.join(',')})
+                WHERE s.Id IN (${sellerParams.join(',')})
                   AND p.Date >= @minDate AND p.Date <= @maxDate
-                GROUP BY s.SellerId, p.Date
+                GROUP BY s.Id, p.Date
             `;
             const dailyResult = await statsRequest.query(dailyQuery);
 
@@ -284,7 +284,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Month level achievements
             for (const monthItem of monthlyBreakdown) {
-                if (monthItem.AchievedValue === null) {
+                if (monthItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') {
                     const { startDate, endDate } = getMonthRange(year, monthItem.PeriodValue);
                     monthItem.AchievedValue = calculateAchievementInMemory(sellerId, startDate, endDate, goalType);
                 }
@@ -292,7 +292,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Week level achievements
             for (const weekItem of weeklyBreakdown) {
-                if (weekItem.AchievedValue === null) {
+                if (weekItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') {
                     const actualMonth = targetType === 'MONTHLY' ? targetMonth : Math.floor(weekItem.PeriodValue / 10);
                     const actualWeek = targetType === 'MONTHLY' ? weekItem.PeriodValue : (weekItem.PeriodValue % 10);
                     const { startDate, endDate } = getWeekRange(year, actualMonth, actualWeek);
@@ -302,7 +302,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Day level achievements
             for (const dayItem of dailyBreakdown) {
-                if (dayItem.AchievedValue === null && dayItem.SpecificDate) {
+                if ((dayItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') && dayItem.SpecificDate) {
                     const dateStr = format(new Date(dayItem.SpecificDate), 'yyyy-MM-dd');
                     dayItem.AchievedValue = calculateDayAchievementInMemory(sellerId, dateStr, goalType);
                 }
@@ -931,11 +931,12 @@ exports.importAchievements = async (req, res) => {
                 }
 
                 // ══════════════════════════════════════
-                // FIND OR CREATE YEARLY target
+                // FIND OR CREATE YEARLY target (using internal hex ID)
                 // ══════════════════════════════════════
+                const internalSellerId = sellerCodeToInternalId.get(sellerId) || sellerId;
                 let yearlyTargetId = null;
                 const yearlyResult = await transaction.request()
-                    .input('sellerId', sql.NVarChar, sellerId)
+                    .input('sellerId', sql.NVarChar, internalSellerId)
                     .input('year', sql.Int, numYear)
                     .input('goalType', sql.VarChar, goalType)
                     .query(`
@@ -958,7 +959,7 @@ exports.importAchievements = async (req, res) => {
                     isNewYearlyTarget = true;
                     await transaction.request()
                         .input('id', sql.VarChar, yearlyTargetId)
-                        .input('sellerId', sql.NVarChar, sellerId)
+                        .input('sellerId', sql.NVarChar, internalSellerId)
                         .input('brandManager', sql.NVarChar, brandManagerVal)
                         .input('userId', sql.VarChar, resolvedUserId)
                         .input('targetType', sql.VarChar, 'YEARLY')
