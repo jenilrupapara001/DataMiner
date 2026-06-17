@@ -350,9 +350,12 @@ exports.getSellerActivities = async (req, res) => {
         const result = await pool.request()
             .input('sellerId', sql.VarChar, sellerId)
             .query(`
-                SELECT TOP 50 l.Id as id, l.Type as type, l.EntityTitle as title, l.Description as description, 
-                       l.Metadata as metadata, l.CreatedAt as timestamp
+                SELECT TOP 50 
+                       l.Id as id, l.Type as type, l.EntityTitle as title, l.Description as description, 
+                       l.Metadata as metadata, l.CreatedAt as timestamp,
+                       u.FirstName as actorFirstName, u.LastName as actorLastName, u.Email as actorEmail
                 FROM SystemLogs l
+                LEFT JOIN Users u ON l.UserId = u.Id
                 WHERE l.EntityId = @sellerId OR l.EntityId IN (
                     SELECT Id FROM Asins WHERE SellerId = @sellerId
                 )
@@ -362,11 +365,8 @@ exports.getSellerActivities = async (req, res) => {
         const activities = result.recordset.map(r => {
             let metadataParsed = null;
             if (r.metadata) {
-                try {
-                    metadataParsed = JSON.parse(r.metadata);
-                } catch (e) {
-                    metadataParsed = r.metadata;
-                }
+                try { metadataParsed = JSON.parse(r.metadata); }
+                catch (e) { metadataParsed = r.metadata; }
             }
             return {
                 id: r.id,
@@ -374,7 +374,10 @@ exports.getSellerActivities = async (req, res) => {
                 title: r.title,
                 description: r.description,
                 timestamp: r.timestamp,
-                metadata: metadataParsed
+                metadata: metadataParsed,
+                actor: r.actorFirstName
+                    ? { firstName: r.actorFirstName, lastName: r.actorLastName, email: r.actorEmail }
+                    : null
             };
         });
 
@@ -383,6 +386,7 @@ exports.getSellerActivities = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
+
 
 /**
  * GET /api/seller-tracker/:sellerId/tasks

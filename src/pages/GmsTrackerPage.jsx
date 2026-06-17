@@ -1185,16 +1185,18 @@ export default function GmsTrackerPage() {
             className="gms-view-toggle"
             style={{ fontWeight: 600, fontSize: 11 }}
           />
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={() => {
-              setExportLevel(viewLevel);
-              setIsExportOpen(true);
-            }}
-            className="gms-btn-export"
-          >
-            Export Report
-          </Button>
+          {(isAdmin || isGlobalUser || hasPermission('gms_tracker_export')) && (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => {
+                setExportLevel(viewLevel);
+                setIsExportOpen(true);
+              }}
+              className="gms-btn-export"
+            >
+              Export Report
+            </Button>
+          )}
           {(isAdmin || isGlobalUser || hasPermission('gms_tracker_import')) && (
             <Button
               type="primary"

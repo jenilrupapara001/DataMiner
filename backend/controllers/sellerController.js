@@ -407,6 +407,19 @@ exports.updateSeller = async (req, res) => {
     }
 
     if (isGlobalUser && assignedUserIds !== undefined) {
+      // Fetch current managers BEFORE changing them (for change log)
+      const prevManagersResult = await pool.request()
+        .input('sid', sql.VarChar, id)
+        .query(`
+          SELECT u.Id, u.FirstName, u.LastName, u.Email
+          FROM Users u
+          JOIN UserSellers us ON u.Id = us.UserId
+          WHERE us.SellerId = @sid
+        `);
+      const prevManagers = prevManagersResult.recordset;
+      const prevManagerIds = prevManagers.map(m => m.Id);
+
+      // Apply new manager assignments
       await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
       if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
         for (const uId of assignedUserIds) {
@@ -416,6 +429,45 @@ exports.updateSeller = async (req, res) => {
             .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
         }
       }
+
+      // Detect manager changes and log them
+      const newManagerIds = Array.isArray(assignedUserIds) ? assignedUserIds.map(String) : [];
+      const removed = prevManagers.filter(m => !newManagerIds.includes(String(m.Id)));
+      const added = newManagerIds.filter(id => !prevManagerIds.map(String).includes(String(id)));
+
+      if (removed.length > 0 || added.length > 0) {
+        // Fetch names for newly added managers
+        let addedNames = [];
+        if (added.length > 0) {
+          const addedNamesResult = await pool.request()
+            .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${added.map(uid => `'${uid}'`).join(',')})`);
+          addedNames = addedNamesResult.recordset;
+        }
+
+        const removedDesc = removed.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
+        const addedDesc = addedNames.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
+
+        let changeDesc = `Manager assignment changed for seller "${finalName}" (${finalMarketplace}).`;
+        if (removed.length > 0) changeDesc += ` Removed: ${removedDesc}.`;
+        if (added.length > 0) changeDesc += ` Added: ${addedDesc}.`;
+
+        await SystemLogService.log({
+          type: 'MANAGER_CHANGE',
+          entityType: 'SELLER',
+          entityId: id,
+          entityTitle: finalName,
+          user: req.user?._id || req.userId,
+          description: changeDesc,
+          metadata: {
+            previousManagers: prevManagers.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
+            newManagerIds: newManagerIds,
+            removedManagers: removed.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
+            addedManagerIds: added
+          }
+        });
+      }
+    } else if (!isGlobalUser) {
+      // Non-global users cannot reassign managers — skip manager update block
     }
 
     clearSellerCache();

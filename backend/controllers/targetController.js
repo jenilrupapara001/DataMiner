@@ -512,14 +512,21 @@ exports.createTargets = async (req, res) => {
 
         try {
             for (const targetConfig of targets) {
+                const bmMsg = targetConfig.brandManager ? ` assigned to manager "${targetConfig.brandManager}"` : '';
                 await SystemLogService.log({
                     type: 'TARGET_CREATE',
                     entityType: 'TARGET',
                     entityId: targetConfig.sellerId,
                     entityTitle: targetConfig.sellerId,
                     user: req.user,
-                    description: `Created ${targetConfig.targetType} target for brand ${targetConfig.sellerId} (${targetConfig.goalType}, Year: ${targetConfig.year}, Total: ${targetConfig.totalTargetValue})`,
-                    metadata: { sellerId: targetConfig.sellerId, year: targetConfig.year, goalType: targetConfig.goalType, total: targetConfig.totalTargetValue }
+                    description: `Created ${targetConfig.targetType} target for brand ${targetConfig.sellerId} (${targetConfig.goalType}, Year: ${targetConfig.year}, Total: ${targetConfig.totalTargetValue})${bmMsg}`,
+                    metadata: {
+                        sellerId: targetConfig.sellerId,
+                        year: targetConfig.year,
+                        goalType: targetConfig.goalType,
+                        total: targetConfig.totalTargetValue,
+                        brandManager: targetConfig.brandManager || null
+                    }
                 });
             }
         } catch (logErr) {
@@ -940,7 +947,7 @@ exports.importAchievements = async (req, res) => {
                     .input('year', sql.Int, numYear)
                     .input('goalType', sql.VarChar, goalType)
                     .query(`
-                        SELECT TOP 1 Id FROM GmsTargets
+                        SELECT TOP 1 Id, BrandManager FROM GmsTargets
                         WHERE SellerId = @sellerId
                           AND Year = @year
                           AND GoalType = @goalType
@@ -948,8 +955,10 @@ exports.importAchievements = async (req, res) => {
                     `);
 
                 let isNewYearlyTarget = false;
+                let prevBrandManager = null;  // Track for change logging
                 if (yearlyResult.recordset.length > 0) {
                     yearlyTargetId = yearlyResult.recordset[0].Id;
+                    prevBrandManager = yearlyResult.recordset[0].BrandManager || null;
                 } else {
                     const bmLower = (brandManagerVal || '').trim().toLowerCase();
                     const resolvedUserId = nameToUserId[bmLower] || req.user?.Id || req.user?._id || req.user?.id || null;
@@ -1125,6 +1134,31 @@ exports.importAchievements = async (req, res) => {
                             UpdatedAt = dbo.GetEnvDate()
                         WHERE Id = @id
                     `);
+
+                // Log manager change if brand manager was updated on an existing target
+                if (!isNewYearlyTarget && brandManagerVal && prevBrandManager &&
+                    brandManagerVal.trim().toLowerCase() !== prevBrandManager.trim().toLowerCase()) {
+                    try {
+                        await SystemLogService.log({
+                            type: 'MANAGER_CHANGE',
+                            entityType: 'TARGET',
+                            entityId: yearlyTargetId,
+                            entityTitle: `${brandName || sellerId} (${goalType} ${numYear})`,
+                            user: req.user,
+                            description: `Brand Manager changed on target "${brandName || sellerId}" for ${goalType} ${numYear}: "${prevBrandManager}" → "${brandManagerVal}"`,
+                            metadata: {
+                                targetId: yearlyTargetId,
+                                sellerId: internalSellerId,
+                                year: numYear,
+                                goalType,
+                                previousManager: prevBrandManager,
+                                newManager: brandManagerVal
+                            }
+                        });
+                    } catch (logErr) {
+                        console.warn('[Import] Failed to log manager change:', logErr.message);
+                    }
+                }
 
                 if (isNewYearlyTarget) {
                     imported++;

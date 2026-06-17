@@ -137,6 +137,7 @@ const ACTIVITY_TYPES = {
   TASK_CREATED: { icon: ClipboardList, color: '#1d4ed8', label: 'Task Created', bg: '#eff6ff' },
   TASK_COMPLETED: { icon: CheckCircle2, color: '#15803d', label: 'Task Completed', bg: '#f0fdf4' },
   MANAGER_ASSIGNED: { icon: Users, color: '#6d28d9', label: 'Manager Assigned', bg: '#f5f3ff' },
+  MANAGER_CHANGE:   { icon: Users, color: '#0891b2', label: 'Manager Changed', bg: '#ecfeff' },
   SETTINGS_UPDATED: { icon: Edit3, color: '#475569', label: 'Settings Updated', bg: '#f1f5f9' }
 };
 
@@ -201,14 +202,29 @@ const TimelineItem = memo(({ activity }) => {
   const config = ACTIVITY_TYPES[activity.type] || ACTIVITY_TYPES.SETTINGS_UPDATED;
   const Icon = config.icon;
   const isAnimated = activity.type === 'SYNC_STARTED';
+  const isManagerChange = activity.type === 'MANAGER_CHANGE';
+  const meta = activity.metadata || {};
+
+  // Extract manager change fields from metadata
+  const prevManagers = meta.previousManagers || [];
+  const removedManagers = meta.removedManagers || [];
+  const prevBMName = removedManagers.length > 0
+    ? removedManagers.map(m => m.name).join(', ')
+    : (prevManagers.length > 0 ? prevManagers.map(m => m.name).join(', ') : meta.previousManager || null);
+  const newBMName = meta.newManager
+    || (meta.addedManagerIds?.length > 0 ? `ID: ${meta.addedManagerIds.join(', ')}` : null);
+  const actorName = activity.actor
+    ? `${activity.actor.firstName || ''} ${activity.actor.lastName || ''}`.trim()
+    : null;
 
   return (
     <div className="timeline-item-row" style={{
       display: 'flex',
       gap: 14,
       padding: '14px 16px',
-      background: '#ffffff',
-      border: '1px solid #e5e7eb',
+      background: isManagerChange ? '#f0fdff' : '#ffffff',
+      border: `1px solid ${isManagerChange ? '#bae6fd' : '#e5e7eb'}`,
+      borderLeft: isManagerChange ? '3px solid #0891b2' : '1px solid #e5e7eb',
       borderRadius: 6,
       marginBottom: 8,
       transition: 'border-color 0.15s, background 0.15s'
@@ -225,20 +241,12 @@ const TimelineItem = memo(({ activity }) => {
         flexShrink: 0,
         border: `1px solid ${config.color}25`
       }}>
-        <Icon
-          size={15}
-          strokeWidth={2}
-          className={isAnimated ? 'spin-animation' : ''}
-        />
+        <Icon size={15} strokeWidth={2} className={isAnimated ? 'spin-animation' : ''} />
       </div>
+
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 4
-        }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{
               fontSize: 10,
@@ -254,72 +262,102 @@ const TimelineItem = memo(({ activity }) => {
               {config.label}
             </span>
             {activity.priority === 'HIGH' && (
-              <span style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: '#b91c1c',
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                padding: '2px 8px',
-                borderRadius: 4,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em'
-              }}>
-                Urgent
-              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Urgent</span>
             )}
           </div>
           <Tooltip title={formatFullDate(activity.timestamp)}>
-            <span style={{
-              fontSize: 11,
-              color: '#64748b',
-              fontWeight: 500,
-              whiteSpace: 'nowrap',
-              cursor: 'help',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4
-            }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Clock size={10} strokeWidth={2} />
               {formatRelativeTime(activity.timestamp)}
+              <span style={{ color: '#94a3b8', marginLeft: 2 }}>· {formatFullDate(activity.timestamp)}</span>
             </span>
           </Tooltip>
         </div>
-        <div style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: '#0f172a',
-          lineHeight: 1.4,
-          marginBottom: 3
-        }}>
+
+        {/* Title */}
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4, marginBottom: 4 }}>
           {activity.title}
         </div>
-        {activity.description && (
-          <div style={{
-            fontSize: 12,
-            color: '#64748b',
-            lineHeight: 1.5
-          }}>
+
+        {/* Description */}
+        {activity.description && !isManagerChange && (
+          <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
             {activity.description}
           </div>
         )}
-        {activity.metadata && (
-          <div style={{
-            display: 'flex',
-            gap: 6,
-            marginTop: 8,
-            flexWrap: 'wrap'
-          }}>
+
+        {/* ── MANAGER CHANGE: rich inline card ── */}
+        {isManagerChange && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto 1fr',
+              gap: 8,
+              alignItems: 'center',
+              background: '#ffffff',
+              border: '1px solid #bae6fd',
+              borderRadius: 8,
+              padding: '12px 14px'
+            }}>
+              {/* Old BM */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Previous Manager</div>
+                <div style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: prevBMName ? '#b91c1c' : '#94a3b8',
+                  background: prevBMName ? '#fef2f2' : '#f8fafc',
+                  border: `1px solid ${prevBMName ? '#fecaca' : '#e2e8f0'}`,
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  textDecoration: 'line-through',
+                  opacity: 0.85
+                }}>
+                  {prevBMName || 'Unassigned'}
+                </div>
+              </div>
+
+              {/* Arrow */}
+              <div style={{ fontSize: 18, color: '#0891b2', fontWeight: 700, textAlign: 'center' }}>→</div>
+
+              {/* New BM */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>New Manager</div>
+                <div style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: '#0891b2',
+                  background: '#ecfeff',
+                  border: '1px solid #a5f3fc',
+                  borderRadius: 6,
+                  padding: '6px 10px'
+                }}>
+                  {newBMName || 'Unassigned'}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer: actor + timestamp */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {actorName && (
+                <span style={{ fontSize: 11, color: '#475569', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Users size={10} strokeWidth={2} />
+                  Changed by <strong style={{ color: '#0f172a' }}>{actorName}</strong>
+                </span>
+              )}
+              <span style={{ fontSize: 11, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Calendar size={10} strokeWidth={2} />
+                {formatFullDate(activity.timestamp)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Generic metadata chips (skip for MANAGER_CHANGE — we show above) */}
+        {activity.metadata && !isManagerChange && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             {Object.entries(activity.metadata).map(([key, value], i) => (
-              <span key={i} style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: '#475569',
-                background: '#f8fafc',
-                border: '1px solid #e5e7eb',
-                padding: '2px 8px',
-                borderRadius: 4
-              }}>
+              <span key={i} style={{ fontSize: 11, fontWeight: 500, color: '#475569', background: '#f8fafc', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>
                 <span style={{ fontWeight: 600, color: '#334155' }}>{key}:</span> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
               </span>
             ))}
