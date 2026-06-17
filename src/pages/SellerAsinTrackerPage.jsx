@@ -320,7 +320,7 @@ const TimelineItem = memo(({ activity }) => {
                 padding: '2px 8px',
                 borderRadius: 4
               }}>
-                <span style={{ fontWeight: 600, color: '#334155' }}>{key}:</span> {value}
+                <span style={{ fontWeight: 600, color: '#334155' }}>{key}:</span> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
               </span>
             ))}
           </div>
