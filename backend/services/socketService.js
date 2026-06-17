@@ -18,5 +18,12 @@ module.exports = {
             return true;
         }
         return false;
+    },
+    emitExportUpdate: (downloadId, data) => {
+        if (io) {
+            io.emit('export_progress', { downloadId, ...data });
+            return true;
+        }
+        return false;
     }
 };

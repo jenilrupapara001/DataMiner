@@ -24,7 +24,15 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
+const asyncLocalStorage = require('./utils/asyncStorage');
+const apiCallLogger = require('./middleware/apiCallLogger');
+
 const app = express();
+app.use((req, res, next) => {
+  asyncLocalStorage.run({ req, logged: false }, () => {
+    next();
+  });
+});
 app.set('trust proxy', 1); // Trust the first proxy (e.g. Nginx) to securely read X-Forwarded-For headers
 app.use(cors({
   origin: [
@@ -51,6 +59,7 @@ app.use(globalLimiter);
 // 1000 users support: Shrink payload limit to save Memory
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(apiCallLogger);
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

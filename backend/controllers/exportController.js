@@ -842,6 +842,9 @@ async function updateDownloadStatus(pool, id, status, progress, errorMessage = n
         query += ' WHERE Id = @id';
 
         await request.query(query);
+
+        // Broadcast progress in real-time via Socket.io
+        SocketService.emitExportUpdate(id, { status, progress, errorMessage });
     } catch (e) {
         console.error('Update download status error:', e.message);
     }
@@ -998,3 +1001,555 @@ exports.cleanExpiredDownloads = async () => {
         console.error('Clean expired downloads error:', error);
     }
 };
+
+/**
+ * Start a GMS performance matrix export job
+ * POST /api/export/start-gms
+ */
+exports.startGmsExport = async (req, res) => {
+    try {
+        const {
+            exportLevel = 'asin',
+            exportDateType = 'all',
+            exportCustomDates = null,
+            exportBrandType = 'all',
+            exportCustomBrands = [],
+            startDate = null,
+            endDate = null,
+            selectedBrands = []
+        } = req.body;
+
+        const userId = (req.user?._id || req.user?.id || '').toString();
+        const pool = await getPool();
+
+        // Create download record
+        const downloadId = generateId();
+        const now = new Date();
+        const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+        const dateStr = istTime.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const fileName = `gms_export_${exportLevel}_${dateStr}.xlsx`;
+        const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
+
+        await pool.request()
+            .input('id', sql.VarChar, downloadId)
+            .input('userId', sql.VarChar, userId)
+            .input('fileName', sql.NVarChar, fileName)
+            .input('filePath', sql.NVarChar, filePath)
+            .input('format', sql.NVarChar, 'xlsx')
+            .input('status', sql.NVarChar, 'pending')
+            .input('params', sql.NVarChar, JSON.stringify(req.body))
+            .query(`
+                INSERT INTO Downloads (Id, UserId, FileName, FilePath, Format, Status, Params, CreatedAt)
+                VALUES (@id, @userId, @fileName, @filePath, @format, @status, @params, dbo.GetEnvDate())
+            `);
+
+        // Return immediately with download ID
+        res.json({
+            success: true,
+            message: 'GMS export started',
+            downloadId,
+            fileName
+        });
+
+        // Run background job
+        processGmsExportJob(downloadId, req.body, userId).catch(err => {
+            console.error(`GMS Export job ${downloadId} failed:`, err);
+            updateDownloadStatus(pool, downloadId, 'failed', 0, err.message).catch(console.error);
+        });
+
+    } catch (error) {
+        console.error('Start GMS Export Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const getISOWeek = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return {
+        year: d.getUTCFullYear(),
+        week: weekNo
+    };
+};
+
+const getWeekRangeLabel = (year, week) => {
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4) {
+        ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    } else {
+        ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+    }
+    const Monday = new Date(ISOweekStart);
+    const Sunday = new Date(ISOweekStart);
+    Sunday.setDate(Monday.getDate() + 6);
+    
+    const options = { day: '2-digit', month: 'short' };
+    const startStr = Monday.toLocaleDateString('en-IN', options);
+    const endStr = Sunday.toLocaleDateString('en-IN', options);
+    return `Week ${week} (${startStr} - ${endStr})`;
+};
+
+const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
+    let currentVal = 0;
+    let previousVal = 0;
+
+    const entityKey = level === 'seller' ? row.dbBrand : row.asin;
+    const entityData = rawGmsMap[entityKey];
+    if (!entityData) return null;
+
+    if (type === 'month') {
+        const months = Object.keys(row.monthlyRev).sort();
+        if (months.length < 1) return null;
+        const latestMonth = months[months.length - 1];
+        currentVal = row.monthlyRev[latestMonth] || 0;
+
+        const [year, month] = latestMonth.split('-').map(Number);
+        const prevMonthDate = new Date(year, month - 2, 1);
+        const prevMonthStr = prevMonthDate.toISOString().slice(0, 7);
+        
+        previousVal = entityData.monthly[prevMonthStr] || 0;
+    } else if (type === 'week') {
+        const weeks = Object.keys(row.weeklyRev).sort();
+        if (weeks.length < 1) return null;
+        const latestWeek = weeks[weeks.length - 1];
+        currentVal = row.weeklyRev[latestWeek] || 0;
+
+        const [year, weekStr] = latestWeek.split('-W');
+        const yVal = parseInt(year);
+        const wVal = parseInt(weekStr);
+        
+        let prevW = wVal - 1;
+        let prevY = yVal;
+        if (prevW === 0) {
+            prevY -= 1;
+            const d = new Date(prevY, 11, 28);
+            prevW = getISOWeek(d).week;
+        }
+        const prevWeekKey = `${prevY}-W${String(prevW).padStart(2, '0')}`;
+
+        previousVal = entityData.weekly[prevWeekKey] || 0;
+    } else if (type === 'day') {
+        const days = Object.keys(row.dailyRev).sort();
+        if (days.length < 1) return null;
+        const latestDay = days[days.length - 1];
+        currentVal = row.dailyRev[latestDay] || 0;
+
+        const prevDayDate = new Date(new Date(latestDay).getTime() - 86400000);
+        const prevDayStr = prevDayDate.toISOString().split('T')[0];
+        
+        previousVal = entityData.daily[prevDayStr] || 0;
+    }
+
+    if (!previousVal) return null;
+    return ((currentVal - previousVal) / previousVal) * 100;
+};
+
+async function processGmsExportJob(downloadId, params, userId) {
+    const pool = await getPool();
+    await updateDownloadStatus(pool, downloadId, 'processing', 10);
+
+    const {
+        exportLevel = 'asin',
+        exportDateType = 'all',
+        exportCustomDates = null,
+        exportBrandType = 'all',
+        exportCustomBrands = [],
+        startDate = null,
+        endDate = null,
+        selectedBrands = []
+    } = params;
+
+    // Fetch user details for RBAC
+    let user = null;
+    const userResult = await pool.request()
+        .input('userId', sql.VarChar, userId)
+        .query(`
+            SELECT U.*, R.Name as RoleName 
+            FROM Users U 
+            LEFT JOIN Roles R ON U.RoleId = R.Id 
+            WHERE U.Id = @userId
+        `);
+
+    if (userResult.recordset.length > 0) {
+        const u = userResult.recordset[0];
+        user = {
+            id: u.Id,
+            role: u.RoleName,
+            assignedSellers: []
+        };
+
+        // Fetch assigned sellers
+        const sellersResult = await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
+        user.assignedSellers = sellersResult.recordset.map(s => s.SellerId);
+    }
+
+    const roleName = user?.role || '';
+    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(roleName);
+    let whereClause = 'WHERE 1=1';
+
+    if (!isGlobalUser) {
+        const assignedIds = user?.assignedSellers || [];
+        if (assignedIds.length === 0) {
+            whereClause += ' AND 1=0';
+        } else {
+            whereClause += ` AND a.SellerId IN (${assignedIds.map(id => `'${id}'`).join(',')})`;
+        }
+    }
+
+    await updateDownloadStatus(pool, downloadId, 'processing', 20);
+
+    const result = await pool.request().query(`
+      SELECT 
+        g.Date as date,
+        g.Asin as asin,
+        g.Brand as brand,
+        g.StoreCode as storeCode,
+        g.OrderedRevenue as orderedRevenue,
+        g.OrderedUnits as orderedUnits,
+        g.ShippedRevenue as shippedRevenue,
+        g.ShippedCOGS as shippedCOGS,
+        g.ShippedUnits as shippedUnits,
+        g.CustomerReturns as customerReturns,
+        s.Name as dbBrand,
+        a.Title as productTitle
+      FROM GmsDailyPerformance g
+      LEFT JOIN Asins a ON g.Asin = a.AsinCode
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      ${whereClause}
+      ORDER BY g.Date DESC
+    `);
+
+    // Format dates to YYYY-MM-DD avoiding timezone issues
+    const rawGmsData = result.recordset.map(row => {
+      if (!row.date) return { ...row, date: null };
+      const d = new Date(row.date);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const localDate = new Date(d.getTime() - tzOffset);
+      return {
+        ...row,
+        date: localDate.toISOString().split('T')[0],
+        resolvedDbBrand: row.dbBrand || '-'
+      };
+    });
+
+    // Build a fast lookup map for all raw GMS data
+    const rawGmsMap = {};
+    rawGmsData.forEach(d => {
+      const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
+      const entityKey = exportLevel === 'seller'
+        ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
+        : d.asin;
+        
+      if (!rawGmsMap[entityKey]) {
+        rawGmsMap[entityKey] = {
+          daily: {},
+          weekly: {},
+          monthly: {}
+        };
+      }
+      
+      const dObj = new Date(d.date);
+      const dateStr = d.date;
+      if (!dateStr) return;
+      const monthKey = dateStr.slice(0, 7);
+      const { year: wYear, week: wWeek } = getISOWeek(dObj);
+      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+      
+      const entityData = rawGmsMap[entityKey];
+      
+      // Daily
+      if (!entityData.daily[dateStr]) entityData.daily[dateStr] = 0;
+      entityData.daily[dateStr] += d.orderedRevenue || 0;
+      
+      // Weekly
+      if (!entityData.weekly[weekKey]) entityData.weekly[weekKey] = 0;
+      entityData.weekly[weekKey] += d.orderedRevenue || 0;
+      
+      // Monthly
+      if (!entityData.monthly[monthKey]) entityData.monthly[monthKey] = 0;
+      entityData.monthly[monthKey] += d.orderedRevenue || 0;
+    });
+
+    await updateDownloadStatus(pool, downloadId, 'processing', 35);
+
+    let dataToExport = rawGmsData;
+
+    // Date range filtering
+    if (exportDateType === 'current' && startDate && endDate) {
+      const sDate = new Date(startDate);
+      const eDate = new Date(endDate);
+      dataToExport = dataToExport.filter(d => {
+        const dDate = new Date(d.date);
+        return dDate >= sDate && dDate <= eDate;
+      });
+    } else if (exportDateType === 'custom' && exportCustomDates && exportCustomDates[0] && exportCustomDates[1]) {
+      const sDate = new Date(exportCustomDates[0]);
+      const eDate = new Date(exportCustomDates[1]);
+      dataToExport = dataToExport.filter(d => {
+        const dDate = new Date(d.date);
+        return dDate >= sDate && dDate <= eDate;
+      });
+    }
+
+    // Brand filtering
+    if (exportBrandType === 'current' && selectedBrands.length > 0) {
+      dataToExport = dataToExport.filter(d => 
+        selectedBrands.includes(d.brand) || selectedBrands.includes(d.dbBrand)
+      );
+    } else if (exportBrandType === 'custom' && exportCustomBrands.length > 0) {
+      dataToExport = dataToExport.filter(d => 
+        exportCustomBrands.includes(d.brand) || exportCustomBrands.includes(d.dbBrand)
+      );
+    }
+
+    if (dataToExport.length === 0) {
+      throw new Error('No GMS data found for the selected export filters.');
+    }
+
+    await updateDownloadStatus(pool, downloadId, 'processing', 50);
+
+    const matrixMap = {};
+    dataToExport.forEach(d => {
+      const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
+      const key = exportLevel === 'seller'
+        ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
+        : d.asin;
+
+      if (!matrixMap[key]) {
+        if (exportLevel === 'seller') {
+          matrixMap[key] = {
+            dbBrand: key,
+            isUnmatched: isUnmatched,
+            asins: new Set(),
+            brands: new Set(),
+            storeCodes: new Set(),
+            dailyRev: {},
+            weeklyRev: {},
+            monthlyRev: {}
+          };
+        } else {
+          matrixMap[key] = {
+            asin: d.asin,
+            productTitle: d.productTitle || '-',
+            dbBrand: d.resolvedDbBrand || '-',
+            brand: d.brand || 'Generic',
+            storeCode: d.storeCode || 'IN',
+            dailyRev: {},
+            weeklyRev: {},
+            monthlyRev: {}
+          };
+        }
+      }
+
+      const row = matrixMap[key];
+      if (exportLevel === 'seller') {
+        if (d.asin) row.asins.add(d.asin);
+        if (d.brand) row.brands.add(d.brand);
+        if (d.storeCode) row.storeCodes.add(d.storeCode);
+      }
+
+      const dObj = new Date(d.date);
+      const dateStr = d.date;
+      const monthKey = dateStr.slice(0, 7);
+      const { year: wYear, week: wWeek } = getISOWeek(dObj);
+      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+
+      // Day Revenue
+      if (!row.dailyRev[dateStr]) row.dailyRev[dateStr] = 0;
+      row.dailyRev[dateStr] += d.orderedRevenue;
+
+      // Week Revenue
+      if (!row.weeklyRev[weekKey]) row.weeklyRev[weekKey] = 0;
+      row.weeklyRev[weekKey] += d.orderedRevenue;
+
+      // Month Revenue
+      if (!row.monthlyRev[monthKey]) row.monthlyRev[monthKey] = 0;
+      row.monthlyRev[monthKey] += d.orderedRevenue;
+    });
+
+    const matrixRows = Object.values(matrixMap).map(r => {
+      if (exportLevel === 'seller') {
+        return {
+          ...r,
+          asinsList: Array.from(r.asins),
+          brandsList: Array.from(r.brands),
+          storeCodesList: Array.from(r.storeCodes)
+        };
+      }
+      return r;
+    });
+
+    const dates = [...new Set(dataToExport.map(d => d.date))].sort();
+    const monthGroups = {};
+
+    dates.forEach(dateStr => {
+      const dObj = new Date(dateStr);
+      const monthKey = dateStr.slice(0, 7);
+      const monthLabel = dObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const { year: wYear, week: wWeek } = getISOWeek(dObj);
+      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+      const weekLabel = getWeekRangeLabel(wYear, wWeek);
+
+      if (!monthGroups[monthKey]) {
+        monthGroups[monthKey] = {
+          label: monthLabel,
+          key: monthKey,
+          weeks: {}
+        };
+      }
+
+      if (!monthGroups[monthKey].weeks[weekKey]) {
+        monthGroups[monthKey].weeks[weekKey] = {
+          label: weekLabel,
+          key: weekKey,
+          days: []
+        };
+      }
+
+      monthGroups[monthKey].weeks[weekKey].days.push(dateStr);
+    });
+
+    const columnDef = [];
+
+    if (exportLevel === 'seller') {
+      columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
+      columnDef.push({ label: 'ASIN', getValue: () => '-' });
+      columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brandsList && r.brandsList.length > 0 ? r.brandsList.join(', ') : '-' });
+      columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCodesList && r.storeCodesList.length > 0 ? r.storeCodesList.join(', ') : '-' });
+    } else {
+      columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
+      columnDef.push({ label: 'ASIN', getValue: (r) => r.asin });
+      columnDef.push({ label: 'Product Title', getValue: (r) => r.productTitle });
+      columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brand });
+      columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCode });
+    }
+
+    Object.values(monthGroups).forEach(month => {
+      Object.values(month.weeks).forEach(week => {
+        const sortedDays = [...week.days].sort();
+        sortedDays.forEach((dayStr, idx) => {
+          const formattedDayLabel = new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          columnDef.push({
+            label: formattedDayLabel,
+            getValue: (r) => r.dailyRev[dayStr] || 0
+          });
+
+          if (idx > 0) {
+            const prevDayStr = sortedDays[idx - 1];
+            const currDayStr = dayStr;
+            const pDayNum = new Date(prevDayStr).getDate();
+            const cDayNum = new Date(currDayStr).getDate();
+            columnDef.push({
+              label: `DoD (${pDayNum}->${cDayNum})`,
+              getValue: (r) => {
+                const prev = r.dailyRev[prevDayStr] || 0;
+                const curr = r.dailyRev[currDayStr] || 0;
+                if (!prev && !curr) return '-';
+                if (!prev) return 'NEW';
+                return `${(((curr - prev) / prev) * 100).toFixed(1)}%`;
+              }
+            });
+          }
+        });
+
+        columnDef.push({
+          label: `${week.label} Total`,
+          getValue: (r) => r.weeklyRev[week.key] || 0
+        });
+        columnDef.push({
+          label: `${week.label} WoW Trend`,
+          getValue: (r) => {
+            const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel);
+            return trend === null ? '-' : `${trend.toFixed(1)}%`;
+          }
+        });
+      });
+
+      columnDef.push({
+        label: `${month.label} Total`,
+        getValue: (r) => r.monthlyRev[month.key] || 0
+      });
+      columnDef.push({
+        label: `${month.label} MoM Trend`,
+        getValue: (r) => {
+          const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel);
+          return trend === null ? '-' : `${trend.toFixed(1)}%`;
+        }
+      });
+    });
+
+    const sheetHeaders = columnDef.map(c => c.label);
+    const sheetRows = matrixRows.map(row => columnDef.map(c => c.getValue(row)));
+
+    await updateDownloadStatus(pool, downloadId, 'processing', 75);
+
+    const fileName = `gms_export_${exportLevel}_${Date.now()}.xlsx`;
+    const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('GMS Matrix');
+    
+    if (sheetRows.length > 0) {
+        worksheet.columns = sheetHeaders.map(label => ({
+            header: label,
+            width: label.includes('Product Title') || label.includes('Seller') || label.includes('Brand') ? 25 : 15
+        }));
+        
+        sheetRows.forEach(rowArr => worksheet.addRow(rowArr));
+        
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF1E293B' }
+        };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 24;
+
+        const borderStyle = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber > 1) {
+                row.eachCell(cell => {
+                    cell.border = borderStyle;
+                });
+            }
+        });
+    }
+    
+    await workbook.xlsx.writeFile(filePath);
+    const stats = fs.statSync(filePath);
+
+    // Update download record as completed
+    await pool.request()
+        .input('id', sql.VarChar, downloadId)
+        .input('fileSize', sql.BigInt, stats.size)
+        .input('rowCount', sql.Int, sheetRows.length)
+        .input('filePath', sql.VarChar, `/exports/${downloadId}_${fileName}`)
+        .query(`
+            UPDATE Downloads SET 
+                Status = 'completed',
+                Progress = 100,
+                FileSize = @fileSize,
+                [RowCount] = @rowCount,
+                FilePath = @filePath,
+                CompletedAt = dbo.GetEnvDate(),
+                ExpiresAt = DATEADD(HOUR, 24, dbo.GetEnvDate())
+            WHERE Id = @id
+        `);
+
+    SocketService.emitExportUpdate(downloadId, { status: 'completed', progress: 100, filePath: `/exports/${downloadId}_${fileName}` });
+}
+

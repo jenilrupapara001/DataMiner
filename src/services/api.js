@@ -1634,6 +1634,18 @@ export const exportApi = {
         }
         return res.json();
     },
+    startGmsExport: async (params) => {
+        const res = await fetch(`${API_BASE}/export/start-gms`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify(params),
+        });
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.error || error.message || 'Export failed');
+        }
+        return res.json();
+    },
     getDownloads: async () => {
         const res = await fetch(`${API_BASE}/export/downloads`, {
             headers: { ...getAuthHeader() }

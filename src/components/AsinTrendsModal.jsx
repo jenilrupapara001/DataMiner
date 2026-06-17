@@ -25,9 +25,9 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
     }
   }, [isOpen, asin?.asinCode]);
 
-  if (!isOpen || !asin) return null;
-
-  const history = asin.history || asin.weekHistory || [];
+  const history = useMemo(() => {
+    return asin?.history || asin?.weekHistory || [];
+  }, [asin]);
 
   const getCategoryLabel = (h) => {
     if (h.date) {
@@ -72,6 +72,8 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
     });
     return map;
   }, [history]);
+
+  if (!isOpen || !asin) return null;
 
   // Chart Series Generation with Forward-Filling for Price/Rating
   const generateSeriesData = (metricKey, shouldForwardFill = true) => {

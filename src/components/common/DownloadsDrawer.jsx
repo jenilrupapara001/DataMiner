@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
     Drawer, Typography, Tag, Button, Empty, Spin, Tooltip, message,
-    ConfigProvider, Segmented
+    ConfigProvider, Segmented, Progress, Card, List, Space, Row, Col,
+    Statistic, Alert
 } from 'antd';
 import {
     Download, FileText, FileSpreadsheet, Clock, CheckCircle2,
     AlertTriangle, RefreshCw, Calendar, Info, DownloadCloud,
     Archive, Activity, XCircle, Loader2, Search, Trash2,
     FileJson, FileCode2, File, Sparkles, ArrowUpRight,
-    Database, Zap, Filter, HardDrive, TrendingUp
+    Database, Zap, Filter, HardDrive, TrendingUp, X
 } from 'lucide-react';
 import { exportApi } from '../../services/api';
+import { useSocket } from '../../contexts/SocketContext';
 
-const { Text, Paragraph } = Typography;
+const { Text, Paragraph, Title } = Typography;
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
@@ -47,12 +49,12 @@ const formatRelativeTime = (dateString) => {
 const getFileIcon = (format) => {
     const f = String(format || '').toLowerCase();
     if (f.includes('csv')) return { Icon: FileText, color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' };
-    if (f.includes('xls') || f.includes('xlsx')) return { Icon: FileSpreadsheet, color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' };
-    if (f.includes('json')) return { Icon: FileJson, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' };
-    if (f.includes('xml')) return { Icon: FileCode2, color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' };
-    if (f.includes('pdf')) return { Icon: FileText, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' };
-    if (f.includes('zip')) return { Icon: Archive, color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' };
-    return { Icon: File, color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1' };
+    if (f.includes('xls') || f.includes('xlsx')) return { Icon: FileSpreadsheet, color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' };
+    if (f.includes('json')) return { Icon: FileJson, color: '#d97706', bg: '#fffbeb', border: '#fef3c7' };
+    if (f.includes('xml')) return { Icon: FileCode2, color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
+    if (f.includes('pdf')) return { Icon: FileText, color: '#dc2626', bg: '#fef2f2', border: '#fee2e2' };
+    if (f.includes('zip')) return { Icon: Archive, color: '#4f46e5', bg: '#eef2ff', border: '#e0e7ff' };
+    return { Icon: File, color: '#4b5563', bg: '#f3f4f6', border: '#e5e7eb' };
 };
 
 const getStatusConfig = (status) => {
@@ -62,18 +64,16 @@ const getStatusConfig = (status) => {
         case 'success':
             return {
                 label: 'READY',
-                color: '#10b981',
-                bg: '#ecfdf5',
-                border: '#a7f3d0',
+                color: 'success',
+                colorCode: '#52c41a',
                 icon: CheckCircle2
             };
         case 'processing':
         case 'in_progress':
             return {
                 label: 'PROCESSING',
-                color: '#3b82f6',
-                bg: '#eff6ff',
-                border: '#bfdbfe',
+                color: 'processing',
+                colorCode: '#1890ff',
                 icon: Loader2,
                 animated: true
             };
@@ -81,395 +81,27 @@ const getStatusConfig = (status) => {
         case 'error':
             return {
                 label: 'FAILED',
-                color: '#ef4444',
-                bg: '#fef2f2',
-                border: '#fecaca',
+                color: 'error',
+                colorCode: '#ff4d4f',
                 icon: XCircle
             };
         case 'pending':
         case 'queued':
             return {
                 label: 'QUEUED',
-                color: '#f59e0b',
-                bg: '#fffbeb',
-                border: '#fde68a',
+                color: 'warning',
+                colorCode: '#faad14',
                 icon: Clock
             };
         default:
             return {
                 label: 'PENDING',
-                color: '#64748b',
-                bg: '#f1f5f9',
-                border: '#cbd5e1',
+                color: 'default',
+                colorCode: '#bfbfbf',
                 icon: Clock
             };
     }
 };
-
-// ═══════════════════════════════════════════════════════════════
-// STAT MINI CARD
-// ═══════════════════════════════════════════════════════════════
-const StatMiniCard = memo(({ icon: Icon, label, value, color, animate }) => (
-    <div style={{
-        flex: 1,
-        padding: '10px 12px',
-        background: `${color}08`,
-        border: `1px solid ${color}20`,
-        borderRadius: 10,
-        minWidth: 0
-    }}>
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            marginBottom: 3
-        }}>
-            <Icon
-                size={11}
-                style={{ color }}
-                strokeWidth={2.5}
-                className={animate ? 'spin-animation' : ''}
-            />
-            <span style={{
-                fontSize: 9,
-                fontWeight: 800,
-                color,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-            }}>
-                {label}
-            </span>
-        </div>
-        <div style={{
-            fontSize: 16,
-            fontWeight: 800,
-            color: '#0f172a',
-            letterSpacing: '-0.3px',
-            lineHeight: 1
-        }}>
-            {value}
-        </div>
-    </div>
-));
-
-// ═══════════════════════════════════════════════════════════════
-// DOWNLOAD ITEM CARD
-// ═══════════════════════════════════════════════════════════════
-const DownloadItem = memo(({ item, onDownload }) => {
-    const fileConfig = getFileIcon(item.format);
-    const statusConfig = getStatusConfig(item.status);
-    const FileIcon = fileConfig.Icon;
-    const StatusIcon = statusConfig.icon;
-    const isClickable = item.status === 'completed';
-    const progress = Math.round(item.progress || 0);
-
-    return (
-        <div
-            className={`download-card-item ${isClickable ? 'clickable' : ''}`}
-            onClick={() => isClickable && onDownload(item)}
-            style={{
-                padding: '14px 16px',
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderLeft: `3px solid ${statusConfig.color}`,
-                borderRadius: 12,
-                marginBottom: 10,
-                cursor: isClickable ? 'pointer' : 'default',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                position: 'relative',
-                overflow: 'hidden'
-            }}
-        >
-            {/* Background pattern for processing */}
-            {item.status === 'processing' && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `linear-gradient(135deg, ${statusConfig.color}04 0%, transparent 100%)`,
-                    pointerEvents: 'none'
-                }} />
-            )}
-
-            <div style={{
-                position: 'relative',
-                display: 'flex',
-                gap: 12,
-                alignItems: 'flex-start'
-            }}>
-                {/* File Type Icon */}
-                <div style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: fileConfig.bg,
-                    border: `1px solid ${fileConfig.border}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: fileConfig.color,
-                    flexShrink: 0
-                }}>
-                    <FileIcon size={18} strokeWidth={2} />
-                </div>
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Top: Filename + Status */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 8,
-                        marginBottom: 6
-                    }}>
-                        <Tooltip title={item.fileName}>
-                            <div style={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                lineHeight: 1.3,
-                                wordBreak: 'break-word',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                flex: 1,
-                                minWidth: 0
-                            }}>
-                                {item.fileName}
-                            </div>
-                        </Tooltip>
-
-                        {/* Status Badge */}
-                        <div style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '3px 8px',
-                            background: statusConfig.bg,
-                            border: `1px solid ${statusConfig.border}`,
-                            borderRadius: 12,
-                            fontSize: 9,
-                            fontWeight: 800,
-                            color: statusConfig.color,
-                            letterSpacing: '0.05em',
-                            flexShrink: 0,
-                            whiteSpace: 'nowrap'
-                        }}>
-                            <StatusIcon
-                                size={10}
-                                strokeWidth={2.5}
-                                className={statusConfig.animated ? 'spin-animation' : ''}
-                            />
-                            {statusConfig.label}
-                        </div>
-                    </div>
-
-                    {/* Metadata Row */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        flexWrap: 'wrap',
-                        marginBottom: item.status === 'processing' || (item.status === 'failed' && item.errorMessage) ? 8 : 0
-                    }}>
-                        {/* File format tag */}
-                        <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            fontSize: 9,
-                            fontWeight: 700,
-                            color: fileConfig.color,
-                            background: fileConfig.bg,
-                            padding: '2px 7px',
-                            borderRadius: 6,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
-                            border: `1px solid ${fileConfig.border}`
-                        }}>
-                            {item.format || 'FILE'}
-                        </span>
-
-                        {/* Row count */}
-                        {item.rowCount !== undefined && item.rowCount !== null && (
-                            <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 3,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: '#64748b'
-                            }}>
-                                <Database size={10} strokeWidth={2.5} />
-                                {item.rowCount.toLocaleString('en-IN')}
-                            </span>
-                        )}
-
-                        {/* File size */}
-                        {item.fileSize ? (
-                            <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 3,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: '#64748b'
-                            }}>
-                                <HardDrive size={10} strokeWidth={2.5} />
-                                {formatSize(item.fileSize)}
-                            </span>
-                        ) : null}
-
-                        {/* Time */}
-                        <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: '#94a3b8',
-                            marginLeft: 'auto'
-                        }}>
-                            <Clock size={10} strokeWidth={2.5} />
-                            {formatRelativeTime(item.createdAt)}
-                        </span>
-                    </div>
-
-                    {/* Progress Bar (processing) */}
-                    {item.status === 'processing' && (
-                        <div>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: 4
-                            }}>
-                                <span style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    color: '#64748b',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.04em'
-                                }}>
-                                    Generating
-                                </span>
-                                <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    color: statusConfig.color
-                                }}>
-                                    {progress}%
-                                </span>
-                            </div>
-                            <div style={{
-                                height: 5,
-                                background: '#f1f5f9',
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                                position: 'relative'
-                            }}>
-                                <div
-                                    className="progress-shimmer"
-                                    style={{
-                                        height: '100%',
-                                        width: `${progress}%`,
-                                        background: `linear-gradient(90deg, ${statusConfig.color}80 0%, ${statusConfig.color} 100%)`,
-                                        borderRadius: 3,
-                                        transition: 'width 0.6s ease',
-                                        boxShadow: `0 0 8px ${statusConfig.color}50`
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Error message (failed) */}
-                    {item.status === 'failed' && item.errorMessage && (
-                        <div style={{
-                            padding: '6px 10px',
-                            background: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: 6,
-                            display: 'flex',
-                            gap: 6,
-                            alignItems: 'flex-start'
-                        }}>
-                            <AlertTriangle
-                                size={12}
-                                style={{ color: '#ef4444', flexShrink: 0, marginTop: 1 }}
-                                strokeWidth={2.5}
-                            />
-                            <span style={{
-                                fontSize: 10,
-                                color: '#991b1b',
-                                fontWeight: 600,
-                                lineHeight: 1.4
-                            }}>
-                                {item.errorMessage}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Download CTA (completed) */}
-                    {isClickable && (
-                        <div style={{
-                            marginTop: 8,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 6
-                        }}>
-                            <div style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                color: '#10b981'
-                            }}>
-                                <Sparkles size={10} strokeWidth={2.5} />
-                                Ready to download
-                            </div>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDownload(item);
-                                }}
-                                className="download-action-btn"
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    padding: '5px 12px',
-                                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: 8,
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    boxShadow: '0 2px 8px -2px rgba(99,102,241,0.4)',
-                                    letterSpacing: '0.02em'
-                                }}
-                            >
-                                <Download size={11} strokeWidth={2.5} />
-                                Download
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-});
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -478,6 +110,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
     const [downloads, setDownloads] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filterStatus, setFilterStatus] = useState('all');
+    const socket = useSocket();
 
     // Normalize schema
     const normalize = useCallback((d) => {
@@ -513,16 +146,38 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
         }
     }, [isOpen, fetchDownloads]);
 
-    // Real-time poll
+    // Real-time socket events integration
     useEffect(() => {
-        if (!isOpen) return;
-        const normalized = downloads.map(normalize);
-        const hasProcessing = normalized.some(d => d.status === 'processing');
-        if (!hasProcessing) return;
+        if (!socket || !isOpen) return;
 
-        const interval = setInterval(fetchDownloads, 3500);
-        return () => clearInterval(interval);
-    }, [isOpen, downloads, fetchDownloads, normalize]);
+        const handleExportProgress = (data) => {
+            if (!data) return;
+            const updated = normalize(data);
+            
+            setDownloads(prev => {
+                const idx = prev.findIndex(d => (d.Id || d.id || d._id) === updated.id);
+                if (idx !== -1) {
+                    const next = [...prev];
+                    next[idx] = {
+                        ...next[idx],
+                        Status: updated.status,
+                        Progress: updated.progress,
+                        FilePath: updated.filePath || next[idx].FilePath || next[idx].filePath,
+                        ErrorMessage: updated.errorMessage || next[idx].ErrorMessage || next[idx].errorMessage
+                    };
+                    return next;
+                } else {
+                    fetchDownloads();
+                    return prev;
+                }
+            });
+        };
+
+        socket.on('export_progress', handleExportProgress);
+        return () => {
+            socket.off('export_progress', handleExportProgress);
+        };
+    }, [socket, isOpen, fetchDownloads, normalize]);
 
     // Normalize all downloads
     const normalizedDownloads = useMemo(() => {
@@ -584,413 +239,303 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
         <ConfigProvider
             theme={{
                 token: {
-                    borderRadius: 10,
-                    colorPrimary: '#6366f1'
+                    borderRadius: 8,
+                    colorPrimary: '#4f46e5',
+                    colorBgLayout: '#f8fafc'
+                },
+                components: {
+                    Card: {
+                        colorBorderSecondary: '#e2e8f0'
+                    }
                 }
             }}
         >
             <Drawer
-                title={null}
+                title={
+                    <Space size="middle">
+                        <div style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 8,
+                            background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ffffff',
+                            boxShadow: '0 4px 10px rgba(79,70,229,0.2)'
+                        }}>
+                            <DownloadCloud size={18} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <Title level={5} style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>
+                                Exports Center
+                            </Title>
+                            <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginTop: 1 }}>
+                                Manage and download your exported reports
+                            </Text>
+                        </div>
+                    </Space>
+                }
                 placement="right"
                 onClose={onClose}
                 open={isOpen}
-                size={420}
-                closable={false}
+                width={420}
+                extra={
+                    <Space size="small">
+                        <Button
+                            type="text"
+                            shape="circle"
+                            onClick={handleRefresh}
+                            disabled={loading}
+                            icon={<RefreshCw size={14} className={loading ? 'spin-animation' : ''} />}
+                        />
+                        <Button
+                            type="text"
+                            shape="circle"
+                            onClick={onClose}
+                            icon={<X size={16} />}
+                        />
+                    </Space>
+                }
                 styles={{
-                    body: { padding: 0, background: '#fafbfc' },
-                    header: { display: 'none' },
-                    content: { boxShadow: '-8px 0 32px -8px rgba(0,0,0,0.12)' }
+                    body: { padding: '16px', background: '#f8fafc' },
+                    header: { padding: '16px 20px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }
                 }}
             >
-                <Spin spinning={loading} wrapperClassName="h-100">
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '100%',
-                        background: '#fafbfc'
-                    }}>
-                        {/* ═══════════════════════════════════════════════════
-                            HEADER
-                        ═══════════════════════════════════════════════════ */}
-                        <div style={{
-                            padding: '18px 20px',
-                            background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
-                            borderBottom: '1px solid #e2e8f0',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}>
-                            {/* Decorative gradient */}
-                            <div style={{
-                                position: 'absolute',
-                                top: -30,
-                                right: -30,
-                                width: 120,
-                                height: 120,
-                                background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
-                                borderRadius: '50%',
-                                pointerEvents: 'none'
-                            }} />
-
-                            <div style={{
-                                position: 'relative',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: 12,
-                                marginBottom: 14
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                                    <div style={{
-                                        width: 40,
-                                        height: 40,
-                                        borderRadius: 11,
-                                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#ffffff',
-                                        boxShadow: '0 4px 12px -2px rgba(99,102,241,0.4)'
-                                    }}>
-                                        <DownloadCloud size={20} strokeWidth={2.5} />
-                                    </div>
-                                    <div>
-                                        <div style={{
-                                            fontSize: 15,
-                                            fontWeight: 800,
-                                            color: '#0f172a',
-                                            letterSpacing: '-0.01em',
-                                            lineHeight: 1.2,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 8
-                                        }}>
-                                            Downloads
-                                            {stats.processing > 0 && (
-                                                <span className="live-pulse-dot" style={{
-                                                    width: 7,
-                                                    height: 7,
-                                                    borderRadius: '50%',
-                                                    background: '#3b82f6',
-                                                    display: 'inline-block'
-                                                }} />
-                                            )}
-                                        </div>
-                                        <div style={{
-                                            fontSize: 11,
-                                            color: '#94a3b8',
-                                            fontWeight: 500,
-                                            marginTop: 1
-                                        }}>
-                                            Export center & file history
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Tooltip title="Refresh">
-                                        <button
-                                            onClick={handleRefresh}
-                                            disabled={loading}
-                                            className="header-icon-btn"
-                                            style={{
-                                                width: 32,
-                                                height: 32,
-                                                borderRadius: 8,
-                                                background: '#ffffff',
-                                                border: '1px solid #e2e8f0',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                cursor: loading ? 'wait' : 'pointer',
-                                                color: '#64748b',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        >
-                                            <RefreshCw
-                                                size={14}
-                                                strokeWidth={2.5}
-                                                className={loading ? 'spin-animation' : ''}
-                                            />
-                                        </button>
-                                    </Tooltip>
-                                    <Tooltip title="Close">
-                                        <button
-                                            onClick={onClose}
-                                            className="header-icon-btn"
-                                            style={{
-                                                width: 32,
-                                                height: 32,
-                                                borderRadius: 8,
-                                                background: '#ffffff',
-                                                border: '1px solid #e2e8f0',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                cursor: 'pointer',
-                                                color: '#64748b',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        >
-                                            <XCircle size={14} strokeWidth={2.5} />
-                                        </button>
-                                    </Tooltip>
-                                </div>
-                            </div>
-
-                            {/* Stats Cards */}
-                            {stats.total > 0 && (
-                                <div style={{
-                                    display: 'flex',
-                                    gap: 8,
-                                    marginBottom: 12
-                                }}>
-                                    <StatMiniCard
-                                        icon={Database}
-                                        label="Total"
-                                        value={stats.total}
-                                        color="#6366f1"
-                                    />
-                                    {stats.processing > 0 && (
-                                        <StatMiniCard
-                                            icon={Loader2}
-                                            label="Active"
+                <Spin spinning={loading} size="large">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+                        
+                        {/* Statistics Summary Widgets */}
+                        {stats.total > 0 && (
+                            <Row gutter={[8, 8]}>
+                                <Col span={6}>
+                                    <Card size="small" styles={{ body: { padding: '10px 6px', textAlign: 'center' } }}>
+                                        <Statistic
+                                            title={<Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>TOTAL</Text>}
+                                            value={stats.total}
+                                            valueStyle={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}
+                                        />
+                                    </Card>
+                                </Col>
+                                <Col span={6}>
+                                    <Card size="small" styles={{ body: { padding: '10px 6px', textAlign: 'center' } }}>
+                                        <Statistic
+                                            title={<Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>ACTIVE</Text>}
                                             value={stats.processing}
-                                            color="#3b82f6"
-                                            animate
+                                            valueStyle={{ fontSize: 16, fontWeight: 800, color: '#1890ff' }}
                                         />
-                                    )}
-                                    {stats.completed > 0 && (
-                                        <StatMiniCard
-                                            icon={CheckCircle2}
-                                            label="Ready"
+                                    </Card>
+                                </Col>
+                                <Col span={6}>
+                                    <Card size="small" styles={{ body: { padding: '10px 6px', textAlign: 'center' } }}>
+                                        <Statistic
+                                            title={<Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>READY</Text>}
                                             value={stats.completed}
-                                            color="#10b981"
+                                            valueStyle={{ fontSize: 16, fontWeight: 800, color: '#52c41a' }}
                                         />
-                                    )}
-                                    {stats.failed > 0 && (
-                                        <StatMiniCard
-                                            icon={XCircle}
-                                            label="Failed"
+                                    </Card>
+                                </Col>
+                                <Col span={6}>
+                                    <Card size="small" styles={{ body: { padding: '10px 6px', textAlign: 'center' } }}>
+                                        <Statistic
+                                            title={<Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>FAILED</Text>}
                                             value={stats.failed}
-                                            color="#ef4444"
+                                            valueStyle={{ fontSize: 16, fontWeight: 800, color: '#ff4d4f' }}
                                         />
-                                    )}
-                                </div>
-                            )}
+                                    </Card>
+                                </Col>
+                            </Row>
+                        )}
 
-                            {/* Filter Tabs */}
-                            {stats.total > 0 && (
-                                <Segmented
-                                    value={filterStatus}
-                                    onChange={setFilterStatus}
-                                    size="small"
-                                    block
-                                    options={[
-                                        { label: `All (${stats.total})`, value: 'all' },
-                                        { label: `Active (${stats.processing})`, value: 'processing' },
-                                        { label: `Ready (${stats.completed})`, value: 'completed' },
-                                        { label: `Failed (${stats.failed})`, value: 'failed' }
-                                    ]}
-                                    style={{
-                                        background: '#f1f5f9',
-                                        fontWeight: 600
-                                    }}
-                                />
-                            )}
+                        {/* Navigation Tabs */}
+                        {stats.total > 0 && (
+                            <Segmented
+                                value={filterStatus}
+                                onChange={setFilterStatus}
+                                block
+                                options={[
+                                    { label: `All (${stats.total})`, value: 'all' },
+                                    { label: `Active (${stats.processing})`, value: 'processing' },
+                                    { label: `Ready (${stats.completed})`, value: 'completed' },
+                                    { label: `Failed (${stats.failed})`, value: 'failed' }
+                                ]}
+                                style={{ fontWeight: 700 }}
+                            />
+                        )}
+
+                        {/* Downloads List using Ant Design Components */}
+                        <div style={{ flex: 1, overflowY: 'auto' }}>
+                            <List
+                                dataSource={filteredDownloads}
+                                locale={{
+                                    emptyText: stats.total === 0 ? (
+                                        <Empty
+                                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                            description={
+                                                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                                    <Text strong>No Exports Registered</Text>
+                                                    <Text type="secondary" style={{ fontSize: 11 }}>
+                                                        Your downloaded files and matrix spreadsheets will show up here.
+                                                    </Text>
+                                                </Space>
+                                            }
+                                        />
+                                    ) : (
+                                        <Empty
+                                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                            description={`No ${filterStatus} downloads matched.`}
+                                        />
+                                    )
+                                }}
+                                renderItem={(item) => {
+                                    const fileConfig = getFileIcon(item.format);
+                                    const statusConfig = getStatusConfig(item.status);
+                                    const isClickable = item.status === 'completed';
+                                    
+                                    return (
+                                        <List.Item style={{ padding: '6px 0', border: 'none' }}>
+                                            <Card
+                                                hoverable={isClickable}
+                                                style={{
+                                                    width: '100%',
+                                                    borderLeft: `4px solid ${statusConfig.colorCode}`,
+                                                    borderRadius: 8,
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.01)'
+                                                }}
+                                                styles={{ body: { padding: 14 } }}
+                                                onClick={() => isClickable && handleDownloadTrigger(item)}
+                                            >
+                                                <div style={{ display: 'flex', gap: 12, alignItems: 'start' }}>
+                                                    {/* File Type Icon badge */}
+                                                    <div style={{
+                                                        width: 38,
+                                                        height: 38,
+                                                        borderRadius: 8,
+                                                        background: fileConfig.bg,
+                                                        border: `1px solid ${fileConfig.border}`,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: fileConfig.color,
+                                                        flexShrink: 0
+                                                    }}>
+                                                        <fileConfig.Icon size={18} />
+                                                    </div>
+
+                                                    {/* Description Details */}
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 8, marginBottom: 4 }}>
+                                                            <Typography.Text strong style={{ fontSize: 13, lineHeight: 1.3 }} ellipsis={{ tooltip: item.fileName }}>
+                                                                {item.fileName}
+                                                            </Typography.Text>
+                                                            <Tag color={statusConfig.color} style={{ margin: 0, textTransform: 'uppercase', fontSize: 9, fontWeight: 700 }}>
+                                                                {statusConfig.label}
+                                                            </Tag>
+                                                        </div>
+
+                                                        {/* Metadata row */}
+                                                        <Space size="middle" split={<span style={{ color: '#d9d9d9', fontSize: 10 }}>|</span>} style={{ fontSize: 11, color: '#8c8c8c', marginBottom: item.status === 'processing' || item.status === 'failed' ? 8 : 0, display: 'flex', flexWrap: 'wrap' }}>
+                                                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, color: fileConfig.color }}>
+                                                                {item.format.toUpperCase()}
+                                                            </Text>
+                                                            {item.rowCount !== undefined && item.rowCount !== null && (
+                                                                <span>{item.rowCount.toLocaleString()} rows</span>
+                                                            )}
+                                                            {item.fileSize !== undefined && item.fileSize !== null && (
+                                                                <span>{formatSize(item.fileSize)}</span>
+                                                            )}
+                                                            <span style={{ color: '#bfbfbf' }}>{formatRelativeTime(item.createdAt)}</span>
+                                                        </Space>
+
+                                                        {/* Native Ant Design Progress */}
+                                                        {item.status === 'processing' && (
+                                                            <div style={{ marginTop: 6 }}>
+                                                                <Progress
+                                                                    percent={Math.round(item.progress || 0)}
+                                                                    size="small"
+                                                                    status="active"
+                                                                    strokeColor={{
+                                                                        '0%': '#1890ff',
+                                                                        '100%': '#69c0ff',
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Native Ant Design Alert for Errors */}
+                                                        {item.status === 'failed' && item.errorMessage && (
+                                                            <div style={{ marginTop: 8 }}>
+                                                                <Alert
+                                                                    message={item.errorMessage}
+                                                                    type="error"
+                                                                    showIcon
+                                                                    style={{ padding: '4px 8px', fontSize: 11 }}
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Native Action Button */}
+                                                        {isClickable && (
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+                                                                <span style={{ fontSize: 11, color: '#52c41a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                                    <Sparkles size={11} style={{ fill: '#52c41a' }} />
+                                                                    File ready
+                                                                </span>
+                                                                <Button
+                                                                    type="primary"
+                                                                    size="small"
+                                                                    icon={<Download size={12} />}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDownloadTrigger(item);
+                                                                    }}
+                                                                    style={{ borderRadius: 6, fontWeight: 600 }}
+                                                                >
+                                                                    Download
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        </List.Item>
+                                    );
+                                }}
+                            />
                         </div>
 
-                        {/* ═══════════════════════════════════════════════════
-                            DOWNLOADS LIST
-                        ═══════════════════════════════════════════════════ */}
-                        <div style={{
-                            flex: 1,
-                            overflowY: 'auto',
-                            padding: filteredDownloads.length > 0 ? '14px 16px' : 0
-                        }}>
-                            {filteredDownloads.length === 0 ? (
-                                stats.total === 0 ? (
-                                    /* No downloads at all */
-                                    <div style={{
-                                        height: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '40px 24px'
-                                    }}>
-                                        <div style={{
-                                            width: 80,
-                                            height: 80,
-                                            borderRadius: '50%',
-                                            background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            marginBottom: 16,
-                                            border: '2px solid #c7d2fe'
-                                        }}>
-                                            <DownloadCloud size={32} style={{ color: '#6366f1' }} strokeWidth={2} />
-                                        </div>
-                                        <div style={{
-                                            fontSize: 15,
-                                            fontWeight: 800,
-                                            color: '#0f172a',
-                                            marginBottom: 6,
-                                            textAlign: 'center'
-                                        }}>
-                                            No Downloads Yet
-                                        </div>
-                                        <div style={{
-                                            fontSize: 12,
-                                            color: '#64748b',
-                                            textAlign: 'center',
-                                            maxWidth: 260,
-                                            lineHeight: 1.5
-                                        }}>
-                                            Your scheduled exports and report downloads will appear here once generated.
-                                        </div>
-                                        <div style={{
-                                            marginTop: 16,
-                                            padding: '8px 14px',
-                                            background: '#eef2ff',
-                                            border: '1px solid #c7d2fe',
-                                            borderRadius: 20,
-                                            fontSize: 10,
-                                            fontWeight: 700,
-                                            color: '#4f46e5',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5
-                                        }}>
-                                            <Info size={11} strokeWidth={2.5} />
-                                            Trigger an export from any module
-                                        </div>
-                                    </div>
-                                ) : (
-                                    /* Filtered empty */
-                                    <div style={{
-                                        height: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '40px 24px'
-                                    }}>
-                                        <Filter size={32} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-                                        <div style={{
-                                            fontSize: 13,
-                                            fontWeight: 700,
-                                            color: '#475569',
-                                            marginBottom: 4
-                                        }}>
-                                            No {filterStatus} downloads
-                                        </div>
-                                        <div style={{
-                                            fontSize: 11,
-                                            color: '#94a3b8',
-                                            textAlign: 'center'
-                                        }}>
-                                            Try selecting a different filter
-                                        </div>
-                                    </div>
-                                )
-                            ) : (
-                                filteredDownloads.map((item) => (
-                                    <DownloadItem
-                                        key={item.id}
-                                        item={item}
-                                        onDownload={handleDownloadTrigger}
-                                    />
-                                ))
-                            )}
-                        </div>
-
-                        {/* ═══════════════════════════════════════════════════
-                            FOOTER (Total size + count)
-                        ═══════════════════════════════════════════════════ */}
+                        {/* Footer Status Metadata */}
                         {stats.total > 0 && (
                             <div style={{
-                                padding: '12px 20px',
-                                background: '#ffffff',
+                                padding: '12px 4px 4px',
                                 borderTop: '1px solid #e2e8f0',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                gap: 8
+                                color: '#64748b'
                             }}>
-                                <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: '#64748b'
-                                }}>
-                                    <Archive size={11} strokeWidth={2.5} />
-                                    Showing {filteredDownloads.length} of {stats.total}
-                                </div>
+                                <Typography.Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
+                                    Showing {filteredDownloads.length} of {stats.total} exports
+                                </Typography.Text>
                                 {stats.totalSize > 0 && (
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 5,
-                                        fontSize: 10,
-                                        fontWeight: 700,
-                                        color: '#0f172a',
-                                        background: '#f1f5f9',
-                                        padding: '4px 10px',
-                                        borderRadius: 10
-                                    }}>
-                                        <HardDrive size={11} strokeWidth={2.5} style={{ color: '#6366f1' }} />
-                                        Total: {formatSize(stats.totalSize)}
-                                    </div>
+                                    <Tag color="purple" style={{ margin: 0, fontWeight: 700 }}>
+                                        Disk Used: {formatSize(stats.totalSize)}
+                                    </Tag>
                                 )}
                             </div>
                         )}
+
                     </div>
                 </Spin>
 
                 <style>{`
-                    .download-card-item.clickable:hover {
-                        transform: translateY(-2px);
-                        box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
-                        border-color: #cbd5e1 !important;
-                    }
-                    .header-icon-btn:hover:not(:disabled) {
-                        background: #f1f5f9 !important;
-                        border-color: #cbd5e1 !important;
-                        color: #4f46e5 !important;
-                        transform: scale(1.05);
-                    }
-                    .download-action-btn:hover {
-                        transform: translateY(-1px);
-                        box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.5) !important;
-                    }
-                    .download-action-btn:active {
-                        transform: translateY(0);
-                    }
                     @keyframes spin-animation {
                         to { transform: rotate(360deg); }
                     }
                     .spin-animation {
                         animation: spin-animation 1.2s linear infinite;
                     }
-                    @keyframes pulse-dot {
-                        0%, 100% { transform: scale(1); opacity: 1; }
-                        50% { transform: scale(1.3); opacity: 0.6; }
-                    }
-                    .live-pulse-dot {
-                        animation: pulse-dot 1.5s ease-in-out infinite;
-                    }
-                    @keyframes shimmer-progress {
-                        0% { background-position: -200px 0; }
-                        100% { background-position: 200px 0; }
-                    }
-                    .progress-shimmer {
-                        background-size: 200px 100%;
-                        animation: shimmer-progress 1.5s linear infinite;
-                    }
-                    /* Custom scrollbar */
+                    /* Custom scrollbars matching the rest of the application */
                     ::-webkit-scrollbar {
                         width: 6px;
                     }

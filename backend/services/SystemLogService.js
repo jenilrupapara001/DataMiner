@@ -1,8 +1,13 @@
 const { sql, getPool, generateId } = require('../database/db');
+const asyncLocalStorage = require('../utils/asyncStorage');
 
 class SystemLogService {
     async log({ type, entityType, entityId, entityTitle, user, description, metadata }) {
         try {
+            const store = asyncLocalStorage.getStore();
+            if (store) {
+                store.logged = true;
+            }
             const pool = await getPool();
             const id = generateId();
             const userId = user?.Id || user?._id || user;
