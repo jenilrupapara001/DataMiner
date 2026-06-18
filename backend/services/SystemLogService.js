@@ -57,14 +57,18 @@ class SystemLogService {
             const pool = await getPool();
             const result = await pool.request()
                 .query(`
-                    SELECT TOP ${limit} l.*, u.FirstName, u.LastName, u.Email
+                    SELECT TOP ${limit} l.*, u.FirstName, u.LastName, u.Email,
+                           s.Name as SellerName
                     FROM SystemLogs l
                     LEFT JOIN Users u ON l.UserId = u.Id
+                    LEFT JOIN Sellers s ON l.EntityId = s.Id AND l.EntityType = 'SELLER'
                     ORDER BY l.CreatedAt DESC
                 `);
 
             return result.recordset.map(log => ({
                 ...log,
+                // Use SellerName if EntityTitle is empty and EntityType is SELLER
+                EntityTitle: log.EntityTitle || (log.EntityType === 'SELLER' ? log.SellerName : null) || log.EntityTitle,
                 user: {
                     Id: log.UserId,
                     firstName: log.FirstName,

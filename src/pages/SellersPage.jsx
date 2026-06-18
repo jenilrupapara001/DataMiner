@@ -199,6 +199,30 @@ const SellersPage = () => {
     return () => socket.off('SELLERS_UPDATED', handler);
   }, [socket]); // socket only
 
+  // Listen for live sync ASIN updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleAsinsUpdated = (data) => {
+      void loadSellersRef.current({
+        page, limit, activeTab, marketplaceFilter, statusFilter,
+        search: debouncedSearch, silent: true
+      });
+    };
+    socket.on('ASINS_UPDATED', handleAsinsUpdated);
+    socket.on('liveSync:completed', (data) => {
+      toastRef.current(`Live sync complete: ${data.updatedAsins} ASINs updated in ${(data.duration/1000).toFixed(1)}s`, 'success');
+    });
+    socket.on('liveSyncAll:completed', (data) => {
+      toastRef.current(`Global sync complete: ${data.success} sellers, ${data.totalAsinsUpdated} ASINs in ${(data.duration/1000).toFixed(1)}s`, 'success');
+      setGlobalSyncing(false);
+    });
+    return () => {
+      socket.off('ASINS_UPDATED', handleAsinsUpdated);
+      socket.off('liveSync:completed');
+      socket.off('liveSyncAll:completed');
+    };
+  }, [socket, page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch]);
+
   // Pool stats
   const fetchPoolStats = useCallback(async () => {
     try {

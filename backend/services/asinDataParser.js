@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const { calculateLQS } = require('../utils/lqs');
+const SocketService = require('./socketService');
 
 class AsinDataParser {
     /**
@@ -451,11 +452,25 @@ class AsinDataParser {
                 UPDATE SET ${updates.join(', ')}
             WHEN NOT MATCHED THEN
                 INSERT (${columns.join(', ')})
-                VALUES (${values.join(', ')});
+                VALUES (${values.join(', ')})
+            OUTPUT inserted.Id, inserted.AsinCode, inserted.SellerId;
         `;
 
-        await request.query(query);
-        return { asinCode: row.AsinCode, sellerId };
+        const result = await request.query(query);
+        const merged = result.recordset[0];
+
+        // Emit socket event for live updates
+        const io = SocketService.getIo();
+        if (io && merged) {
+            io.emit('scrape_data_ingested', {
+                asinId: merged.Id,
+                sellerId: merged.SellerId,
+                asinCode: merged.AsinCode,
+                timestamp: new Date()
+            });
+        }
+
+        return { id: merged ? merged.Id : null, asinCode: row.AsinCode, sellerId };
     }
 
     /**
@@ -463,14 +478,32 @@ class AsinDataParser {
      */
     static async bulkUpsertAsins(rawDataArray, sellerId) {
         const results = [];
+        const updatedAsinCodes = [];
         for (const rawData of rawDataArray) {
             try {
                 const result = await this.upsertAsinFromRaw(rawData, sellerId);
                 results.push({ success: true, ...result });
+                if (result.asinCode) {
+                    updatedAsinCodes.push(result.asinCode);
+                }
             } catch (err) {
                 results.push({ success: false, error: err.message });
             }
         }
+
+        // Emit batch complete event for live updates
+        if (updatedAsinCodes.length > 0) {
+            const io = SocketService.getIo();
+            if (io) {
+                io.emit('scrape_batch_complete', {
+                    sellerId: sellerId,
+                    count: updatedAsinCodes.length,
+                    asinCodes: updatedAsinCodes,
+                    timestamp: new Date()
+                });
+            }
+        }
+
         return results;
     }
 }

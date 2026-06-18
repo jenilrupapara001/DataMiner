@@ -8,7 +8,7 @@ import {
 import {
     Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
     PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
-    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle
+    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle, Zap
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
@@ -101,6 +101,10 @@ const ActivityLog = () => {
                 return { icon: <AlertTriangle size={14} />, color: '#dc2626', label: 'Error' };
             case 'IMPORT':
                 return { icon: <ClipboardList size={14} />, color: '#06b6d4', label: 'Import' };
+            case 'LIVE_SYNC':
+                return { icon: <Zap size={14} />, color: '#7c3aed', label: 'Live Sync' };
+            case 'LIVE_SYNC_TEST':
+                return { icon: <Zap size={14} />, color: '#7c3aed', label: 'Live Sync Test' };
             case 'AUTOMATION_TASK':
                 return { icon: <Cpu size={14} />, color: '#6366f1', label: 'Automation Task' };
             case 'TARGET_UPDATE':
@@ -142,9 +146,10 @@ const ActivityLog = () => {
     const metrics = useMemo(() => {
         const total = logs.length;
         const automations = logs.filter(l => l.type === 'AUTOMATION_TASK').length;
+        const liveSyncs = logs.filter(l => l.type === 'LIVE_SYNC').length;
         const security = logs.filter(l => l.type?.startsWith('AUTH_')).length;
         const operations = logs.filter(l => ['CREATE', 'UPDATE', 'DELETE', 'TARGET_UPDATE', 'TARGET_DELETE', 'TARGET_IMPORT'].includes(l.type)).length;
-        return { total, automations, security, operations };
+        return { total, automations, liveSyncs, security, operations };
     }, [logs]);
 
     const filteredLogs = useMemo(() => {
@@ -274,7 +279,7 @@ const ActivityLog = () => {
             render: (_, record) => (
                 <div onClick={() => showDetails(record)} style={{ cursor: 'pointer' }}>
                     <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', marginBottom: '2px' }}>
-                        {record.entityTitle || 'System Activity'}
+                        {record.entityTitle || (record.entityType === 'SELLER' ? `Seller ${record.entityId?.substring(0, 8)}...` : 'System Activity')}
                     </div>
                     <div style={{ color: '#64748b', fontSize: '12px', lineHeight: '1.4' }}>
                         {record.description || 'Action performed on the system.'}
@@ -407,9 +412,9 @@ const ActivityLog = () => {
                 <Col xs={12} sm={12} md={6}>
                     <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
                         <Statistic
-                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>SECURITY LOGS</span>}
-                            value={metrics.security}
-                            prefix={<Shield size={16} style={{ color: '#10b981', marginRight: 6, marginBottom: -2 }} />}
+                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>LIVE SYNCS</span>}
+                            value={metrics.liveSyncs}
+                            prefix={<Zap size={16} style={{ color: '#7c3aed', marginRight: 6, marginBottom: -2 }} />}
                             valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
                         />
                     </Card>
@@ -453,6 +458,7 @@ const ActivityLog = () => {
                             <Select.Option value="DELETE">Removal Operations</Select.Option>
                             <Select.Option value="IMPORT">Data Ingestion (Bulk)</Select.Option>
                             <Select.Option value="AUTOMATION_TASK">Automation Tasks</Select.Option>
+                            <Select.Option value="LIVE_SYNC">Live Data Sync</Select.Option>
                             <Select.Option value="TARGET_IMPORT">Target Ingestion</Select.Option>
                             <Select.Option value="TARGET_UPDATE">Target Updates</Select.Option>
                             <Select.Option value="TARGET_DELETE">Target Deletions</Select.Option>
@@ -585,7 +591,9 @@ const ActivityLog = () => {
                                 fontSize: '13px',
                                 lineHeight: '1.6'
                             }}>
-                                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>{selectedLog.entityTitle}</div>
+                                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
+                                    {selectedLog.entityTitle || (selectedLog.entityType === 'SELLER' ? `Seller ${selectedLog.entityId?.substring(0, 8)}...` : 'System Activity')}
+                                </div>
                                 {selectedLog.description}
                             </div>
                         </div>
