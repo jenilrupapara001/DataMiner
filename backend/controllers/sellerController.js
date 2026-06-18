@@ -155,7 +155,9 @@ exports.getSellers = async (req, res) => {
       SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, 
              OctoparseId as octoparseId, IsActive as status, IsPriority as isPriority, [Plan] as sellerPlan,
              ScrapeLimit as scrapeLimit, CreatedAt as createdAt, UpdatedAt as updatedAt,
-             LastScrapedAt as lastScraped
+             LastScrapedAt as lastScraped, LiveSyncClientId as liveSyncClientId,
+             LiveSyncClientSecret as liveSyncClientSecret, PartnerTag as partnerTag,
+             LiveSyncEnabled as liveSyncEnabled
        FROM Sellers
        ${whereClause}
        ORDER BY Name ASC
@@ -172,7 +174,8 @@ exports.getSellers = async (req, res) => {
             ...s,
             status: s.status ? 'Active' : 'Inactive',
             isPriority: !!s.isPriority,
-            plan: s.sellerPlan
+            plan: s.sellerPlan,
+            liveSyncEnabled: !!s.liveSyncEnabled
         }));
         console.log('Fetched sellers count:', sellers.length);
     } catch (e) {
@@ -256,7 +259,11 @@ exports.getSeller = async (req, res) => {
           plan: seller.Plan,
           scrapeLimit: seller.ScrapeLimit,
           scrapeUsed: seller.ScrapeUsed,
-          lastScraped: seller.LastScrapedAt
+          lastScraped: seller.LastScrapedAt,
+          liveSyncClientId: seller.LiveSyncClientId,
+          liveSyncClientSecret: seller.LiveSyncClientSecret,
+          partnerTag: seller.PartnerTag,
+          liveSyncEnabled: !!seller.LiveSyncEnabled
         }, 
         asins: asinsResult.recordset.map(a => ({ ...a, _id: a.Id })) 
     });
@@ -271,7 +278,7 @@ exports.createSeller = async (req, res) => {
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
     const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-    const { assignedUserIds, name, marketplace, sellerId, status, isPriority } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
 
     const pool = await getPool();
     const id = generateId();
@@ -286,11 +293,15 @@ exports.createSeller = async (req, res) => {
       .input('isPriority', sql.Bit, isPriority === true ? 1 : 0)
       .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
       .input('plan', sql.NVarChar, req.body.plan || 'Starter')
-      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100);
+      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100)
+      .input('liveSyncClientId', sql.NVarChar, liveSyncClientId || null)
+      .input('liveSyncClientSecret', sql.NVarChar, liveSyncClientSecret || null)
+      .input('partnerTag', sql.NVarChar, partnerTag || null)
+      .input('liveSyncEnabled', sql.Bit, liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0);
 
     await request.query(`
-        INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, CreatedAt, UpdatedAt)
-        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, dbo.GetEnvDate(), dbo.GetEnvDate())
+        INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, LiveSyncClientId, LiveSyncClientSecret, PartnerTag, LiveSyncEnabled, CreatedAt, UpdatedAt)
+        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, @liveSyncClientId, @liveSyncClientSecret, @partnerTag, @liveSyncEnabled, dbo.GetEnvDate(), dbo.GetEnvDate())
       `);
 
     // Assign to users
@@ -338,7 +349,7 @@ exports.createSeller = async (req, res) => {
 exports.updateSeller = async (req, res) => {
   try {
     const { id } = req.params;
-    const { assignedUserIds, name, marketplace, sellerId, status, isPriority } = req.body;
+    const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
     const userRole = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
 
@@ -372,6 +383,14 @@ exports.updateSeller = async (req, res) => {
     const finalOctoId = req.body.octoparseId === undefined ? current.OctoparseId : (req.body.octoparseId || null);
     const finalPlan = req.body.plan === undefined ? current.Plan : (req.body.plan || 'Starter');
     const finalScrapeLimit = req.body.scrapeLimit === undefined ? current.ScrapeLimit : (parseInt(req.body.scrapeLimit) || 100);
+    const finalLiveSyncClientId = liveSyncClientId === undefined ? current.LiveSyncClientId : (liveSyncClientId || null);
+    const finalLiveSyncClientSecret = liveSyncClientSecret === undefined ? current.LiveSyncClientSecret : (liveSyncClientSecret || null);
+    const finalPartnerTag = partnerTag === undefined ? current.PartnerTag : (partnerTag || null);
+    
+    let finalLiveSyncEnabled = current.LiveSyncEnabled;
+    if (liveSyncEnabled !== undefined) {
+      finalLiveSyncEnabled = liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0;
+    }
 
     const request = pool.request();
     request
@@ -383,13 +402,19 @@ exports.updateSeller = async (req, res) => {
       .input('isPriority', sql.Bit, finalIsPriority)
       .input('octoparseId', sql.NVarChar, finalOctoId)
       .input('plan', sql.NVarChar, finalPlan)
-      .input('scrapeLimit', sql.Int, finalScrapeLimit);
+      .input('scrapeLimit', sql.Int, finalScrapeLimit)
+      .input('liveSyncClientId', sql.NVarChar, finalLiveSyncClientId)
+      .input('liveSyncClientSecret', sql.NVarChar, finalLiveSyncClientSecret)
+      .input('partnerTag', sql.NVarChar, finalPartnerTag)
+      .input('liveSyncEnabled', sql.Bit, finalLiveSyncEnabled);
 
     await request.query(`
         UPDATE Sellers 
         SET Name = @name, Marketplace = @marketplace, SellerId = @sellerId, 
             IsActive = @isActive, IsPriority = @isPriority, OctoparseId = @octoparseId, [Plan] = @plan, 
-            ScrapeLimit = @scrapeLimit, UpdatedAt = dbo.GetEnvDate()
+            ScrapeLimit = @scrapeLimit, LiveSyncClientId = @liveSyncClientId, 
+            LiveSyncClientSecret = @liveSyncClientSecret, PartnerTag = @partnerTag, 
+            LiveSyncEnabled = @liveSyncEnabled, UpdatedAt = dbo.GetEnvDate()
         WHERE Id = @id
       `);
 

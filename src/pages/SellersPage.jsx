@@ -14,7 +14,7 @@ import {
 import {
   Package, Search, Plus, FileUp, Upload,
   Clock, Trash2, Play, Pause, LayoutGrid,
-  RefreshCw, Edit3, ChevronRight, Star
+  RefreshCw, Edit3, ChevronRight, Star, Zap
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
@@ -101,6 +101,8 @@ const SellersPage = () => {
   const [bulkImportConfig, setBulkImportConfig] = useState({ sellerId: '', tab: 'catalog' });
   const [poolStats, setPoolStats] = useState({ total: 0, assigned: 0, available: 0 });
   const [syncingIds, setSyncingIds] = useState(new Set());
+  const [liveSyncingIds, setLiveSyncingIds] = useState(new Set());
+  const [liveSyncStatuses, setLiveSyncStatuses] = useState({});
 
   // Stable toast ref
   const toastRef = useRef(addToast);
@@ -430,6 +432,93 @@ const SellersPage = () => {
     }
   }, []);
 
+  // ── Live Sync (PA-API) trigger ─────────────────────────────────────────
+  const handleLiveSync = useCallback(async (sellerId) => {
+    setLiveSyncingIds(prev => new Set(prev).add(sellerId));
+    setLiveSyncStatuses(prev => ({ ...prev, [sellerId]: { status: 'STARTING' } }));
+    try {
+      const res = await marketSyncApi.triggerLiveSync(sellerId);
+      if (res.success) {
+        if (res.status === 'IN_PROGRESS') {
+          toastRef.current('Live sync already running. Showing progress...', 'info');
+        } else {
+          toastRef.current('Live sync started. Updates will appear within minutes.', 'success');
+        }
+        setLiveSyncStatuses(prev => ({ ...prev, [sellerId]: { status: 'RUNNING', progress: res.progress || null } }));
+      } else {
+        toastRef.current(res.error || 'Failed to start live sync', 'error');
+        setLiveSyncingIds(prev => { const n = new Set(prev); n.delete(sellerId); return n; });
+        setLiveSyncStatuses(prev => ({ ...prev, [sellerId]: { status: 'ERROR', error: res.error } }));
+      }
+    } catch (error) {
+      toastRef.current(error.message, 'error');
+      setLiveSyncingIds(prev => { const n = new Set(prev); n.delete(sellerId); return n; });
+      setLiveSyncStatuses(prev => ({ ...prev, [sellerId]: { status: 'ERROR', error: error.message } }));
+    }
+  }, []);
+
+  // ── Live Sync status polling (stable interval using refs) ──────────────
+  const liveSyncingIdsRef = useRef(liveSyncingIds);
+  liveSyncingIdsRef.current = liveSyncingIds;
+  
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const currentIds = liveSyncingIdsRef.current;
+      if (currentIds.size === 0) return;
+      
+      for (const sellerId of currentIds) {
+        try {
+          const status = await marketSyncApi.getSellerSyncStatus(sellerId);
+          const syncStatus = status.liveSync?.status;
+          
+          if (syncStatus === 'RUNNING') {
+            setLiveSyncStatuses(prev => ({
+              ...prev,
+              [sellerId]: {
+                status: 'RUNNING',
+                progress: status.liveSync.progress
+              }
+            }));
+          } else if (syncStatus === 'FAILED') {
+            // Sync failed
+            setLiveSyncingIds(prev => { const n = new Set(prev); n.delete(sellerId); return n; });
+            setLiveSyncStatuses(prev => ({
+              ...prev,
+              [sellerId]: {
+                status: 'ERROR',
+                error: status.liveSync.error || 'Sync failed',
+                lastRun: status.liveSync.lastRun
+              }
+            }));
+            toastRef.current(`Live sync failed: ${status.liveSync.error || 'Unknown error'}`, 'error');
+          } else {
+            // Sync finished (IDLE or COMPLETED)
+            setLiveSyncingIds(prev => { const n = new Set(prev); n.delete(sellerId); return n; });
+            setLiveSyncStatuses(prev => ({
+              ...prev,
+              [sellerId]: {
+                status: 'COMPLETE',
+                lastResult: status.liveSync.lastResult,
+                lastRun: status.liveSync.lastRun
+              }
+            }));
+            if (status.liveSync.lastResult) {
+              const r = status.liveSync.lastResult;
+              toastRef.current(`Live sync complete: ${r.success}/${r.totalAsins} ASINs updated in ${(r.duration/1000).toFixed(1)}s`, 'success');
+            } else {
+              toastRef.current('Live sync complete.', 'success');
+            }
+            // Refresh seller list to show updated metrics
+            void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+          }
+        } catch (e) {
+          console.error('Live sync poll error:', e);
+        }
+      }
+    }, 8000); // Poll every 8 seconds
+    return () => clearInterval(interval);
+  }, []); // Empty deps - interval runs forever, reads from ref
+
   const handleCatalogSync = useCallback((seller) => {
     const isAjio = seller.marketplace?.toLowerCase() === 'ajio';
     setBulkImportConfig({ sellerId: seller._id, tab: isAjio ? 'ajio_catalog' : 'catalog' });
@@ -535,6 +624,37 @@ const SellersPage = () => {
             onClick={() => handleSyncSeller(seller._id)}
             style={{ color: '#64748b' }} />
         </Tooltip>
+        {seller.marketplace?.toLowerCase() === 'amazon.in' && (() => {
+          const lsStatus = liveSyncStatuses[seller._id];
+          const isLiveSyncing = liveSyncingIds.has(seller._id);
+          const progressText = isLiveSyncing && lsStatus?.progress
+            ? `${lsStatus.progress.processed}/${lsStatus.progress.total}`
+            : null;
+          return (
+            <Tooltip title={isLiveSyncing ? `Live Sync Running${progressText ? ` (${progressText})` : '...'}` : 'Live Sync'}>
+              <Button
+                size="small"
+                icon={<Zap size={13} />}
+                loading={isLiveSyncing}
+                onClick={() => handleLiveSync(seller._id)}
+                disabled={isLiveSyncing}
+                style={{
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 10,
+                  background: isLiveSyncing ? '#e9d5ff' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                  borderColor: isLiveSyncing ? '#c4b5fd' : '#7c3aed',
+                  color: isLiveSyncing ? '#6d28d9' : '#fff',
+                  boxShadow: isLiveSyncing ? 'none' : '0 1px 3px rgba(124,58,237,0.3)',
+                  height: 26,
+                  padding: '0 8px',
+                }}
+              >
+                {isLiveSyncing ? (progressText || 'Syncing') : 'Live'}
+              </Button>
+            </Tooltip>
+          );
+        })()}
         {isGlobalUser && (
           <Tooltip title={seller.isPriority ? 'Remove High Priority' : 'Set as High Priority'}>
             <Button
@@ -576,9 +696,9 @@ const SellersPage = () => {
       </Space>
     );
   }, [
-    isBrandManager, isGlobalUser, syncingIds,
+    isBrandManager, isGlobalUser, syncingIds, liveSyncingIds, liveSyncStatuses,
     handleEditSeller, handleViewAsins, handleCatalogSync,
-    handleSyncSeller, handleToggleStatus, handleTogglePriority, handleDeleteSeller, hasPermission
+    handleSyncSeller, handleLiveSync, handleToggleStatus, handleTogglePriority, handleDeleteSeller, hasPermission
   ]);
 
   // ── Table columns ──────────────────────────────────────────────────────
@@ -696,7 +816,7 @@ const SellersPage = () => {
   ], [getMarketplaceBadge, getStatusBadge, handleViewAsins]);
 
   const actionColumn = useMemo(() => ({
-    title: 'ACTIONS', key: 'actions', fixed: 'right', width: 120, align: 'right',
+    title: 'ACTIONS', key: 'actions', fixed: 'right', width: 180, align: 'right',
     render: (_, seller) => {
       if (seller?.isGroupHeader) return null;
       return renderActions(seller);

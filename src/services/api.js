@@ -8,6 +8,26 @@ const getAuthHeader = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+const handleResponse = async (res, defaultErrorMsg = 'Request failed') => {
+  if (res.ok) {
+    return res.json();
+  }
+  let errorMsg = defaultErrorMsg;
+  try {
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const error = await res.json();
+      errorMsg = error.error || error.message || errorMsg;
+    } else {
+      const text = await res.text();
+      errorMsg = text ? (text.length > 150 ? text.substring(0, 150) + '...' : text) : `HTTP Error ${res.status}: ${res.statusText}`;
+    }
+  } catch (e) {
+    errorMsg = `HTTP Error ${res.status}: ${res.statusText}`;
+  }
+  throw new Error(errorMsg);
+};
+
 // Auth API
 export const authApi = {
   login: async (email, password) => {
@@ -343,7 +363,22 @@ export const marketSyncApi = {
       throw new Error(error.error || error.message || 'Failed to upload Octoparse JSON');
     }
     return res.json();
-  }
+  },
+
+  triggerLiveSync: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/market-sync/sync/live/${sellerId}`, {
+      method: 'POST',
+      headers: { ...getAuthHeader() },
+    });
+    return handleResponse(res, 'Failed to trigger live sync');
+  },
+
+  getSellerSyncStatus: async (sellerId) => {
+    const res = await fetch(`${API_BASE}/market-sync/sync/status/${sellerId}`, {
+      headers: { ...getAuthHeader() },
+    });
+    return handleResponse(res, 'Failed to fetch seller sync status');
+  },
 };
 
 // Scheduled Runs API

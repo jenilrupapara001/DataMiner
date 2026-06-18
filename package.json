@@ -42,6 +42,7 @@
     "motion": "^12.39.0",
     "multer": "^2.1.1",
     "mysql2": "^3.22.3",
+    "p-queue": "^6.6.2",
     "react": "^19.2.6",
     "react-apexcharts": "^2.1.0",
     "react-chartjs-2": "^5.3.1",

@@ -11,6 +11,12 @@ const { authenticate, requirePermission, checkSellerAccess } = require('../middl
 // Basic health check for service
 router.get('/status', authenticate, marketSyncController.getSyncStatus);
 
+// Sync status for specific seller
+router.get('/sync/status/:sellerId', authenticate, checkSellerAccess, marketSyncController.getSellerSyncStatus);
+
+// Trigger Live Sync for specific seller
+router.post('/sync/live/:sellerId', authenticate, requirePermission('scraping_manage'), checkSellerAccess, marketSyncController.triggerLiveSync);
+
 // Diagnostic route
 router.get('/ping', (req, res) => res.json({ message: 'market-sync router is active' }));
 

@@ -433,10 +433,13 @@ io.on('connection', async (socket) => {
         .input('msgId', sql.VarChar, messageId)
         .query(`SELECT Emoji, COUNT(*) as count FROM MessageReactions WHERE MessageId = @msgId GROUP BY Emoji`);
 
-      io.to(conversationIdFromMessage(messageId)).emit('message_reaction_updated', {
-        messageId,
-        reactions: reactionsResult.recordset
-      });
+      const convId = await conversationIdFromMessage(messageId);
+      if (convId) {
+        io.to(convId).emit('message_reaction_updated', {
+          messageId,
+          reactions: reactionsResult.recordset
+        });
+      }
     } catch (err) {
       console.error('Socket add_reaction error:', err);
     }
@@ -575,10 +578,6 @@ io.on('connection', async (socket) => {
   });
 });
 
-// Make sql and getPool available globally for socket handlers
-global.getPool = getPool;
-global.sql = require('./database/db').sql;
-
 server.listen(PORT, () => {
   console.log(`🚀 Backend running: http://localhost:${PORT}`);
 
@@ -606,16 +605,21 @@ server.listen(PORT, () => {
   }
 });
 
-// 1000 users support: High concurrency keep-alive configuration to prevent socket hangups under load
-server.keepAliveTimeout = 65000; 
-server.headersTimeout = 66000;
-
 // Make getPool available globally for socket handlers
 global.getPool = getPool;
 global.sql = sql;
 
 // Helper to get conversation ID from message ID
-function conversationIdFromMessage(messageId) {
-  return '';
+async function conversationIdFromMessage(messageId) {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('msgId', sql.VarChar, messageId)
+      .query('SELECT ConversationId FROM Messages WHERE Id = @msgId');
+    return result.recordset[0]?.ConversationId || '';
+  } catch (err) {
+    console.error('Failed to get conversationId from messageId:', err.message);
+    return '';
+  }
 }
 

@@ -14,25 +14,7 @@ class DataAggregationEngine {
     try {
       const pool = await getPool();
       
-      // Use AdsPerformance as the primary source for daily aggregated metrics
-      const result = await pool.request()
-        .input('startDate', sql.DateTime, new Date(startDate))
-        .input('endDate', sql.DateTime, new Date(endDate))
-        .query(`
-          SELECT 
-            SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as totalGMS,
-            SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as totalOrders,
-            SUM(ISNULL(OrganicSales, 0)) as totalOrganicSales,
-            SUM(ISNULL(AdSpend, 0)) as totalSpend,
-            SUM(ISNULL(AdSales, 0)) as totalAdSales,
-            SUM(ISNULL(Clicks, 0)) as totalClicks,
-            SUM(ISNULL(Impressions, 0)) as totalImpressions
-          FROM AdsPerformance
-          WHERE Asin IN (${asins.map((_, i) => `@asin${i}`).join(',')})
-          AND Date >= @startDate AND Date <= @endDate
-        `);
-      
-      // We need to dynamically add ASIN parameters because mssql doesn't support arrays in IN clause easily without TVPs or splitting
+      // Dynamically add ASIN parameters for the IN clause
       const request = pool.request()
         .input('startDate', sql.DateTime, new Date(startDate))
         .input('endDate', sql.DateTime, new Date(endDate));
@@ -41,7 +23,7 @@ class DataAggregationEngine {
         request.input(`asin${i}`, sql.NVarChar, asin);
       });
 
-      const finalResult = await request.query(`
+      const result = await request.query(`
           SELECT 
             SUM(ISNULL(AdSales, 0) + ISNULL(OrganicSales, 0)) as totalGMS,
             SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as totalOrders,
@@ -55,7 +37,7 @@ class DataAggregationEngine {
           AND Date >= @startDate AND Date <= @endDate
       `);
 
-      const data = finalResult.recordset[0] || {};
+      const data = result.recordset[0] || {};
       
       const totalGMS = data.totalGMS || 0;
       const totalSpend = data.totalSpend || 0;

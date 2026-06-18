@@ -2365,84 +2365,25 @@ class MarketDataSyncService {
             // Extract Parent ASIN if available
             const parentAsin = this._extractParentAsinFromData(rawData);
 
+            let aplusContent = this._getFromRaw(rawData, ['A_plus', 'aplus_content', 'aplus'], null);
+            if (aplusContent && typeof aplusContent === 'object') {
+                aplusContent = JSON.stringify(aplusContent);
+            }
+            let aplusModuleCount = 0;
+            if (aplusContent) {
+                const moduleMatches = aplusContent.match(/aplus-module|apm-module|aplus-3p-fixed-width/g);
+                aplusModuleCount = moduleMatches ? moduleMatches.length : 1;
+            }
+
             const updates = {
-                Title: title,
-                Category: category,
-                CurrentPrice: currentPrice,
-                Mrp: mrp > 0 ? mrp : asin.Mrp,
-                DealBadge: dealBadge,
-                PriceType: priceType,
-                ScrapedAsin: scrapedAsin || null,
-                BSR: currentBSR,
-                BsrTrend: bsrTrend,
-                Rating: currentRating,
-                RatingTrend: ratingTrend,
-                ReviewCount: currentReviews,
-                RatingBreakdown: JSON.stringify(finalRatingBreakdown),
-                LQS: lqsScore,
-                LQSGrade: lqsGrade,
-                LqsDetails: JSON.stringify(lqsAnalysis.components.title.issues), // Fallback for legacy
-
-                // Detailed Quality Components
-                TitleScore: lqsAnalysis.components.title.score,
-                TitleGrade: lqsAnalysis.components.title.grade,
-                TitleIssues: JSON.stringify(lqsAnalysis.components.title.issues),
-                TitleRecommendations: JSON.stringify(lqsAnalysis.components.title.recommendations),
-                TitleDetails: JSON.stringify(lqsAnalysis.components.title.details),
-
-                BulletScore: lqsAnalysis.components.bullets.score,
-                BulletGrade: lqsAnalysis.components.bullets.grade,
-                BulletIssues: JSON.stringify(lqsAnalysis.components.bullets.issues),
-                BulletRecommendations: JSON.stringify(lqsAnalysis.components.bullets.recommendations),
-                BulletDetails: JSON.stringify(lqsAnalysis.components.bullets.details),
-
-                ImageScore: lqsAnalysis.components.images.score,
-                ImageGrade: lqsAnalysis.components.images.grade,
-                ImageIssues: JSON.stringify(lqsAnalysis.components.images.issues),
-                ImageRecommendations: JSON.stringify(lqsAnalysis.components.images.recommendations),
-                ImageDetails: JSON.stringify(lqsAnalysis.components.images.details),
-
-                DescriptionScore: lqsAnalysis.components.description.score,
-                DescriptionGrade: lqsAnalysis.components.description.grade,
-                DescriptionIssues: JSON.stringify(lqsAnalysis.components.description.issues),
-                DescriptionRecommendations: JSON.stringify(lqsAnalysis.components.description.recommendations),
-                DescriptionDetails: JSON.stringify(lqsAnalysis.components.description.details),
-
-                ProductDescription: productDescription,
-                BuyBoxStatus: buyBoxWin ? 1 : 0,
-                ImageUrl: mainImageUrl,
-                SubBsr: subBsr,
-                SubBSRs: subBSRs && Array.isArray(subBSRs) ? JSON.stringify(subBSRs) : null,
-                SubBsrCategories: JSON.stringify((subBSRs && Array.isArray(subBSRs) ? subBSRs : []).map(rankStr => {
-                    const match = String(rankStr).match(/in\s+([^\(#]+)/i);
-                    return match ? match[1].trim() : '';
-                }).filter(Boolean)),
-                Images: JSON.stringify(images),
-                ImagesCount: imagesCount,
-                VideoCount: videoCount,
-                BulletPoints: bulletPointsCount,
-                BulletPointsText: JSON.stringify(bulletPointsText),
-                StockLevel: stockLevel,
-                SoldBy: soldBy || asin.SoldBy || '',
-                BuyBoxWin: buyBoxWin ? 1 : 0,
-                BuyBoxSellerId: soldBy || asin.SoldBy || '',
-                SecondAsp: secondAsp || 0,
-                SoldBySec: soldBySec || '',
-                AspDifference: currentPrice && secondAsp ? Math.abs(currentPrice - secondAsp) : 0,
-                DiscountPercentage: this._parseDiscount(rawData, currentPrice, mrp),
                 HasAplus: hasAplus ? 1 : 0,
-                AvailabilityStatus: availabilityStatus,
-                AplusAbsentSince: aplusAbsentSince,
-                AplusPresentSince: aplusPresentSince,
-                AllOffers: JSON.stringify(allOffers),
-                Brand: (rawData.brand || rawData.Brand || rawData.Field12 || asin.Brand || '').trim(),
-                ParentAsin: parentAsin || asin.ParentAsin || null,
+                AplusContent: aplusContent,
+                AplusModuleCount: aplusModuleCount,
+                RatingBreakdown: JSON.stringify(finalRatingBreakdown),
+                LastOctoparseSyncAt: now,
+                LastSyncSource: 'OCTOPARSE',
                 ScrapeStatus: 'COMPLETED',
                 Status: asin.Status === 'Scraping' ? 'Active' : asin.Status,
-                History: JSON.stringify(uniqueHistory),
-                LastScrapedAt: now,
-                PriceDispute: isDisputed ? 1 : 0,
-                Tags: JSON.stringify(currentTags),
                 UpdatedAt: now
             };
 
@@ -2457,80 +2398,6 @@ class MarketDataSyncService {
             await executeWithRetry(async () => {
                 await request.query(`UPDATE Asins SET ${setClause} WHERE Id = @asinId`);
             });
-
-            // 11. History Tracking - Use IST Date
-            const tz = process.env.AUTOMATION_TIMEZONE || 'Asia/Kolkata';
-            const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
-            const locStr = now.toLocaleString('en-US', { timeZone: tz });
-            const offsetMins = Math.round((new Date(locStr) - new Date(utcStr)) / 60000);
-            
-            const localNow = new Date(now.getTime() + (offsetMins * 60 * 1000));
-            const today = localNow.toISOString().split('T')[0];
-            await executeWithRetry(async () => {
-                await pool.request()
-                    .input('asinId', sql.VarChar, asinId)
-                    .input('date', sql.Date, today)
-                    .input('price', sql.Decimal(18, 2), updates.CurrentPrice)
-                    .input('bsr', sql.Int, updates.BSR)
-                    .input('rating', sql.Decimal(3, 2), updates.Rating)
-                    .input('reviewCount', sql.Int, updates.ReviewCount)
-                    .input('buyBoxStatus', sql.Bit, updates.BuyBoxStatus)
-                    .input('stockLevel', sql.Int, updates.StockLevel)
-                    .input('lqs', sql.Decimal(5, 2), updates.LQS)
-                    .query(`
-                        SET NOCOUNT ON;
-                        UPDATE AsinHistory SET Price = @price, BSR = @bsr, Rating = @rating, ReviewCount = @reviewCount, BuyBoxStatus = @buyBoxStatus, StockLevel = @stockLevel, LQS = @lqs
-                        WHERE AsinId = @asinId AND Date = @date;
-
-                        IF @@ROWCOUNT = 0
-                        BEGIN
-                            INSERT INTO AsinHistory (AsinId, Date, Price, BSR, Rating, ReviewCount, BuyBoxStatus, StockLevel, LQS)
-                            VALUES (@asinId, @date, @price, @bsr, @rating, @reviewCount, @buyBoxStatus, @stockLevel, @lqs);
-                        END
-                    `);
-            });
-
-            // ✅ NEW: Save Detailed Sub BSR History
-            if (subBSRs && subBSRs.length > 0) {
-                const subBsrRequest = pool.request();
-                let subBsrQuery = 'SET NOCOUNT ON;\n';
-                let validRanks = 0;
-
-                for (let i = 0; i < subBSRs.length; i++) {
-                    const match = String(subBSRs[i]).match(/#([\d,]+)\s+in\s+(.+)/);
-                    if (match) {
-                        const rank = parseInt(match[1].replace(/,/g, ''));
-                        const category = match[2].trim();
-
-                        subBsrRequest.input(`asinId${i}`, sql.VarChar, asinId);
-                        subBsrRequest.input(`date${i}`, sql.Date, today);
-                        subBsrRequest.input(`category${i}`, sql.NVarChar, category);
-                        subBsrRequest.input(`rank${i}`, sql.Int, rank);
-
-                        subBsrQuery += `
-                            UPDATE SubBsrHistory SET SubBsrRank = @rank${i}, CreatedAt = dbo.GetEnvDate()
-                            WHERE AsinId = @asinId${i} AND Date = @date${i} AND SubBsrCategory = @category${i};
-
-                            IF @@ROWCOUNT = 0
-                            BEGIN
-                                INSERT INTO SubBsrHistory (AsinId, Date, SubBsrCategory, SubBsrRank, CreatedAt)
-                                VALUES (@asinId${i}, @date${i}, @category${i}, @rank${i}, dbo.GetEnvDate());
-                            END
-                        `;
-                        validRanks++;
-                    }
-                }
-
-                if (validRanks > 0) {
-                    try {
-                        await executeWithRetry(async () => {
-                            await subBsrRequest.query(subBsrQuery);
-                        });
-                    } catch (e) {
-                        console.warn(`Failed to save Sub BSR history batch for ${asin.AsinCode}:`, e.message);
-                    }
-                }
-            }
 
             // 12. Socket Notification - Restored for live updates
             const io = SocketService.getIo();

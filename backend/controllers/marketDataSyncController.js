@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../database/db');
 const marketDataSyncService = require('../services/marketDataSyncService');
+const liveDataSyncService = require('../services/liveDataSyncService');
 const { updateSellerAsinCount } = require('./asinController');
 
 /**
@@ -645,12 +646,169 @@ exports.syncAllSellersResults = async (req, res) => {
 /**
  * Provide general status of sync capabilities.
  */
+/**
+ * Provide general status of sync capabilities.
+ */
 exports.getSyncStatus = async (req, res) => {
     try {
         await marketDataSyncService.authenticate();
         res.json({ success: true, service: 'Operational', provider: 'Connected' });
     } catch (error) {
         res.json({ success: true, service: 'Maintenance', provider: 'Disconnected' });
+    }
+};
+
+/**
+ * Get the sync status details (Live & Octoparse) for a specific seller.
+ */
+exports.getSellerSyncStatus = async (req, res) => {
+    try {
+        const { sellerId } = req.params;
+        const pool = await getPool();
+        
+        const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
+        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isAssigned = req.user && req.user.assignedSellers.includes(sellerId);
+
+        if (!isGlobalUser && !isAssigned) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const activeLiveSync = liveDataSyncService.activeSyncs.get(sellerId.toString());
+        
+        const logResult = await pool.request()
+            .input('sellerIdPattern', sql.VarChar, `%seller ${sellerId}%`)
+            .query(`
+                SELECT TOP 1 CreatedAt, Metadata
+                FROM SystemLogs
+                WHERE Type = 'LIVE_SYNC' AND Description LIKE @sellerIdPattern
+                ORDER BY CreatedAt DESC
+            `);
+            
+        const lastLiveLog = logResult.recordset[0];
+        let lastLiveMetadata = null;
+        if (lastLiveLog && lastLiveLog.Metadata) {
+            try {
+                lastLiveMetadata = JSON.parse(lastLiveLog.Metadata);
+            } catch (e) {}
+        }
+
+        const octoResult = await pool.request()
+            .input('sellerId', sql.VarChar, sellerId)
+            .query(`
+                SELECT MAX(LastOctoparseSyncAt) as lastOcto
+                FROM Asins
+                WHERE SellerId = @sellerId
+            `);
+        
+        const lastOcto = octoResult.recordset[0]?.lastOcto;
+
+        // Determine live sync status
+        let liveSyncStatus = 'IDLE';
+        let liveSyncProgress = null;
+        let liveSyncError = null;
+        
+        if (activeLiveSync) {
+            if (activeLiveSync.status === 'FAILED') {
+                liveSyncStatus = 'FAILED';
+                liveSyncError = activeLiveSync.fatalError;
+            } else {
+                liveSyncStatus = 'RUNNING';
+                liveSyncProgress = {
+                    processed: activeLiveSync.successCount,
+                    total: activeLiveSync.totalAsins
+                };
+            }
+        }
+
+        res.json({
+            sellerId: sellerId,
+            liveSync: {
+                status: liveSyncStatus,
+                lastRun: lastLiveLog?.CreatedAt || null,
+                lastResult: lastLiveMetadata ? {
+                    totalAsins: lastLiveMetadata.totalAsins,
+                    success: lastLiveMetadata.successCount,
+                    failed: lastLiveMetadata.failedCount,
+                    duration: lastLiveMetadata.duration
+                } : null,
+                progress: liveSyncProgress,
+                error: liveSyncError
+            },
+            octoparseSync: {
+                status: 'SCHEDULED',
+                lastRun: lastOcto || null,
+                nextRun: 'Daily at 2 AM',
+                handles: 'A+ Content & Rating Breakdown'
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+/**
+ * Trigger Live Data Sync for a seller (uses obfuscated API credentials).
+ */
+exports.triggerLiveSync = async (req, res) => {
+    try {
+        const { sellerId } = req.params;
+        
+        // Check if sync is already running
+        const existingSync = liveDataSyncService.activeSyncs.get(sellerId.toString());
+        if (existingSync) {
+            return res.json({
+                success: true,
+                message: 'Live sync already in progress for this seller',
+                sellerId,
+                status: 'IN_PROGRESS',
+                progress: {
+                    processed: existingSync.successCount,
+                    total: existingSync.totalAsins
+                }
+            });
+        }
+        
+        // Start sync in background (returns immediately to client)
+        // The frontend polls /sync/status/:sellerId for completion
+        liveDataSyncService.syncSellerLiveData(sellerId)
+            .then(result => {
+                console.log(`Live sync completed for seller ${sellerId}:`, {
+                    success: result.success,
+                    updated: result.updatedAsins,
+                    failed: result.failedAsins
+                });
+            })
+            .catch(e => {
+                console.error(`Live sync failed for seller ${sellerId}:`, e.message);
+                // Store error in activeSyncs so status endpoint can report it
+                liveDataSyncService.activeSyncs.set(sellerId.toString(), {
+                    sellerId: sellerId,
+                    status: 'FAILED',
+                    fatalError: e.message,
+                    totalAsins: 0,
+                    successCount: 0,
+                    failedCount: 0
+                });
+                // Auto-cleanup after 30 seconds
+                setTimeout(() => {
+                    liveDataSyncService.activeSyncs.delete(sellerId.toString());
+                }, 30000);
+            });
+        
+        res.json({
+            success: true,
+            message: 'Live data sync started. Updates will appear within minutes.',
+            sellerId,
+            estimatedTime: 'Usually completes in 1-5 minutes'
+        });
+        
+    } catch (error) {
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 };
 
@@ -744,12 +902,13 @@ exports.bulkUpdateSellerTasks = async (req, res) => {
         const pool = await getPool();
 
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers";
+        const request = pool.request();
         if (sellerIds && Array.isArray(sellerIds) && sellerIds.length > 0) {
-            const sellerIdsStr = sellerIds.map(id => `'${id}'`).join(',');
-            query += ` WHERE Id IN (${sellerIdsStr})`;
+            request.input('sellerIdsJson', sql.NVarChar, JSON.stringify(sellerIds));
+            query += ` WHERE Id IN (SELECT value FROM OPENJSON(@sellerIdsJson))`;
         }
 
-        const sellersResult = await pool.request().query(query);
+        const sellersResult = await request.query(query);
         const targetSellers = sellersResult.recordset;
 
         if (targetSellers.length === 0) {
@@ -841,12 +1000,13 @@ exports.bulkInjectAsinsToTasks = async (req, res) => {
         const pool = await getPool();
 
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
+        const request = pool.request();
         if (sellerIds && Array.isArray(sellerIds) && sellerIds.length > 0) {
-            const sellerIdsStr = sellerIds.map(id => `'${id}'`).join(',');
-            query += ` AND Id IN (${sellerIdsStr})`;
+            request.input('sellerIdsJson', sql.NVarChar, JSON.stringify(sellerIds));
+            query += ` AND Id IN (SELECT value FROM OPENJSON(@sellerIdsJson))`;
         }
 
-        const sellersResult = await pool.request().query(query);
+        const sellersResult = await request.query(query);
         const sellers = sellersResult.recordset;
 
         if (sellers.length === 0) {

@@ -189,7 +189,6 @@ const AddSellerModal = memo(({
         </div>
       }
     >
-      {/* ✅ Fix 10: show save errors to the user */}
       {submitError && (
         <Alert
           type="error"
@@ -204,101 +203,99 @@ const AddSellerModal = memo(({
       <Form
         form={form}
         layout="vertical"
-        // ✅ Fix 1: NO onValuesChange syncing to separate state
-        // Form is single source of truth — no dual state
         requiredMark={false}
         disabled={submitting}
       >
-        {/* Brand Name */}
-        <Form.Item
-          name="name"
-          label={<FieldLabel icon={<LayoutGrid size={13} color="#94a3b8" />} text="BRAND NAME" required />}
-          rules={[{ required: true, message: 'Brand name is required' }]}
-          style={{ marginBottom: 16 }}
-        >
-          <Input
-            placeholder="e.g. RetailOps Storefront"
-            style={{ height: 42, borderRadius: 10, fontWeight: 600, fontSize: 13 }}
-            maxLength={100}
-          />
-        </Form.Item>
-
-        {/* Marketplace + Seller ID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div style={{ paddingTop: 8 }}>
+          {/* Brand Name */}
           <Form.Item
-            name="marketplace"
-            label={<FieldLabel icon={<Globe size={13} color="#94a3b8" />} text="MARKETPLACE" required />}
-            rules={[{ required: true }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Select style={{ height: 42, borderRadius: 10 }}>
-              {canAccessAmazon && <Select.Option value="amazon.in">Amazon.in</Select.Option>}
-              {canAccessAjio && <Select.Option value="ajio">Ajio</Select.Option>}
-              {canAccessMyntra && <Select.Option value="myntra">Myntra</Select.Option>}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="sellerId"
-            label={
-              // ✅ Fix 8: use Form.useWatch value, not stale formData state
-              <FieldLabel
-                icon={<Key size={13} color="#94a3b8" />}
-                text="SELLER ID"
-                required={watchedMarketplace === 'amazon.in'}
-                optional={watchedMarketplace !== 'amazon.in'}
-              />
-            }
-            rules={[{
-              required: watchedMarketplace === 'amazon.in',
-              message: 'Seller ID is required for Amazon'
-            }]}
-            style={{ marginBottom: 0 }}
+            name="name"
+            label={<FieldLabel icon={<LayoutGrid size={13} color="#94a3b8" />} text="BRAND NAME" required />}
+            rules={[{ required: true, message: 'Brand name is required' }]}
+            style={{ marginBottom: 16 }}
           >
             <Input
-              placeholder={watchedMarketplace === 'amazon.in' ? 'Merchant ID' : 'Optional'}
-              style={{
-                height: 42, borderRadius: 10,
-                fontWeight: 700, fontFamily: 'monospace', color: '#2563eb'
-              }}
-              maxLength={30}
+              placeholder="e.g. RetailOps Storefront"
+              style={{ height: 42, borderRadius: 10, fontWeight: 600, fontSize: 13 }}
+              maxLength={100}
+            />
+          </Form.Item>
+
+          {/* Marketplace + Seller ID */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <Form.Item
+              name="marketplace"
+              label={<FieldLabel icon={<Globe size={13} color="#94a3b8" />} text="MARKETPLACE" required />}
+              rules={[{ required: true }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Select style={{ height: 42, borderRadius: 10 }}>
+                {canAccessAmazon && <Select.Option value="amazon.in">Amazon.in</Select.Option>}
+                {canAccessAjio && <Select.Option value="ajio">Ajio</Select.Option>}
+                {canAccessMyntra && <Select.Option value="myntra">Myntra</Select.Option>}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="sellerId"
+              label={
+                <FieldLabel
+                  icon={<Key size={13} color="#94a3b8" />}
+                  text="SELLER ID"
+                  required={watchedMarketplace === 'amazon.in'}
+                  optional={watchedMarketplace !== 'amazon.in'}
+                />
+              }
+              rules={[{
+                required: watchedMarketplace === 'amazon.in',
+                message: 'Seller ID is required for Amazon'
+              }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input
+                placeholder={watchedMarketplace === 'amazon.in' ? 'Merchant ID' : 'Optional'}
+                style={{
+                  height: 42, borderRadius: 10,
+                  fontWeight: 700, fontFamily: 'monospace', color: '#2563eb'
+                }}
+                maxLength={30}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Brand Managers */}
+          <Form.Item
+            name="assignedUserIds"
+            label={
+              <FieldLabel
+                icon={<Users size={13} color="#94a3b8" />}
+                text="BRAND MANAGER"
+              />
+            }
+            style={{ marginBottom: 0 }}
+          >
+            <Select
+              mode="multiple"
+              placeholder={
+                loadingManagers
+                  ? 'Loading managers…'
+                  : '— Unassigned (Public Pool) —'
+              }
+              style={{ borderRadius: 10 }}
+              options={managerOptions}
+              maxTagCount="responsive"
+              loading={loadingManagers}
+              notFoundContent={
+                loadingManagers
+                  ? <Spin size="small" />
+                  : <Text style={{ fontSize: 12, color: '#94a3b8' }}>No managers found</Text>
+              }
+              filterOption={(input, opt) =>
+                (opt?.label || '').toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
         </div>
-
-        {/* Brand Managers */}
-        <Form.Item
-          name="assignedUserIds"
-          label={
-            <FieldLabel
-              icon={<Users size={13} color="#94a3b8" />}
-              text="BRAND MANAGER"
-            />
-          }
-          style={{ marginBottom: 0 }}
-        >
-          {/* ✅ Fix 6: show spinner while managers load */}
-          <Select
-            mode="multiple"
-            placeholder={
-              loadingManagers
-                ? 'Loading managers…'
-                : '— Unassigned (Public Pool) —'
-            }
-            style={{ borderRadius: 10 }}
-            options={managerOptions}
-            maxTagCount="responsive"
-            loading={loadingManagers}
-            notFoundContent={
-              loadingManagers
-                ? <Spin size="small" />
-                : <Text style={{ fontSize: 12, color: '#94a3b8' }}>No managers found</Text>
-            }
-            filterOption={(input, opt) =>
-              (opt?.label || '').toLowerCase().includes(input.toLowerCase())
-            }
-          />
-        </Form.Item>
       </Form>
     </Modal>
   );

@@ -529,10 +529,25 @@ exports.getAsins = async (req, res) => {
         let subBsrCategories = [];
         try { subBsrCategories = a.SubBsrCategories ? (typeof a.SubBsrCategories === 'string' ? JSON.parse(a.SubBsrCategories) : a.SubBsrCategories) : []; } catch (e) { subBsrCategories = []; }
 
-        // If subBsr is "0" or empty, try to get from subBSRs (current data)
-        let currentSubBsr = a.SubBsr || '';
-        if ((!currentSubBsr || currentSubBsr === '0') && subBSRs.length > 0) {
-            currentSubBsr = subBSRs[0];
+        // Use new SubBSR (int) and SubBSRCategory columns from live sync
+        let currentSubBsr = '';
+        let currentSubBSRCategory = a.SubBSRCategory || '';
+        
+        if (a.SubBSR && a.SubBSR > 0) {
+            currentSubBsr = `#${a.SubBSR.toLocaleString()}`;
+            if (currentSubBSRCategory) {
+                currentSubBsr += ` in ${currentSubBSRCategory}`;
+            }
+            // Also populate subBSRs array for frontend compatibility
+            if (subBSRs.length === 0) {
+                subBSRs = [currentSubBsr];
+            }
+        } else {
+            // Fallback to old SubBsr text column
+            currentSubBsr = a.SubBsr || '';
+            if ((!currentSubBsr || currentSubBsr === '0') && subBSRs.length > 0) {
+                currentSubBsr = subBSRs[0];
+            }
         }
 
         let images = [];
@@ -682,6 +697,8 @@ exports.getAsins = async (req, res) => {
             
             // Sub BSR
             subBsr: currentSubBsr,
+            subBSR: a.SubBSR || null,
+            subBSRCategory: currentSubBSRCategory,
             subBsrCategories: subBsrCategories,
             
             // Parsed JSON arrays/objects
