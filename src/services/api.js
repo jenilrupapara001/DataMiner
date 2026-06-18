@@ -379,6 +379,22 @@ export const marketSyncApi = {
     });
     return handleResponse(res, 'Failed to fetch seller sync status');
   },
+
+  triggerLiveSyncAll: async (options = {}) => {
+    const res = await fetch(`${API_BASE}/market-sync/sync-all-live`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(options),
+    });
+    return handleResponse(res, 'Failed to trigger global live sync');
+  },
+
+  getLiveSyncAllStatus: async () => {
+    const res = await fetch(`${API_BASE}/market-sync/sync-all-live/status`, {
+      headers: { ...getAuthHeader() },
+    });
+    return handleResponse(res, 'Failed to fetch global sync status');
+  },
 };
 
 // Scheduled Runs API

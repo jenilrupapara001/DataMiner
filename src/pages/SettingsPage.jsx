@@ -7,7 +7,7 @@ import {
 import {
     Cloud, Mail, Clock, Sliders, Bell, User, HelpCircle,
     CheckCircle2, Info, AlertTriangle, Terminal, Save, Send,
-    RefreshCw, Link2, ExternalLink, Settings, Lock, Cpu
+    RefreshCw, Link2, ExternalLink, Settings, Lock, Cpu, Zap
 } from 'lucide-react';
 import { db } from '../services/db';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
@@ -150,6 +150,9 @@ const SettingsPage = () => {
         AUTOMATION_AJIO_SCHEDULE_TIME: '12:00',
         AUTOMATION_AMAZON_ENABLED: true,
         AUTOMATION_AJIO_ENABLED: true,
+        LIVE_SYNC_ENABLED: false,
+        LIVE_SYNC_SCHEDULE_TIME: '06:00',
+        LIVE_SYNC_CONCURRENCY: 3,
     });
 
     const [loading, setLoading] = useState(true);
@@ -590,6 +593,55 @@ const SettingsPage = () => {
                                     />
                                     <FieldHelp>Daily execution time for AJIO pipeline jobs</FieldHelp>
                                 </div>
+                            </Col>
+                        </Row>
+                    </SectionCard>
+
+                    {/* Live Data Sync Schedule */}
+                    <SectionCard icon={Zap} iconColor="#7c3aed" title="Live Data Sync (Amazon Creators API)">
+                        <Alert
+                            message="Live Sync updates product data (Price, BSR, Rating, Reviews, Images) directly from Amazon's API in real-time."
+                            type="info"
+                            showIcon
+                            icon={<Zap size={14} />}
+                            style={{ marginBottom: 16, borderRadius: 6 }}
+                        />
+                        <Row gutter={[16, 16]}>
+                            <Col xs={24} md={8}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block' }} />
+                                        <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>Live Sync</span>
+                                    </div>
+                                    <Switch
+                                        size="small"
+                                        checked={settings.LIVE_SYNC_ENABLED === true || settings.LIVE_SYNC_ENABLED === 'true'}
+                                        onChange={checked => handleFieldChange('LIVE_SYNC_ENABLED', checked)}
+                                    />
+                                </div>
+                                <FieldHelp>Enable automatic daily live data sync</FieldHelp>
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <FieldLabel>Schedule Time</FieldLabel>
+                                <TimePicker
+                                    format="HH:mm"
+                                    style={{ width: '100%', height: 38 }}
+                                    value={settings.LIVE_SYNC_SCHEDULE_TIME ? dayjs(settings.LIVE_SYNC_SCHEDULE_TIME, 'HH:mm') : null}
+                                    onChange={(time, timeStr) => handleFieldChange('LIVE_SYNC_SCHEDULE_TIME', timeStr)}
+                                    allowClear={false}
+                                />
+                                <FieldHelp>Daily execution time (IST)</FieldHelp>
+                            </Col>
+                            <Col xs={24} md={8}>
+                                <FieldLabel>Concurrency</FieldLabel>
+                                <InputNumber
+                                    value={settings.LIVE_SYNC_CONCURRENCY || 3}
+                                    onChange={v => handleFieldChange('LIVE_SYNC_CONCURRENCY', v)}
+                                    style={{ width: '100%', height: 38 }}
+                                    min={1}
+                                    max={10}
+                                />
+                                <FieldHelp>Parallel sellers to sync simultaneously (1-10)</FieldHelp>
                             </Col>
                         </Row>
                     </SectionCard>

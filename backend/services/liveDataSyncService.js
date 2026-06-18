@@ -17,12 +17,27 @@ class LiveDataSyncService extends EventEmitter {
             maxPerRequest: 10,
             concurrency: 3,
             requestDelay: 1500,
+            sellerDelay: 2000,
             maxRetries: 3,
-            retryDelay: 3000
+            retryDelay: 3000,
+            rateLimitPerSecond: 1
         };
         
         this._tokens = new Map();
         this.activeSyncs = new Map();
+        this._globalSyncRunning = false;
+        this._lastRequestTime = 0;
+    }
+    
+    // Rate limiter - ensures max 1 request per second
+    async _rateLimit() {
+        const now = Date.now();
+        const elapsed = now - this._lastRequestTime;
+        const minInterval = 1000 / this._config.rateLimitPerSecond;
+        if (elapsed < minInterval) {
+            await this._delay(minInterval - elapsed);
+        }
+        this._lastRequestTime = Date.now();
     }
 
     // ============================================
@@ -148,6 +163,23 @@ class LiveDataSyncService extends EventEmitter {
             // 6. Log sync
             await this._logSync(sellerIdStr, stats);
             
+            // 7. Emit socket event for real-time UI updates
+            try {
+                const SocketService = require('./socketService');
+                const io = SocketService.getIo();
+                if (io) {
+                    io.emit('liveSync:completed', {
+                        sellerId: sellerIdStr,
+                        totalAsins: stats.totalAsins,
+                        updatedAsins: stats.successCount,
+                        failedAsins: stats.failedCount,
+                        duration: stats.duration
+                    });
+                    // Also emit ASIN update event for ASIN manager auto-refresh
+                    io.emit('ASINS_UPDATED', { sellerId: sellerIdStr });
+                }
+            } catch (e) { /* socket not critical */ }
+            
             stats.completedAt = new Date().toISOString();
             stats.status = 'COMPLETED';
             this.emit('liveSync:completed', stats);
@@ -175,6 +207,102 @@ class LiveDataSyncService extends EventEmitter {
             // Always clean up after ALL operations complete (success or failure)
             this.activeSyncs.delete(sellerIdStr);
         }
+    }
+    
+    // ============================================
+    // GLOBAL: Sync All Sellers (parallel batching)
+    // ============================================
+    async syncAllSellers(options = {}) {
+        const { concurrency = 3, sellerIds = null } = options;
+        const startTime = Date.now();
+        
+        // Prevent duplicate global sync
+        if (this._globalSyncRunning) {
+            return { error: 'Global live sync already in progress', status: 'IN_PROGRESS' };
+        }
+        this._globalSyncRunning = true;
+        
+        const pool = await getPool();
+        
+        // Get all active sellers with Amazon ASINs
+        let sellersQuery = `
+            SELECT DISTINCT s.Id, s.Name, COUNT(a.Id) as AsinCount
+            FROM Sellers s
+            JOIN Asins a ON a.SellerId = s.Id
+            WHERE s.IsActive = 1 AND a.Status = 'Active' AND a.AsinCode LIKE 'B0%'
+            GROUP BY s.Id, s.Name
+            HAVING COUNT(a.Id) > 0
+        `;
+        if (sellerIds && sellerIds.length > 0) {
+            sellersQuery += ` AND s.Id IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+        }
+        
+        const sellersResult = await pool.request().query(sellersQuery);
+        const sellers = sellersResult.recordset;
+        
+        console.log(`Live sync all: ${sellers.length} sellers with Amazon ASINs`);
+        this.emit('liveSyncAll:started', { totalSellers: sellers.length });
+        
+        const results = [];
+        const limit = pLimit(concurrency);
+        
+        const promises = sellers.map(seller => 
+            limit(async () => {
+                // Skip if already syncing this seller
+                if (this.activeSyncs.has(seller.Id)) {
+                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Already syncing' });
+                    return;
+                }
+                
+                try {
+                    const result = await this.syncSellerLiveData(seller.Id);
+                    results.push({ 
+                        sellerId: seller.Id, 
+                        name: seller.Name, 
+                        status: result.success ? 'SUCCESS' : 'FAILED',
+                        updated: result.updatedAsins || 0,
+                        failed: result.failedAsins || 0,
+                        duration: result.duration || 0
+                    });
+                    console.log(`  ✅ ${seller.Name}: ${result.updatedAsins || 0} updated`);
+                } catch (err) {
+                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'FAILED', error: err.message });
+                    console.error(`  ❌ ${seller.Name}: ${err.message}`);
+                }
+                
+                // Rate limit between sellers
+                await this._delay(this._config.sellerDelay);
+            })
+        );
+        
+        await Promise.all(promises);
+        
+        const totalDuration = Date.now() - startTime;
+        const summary = {
+            totalSellers: sellers.length,
+            success: results.filter(r => r.status === 'SUCCESS').length,
+            failed: results.filter(r => r.status === 'FAILED').length,
+            skipped: results.filter(r => r.status === 'SKIPPED').length,
+            totalAsinsUpdated: results.reduce((sum, r) => sum + (r.updated || 0), 0),
+            duration: totalDuration,
+            completedAt: new Date().toISOString()
+        };
+        
+        console.log(`Live sync all complete: ${summary.success}/${summary.totalSellers} sellers, ${summary.totalAsinsUpdated} ASINs in ${(totalDuration / 1000).toFixed(1)}s`);
+        this.emit('liveSyncAll:completed', summary);
+        
+        // Emit socket event for real-time UI updates
+        try {
+            const SocketService = require('./socketService');
+            const io = SocketService.getIo();
+            if (io) {
+                io.emit('liveSyncAll:completed', summary);
+                io.emit('ASINS_UPDATED', { type: 'bulk', sellerCount: summary.success });
+            }
+        } catch (e) { /* socket not critical */ }
+        
+        this._globalSyncRunning = false;
+        return { success: true, summary, results };
     }
     
     // ============================================
@@ -212,6 +340,9 @@ class LiveDataSyncService extends EventEmitter {
     async _processBatch(sellerId, batch, token, creds, stats, retry = 0) {
         try {
             const codes = batch.map(a => a.AsinCode);
+            
+            // Rate limit before API call
+            await this._rateLimit();
             
             const response = await axios.post(
                 `${this._config._b}/catalog/v1/getItems`,
@@ -620,12 +751,25 @@ class LiveDataSyncService extends EventEmitter {
     
     async _logSync(sellerId, stats) {
         try {
+            // Fetch seller name for human-readable log
+            let sellerName = sellerId;
+            try {
+                const pool = await getPool();
+                const nameResult = await pool.request()
+                    .input('id', sql.VarChar, sellerId)
+                    .query('SELECT Name FROM Sellers WHERE Id = @id');
+                if (nameResult.recordset.length > 0) {
+                    sellerName = nameResult.recordset[0].Name;
+                }
+            } catch (e) { /* use sellerId as fallback */ }
+            
             await SystemLogService.log({
                 type: 'LIVE_SYNC',
                 entityType: 'SELLER',
                 entityId: sellerId,
-                description: `Live data sync completed for seller ${sellerId}. Total: ${stats.totalAsins}, Success: ${stats.successCount}, Failed: ${stats.failedCount}`,
-                metadata: stats
+                entityTitle: sellerName,
+                description: `Live data sync completed for ${sellerName}. Total: ${stats.totalAsins}, Success: ${stats.successCount}, Failed: ${stats.failedCount}, Duration: ${(stats.duration / 1000).toFixed(1)}s`,
+                metadata: { ...stats, sellerName }
             });
         } catch (e) {
             console.error('Logging sync failed:', e);

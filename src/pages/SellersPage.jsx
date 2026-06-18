@@ -545,6 +545,54 @@ const SellersPage = () => {
     }
   }, [selectedSellerIds]);
 
+  // ── Global Live Sync All ──────────────────────────────────────────────
+  const [globalSyncing, setGlobalSyncing] = useState(false);
+  const [globalSyncProgress, setGlobalSyncProgress] = useState(null);
+  const globalSyncPollRef = useRef(null);
+
+  const handleGlobalLiveSync = useCallback(async () => {
+    setGlobalSyncing(true);
+    setGlobalSyncProgress({ status: 'STARTING', sellers: 0, asins: 0 });
+    try {
+      const res = await marketSyncApi.triggerLiveSyncAll();
+      if (res.success) {
+        toastRef.current('Global live sync started for all brands', 'success');
+        // Start polling for status
+        globalSyncPollRef.current = setInterval(async () => {
+          try {
+            const status = await marketSyncApi.getLiveSyncAllStatus();
+            setGlobalSyncProgress({
+              status: status.isRunning ? 'RUNNING' : 'COMPLETE',
+              activeSyncs: status.activeSyncs || 0,
+              syncs: status.syncs || []
+            });
+            if (!status.isRunning && status.activeSyncs === 0) {
+              clearInterval(globalSyncPollRef.current);
+              setGlobalSyncing(false);
+              toastRef.current('Global live sync completed!', 'success');
+              loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+            }
+          } catch (e) {
+            console.error('Global sync poll error:', e);
+          }
+        }, 10000);
+      } else {
+        toastRef.current(res.error || 'Failed to start global sync', 'error');
+        setGlobalSyncing(false);
+      }
+    } catch (error) {
+      toastRef.current(error.message, 'error');
+      setGlobalSyncing(false);
+    }
+  }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch]);
+
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (globalSyncPollRef.current) clearInterval(globalSyncPollRef.current);
+    };
+  }, []);
+
   const handleIngestAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -962,6 +1010,21 @@ const SellersPage = () => {
             onChange={e => setSearchQuery(e.target.value)}
             prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
             style={{ width: 240, borderRadius: 8 }} allowClear size="middle" />
+          <Tooltip title={globalSyncing ? 'Sync in progress...' : 'Sync all brands live data'}>
+            <Button 
+              type={globalSyncing ? 'default' : 'primary'}
+              icon={<Zap size={13} className={globalSyncing ? 'spin' : ''} />}
+              loading={globalSyncing}
+              onClick={handleGlobalLiveSync}
+              style={{ 
+                borderRadius: 8, 
+                fontWeight: 600,
+                background: globalSyncing ? undefined : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                borderColor: globalSyncing ? undefined : '#7c3aed'
+              }}>
+              {globalSyncing ? 'Syncing...' : 'Sync All Brands'}
+            </Button>
+          </Tooltip>
           <Tooltip title="Refresh">
             <Button size="middle" icon={<RefreshCw size={13} />}
               onClick={() => loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch })}
@@ -969,6 +1032,27 @@ const SellersPage = () => {
           </Tooltip>
         </Space>
       </div>
+
+      {/* ── Global Live Sync Progress ──────────────────────────────── */}
+      {globalSyncing && globalSyncProgress && (
+        <div style={{
+          padding: '10px 24px', 
+          background: 'linear-gradient(135deg, #faf5ff, #ede9fe)', 
+          borderBottom: '1px solid #e9d5ff',
+          display: 'flex', alignItems: 'center', gap: 12
+        }}>
+          <Zap size={14} className="spin" style={{ color: '#7c3aed' }} />
+          <Text style={{ color: '#6d28d9', fontSize: 12, fontWeight: 600 }}>
+            Global Live Sync Running
+          </Text>
+          {globalSyncProgress.activeSyncs > 0 && (
+            <Tag color="purple">{globalSyncProgress.activeSyncs} sellers syncing</Tag>
+          )}
+          <Text style={{ color: '#94a3b8', fontSize: 11 }}>
+            Updates appear within minutes. You can continue using the app.
+          </Text>
+        </div>
+      )}
 
       {/* ── Bulk action bar ───────────────────────────────────────── */}
       {selectedSellerIds.length > 0 && (

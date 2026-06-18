@@ -72,7 +72,7 @@ class SchedulerService {
 
         try {
             const pool = await getPool();
-            const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_TIMEZONE', 'AUTOMATION_AMAZON_ENABLED', 'AUTOMATION_AJIO_ENABLED')");
+            const settingsResult = await pool.request().query("SELECT [Key], Value FROM SystemSettings WHERE [Key] IN ('AUTOMATION_SCHEDULE_TIME', 'AUTOMATION_AJIO_SCHEDULE_TIME', 'AUTOMATION_TIMEZONE', 'AUTOMATION_AMAZON_ENABLED', 'AUTOMATION_AJIO_ENABLED', 'LIVE_SYNC_ENABLED', 'LIVE_SYNC_SCHEDULE_TIME', 'LIVE_SYNC_CONCURRENCY')");
             const settingsMap = {};
             settingsResult.recordset.forEach(s => {
                 settingsMap[s.Key] = s.Value;
@@ -141,7 +141,45 @@ class SchedulerService {
             console.log('🛑 [Scheduler] Ajio Automation is DISABLED.');
         }
 
-        // 3. Database Integrity Repair (Every 6 hours)
+        // 3. Live Data Sync (Amazon Creators API)
+        let liveSyncEnabled = false;
+        let liveSyncTime = '06:00';
+        let liveSyncConcurrency = 3;
+        if (settingsMap['LIVE_SYNC_ENABLED']) {
+            liveSyncEnabled = settingsMap['LIVE_SYNC_ENABLED'] === 'true';
+        }
+        if (settingsMap['LIVE_SYNC_SCHEDULE_TIME']) {
+            liveSyncTime = settingsMap['LIVE_SYNC_SCHEDULE_TIME'];
+        }
+        if (settingsMap['LIVE_SYNC_CONCURRENCY']) {
+            liveSyncConcurrency = parseInt(settingsMap['LIVE_SYNC_CONCURRENCY']) || 3;
+        }
+        
+        console.log(`⚡ DB -> Live Sync Schedule: ${liveSyncTime} (Enabled: ${liveSyncEnabled}, Concurrency: ${liveSyncConcurrency})`);
+        
+        if (liveSyncEnabled) {
+            let liveSyncCronExpr = '0 6 * * *';
+            if (liveSyncTime && liveSyncTime.includes(':')) {
+                const [hour, minute] = liveSyncTime.split(':');
+                liveSyncCronExpr = `${parseInt(minute, 10)} ${parseInt(hour, 10)} * * *`;
+            }
+            
+            this.jobs.liveDataSync = cron.schedule(liveSyncCronExpr, async () => {
+                console.log('⚡ [Cron] Triggering Daily Live Data Sync...');
+                try {
+                    const liveSyncService = require('./liveDataSyncService');
+                    const result = await liveSyncService.syncAllSellers({ concurrency: liveSyncConcurrency });
+                    console.log('⚡ [Cron] Live Sync completed:', result.summary);
+                } catch (err) {
+                    console.error('⚡ [Cron] Live Sync failed:', err.message);
+                }
+            }, cronOptions);
+            console.log(`⚡ Live Data Sync scheduled at ${liveSyncTime} in ${automationTimezone} (${liveSyncCronExpr})`);
+        } else {
+            console.log('🛑 [Scheduler] Live Data Sync is DISABLED.');
+        }
+
+        // 4. Database Integrity Repair (Every 6 hours)
         this.jobs.integrityRepair = cron.schedule('0 */6 * * *', async () => {
             console.log('🕒 Starting Global Database Integrity Repair Check...');
             console.log('ℹ️ Repair task skipped (Refactoring in progress)');

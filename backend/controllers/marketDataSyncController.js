@@ -1120,3 +1120,58 @@ exports.triggerRepair = async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to trigger repair: ' + error.message });
     }
 };
+
+/**
+ * Global Live Sync: Sync all sellers' data via Amazon Creators API.
+ * Runs in background with parallel batching.
+ */
+exports.syncAllLiveSync = async (req, res) => {
+    try {
+        const { sellerIds, concurrency } = req.body || {};
+        
+        // Start sync in background
+        liveDataSyncService.syncAllSellers({ 
+            concurrency: concurrency || 3,
+            sellerIds: sellerIds || null
+        })
+            .then(result => {
+                console.log('Global live sync completed:', result.summary);
+            })
+            .catch(e => {
+                console.error('Global live sync failed:', e.message);
+            });
+        
+        res.json({
+            success: true,
+            message: 'Global live sync started. All sellers with Amazon ASINs will be synced.',
+            estimatedTime: 'Usually completes in 5-15 minutes depending on seller count'
+        });
+    } catch (error) {
+        console.error('Global Live Sync Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Get Global Live Sync Status
+ */
+exports.getGlobalLiveSyncStatus = async (req, res) => {
+    try {
+        const isRunning = liveDataSyncService._globalSyncRunning;
+        const activeCount = liveDataSyncService.activeSyncs.size;
+        
+        res.json({
+            success: true,
+            isRunning,
+            activeSyncs: activeCount,
+            syncs: Array.from(liveDataSyncService.activeSyncs.values()).map(s => ({
+                sellerId: s.sellerId,
+                status: s.status || 'RUNNING',
+                processed: s.successCount,
+                total: s.totalAsins
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};

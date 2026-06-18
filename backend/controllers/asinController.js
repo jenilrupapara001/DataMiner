@@ -139,7 +139,7 @@ exports.getAsins = async (req, res) => {
     } = req.query;
 
     // Support fallback to params in case Express query object is immutable
-    const seller = req.query.seller || req.params.sellerId;
+    const seller = req.query.seller || req.query.sellerId || req.params.sellerId;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -912,6 +912,12 @@ exports.getAsin = async (req, res) => {
       productDescription: a.ProductDescription || '',
       
       allOffers,
+      
+      // Sub BSR (from live sync)
+      subBsr: (a.SubBsr && a.SubBsr > 0) ? `#${a.SubBsr.toLocaleString()}${a.SubBSRCategory ? ' in ' + a.SubBSRCategory : ''}` : (subBSRs[0] || ''),
+      subBSR: a.SubBsr || null,
+      subBSRCategory: a.SubBSRCategory || '',
+      
       subBSRs,
       images,
       bulletPointsText,

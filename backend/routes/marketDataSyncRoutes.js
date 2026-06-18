@@ -69,4 +69,8 @@ router.post('/bulk-inject-json', authenticate, requirePermission('scraping_manag
 // Global database integrity repair
 router.post('/repair', authenticate, requirePermission('scraping_manage'), marketSyncController.triggerRepair);
 
+// Global Live Sync - sync all sellers via Amazon Creators API
+router.post('/sync-all-live', authenticate, requirePermission('scraping_manage'), marketSyncController.syncAllLiveSync);
+router.get('/sync-all-live/status', authenticate, requirePermission('scraping_manage'), marketSyncController.getGlobalLiveSyncStatus);
+
 module.exports = router;
