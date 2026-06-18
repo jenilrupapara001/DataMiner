@@ -2051,7 +2051,7 @@ const AsinManagerPage = (props) => {
               </div>
               <div className="d-flex flex-wrap gap-2 mt-3">
                 {filterOptions.tags
-                  .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
+                  .filter(t => typeof t === 'string' && t.toLowerCase().includes(tagSearch.toLowerCase()))
                   .map(tag => (
                     <button
                       key={tag}
@@ -3818,7 +3818,7 @@ const AsinManagerPage = (props) => {
                             const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
                             let rank = subBsrValue;
                             let category = '';
-                            if (subBsrValue.includes(' in ')) {
+                            if (typeof subBsrValue === 'string' && subBsrValue.includes(' in ')) {
                               const parts = subBsrValue.split(' in ');
                               rank = parts[0];
                               category = parts.slice(1).join(' in ');

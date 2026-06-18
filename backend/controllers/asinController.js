@@ -529,12 +529,12 @@ exports.getAsins = async (req, res) => {
         let subBsrCategories = [];
         try { subBsrCategories = a.SubBsrCategories ? (typeof a.SubBsrCategories === 'string' ? JSON.parse(a.SubBsrCategories) : a.SubBsrCategories) : []; } catch (e) { subBsrCategories = []; }
 
-        // Use new SubBSR (int) and SubBSRCategory columns from live sync
+        // Use SubBsr (int) and SubBSRCategory columns from live sync
         let currentSubBsr = '';
         let currentSubBSRCategory = a.SubBSRCategory || '';
         
-        if (a.SubBSR && a.SubBSR > 0) {
-            currentSubBsr = `#${a.SubBSR.toLocaleString()}`;
+        if (a.SubBsr && a.SubBsr > 0) {
+            currentSubBsr = `#${a.SubBsr.toLocaleString()}`;
             if (currentSubBSRCategory) {
                 currentSubBsr += ` in ${currentSubBSRCategory}`;
             }
@@ -543,9 +543,8 @@ exports.getAsins = async (req, res) => {
                 subBSRs = [currentSubBsr];
             }
         } else {
-            // Fallback to old SubBsr text column
-            currentSubBsr = a.SubBsr || '';
-            if ((!currentSubBsr || currentSubBsr === '0') && subBSRs.length > 0) {
+            // Fallback to old text format
+            if (subBSRs.length > 0) {
                 currentSubBsr = subBSRs[0];
             }
         }
@@ -697,7 +696,7 @@ exports.getAsins = async (req, res) => {
             
             // Sub BSR
             subBsr: currentSubBsr,
-            subBSR: a.SubBSR || null,
+            subBSR: a.SubBsr || null,
             subBSRCategory: currentSubBSRCategory,
             subBsrCategories: subBsrCategories,
             
