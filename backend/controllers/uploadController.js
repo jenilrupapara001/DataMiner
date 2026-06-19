@@ -1,6 +1,7 @@
 const XLSX = require("xlsx");
 const fs = require("fs");
 const { sql, getPool, generateId, executeWithRetry } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const marketDataSyncService = require("../services/marketDataSyncService");
 const SystemLogService = require('../services/SystemLogService');
 
@@ -669,8 +670,9 @@ exports.uploadGmsData = async (req, res) => {
       if (assignedSellerIds.length === 0) {
         throw new Error('You do not have any assigned sellers.');
       }
-      const allowedAsinsResult = await pool.request()
-        .query(`SELECT AsinCode FROM Asins WHERE SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`);
+      const req = pool.request();
+      const inClause = buildInClause(req, 'sellerId', assignedSellerIds);
+      const allowedAsinsResult = await req.query(`SELECT AsinCode FROM Asins WHERE SellerId IN (${inClause})`);
       allowedAsins = new Set(allowedAsinsResult.recordset.map(r => r.AsinCode.toUpperCase()));
     }
 
@@ -813,16 +815,18 @@ exports.getGmsData = async (req, res) => {
     const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
     let whereClause = '';
 
+    const pool = await getPool();
+    const request = pool.request();
+
     if (!isGlobalUser) {
       const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
       if (assignedSellerIds.length === 0) {
         return res.json({ success: true, data: [] });
       }
-      whereClause = `WHERE a.SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+      whereClause = `WHERE a.SellerId IN (${buildInClause(request, 'sellerId', assignedSellerIds)})`;
     }
 
-    const pool = await getPool();
-    const result = await pool.request().query(`
+    const result = await request.query(`
       SELECT 
         g.Date as date,
         g.Asin as asin,

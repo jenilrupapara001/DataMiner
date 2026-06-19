@@ -21,7 +21,11 @@ module.exports = {
     },
     emitExportUpdate: (downloadId, data) => {
         if (io) {
-            io.emit('export_progress', { downloadId, ...data });
+            if (data.userId) {
+                io.to(data.userId.toString()).emit('export_progress', { downloadId, ...data });
+            } else {
+                io.emit('export_progress', { downloadId, ...data });
+            }
             return true;
         }
         return false;

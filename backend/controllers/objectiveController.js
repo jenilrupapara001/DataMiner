@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const WebhookService = require('../services/WebhookService');
 
 /**
@@ -29,13 +30,14 @@ exports.getObjectives = async (req, res) => {
             const hierarchyService = require('../services/hierarchyService');
             const subordinateIds = await hierarchyService.getSubordinateIds(userId);
             const teamIds = [userId, ...subordinateIds];
-            const teamList = teamIds.map(id => `'${id}'`).join(',');
+            const teamList = buildInClause(request, 'teamId', teamIds);
 
             // Also filter by assigned sellers
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
             let accessFilter = '';
             if (assignedSellerIds.length > 0) {
-                accessFilter = ` OR (o.SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')}) AND o.SellerId IS NOT NULL)`;
+                const sellerPlaceholders = buildInClause(request, 'assignedSeller', assignedSellerIds);
+                accessFilter = ` OR (o.SellerId IN (${sellerPlaceholders}) AND o.SellerId IS NOT NULL)`;
             }
 
             whereClause += ` AND (o.OwnerId IN (${teamList}) ${accessFilter})`;

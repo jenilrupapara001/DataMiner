@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const { createNotification } = require('../controllers/notificationController');
 const WebhookService = require('../services/WebhookService');
 
@@ -20,7 +21,8 @@ exports.getAlerts = async (req, res) => {
             if (assignedSellerIds.length === 0) {
                 return res.json({ success: true, data: [] });
             }
-            whereClause += ` AND SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(request, 'alertSeller', assignedSellerIds);
+            whereClause += ` AND SellerId IN (${inClause})`;
         }
 
         const result = await request.query(`
@@ -254,7 +256,8 @@ exports.acknowledgeAllAlerts = async (req, res) => {
         if (!isGlobalUser) {
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
             if (assignedSellerIds.length === 0) return res.json({ success: true, count: 0 });
-            updateSql += ` AND SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(request, 'ackSeller', assignedSellerIds);
+            updateSql += ` AND SellerId IN (${inClause})`;
         }
 
         const result = await request.query(updateSql);
@@ -282,7 +285,8 @@ exports.getUnreadAlertCount = async (req, res) => {
         if (!isGlobalUser) {
             const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
             if (assignedSellerIds.length === 0) return res.json({ success: true, count: 0 });
-            whereClause += ` AND SellerId IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(request, 'unreadSeller', assignedSellerIds);
+            whereClause += ` AND SellerId IN (${inClause})`;
         }
 
         const result = await request.query(`SELECT COUNT(*) as count FROM Alerts ${whereClause}`);

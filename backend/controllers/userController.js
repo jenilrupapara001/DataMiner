@@ -1,6 +1,7 @@
 const { sql, getPool, generateId } = require('../database/db');
 const bcrypt = require('bcryptjs');
 const { sendAdminEmail } = require('../services/emailService');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 /**
  * Get all users with filters, pagination, and role/seller info
@@ -33,7 +34,8 @@ exports.getUsers = async (req, res) => {
       if (subordinates.length === 0) {
         return res.json({ success: true, data: { users: [], pagination: { page: 1, limit: limitNum, total: 0, totalPages: 0 } } });
       }
-      whereClause += ` AND U.Id IN (${subordinates.map(id => `'${id}'`).join(',')})`;
+      const subPlaceholders = buildInClause(request, 'subId', subordinates);
+      whereClause += ` AND U.Id IN (${subPlaceholders})`;
     }
 
     // Filters
@@ -86,15 +88,16 @@ exports.getUsers = async (req, res) => {
       `);
 
     // Fetch assigned sellers for each user
-    const userIds = usersResult.recordset.map(u => `'${u.Id}'`).join(',');
+    const userReq = pool.request();
+    const userIdPlaceholders = buildInClause(userReq, 'userId', usersResult.recordset.map(u => u.Id));
     let sellerMap = {};
     
-    if (userIds.length > 0) {
-      const sellersResult = await pool.request().query(`
+    if (usersResult.recordset.length > 0) {
+      const sellersResult = await userReq.query(`
         SELECT US.UserId, S.Id as SellerId, S.Name as SellerName, S.Marketplace
         FROM UserSellers US
         JOIN Sellers S ON US.SellerId = S.Id
-        WHERE US.UserId IN (${userIds})
+        WHERE US.UserId IN (${userIdPlaceholders})
       `);
       
       sellersResult.recordset.forEach(s => {
@@ -146,11 +149,13 @@ exports.getUsers = async (req, res) => {
     let permissionMap = {};
     
     if (roleIds.length > 0) {
-      const permResult = await pool.request().query(`
+      const permReq = pool.request();
+      const roleIdPlaceholders = buildInClause(permReq, 'roleId', roleIds);
+      const permResult = await permReq.query(`
         SELECT RP.RoleId, P.Name as PermissionName
         FROM RolePermissions RP
         JOIN Permissions P ON RP.PermissionId = P.Id
-        WHERE RP.RoleId IN (${roleIds.map(id => `'${id}'`).join(',')})
+        WHERE RP.RoleId IN (${roleIdPlaceholders})
       `);
       
       permResult.recordset.forEach(p => {
@@ -657,13 +662,14 @@ exports.getSellersForAssignment = async (req, res) => {
     }
 
     // Enrich with managers
-    const sellerIds = sellers.map(s => `'${s.Id}'`).join(',');
-    const managersResult = await pool.request().query(`
+    const sellerReq = pool.request();
+    const sellerIdPlaceholders = buildInClause(sellerReq, 'sellerId', sellers.map(s => s.Id));
+    const managersResult = await sellerReq.query(`
       SELECT US.SellerId, U.Id as _id, U.FirstName as firstName, U.LastName as lastName, U.Email as email
       FROM UserSellers US
       JOIN Users U ON US.UserId = U.Id
       JOIN Roles R ON U.RoleId = R.Id
-      WHERE US.SellerId IN (${sellerIds}) AND R.Name IN ('admin', 'manager', 'Brand Manager')
+      WHERE US.SellerId IN (${sellerIdPlaceholders}) AND R.Name IN ('admin', 'manager', 'Brand Manager')
     `);
 
     const managerMap = {};
@@ -758,15 +764,16 @@ exports.getManagers = async (req, res) => {
     `);
 
     // Fetch assigned sellers for each manager
-    const userIds = result.recordset.map(u => `'${u.Id}'`).join(',');
+    const manReq = pool.request();
+    const manIdPlaceholders = buildInClause(manReq, 'manId', result.recordset.map(u => u.Id));
     let sellerMap = {};
     
-    if (userIds.length > 0) {
-      const sellersResult = await pool.request().query(`
+    if (result.recordset.length > 0) {
+      const sellersResult = await manReq.query(`
         SELECT US.UserId, S.Id as SellerId, S.Name as SellerName, S.Marketplace
         FROM UserSellers US
         JOIN Sellers S ON US.SellerId = S.Id
-        WHERE US.UserId IN (${userIds})
+        WHERE US.UserId IN (${manIdPlaceholders})
       `);
       
       sellersResult.recordset.forEach(s => {

@@ -1,4 +1,5 @@
 const { getPool, sql, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const { endOfMonth, startOfMonth, format, addDays } = require('date-fns');
 const SystemLogService = require('../services/SystemLogService');
 
@@ -73,11 +74,8 @@ const getSellerIdsByTargetIds = async (targetIds) => {
     if (!targetIds || targetIds.length === 0) return [];
     const pool = await getPool();
     const request = pool.request();
-    const placeholders = targetIds.map((id, idx) => {
-        request.input(`tId_${idx}`, sql.VarChar, id);
-        return `@tId_${idx}`;
-    });
-    const result = await request.query(`SELECT DISTINCT SellerId FROM GmsTargets WHERE Id IN (${placeholders.join(',')})`);
+    const inClause = buildInClause(request, 'tId', targetIds);
+    const result = await request.query(`SELECT DISTINCT SellerId FROM GmsTargets WHERE Id IN (${inClause})`);
     return result.recordset.map(r => r.SellerId);
 };
 
@@ -85,15 +83,12 @@ const getSellerIdsByBreakdownIds = async (breakdownIds) => {
     if (!breakdownIds || breakdownIds.length === 0) return [];
     const pool = await getPool();
     const request = pool.request();
-    const placeholders = breakdownIds.map((id, idx) => {
-        request.input(`bId_${idx}`, sql.VarChar, id);
-        return `@bId_${idx}`;
-    });
+    const inClause = buildInClause(request, 'bId', breakdownIds);
     const result = await request.query(`
         SELECT DISTINCT t.SellerId 
         FROM GmsTargetBreakdowns b
         JOIN GmsTargets t ON b.TargetId = t.Id
-        WHERE b.Id IN (${placeholders.join(',')})
+        WHERE b.Id IN (${inClause})
     `);
     return result.recordset.map(r => r.SellerId);
 };
@@ -119,11 +114,8 @@ exports.getTargets = async (req, res) => {
 
             const orParts = [];
             if (assignedSellerIds.length > 0) {
-                const params = assignedSellerIds.map((id, i) => {
-                    request.input(`sid_${i}`, sql.VarChar, id);
-                    return `@sid_${i}`;
-                });
-                orParts.push(`s.Id IN (${params.join(',')})`);
+                const inClause = buildInClause(request, 'sid', assignedSellerIds);
+                orParts.push(`s.Id IN (${inClause})`);
             }
             if (bmName) {
                 request.input('bmName', sql.NVarChar, bmName);
@@ -156,17 +148,14 @@ exports.getTargets = async (req, res) => {
 
         // 2. Fetch all breakdowns for all these targets in a single query
         const targetIds = targets.map(t => t.Id);
-        const targetIdsPlaceholders = targetIds.map((id, idx) => `@tId_${idx}`);
         const breakdownsRequest = pool.request();
-        targetIds.forEach((id, idx) => {
-            breakdownsRequest.input(`tId_${idx}`, sql.VarChar, id);
-        });
+        const inClause = buildInClause(breakdownsRequest, 'tId', targetIds);
 
         const breakdownsResult = await breakdownsRequest.query(`
             SELECT 
                 Id, TargetId, PeriodType, PeriodValue, SpecificDate, TargetValue, AchievedValue, PercentageContribution
             FROM GmsTargetBreakdowns
-            WHERE TargetId IN (${targetIdsPlaceholders.join(',')})
+            WHERE TargetId IN (${inClause})
             ORDER BY PeriodType, PeriodValue
         `);
         const allBreakdowns = breakdownsResult.recordset;
@@ -188,11 +177,7 @@ exports.getTargets = async (req, res) => {
         const dailyStats = {};
         if (sellerIds.length > 0) {
             const statsRequest = pool.request();
-            const sellerParams = [];
-            sellerIds.forEach((id, idx) => {
-                statsRequest.input(`sId_${idx}`, sql.NVarChar, id);
-                sellerParams.push(`@sId_${idx}`);
-            });
+            const sellerInClause = buildInClause(statsRequest, 'sId', sellerIds, sql.NVarChar);
             statsRequest.input('minDate', sql.Date, `${minYear}-01-01`);
             statsRequest.input('maxDate', sql.Date, `${maxYear}-12-31`);
 
@@ -204,7 +189,7 @@ exports.getTargets = async (req, res) => {
                 FROM Asins a
                 INNER JOIN AdsPerformance p ON a.AsinCode = p.Asin
                 INNER JOIN Sellers s ON a.SellerId = s.Id
-                WHERE s.Id IN (${sellerParams.join(',')})
+                WHERE s.Id IN (${sellerInClause})
                   AND p.Date >= @minDate AND p.Date <= @maxDate
                 GROUP BY s.Id, p.Date
             `;
@@ -670,16 +655,12 @@ exports.deleteTargetsBulk = async (req, res) => {
         const pool = await getPool();
         
         const request = pool.request();
-        const parameters = [];
-        ids.forEach((id, index) => {
-            request.input(`id${index}`, sql.VarChar, id);
-            parameters.push(`@id${index}`);
-        });
+        const inClause = buildInClause(request, 'id', ids);
 
-        const targetInfo = await request.query(`SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`);
+        const targetInfo = await request.query(`SELECT SellerId, TargetType, Year, GoalType FROM GmsTargets WHERE Id IN (${inClause})`);
         const targets = targetInfo.recordset;
         
-        const query = `DELETE FROM GmsTargets WHERE Id IN (${parameters.join(', ')})`;
+        const query = `DELETE FROM GmsTargets WHERE Id IN (${inClause})`;
         await request.query(query);
 
         try {

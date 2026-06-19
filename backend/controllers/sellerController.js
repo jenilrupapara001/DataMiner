@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const marketDataSyncService = require('../services/marketDataSyncService');
 const SystemLogService = require('../services/SystemLogService');
 
@@ -35,14 +36,15 @@ const enrichSellersWithManagers = async (sellers) => {
   if (!sellers || sellers.length === 0) return sellers;
   const sellerIds = sellers.map(s => s._id || s.Id);
   const pool = await getPool();
+  const req = pool.request();
+  const sellerInClause = buildInClause(req, 'sellerId', sellerIds);
   
-  const result = await pool.request()
-    .query(`
-      SELECT u.Id as _id, u.FirstName as firstName, u.LastName as lastName, u.Email as email, us.SellerId
-      FROM Users u
-      JOIN UserSellers us ON u.Id = us.UserId
-      WHERE us.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})
-    `);
+  const result = await req.query(`
+    SELECT u.Id as _id, u.FirstName as firstName, u.LastName as lastName, u.Email as email, us.SellerId
+    FROM Users u
+    JOIN UserSellers us ON u.Id = us.UserId
+    WHERE us.SellerId IN (${sellerInClause})
+  `);
 
   const managers = result.recordset;
 
@@ -62,16 +64,17 @@ const enrichSellersWithAsinCounts = async (sellers) => {
   if (!sellers || sellers.length === 0) return sellers;
   const sellerIds = sellers.map(s => s._id || s.Id);
   const pool = await getPool();
+  const req = pool.request();
+  const sellerInClause = buildInClause(req, 'asinSellerId', sellerIds);
 
-  const result = await pool.request()
-    .query(`
-      SELECT SellerId, 
-             COUNT(*) as totalAsins,
-             SUM(CASE WHEN Status IS NULL OR Status != 'Inactive' THEN 1 ELSE 0 END) as activeAsins
-      FROM Asins
-      WHERE SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})
-      GROUP BY SellerId
-    `);
+  const result = await req.query(`
+    SELECT SellerId, 
+           COUNT(*) as totalAsins,
+           SUM(CASE WHEN Status IS NULL OR Status != 'Inactive' THEN 1 ELSE 0 END) as activeAsins
+    FROM Asins
+    WHERE SellerId IN (${sellerInClause})
+    GROUP BY SellerId
+  `);
 
   const countMap = {};
   result.recordset.forEach(c => {
@@ -132,6 +135,7 @@ exports.getSellers = async (req, res) => {
         return reqObj;
     };
 
+    const sellerReq = pool.request();
     if (!isGlobalUser) {
       const sellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
       if (sellerIds.length === 0) {
@@ -139,15 +143,16 @@ exports.getSellers = async (req, res) => {
         setCachedSellers(cacheKey, emptyResponse);
         return res.json({ success: true, data: emptyResponse });
       }
-      whereClause += ` AND Id IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+      const sellerInClause = buildInClause(sellerReq, 'gsSellerId', sellerIds);
+      whereClause += ` AND Id IN (${sellerInClause})`;
     }
 
     if (status) whereClause += ' AND IsActive = @status';
     if (marketplace) whereClause += ' AND Marketplace = @marketplace';
     if (search) whereClause += ' AND (Name LIKE @search OR SellerId LIKE @search)';
 
-    const countRequest = applyInputs(pool.request());
-    const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Sellers ${whereClause}`);
+    applyInputs(sellerReq);
+    const countResult = await sellerReq.query(`SELECT COUNT(*) as total FROM Sellers ${whereClause}`);
     const total = countResult.recordset[0].total;
 
     // Prepare paginated query with parameters
@@ -165,8 +170,7 @@ exports.getSellers = async (req, res) => {
     `;
     let sellers;
     try {
-        const dataRequest = applyInputs(pool.request());
-        const sellersResult = await dataRequest
+        const sellersResult = await sellerReq
             .input('offset', sql.Int, offset)
             .input('limit', sql.Int, limitNum)
             .query(sqlQuery);
@@ -464,8 +468,10 @@ exports.updateSeller = async (req, res) => {
         // Fetch names for newly added managers
         let addedNames = [];
         if (added.length > 0) {
-          const addedNamesResult = await pool.request()
-            .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${added.map(uid => `'${uid}'`).join(',')})`);
+          const userReq = pool.request();
+          const addedInClause = buildInClause(userReq, 'addedUser', added);
+          const addedNamesResult = await userReq
+            .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${addedInClause})`);
           addedNames = addedNamesResult.recordset;
         }
 
@@ -530,13 +536,14 @@ exports.deleteSeller = async (req, res) => {
 
     // 2. Cascade delete ASIN-related metrics if there are any
     if (asins.length > 0) {
-      const asinIdsStr = asins.map(a => `'${a.Id}'`).join(',');
+      const asinReq = pool.request();
+      const asinInClause = buildInClause(asinReq, 'asinId', asins.map(a => a.Id));
       
       // Delete historical metrics
-      await pool.request().query(`DELETE FROM AsinHistory WHERE AsinId IN (${asinIdsStr})`);
-      await pool.request().query(`DELETE FROM AsinWeekHistory WHERE AsinId IN (${asinIdsStr})`);
-      await pool.request().query(`DELETE FROM SubBsrHistory WHERE AsinId IN (${asinIdsStr})`);
-      await pool.request().query(`DELETE FROM RevenueCalculators WHERE AsinId IN (${asinIdsStr})`);
+      await asinReq.query(`DELETE FROM AsinHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM AsinWeekHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM SubBsrHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM RevenueCalculators WHERE AsinId IN (${asinInClause})`);
     }
 
     // 3. Delete related Actions

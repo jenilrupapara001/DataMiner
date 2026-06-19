@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
 const marketDataSyncService = require('../services/marketDataSyncService');
 const imageGenerationService = require('../services/imageGenerationService');
@@ -200,10 +201,11 @@ exports.getAsins = async (req, res) => {
     };
 
     let whereClause = 'WHERE 1=1';
+    let allowedSellerIds = [];
 
     // [1] User Scope / Seller Filtering
     if (!isGlobalUser) {
-      const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
+      allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
       if (allowedSellerIds.length === 0) {
         return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0 } });
       }
@@ -216,7 +218,8 @@ exports.getAsins = async (req, res) => {
           return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } });
         }
       } else {
-        whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        const sellerPlaceholders = allowedSellerIds.map((_, i) => `@allowedSeller_${i}`).join(',');
+        whereClause += ` AND a.SellerId IN (${sellerPlaceholders})`;
       }
     } else if (seller) {
       whereClause += ' AND a.SellerId = @seller';
@@ -292,28 +295,28 @@ exports.getAsins = async (req, res) => {
     }
 
     if (req.query.minTitleScore) {
-      whereClause += ' AND TitleScore >= ' + parseFloat(req.query.minTitleScore);
+      whereClause += ' AND TitleScore >= @minTitleScore';
     }
     if (req.query.maxTitleScore) {
-      whereClause += ' AND TitleScore <= ' + parseFloat(req.query.maxTitleScore);
+      whereClause += ' AND TitleScore <= @maxTitleScore';
     }
     if (req.query.minBulletScore) {
-      whereClause += ' AND BulletScore >= ' + parseFloat(req.query.minBulletScore);
+      whereClause += ' AND BulletScore >= @minBulletScore';
     }
     if (req.query.maxBulletScore) {
-      whereClause += ' AND BulletScore <= ' + parseFloat(req.query.maxBulletScore);
+      whereClause += ' AND BulletScore <= @maxBulletScore';
     }
     if (req.query.minImageScore) {
-      whereClause += ' AND ImageScore >= ' + parseFloat(req.query.minImageScore);
+      whereClause += ' AND ImageScore >= @minImageScore';
     }
     if (req.query.maxImageScore) {
-      whereClause += ' AND ImageScore <= ' + parseFloat(req.query.maxImageScore);
+      whereClause += ' AND ImageScore <= @maxImageScore';
     }
     if (req.query.minDescriptionScore) {
-      whereClause += ' AND DescriptionScore >= ' + parseFloat(req.query.minDescriptionScore);
+      whereClause += ' AND DescriptionScore >= @minDescriptionScore';
     }
     if (req.query.maxDescriptionScore) {
-      whereClause += ' AND DescriptionScore <= ' + parseFloat(req.query.maxDescriptionScore);
+      whereClause += ' AND DescriptionScore <= @maxDescriptionScore';
     }
 
     if (req.query.hasDeal !== undefined && req.query.hasDeal !== '') {
@@ -347,6 +350,17 @@ exports.getAsins = async (req, res) => {
 
     // [5] Count Total
     const countRequest = applyInputs(pool.request());
+    if (!isGlobalUser && allowedSellerIds.length > 0) {
+      buildInClause(countRequest, 'allowedSeller', allowedSellerIds);
+    }
+    if (req.query.minTitleScore) countRequest.input('minTitleScore', sql.Float, parseFloat(req.query.minTitleScore));
+    if (req.query.maxTitleScore) countRequest.input('maxTitleScore', sql.Float, parseFloat(req.query.maxTitleScore));
+    if (req.query.minBulletScore) countRequest.input('minBulletScore', sql.Float, parseFloat(req.query.minBulletScore));
+    if (req.query.maxBulletScore) countRequest.input('maxBulletScore', sql.Float, parseFloat(req.query.maxBulletScore));
+    if (req.query.minImageScore) countRequest.input('minImageScore', sql.Float, parseFloat(req.query.minImageScore));
+    if (req.query.maxImageScore) countRequest.input('maxImageScore', sql.Float, parseFloat(req.query.maxImageScore));
+    if (req.query.minDescriptionScore) countRequest.input('minDescriptionScore', sql.Float, parseFloat(req.query.minDescriptionScore));
+    if (req.query.maxDescriptionScore) countRequest.input('maxDescriptionScore', sql.Float, parseFloat(req.query.maxDescriptionScore));
     const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Asins a JOIN Sellers s ON a.SellerId = s.Id ${whereClause}`);
     const total = countResult.recordset[0].total;
 
@@ -381,6 +395,17 @@ exports.getAsins = async (req, res) => {
     };
     
     const dataRequest = applyInputs(pool.request());
+    if (!isGlobalUser && allowedSellerIds.length > 0) {
+      buildInClause(dataRequest, 'allowedSeller', allowedSellerIds);
+    }
+    if (req.query.minTitleScore) dataRequest.input('minTitleScore', sql.Float, parseFloat(req.query.minTitleScore));
+    if (req.query.maxTitleScore) dataRequest.input('maxTitleScore', sql.Float, parseFloat(req.query.maxTitleScore));
+    if (req.query.minBulletScore) dataRequest.input('minBulletScore', sql.Float, parseFloat(req.query.minBulletScore));
+    if (req.query.maxBulletScore) dataRequest.input('maxBulletScore', sql.Float, parseFloat(req.query.maxBulletScore));
+    if (req.query.minImageScore) dataRequest.input('minImageScore', sql.Float, parseFloat(req.query.minImageScore));
+    if (req.query.maxImageScore) dataRequest.input('maxImageScore', sql.Float, parseFloat(req.query.maxImageScore));
+    if (req.query.minDescriptionScore) dataRequest.input('minDescriptionScore', sql.Float, parseFloat(req.query.minDescriptionScore));
+    if (req.query.maxDescriptionScore) dataRequest.input('maxDescriptionScore', sql.Float, parseFloat(req.query.maxDescriptionScore));
     const asinsResult = await dataRequest
         .input('offset', sql.Int, offset)
         .input('limit', sql.Int, limitNum)
@@ -402,32 +427,41 @@ exports.getAsins = async (req, res) => {
 
     // [7] Fetch all history data IN PARALLEL to avoid sequential timeouts
     const historyDays = parseInt(req.query.historyDays) || 14;
-    const asinIds = asins.map(a => `'${a.Id}'`).join(',');
-    const asinCodes = asins.map(a => `'${a.AsinCode}'`).join(',');
+    const asinIdValues = asins.map(a => a.Id);
+    const asinCodeValues = asins.map(a => a.AsinCode);
+
+    const histDailyReq = pool.request();
+    const histWeekReq = pool.request();
+    const histSubBsrReq = pool.request();
+    const histOrdersReq = pool.request();
+    const histAsinIds = buildInClause(histDailyReq, 'histAsin', asinIdValues);
+    const histAsinIds2 = buildInClause(histWeekReq, 'histAsin', asinIdValues);
+    const histAsinIds3 = buildInClause(histSubBsrReq, 'histAsin', asinIdValues);
+    const histAsinCodes = buildInClause(histOrdersReq, 'histCode', asinCodeValues);
 
     const [dailyHistoryResult, weekHistoryResult, subBsrHistoryResult, monthsResult, monthlyOrdersResult] = await Promise.all([
       // [7.1] Daily History
-      pool.request().query(`
+      histDailyReq.query(`
         SELECT AsinId, FORMAT(Date, 'yyyy-MM-dd') as dateStr, Price as price, BSR as bsr, 
                Rating as rating, ReviewCount as reviews, 
                StockLevel as stockLevel, LQS as lqs
         FROM AsinHistory WITH (NOLOCK)
-        WHERE AsinId IN (${asinIds}) 
+        WHERE AsinId IN (${histAsinIds}) 
         AND Date >= DATEADD(day, -${historyDays}, dbo.GetEnvDate())
         ORDER BY Date ASC
       `),
       // [7.2] Week History
-      pool.request().query(`
+      histWeekReq.query(`
         SELECT AsinId, FORMAT(WeekStartDate, 'yyyy-MM-dd') as dateStr, WeekStartDate, AvgPrice as price, AvgBSR as bsr, AvgRating as rating, TotalReviews as reviews
         FROM AsinWeekHistory WITH (NOLOCK)
-        WHERE AsinId IN (${asinIds}) 
+        WHERE AsinId IN (${histAsinIds2}) 
         ORDER BY WeekStartDate ASC
       `),
       // [7.3] Sub BSR History
-      pool.request().query(`
+      histSubBsrReq.query(`
         SELECT AsinId, Date, SubBsrRank as rank, SubBsrCategory as category
         FROM SubBsrHistory WITH (NOLOCK)
-        WHERE AsinId IN (${asinIds})
+        WHERE AsinId IN (${histAsinIds3})
         AND Date >= DATEADD(day, -14, dbo.GetEnvDate())
         ORDER BY Date ASC, CreatedAt DESC
       `),
@@ -439,10 +473,10 @@ exports.getAsins = async (req, res) => {
         ORDER BY Month ASC
       `),
       // [7.5] Monthly orders
-      pool.request().query(`
+      histOrdersReq.query(`
         SELECT Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month, SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as Orders
         FROM AdsPerformance WITH (NOLOCK)
-        WHERE Asin IN (${asinCodes})
+        WHERE Asin IN (${histAsinCodes})
         AND (Month IS NOT NULL OR Date IS NOT NULL)
         GROUP BY Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1))
       `)
@@ -1055,7 +1089,8 @@ exports.getAsinStats = async (req, res) => {
           whereClause += ' AND 1=0';
         }
       } else if (allowedSellerIds.length > 0) {
-        whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        const sellerInClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+        whereClause += ` AND SellerId IN (${sellerInClause})`;
       } else {
         whereClause += ' AND 1=0';
       }
@@ -1404,12 +1439,14 @@ exports.bulkDeleteAsins = async (req, res) => {
     if (roleName !== 'admin') return res.status(403).json({ error: 'Only Super Administrators can delete ASINs' });
 
     const pool = await getPool();
-    const idList = ids.map(id => `'${id}'`).join(',');
-    
-    const sellersResult = await pool.request().query(`SELECT DISTINCT SellerId FROM Asins WHERE Id IN (${idList})`);
+    const delRequest = pool.request();
+    const idList = buildInClause(delRequest, 'delId', ids);
+    const sellersResult = await delRequest.query(`SELECT DISTINCT SellerId FROM Asins WHERE Id IN (${idList})`);
     const sellerIds = sellersResult.recordset.map(r => r.SellerId);
 
-    await pool.request().query(`DELETE FROM Asins WHERE Id IN (${idList})`);
+    const delRequest2 = pool.request();
+    const idList2 = buildInClause(delRequest2, 'delId', ids);
+    await delRequest2.query(`DELETE FROM Asins WHERE Id IN (${idList2})`);
 
     for (const sellerId of sellerIds) {
       await updateSellerAsinCount(sellerId, req.app.get('io'));
@@ -1445,7 +1482,8 @@ exports.searchAsins = async (req, res) => {
           whereClause += ' AND 1=0';
         }
       } else {
-        whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        const sellerInClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+        whereClause += ` AND SellerId IN (${sellerInClause})`;
       }
     } else if (seller) {
       whereClause += ' AND SellerId = @seller';
@@ -1493,7 +1531,8 @@ exports.getAsinBrands = async (req, res) => {
     if (!isGlobalUser) {
       const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
       if (allowedSellerIds.length === 0) return res.json({ success: true, data: [] });
-      whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+      const sellerInClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+      whereClause += ` AND SellerId IN (${sellerInClause})`;
     }
 
     const result = await request.query(`SELECT DISTINCT Brand FROM Asins ${whereClause} ORDER BY Brand ASC`);
@@ -1516,27 +1555,45 @@ exports.getAsinFilterOptions = async (req, res) => {
     const roleName = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
 
+    let allowedSellerIds = [];
     if (!isGlobalUser) {
-      const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
+      allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
       if (allowedSellerIds.length === 0) {
         return res.json({ 
           success: true, 
           data: { categories: [], brands: [], scrapeStatuses: [], statuses: [], subBsrCategories: [], tags: [] } 
         });
       }
-      whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+      const sellerPlaceholders = allowedSellerIds.map((_, i) => `@allowedSeller_${i}`).join(',');
+      whereClause += ` AND a.SellerId IN (${sellerPlaceholders})`;
     }
 
     if (req.query.seller) {
-      // Safe to interpolate seller ID as it's an ObjectId/UUID format
-      whereClause += ` AND a.SellerId = '${req.query.seller.replace(/'/g, "''")}'`; 
+      whereClause += ' AND a.SellerId = @sellerFilter';
+    }
+
+    const catReq = pool.request();
+    const brandReq = pool.request();
+    const subBsrReq = pool.request();
+    const tagsReq = pool.request();
+    if (!isGlobalUser && allowedSellerIds.length > 0) {
+      buildInClause(catReq, 'allowedSeller', allowedSellerIds);
+      buildInClause(brandReq, 'allowedSeller', allowedSellerIds);
+      buildInClause(subBsrReq, 'allowedSeller', allowedSellerIds);
+      buildInClause(tagsReq, 'allowedSeller', allowedSellerIds);
+    }
+    if (req.query.seller) {
+      catReq.input('sellerFilter', sql.VarChar, req.query.seller);
+      brandReq.input('sellerFilter', sql.VarChar, req.query.seller);
+      subBsrReq.input('sellerFilter', sql.VarChar, req.query.seller);
+      tagsReq.input('sellerFilter', sql.VarChar, req.query.seller);
     }
 
     const [categoriesResult, brandsResult, subBsrResult, tagsResult] = await Promise.all([
-      pool.request().query(`SELECT DISTINCT Category FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
-      pool.request().query(`SELECT DISTINCT s.Name as Brand FROM Asins a WITH (NOLOCK) JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
-      pool.request().query(`SELECT DISTINCT value as SubBsr FROM Asins a WITH (NOLOCK) CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
-      pool.request().query(`SELECT Tags FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
+      catReq.query(`SELECT DISTINCT Category FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Category IS NOT NULL AND a.Category != '' ORDER BY Category ASC`),
+      brandReq.query(`SELECT DISTINCT s.Name as Brand FROM Asins a WITH (NOLOCK) JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id ${whereClause.replace('WHERE 1=1', 'WHERE 1=1 AND s.Name IS NOT NULL')} ORDER BY s.Name ASC`),
+      subBsrReq.query(`SELECT DISTINCT value as SubBsr FROM Asins a WITH (NOLOCK) CROSS APPLY OPENJSON(a.SubBsrCategories) ${whereClause} AND a.SubBsrCategories IS NOT NULL AND ISJSON(a.SubBsrCategories) > 0 ORDER BY value ASC`),
+      tagsReq.query(`SELECT Tags FROM Asins a WITH (NOLOCK) ${whereClause} AND a.Tags IS NOT NULL AND a.Tags != '[]' AND a.Tags != ''`)
     ]);
 
     // Extract unique tags
@@ -1674,11 +1731,10 @@ exports.importFromCsv = async (req, res) => {
     const existingCodes = new Map();
 
     if (identifiers.length > 0) {
-      // Chunk identifiers to avoid too long IN clause if needed, but 350 is fine
-      const idInClause = identifiers.map(id => `'${id}'`).join(',');
-      const existingAsinsResult = await pool.request()
-        .input('sellerId', sql.VarChar, sellerId)
-        .query(`SELECT Id, AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${idInClause})`);
+      const lookupRequest = pool.request();
+      lookupRequest.input('sellerId', sql.VarChar, sellerId);
+      const idInClause = buildInClause(lookupRequest, 'ident', identifiers);
+      const existingAsinsResult = await lookupRequest.query(`SELECT Id, AsinCode FROM Asins WHERE SellerId = @sellerId AND AsinCode IN (${idInClause})`);
       
       existingAsinsResult.recordset.forEach(a => existingCodes.set(a.AsinCode, a.Id));
     }
@@ -2139,13 +2195,17 @@ exports.bulkUpdateAsins = async (req, res) => {
     await transaction.begin();
 
     try {
-      const idList = ids.map(id => `'${id}'`).join(',');
-      const sellersResult = await transaction.request().query(`SELECT DISTINCT SellerId FROM Asins WHERE Id IN (${idList})`);
+      const idPlaceholders = ids.map((_, i) => `@bulkId_${i}`).join(',');
+
+      const sellersReq = transaction.request();
+      buildInClause(sellersReq, 'bulkId', ids);
+      const sellersResult = await sellersReq.query(`SELECT DISTINCT SellerId FROM Asins WHERE Id IN (${idPlaceholders})`);
       const sellerIds = sellersResult.recordset.map(r => r.SellerId);
 
       // Build SET clause
       const setParts = [];
       const request = transaction.request();
+      buildInClause(request, 'bulkId', ids);
       if (updates.status) { setParts.push('Status = @status'); request.input('status', sql.NVarChar, updates.status); }
       if (updates.category) { setParts.push('Category = @category'); request.input('category', sql.NVarChar, updates.category); }
       if (updates.brand) { setParts.push('Brand = @brand'); request.input('brand', sql.NVarChar, updates.brand); }
@@ -2156,29 +2216,27 @@ exports.bulkUpdateAsins = async (req, res) => {
       
       if (setParts.length > 0) {
         setParts.push('UpdatedAt = dbo.GetEnvDate()');
-        await request.query(`UPDATE Asins SET ${setParts.join(', ')} WHERE Id IN (${idList})`);
+        await request.query(`UPDATE Asins SET ${setParts.join(', ')} WHERE Id IN (${idPlaceholders})`);
 
         // Handle tags for Price Dispute bulk update
         if (updates.priceDispute !== undefined) {
           const isDispute = updates.priceDispute ? 1 : 0;
           if (isDispute === 1) {
-            // Add tag if not exists
-            await transaction.request().query(`
+            const addTagReq = transaction.request();
+            buildInClause(addTagReq, 'bulkId', ids);
+            await addTagReq.query(`
               UPDATE Asins 
               SET Tags = CASE 
                 WHEN Tags IS NULL OR Tags = '' OR Tags = '[]' THEN '["Price Dispute"]'
                 WHEN CHARINDEX('"Price Dispute"', Tags) = 0 THEN JSON_MODIFY(Tags, 'append $', 'Price Dispute')
                 ELSE Tags
               END
-              WHERE Id IN (${idList})
+              WHERE Id IN (${idPlaceholders})
             `);
           } else {
-            // Remove tag if exists
-            // Since STRING_AGG is tricky with bulk update per-row, we do it in a small cursor-like logic or per-row
-            // For simplicity in bulk, we'll use a slightly more complex set-based removal if possible, 
-            // but SQL Server doesn't have a great "remove from JSON array" for multiple rows at once easily without a subquery
-            // We'll use the same logic as single update but in a cross apply or similar
-            await transaction.request().query(`
+            const removeTagReq = transaction.request();
+            buildInClause(removeTagReq, 'bulkId', ids);
+            await removeTagReq.query(`
               UPDATE a
               SET Tags = (
                   SELECT JSON_QUERY('[' + STRING_AGG('"' + value + '"', ',') + ']')
@@ -2186,7 +2244,7 @@ exports.bulkUpdateAsins = async (req, res) => {
                   WHERE value <> 'Price Dispute'
               )
               FROM Asins a
-              WHERE a.Id IN (${idList}) AND CHARINDEX('"Price Dispute"', a.Tags) > 0
+              WHERE a.Id IN (${idPlaceholders}) AND CHARINDEX('"Price Dispute"', a.Tags) > 0
             `);
           }
         }
@@ -2242,7 +2300,8 @@ exports.recalculateLqs = async (req, res) => {
                 if (allowedSellerIds.length === 0) {
                     return res.json({ success: true, processedCount: 0 });
                 }
-                query += ` WHERE SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+                const sellerInClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+                query += ` WHERE SellerId IN (${sellerInClause})`;
             }
         }
         
@@ -2510,17 +2569,21 @@ exports.exportData = async (req, res) => {
       if (!allSellers && sellerIds.length > 0) {
         const validIds = sellerIds.filter(id => allowedSellerIds.includes(id));
         if (validIds.length === 0) {
-          whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+          const inClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+          whereClause += ` AND a.SellerId IN (${inClause})`;
         } else {
-          whereClause += ` AND a.SellerId IN (${validIds.map(id => `'${id}'`).join(',')})`;
+          const inClause = buildInClause(request, 'exportSeller', validIds);
+          whereClause += ` AND a.SellerId IN (${inClause})`;
         }
       } else {
-        whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+        const inClause = buildInClause(request, 'allowedSeller', allowedSellerIds);
+        whereClause += ` AND a.SellerId IN (${inClause})`;
       }
     } else {
       // Admin/Global User
       if (!allSellers && sellerIds.length > 0) {
-        whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+        const inClause = buildInClause(request, 'exportSeller', sellerIds);
+        whereClause += ` AND a.SellerId IN (${inClause})`;
       }
       
       // Manager filter (Global only)
@@ -2530,7 +2593,8 @@ exports.exportData = async (req, res) => {
           .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
         const managedIds = userSellers.recordset.map(r => r.SellerId);
         if (managedIds.length > 0) {
-          whereClause += ` AND a.SellerId IN (${managedIds.map(id => `'${id}'`).join(',')})`;
+          const inClause = buildInClause(request, 'managedSeller', managedIds);
+          whereClause += ` AND a.SellerId IN (${inClause})`;
         } else {
           whereClause += ` AND 1=0`; // No sellers assigned to "mine"
         }
@@ -2543,7 +2607,8 @@ exports.exportData = async (req, res) => {
           .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
         const managedIds = userSellers.recordset.map(r => r.SellerId);
         if (managedIds.length > 0) {
-          whereClause += ` AND a.SellerId IN (${managedIds.map(id => `'${id}'`).join(',')})`;
+          const inClause = buildInClause(request, 'managedSeller', managedIds);
+          whereClause += ` AND a.SellerId IN (${inClause})`;
         } else {
           whereClause += ` AND 1=0`;
         }
@@ -2577,7 +2642,8 @@ exports.exportData = async (req, res) => {
 
     // Filter by specific ASIN IDs if provided
     if (asinIds.length > 0) {
-      whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
+      const inClause = buildInClause(request, 'exportAsin', asinIds);
+      whereClause += ` AND a.Id IN (${inClause})`;
     }
 
     if (status) {

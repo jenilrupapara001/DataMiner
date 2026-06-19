@@ -1,5 +1,6 @@
 const { sql, getPool, generateId } = require('../database/db');
 const { createNotification } = require('./notificationController');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 const getUnreadAlertCount = async (req, res) => {
   try {
@@ -11,9 +12,10 @@ const getUnreadAlertCount = async (req, res) => {
     
     let whereClause = 'WHERE Acknowledged = 0';
     if (!isGlobalUser) {
-      const allowedSellers = req.user.assignedSellers.map(s => `'${s._id || s}'`).join(',');
-      if (allowedSellers.length > 0) {
-        whereClause += ` AND SellerId IN (${allowedSellers})`;
+      const sellerIds = req.user.assignedSellers.map(s => s._id || s);
+      if (sellerIds.length > 0) {
+        const inClause = buildInClause(request, 'sellerId', sellerIds);
+        whereClause += ` AND SellerId IN (${inClause})`;
       } else {
         return res.json({ count: 0 });
       }
@@ -37,9 +39,10 @@ const acknowledgeAllAlerts = async (req, res) => {
     
     let whereClause = 'WHERE Acknowledged = 0';
     if (!isGlobalUser) {
-      const allowedSellers = req.user.assignedSellers.map(s => `'${s._id || s}'`).join(',');
-      if (allowedSellers.length > 0) {
-        whereClause += ` AND SellerId IN (${allowedSellers})`;
+      const sellerIds = req.user.assignedSellers.map(s => s._id || s);
+      if (sellerIds.length > 0) {
+        const inClause = buildInClause(request, 'sellerId', sellerIds);
+        whereClause += ` AND SellerId IN (${inClause})`;
       } else {
         return res.json({ acknowledgedCount: 0 });
       }
@@ -440,9 +443,10 @@ const executeAllRules = async (req, res) => {
       
       let query = 'SELECT * FROM AlertRules WHERE IsActive = 1';
       if (!isGlobalUser) {
-        const allowedSellers = req.user.assignedSellers.map(s => `'${s._id || s}'`).join(',');
-        if (allowedSellers.length > 0) {
-          query += ` AND (SellerId IN (${allowedSellers}) OR SellerId IS NULL)`;
+        const sellerIds = req.user.assignedSellers.map(s => s._id || s);
+        if (sellerIds.length > 0) {
+          const inClause = buildInClause(request, 'sellerId', sellerIds);
+          query += ` AND (SellerId IN (${inClause}) OR SellerId IS NULL)`;
         }
       }
   

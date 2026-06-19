@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
 const SocketService = require('../services/socketService');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 const EXPORTS_DIR = path.join(__dirname, '../uploads/exports');
 
@@ -159,7 +160,7 @@ async function processExportJob(downloadId, params, userId) {
         console.log(`📦 [Export] Starting job ${downloadId} for user ${userId}`);
 
         // Update progress
-        await updateDownloadStatus(pool, downloadId, 'processing', 5);
+        await updateDownloadStatus(pool, downloadId, 'processing', 5, null, userId);
 
         const {
             sellerIds = [],
@@ -216,25 +217,28 @@ async function processExportJob(downloadId, params, userId) {
             if (assignedIds.length === 0) {
                 whereClause += ' AND 1=0';
             } else {
-                whereClause += ` AND a.SellerId IN (${assignedIds.map(id => `'${id}'`).join(',')})`;
+                const inClause = buildInClause(request, 'asgnSeller', assignedIds);
+                whereClause += ` AND a.SellerId IN (${inClause})`;
             }
 
             // Further restrict by requested sellers if provided (intersection)
             if (sellerIds.length > 0) {
                 const allowedSellerIds = sellerIds.filter(id => assignedIds.includes(id));
                 if (allowedSellerIds.length > 0) {
-                    whereClause += ` AND a.SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+                    const inClause = buildInClause(request, 'alwdSeller', allowedSellerIds);
+                    whereClause += ` AND a.SellerId IN (${inClause})`;
                 } else {
                     whereClause += ' AND 1=0'; // Requested sellers not in assigned list
                 }
             }
         } else if (!allSellers && sellerIds.length > 0) {
-            // Admins filtering by specific sellers
-            whereClause += ` AND a.SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(request, 'reqSeller', sellerIds);
+            whereClause += ` AND a.SellerId IN (${inClause})`;
         }
 
         if (asinIds.length > 0) {
-            whereClause += ` AND a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(request, 'asinId', asinIds);
+            whereClause += ` AND a.Id IN (${inClause})`;
         }
 
         console.log(`🔍 [Export] Generated Where Clause: ${whereClause}`);
@@ -333,14 +337,14 @@ async function processExportJob(downloadId, params, userId) {
             }
 
             // LQS Breakdown Filters
-            if (minTitleScore) whereClause += ' AND a.TitleScore >= ' + parseFloat(minTitleScore);
-            if (maxTitleScore) whereClause += ' AND a.TitleScore <= ' + parseFloat(maxTitleScore);
-            if (minBulletScore) whereClause += ' AND a.BulletScore >= ' + parseFloat(minBulletScore);
-            if (maxBulletScore) whereClause += ' AND a.BulletScore <= ' + parseFloat(maxBulletScore);
-            if (minImageScore) whereClause += ' AND a.ImageScore >= ' + parseFloat(minImageScore);
-            if (maxImageScore) whereClause += ' AND a.ImageScore <= ' + parseFloat(maxImageScore);
-            if (minDescriptionScore) whereClause += ' AND a.DescriptionScore >= ' + parseFloat(minDescriptionScore);
-            if (maxDescriptionScore) whereClause += ' AND a.DescriptionScore <= ' + parseFloat(maxDescriptionScore);
+            if (minTitleScore) { request.input('minTitleScore', sql.Float, parseFloat(minTitleScore)); whereClause += ' AND a.TitleScore >= @minTitleScore'; }
+            if (maxTitleScore) { request.input('maxTitleScore', sql.Float, parseFloat(maxTitleScore)); whereClause += ' AND a.TitleScore <= @maxTitleScore'; }
+            if (minBulletScore) { request.input('minBulletScore', sql.Float, parseFloat(minBulletScore)); whereClause += ' AND a.BulletScore >= @minBulletScore'; }
+            if (maxBulletScore) { request.input('maxBulletScore', sql.Float, parseFloat(maxBulletScore)); whereClause += ' AND a.BulletScore <= @maxBulletScore'; }
+            if (minImageScore) { request.input('minImageScore', sql.Float, parseFloat(minImageScore)); whereClause += ' AND a.ImageScore >= @minImageScore'; }
+            if (maxImageScore) { request.input('maxImageScore', sql.Float, parseFloat(maxImageScore)); whereClause += ' AND a.ImageScore <= @maxImageScore'; }
+            if (minDescriptionScore) { request.input('minDescScore', sql.Float, parseFloat(minDescriptionScore)); whereClause += ' AND a.DescriptionScore >= @minDescScore'; }
+            if (maxDescriptionScore) { request.input('maxDescScore', sql.Float, parseFloat(maxDescriptionScore)); whereClause += ' AND a.DescriptionScore <= @maxDescScore'; }
 
             // Tags filter
             if (tags && (Array.isArray(tags) ? tags.length > 0 : tags)) {
@@ -370,7 +374,7 @@ async function processExportJob(downloadId, params, userId) {
             }
         }
 
-        await updateDownloadStatus(pool, downloadId, 'processing', 20);
+        await updateDownloadStatus(pool, downloadId, 'processing', 20, null, userId);
 
         // BUILD FIELD LIST - Map frontend field keys to actual SQL columns
         const sqlFieldMapping = {
@@ -427,9 +431,10 @@ async function processExportJob(downloadId, params, userId) {
 
         // Build SELECT columns with aliases to match frontend camelCase keys
         const selectColumns = fields.map(f => {
-            const sqlField = sqlFieldMapping[f] || `a.${f}`;
-            return `${sqlField} AS [${f}]`;
-        }).join(', ');
+            const sqlField = sqlFieldMapping[f];
+            if (!sqlField) return null;
+            return `${sqlField} AS [${f.replace(/[\]]/g, '')}]`;
+        }).filter(Boolean).join(', ');
 
         let selectQuery = '';
         let sortedDates = [];
@@ -445,6 +450,11 @@ async function processExportJob(downloadId, params, userId) {
             const dateWhereClause = whereClause.replace(/a\.LastScrapedAt/g, 'ah.Date');
 
             // Fetch unique dates first
+            const datesRequest = pool.request();
+            Object.keys(request.parameters).forEach(key => {
+                const param = request.parameters[key];
+                datesRequest.input(key, param.type, param.value);
+            });
             const datesQuery = `
                 SELECT DISTINCT CONVERT(varchar, ah.Date, 23) as [Date]
                 FROM AsinHistory ah
@@ -453,7 +463,7 @@ async function processExportJob(downloadId, params, userId) {
                 ${dateWhereClause}
                 ORDER BY [Date] ASC
             `;
-            const datesResult = await pool.request().query(datesQuery);
+            const datesResult = await datesRequest.query(datesQuery);
             sortedDates = datesResult.recordset.map(r => r.Date);
 
             // Construct headers
@@ -518,7 +528,7 @@ async function processExportJob(downloadId, params, userId) {
         }
 
         console.log(`📊 [Export] Running query: ${selectQuery.substring(0, 500)}${selectQuery.length > 500 ? '...' : ''}`);
-        await updateDownloadStatus(pool, downloadId, 'processing', 30);
+        await updateDownloadStatus(pool, downloadId, 'processing', 30, null, userId);
 
         const resultDownloads = await pool.request()
             .input('id', sql.VarChar, downloadId)
@@ -786,7 +796,7 @@ async function processExportJob(downloadId, params, userId) {
         });
 
         console.log(`📊 [Export] Streaming complete: ${rowCount} rows written`);
-        await updateDownloadStatus(pool, downloadId, 'processing', 90);
+        await updateDownloadStatus(pool, downloadId, 'processing', 90, null, userId);
         const stats = fs.statSync(filePath);
 
         // Update download record as completed
@@ -821,7 +831,7 @@ async function processExportJob(downloadId, params, userId) {
 
     } catch (error) {
         console.error(`❌ Export job ${downloadId} failed:`, error);
-        await updateDownloadStatus(pool, downloadId, 'failed', 0, error.message);
+        await updateDownloadStatus(pool, downloadId, 'failed', 0, error.message, userId);
 
         const io = SocketService.getIo();
         if (io) {
@@ -833,7 +843,7 @@ async function processExportJob(downloadId, params, userId) {
     }
 }
 
-async function updateDownloadStatus(pool, id, status, progress, errorMessage = null) {
+async function updateDownloadStatus(pool, id, status, progress, errorMessage = null, userId = null) {
     try {
         const request = pool.request()
             .input('id', sql.VarChar, id)
@@ -850,7 +860,7 @@ async function updateDownloadStatus(pool, id, status, progress, errorMessage = n
         await request.query(query);
 
         // Broadcast progress in real-time via Socket.io
-        SocketService.emitExportUpdate(id, { status, progress, errorMessage });
+        SocketService.emitExportUpdate(id, { status, progress, errorMessage, userId });
     } catch (e) {
         console.error('Update download status error:', e.message);
     }
@@ -1060,7 +1070,7 @@ exports.startGmsExport = async (req, res) => {
         // Run background job
         processGmsExportJob(downloadId, req.body, userId).catch(err => {
             console.error(`GMS Export job ${downloadId} failed:`, err);
-            updateDownloadStatus(pool, downloadId, 'failed', 0, err.message).catch(console.error);
+            updateDownloadStatus(pool, downloadId, 'failed', 0, err.message, userId).catch(console.error);
         });
 
     } catch (error) {
@@ -1198,6 +1208,7 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     const roleName = user?.role || '';
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const gmsRequest = pool.request();
     let whereClause = 'WHERE 1=1';
 
     if (!isGlobalUser) {
@@ -1205,13 +1216,14 @@ async function processGmsExportJob(downloadId, params, userId) {
         if (assignedIds.length === 0) {
             whereClause += ' AND 1=0';
         } else {
-            whereClause += ` AND a.SellerId IN (${assignedIds.map(id => `'${id}'`).join(',')})`;
+            const inClause = buildInClause(gmsRequest, 'gmsSeller', assignedIds);
+            whereClause += ` AND a.SellerId IN (${inClause})`;
         }
     }
 
     await updateDownloadStatus(pool, downloadId, 'processing', 20);
 
-    const result = await pool.request().query(`
+    const result = await gmsRequest.query(`
       SELECT 
         g.Date as date,
         g.Asin as asin,

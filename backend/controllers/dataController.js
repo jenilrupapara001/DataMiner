@@ -1,4 +1,5 @@
 const { sql, getPool } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 /**
  * Get master data with revenue (stub)
@@ -723,7 +724,7 @@ exports.getAdsManagerData = async (req, res) => {
 
             const validGroupKeys = pagedRows.map(r => r.groupKey).filter(Boolean);
             if (validGroupKeys.length > 0) {
-                const groupKeys = validGroupKeys.map(key => `'${String(key).replace(/'/g, "''")}'`).join(',');
+                const groupKeys = buildInClause(request, 'gk', validGroupKeys);
                 
                 const historyQuery = `
                     SELECT 
@@ -768,7 +769,7 @@ exports.getAdsManagerData = async (req, res) => {
                         FROM GmsTargets t
                         LEFT JOIN GmsTargetBreakdowns b ON t.Id = b.TargetId AND b.PeriodType = 'MONTH'
                         WHERE (${monthConditions})
-                          AND t.SellerId IN (${uniqueSellers.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})
+                          AND t.SellerId IN (${buildInClause(request, 'sid', uniqueSellers)})
                           AND t.GoalType IN ('ADS', 'ACOS')
                     `;
                     const targetsResult = await request.query(targetsQuery);

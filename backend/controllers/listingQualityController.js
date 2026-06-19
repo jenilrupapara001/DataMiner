@@ -34,18 +34,22 @@ exports.analyzeBatch = async (req, res) => {
     
     let query = 'SELECT Id, AsinCode FROM Asins';
     const conditions = [];
+    const request = pool.request();
     
     if (asinIds && asinIds.length > 0) {
-      conditions.push(`Id IN (${asinIds.map(id => `'${id}'`).join(',')})`);
+      asinIds.forEach((id, i) => request.input(`asinId${i}`, sql.VarChar, id));
+      const placeholders = asinIds.map((_, i) => `@asinId${i}`).join(',');
+      conditions.push(`Id IN (${placeholders})`);
     } else if (sellerId) {
-      conditions.push(`SellerId = '${sellerId}'`);
+      request.input('sellerId', sql.VarChar, sellerId);
+      conditions.push('SellerId = @sellerId');
     }
     
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const result = await pool.request().query(query);
+    const result = await request.query(query);
     const asins = result.recordset;
     
     let analyzed = 0;

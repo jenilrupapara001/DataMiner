@@ -40,10 +40,10 @@ const upload = multer({
   limits
 });
 
-router.post('/upload/upload-monthly', upload.single('file'), uploadController.uploadMonthlyData);
-router.post('/upload/upload-ads', upload.single('file'), uploadController.uploadAdsData);
-router.post('/upload/octoparse', upload.single('file'), uploadController.uploadOctoparseData);
-router.get('/upload/upload-stats', uploadController.getUploadStats);
+router.post('/upload/upload-monthly', authenticate, upload.single('file'), uploadController.uploadMonthlyData);
+router.post('/upload/upload-ads', authenticate, upload.single('file'), uploadController.uploadAdsData);
+router.post('/upload/octoparse', authenticate, upload.single('file'), uploadController.uploadOctoparseData);
+router.get('/upload/upload-stats', authenticate, uploadController.getUploadStats);
 
 // GMS endpoints
 router.post('/upload/upload-gms', authenticate, requirePermission('gms_tracker_import'), upload.single('file'), uploadController.uploadGmsData);

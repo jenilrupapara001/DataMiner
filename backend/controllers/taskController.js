@@ -1,4 +1,5 @@
 const { sql, getPool, generateId } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 const TaskAnalyzer = require('../utils/taskAnalyzer');
 
 /**
@@ -15,10 +16,13 @@ exports.generateTasks = async (req, res) => {
 
         const pool = await getPool();
         
-        // Fetch ASINs
-        const asinResult = await pool.request()
-            .query(`SELECT a.*, s.Name as SellerName FROM Asins a LEFT JOIN Sellers s ON a.SellerId = s.Id WHERE a.Id IN (${asinIds.map(id => `'${id}'`).join(',')})`);
-        
+        // Fetch ASINs - use parameterized query to prevent SQL injection
+        const request = pool.request();
+        asinIds.forEach((id, i) => request.input(`asinId${i}`, sql.VarChar, id));
+        const placeholders = asinIds.map((_, i) => `@asinId${i}`).join(',');
+        const asinResult = await request.query(
+            `SELECT a.*, s.Name as SellerName FROM Asins a LEFT JOIN Sellers s ON a.SellerId = s.Id WHERE a.Id IN (${placeholders})`
+        );
         if (asinResult.recordset.length === 0) {
             return res.status(404).json({ success: false, error: 'No ASINs found' });
         }
@@ -126,19 +130,19 @@ exports.getTasks = async (req, res) => {
         const pool = await getPool();
         
         let whereClause = 'WHERE 1=1';
-        const params = {};
+        const request = pool.request();
 
         if (status && status !== 'all') {
             whereClause += ' AND Status = @status';
-            params.status = status;
+            request.input('status', sql.NVarChar, status);
         }
         if (category) {
             whereClause += ' AND Category = @category';
-            params.category = category;
+            request.input('category', sql.NVarChar, category);
         }
         if (priority) {
             whereClause += ' AND Priority = @priority';
-            params.priority = priority;
+            request.input('priority', sql.NVarChar, priority);
         }
         const roleName = req.user?.role?.name || req.user?.role;
         const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
@@ -157,37 +161,34 @@ exports.getTasks = async (req, res) => {
             }
             if (sellerId && allowedSellerIds.includes(sellerId)) {
                 whereClause += ' AND SellerId = @sellerId';
-                params.sellerId = sellerId;
+                request.input('sellerId', sql.VarChar, sellerId);
             } else {
-                whereClause += ` AND SellerId IN (${allowedSellerIds.map(id => `'${id}'`).join(',')})`;
+                const inClause = buildInClause(request, 'taskSeller', allowedSellerIds);
+                whereClause += ` AND SellerId IN (${inClause})`;
             }
         } else if (sellerId) {
             whereClause += ' AND SellerId = @sellerId';
-            params.sellerId = sellerId;
+            request.input('sellerId', sql.VarChar, sellerId);
         }
         if (asinId) {
             whereClause += ' AND AsinId = @asinId';
-            params.asinId = asinId;
+            request.input('asinId', sql.VarChar, asinId);
         }
         if (search) {
             whereClause += ' AND (Title LIKE @search OR AsinCode LIKE @search OR SellerName LIKE @search)';
-            params.search = `%${search}%`;
+            request.input('search', sql.NVarChar, `%${search}%`);
         }
 
         // Count Total
-        const countRequest = pool.request();
-        Object.entries(params).forEach(([key, val]) => countRequest.input(key, val));
-        const countResult = await countRequest.query(`SELECT COUNT(*) as total FROM Tasks ${whereClause}`);
+        const countResult = await request.query(`SELECT COUNT(*) as total FROM Tasks ${whereClause}`);
         const total = countResult.recordset[0].total;
 
         // Fetch Paginated Tasks
         const offset = (parseInt(page) - 1) * parseInt(limit);
-        const taskRequest = pool.request();
-        Object.entries(params).forEach(([key, val]) => taskRequest.input(key, val));
-        taskRequest.input('offset', sql.Int, offset);
-        taskRequest.input('limit', sql.Int, parseInt(limit));
+        request.input('offset', sql.Int, offset);
+        request.input('limit', sql.Int, parseInt(limit));
 
-        const result = await taskRequest.query(`
+        const result = await request.query(`
             SELECT t.*, 
                 u.FirstName as AssignedToFirstName, u.LastName as AssignedToLastName,
                 cu.FirstName as CreatedByFirstName, cu.LastName as CreatedByLastName
@@ -229,9 +230,7 @@ exports.getTasks = async (req, res) => {
         }));
 
         // Get status counts
-        const statusRequest = pool.request();
-        Object.entries(params).forEach(([key, val]) => statusRequest.input(key, val));
-        const statusCounts = await statusRequest.query(`
+        const statusCounts = await request.query(`
             SELECT Status, COUNT(*) as count FROM Tasks ${whereClause} GROUP BY Status
         `);
         const counts = { todo: 0, inProgress: 0, inReview: 0, completed: 0 };

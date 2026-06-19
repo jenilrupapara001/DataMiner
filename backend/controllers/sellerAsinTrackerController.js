@@ -20,7 +20,10 @@ exports.getTrackerList = async (req, res) => {
             if (assignedSellerIds.length === 0) {
                 return res.json({ success: true, data: [], tokenStatus: null });
             }
-            whereClause += ` AND Id IN (${assignedSellerIds.map(id => `'${id}'`).join(',')})`;
+            const request = (await getPool()).request();
+            assignedSellerIds.forEach((id, i) => request.input(`sellerId${i}`, sql.VarChar, id));
+            const placeholders = assignedSellerIds.map((_, i) => `@sellerId${i}`).join(',');
+            whereClause += ` AND Id IN (${placeholders})`;
         }
 
         // Fetch sellers
@@ -44,13 +47,15 @@ exports.getTrackerList = async (req, res) => {
         // Enrich with ASIN counts from DB (total and today's new)
         if (sellers.length > 0) {
             const sellerIds = sellers.map(s => s.Id);
-            const countsResult = await (await getPool()).request()
-                .query(`
+            const request = (await getPool()).request();
+            sellerIds.forEach((id, i) => request.input(`sellerId${i}`, sql.VarChar, id));
+            const placeholders = sellerIds.map((_, i) => `@sellerId${i}`).join(',');
+            const countsResult = await request.query(`
                     SELECT SellerId,
                            COUNT(*) as totalAsins,
                            SUM(CASE WHEN DATEDIFF(DAY, CreatedAt, dbo.GetEnvDate()) = 0 THEN 1 ELSE 0 END) as newToday
                     FROM Asins
-                    WHERE SellerId IN (${sellerIds.map(id => `'${id}'`).join(',')})
+                    WHERE SellerId IN (${placeholders})
                     GROUP BY SellerId
                 `);
 

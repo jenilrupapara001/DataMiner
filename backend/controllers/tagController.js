@@ -350,9 +350,12 @@ exports.bulkUpdateTags = async (req, res) => {
 
     const pool = await getPool();
     
-    const asinResult = await pool.request()
-      .query(`SELECT Id, AsinCode, Tags FROM Asins WHERE Id IN (${asinIds.map(id => `'${id}'`).join(',')})`);
-
+    const request = pool.request();
+    asinIds.forEach((id, i) => request.input(`asinId${i}`, sql.VarChar, id));
+    const placeholders = asinIds.map((_, i) => `@asinId${i}`).join(',');
+    const asinResult = await request.query(
+      `SELECT Id, AsinCode, Tags FROM Asins WHERE Id IN (${placeholders})`
+    );
     if (asinResult.recordset.length === 0) {
       return res.status(404).json({ success: false, error: 'No ASINs found' });
     }

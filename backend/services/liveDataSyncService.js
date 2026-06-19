@@ -225,88 +225,91 @@ class LiveDataSyncService extends EventEmitter {
             return { error: 'Global live sync already in progress', status: 'IN_PROGRESS' };
         }
         this._globalSyncRunning = true;
-        
-        const pool = await getPool();
-        
-        // Get all active sellers with Amazon ASINs
-        let sellersQuery = `
-            SELECT DISTINCT s.Id, s.Name, COUNT(a.Id) as AsinCount
-            FROM Sellers s
-            JOIN Asins a ON a.SellerId = s.Id
-            WHERE s.IsActive = 1 AND a.Status = 'Active' AND a.AsinCode LIKE 'B0%'
-            GROUP BY s.Id, s.Name
-            HAVING COUNT(a.Id) > 0
-        `;
-        if (sellerIds && sellerIds.length > 0) {
-            sellersQuery += ` AND s.Id IN (${sellerIds.map(id => `'${id}'`).join(',')})`;
-        }
-        
-        const sellersResult = await pool.request().query(sellersQuery);
-        const sellers = sellersResult.recordset;
-        
-        console.log(`Live sync all: ${sellers.length} sellers with Amazon ASINs`);
-        this.emit('liveSyncAll:started', { totalSellers: sellers.length });
-        
-        const results = [];
-        const limit = pLimit(concurrency);
-        
-        const promises = sellers.map(seller => 
-            limit(async () => {
-                // Skip if already syncing this seller
-                if (this.activeSyncs.has(seller.Id)) {
-                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Already syncing' });
-                    return;
-                }
-                
-                try {
-                    const result = await this.syncSellerLiveData(seller.Id);
-                    results.push({ 
-                        sellerId: seller.Id, 
-                        name: seller.Name, 
-                        status: result.success ? 'SUCCESS' : 'FAILED',
-                        updated: result.updatedAsins || 0,
-                        failed: result.failedAsins || 0,
-                        duration: result.duration || 0
-                    });
-                    console.log(`  ✅ ${seller.Name}: ${result.updatedAsins || 0} updated`);
-                } catch (err) {
-                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'FAILED', error: err.message });
-                    console.error(`  ❌ ${seller.Name}: ${err.message}`);
-                }
-                
-                // Rate limit between sellers
-                await this._delay(this._config.sellerDelay);
-            })
-        );
-        
-        await Promise.all(promises);
-        
-        const totalDuration = Date.now() - startTime;
-        const summary = {
-            totalSellers: sellers.length,
-            success: results.filter(r => r.status === 'SUCCESS').length,
-            failed: results.filter(r => r.status === 'FAILED').length,
-            skipped: results.filter(r => r.status === 'SKIPPED').length,
-            totalAsinsUpdated: results.reduce((sum, r) => sum + (r.updated || 0), 0),
-            duration: totalDuration,
-            completedAt: new Date().toISOString()
-        };
-        
-        console.log(`Live sync all complete: ${summary.success}/${summary.totalSellers} sellers, ${summary.totalAsinsUpdated} ASINs in ${(totalDuration / 1000).toFixed(1)}s`);
-        this.emit('liveSyncAll:completed', summary);
-        
-        // Emit socket event for real-time UI updates
+
         try {
-            const SocketService = require('./socketService');
-            const io = SocketService.getIo();
-            if (io) {
-                io.emit('liveSyncAll:completed', summary);
-                io.emit('ASINS_UPDATED', { type: 'bulk', sellerCount: summary.success });
+            const pool = await getPool();
+
+            // Get all active sellers with Amazon ASINs
+            let sellersQuery = `
+                SELECT DISTINCT s.Id, s.Name, COUNT(a.Id) as AsinCount
+                FROM Sellers s
+                JOIN Asins a ON a.SellerId = s.Id
+                WHERE s.IsActive = 1 AND a.Status = 'Active' AND a.AsinCode LIKE 'B0%'
+                GROUP BY s.Id, s.Name
+                HAVING COUNT(a.Id) > 0
+            `;
+            const request = pool.request();
+            if (sellerIds && sellerIds.length > 0) {
+                sellersQuery += ` AND s.Id IN (${sellerIds.map((_, i) => `@sellerId${i}`).join(',')})`;
+                sellerIds.forEach((id, i) => request.input(`sellerId${i}`, sql.VarChar, id));
             }
-        } catch (e) { /* socket not critical */ }
-        
-        this._globalSyncRunning = false;
-        return { success: true, summary, results };
+
+            const sellersResult = await request.query(sellersQuery);
+            const sellers = sellersResult.recordset;
+
+            console.log(`Live sync all: ${sellers.length} sellers with Amazon ASINs`);
+            this.emit('liveSyncAll:started', { totalSellers: sellers.length });
+
+            const results = [];
+            const limit = pLimit(concurrency);
+
+            const promises = sellers.map(seller =>
+                limit(async () => {
+                    if (this.activeSyncs.has(seller.Id)) {
+                        results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Already syncing' });
+                        return;
+                    }
+
+                    try {
+                        const result = await this.syncSellerLiveData(seller.Id);
+                        results.push({
+                            sellerId: seller.Id,
+                            name: seller.Name,
+                            status: result.success ? 'SUCCESS' : 'FAILED',
+                            updated: result.updatedAsins || 0,
+                            failed: result.failedAsins || 0,
+                            duration: result.duration || 0
+                        });
+                        console.log(`  ✅ ${seller.Name}: ${result.updatedAsins || 0} updated`);
+                    } catch (err) {
+                        results.push({ sellerId: seller.Id, name: seller.Name, status: 'FAILED', error: err.message });
+                        console.error(`  ❌ ${seller.Name}: ${err.message}`);
+                    }
+
+                    await this._delay(this._config.sellerDelay);
+                })
+            );
+
+            await Promise.all(promises);
+
+            const totalDuration = Date.now() - startTime;
+            const summary = {
+                totalSellers: sellers.length,
+                success: results.filter(r => r.status === 'SUCCESS').length,
+                failed: results.filter(r => r.status === 'FAILED').length,
+                skipped: results.filter(r => r.status === 'SKIPPED').length,
+                totalAsinsUpdated: results.reduce((sum, r) => sum + (r.updated || 0), 0),
+                duration: totalDuration,
+                completedAt: new Date().toISOString()
+            };
+
+            console.log(`Live sync all complete: ${summary.success}/${summary.totalSellers} sellers, ${summary.totalAsinsUpdated} ASINs in ${(totalDuration / 1000).toFixed(1)}s`);
+            this.emit('liveSyncAll:completed', summary);
+
+            // Emit socket event for real-time UI updates
+            try {
+                const SocketService = require('./socketService');
+                const io = SocketService.getIo();
+                if (io) {
+                    io.emit('liveSyncAll:completed', summary);
+                    io.emit('ASINS_UPDATED', { type: 'bulk', sellerCount: summary.success });
+                }
+            } catch (e) { /* socket not critical */ }
+
+            return { success: true, summary, results };
+        } finally {
+            this._globalSyncRunning = false;
+        }
     }
     
     // ============================================

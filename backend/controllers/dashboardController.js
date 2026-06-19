@@ -1,4 +1,5 @@
 const { sql, getPool } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 // Helper to parse period strings (e.g., '30d', '3M', '1y')
 const parsePeriod = (period) => {
@@ -49,47 +50,61 @@ exports.getDashboardData = async (req, res) => {
     const safeSellerIds = finalSellerIds.length > 0 ? finalSellerIds : ['000000000000000000000000'];
     const useWideFilters = isGlobalUser && (!sellerId || sellerId === 'all');
 
-    let sellerFilter = useWideFilters ? '' : 'WHERE Id IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
-    let asinFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
-    let alertFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + safeSellerIds.map(id => `'${id}'`).join(',') + ')';
+    const dashReq = pool.request();
+    const sellerInClause = useWideFilters ? '' : buildInClause(dashReq, 'dashSeller', safeSellerIds);
+    let sellerFilter = useWideFilters ? '' : 'WHERE Id IN (' + sellerInClause + ')';
+    let asinFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + sellerInClause + ')';
+    let alertFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + sellerInClause + ')';
 
-    // 2. Aggregate Counts
-    const sellerCounts = await pool.request().query(`
-      SELECT 
-        COUNT(*) as Total,
-        SUM(CASE WHEN IsActive = 1 THEN 1 ELSE 0 END) as Active
-      FROM Sellers ${sellerFilter}
-    `);
-    
-    const asinCounts = await pool.request().query(`
-      SELECT 
-        COUNT(*) as Total,
-        SUM(CASE WHEN Status IN ('Active', 'Scraping') THEN 1 ELSE 0 END) as Active,
-        SUM(CASE WHEN Status IN ('Active', 'Scraping') AND (StockLevel = 0 OR StockLevel IS NULL) THEN 1 ELSE 0 END) as OutOfStock,
-        SUM(CASE WHEN CreatedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0) THEN 1 ELSE 0 END) as NewThisMonth,
-        SUM(ISNULL(CurrentPrice, 0)) as PortfolioValue
-      FROM Asins ${asinFilter}
-    `);
+    // 2. Aggregate Counts (parallel independent queries)
+    const [
+      sellerCountsResult,
+      asinCountsResult,
+      alertsResult,
+      userActionStatsResult,
+      teamActionStatsPromise
+    ] = await Promise.all([
+      dashReq.query(`
+        SELECT 
+          COUNT(*) as Total,
+          SUM(CASE WHEN IsActive = 1 THEN 1 ELSE 0 END) as Active
+        FROM Sellers ${sellerFilter}
+      `),
+      dashReq.query(`
+        SELECT 
+          COUNT(*) as Total,
+          SUM(CASE WHEN Status IN ('Active', 'Scraping') THEN 1 ELSE 0 END) as Active,
+          SUM(CASE WHEN Status IN ('Active', 'Scraping') AND (StockLevel = 0 OR StockLevel IS NULL) THEN 1 ELSE 0 END) as OutOfStock,
+          SUM(CASE WHEN CreatedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0) THEN 1 ELSE 0 END) as NewThisMonth,
+          SUM(ISNULL(CurrentPrice, 0)) as PortfolioValue
+        FROM Asins ${asinFilter}
+      `),
+      dashReq.query(`
+        SELECT TOP 5 Id, Severity, Message, CreatedAt 
+        FROM Alerts ${alertFilter} 
+        ORDER BY CreatedAt DESC
+      `),
+      pool.request()
+        .input('userId', sql.VarChar, req.user.Id || req.user._id.toString())
+        .query(`
+          SELECT Status, COUNT(*) as Count 
+          FROM Actions 
+          WHERE AssignedTo = @userId 
+          GROUP BY Status
+        `),
+      isGlobalUser
+        ? pool.request().query(`
+            SELECT Status, COUNT(*) as Count FROM Actions GROUP BY Status
+          `)
+        : Promise.resolve({ recordset: [] })
+    ]);
 
-    // 3. Alerts
-    const alertsResult = await pool.request().query(`
-      SELECT TOP 5 Id, Severity, Message, CreatedAt 
-      FROM Alerts ${alertFilter} 
-      ORDER BY CreatedAt DESC
-    `);
-
-    // 4. Action Stats (User & Team)
-    const userActionStats = await pool.request()
-      .input('userId', sql.VarChar, req.user.Id || req.user._id.toString())
-      .query(`
-        SELECT Status, COUNT(*) as Count 
-        FROM Actions 
-        WHERE AssignedTo = @userId 
-        GROUP BY Status
-      `);
+    const sellerCounts = sellerCountsResult;
+    const asinCounts = asinCountsResult;
+    const { recordset: userActionRows } = userActionStatsResult;
 
     const userStats = { pending: 0, inProgress: 0, review: 0, completed: 0, total: 0 };
-    userActionStats.recordset.forEach(row => {
+    userActionRows.forEach(row => {
       const status = row.Status?.toLowerCase();
       if (status === 'pending') userStats.pending = row.Count;
       else if (status === 'in_progress') userStats.inProgress = row.Count;
@@ -100,9 +115,7 @@ exports.getDashboardData = async (req, res) => {
 
     let teamStats = null;
     if (isGlobalUser) {
-      const teamActionStats = await pool.request().query(`
-        SELECT Status, COUNT(*) as Count FROM Actions GROUP BY Status
-      `);
+      const teamActionStats = teamActionStatsPromise;
       teamStats = { pending: 0, inProgress: 0, review: 0, completed: 0, total: 0 };
       teamActionStats.recordset.forEach(row => {
         const status = row.Status?.toLowerCase();
@@ -132,7 +145,7 @@ exports.getDashboardData = async (req, res) => {
 
     // 6. Ads Performance & Charts
     // Join Asins with AdsPerformance
-    const adsDataResult = await pool.request()
+    const adsDataResult = await dashReq
       .input('startDate', sql.Date, startDate)
       .input('endDate', sql.Date, endDate)
       .query(`
@@ -171,7 +184,7 @@ exports.getDashboardData = async (req, res) => {
 
     // 7. Optimized Marketplace Distribution (Safe high-performance decouple)
     // First: Get raw counts using ONLY covering index on Asins (super fast)
-    const asinsGroupedResult = await pool.request().query(`
+    const asinsGroupedResult = await dashReq.query(`
       SELECT SellerId, COUNT(*) as Count 
       FROM Asins
       ${asinFilter}
@@ -206,7 +219,7 @@ exports.getDashboardData = async (req, res) => {
     }));
 
     // 8. Top ASINs Table
-    const topAsinsResult = await pool.request()
+    const topAsinsResult = await dashReq
       .input('startDate', sql.Date, startDate)
       .input('endDate', sql.Date, endDate)
       .query(`

@@ -1,4 +1,5 @@
 const { sql, getPool } = require('../database/db');
+const { buildInClause } = require('../utils/sqlHelpers');
 
 // Helper to calculate match score for fuzzy category matching
 const calculateMatchScore = (ruleCat, itemPath) => {
@@ -90,7 +91,7 @@ const calculateProfits = async (asinIds = []) => {
         const request = pool.request();
         
         if (asinIds.length > 0) {
-            const idList = asinIds.map(id => `'${id}'`).join(',');
+            const idList = buildInClause(request, 'asinId', asinIds);
             query += ` WHERE Id IN (${idList})`;
         } else {
             query += " WHERE Status IN ('Active', 'Pending')";
