@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, useRef } from 'react';
-import { Drawer, Button, Input, Select, Space, Typography, Badge, Segmented, Tooltip, Dropdown, Menu, Modal, Form, Tag } from 'antd';
+import { Drawer, Button, Input, Select, Space, Typography, Badge, Segmented, Tooltip, Dropdown, Menu, Modal, Form, Tag, message } from 'antd';
 const { Text, Title } = Typography;
 const TablePagination = lazy(() => import('@mui/material/TablePagination'));
 import KPICard from '../components/KPICard';
@@ -407,7 +407,7 @@ const AsinManagerPage = (props) => {
   const [scrapingIds, setScrapingIds] = useState(new Set());
   const [stats, setStats] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
-  const [sortBy, setSortBy] = useState('lastScraped');
+  const [sortBy, setSortBy] = useState('lastLiveSyncAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const { setPageTitle } = usePageTitle();
 
@@ -465,6 +465,7 @@ const AsinManagerPage = (props) => {
   const [activeEditAsin, setActiveEditAsin] = useState(null);
   const [importingTags, setImportingTags] = useState(false);
   const tagsImportRef = useRef(null);
+  const initialLoadCompleteRef = useRef(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const {
     visibleColumns,
@@ -1097,6 +1098,7 @@ const AsinManagerPage = (props) => {
       });
 
 
+      initialLoadCompleteRef.current = true;
       setAsins(asinRes?.asins || []);
       setGlobalHistoryDates(asinRes?.globalHistoryDates || []);
       setAvailableMonths(asinRes?.months || []);
@@ -1252,12 +1254,47 @@ const AsinManagerPage = (props) => {
       loadData();
     });
 
+    // Live Sync events - auto-refresh ASIN data with toast notifications
+    socket.on('ASINS_UPDATED', (data) => {
+      console.log('⚡ ASINS_UPDATED received:', data);
+      loadData(pagination.page);
+    });
+
+    socket.on('liveSync:completed', (data) => {
+      console.log('⚡ Live sync completed:', data);
+      message.success({
+        content: `Live sync completed — ${data.updatedAsins} ASINs updated for seller`,
+        icon: <Zap size={16} style={{ color: '#7c3aed' }} />,
+        duration: 4
+      });
+      loadData(pagination.page);
+    });
+
+    socket.on('liveSyncAll:completed', (data) => {
+      console.log('⚡ Global live sync completed:', data);
+      message.success({
+        content: `Global live sync completed — ${data.totalAsinsUpdated} ASINs updated across ${data.totalSellers} sellers`,
+        icon: <Zap size={16} style={{ color: '#7c3aed' }} />,
+        duration: 5
+      });
+      loadData(pagination.page);
+    });
+
+    socket.on('SELLERS_UPDATED', (data) => {
+      console.log('📡 Sellers updated:', data);
+      loadData(pagination.page);
+    });
+
     return () => {
       socket.off('scrape_progress');
       socket.off('scrape_data_ingested');
       socket.off('scrape_batch_complete');
       socket.off('repair_job_progress');
       socket.off('repair_job_finished');
+      socket.off('ASINS_UPDATED');
+      socket.off('liveSync:completed');
+      socket.off('liveSyncAll:completed');
+      socket.off('SELLERS_UPDATED');
       if (pendingRefreshRef.current) clearTimeout(pendingRefreshRef.current);
     };
   }, [socket, loadData, pagination.page]);
@@ -1765,7 +1802,7 @@ const AsinManagerPage = (props) => {
     </div>
   );
 
-  if (loading && asins.length === 0) {
+  if (!initialLoadCompleteRef.current && loading && asins.length === 0) {
     return <PageLoader message="Loading ASIN Manager..." />;
   }
 

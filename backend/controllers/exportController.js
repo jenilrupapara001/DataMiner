@@ -145,7 +145,7 @@ async function processExportJob(downloadId, params, userId) {
             const u = userResult.recordset[0];
             user = {
                 id: u.Id,
-                role: u.RoleName,
+                role: u.RoleName === 'super_admin' ? 'admin' : u.RoleName,
                 assignedSellers: []
             };
 
@@ -207,7 +207,7 @@ async function processExportJob(downloadId, params, userId) {
 
         // RBAC / Seller Filtering
         const roleName = user?.role || '';
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
         if (!isGlobalUser) {
             const assignedIds = user?.assignedSellers || [];
@@ -270,9 +270,11 @@ async function processExportJob(downloadId, params, userId) {
             }
             if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
                 if (priceDispute === 'true' || priceDispute === true) {
-                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+                    // Price dispute: > ₹5 difference and no deal badge
+                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 5 AND a.UploadedPrice > 0 AND a.CurrentPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
                 } else {
-                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+                    // No dispute: within ₹5, or no uploaded price, or has deal badge
+                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 5 OR a.UploadedPrice <= 0 OR a.CurrentPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
                 }
             }
             if (minPrice) {
@@ -1179,7 +1181,7 @@ async function processGmsExportJob(downloadId, params, userId) {
         const u = userResult.recordset[0];
         user = {
             id: u.Id,
-            role: u.RoleName,
+            role: u.RoleName === 'super_admin' ? 'admin' : u.RoleName,
             assignedSellers: []
         };
 
@@ -1191,7 +1193,7 @@ async function processGmsExportJob(downloadId, params, userId) {
     }
 
     const roleName = user?.role || '';
-    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
     let whereClause = 'WHERE 1=1';
 
     if (!isGlobalUser) {

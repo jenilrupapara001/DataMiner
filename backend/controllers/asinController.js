@@ -375,6 +375,7 @@ exports.getAsins = async (req, res) => {
                     sortBy === 'imagesCount' ? 'a.ImagesCount' :
                     sortBy === 'hasAplus' ? 'a.HasAplus' :
                     sortBy === 'orders' || sortBy === 'totalOrders' ? '(SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode)' :
+                    sortBy === 'lastLiveSyncAt' ? 'a.LastLiveSyncAt' :
                     sortBy === 'lastScraped' ? 'a.LastScrapedAt' : 'a.CreatedAt';
         return `${col} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
     };
@@ -598,7 +599,15 @@ exports.getAsins = async (req, res) => {
         }
 
         const hasDeal = a.DealBadge && a.DealBadge !== '' && a.DealBadge !== 'No deal found';
-        const priceDisputeValue = (a.UploadedPrice > 0 && Math.abs(a.UploadedPrice - (a.CurrentPrice || 0)) > 0.01 && !hasDeal);
+        
+        // Price dispute: only if > ₹5 difference and no deal badge
+        let priceDisputeValue = false;
+        if (a.UploadedPrice > 0 && (a.CurrentPrice || 0) > 0) {
+            const priceDiff = Math.abs(a.UploadedPrice - (a.CurrentPrice || 0));
+            if (!hasDeal && priceDiff > 5) {
+                priceDisputeValue = true;
+            }
+        }
 
         // ---- BUILD FINAL RESPONSE OBJECT ----
         return {
@@ -2708,7 +2717,14 @@ exports.exportData = async (req, res) => {
             const cp = parseFloat(row.CurrentPrice) || 0;
             const db = row.DealBadge;
             const isDeal = db && db !== '' && db !== 'No deal found';
-            const isDisputed = up > 0 && Math.abs(up - cp) > 0.01 && !isDeal;
+            // Price dispute: only if > ₹5 difference and no deal badge
+            let isDisputed = false;
+            if (up > 0 && cp > 0) {
+                const priceDiff = Math.abs(up - cp);
+                if (!isDeal && priceDiff > 5) {
+                    isDisputed = true;
+                }
+            }
             value = isDisputed ? 'Yes' : 'No';
           }
           // Parse JSON fields

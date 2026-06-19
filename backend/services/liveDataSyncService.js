@@ -168,6 +168,7 @@ class LiveDataSyncService extends EventEmitter {
                 const SocketService = require('./socketService');
                 const io = SocketService.getIo();
                 if (io) {
+                    console.log(`⚡ Emitting liveSync:completed for ${sellerIdStr}`);
                     io.emit('liveSync:completed', {
                         sellerId: sellerIdStr,
                         totalAsins: stats.totalAsins,
@@ -176,9 +177,12 @@ class LiveDataSyncService extends EventEmitter {
                         duration: stats.duration
                     });
                     // Also emit ASIN update event for ASIN manager auto-refresh
+                    console.log(`⚡ Emitting ASINS_UPDATED for ${sellerIdStr}`);
                     io.emit('ASINS_UPDATED', { sellerId: sellerIdStr });
+                } else {
+                    console.warn('⚠️ SocketService not initialized, skipping socket emission');
                 }
-            } catch (e) { /* socket not critical */ }
+            } catch (e) { console.error('Socket emission error:', e.message); }
             
             stats.completedAt = new Date().toISOString();
             stats.status = 'COMPLETED';
@@ -411,6 +415,19 @@ class LiveDataSyncService extends EventEmitter {
             
             const extracted = this._extractFields(item);
             
+            // Price Dispute Calculation
+            const uploadedPrice = item.uploadedPrice || item.UploadedPrice || 0;
+            const currentPrice = extracted.priceAmount || 0;
+            const hasDeal = extracted.hasDeal;
+            
+            let priceDispute = false;
+            if (uploadedPrice > 0 && currentPrice > 0) {
+                const priceDiff = Math.abs(uploadedPrice - currentPrice);
+                if (!hasDeal && priceDiff > 5) {
+                    priceDispute = true;
+                }
+            }
+            
             // ⚠️ Update ALL fields EXCEPT:
             // - HasAplus, AplusContent, AplusModuleCount (from Octoparse)
             // - RatingBreakdown (from Octoparse)
@@ -441,6 +458,7 @@ class LiveDataSyncService extends EventEmitter {
                 .input('hasDeal', sql.Bit, extracted.hasDeal ? 1 : 0)
                 .input('dealType', sql.NVarChar, extracted.dealType)
                 .input('dealEndTime', sql.DateTime, extracted.dealEndTime)
+                .input('priceDispute', sql.Bit, priceDispute ? 1 : 0)
                 .input('variantImages', sql.NVarChar(sql.MAX), JSON.stringify(extracted.variantImages))
                 .input('dimensions', sql.NVarChar(sql.MAX), JSON.stringify(extracted.dimensions))
                 .input('buyBoxes', sql.NVarChar(sql.MAX), JSON.stringify(extracted.buyBoxes))
@@ -470,6 +488,8 @@ class LiveDataSyncService extends EventEmitter {
                         HasDeal = @hasDeal,
                         DealType = @dealType,
                         DealEndTime = @dealEndTime,
+                        PriceDispute = @priceDispute,
+                        DiscountPercentage = @discount,
                         LastLiveSyncAt = dbo.GetEnvDate(),
                         LastSyncSource = 'LIVE',
                         UpdatedAt = dbo.GetEnvDate()

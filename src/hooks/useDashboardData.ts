@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { useDashboardOrchestration } from './useDashboardOrchestration';
 import { useTargetPermissions } from './useTargetPermissions';
+import { useSocket } from '../contexts/SocketContext';
 
 export interface DashboardFilters {
     sellerId: string;
@@ -62,6 +63,7 @@ export interface ModuleStats {
 export function useDashboardData(filters: DashboardFilters) {
     const { user } = useAuth();
     const { isBrandManager } = useTargetPermissions();
+    const socket = useSocket();
     const [sellers, setSellers] = useState<any[]>([]);
     const [managers, setManagers] = useState<any[]>([]);
     const [activityLogs, setActivityLogs] = useState<any[]>([]);
@@ -159,11 +161,37 @@ export function useDashboardData(filters: DashboardFilters) {
         }
     }, []);
 
+    // Real-time socket sync for activity logs
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewLog = (data: any) => {
+            if (!data) return;
+            const normalized = {
+                ...data,
+                _id: data._id || data.id || data.Id,
+                createdAt: data.createdAt || data.CreatedAt,
+                type: data.type || data.Type || '',
+                entityType: data.entityType || data.EntityType || '',
+                entityTitle: data.entityTitle || data.EntityTitle || '',
+                description: data.description || data.Description || '',
+                metadata: data.metadata || data.Metadata || null,
+                user: data.user || null,
+            };
+            setActivityLogs(prev => {
+                const next = [normalized, ...prev];
+                return next.slice(0, 10);
+            });
+        };
+
+        socket.on('new_system_log', handleNewLog);
+        return () => socket.off('new_system_log', handleNewLog);
+    }, [socket]);
+
     useEffect(() => {
         loadLogs();
         loadPipeline();
         const interval = setInterval(() => {
-            loadLogs();
             loadPipeline();
         }, 30000);
         return () => clearInterval(interval);

@@ -2295,12 +2295,39 @@ class MarketDataSyncService {
             }
 
             // --- Price Dispute Detection & Tagging ---
+            // New rules:
+            // 1. If channel price == current price → NO dispute
+            // 2. If current price within ±₹5 of channel price → NO dispute
+            // 3. If deal badge is present → NO dispute (deals change prices frequently)
+            // 4. If current price is more than ₹5 away from channel price → Price Dispute
             const currentPrice = price > 0 ? price : (asin.CurrentPrice || 0);
             const uploadedPrice = asin.UploadedPrice || 0;
-            // Simple match logic: if uploaded price is set and doesn't match current price, it's a dispute
-            // User requested: If deal badge is present, it's NOT a price dispute
             const hasDeal = dealBadge && dealBadge !== 'No deal found';
-            const isDisputed = uploadedPrice > 0 && Math.abs(uploadedPrice - currentPrice) > 0.01 && !hasDeal;
+            
+            let isDisputed = false;
+            let disputeReason = '';
+            
+            if (uploadedPrice > 0 && currentPrice > 0) {
+                const priceDiff = Math.abs(uploadedPrice - currentPrice);
+                
+                if (hasDeal) {
+                    // Rule 3: Deal badge present → no dispute
+                    isDisputed = false;
+                    disputeReason = 'Deal active';
+                } else if (priceDiff <= 0.01) {
+                    // Rule 1: Prices match exactly → no dispute
+                    isDisputed = false;
+                    disputeReason = 'Price match';
+                } else if (priceDiff <= 5) {
+                    // Rule 2: Within ±₹5 tolerance → no dispute
+                    isDisputed = false;
+                    disputeReason = 'Within tolerance (±₹5)';
+                } else {
+                    // Rule 4: More than ₹5 difference → price dispute
+                    isDisputed = true;
+                    disputeReason = `₹${priceDiff.toFixed(0)} difference`;
+                }
+            }
 
             // Handle Tags
             let currentTags = [];
