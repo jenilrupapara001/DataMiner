@@ -209,6 +209,8 @@ async function processExportJob(downloadId, params, userId) {
         const roleName = user?.role || '';
         const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
+        console.log(`🔍 [Export] Debug: roleName=${roleName}, isGlobalUser=${isGlobalUser}, sellerIds=${JSON.stringify(sellerIds)}, allSellers=${allSellers}`);
+
         if (!isGlobalUser) {
             const assignedIds = user?.assignedSellers || [];
             if (assignedIds.length === 0) {
@@ -673,6 +675,7 @@ async function processExportJob(downloadId, params, userId) {
         // Execute query in stream mode
         await new Promise((resolve, reject) => {
             const selectRequest = pool.request();
+            console.log(`📊 [Export] Copying ${Object.keys(request.parameters).length} parameters`);
             Object.keys(request.parameters).forEach(key => {
                 const param = request.parameters[key];
                 selectRequest.input(key, param.type, param.value);
@@ -782,6 +785,7 @@ async function processExportJob(downloadId, params, userId) {
             selectRequest.query(selectQuery);
         });
 
+        console.log(`📊 [Export] Streaming complete: ${rowCount} rows written`);
         await updateDownloadStatus(pool, downloadId, 'processing', 90);
         const stats = fs.statSync(filePath);
 

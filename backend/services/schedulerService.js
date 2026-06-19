@@ -66,6 +66,11 @@ class SchedulerService {
         // Automation is strictly opt-in via UI Settings now.
         let amazonEnabled = false;
         let ajioEnabled = false;
+        
+        // Live Data Sync defaults
+        let liveSyncEnabled = false;
+        let liveSyncTime = '06:00';
+        let liveSyncConcurrency = 3;
 
         console.log('--------------------------------------------------------');
         console.log('📡 [SCHEDULER CONFIG LOADED FROM DATABASE SETTINGS]');
@@ -92,6 +97,17 @@ class SchedulerService {
             }
             if (settingsMap['AUTOMATION_AJIO_ENABLED'] !== undefined) {
                 ajioEnabled = settingsMap['AUTOMATION_AJIO_ENABLED'] === 'true';
+            }
+            
+            // Live Data Sync settings
+            if (settingsMap['LIVE_SYNC_ENABLED']) {
+                liveSyncEnabled = settingsMap['LIVE_SYNC_ENABLED'] === 'true';
+            }
+            if (settingsMap['LIVE_SYNC_SCHEDULE_TIME']) {
+                liveSyncTime = settingsMap['LIVE_SYNC_SCHEDULE_TIME'];
+            }
+            if (settingsMap['LIVE_SYNC_CONCURRENCY']) {
+                liveSyncConcurrency = parseInt(settingsMap['LIVE_SYNC_CONCURRENCY']) || 3;
             }
         } catch (dbErr) {
             console.warn('⚠️ [Scheduler] Could not query SystemSettings:', dbErr.message);
@@ -141,20 +157,6 @@ class SchedulerService {
             console.log('🛑 [Scheduler] Ajio Automation is DISABLED.');
         }
 
-        // 3. Live Data Sync (Amazon Creators API)
-        let liveSyncEnabled = false;
-        let liveSyncTime = '06:00';
-        let liveSyncConcurrency = 3;
-        if (settingsMap['LIVE_SYNC_ENABLED']) {
-            liveSyncEnabled = settingsMap['LIVE_SYNC_ENABLED'] === 'true';
-        }
-        if (settingsMap['LIVE_SYNC_SCHEDULE_TIME']) {
-            liveSyncTime = settingsMap['LIVE_SYNC_SCHEDULE_TIME'];
-        }
-        if (settingsMap['LIVE_SYNC_CONCURRENCY']) {
-            liveSyncConcurrency = parseInt(settingsMap['LIVE_SYNC_CONCURRENCY']) || 3;
-        }
-        
         console.log(`⚡ DB -> Live Sync Schedule: ${liveSyncTime} (Enabled: ${liveSyncEnabled}, Concurrency: ${liveSyncConcurrency})`);
         
         if (liveSyncEnabled) {
