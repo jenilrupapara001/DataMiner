@@ -146,7 +146,7 @@ const KpiCard = memo(({ card, isLast }) => {
             className="kpi-premium-card"
             style={{
                 borderRadius: 8,
-                border: '1px solid #e2e8f0',
+                border: '1px solid #d9e6e9',
                 background: '#ffffff',
                 overflow: 'hidden',
                 height: 135,
@@ -158,16 +158,16 @@ const KpiCard = memo(({ card, isLast }) => {
         >
             <div style={{ padding: '12px 12px 6px 12px', display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#8c8e8f' }}>{label}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: indicatorColor }}>
                         {displayTrend}
                     </span>
                 </div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#121b1e', marginBottom: 6, fontFamily: 'system-ui, -apple-system' }}>
                     {value}
                 </div>
                 {subValue && (
-                    <div style={{ fontSize: 9.5, color: '#94a3b8', fontWeight: 500, marginBottom: 4 }}>
+                    <div style={{ fontSize: 9.5, color: '#8c8e8f', fontWeight: 500, marginBottom: 4 }}>
                         {subValue}
                     </div>
                 )}
@@ -183,8 +183,8 @@ const KpiCard = memo(({ card, isLast }) => {
                     )}
                 </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', padding: '6px 12px', background: '#ffffff' }}>
-                <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #d9e6e9', padding: '6px 12px', background: '#ffffff' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 600, color: '#8c8e8f', display: 'flex', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
                     See more details <span style={{ fontSize: 8 }}>&gt;</span>
                 </span>
             </div>
@@ -328,7 +328,7 @@ const KpiStrip = ({
                 .kpi-premium-card:hover {
                     transform: translateY(-4px);
                     box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.1);
-                    border-color: #cbd5e1;
+                    border-color: #cbd0d4;
                 }
                 .kpi-section-header {
                     display: flex;
@@ -339,11 +339,11 @@ const KpiStrip = ({
                 .kpi-section-divider {
                     flex: 1;
                     height: 1px;
-                    background: linear-gradient(90deg, #e2e8f0 0%, transparent 100%);
+                    background: linear-gradient(90deg, #d9e6e9 0%, transparent 100%);
                 }
                 @keyframes pulseGlow {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
-                    50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); }
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(251,79,64,0.4); }
+                    50% { box-shadow: 0 0 0 6px rgba(251,79,64,0); }
                 }
                 .kpi-live-indicator {
                     animation: pulseGlow 2s ease-in-out infinite;
@@ -357,16 +357,16 @@ const KpiStrip = ({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 6,
-                        background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                        background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
                         padding: '5px 12px',
                         borderRadius: 20,
-                        border: '1px solid #bfdbfe'
+                        border: '1px solid #fecaca'
                     }}>
-                        <BarChart3 size={13} style={{ color: '#2563eb' }} />
+                        <BarChart3 size={13} style={{ color: '#fb4f40' }} />
                         <span style={{
                             fontSize: 10,
                             fontWeight: 800,
-                            color: '#1e40af',
+                            color: '#dc2626',
                             textTransform: 'uppercase',
                             letterSpacing: '0.08em'
                         }}>
@@ -376,7 +376,7 @@ const KpiStrip = ({
                             width: 6,
                             height: 6,
                             borderRadius: '50%',
-                            background: '#2563eb',
+                            background: '#fb4f40',
                             marginLeft: 4
                         }} />
                     </div>
@@ -405,16 +405,16 @@ const KpiStrip = ({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 6,
-                        background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                        background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
                         padding: '5px 12px',
                         borderRadius: 20,
-                        border: '1px solid #c4b5fd'
+                        border: '1px solid #fecaca'
                     }}>
-                        <Target size={13} style={{ color: '#7c3aed' }} />
+                        <Target size={13} style={{ color: '#fb4f40' }} />
                         <span style={{
                             fontSize: 10,
                             fontWeight: 800,
-                            color: '#5b21b6',
+                            color: '#dc2626',
                             textTransform: 'uppercase',
                             letterSpacing: '0.08em'
                         }}>
@@ -424,7 +424,7 @@ const KpiStrip = ({
                             width: 6,
                             height: 6,
                             borderRadius: '50%',
-                            background: '#7c3aed',
+                            background: '#fb4f40',
                             marginLeft: 4
                         }} />
                     </div>

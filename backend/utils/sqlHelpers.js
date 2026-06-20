@@ -3,9 +3,9 @@ const { sql } = require('../database/db');
 function buildInClause(request, paramPrefix, values, sqlType = sql.VarChar) {
     const placeholders = [];
     values.forEach((val, i) => {
-        const paramName = `@${paramPrefix}_${i}`;
-        request.input(paramName, sqlType, val);
-        placeholders.push(paramName);
+        const name = `${paramPrefix}_${i}`;
+        request.input(name, sqlType, val);
+        placeholders.push(`@${name}`);
     });
     return placeholders.join(',');
 }

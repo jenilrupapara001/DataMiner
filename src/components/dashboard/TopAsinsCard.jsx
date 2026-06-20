@@ -146,7 +146,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                 background: isTop3
                     ? `linear-gradient(135deg, ${brandColor.bg}40 0%, #ffffff 100%)`
                     : '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #d9e6e9',
                 borderRadius: 10,
                 marginBottom: 8,
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -182,7 +182,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                             style={{
                                 fontSize: 13,
                                 fontWeight: 700,
-                                color: '#0f172a',
+                                color: '#121b1e',
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -209,7 +209,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                         <span style={{
                             fontSize: 10,
                             fontWeight: 700,
-                            color: '#64748b',
+                            color: '#8c8e8f',
                             background: '#f1f5f9',
                             padding: '1px 6px',
                             borderRadius: 4,
@@ -243,7 +243,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                         {pctOfMax > 0 && (
                             <span style={{
                                 fontSize: 9,
-                                color: '#94a3b8',
+                                color: '#8c8e8f',
                                 fontWeight: 600,
                                 marginLeft: 'auto',
                                 whiteSpace: 'nowrap'
@@ -263,7 +263,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                     <div style={{
                         fontSize: 16,
                         fontWeight: 800,
-                        color: '#0f172a',
+                        color: '#121b1e',
                         lineHeight: 1,
                         letterSpacing: '-0.3px'
                     }}>
@@ -271,7 +271,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                     </div>
                     <div style={{
                         fontSize: 9,
-                        color: '#94a3b8',
+                        color: '#8c8e8f',
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
@@ -362,7 +362,7 @@ const TopAsinsCard = ({ products = [] }) => {
                 .asin-row-hover:hover {
                     transform: translateX(2px) translateY(-1px);
                     box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
-                    border-color: #cbd5e1 !important;
+                    border-color: #cbd0d4 !important;
                 }
                 .top-asins-scroll::-webkit-scrollbar {
                     width: 6px;
@@ -378,7 +378,7 @@ const TopAsinsCard = ({ products = [] }) => {
                     background: #94a3b8;
                 }
                 .section-link-asins:hover {
-                    color: #1d4ed8 !important;
+                    color: #fb4f40 !important;
                     transform: translateX(2px);
                 }
                 @keyframes shimmer-crown {
@@ -389,14 +389,14 @@ const TopAsinsCard = ({ products = [] }) => {
                     animation: shimmer-crown 2s ease-in-out infinite;
                 }
                 .asin-search-input {
-                    border: 1px solid #e2e8f0 !important;
+                    border: 1px solid #d9e6e9 !important;
                     border-radius: 8px !important;
                     transition: all 0.2s;
                 }
                 .asin-search-input:focus,
                 .asin-search-input:hover {
-                    border-color: #2563eb !important;
-                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08) !important;
+                    border-color: #fb4f40 !important;
+                    box-shadow: 0 0 0 3px rgba(251, 79, 64, 0.08) !important;
                 }
             `}</style>
 
@@ -404,7 +404,7 @@ const TopAsinsCard = ({ products = [] }) => {
                 styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
                 style={{
                     borderRadius: 16,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #d9e6e9',
                     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                     background: '#ffffff',
                     height: 850,
@@ -418,8 +418,8 @@ const TopAsinsCard = ({ products = [] }) => {
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '16px 20px',
-                    borderBottom: '1px solid #f1f5f9',
-                    background: 'linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)'
+                    borderBottom: '1px solid #d9e6e9',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -433,12 +433,12 @@ const TopAsinsCard = ({ products = [] }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#ffffff',
-                                boxShadow: '0 4px 12px -2px rgba(251, 191, 36, 0.5)',
+                                boxShadow: '0 4px 12px -2px rgba(251, 79, 64, 0.5)',
                                 flexShrink: 0
                             }}>
                                 <Trophy size={20} strokeWidth={2.5} className="crown-animate" />
@@ -447,7 +447,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 <div style={{
                                     fontSize: 15,
                                     fontWeight: 800,
-                                    color: '#0f172a',
+                                    color: '#121b1e',
                                     letterSpacing: '-0.01em',
                                     lineHeight: 1.2,
                                     display: 'flex',
@@ -458,7 +458,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 </div>
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 1
                                 }}>
@@ -473,7 +473,7 @@ const TopAsinsCard = ({ products = [] }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: '#fb4f40',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -501,7 +501,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 gap: 5,
                                 padding: '4px 10px',
                                 background: '#ffffff',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid #d9e6e9',
                                 borderRadius: 12
                             }}>
                                 <Package size={11} style={{ color: '#2563eb' }} strokeWidth={2.5} />
@@ -536,7 +536,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                     gap: 5,
                                     padding: '4px 10px',
                                     background: '#ffffff',
-                                    border: '1px solid #e2e8f0',
+                                    border: '1px solid #d9e6e9',
                                     borderRadius: 12
                                 }}>
                                     <BarChart3 size={11} style={{ color: '#8b5cf6' }} strokeWidth={2.5} />
@@ -559,7 +559,7 @@ const TopAsinsCard = ({ products = [] }) => {
                     <div style={{
                         padding: '10px 20px',
                         background: '#fafbfc',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid #d9e6e9',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 8,
@@ -578,7 +578,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                     left: 10,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     pointerEvents: 'none'
                                 }}
                             />
@@ -685,7 +685,7 @@ const TopAsinsCard = ({ products = [] }) => {
                     <div style={{
                         padding: '10px 20px',
                         background: '#fafbfc',
-                        borderTop: '1px solid #f1f5f9',
+                        borderTop: '1px solid #d9e6e9',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -697,7 +697,7 @@ const TopAsinsCard = ({ products = [] }) => {
                             alignItems: 'center',
                             gap: 4,
                             fontSize: 10,
-                            color: '#64748b',
+                            color: '#8c8e8f',
                             fontWeight: 600
                         }}>
                             <Eye size={10} strokeWidth={2.5} />

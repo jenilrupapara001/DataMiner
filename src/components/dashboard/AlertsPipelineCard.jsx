@@ -221,7 +221,7 @@ const AlertItem = memo(({ alert }) => {
                 </div>
                 <div style={{
                     fontSize: 11,
-                    color: '#64748b',
+                    color: '#8c8e8f',
                     fontWeight: 500,
                     lineHeight: 1.3,
                     whiteSpace: 'nowrap',
@@ -298,7 +298,7 @@ const PipelineTaskItem = memo(({ task }) => {
                         {asinCount > 0 && (
                             <div style={{
                                 fontSize: 10,
-                                color: '#94a3b8',
+                                color: '#8c8e8f',
                                 fontWeight: 500,
                                 marginTop: 1
                             }}>
@@ -399,7 +399,7 @@ const StatChip = memo(({ icon: Icon, value, label, color, animate }) => (
         <span style={{ fontSize: 11, fontWeight: 800, color }}>
             {value}
         </span>
-        <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
+        <span style={{ fontSize: 9, color: '#8c8e8f', fontWeight: 600 }}>
             {label}
         </span>
     </div>
@@ -482,12 +482,12 @@ const AlertsPipelineCard = ({
                     box-shadow: 0 4px 12px -2px rgba(0,0,0,0.06);
                 }
                 .section-link:hover {
-                    color: #1d4ed8 !important;
+                    color: #fb4f40 !important;
                     transform: translateX(2px);
                 }
                 .sync-button-premium:hover {
                     transform: translateY(-1px);
-                    box-shadow: 0 8px 16px -4px rgba(37,99,235,0.3) !important;
+                    box-shadow: 0 8px 16px -4px rgba(251,79,64,0.3) !important;
                 }
             `}</style>
 
@@ -495,7 +495,7 @@ const AlertsPipelineCard = ({
                 styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
                 style={{
                     borderRadius: 16,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #d9e6e9',
                     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                     background: '#ffffff',
                     height: 850,
@@ -509,8 +509,8 @@ const AlertsPipelineCard = ({
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '16px 20px',
-                    borderBottom: '1px solid #f1f5f9',
-                    background: 'linear-gradient(135deg, #fafbff 0%, #ffffff 100%)'
+                    borderBottom: '1px solid #d9e6e9',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -536,7 +536,7 @@ const AlertsPipelineCard = ({
                                 <div style={{
                                     fontSize: 15,
                                     fontWeight: 800,
-                                    color: '#0f172a',
+                                    color: '#121b1e',
                                     letterSpacing: '-0.01em',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -553,7 +553,7 @@ const AlertsPipelineCard = ({
                                 </div>
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 1
                                 }}>
@@ -569,7 +569,7 @@ const AlertsPipelineCard = ({
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '14px 20px 12px',
-                    borderBottom: '1px solid #f1f5f9'
+                    borderBottom: '1px solid #d9e6e9'
                 }}>
                     {/* Section header with stats */}
                     <div style={{
@@ -614,7 +614,7 @@ const AlertsPipelineCard = ({
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: '#fb4f40',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -739,7 +739,7 @@ const AlertsPipelineCard = ({
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: '#fb4f40',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -826,7 +826,7 @@ const AlertsPipelineCard = ({
                             padding: '11px 18px',
                             background: syncLoading
                                 ? 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)'
-                                : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                : 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
                             color: '#ffffff',
                             border: 'none',
                             borderRadius: 10,
@@ -839,7 +839,7 @@ const AlertsPipelineCard = ({
                             gap: 7,
                             boxShadow: syncLoading
                                 ? 'none'
-                                : '0 4px 12px -2px rgba(37, 99, 235, 0.4)',
+                                : '0 4px 12px -2px rgba(251, 79, 64, 0.4)',
                             transition: 'all 0.2s',
                             letterSpacing: '0.02em'
                         }}

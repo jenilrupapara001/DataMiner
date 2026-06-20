@@ -1,0 +1,57 @@
+export const mockNotifications = [
+  {
+    id: 'n1',
+    type: 'warning',
+    title: 'Buybox lost on ASIN B08N5WRWNW',
+    message: 'Clicktech Retail has been outbid by 2 competitors.',
+    timestamp: new Date(Date.now() - 8 * 60 * 1000),
+    read: false,
+    actionLabel: 'Review',
+    category: 'alert',
+  },
+  {
+    id: 'n2',
+    type: 'error',
+    title: 'Campaign budget exhausted',
+    message: 'Auto-Sponsored | Electronics — paused at 100% spend.',
+    timestamp: new Date(Date.now() - 32 * 60 * 1000),
+    read: false,
+    actionLabel: 'Refill',
+    category: 'alert',
+  },
+  {
+    id: 'n3',
+    type: 'success',
+    title: 'Monthly sync completed',
+    message: 'All 226 brands synced successfully in 4m 32s.',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    read: false,
+    category: 'system',
+  },
+  {
+    id: 'n4',
+    type: 'info',
+    title: 'New competitor detected',
+    message: 'Yemark Official Store entered Home & Kitchen category.',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
+    read: true,
+    actionLabel: 'View',
+    category: 'alert',
+  },
+  {
+    id: 'n5',
+    type: 'success',
+    title: 'Goal achieved: Q2 GMS',
+    message: 'Niren Enterprise crossed ₹2Cr target — 12 days early.',
+    timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+    read: true,
+    category: 'report',
+  },
+];
+
+export const notificationTypeConfig = {
+  success: { color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
+  warning: { color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+  error: { color: '#fb4f40', bg: '#fff0f0', border: '#ffb3ae' },
+  info: { color: '#8c8e8f', bg: '#f4f5f7', border: '#d9e6e9' },
+};

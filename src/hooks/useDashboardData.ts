@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api, { marketSyncApi } from '../services/api';
+import { apiClient } from '../lib/api-client';
 import { db } from '../services/db';
 import { format } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
@@ -68,7 +70,6 @@ export function useDashboardData(filters: DashboardFilters) {
     const [managers, setManagers] = useState<any[]>([]);
     const [activityLogs, setActivityLogs] = useState<any[]>([]);
     const [scrapeTasks, setScrapeTasks] = useState<any[]>([]);
-    const [optimizationTasks, setOptimizationTasks] = useState<any[]>([]);
 
     // Use existing orchestration hook
     const orch = useDashboardOrchestration({
@@ -125,19 +126,24 @@ export function useDashboardData(filters: DashboardFilters) {
         setManagers(Array.from(mgrSet).map(name => ({ id: name, name })));
     }, [orch.targets]);
 
-    // Load optimization tasks by sellerId filter
-    useEffect(() => {
-        const params: any = {};
-        if (filters.sellerId && filters.sellerId !== 'all') {
-            params.sellerId = filters.sellerId;
-        }
-        api.get('/tasks', params)
-            .then((res: any) => {
-                const tasks = res?.data?.tasks || res?.tasks || res?.data || [];
-                setOptimizationTasks(Array.isArray(tasks) ? tasks : []);
-            })
-            .catch(() => setOptimizationTasks([]));
-    }, [filters.sellerId]);
+    // Load optimization tasks with React Query caching
+    const tasksQuery = useQuery({
+        queryKey: ['tasks', 'optimization', filters.sellerId],
+        queryFn: async () => {
+            const params: any = {};
+            if (filters.sellerId && filters.sellerId !== 'all') {
+                params.sellerId = filters.sellerId;
+            }
+            const r = await apiClient.get('/tasks', { params });
+            const tasks = (r as any).data?.data?.tasks || (r as any).data?.tasks || (r as any).data?.data || [];
+            return Array.isArray(tasks) ? tasks : [];
+        },
+        staleTime: 2 * 60_000,
+        gcTime: 5 * 60_000,
+        refetchOnWindowFocus: false,
+    });
+
+    const optimizationTasks = tasksQuery.data ?? [];
 
     // Load activity logs
     const loadLogs = useCallback(async () => {

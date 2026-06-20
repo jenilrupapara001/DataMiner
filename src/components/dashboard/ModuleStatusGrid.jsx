@@ -34,7 +34,7 @@ const SegmentedProgress = memo(({ segments = [], height = 8 }) => {
         return (
             <div style={{
                 height,
-                background: '#f1f5f9',
+                background: '#d9e6e9',
                 borderRadius: height / 2,
                 overflow: 'hidden'
             }} />
@@ -45,7 +45,7 @@ const SegmentedProgress = memo(({ segments = [], height = 8 }) => {
         <div style={{
             display: 'flex',
             height,
-            background: '#f1f5f9',
+            background: '#d9e6e9',
             borderRadius: height / 2,
             overflow: 'hidden',
             gap: 1
@@ -129,7 +129,7 @@ const StatMini = memo(({ label, value, color, icon: Icon, pulse, animate }) => (
             minWidth: 0,
             padding: '8px 10px',
             background: color ? `${color}08` : '#f8fafc',
-            border: `1px solid ${color ? `${color}20` : '#e2e8f0'}`,
+            border: `1px solid ${color ? `${color}20` : '#d9e6e9'}`,
             borderRadius: 8,
             transition: 'all 0.2s',
             cursor: 'default'
@@ -145,13 +145,13 @@ const StatMini = memo(({ label, value, color, icon: Icon, pulse, animate }) => (
                 <Icon
                     size={9}
                     className={animate ? 'rotating-icon-mini' : ''}
-                    style={{ color: color || '#94a3b8', flexShrink: 0 }}
+                    style={{ color: color || '#8c8e8f', flexShrink: 0 }}
                 />
             )}
             <span style={{
                 fontSize: 9,
                 fontWeight: 700,
-                color: color ? `${color}` : '#94a3b8',
+                color: color ? `${color}` : '#8c8e8f',
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
                 whiteSpace: 'nowrap',
@@ -164,7 +164,7 @@ const StatMini = memo(({ label, value, color, icon: Icon, pulse, animate }) => (
         <div style={{
             fontSize: 14,
             fontWeight: 800,
-            color: color || '#0f172a',
+            color: color || '#121b1e',
             lineHeight: 1,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -193,7 +193,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                 position: 'relative',
                 background: '#ffffff',
                 borderRadius: 16,
-                border: '1px solid #e2e8f0',
+                border: '1px solid #d9e6e9',
                 overflow: 'hidden',
                 cursor: 'pointer',
                 height: '100%',
@@ -244,7 +244,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                             <div style={{
                                 fontSize: 14,
                                 fontWeight: 800,
-                                color: '#0f172a',
+                                color: '#121b1e',
                                 letterSpacing: '-0.01em',
                                 lineHeight: 1.2,
                                 whiteSpace: 'nowrap',
@@ -256,7 +256,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                             {subtitle && (
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 2,
                                     whiteSpace: 'nowrap',
@@ -321,7 +321,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                             <div style={{
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: '#94a3b8',
+                                color: '#8c8e8f',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.06em',
                                 marginBottom: 2
@@ -331,7 +331,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                             <div style={{
                                 fontSize: 22,
                                 fontWeight: 800,
-                                color: '#0f172a',
+                                color: '#121b1e',
                                 letterSpacing: '-0.5px',
                                 lineHeight: 1,
                                 whiteSpace: 'nowrap',
@@ -343,7 +343,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                             {primaryMetric.subValue && (
                                 <div style={{
                                     fontSize: 10,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 3
                                 }}>
@@ -390,7 +390,7 @@ const ModuleCard = memo(({ module, onClick }) => {
                 <div style={{
                     padding: '12px 18px 14px',
                     background: '#fafbfc',
-                    borderTop: '1px solid #f1f5f9',
+                    borderTop: '1px solid #d9e6e9',
                     marginTop: 'auto'
                 }}>
                     {segments && segments.length > 0 && (
@@ -729,7 +729,7 @@ const ModuleStatusGrid = ({ moduleStats }) => {
                 .module-card:hover {
                     transform: translateY(-4px);
                     box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
-                    border-color: #cbd5e1;
+                    border-color: #cbd0d4;
                 }
                 .module-card:hover .action-arrow {
                     background: #4f46e5 !important;
@@ -749,16 +749,16 @@ const ModuleStatusGrid = ({ moduleStats }) => {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
-                    background: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
                     padding: '5px 12px',
                     borderRadius: 20,
-                    border: '1px solid #99f6e4'
+                    border: '1px solid #fecaca'
                 }}>
-                    <Layers size={13} style={{ color: '#0d9488' }} />
+                    <Layers size={13} style={{ color: '#fb4f40' }} />
                     <span style={{
                         fontSize: 10,
                         fontWeight: 800,
-                        color: '#115e59',
+                        color: '#dc2626',
                         textTransform: 'uppercase',
                         letterSpacing: '0.08em'
                     }}>
@@ -768,11 +768,11 @@ const ModuleStatusGrid = ({ moduleStats }) => {
                 <div style={{
                     flex: 1,
                     height: 1,
-                    background: 'linear-gradient(90deg, #e2e8f0 0%, transparent 100%)'
+                    background: 'linear-gradient(90deg, #d9e6e9 0%, transparent 100%)'
                 }} />
                 <span style={{
                     fontSize: 11,
-                    color: '#94a3b8',
+                    color: '#8c8e8f',
                     fontWeight: 600
                 }}>
                     {modules.length} modules · Real-time sync

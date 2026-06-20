@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useTransition } from 'react';
 import {
   Card, Row, Col, Table, Button, DatePicker, Select,
   Upload, Modal, Typography, Space, Input, Tag, Tooltip, message, Empty, Progress, Skeleton, Radio, Segmented
@@ -149,6 +149,9 @@ export default function GmsTrackerPage() {
   const [dbSellers, setDbSellers] = useState([]);
   const [dbAsins, setDbAsins] = useState([]);
 
+  // Deferred filter flag for smooth UX during heavy filter recomputation
+  const [isFilterPending, startFilterTransition] = useTransition();
+
   // Upload Progress States
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -242,13 +245,10 @@ export default function GmsTrackerPage() {
     }
   };
 
-  // Extract unique brands (merged from DB and CSV uploads) and ASINs for filters
+  // Extract unique brands from database sellers only
   const uniqueBrands = useMemo(() => {
-    const dbNames = dbSellers.map(s => s.name).filter(Boolean);
-    const dbAsinBrands = dbAsins.map(a => a.brand).filter(Boolean);
-    const csvNames = gmsData.map(d => d.brand).filter(Boolean);
-    return [...new Set([...dbNames, ...dbAsinBrands, ...csvNames])].sort();
-  }, [dbSellers, dbAsins, gmsData]);
+    return dbSellers.map(s => s.name).filter(Boolean).sort();
+  }, [dbSellers]);
 
   const uniqueAsins = useMemo(() => [...new Set(gmsData.map(d => d.asin))].filter(Boolean).sort(), [gmsData]);
 
@@ -1177,7 +1177,7 @@ export default function GmsTrackerPage() {
         <Space size={8}>
           <Segmented
             value={viewLevel}
-            onChange={(value) => setViewLevel(value)}
+            onChange={(value) => startFilterTransition(() => setViewLevel(value))}
             options={[
               { label: 'ASIN View', value: 'asin' },
               { label: 'Seller View', value: 'seller' }
@@ -1221,7 +1221,7 @@ export default function GmsTrackerPage() {
               mode="multiple"
               placeholder="All Brands / Sellers"
               value={selectedBrands}
-              onChange={setSelectedBrands}
+              onChange={(val) => startFilterTransition(() => setSelectedBrands(val))}
               style={{ width: '100%' }}
               allowClear
               maxTagCount="responsive"
@@ -1235,7 +1235,7 @@ export default function GmsTrackerPage() {
               mode="multiple"
               placeholder="All ASINs"
               value={selectedAsins}
-              onChange={setSelectedAsins}
+              onChange={(val) => startFilterTransition(() => setSelectedAsins(val))}
               style={{ width: '100%' }}
               allowClear
               maxTagCount="responsive"
@@ -1249,7 +1249,7 @@ export default function GmsTrackerPage() {
               prefix={<SearchOutlined style={{ color: '#94a3b8', fontSize: 12 }} />}
               placeholder="Search by ASIN, Title, Brand..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => startFilterTransition(() => setSearchQuery(e.target.value))}
               allowClear
               className="gms-compact-filter"
               style={{ height: 32 }}
@@ -1278,7 +1278,31 @@ export default function GmsTrackerPage() {
           </Card>
         </div>
       ) : (
-        <>
+        <div style={{ position: 'relative' }}>
+          {/* Filter loading overlay */}
+          {isFilterPending && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 10,
+              background: 'rgba(248,250,252,0.6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 8, pointerEvents: 'none'
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#fff', padding: '6px 16px', borderRadius: 8,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                fontSize: 12, fontWeight: 600, color: '#4f46e5'
+              }}>
+                <span style={{
+                  width: 14, height: 14, border: '2px solid #c7d2fe',
+                  borderTopColor: '#4f46e5', borderRadius: '50%',
+                  animation: 'gms-spin 0.6s linear infinite', display: 'inline-block'
+                }} />
+                Applying filters...
+              </div>
+            </div>
+          )}
+          <style>{`@keyframes gms-spin { to { transform: rotate(360deg); } }`}</style>
           <Row gutter={[10, 10]} style={{ marginBottom: 10 }}>
             {/* Card 1: Ordered Revenue */}
             <Col xs={24} sm={12} md={8} style={{ flex: '1 1 18%', minWidth: '180px' }}>
@@ -1511,7 +1535,7 @@ export default function GmsTrackerPage() {
               </div>
             )}
           </Card>
-        </>
+        </div>
       )}
 
       {/* FILE UPLOAD MODAL WITH COMPLETE DATE PICKER */}

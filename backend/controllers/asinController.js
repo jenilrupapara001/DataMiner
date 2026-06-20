@@ -1,4 +1,4 @@
-const { sql, getPool, generateId } = require('../database/db');
+const { sql, getPool, generateId, executeWithRetry } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
 const marketDataSyncService = require('../services/marketDataSyncService');
@@ -132,6 +132,7 @@ const parseFlexibleDate = (val) => {
  */
 exports.getAsins = async (req, res) => {
   try {
+    await executeWithRetry(async () => {
     const {
       status, category, brand, search,
       minPrice, maxPrice, minBSR, maxBSR, minLQS, maxLQS,
@@ -809,9 +810,12 @@ exports.getAsins = async (req, res) => {
       },
     });
 
+    });
   } catch (error) {
     console.error('getAsins Error:', error);
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 

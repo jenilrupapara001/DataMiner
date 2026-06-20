@@ -13,6 +13,7 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadingPermissions, setLoadingPermissions] = useState(false);   // ← NEW
+    const [bootstrapping, setBootstrapping] = useState(false);
     const [error, setError] = useState(null);
 
     // Helper to normalize user object
@@ -63,10 +64,12 @@ export const AuthProvider = ({ children }) => {
 
     // ----- Login -----
     const login = async (email, password) => {
-        try {
-            setError(null);
-            // setLoading(true); // <-- REMOVED TO PREVENT GLOBAL UNMOUNT IN APP.JSX
+        const MIN_BOOTSTRAP_MS = 1500;
+        const startTime = Date.now();
+        setBootstrapping(true);
+        setError(null);
 
+        try {
             const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -109,12 +112,17 @@ export const AuthProvider = ({ children }) => {
                 }
             }
 
-            // setLoading(false); // <-- REMOVED
             return { success: true };
         } catch (err) {
             setError(err.message);
-            // setLoading(false); // <-- REMOVED
             return { success: false, error: err.message };
+        } finally {
+            const elapsed = Date.now() - startTime;
+            const remaining = MIN_BOOTSTRAP_MS - elapsed;
+            if (remaining > 0) {
+                await new Promise(r => setTimeout(r, remaining));
+            }
+            setBootstrapping(false);
         }
     };
 
@@ -216,7 +224,8 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         loading,
-        loadingPermissions,              // ← NEW
+        loadingPermissions,
+        bootstrapping,
         error,
         login,
         register,

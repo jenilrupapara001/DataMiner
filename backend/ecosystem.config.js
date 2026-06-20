@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'retailops-api',
       script: './server.js',
-      instances: 'max', // Use all available CPU cores
-      exec_mode: 'cluster', // Enable load balancing
+      instances: 1,
+      exec_mode: 'fork',
       watch: false,
       max_memory_restart: '1500M', // Automatically restart if memory exceeds 1.5GB per thread
       env: {

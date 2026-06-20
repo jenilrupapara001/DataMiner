@@ -47,10 +47,10 @@ const MetricSummary = memo(({ label, value, change, color, icon: Icon, isPositiv
         }}>
             <Icon size={10} style={{ color }} strokeWidth={2.5} />
             <span style={{
-                fontSize: 9,
-                fontWeight: 800,
-                color: '#94a3b8',
-                textTransform: 'uppercase',
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: '#8c8e8f',
+                    textTransform: 'uppercase',
                 letterSpacing: '0.06em',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -62,7 +62,7 @@ const MetricSummary = memo(({ label, value, change, color, icon: Icon, isPositiv
         <div style={{
             fontSize: 16,
             fontWeight: 800,
-            color: '#0f172a',
+            color: '#121b1e',
             letterSpacing: '-0.3px',
             lineHeight: 1.1,
             marginBottom: 3
@@ -317,7 +317,7 @@ const SalesTrendChart = ({
                 styles={{ body: { padding: 0 } }}
                 style={{
                     borderRadius: 16,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #d9e6e9',
                     background: '#ffffff',
                     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                     height: '100%',
@@ -329,7 +329,7 @@ const SalesTrendChart = ({
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '18px 20px 14px',
-                    borderBottom: '1px solid #f1f5f9'
+                    borderBottom: '1px solid #d9e6e9'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -344,12 +344,12 @@ const SalesTrendChart = ({
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#ffffff',
-                                boxShadow: '0 4px 12px -2px rgba(37, 99, 235, 0.4)',
+                                boxShadow: '0 4px 12px -2px rgba(251, 79, 64, 0.4)',
                                 flexShrink: 0
                             }}>
                                 <BarChart3 size={20} strokeWidth={2.5} />
@@ -358,7 +358,7 @@ const SalesTrendChart = ({
                                 <div style={{
                                     fontSize: 15,
                                     fontWeight: 800,
-                                    color: '#0f172a',
+                                    color: '#121b1e',
                                     letterSpacing: '-0.01em',
                                     lineHeight: 1.2,
                                     display: 'flex',
@@ -376,7 +376,7 @@ const SalesTrendChart = ({
                                 </div>
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 2
                                 }}>
@@ -459,7 +459,7 @@ const SalesTrendChart = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     background: '#fafbfc',
-                    borderBottom: '1px solid #f1f5f9'
+                    borderBottom: '1px solid #d9e6e9'
                 }}>
                     <div style={{ display: 'flex', gap: 14 }}>
                         <div
@@ -588,7 +588,7 @@ const SalesTrendChart = ({
                 <div style={{
                     padding: '10px 20px',
                     background: '#fafbfc',
-                    borderTop: '1px solid #f1f5f9',
+                    borderTop: '1px solid #d9e6e9',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -601,7 +601,7 @@ const SalesTrendChart = ({
                             alignItems: 'center',
                             gap: 4,
                             fontSize: 10,
-                            color: '#64748b',
+                            color: '#8c8e8f',
                             fontWeight: 600
                         }}>
                             <Calendar size={10} />
@@ -612,7 +612,7 @@ const SalesTrendChart = ({
                             alignItems: 'center',
                             gap: 4,
                             fontSize: 10,
-                            color: '#64748b',
+                            color: '#8c8e8f',
                             fontWeight: 600
                         }}>
                             <Activity size={10} />

@@ -21,23 +21,21 @@ exports.getTags = async (req, res) => {
     try {
         const pool = await getPool();
         
-        // Fetch predefined tags from database
+        // Run both queries in parallel
+        const [predefinedResult, tagsResult] = await Promise.all([
+            pool.request().query('SELECT Name FROM PredefinedTags ORDER BY Category, Name').catch(() => ({ recordset: [] })),
+            pool.request().query(`
+                SELECT Tags FROM Asins WHERE Tags IS NOT NULL AND Tags != '[]' AND Tags != ''
+            `)
+        ]);
+        
         let currentDefaultTags = [...DEFAULT_TAGS];
-        try {
-            const predefinedResult = await pool.request().query('SELECT Name FROM PredefinedTags ORDER BY Category, Name');
-            if (predefinedResult.recordset.length > 0) {
-                currentDefaultTags = predefinedResult.recordset.map(r => r.Name);
-            }
-        } catch (dbErr) {
-            console.error('Failed to fetch predefined tags from database:', dbErr.message);
+        if (predefinedResult.recordset.length > 0) {
+            currentDefaultTags = predefinedResult.recordset.map(r => r.Name);
         }
 
-        const result = await pool.request().query(`
-            SELECT Tags FROM Asins WHERE Tags IS NOT NULL AND Tags != '[]' AND Tags != ''
-        `);
-        
         const usedTags = new Set();
-        result.recordset.forEach(row => {
+        tagsResult.recordset.forEach(row => {
             try {
                 const tags = JSON.parse(row.Tags);
                 if (Array.isArray(tags)) {

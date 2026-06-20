@@ -11,41 +11,41 @@
    CSS Variables - Design System
    ========================================================================== */
 :root {
-  /* Colors - High-End Premium Palette (Vercel/Linear inspired) */
-  --color-primary: #0070F3;
-  --color-primary-light: #3291FF;
-  --color-primary-dark: #0761D1;
-  --color-secondary: #FAFAFA;
-  --color-secondary-light: #FFFFFF;
-  --color-secondary-dark: #EAEAEA;
+  /* Brand Palette */
+  --color-primary: #fb4f40;
+  --color-primary-light: #fc7a6e;
+  --color-primary-dark: #d94033;
+  --color-secondary: #f4f5f7;
+  --color-secondary-light: #ffffff;
+  --color-secondary-dark: #d9e6e9;
 
-  /* Semantic Colors - Rich Glossy Tones */
+  /* Semantic Colors */
   --color-success: #50E3C2;
   --color-success-bg: rgba(80, 227, 194, 0.1);
   --color-warning: #F5A623;
   --color-warning-bg: rgba(245, 166, 35, 0.1);
-  --color-error: #EE0000;
-  --color-error-bg: rgba(238, 0, 0, 0.1);
-  --color-info: #0070F3;
-  --color-info-bg: rgba(0, 112, 243, 0.1);
+  --color-error: #fb4f40;
+  --color-error-bg: rgba(251, 79, 64, 0.1);
+  --color-info: #8c8e8f;
+  --color-info-bg: rgba(140, 142, 143, 0.1);
 
-  /* Neutral Colors - Ultra Dark Zinc */
-  --color-white: #FFFFFF;
-  --color-gray-50: #FAFAFA;
-  --color-gray-100: #F4F4F5;
-  --color-gray-200: #E4E4E7;
-  --color-gray-300: #D4D4D8;
-  --color-gray-400: #A1A1AA;
-  --color-gray-500: #71717A;
-  --color-gray-600: #52525B;
-  --color-gray-700: #3F3F46;
-  --color-gray-800: #27272A;
-  --color-gray-900: #18181B;
+  /* Neutral Colors */
+  --color-white: #f4f5f7;
+  --color-gray-50: #f4f5f7;
+  --color-gray-100: #d9e6e9;
+  --color-gray-200: #d2dcdf;
+  --color-gray-300: #cbd0d4;
+  --color-gray-400: #8c8e8f;
+  --color-gray-500: #6e7071;
+  --color-gray-600: #545657;
+  --color-gray-700: #3d3f40;
+  --color-gray-800: #282a2b;
+  --color-gray-900: #121b1e;
 
-  /* Premium $100M Light Aesthetic */
-  --bg-primary: #F9FAFB;
-  --bg-secondary: #FFFFFF;
-  --bg-tertiary: #F3F4F6;
+  /* Premium Light Aesthetic */
+  --bg-primary: #f4f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #d9e6e9;
 
   /* Text Colors - High Contrast Hierarchy */
   --text-primary: #09090B;

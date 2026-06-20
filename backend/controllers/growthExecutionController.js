@@ -66,16 +66,20 @@ exports.getFilteredTasks = async (req, res) => {
 exports.getIntelligenceInsights = async (req, res) => {
     try {
         const pool = await getPool();
-        const sellers = await pool.request().query("SELECT COUNT(*) as count FROM Sellers WHERE IsActive = 1");
-        const asins = await pool.request().query("SELECT COUNT(*) as count FROM Asins");
-        const actions = await pool.request().query("SELECT COUNT(*) as count FROM Actions WHERE Status != 'COMPLETED'");
+        
+        // Run all 3 queries in parallel instead of sequential
+        const [sellersResult, asinsResult, actionsResult] = await Promise.all([
+            pool.request().query("SELECT COUNT(*) as count FROM Sellers WHERE IsActive = 1"),
+            pool.request().query("SELECT COUNT(*) as count FROM Asins"),
+            pool.request().query("SELECT COUNT(*) as count FROM Actions WHERE Status != 'COMPLETED'")
+        ]);
 
         res.json({
             success: true,
             data: {
-                totalActiveSellers: sellers.recordset[0].count,
-                totalAsins: asins.recordset[0].count,
-                pendingActions: actions.recordset[0].count,
+                totalActiveSellers: sellersResult.recordset[0].count,
+                totalAsins: asinsResult.recordset[0].count,
+                pendingActions: actionsResult.recordset[0].count,
                 lastUpdated: new Date()
             }
         });

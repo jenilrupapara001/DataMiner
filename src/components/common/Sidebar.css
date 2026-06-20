@@ -1,341 +1,373 @@
-/* Sidebar Redesign - Elite Ant Design Customized Style */
-
+/* ─── Sidebar Shell ─────────────────────────────────────────────────── */
 .sidebar-sider {
-    transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1) !important;
-    overflow: visible !important;
-    display: flex !important;
-    flex-direction: column !important;
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .sidebar-sider .ant-layout-sider-children {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: visible;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: visible;
 }
 
-/* --- Logo Area --- */
+/* ─── Logo Area ─────────────────────────────────────────────────────── */
 .logo-area {
-    height: var(--topbar-h);
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    position: relative;
-    overflow: visible;
-    background-color: var(--bg-sidebar);
+  height: 60px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: visible;
+  background-color: var(--bg-sidebar);
 }
 
 .sidebar-sider.ant-layout-sider-collapsed .logo-area {
-    justify-content: center;
-    padding: 0 8px;
+  justify-content: center;
+  padding: 0 8px;
 }
 
-/* Lock / Toggle Button */
+/* ─── Lock / Toggle Button ──────────────────────────────────────────── */
 .sidebar-toggle {
-    position: absolute;
-    right: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 24px;
-    height: 24px;
-    background: white;
-    border: 1px solid #cbd5e1;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
-    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 120;
-    padding: 0;
-    color: #475569;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid #d9e6e9;
+  background: white;
+  color: #8c8e8f;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(18, 27, 30, 0.08);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
 }
 
 .sidebar-toggle:hover {
-    color: #171717;
-    border-color: #e5e5e5;
-    background-color: #f8fafc;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transform: translateY(-50%) scale(1.1);
+  color: #fb4f40;
+  border-color: #fb4f40;
+  background-color: #fff0f0;
+  box-shadow: 0 2px 12px rgba(251, 79, 64, 0.2);
+  transform: scale(1.1);
 }
 
-/* --- Nav Body --- */
+.ant-layout-sider-collapsed .sidebar-toggle {
+  display: none;
+}
+
+/* ─── Nav Body ──────────────────────────────────────────────────────── */
 .nav-body {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 8px 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0;
 }
 
-/* Customizing Ant Design Menu to reach SaaS perfection */
+.nav-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-body::-webkit-scrollbar-thumb {
+  background: #d9e6e9;
+  border-radius: 10px;
+}
+
+.nav-body:hover::-webkit-scrollbar-thumb {
+  background: #cbd0d4;
+}
+
+/* ─── Ant Menu Overrides ────────────────────────────────────────────── */
 .sidebar-sider .ant-menu {
-    font-family: 'DM Sans', 'Inter', sans-serif;
+  font-family: 'DM Sans', 'Inter', sans-serif;
+  border-inline-end: none !important;
 }
 
-/* Menu Group Titles */
+/* Group Section Titles */
 .sidebar-sider .ant-menu-item-group-title {
-    font-weight: 700 !important;
-    letter-spacing: 0.06em !important;
-    text-transform: uppercase !important;
-    padding: 6px 16px 2px !important;
-    transition: opacity 0.15s;
-    color: #4f46e5 !important; /* Make group titles pop with color */
-    opacity: 0.85;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700 !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 10px 18px 4px !important;
+  color: #8c8e8f !important;
+  opacity: 1;
 }
 
-/* Individual Menu Items Styling */
+.sidebar-sider .ant-menu-item-group-title::before {
+  content: '';
+  width: 10px;
+  height: 2px;
+  background: #fb4f40;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Nav Items */
 .sidebar-sider .ant-menu-item {
-    margin: 1px 8px !important;
-    width: calc(100% - 16px) !important;
-    border-radius: var(--radius-md) !important;
-    font-weight: 450;
-    font-size: 13px !important;
-    display: flex !important;
-    align-items: center !important;
+  margin: 1px 10px !important;
+  width: calc(100% - 20px) !important;
+  border-radius: 8px !important;
+  font-weight: 450;
+  font-size: 13px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding-inline: 10px !important;
+  transition: all 150ms ease;
 }
 
-/* Selected Menu Item Indicator Accent */
+.sidebar-sider .ant-menu-item:hover {
+  background-color: #fff0f0 !important;
+  color: #121b1e !important;
+}
+
+/* Selected Item */
 .sidebar-sider .ant-menu-item-selected {
-    font-weight: 600 !important;
-    background-color: rgba(79, 70, 229, 0.08) !important;
-    color: #4f46e5 !important;
+  font-weight: 600 !important;
+  background-color: #fff0f0 !important;
+  color: #d94033 !important;
+  position: relative;
 }
 
 .sidebar-sider .ant-menu-item-selected::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 16px;
-    background-color: #4f46e5;
-    border-radius: 0 4px 4px 0;
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: #fb4f40;
+  border-radius: 0 3px 3px 0;
 }
 
+.sidebar-sider .ant-menu-item-selected:hover {
+  color: #d94033 !important;
+}
+
+/* Menu Item Icon */
 .sidebar-sider .ant-menu-item .ant-menu-item-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 16px !important;
-    margin-right: 8px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px !important;
+  margin-right: 10px !important;
+  font-size: 16px !important;
 }
 
-/* Label and Badge alignment */
-.menu-label-text {
-    font-family: 'DM Sans', sans-serif;
-}
-
-/* --- Bottom Area --- */
+/* ─── Bottom Area ───────────────────────────────────────────────────── */
 .bottom-area {
-    flex-shrink: 0;
-    border-top: 1px solid var(--border);
-    background-color: var(--bg-sidebar);
-    padding-bottom: 4px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background-color: var(--bg-sidebar);
+  padding: 8px 0 10px;
 }
 
+/* Pipeline Status */
 .pipeline-row {
-    padding: 6px 16px;
-    background: var(--bg-app);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  padding: 6px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .pipeline-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .pipeline-dot.idle {
-    background: #d1d5db;
+  background: #cbd0d4;
 }
 
 .pipeline-dot.active {
-    background: var(--green);
-    box-shadow: 0 0 0 3px var(--green-soft);
-    animation: pulse 2s infinite;
+  background: #fb4f40;
+  box-shadow: 0 0 0 3px rgba(251, 79, 64, 0.2);
+  animation: pipelinePulse 2s infinite;
 }
 
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+@keyframes pipelinePulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
 .pipeline-text {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 700;
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c8e8f;
 }
 
-/* User Profile Card */
+/* User Row */
 .user-row {
-    padding: 10px 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    transition: background 120ms;
-    margin: 4px 8px;
-    border-radius: var(--radius-md);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 120ms;
+  margin: 2px 10px;
+  border-radius: 8px;
 }
 
 .user-row:hover {
-    background: var(--bg-hover);
+  background-color: #f4f5f7;
 }
 
 .user-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #171717;
-    color: white;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 650;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.sidebar-sider.ant-layout-sider-collapsed .user-row {
-    justify-content: center;
-    padding: 10px 0;
-    margin: 4px 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d94033, #fb4f40);
+  color: white;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 650;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(251, 79, 64, 0.25);
 }
 
 .user-info {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .user-name {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 550;
-    font-size: 12.5px;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #121b1e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .user-role {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 450;
-    font-size: 10.5px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
-    margin-top: 1px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 450;
+  font-size: 10.5px;
+  color: #8c8e8f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  margin-top: 1px;
 }
 
 .user-arrow {
-    color: var(--text-muted);
-    flex-shrink: 0;
+  color: #cbd0d4;
+  flex-shrink: 0;
+  transition: color 150ms;
 }
 
-/* Premium Scrollbar customization */
-.custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+.user-row:hover .user-arrow {
+  color: #8c8e8f;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+/* Collapsed states for bottom area */
+.sidebar-sider.ant-layout-sider-collapsed .user-row {
+  justify-content: center;
+  padding: 8px 0;
+  margin: 2px 4px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 10px;
+.sidebar-sider.ant-layout-sider-collapsed .user-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 10px;
 }
 
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background: #d4d4d8;
-}
-
-/* Integrated Logout Action Pill */
+/* Logout Button */
 .logout-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: calc(100% - 24px);
-    margin: 8px 12px 12px;
-    padding: 9px 12px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text-secondary);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 12.5px;
-    font-weight: 550;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 20px);
+  margin: 6px 10px 0;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #8c8e8f;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .logout-btn:hover {
-    background: #fef2f2;
-    border-color: #fecaca;
-    color: #dc2626;
+  background: #fff0f0;
+  border-color: #ffb3ae;
+  color: #fb4f40;
 }
 
 .sidebar-sider.ant-layout-sider-collapsed .logout-btn {
-    justify-content: center;
-    width: 38px;
-    margin: 8px auto 12px;
-    padding: 9px 0;
+  justify-content: center;
+  width: 36px;
+  margin: 6px auto 0;
+  padding: 8px 0;
 }
 
-/* Mobile and Tablet Overlay Sidebar Styles */
+/* ─── Mobile Backdrop ───────────────────────────────────────────────── */
 .sidebar-mobile-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    z-index: 998; /* Under Sider's z-index but above main content */
-    animation: sidebarFadeIn 240ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(18, 27, 30, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 998;
+  animation: sidebarFadeIn 240ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes sidebarFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
+/* ─── Mobile Responsive ─────────────────────────────────────────────── */
 @media (max-width: 992px) {
-    /* Force the sidebar to be a sliding drawer on mobile */
-    .sidebar-sider {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        height: 100vh !important;
-        z-index: 999 !important;
-        box-shadow: 20px 0 40px rgba(0, 0, 0, 0.15) !important;
-        transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    
-    .sidebar-sider.mobile-hidden {
-        transform: translateX(-100%) !important;
-    }
-    
-    /* Hide the desktop collapse lock button on mobile */
-    .sidebar-toggle {
-        display: none !important;
-    }
+  .sidebar-sider {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    z-index: 999 !important;
+    box-shadow: 20px 0 40px rgba(0, 0, 0, 0.15) !important;
+    transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .sidebar-sider.mobile-hidden {
+    transform: translateX(-100%) !important;
+  }
+
+  .sidebar-toggle {
+    display: none !important;
+  }
 }

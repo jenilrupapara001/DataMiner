@@ -127,7 +127,7 @@ const Sidebar = () => {
                                 showZero
                                 overflowCount={9999}
                                 style={{ 
-                                    backgroundColor: item.badgeColor || '#6366f1', 
+                                    backgroundColor: item.badgeColor || '#fb4f40', 
                                     color: '#ffffff', 
                                     boxShadow: 'none',
                                     fontSize: '10px',
@@ -166,15 +166,15 @@ const Sidebar = () => {
                 theme={{
                     components: {
                         Menu: {
-                            itemSelectedColor: '#4f46e5',
-                            itemSelectedBg: 'rgba(79, 70, 229, 0.08)',
-                            itemHoverBg: 'var(--bg-hover)',
-                            itemHoverColor: 'var(--text-primary)',
-                            groupTitleColor: 'var(--text-muted)',
-                            groupTitleFontSize: 9,
-                            itemHeight: 32,
+                            itemSelectedColor: '#d94033',
+                            itemSelectedBg: '#fff0f0',
+                            itemHoverBg: '#fff0f0',
+                            itemHoverColor: '#121b1e',
+                            groupTitleColor: '#8c8e8f',
+                            groupTitleFontSize: 9.5,
+                            itemHeight: 34,
                             iconSize: 16,
-                            itemPaddingInline: 16,
+                            itemPaddingInline: 12,
                         },
                     },
                 }}

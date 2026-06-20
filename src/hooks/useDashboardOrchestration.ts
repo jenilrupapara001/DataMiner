@@ -6,7 +6,7 @@ import {
     useCallback, useEffect, useRef, useState, useMemo
 } from 'react';
 import {
-    useQuery, useQueryClient, type QueryKey
+    useQuery, useQueryClient, keepPreviousData, type QueryKey
 } from '@tanstack/react-query';
 import { apiClient } from '../lib/api-client';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -132,6 +132,7 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
         },
         staleTime: 5 * 60_000,
         gcTime: 10 * 60_000,
+        placeholderData: keepPreviousData,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
         retry: retries,
@@ -148,6 +149,7 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
         },
         staleTime: 2 * 60_000,
         gcTime: 4 * 60_000,
+        placeholderData: keepPreviousData,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
         retry: 2,
@@ -162,6 +164,7 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
         },
         staleTime: 4 * 60_000,
         gcTime: 8 * 60_000,
+        placeholderData: keepPreviousData,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
         retry: retries,

@@ -147,7 +147,7 @@ const PremiumDonutChart = memo(({ segments, total, overallRate, color }) => {
                 <div style={{
                     fontSize: 9,
                     fontWeight: 800,
-                    color: '#94a3b8',
+                    color: '#8c8e8f',
                     textTransform: 'uppercase',
                     letterSpacing: '0.1em',
                     marginBottom: 2
@@ -170,7 +170,7 @@ const PremiumDonutChart = memo(({ segments, total, overallRate, color }) => {
                 <div style={{
                     fontSize: 10,
                     fontWeight: 700,
-                    color: '#64748b',
+                    color: '#8c8e8f',
                     marginTop: 6,
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -262,8 +262,8 @@ const TierRow = memo(({ tier, total }) => {
                         <span style={{
                             fontSize: 9,
                             fontWeight: 600,
-                            color: '#94a3b8',
-                            background: '#f1f5f9',
+                            color: '#8c8e8f',
+                            background: '#d9e6e9',
                             padding: '1px 5px',
                             borderRadius: 4
                         }}>
@@ -272,7 +272,7 @@ const TierRow = memo(({ tier, total }) => {
                     </div>
                     <div style={{
                         fontSize: 10,
-                        color: '#94a3b8',
+                        color: '#8c8e8f',
                         fontWeight: 500
                     }}>
                         {tier.description}
@@ -295,7 +295,7 @@ const TierRow = memo(({ tier, total }) => {
                     </div>
                     <div style={{
                         fontSize: 10,
-                        color: '#94a3b8',
+                        color: '#8c8e8f',
                         fontWeight: 700,
                         marginTop: 2
                     }}>
@@ -450,7 +450,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                     border-color: currentColor !important;
                 }
                 .section-link-donut:hover {
-                    color: #1d4ed8 !important;
+                    color: #fb4f40 !important;
                     transform: translateX(2px);
                 }
                 @keyframes float-icon {
@@ -473,7 +473,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
                 style={{
                     borderRadius: 16,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #d9e6e9',
                     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                     background: '#ffffff',
                     height: '100%',
@@ -487,8 +487,8 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '16px 20px',
-                    borderBottom: '1px solid #f1f5f9',
-                    background: 'linear-gradient(135deg, #fdf4ff 0%, #ffffff 100%)'
+                    borderBottom: '1px solid #d9e6e9',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -501,12 +501,12 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #c084fc 0%, #9333ea 100%)',
+                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#ffffff',
-                                boxShadow: '0 4px 12px -2px rgba(147, 51, 234, 0.4)',
+                                boxShadow: '0 4px 12px -2px rgba(251, 79, 64, 0.4)',
                                 flexShrink: 0
                             }}>
                                 <Award size={20} strokeWidth={2.5} className="floating-icon" />
@@ -515,7 +515,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                 <div style={{
                                     fontSize: 15,
                                     fontWeight: 800,
-                                    color: '#0f172a',
+                                    color: '#121b1e',
                                     letterSpacing: '-0.01em',
                                     lineHeight: 1.2
                                 }}>
@@ -523,7 +523,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                 </div>
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 1
                                 }}>
@@ -538,7 +538,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: '#fb4f40',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -581,7 +581,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                         }}>
                             <Target size={28} style={{ color: '#d97706' }} strokeWidth={2.5} />
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#121b1e', marginBottom: 4 }}>
                             No Targets Defined
                         </div>
                         <div style={{ fontSize: 11, color: '#64748b' }}>
@@ -698,7 +698,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                     flex: 1,
                                     padding: '10px 12px',
                                     background: parseInt(insights.criticalPct) > 30 ? '#fef2f2' : '#f8fafc',
-                                    border: `1px solid ${parseInt(insights.criticalPct) > 30 ? '#fecaca' : '#e2e8f0'}`,
+                                    border: `1px solid ${parseInt(insights.criticalPct) > 30 ? '#fecaca' : '#d9e6e9'}`,
                                     borderRadius: 10
                                 }}>
                                     <div style={{
@@ -754,7 +754,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                             <div style={{
                                 fontSize: 9,
                                 fontWeight: 800,
-                                color: '#94a3b8',
+                                color: '#8c8e8f',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.08em',
                                 marginBottom: 4,

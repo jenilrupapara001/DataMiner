@@ -145,34 +145,30 @@ const Dashboard = () => {
         return adsPerf[1]?.data || [];
     }, [orch.dashboardRaw]);
 
-    const showSkeleton = loading && !isHydrated;
+    const initialLoading = loading && !isHydrated;
 
-    if (showSkeleton) {
+    if (initialLoading) {
         return (
-            <div style={{ padding: '32px', background: '#f8fafc', minHeight: '100vh' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+            <div style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 60 }}>
                     <Space direction="vertical" size={2}>
                         <Skeleton.Input active size="large" style={{ width: 220, height: 32 }} />
                         <Skeleton.Input active size="small" style={{ width: 320, height: 16 }} />
                     </Space>
                 </div>
-                
-                {/* KPI Strip skeletons */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                         <Col key={i} xs={12} sm={6} md={3}>
-                            <Card style={{ borderRadius: 12, border: '1px solid #f1f5f9', padding: 8 }}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 8 }}>
                                 <Skeleton active paragraph={{ rows: 1 }} />
                             </Card>
                         </Col>
                     ))}
                 </Row>
-
-                {/* Module status skeletons */}
                 <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <Col key={i} xs={24} sm={12} md={8}>
-                            <Card style={{ borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 16 }}>
                                 <Skeleton active paragraph={{ rows: 2 }} />
                             </Card>
                         </Col>
@@ -187,7 +183,7 @@ const Dashboard = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            style={{ padding: '32px', background: '#f8fafc', minHeight: '100vh' }}
+            style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}
         >
             {/* Section 1: Header */}
             <DashboardHeader
@@ -199,19 +195,31 @@ const Dashboard = () => {
                 loading={loading}
             />
 
-            {/* Section 2: KPI Strip */}
-            <KpiStrip
-                adSales={kpiValues.adSales}
-                adSpend={kpiValues.adSpend}
-                orders={kpiValues.orders}
-                acos={kpiValues.acos}
-                units={kpiValues.units}
-                targetTotal={kpiValues.targetTotal}
-                targetAchieved={kpiValues.targetAchieved}
-                achievementRate={kpiValues.achievementRate}
-                brandCount={kpiValues.brandCount}
-                sparklineData={sparklineData}
-            />
+            {/* Section 2: KPI Strip -- shows skeleton until KPIs arrive */}
+            {orch.isLoadingKpis ? (
+                <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                        <Col key={i} xs={12} sm={6} md={3}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 8 }}>
+                                <Skeleton active paragraph={{ rows: 1 }} />
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+            ) : (
+                <KpiStrip
+                    adSales={kpiValues.adSales}
+                    adSpend={kpiValues.adSpend}
+                    orders={kpiValues.orders}
+                    acos={kpiValues.acos}
+                    units={kpiValues.units}
+                    targetTotal={kpiValues.targetTotal}
+                    targetAchieved={kpiValues.targetAchieved}
+                    achievementRate={kpiValues.achievementRate}
+                    brandCount={kpiValues.brandCount}
+                    sparklineData={sparklineData}
+                />
+            )}
 
             {/* Section 3: Module Status Grid */}
             <ModuleStatusGrid moduleStats={moduleStats} />
@@ -219,17 +227,29 @@ const Dashboard = () => {
             {/* Section 4: Charts Row */}
             <Row gutter={[20, 20]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} lg={14}>
-                    <SalesTrendChart
-                        labels={salesTrendLabels}
-                        revenueData={salesTrendRevenue}
-                        spendData={salesTrendSpend}
-                    />
+                    {orch.isLoadingKpis ? (
+                        <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9' }}>
+                            <Skeleton active paragraph={{ rows: 6 }} style={{ padding: 16 }} />
+                        </Card>
+                    ) : (
+                        <SalesTrendChart
+                            labels={salesTrendLabels}
+                            revenueData={salesTrendRevenue}
+                            spendData={salesTrendSpend}
+                        />
+                    )}
                 </Col>
                 <Col xs={24} lg={10}>
-                    <AchievementDonut
-                        targets={orch.targets || []}
-                        overallRate={kpiValues.achievementRate}
-                    />
+                    {orch.isLoadingTargets ? (
+                        <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9' }}>
+                            <Skeleton active paragraph={{ rows: 4 }} style={{ padding: 16 }} />
+                        </Card>
+                    ) : (
+                        <AchievementDonut
+                            targets={orch.targets || []}
+                            overallRate={kpiValues.achievementRate}
+                        />
+                    )}
                 </Col>
             </Row>
 

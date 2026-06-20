@@ -52,36 +52,40 @@ exports.getObjectives = async (req, res) => {
             ORDER BY o.CreatedAt DESC
         `);
 
-        // For each objective, fetch its key results
-        const objectives = await Promise.all(objectivesResult.recordset.map(async (obj) => {
-            const krsResult = await pool.request()
-                .input('objectiveId', sql.VarChar, obj.Id)
-                .query(`
-                    SELECT * FROM KeyResults WHERE ObjectiveId = @objectiveId ORDER BY CreatedAt ASC
-                `);
-
-            const keyResults = krsResult.recordset.map(kr => ({
+        // Fetch ALL key results in a single query instead of N+1
+        const objectiveIds = objectivesResult.recordset.map(o => `'${o.Id}'`).join(',');
+        const allKRsResult = objectiveIds.length > 0 
+            ? await pool.request().query(`
+                SELECT * FROM KeyResults WHERE ObjectiveId IN (${objectiveIds}) ORDER BY CreatedAt ASC
+            `)
+            : { recordset: [] };
+        
+        // Build key results map by objectiveId
+        const krsByObjective = {};
+        allKRsResult.recordset.forEach(kr => {
+            if (!krsByObjective[kr.ObjectiveId]) krsByObjective[kr.ObjectiveId] = [];
+            krsByObjective[kr.ObjectiveId].push({
                 ...kr,
                 _id: kr.Id,
                 objectiveId: kr.ObjectiveId,
                 owner: kr.OwnerId,
                 createdAt: kr.CreatedAt,
                 updatedAt: kr.UpdatedAt
-            }));
+            });
+        });
 
-            return {
-                ...obj,
-                _id: obj.Id,
-                owner: obj.OwnerId ? { _id: obj.OwnerId, name: obj.OwnerName } : null,
-                seller: obj.SellerId ? { _id: obj.SellerId, name: obj.SellerName } : null,
-                keyResults,
-                startDate: obj.StartDate,
-                endDate: obj.EndDate,
-                status: obj.Status,
-                progress: obj.Progress || 0,
-                createdAt: obj.CreatedAt,
-                updatedAt: obj.UpdatedAt
-            };
+        const objectives = objectivesResult.recordset.map(obj => ({
+            ...obj,
+            _id: obj.Id,
+            owner: obj.OwnerId ? { _id: obj.OwnerId, name: obj.OwnerName } : null,
+            seller: obj.SellerId ? { _id: obj.SellerId, name: obj.SellerName } : null,
+            keyResults: krsByObjective[obj.Id] || [],
+            startDate: obj.StartDate,
+            endDate: obj.EndDate,
+            status: obj.Status,
+            progress: obj.Progress || 0,
+            createdAt: obj.CreatedAt,
+            updatedAt: obj.UpdatedAt
         }));
 
         res.json({ success: true, data: objectives });

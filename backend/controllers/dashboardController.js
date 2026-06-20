@@ -1,5 +1,8 @@
 const { sql, getPool } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
+const { BoundedCache } = require('../utils/memoryMonitor');
+
+const dashboardCache = new BoundedCache({ maxSize: 100, ttlMs: 60_000 });
 
 // Helper to parse period strings (e.g., '30d', '3M', '1y')
 const parsePeriod = (period) => {
@@ -28,6 +31,13 @@ const parsePeriod = (period) => {
 exports.getDashboardData = async (req, res) => {
   try {
     const { period = '30d', startDate: startQuery, endDate: endQuery, sellerId } = req.query;
+    const userId = req.user?.Id || req.user?._id?.toString() || '';
+
+    // Check cache
+    const cacheKey = `${userId}|${sellerId || 'all'}|${startQuery || ''}|${endQuery || ''}|${period}`;
+    const cached = dashboardCache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const pool = await getPool();
 
     const roleName = req.user?.role?.name || req.user?.role;
@@ -50,13 +60,26 @@ exports.getDashboardData = async (req, res) => {
     const safeSellerIds = finalSellerIds.length > 0 ? finalSellerIds : ['000000000000000000000000'];
     const useWideFilters = isGlobalUser && (!sellerId || sellerId === 'all');
 
-    const dashReq = pool.request();
-    const sellerInClause = useWideFilters ? '' : buildInClause(dashReq, 'dashSeller', safeSellerIds);
-    let sellerFilter = useWideFilters ? '' : 'WHERE Id IN (' + sellerInClause + ')';
-    let asinFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + sellerInClause + ')';
-    let alertFilter = useWideFilters ? '' : 'WHERE SellerId IN (' + sellerInClause + ')';
+    let sellerFilter = '';
+    let asinFilter = '';
+    let alertFilter = '';
+    let sellerParams = [];
 
-    // 2. Aggregate Counts (parallel independent queries)
+    if (!useWideFilters && safeSellerIds.length > 0) {
+      sellerParams = safeSellerIds;
+      const placeholders = safeSellerIds.map((_, i) => `@dashSeller_${i}`).join(',');
+      sellerFilter = 'WHERE Id IN (' + placeholders + ')';
+      asinFilter = 'WHERE SellerId IN (' + placeholders + ')';
+      alertFilter = 'WHERE SellerId IN (' + placeholders + ')';
+    }
+
+    const buildDashReq = () => {
+      const r = pool.request();
+      sellerParams.forEach((val, i) => r.input(`dashSeller_${i}`, sql.VarChar, val));
+      return r;
+    };
+
+    // 2. Aggregate Counts (parallel independent queries - each with own request)
     const [
       sellerCountsResult,
       asinCountsResult,
@@ -64,13 +87,13 @@ exports.getDashboardData = async (req, res) => {
       userActionStatsResult,
       teamActionStatsPromise
     ] = await Promise.all([
-      dashReq.query(`
+      buildDashReq().query(`
         SELECT 
           COUNT(*) as Total,
           SUM(CASE WHEN IsActive = 1 THEN 1 ELSE 0 END) as Active
         FROM Sellers ${sellerFilter}
       `),
-      dashReq.query(`
+      buildDashReq().query(`
         SELECT 
           COUNT(*) as Total,
           SUM(CASE WHEN Status IN ('Active', 'Scraping') THEN 1 ELSE 0 END) as Active,
@@ -79,7 +102,7 @@ exports.getDashboardData = async (req, res) => {
           SUM(ISNULL(CurrentPrice, 0)) as PortfolioValue
         FROM Asins ${asinFilter}
       `),
-      dashReq.query(`
+      buildDashReq().query(`
         SELECT TOP 5 Id, Severity, Message, CreatedAt 
         FROM Alerts ${alertFilter} 
         ORDER BY CreatedAt DESC
@@ -145,7 +168,7 @@ exports.getDashboardData = async (req, res) => {
 
     // 6. Ads Performance & Charts
     // Join Asins with AdsPerformance
-    const adsDataResult = await dashReq
+    const adsDataResult = await buildDashReq()
       .input('startDate', sql.Date, startDate)
       .input('endDate', sql.Date, endDate)
       .query(`
@@ -184,7 +207,7 @@ exports.getDashboardData = async (req, res) => {
 
     // 7. Optimized Marketplace Distribution (Safe high-performance decouple)
     // First: Get raw counts using ONLY covering index on Asins (super fast)
-    const asinsGroupedResult = await dashReq.query(`
+    const asinsGroupedResult = await buildDashReq().query(`
       SELECT SellerId, COUNT(*) as Count 
       FROM Asins
       ${asinFilter}
@@ -219,7 +242,7 @@ exports.getDashboardData = async (req, res) => {
     }));
 
     // 8. Top ASINs Table
-    const topAsinsResult = await dashReq
+    const topAsinsResult = await pool.request()
       .input('startDate', sql.Date, startDate)
       .input('endDate', sql.Date, endDate)
       .query(`
@@ -252,7 +275,7 @@ exports.getDashboardData = async (req, res) => {
       };
     });
 
-    res.json({
+    const response = {
       kpi,
       revenue: revenueData,
       areaSeries,
@@ -279,7 +302,10 @@ exports.getDashboardData = async (req, res) => {
         outOfStockAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].OutOfStock || 0 : 0,
         newThisMonthAsins: (asinCounts.recordset && asinCounts.recordset[0]) ? asinCounts.recordset[0].NewThisMonth || 0 : 0,
       }
-    });
+    };
+
+    dashboardCache.set(cacheKey, response);
+    res.json(response);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -290,6 +316,7 @@ function processChartData(days, adsData = [], endDate) {
   const useWeekly = days > 60;
   const bucketCount = useWeekly ? Math.ceil(days / 7) : days;
   const buckets = [];
+  const bucketMap = {};
 
   for (let i = bucketCount - 1; i >= 0; i--) {
     const d = new Date(endDateObj);
@@ -297,7 +324,7 @@ function processChartData(days, adsData = [], endDate) {
     else d.setDate(d.getDate() - i);
     
     const dateStr = d.toISOString().split('T')[0];
-    buckets.push({
+    const bucket = {
       key: dateStr,
       ts: d.getTime(),
       revenue: 0,
@@ -305,26 +332,24 @@ function processChartData(days, adsData = [], endDate) {
       ppc: 0,
       adsSpend: 0,
       orders: 0
-    });
+    };
+    buckets.push(bucket);
+    bucketMap[dateStr] = bucket;
   }
 
-  const findBucket = (dateMs) => {
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < buckets.length; i++) {
-      const dist = Math.abs(buckets[i].ts - dateMs);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
+  const findBucket = (adDateStr) => {
+    if (bucketMap[adDateStr]) return bucketMap[adDateStr];
+    let best = buckets[0];
+    let bestDist = Math.abs(buckets[0].ts - new Date(adDateStr).getTime());
+    for (let i = 1; i < buckets.length; i++) {
+      const dist = Math.abs(buckets[i].ts - new Date(adDateStr).getTime());
+      if (dist < bestDist) { bestDist = dist; best = buckets[i]; }
     }
     return best;
   };
 
   adsData.forEach(ad => {
-    const adMs = new Date(ad.Date).getTime();
-    const idx = findBucket(adMs);
-    const b = buckets[idx];
+    const b = findBucket(ad.Date?.toISOString?.()?.split('T')[0] || ad.Date);
     const rev = ad.AdSales + ad.OrganicSales;
     b.revenue += rev;
     b.organic += ad.OrganicSales || 0;

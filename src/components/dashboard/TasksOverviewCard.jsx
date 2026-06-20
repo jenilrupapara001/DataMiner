@@ -144,7 +144,7 @@ const StatChip = memo(({ icon: Icon, value, label, color, animate }) => (
         <span style={{ fontSize: 12, fontWeight: 800, color }}>
             {value}
         </span>
-        <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
+        <span style={{ fontSize: 9, color: '#8c8e8f', fontWeight: 600 }}>
             {label}
         </span>
     </div>
@@ -158,7 +158,7 @@ const SegmentedProgress = memo(({ counts, total }) => {
         return (
             <div style={{
                 height: 6,
-                background: '#f1f5f9',
+                background: '#d9e6e9',
                 borderRadius: 3,
                 overflow: 'hidden'
             }} />
@@ -177,7 +177,7 @@ const SegmentedProgress = memo(({ counts, total }) => {
         <div style={{
             display: 'flex',
             height: 6,
-            background: '#f1f5f9',
+            background: '#d9e6e9',
             borderRadius: 3,
             overflow: 'hidden',
             gap: 1
@@ -221,7 +221,7 @@ const TaskItem = memo(({ task, isLast }) => {
             style={{
                 padding: '12px 14px',
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #d9e6e9',
                 borderLeft: `3px solid ${status.color}`,
                 borderRadius: 10,
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -301,7 +301,7 @@ const TaskItem = memo(({ task, isLast }) => {
             <div style={{
                 fontSize: 13,
                 fontWeight: 700,
-                color: isCompleted ? '#94a3b8' : '#0f172a',
+                color: isCompleted ? '#8c8e8f' : '#121b1e',
                 lineHeight: 1.3,
                 marginBottom: 6,
                 textDecoration: isCompleted ? 'line-through' : 'none',
@@ -339,7 +339,7 @@ const TaskItem = memo(({ task, isLast }) => {
                     </div>
                     <span style={{
                         fontSize: 11,
-                        color: '#64748b',
+                        color: '#8c8e8f',
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
@@ -354,7 +354,7 @@ const TaskItem = memo(({ task, isLast }) => {
                     <span style={{
                         fontSize: 9,
                         fontWeight: 700,
-                        color: '#64748b',
+                        color: '#8c8e8f',
                         background: '#f1f5f9',
                         padding: '2px 7px',
                         borderRadius: 6,
@@ -426,10 +426,10 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                 .task-item-hover:hover {
                     transform: translateX(2px) translateY(-1px);
                     box-shadow: 0 8px 16px -4px rgba(0,0,0,0.08);
-                    border-color: #cbd5e1 !important;
+                    border-color: #cbd0d4 !important;
                 }
                 .section-link-tasks:hover {
-                    color: #1d4ed8 !important;
+                    color: #fb4f40 !important;
                     transform: translateX(2px);
                 }
                 @keyframes shimmer-stat {
@@ -445,7 +445,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                 styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
                 style={{
                     borderRadius: 16,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #d9e6e9',
                     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.02)',
                     background: '#ffffff',
                     height: '100%',
@@ -459,8 +459,8 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                 ═══════════════════════════════════════════════════ */}
                 <div style={{
                     padding: '16px 20px',
-                    borderBottom: '1px solid #f1f5f9',
-                    background: 'linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)'
+                    borderBottom: '1px solid #d9e6e9',
+                    background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)'
                 }}>
                     <div style={{
                         display: 'flex',
@@ -474,12 +474,12 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#ffffff',
-                                boxShadow: '0 4px 12px -2px rgba(245, 158, 11, 0.4)',
+                                boxShadow: '0 4px 12px -2px rgba(251, 79, 64, 0.4)',
                                 flexShrink: 0
                             }}>
                                 <ClipboardList size={20} strokeWidth={2.5} />
@@ -488,7 +488,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 <div style={{
                                     fontSize: 15,
                                     fontWeight: 800,
-                                    color: '#0f172a',
+                                    color: '#121b1e',
                                     letterSpacing: '-0.01em',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -516,7 +516,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 </div>
                                 <div style={{
                                     fontSize: 11,
-                                    color: '#94a3b8',
+                                    color: '#8c8e8f',
                                     fontWeight: 500,
                                     marginTop: 1
                                 }}>
@@ -531,7 +531,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#2563eb',
+                                color: '#fb4f40',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -546,24 +546,24 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                     </div>
 
                     {/* Completion Rate + Progress */}
-                    <div style={{
-                        padding: '10px 14px',
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: 10
-                    }}>
                         <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: 8
+                            padding: '10px 14px',
+                            background: '#ffffff',
+                            border: '1px solid #d9e6e9',
+                            borderRadius: 10
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Award size={13} style={{ color: counts.completionRate >= 70 ? '#10b981' : counts.completionRate >= 40 ? '#f59e0b' : '#94a3b8' }} strokeWidth={2.5} />
-                                <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: '#475569',
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: 8
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Award size={13} style={{ color: counts.completionRate >= 70 ? '#10b981' : counts.completionRate >= 40 ? '#f59e0b' : '#94a3b8' }} strokeWidth={2.5} />
+                                    <span style={{
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        color: '#8c8e8f',
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.04em'
                                 }}>
@@ -579,7 +579,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 }}>
                                     {counts.completionRate.toFixed(0)}%
                                 </span>
-                                <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+                                <span style={{ fontSize: 10, color: '#8c8e8f', fontWeight: 600 }}>
                                     ({counts.completed}/{counts.total})
                                 </span>
                             </div>
@@ -595,7 +595,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                     <div style={{
                         padding: '12px 20px',
                         background: '#fafbfc',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid #d9e6e9',
                         display: 'flex',
                         gap: 6,
                         flexWrap: 'wrap'
@@ -724,7 +724,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                     <div style={{
                         padding: '10px 20px',
                         background: '#fafbfc',
-                        borderTop: '1px solid #f1f5f9',
+                        borderTop: '1px solid #d9e6e9',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -736,7 +736,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                             alignItems: 'center',
                             gap: 4,
                             fontSize: 10,
-                            color: '#64748b',
+                            color: '#8c8e8f',
                             fontWeight: 600
                         }}>
                             <Activity size={10} strokeWidth={2.5} />

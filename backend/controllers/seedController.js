@@ -23,13 +23,21 @@ exports.getDashboardSummary = async (req, res) => {
   try {
     const pool = await getPool();
     
-    const [userRes, roleRes, permissionRes, sellerRes, asinRes, alertRuleRes] = await Promise.all([
+    const [userRes, roleRes, permissionRes, sellerRes, asinRes, alertRuleRes, statsRes] = await Promise.all([
       pool.request().query("SELECT COUNT(*) as count FROM Users WHERE IsActive = 1"),
       pool.request().query("SELECT COUNT(*) as count FROM Roles"),
       pool.request().query("SELECT COUNT(*) as count FROM Permissions"),
       pool.request().query("SELECT COUNT(*) as count FROM Sellers WHERE IsActive = 1"),
       pool.request().query("SELECT COUNT(*) as count FROM Asins WHERE Status = 'Active'"),
       pool.request().query("SELECT COUNT(*) as count FROM AlertRules WHERE IsActive = 1"),
+      pool.request().query(`
+        SELECT 
+          COUNT(*) as totalAsins,
+          SUM(ISNULL(CurrentPrice, 0) * ISNULL(ReviewCount, 100) * 0.3) as totalRevenue,
+          SUM(ISNULL(ReviewCount, 100) * 0.3) as totalUnits,
+          SUM(CASE WHEN StockLevel < 10 THEN 1 ELSE 0 END) as lowStockCount
+        FROM Asins WHERE Status = 'Active'
+      `),
     ]);
 
     const users = userRes.recordset[0].count;
@@ -38,16 +46,14 @@ exports.getDashboardSummary = async (req, res) => {
     const sellers = sellerRes.recordset[0].count;
     const asins = asinRes.recordset[0].count;
     const alertRules = alertRuleRes.recordset[0].count;
+    const stats = statsRes.recordset[0];
 
-    const allAsinsRes = await pool.request().query("SELECT * FROM Asins WHERE Status = 'Active'");
-    const allAsins = allAsinsRes.recordset;
-
-    const totalRevenue = allAsins.reduce((sum, a) => sum + ((a.CurrentPrice || 0) * (a.ReviewCount || 100) * 0.3), 0);
-    const totalUnits = allAsins.reduce((sum, a) => sum + ((a.ReviewCount || 100) * 0.3), 0);
-    const avgAcos = allAsins.length > 0 ? 22 : 0;
-    const avgRoas = allAsins.length > 0 ? 3.5 : 0;
+    const totalRevenue = stats.totalRevenue || 0;
+    const totalUnits = stats.totalUnits || 0;
+    const avgAcos = asins > 0 ? 22 : 0;
+    const avgRoas = asins > 0 ? 3.5 : 0;
     const totalProfit = totalRevenue * 0.22;
-    const lowStockCount = allAsins.filter(a => (a.StockLevel || 0) < 10).length;
+    const lowStockCount = stats.lowStockCount || 0;
 
     res.json({
       success: true,

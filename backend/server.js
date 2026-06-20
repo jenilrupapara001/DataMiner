@@ -251,6 +251,23 @@ const io = new Server(server, {
 const SocketService = require('./services/socketService');
 SocketService.init(io);
 
+// Redis adapter for Socket.IO cluster mode (PM2 multi-instance)
+try {
+  const { createAdapter } = require('@socket.io/redis-adapter');
+  const { createClient } = require('redis');
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  const pubClient = createClient({ url: redisUrl });
+  const subClient = pubClient.duplicate();
+  Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('✅ Socket.IO Redis adapter connected');
+  }).catch(err => {
+    console.error('❌ Socket.IO Redis adapter failed (falling back to in-memory):', err.message);
+  });
+} catch (err) {
+  console.warn('⚠️ Socket.IO Redis adapter not available (falling back to in-memory):', err.message);
+}
+
 if (!io) console.error('❌ Socket.io failed to initialize');
 
 app.set('io', io);

@@ -33,12 +33,24 @@ exports.getRoles = async (req, res) => {
     const totalResult = await pool.request().query(`SELECT COUNT(*) as Total FROM Roles ${whereSql}`);
     const total = totalResult.recordset[0].Total;
 
-    const roles = await Promise.all(rolesResult.recordset.map(async (role) => {
-      const perms = await pool.request()
-        .input('roleId', sql.VarChar, role.Id)
-        .query('SELECT P.* FROM Permissions P JOIN RolePermissions RP ON P.Id = RP.PermissionId WHERE RP.RoleId = @roleId');
-      
-      return {
+    const roles = rolesResult.recordset;
+
+    // Fetch ALL permissions in a single query instead of N+1
+    const roleIds = roles.map(r => `'${r.Id}'`).join(',');
+    const allPermsResult = await pool.request()
+        .query(`SELECT P.*, RP.RoleId 
+                FROM Permissions P 
+                JOIN RolePermissions RP ON P.Id = RP.PermissionId 
+                WHERE RP.RoleId IN (${roleIds})`);
+    
+    // Build permission map by roleId
+    const permsByRole = {};
+    allPermsResult.recordset.forEach(p => {
+        if (!permsByRole[p.RoleId]) permsByRole[p.RoleId] = [];
+        permsByRole[p.RoleId].push(p);
+    });
+
+    const enrichedRoles = roles.map(role => ({
         _id: role.Id,
         id: role.Id,
         name: role.Name,
@@ -50,16 +62,15 @@ exports.getRoles = async (req, res) => {
         isActive: role.IsActive === 1 || role.IsActive === true,
         createdAt: role.CreatedAt,
         updatedAt: role.UpdatedAt,
-        permissions: perms.recordset.map(p => ({
-          _id: p.Id,
-          id: p.Id,
-          name: p.Name,
-          displayName: p.DisplayName,
-          description: p.Description,
-          category: p.Category,
-          action: p.Action
+        permissions: (permsByRole[role.Id] || []).map(p => ({
+            _id: p.Id,
+            id: p.Id,
+            name: p.Name,
+            displayName: p.DisplayName,
+            description: p.Description,
+            category: p.Category,
+            action: p.Action
         }))
-      };
     }));
 
     res.json({

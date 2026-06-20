@@ -34,7 +34,7 @@ function ensureSocket() {
     if (socket) socket.disconnect();
 
     socket = io(getSocketUrl(), {
-        transports: ['polling', 'websocket'],
+        transports: ['websocket'],
         reconnection: true,
         reconnectionDelay: RECONNECT_DELAY,
         reconnectionDelayMax: RECONNECT_DELAY_MAX,

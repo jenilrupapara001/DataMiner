@@ -6,7 +6,8 @@ import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { PageTitleProvider } from './contexts/PageTitleContext';
 import { DateRangeProvider } from './contexts/DateRangeContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Header from './components/Header';
+import GlobalHeader from './components/header/GlobalHeader';
+import { HeaderProvider } from './contexts/HeaderContext';
 import Sidebar from './components/common/Sidebar';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
@@ -91,27 +92,61 @@ const PageSkeleton = () => (
 // Layout wrapper — flex row: Sidebar takes its own width, content fills the rest
 function AppLayout({ children }) {
   return (
-    <div className="app-shell">
-      {/* Sidebar lives in the flex row — takes its own width (260px or 72px) */}
-      <Sidebar />
-
-      {/* Content fills the remaining space automatically */}
-      <div className="content-wrapper">
-        <Header />
-        <main className="main-content">
-          <div className="routes-container">
-            {children}
-          </div>
-        </main>
+    <HeaderProvider>
+      <div className="app-shell">
+        <Sidebar />
+        <div className="content-wrapper">
+          <GlobalHeader />
+          <main className="main-content">
+            <div className="routes-container">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </HeaderProvider>
   );
 }
 
+const BrandedLoader = () => (
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100vh',
+    background: '#f4f5f7',
+    gap: 32,
+  }}>
+    <div style={{
+      width: 80,
+      height: 80,
+      borderRadius: 20,
+      background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 8px 32px rgba(251,79,64,0.25)',
+    }}>
+      <span style={{ color: '#fff', fontSize: 36, fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>R</span>
+    </div>
+    <div style={{
+      width: 40,
+      height: 40,
+      border: '3px solid #d9e6e9',
+      borderTopColor: '#fb4f40',
+      borderRadius: '50%',
+      animation: 'branded-spin 0.8s linear infinite',
+    }} />
+    <style>{`@keyframes branded-spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
+
 function AppRoutes() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, bootstrapping } = useAuth();
   const { showWizard, isLoading: onboardingLoading } = useOnboarding();
 
+  if (bootstrapping && isAuthenticated) return <BrandedLoader />;
   if (loading || onboardingLoading) return null;
 
   return (
@@ -198,9 +233,30 @@ function App() {
                 <DateRangeProvider>
                   <PageTitleProvider>
                     <ToastProvider>
+                      <ConfigProvider
+                        theme={{
+                          token: {
+                            colorPrimary: '#fb4f40',
+                            colorBgBase: '#f4f5f7',
+                            colorTextBase: '#121b1e',
+                            colorBorder: '#cbd0d4',
+                            borderRadius: 10,
+                            colorBgContainer: '#ffffff',
+                            colorBgElevated: '#ffffff',
+                            colorBgLayout: '#f4f5f7',
+                            colorTextSecondary: '#545657',
+                            colorTextTertiary: '#8c8e8f',
+                            colorBorderSecondary: '#d9e6e9',
+                            fontSize: 14,
+                            controlHeight: 48,
+                            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+                          }
+                        }}
+                      >
                       <AntdApp>
                         <AppRoutes />
                       </AntdApp>
+                      </ConfigProvider>
                     </ToastProvider>
                   </PageTitleProvider>
                 </DateRangeProvider>

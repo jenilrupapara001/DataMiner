@@ -8,28 +8,28 @@
 
 /* Brand Colors (base: #1B4FD8) */
 :root {
-    --color-brand-50: #EEF2FF;
-    --color-brand-100: #E0E7FF;
-    --color-brand-200: #C7D2FE;
-    --color-brand-300: #A5B4FC;
-    --color-brand-400: #818CF8;
-    --color-brand-500: #6366F1;
-    --color-brand-600: #4F46E5;
-    --color-brand-700: #4338CA;
-    --color-brand-800: #3730A3;
-    --color-brand-900: #312E81;
+    --color-brand-50: #fff0f0;
+    --color-brand-100: #ffd6d4;
+    --color-brand-200: #ffb3ae;
+    --color-brand-300: #ff8a82;
+    --color-brand-400: #fc6b61;
+    --color-brand-500: #fb4f40;
+    --color-brand-600: #d94033;
+    --color-brand-700: #b7352a;
+    --color-brand-800: #952b22;
+    --color-brand-900: #7a231b;
 
-    /* Neutral Colors - Ultra High-End Zinc Palette */
-    --color-neutral-50: #FAFAFA;
-    --color-neutral-100: #F4F4F5;
-    --color-neutral-200: #E4E4E7;
-    --color-neutral-300: #D4D4D8;
-    --color-neutral-400: #A1A1AA;
-    --color-neutral-500: #71717A;
-    --color-neutral-600: #52525B;
-    --color-neutral-700: #3F3F46;
-    --color-neutral-800: #27272A;
-    --color-neutral-900: #18181B;
+    /* Neutral Colors */
+    --color-neutral-50: #f4f5f7;
+    --color-neutral-100: #d9e6e9;
+    --color-neutral-200: #d2dcdf;
+    --color-neutral-300: #cbd0d4;
+    --color-neutral-400: #8c8e8f;
+    --color-neutral-500: #6e7071;
+    --color-neutral-600: #545657;
+    --color-neutral-700: #3d3f40;
+    --color-neutral-800: #282a2b;
+    --color-neutral-900: #121b1e;
 
     /* Semantic Colors - Success */
     --color-success-50: #F0FDF4;
@@ -42,23 +42,23 @@
     --color-warning-700: #D97706;
 
     /* Semantic Colors - Danger */
-    --color-danger-50: #FEF2F2;
-    --color-danger-500: #EF4444;
-    --color-danger-700: #DC2626;
+    --color-danger-50: #fff0f0;
+    --color-danger-500: #fb4f40;
+    --color-danger-700: #d94033;
 
-    /* Surface Colors - Pristine White System */
-    --color-surface-0: #FFFFFF;
-    --color-surface-1: #F9FAFB;
-    --color-surface-2: #F4F4F5;
+    /* Surface Colors */
+    --color-surface-0: #ffffff;
+    --color-surface-1: #f4f5f7;
+    --color-surface-2: #d9e6e9;
 
-    /* Border Colors - Hairline Precision */
-    --color-border: #E4E4E7;
-    --color-border-strong: #D4D4D8;
+    /* Border Colors */
+    --color-border: #cbd0d4;
+    --color-border-strong: #8c8e8f;
 
-    /* Text Colors - Zinc Contrast hierarchy */
-    --color-text-primary: #09090B;
-    --color-text-secondary: #52525B;
-    --color-text-muted: #A1A1AA;
+    /* Text Colors */
+    --color-text-primary: #121b1e;
+    --color-text-secondary: #545657;
+    --color-text-muted: #8c8e8f;
 }
 
 /* ==========================================================================
