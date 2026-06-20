@@ -151,7 +151,7 @@ const Dashboard = () => {
         return (
             <div style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 60 }}>
-                    <Space direction="vertical" size={2}>
+                    <Space orientation="vertical" size={2}>
                         <Skeleton.Input active size="large" style={{ width: 220, height: 32 }} />
                         <Skeleton.Input active size="small" style={{ width: 320, height: 16 }} />
                     </Space>

@@ -1,16 +1,26 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import {
-  X, Star, Search, Download, Maximize2, Minimize2,
+  X, Star, Search, Download,
   ArrowUpDown, ArrowUp, ArrowDown, FileText, MessageSquare,
   Minus, TrendingUp, TrendingDown, SlidersHorizontal, Loader2, Store, Calendar
 } from 'lucide-react';
 import { asinApi, sellerApi } from '../services/api';
 import InfiniteScrollSelect from './common/InfiniteScrollSelect';
+import { Modal, Tag, Typography, Space, Badge } from 'antd';
+
+const { Text } = Typography;
+
+const C = {
+  primary: '#fb4f40', primaryLight: '#fce8e6', dark: '#121b1e',
+  text: '#27272a', textSecondary: '#71717a', border: '#e4e4e7',
+  borderLight: '#f0f0f3', bg: '#f4f5f7', white: '#fff',
+  success: '#22c55e', successBg: '#f0fdf4',
+  warning: '#f59e0b', warningBg: '#fffbeb',
+  danger: '#ef4444', dangerBg: '#fef2f2',
+};
 
 const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerId: initialSellerId = '' }) => {
-  // ===== DATA STATE =====
   const [asins, setAsins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -21,235 +31,156 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [exporting, setExporting] = useState(false);
 
-  // Fetch all sellers once for badge labels
   useEffect(() => {
     const fetchSellers = async () => {
       try {
         const res = await sellerApi.getAll({ page: 1, limit: 1000 });
         if (res.success) setSellers(res.data.sellers || []);
-      } catch (err) {
-        console.error('Error fetching sellers for labels:', err);
-      }
+      } catch (err) { console.error('Error fetching sellers for labels:', err); }
     };
-    fetchSellers();
-  }, []);
+    if (isOpen) fetchSellers();
+  }, [isOpen]);
 
-  // Sync with prop if it changes (e.g. parent updates seller)
   useEffect(() => {
-    if (isOpen) {
-      setCurrentSellerId(initialSellerId);
-    }
+    if (isOpen) setCurrentSellerId(initialSellerId);
   }, [isOpen, initialSellerId]);
 
-  // ===== LOCAL UI STATE =====
   const [localSearch, setLocalSearch] = useState('');
   const [sortBy, setSortBy] = useState('rating');
   const [sortOrder, setSortOrder] = useState('desc');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterRatingRange, setFilterRatingRange] = useState({ min: '', max: '' });
   const [showFilters, setShowFilters] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   const loaderRef = useRef(null);
 
-  // ===== DATA FETCHING with date range =====
-  const fetchData = useCallback(async (pageNum, isNew = false) => {
-    if (!isOpen || (loading && !isNew) || (!hasMore && !isNew)) return;
+  const filterKey = useMemo(() => JSON.stringify(filters),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters?.category, filters?.marketplace, filters?.seller, filters?.priceDispute, filters?.bsrTrend]
+  );
 
+  const fetchData = useCallback(async (pageNum, isNew = false) => {
+    if (!isOpen) return;
     setLoading(true);
     try {
-      const isSellerActive = !!currentSellerId;
       const params = {
-        page: isSellerActive ? 1 : pageNum,
-        limit: isSellerActive ? 10000 : 50,
-        seller: currentSellerId,
-        search: searchQuery,
-        ...filters,
-        sortBy: sortBy === 'asinCode' ? 'asinCode' : 'lastScraped',
-        sortOrder: 'desc',
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
+        page: pageNum, limit: 50, seller: currentSellerId || undefined,
+        search: searchQuery || undefined, ...filters,
+        sortBy: 'lastScraped', sortOrder: 'desc',
+        startDate: dateRange.startDate || undefined, endDate: dateRange.endDate || undefined,
       };
-
       const res = await asinApi.getAll(params);
       if (res && res.asins) {
-        setAsins(prev => (isNew || isSellerActive) ? res.asins : [...prev, ...res.asins]);
-        setHasMore(isSellerActive ? false : res.pagination.page < res.pagination.totalPages);
+        setAsins(prev => isNew ? res.asins : [...prev, ...res.asins]);
+        setHasMore(res.pagination.page < res.pagination.totalPages);
         setTotalCount(res.pagination.total);
       }
-    } catch (err) {
-      console.error('Error fetching rating trends:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [isOpen, currentSellerId, searchQuery, filters, sortBy, sortOrder, hasMore, loading, dateRange]);
+    } catch (err) { console.error('Error fetching rating trends:', err); }
+    finally { setLoading(false); }
+  }, [isOpen, currentSellerId, searchQuery, filters, dateRange.startDate, dateRange.endDate]);
 
-  // Reset and fetch when modal opens or filters change
   useEffect(() => {
-    if (isOpen) {
-      setAsins([]);
-      setPage(1);
-      setHasMore(true);
-      fetchData(1, true);
-    }
-  }, [isOpen, currentSellerId, searchQuery, JSON.stringify(filters), dateRange.startDate, dateRange.endDate]);
+    if (isOpen) { setAsins([]); setPage(1); setHasMore(true); fetchData(1, true); }
+  }, [isOpen, currentSellerId, searchQuery, filterKey, dateRange.startDate, dateRange.endDate, fetchData]);
 
-  // Fetch next page when page changes
-  useEffect(() => {
-    if (page > 1) fetchData(page);
-  }, [page]);
+  useEffect(() => { if (page > 1) fetchData(page); }, [page, fetchData]);
 
-  // ===== INFINITE SCROLL OBSERVER =====
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && hasMore && !loading) {
-        setPage(prev => prev + 1);
-      }
+      if (entries[0].isIntersecting && hasMore && !loading) setPage(prev => prev + 1);
     }, { threshold: 0.1 });
-
     if (loaderRef.current) observer.observe(loaderRef.current);
     return () => observer.disconnect();
   }, [hasMore, loading]);
 
-  const fetchSellerDropdownData = useCallback(async (page = 1, search = '') => {
+  const fetchSellerDropdownData = useCallback(async (p = 1, s = '') => {
     try {
-      const response = await sellerApi.getAll({ page, limit: 20, search });
-      if (response.success && response.data) {
-        return {
-          data: response.data.sellers || [],
-          hasMore: response.data.pagination.page < response.data.pagination.totalPages
-        };
-      }
+      const response = await sellerApi.getAll({ page: p, limit: 20, search: s });
+      if (response.success && response.data)
+        return { data: response.data.sellers || [], hasMore: response.data.pagination.page < response.data.pagination.totalPages };
       return { data: [], hasMore: false };
-    } catch (err) {
-      console.error('Error fetching sellers:', err);
-      return { data: [], hasMore: false };
-    }
+    } catch (err) { return { data: [], hasMore: false }; }
   }, []);
 
-  // ===== GENERATE DATE COLUMNS FROM HISTORY DATA =====
   const { dateColumns, weekGroups } = useMemo(() => {
     const dates = new Set();
     asins.forEach(a => {
       const h = a.history || [];
       h.forEach(p => { if (p.date) dates.add(p.date.split('T')[0]); });
     });
-
     const sorted = [...dates].sort();
-
     const dateColumnsArray = [];
     const groups = [];
-    let currentWeek = null;
-    let weekCounter = 0;
-    let currentGroup = null;
-
+    let currentWeek = null, weekCounter = 0, currentGroup = null;
     sorted.forEach(d => {
       const dateObj = new Date(d);
       const day = dateObj.getDay();
       const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(dateObj.setDate(diff)).toISOString().split('T')[0];
-
       if (monday !== currentWeek) {
-        currentWeek = monday;
-        weekCounter++;
+        currentWeek = monday; weekCounter++;
         currentGroup = { name: `W${weekCounter}`, colSpan: 0 };
         groups.push(currentGroup);
       }
-
       currentGroup.colSpan++;
       dateColumnsArray.push({ date: d, weekName: `W${weekCounter}`, isLastOfWeek: false });
     });
-
     for (let i = 0; i < dateColumnsArray.length; i++) {
-      if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i + 1].weekName) {
+      if (i === dateColumnsArray.length - 1 || dateColumnsArray[i].weekName !== dateColumnsArray[i + 1].weekName)
         dateColumnsArray[i].isLastOfWeek = true;
-      }
     }
-
     return { dateColumns: dateColumnsArray, weekGroups: groups };
   }, [asins]);
 
-  // ===== PROCESS DATA FOR DISPLAY =====
   const processedData = useMemo(() => {
     const now = new Date();
-
     return asins.map(asin => {
       const currentRating = asin.rating || 0;
       const reviewCount = asin.reviewCount || 0;
       const history = asin.history || [];
-
       const ratingByDate = {};
       history.forEach(h => {
         if (h.date && h.rating) {
           const d = h.date.split('T')[0];
-          ratingByDate[d] = {
-            rating: h.rating,
-            reviews: h.reviews || h.reviewCount || 0
-          };
+          ratingByDate[d] = { rating: h.rating, reviews: h.reviews || h.reviewCount || 0 };
         }
       });
-
       const dateValues = dateColumns.map(col => ({
-        date: col.date,
-        rating: ratingByDate[col.date]?.rating || null,
-        reviews: ratingByDate[col.date]?.reviews || null,
+        date: col.date, rating: ratingByDate[col.date]?.rating || null, reviews: ratingByDate[col.date]?.reviews || null,
       }));
-
       const currentWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       let currentWeekRating = null, lastWeekRating = null;
       const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
-
       for (const h of sortedHistory) {
         const hDate = new Date(h.date);
         if (hDate >= currentWeekStart && h.rating > 0 && !currentWeekRating) currentWeekRating = h.rating;
         else if (hDate < currentWeekStart && h.rating > 0 && !lastWeekRating) lastWeekRating = h.rating;
         if (currentWeekRating && lastWeekRating) break;
       }
-
       const woWChange = currentWeekRating && lastWeekRating ? currentWeekRating - lastWeekRating : 0;
       const woWPercent = lastWeekRating ? ((woWChange / lastWeekRating) * 100) : 0;
-
       const firstValid = dateValues.find(dv => dv.rating !== null);
       const lastValid = [...dateValues].reverse().find(dv => dv.rating !== null);
       const periodTrend = firstValid && lastValid ? (lastValid.rating > firstValid.rating ? 'up' : lastValid.rating < firstValid.rating ? 'down' : 'stable') : 'stable';
-
-      return {
-        ...asin,
-        currentRating,
-        reviewCount,
-        dateValues,
-        woWChange,
-        woWPercent,
-        trend: periodTrend,
-        wowTrend: woWChange > 0 ? 'up' : woWChange < 0 ? 'down' : 'stable',
-      };
+      return { ...asin, currentRating, reviewCount, dateValues, woWChange, woWPercent, trend: periodTrend, wowTrend: woWChange > 0 ? 'up' : woWChange < 0 ? 'down' : 'stable' };
     });
   }, [asins, dateColumns]);
 
-  // ===== LOCAL FILTERING & SORTING =====
   const filteredData = useMemo(() => {
     let data = [...processedData];
-
     if (localSearch.trim()) {
       const q = localSearch.toLowerCase();
-      data = data.filter(d =>
-        (d.asinCode || '').toLowerCase().includes(q) ||
-        (d.sku || '').toLowerCase().includes(q) ||
-        (d.title || '').toLowerCase().includes(q)
-      );
+      data = data.filter(d => (d.asinCode || '').toLowerCase().includes(q) || (d.sku || '').toLowerCase().includes(q) || (d.title || '').toLowerCase().includes(q));
     }
-
     if (filterStatus === '4starPlus') data = data.filter(d => d.currentRating >= 4);
     else if (filterStatus === 'lowRating') data = data.filter(d => d.currentRating > 0 && d.currentRating < 3.5);
     else if (filterStatus === 'ratingUp') data = data.filter(d => d.trend === 'up');
     else if (filterStatus === 'ratingDown') data = data.filter(d => d.trend === 'down');
     else if (filterStatus === 'hasReviews') data = data.filter(d => d.reviewCount > 0);
-
     if (filterRatingRange.min !== '') data = data.filter(d => d.currentRating >= Number(filterRatingRange.min));
     if (filterRatingRange.max !== '') data = data.filter(d => d.currentRating <= Number(filterRatingRange.max));
-
     data.sort((a, b) => {
       let va, vb;
       switch (sortBy) {
@@ -259,19 +190,13 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
         case 'asinCode': return sortOrder === 'asc' ? (a.asinCode || '').localeCompare(b.asinCode || '') : (b.asinCode || '').localeCompare(a.asinCode || '');
         default: va = a.currentRating; vb = b.currentRating;
       }
-
       const aE = !va || va === 0, bE = !vb || vb === 0;
-      if (aE && bE) return 0;
-      if (aE) return 1;
-      if (bE) return -1;
-
+      if (aE && bE) return 0; if (aE) return 1; if (bE) return -1;
       return sortOrder === 'asc' ? va - vb : vb - va;
     });
-
     return data;
   }, [processedData, localSearch, sortBy, sortOrder, filterStatus, filterRatingRange]);
 
-  // ===== HANDLERS =====
   const handleSort = (field) => {
     if (sortBy === field) setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setSortBy(field); setSortOrder('desc'); }
@@ -281,499 +206,343 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
     if (selectedIds.size === filteredData.length && filteredData.length > 0) setSelectedIds(new Set());
     else setSelectedIds(new Set(filteredData.map(d => d._id)));
   };
-
   const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
   const resetAllFilters = () => {
-    setLocalSearch('');
-    setFilterStatus('all');
-    setFilterRatingRange({ min: '', max: '' });
-    setSortBy('rating');
-    setSortOrder('desc');
-    setDateRange({ startDate: '', endDate: '' });
+    setLocalSearch(''); setFilterStatus('all'); setFilterRatingRange({ min: '', max: '' });
+    setSortBy('rating'); setSortOrder('desc'); setDateRange({ startDate: '', endDate: '' });
   };
 
-  const getAppliedFiltersBadges = () => {
+  const filterBadges = useMemo(() => {
     const badges = [];
-
     if (currentSellerId) {
       const seller = sellers.find(s => s._id === currentSellerId);
-      badges.push(
-        <div key="seller" className="badge bg-zinc-900 text-white border border-zinc-900 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <Store size={10} className="opacity-60" />
-          <span className="fw-bold">{seller?.name || 'Selected Seller'}</span>
-          <button className="btn btn-link p-0 text-zinc-400 hover-text-white transition-colors" onClick={() => setCurrentSellerId('')}><X size={12} /></button>
-        </div>
-      );
+      badges.push({ key: 'seller', label: seller?.name || 'Selected Seller', icon: <Store size={10} />, onRemove: () => setCurrentSellerId('') });
     }
-
-    if (dateRange.startDate || dateRange.endDate) {
-      badges.push(
-        <div key="dateRange" className="badge bg-indigo-50 text-indigo-700 border border-indigo-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <Calendar size={10} className="opacity-60" />
-          <span className="fw-bold">{dateRange.startDate || 'Any'} → {dateRange.endDate || 'Any'}</span>
-          <button className="btn btn-link p-0 text-indigo-400 hover-text-red-500 transition-colors" onClick={() => setDateRange({ startDate: '', endDate: '' })}><X size={12} /></button>
-        </div>
-      );
-    }
-
-    if (localSearch) {
-      badges.push(
-        <div key="search" className="badge bg-amber-50 text-amber-700 border border-amber-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <Search size={10} className="opacity-60" />
-          <span className="fw-bold italic">"{localSearch}"</span>
-          <button className="btn btn-link p-0 text-amber-400 hover-text-red-500 transition-colors" onClick={() => setLocalSearch('')}><X size={12} /></button>
-        </div>
-      );
-    }
-
-    if (filterStatus !== 'all') {
-      badges.push(
-        <div key="status" className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>Status:</span>
-          <span className="fw-bold">{filterStatus}</span>
-          <button className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" onClick={() => setFilterStatus('all')}><X size={12} /></button>
-        </div>
-      );
-    }
-
-    if (filterRatingRange.min || filterRatingRange.max) {
-      const label = `${filterRatingRange.min || 0} - ${filterRatingRange.max || '5'}`;
-      badges.push(
-        <div key="rating" className="badge bg-zinc-100 text-zinc-700 border border-zinc-200 d-flex align-items-center gap-1.5 py-1.5 px-2 rounded-2" style={{ fontSize: '10px' }}>
-          <span className="fw-bold opacity-60 text-uppercase" style={{ fontSize: '8.5px' }}>Rating:</span>
-          <span className="fw-bold">{label} ★</span>
-          <button className="btn btn-link p-0 text-zinc-400 hover-text-red-500 transition-colors" onClick={() => setFilterRatingRange({ min: '', max: '' })}><X size={12} /></button>
-        </div>
-      );
-    }
-
+    if (dateRange.startDate || dateRange.endDate)
+      badges.push({ key: 'date', label: `${dateRange.startDate || 'Any'} → ${dateRange.endDate || 'Any'}`, icon: <Calendar size={10} />, onRemove: () => setDateRange({ startDate: '', endDate: '' }) });
+    if (localSearch)
+      badges.push({ key: 'search', label: `"${localSearch}"`, icon: <Search size={10} />, onRemove: () => setLocalSearch('') });
+    if (filterStatus !== 'all')
+      badges.push({ key: 'status', label: filterStatus, icon: null, onRemove: () => setFilterStatus('all') });
+    if (filterRatingRange.min || filterRatingRange.max)
+      badges.push({ key: 'rating', label: `${filterRatingRange.min || 0} - ${filterRatingRange.max || '5'} ★`, icon: null, onRemove: () => setFilterRatingRange({ min: '', max: '' }) });
     return badges;
-  };
+  }, [currentSellerId, sellers, dateRange, localSearch, filterStatus, filterRatingRange]);
 
-  // ===== EXPORT ALL DATA (CSV or Excel) =====
   const exportAllData = async (format = 'excel') => {
-    setExporting(true);
-    setShowExportMenu(false);
+    setExporting(true); setShowExportMenu(false);
     try {
-      // Fetch all ASINs for the current seller (or all sellers if none selected)
-      let allAsins = [];
-      let currentPage = 1;
-      let totalPages = 1;
-      const limit = 200;
-
+      let allAsins = []; let currentPage = 1; let totalPages = 1;
       while (currentPage <= totalPages) {
-        const params = {
-          page: currentPage,
-          limit,
-          seller: currentSellerId || undefined,
-          search: searchQuery,
-          ...filters,
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
-        };
-        const res = await asinApi.getAll(params);
-        if (res && res.asins) {
-          allAsins = [...allAsins, ...res.asins];
-          totalPages = res.pagination.totalPages;
-          currentPage++;
-        } else {
-          break;
-        }
+        const res = await asinApi.getAll({ page: currentPage, limit: 200, seller: currentSellerId || undefined, search: searchQuery, ...filters, startDate: dateRange.startDate, endDate: dateRange.endDate });
+        if (res && res.asins) { allAsins = [...allAsins, ...res.asins]; totalPages = res.pagination.totalPages; currentPage++; } else break;
       }
-
-      // Collect all unique dates from all ASINs
       const allDatesSet = new Set();
-      allAsins.forEach(asin => {
-        const history = asin.history || [];
-        history.forEach(h => {
-          if (h.date) allDatesSet.add(h.date.split('T')[0]);
-        });
-      });
+      allAsins.forEach(asin => { (asin.history || []).forEach(h => { if (h.date) allDatesSet.add(h.date.split('T')[0]); }); });
       const sortedDates = Array.from(allDatesSet).sort();
-
-      // Build rows: ASIN, Parent ASIN, SKU, Brand Name, then each date's rating
       const headers = ['ASIN', 'Parent ASIN', 'SKU', 'Brand Name', ...sortedDates];
       const rows = allAsins.map(asin => {
-        // Build rating map for this ASIN
         const ratingMap = new Map();
-        const history = asin.history || [];
-        history.forEach(h => {
-          if (h.date && h.rating) {
-            const d = h.date.split('T')[0];
-            ratingMap.set(d, h.rating);
-          }
-        });
-        const row = [
-          asin.asinCode || '',
-          asin.parentAsin || '',
-          asin.sku || '',
-          asin.brand || asin.seller?.name || '',
-        ];
-        sortedDates.forEach(date => {
-          const rating = ratingMap.get(date);
-          row.push(rating !== undefined ? rating.toFixed(1) : '');
-        });
+        (asin.history || []).forEach(h => { if (h.date && h.rating) ratingMap.set(h.date.split('T')[0], h.rating); });
+        const row = [asin.asinCode || '', asin.parentAsin || '', asin.sku || '', asin.brand || asin.seller?.name || ''];
+        sortedDates.forEach(date => { const r = ratingMap.get(date); row.push(r !== undefined ? r.toFixed(1) : ''); });
         return row;
       });
-
       const sheetData = [headers, ...rows];
       const fileName = `rating_trend_${new Date().toISOString().split('T')[0]}`;
-
       if (format === 'csv') {
         const csvContent = sheetData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${fileName}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const url = URL.createObjectURL(blob); const a = document.createElement('a');
+        a.href = url; a.download = `${fileName}.csv`; a.click(); URL.revokeObjectURL(url);
       } else {
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
         ws['!cols'] = headers.map(() => ({ wch: 15 }));
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'RatingTrend');
-        XLSX.writeFile(wb, `${fileName}.xlsx`);
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'RatingTrend'); XLSX.writeFile(wb, `${fileName}.xlsx`);
       }
-    } catch (err) {
-      console.error('Export failed', err);
-      alert('Export failed: ' + err.message);
-    } finally {
-      setExporting(false);
-    }
+    } catch (err) { console.error('Export failed', err); alert('Export failed: ' + err.message); }
+    finally { setExporting(false); }
   };
+
+  const SortIcon = ({ field }) => (
+    sortBy !== field ? <ArrowUpDown size={10} style={{ color: C.border }} /> :
+      sortOrder === 'asc' ? <ArrowUp size={10} style={{ color: C.primary }} /> : <ArrowDown size={10} style={{ color: C.primary }} />
+  );
 
   if (!isOpen) return null;
 
   const css = `
     .rt { width:100%; border-collapse:separate; border-spacing:0; }
-    .rt th { background:#fafafa; position:sticky; top:0; z-index:10; padding:6px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#71717a; border-bottom:2px solid #e5e7eb; white-space:nowrap; cursor:pointer; }
+    .rt th { background:#fafafa; position:sticky; top:0; z-index:10; padding:5px 8px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:${C.textSecondary}; border-bottom:2px solid #e5e7eb; white-space:nowrap; cursor:pointer; user-select:none; }
     .rt th:hover { background:#f4f4f5; }
-    .rt td { padding:5px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; vertical-align: middle; }
+    .rt td { padding:4px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; vertical-align:middle; }
     .rt tr:hover td { background:#fafafa; }
-    .rt tr.selected td { background:#fffbeb; }
-    .up { color:#059669; } .dn { color:#dc2626; } .st { color:#9ca3af; }
-    .chp { padding:4px 12px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; border:1.5px solid #e5e7eb; background:#fff; color:#71717a; white-space:nowrap; transition:all 0.2s; }
-    .chp:hover { border-color:#18181b; color:#18181b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .chp.act { background:#18181b; color:#fff; border-color:#18181b; }
-    .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:55px; }
-    .dd-has { background:#fffbeb; color:#d97706; font-weight:600; }
+    .rt tr.selected td { background:${C.warningBg}; }
+    .up { color:${C.success}; } .dn { color:${C.danger}; } .st { color:#9ca3af; }
+    .chp { padding:2px 10px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; border:1.5px solid #e5e7eb; background:#fff; color:${C.textSecondary}; white-space:nowrap; transition:all 0.15s; line-height:26px; display:inline-flex; align-items:center; gap:4px; }
+    .chp:hover { border-color:${C.dark}; color:${C.dark}; }
+    .chp.act { background:${C.primary}; color:#fff; border-color:${C.primary}; }
+    .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:48px; }
+    .dd-has { background:${C.warningBg}; color:#d97706; font-weight:600; }
     .dd-no { color:#d1d5db; }
-    .inp-sm { font-size:11px; height:28px; border:1.5px solid #e5e7eb; border-radius:8px; padding:2px 10px; width:80px; outline: none; }
-    .loader-pulse { height:30px; display:flex; align-items:center; justify-content:center; gap:6px; margin:20px 0; }
-    .pulse-dot { width:8px; height:8px; background:#d1d5db; border-radius:50%; animation: pulse 1.5s infinite; }
-    .pulse-dot:nth-child(2) { animation-delay: 0.2s; }
-    .pulse-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 1; } }
-    .trend-badge { display: inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; }
-    .trend-up { background: #059669; color: #ffffff; }
-    .trend-dn { background: #dc2626; color: #ffffff; }
-    .trend-st { background: #f4f4f5; color: #71717a; }
+    .loader-pulse { height:30px; display:flex; align-items:center; justify-content:center; gap:6px; margin:16px 0; }
+    .pulse-dot { width:6px; height:6px; background:${C.primary}; border-radius:50%; animation:pulse 1.5s infinite; }
+    .pulse-dot:nth-child(2) { animation-delay:0.2s; }
+    .pulse-dot:nth-child(3) { animation-delay:0.4s; }
+    @keyframes pulse { 0%,100% { transform:scale(1); opacity:0.3; } 50% { transform:scale(1.5); opacity:1; } }
+    .rt input[type="checkbox"] { width:13px; height:13px; cursor:pointer; accent-color:${C.primary}; }
+    .trend-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; }
+    .trend-up { background:${C.success}; color:#fff; }
+    .trend-dn { background:${C.danger}; color:#fff; }
+    .trend-st { background:#f4f4f5; color:${C.textSecondary}; }
   `;
 
-  const Si = ({ f }) => sortBy !== f ? <ArrowUpDown size={10} className="text-zinc-300" /> : sortOrder === 'asc' ? <ArrowUp size={10} className="text-zinc-700" /> : <ArrowDown size={10} className="text-zinc-700" />;
+  const hasActiveFilters = filterStatus !== 'all' || localSearch || filterRatingRange.min || filterRatingRange.max || dateRange.startDate || dateRange.endDate || currentSellerId;
 
-  return createPortal(
-    <div className={`position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center ${isFullscreen ? 'p-0' : 'p-3'}`}
-      style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(12px)', zIndex: 9999 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <style>{css}</style>
-
-      <div className={`bg-white shadow-2xl d-flex flex-column ${isFullscreen ? 'w-100 h-100 rounded-0' : 'rounded-3'}`}
-        style={{ width: isFullscreen ? '100%' : '98%', maxWidth: isFullscreen ? 'none' : '1650px', height: isFullscreen ? '100%' : '94vh', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
-
-        {/* HEADER */}
-        <div className="px-4 py-3 border-bottom d-flex justify-content-between align-items-center flex-shrink-0 bg-white flex-wrap gap-3">
-          <div className="d-flex align-items-center gap-3">
-            <div className="p-2 rounded-3 shadow-sm" style={{ background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', color: '#d97706', border: '1px solid #fde68a' }}>
-              <Star size={20} className="fill-current" />
+  return (
+    <Modal
+      open={isOpen} onCancel={onClose} footer={null} width={1650} centered destroyOnClose
+      closeIcon={<X size={18} />}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 32 }}>
+          <Space size={12}>
+            <div style={{ background: C.warningBg, padding: 8, borderRadius: 8, color: C.warning, display: 'flex' }}>
+              <Star size={18} />
             </div>
             <div>
-              <h5 className="mb-0 fw-bold text-zinc-900" style={{ fontSize: '15px' }}>Rating Analytics Matrix</h5>
-              <div className="d-flex align-items-center gap-2 mt-0.5">
-                <span className="badge bg-zinc-100 text-zinc-600 border fw-medium" style={{ fontSize: '10px' }}>
-                  {totalCount.toLocaleString()} Total ASINs
-                </span>
-                <span className="text-zinc-400" style={{ fontSize: '10px' }}>•</span>
-                <span className="text-zinc-500 fw-medium" style={{ fontSize: '10px' }}>Live Data Streamed from DB</span>
-              </div>
+              <Text strong style={{ fontSize: 15, color: C.dark }}>Rating Analytics Matrix</Text>
+              <Space size={8} style={{ marginTop: 2 }}>
+                <Badge count={totalCount.toLocaleString()} style={{ backgroundColor: C.border, color: C.text, fontSize: 10, fontWeight: 600, boxShadow: 'none' }} overflowCount={999999} />
+                <Text type="secondary" style={{ fontSize: 11 }}>·</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>Live Data Streamed from DB</Text>
+              </Space>
             </div>
-          </div>
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <div className="position-relative">
-              <button className="chp d-flex align-items-center gap-2" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: '#d97706', color: '#d97706' }} disabled={exporting}>
-                {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export
-              </button>
-              {showExportMenu && !exporting && (
-                <div className="position-absolute bg-white border rounded-3 shadow-xl p-1" style={{ top: '100%', right: 0, zIndex: 100, marginTop: '8px', minWidth: '160px' }}>
-                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('excel')} style={{ fontSize: '11px' }}>
-                    <FileText size={15} className="text-green-600" /> Export Excel (.xlsx)
-                  </button>
-                  <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start rounded-2 py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: '11px' }}>
-                    <FileText size={15} className="text-blue-600" /> Export CSV (.csv)
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="vr mx-1 opacity-10" style={{ height: '24px' }}></div>
-            <button className="btn btn-ghost p-2 rounded-circle transition-all" onClick={() => setIsFullscreen(!isFullscreen)}>
-              {isFullscreen ? <Minimize2 size={17} className="text-zinc-500" /> : <Maximize2 size={17} className="text-zinc-500" />}
+          </Space>
+          <Space size={8}>
+            <button className="chp" onClick={() => setShowExportMenu(!showExportMenu)} style={{ borderColor: C.warning, color: C.warning }} disabled={exporting}>
+              {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Export
             </button>
-            <button className="btn btn-ghost p-2 rounded-circle text-zinc-500 hover-text-red-500" onClick={onClose}><X size={18} /></button>
-          </div>
-        </div>
-
-        {/* FILTERS BAR */}
-        <div className="px-4 py-2 bg-white border-bottom d-flex align-items-center gap-3 flex-shrink-0 flex-wrap">
-          <div className="position-relative" style={{ width: '220px' }}>
-            <Search size={13} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-zinc-400" />
-            <input className="form-control form-control-sm ps-5 rounded-3" placeholder="Filter ASIN, SKU, Title..." value={localSearch}
-              onChange={e => setLocalSearch(e.target.value)} style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb' }} />
-          </div>
-
-          <div style={{ width: '200px' }}>
-            <InfiniteScrollSelect
-              fetchData={fetchSellerDropdownData}
-              value={currentSellerId}
-              onSelect={(sellerId) => {
-                setCurrentSellerId(sellerId);
-                setDateRange({ startDate: '', endDate: '' }); // reset date range on seller change
-              }}
-              placeholder="Filter by Seller..."
-            />
-          </div>
-
-          {/* Custom Date Range Picker (native) */}
-          <div className="d-flex align-items-center gap-2">
-            <Calendar size={13} className="text-zinc-400" />
-            <input
-              type="date"
-              className="form-control form-control-sm rounded-3"
-              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-              placeholder="Start"
-            />
-            <span className="text-zinc-300">–</span>
-            <input
-              type="date"
-              className="form-control form-control-sm rounded-3"
-              style={{ fontSize: '11px', height: '32px', border: '1.5px solid #e5e7eb', width: '130px' }}
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-              placeholder="End"
-            />
-            {(dateRange.startDate || dateRange.endDate) && (
-              <button className="btn btn-sm p-0 text-zinc-400 hover-text-red-500" onClick={() => setDateRange({ startDate: '', endDate: '' })}>
-                <X size={12} />
-              </button>
+            {showExportMenu && !exporting && (
+              <div className="position-absolute bg-white border rounded-lg shadow-xl p-1" style={{ top: '100%', right: 0, zIndex: 100, marginTop: 4, minWidth: 160 }}>
+                <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start py-2 px-3" onClick={() => exportAllData('excel')} style={{ fontSize: 11, border: 'none', background: 'transparent' }}>
+                  <FileText size={14} style={{ color: C.success }} /> Export Excel (.xlsx)
+                </button>
+                <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: 11, border: 'none', background: 'transparent' }}>
+                  <FileText size={14} color="#2563eb" /> Export CSV (.csv)
+                </button>
+              </div>
             )}
-          </div>
+          </Space>
+        </div>
+      }
+      styles={{
+        body: { padding: 0, background: C.white },
+        mask: { backdropFilter: 'blur(6px)', background: 'rgba(15,23,42,0.3)' },
+        header: { borderBottom: `1px solid ${C.borderLight}`, padding: '14px 24px', borderRadius: 0, marginBottom: 0 },
+      }}
+    >
+      <style>{css}</style>
 
-          <div className="d-flex gap-1.5 flex-wrap">
-            {[{ v: 'all', l: 'All' }, { v: '4starPlus', l: '4★+' }, { v: 'lowRating', l: '< 3.5★' }, { v: 'ratingUp', l: 'Improved' }, { v: 'ratingDown', l: 'Dropped' }].map(f => (
-              <button key={f.v} className={`chp ${filterStatus === f.v ? 'act' : ''}`} onClick={() => setFilterStatus(f.v === filterStatus ? 'all' : f.v)}>{f.l}</button>
-            ))}
-          </div>
-
-          <button className={`chp d-flex align-items-center gap-2 ${showFilters ? 'act' : ''}`} onClick={() => setShowFilters(!showFilters)}>
-            <SlidersHorizontal size={13} /> Advanced Filters
+      <div className="px-3 py-2 border-bottom d-flex align-items-center gap-2 flex-shrink-0 flex-wrap" style={{ background: C.bg }}>
+        <div className="position-relative" style={{ width: 200 }}>
+          <Search size={13} className="position-absolute top-50 start-0 translate-middle-y ms-2.5 text-zinc-400" style={{ marginLeft: 10 }} />
+          <input className="form-control form-control-sm ps-5 rounded-3" placeholder="Filter ASIN, SKU..." value={localSearch}
+            onChange={e => setLocalSearch(e.target.value)}
+            style={{ fontSize: 11, height: 30, border: `1.5px solid ${C.border}`, borderRadius: 6, paddingLeft: 28 }} />
+        </div>
+        <div style={{ width: 180 }}>
+          <InfiniteScrollSelect fetchData={fetchSellerDropdownData} value={currentSellerId}
+            onSelect={(sellerId) => { setCurrentSellerId(sellerId); setDateRange({ startDate: '', endDate: '' }); }}
+            placeholder="Filter by Seller..." />
+        </div>
+        <div className="d-flex align-items-center gap-1">
+          <Calendar size={12} style={{ color: C.textSecondary }} />
+          <input type="date" className="form-control form-control-sm rounded-3"
+            style={{ fontSize: 11, height: 30, border: `1.5px solid ${C.border}`, width: 120, borderRadius: 6 }}
+            value={dateRange.startDate} onChange={e => setDateRange(prev => ({ ...prev, startDate: e.target.value }))} />
+          <span style={{ color: C.border }}>–</span>
+          <input type="date" className="form-control form-control-sm rounded-3"
+            style={{ fontSize: 11, height: 30, border: `1.5px solid ${C.border}`, width: 120, borderRadius: 6 }}
+            value={dateRange.endDate} onChange={e => setDateRange(prev => ({ ...prev, endDate: e.target.value }))} />
+        </div>
+        <div className="d-flex gap-1 flex-wrap">
+          {[{ v: 'all', l: 'All' }, { v: '4starPlus', l: '4★+' }, { v: 'lowRating', l: '< 3.5★' }, { v: 'ratingUp', l: 'Improved' }, { v: 'ratingDown', l: 'Dropped' }].map(f => (
+            <button key={f.v} className={`chp ${filterStatus === f.v ? 'act' : ''}`} onClick={() => setFilterStatus(f.v === filterStatus ? 'all' : f.v)}>{f.l}</button>
+          ))}
+        </div>
+        <button className={`chp ${showFilters ? 'act' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+          <SlidersHorizontal size={12} /> Range
+        </button>
+        <div className="d-flex gap-1">
+          {[{ f: 'rating', l: 'Rating' }, { f: 'reviews', l: 'Reviews' }, { f: 'asinCode', l: 'ASIN' }].map(s => (
+            <button key={s.f} className={`chp ${sortBy === s.f ? 'act' : ''}`} onClick={() => handleSort(s.f)}>
+              {s.l} {sortBy === s.f ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+            </button>
+          ))}
+        </div>
+        {hasActiveFilters && (
+          <button className="chp" style={{ borderColor: C.dangerBg, color: C.danger, background: C.dangerBg }} onClick={resetAllFilters}>
+            <X size={12} /> Reset
           </button>
-
-          <div className="vr mx-1 opacity-10" style={{ height: '20px' }}></div>
-
-          <div className="d-flex gap-1.5">
-            {[{ f: 'rating', l: 'Rating' }, { f: 'reviews', l: 'Reviews' }, { f: 'asinCode', l: 'ASIN' }].map(s => (
-              <button key={s.f} className={`chp ${sortBy === s.f ? 'act' : ''}`} onClick={() => handleSort(s.f)}>
-                {s.l} {sortBy === s.f ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-              </button>
-            ))}
-          </div>
-
-          {(filterStatus !== 'all' || localSearch || filterRatingRange.min || filterRatingRange.max || dateRange.startDate || dateRange.endDate) && (
-            <button className="chp text-red-500 border-red-100 bg-red-50" onClick={resetAllFilters} style={{ fontSize: '10px' }}><X size={12} className="me-1" /> Reset View</button>
-          )}
-
-          {loading && <div className="ms-auto d-flex align-items-center gap-2 text-zinc-400" style={{ fontSize: '11px' }}><Loader2 size={14} className="animate-spin" /> Synchronizing...</div>}
-        </div>
-
-        {/* APPLIED FILTERS BADGES */}
-        {(currentSellerId || localSearch || filterStatus !== 'all' || filterRatingRange.min || filterRatingRange.max || dateRange.startDate || dateRange.endDate) && (
-          <div className="px-4 py-2 bg-zinc-50 border-bottom d-flex align-items-center flex-wrap gap-2">
-            <span className="text-zinc-400 fw-bold me-2" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Context Filters
-            </span>
-            <div className="d-flex flex-wrap gap-2">
-              {getAppliedFiltersBadges()}
-            </div>
-            <button
-              className="btn btn-link btn-xs text-red-500 p-0 ms-auto fw-bold text-decoration-none shadow-none"
-              style={{ fontSize: '10px' }}
-              onClick={resetAllFilters}
-            >
-              CLEAR ALL
-            </button>
-          </div>
         )}
-
-        {showFilters && (
-          <div className="px-4 py-3 bg-zinc-50 border-bottom d-flex gap-4 flex-shrink-0 flex-wrap align-items-center">
-            <div className="d-flex align-items-center gap-2">
-              <span className="text-zinc-500 fw-bold" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Rating Range:</span>
-              <div className="d-flex align-items-center gap-1.5 bg-white p-1 rounded-2 border">
-                <input type="number" step="0.1" className="inp-sm border-0" placeholder="Min" value={filterRatingRange.min} onChange={e => setFilterRatingRange(prev => ({ ...prev, min: e.target.value }))} />
-                <span className="text-zinc-300">/</span>
-                <input type="number" step="0.1" className="inp-sm border-0" placeholder="Max" value={filterRatingRange.max} onChange={e => setFilterRatingRange(prev => ({ ...prev, max: e.target.value }))} />
-              </div>
-            </div>
-          </div>
+        {loading && (
+          <span className="d-flex align-items-center gap-1 ms-auto" style={{ fontSize: 11, color: C.textSecondary }}>
+            <Loader2 size={13} className="animate-spin" /> Synchronizing...
+          </span>
         )}
-
-        {/* TABLE */}
-        <div className="flex-grow-1 overflow-auto position-relative">
-          <table className="table table-hover align-middle mb-0 custom-modal-table" style={{ whiteSpace: 'nowrap' }}>
-            <thead>
-              <tr>
-                <th rowSpan={2} style={{ width: '40px', position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>
-                  <input type="checkbox" checked={selectedIds.size === filteredData.length && filteredData.length > 0} onChange={toggleSelectAll} style={{ width: '13px', height: '13px', cursor: 'pointer', accentColor: '#18181b' }} />
-                </th>
-                <th rowSpan={2} style={{ width: '45px', position: 'sticky', left: '40px', zIndex: 40, background: '#fafafa', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>#</th>
-                <th rowSpan={2} style={{ width: '85px', position: 'sticky', left: '85px', zIndex: 40, background: '#fff', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('asinCode')}>
-                  <div className="d-flex align-items-center gap-2">ASIN <Si f="asinCode" /></div>
-                </th>
-                <th rowSpan={2} style={{ width: '120px', borderBottom: '1px solid #e5e7eb' }}>SKU</th>
-                <th rowSpan={2} style={{ width: '80px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('rating')}>
-                  <div className="d-flex align-items-center justify-content-center gap-2">SCORE <Si f="rating" /></div>
-                </th>
-                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }} onClick={() => handleSort('reviews')}>
-                  <div className="d-flex align-items-center justify-content-center gap-2">VOLUME <Si f="reviews" /></div>
-                </th>
-                {weekGroups.map((grp, idx) => (
-                  <th key={grp.name} colSpan={grp.colSpan} style={{ textAlign: 'center', background: '#fff7ed', color: '#9a3412', fontSize: '10px', borderBottom: '1px solid #e5e7eb', borderRight: idx !== weekGroups.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb', letterSpacing: '0.05em' }}>
-                    {grp.name}
-                  </th>
-                ))}
-                <th rowSpan={2} style={{ width: '85px', textAlign: 'center', background: '#fffbeb', borderBottom: '1px solid #e5e7eb', borderLeft: '1px solid #e5e7eb' }} onClick={() => handleSort('wowPercent')}>
-                  <div className="d-flex align-items-center justify-content-center gap-2">WoW % <Si f="wowPercent" /></div>
-                </th>
-                <th rowSpan={2} style={{ width: '60px', textAlign: 'center', borderBottom: '1px solid #e5e7eb' }}>TREND</th>
-              </tr>
-              <tr>
-                {dateColumns.map((col, idx) => (
-                  <th key={col.date} style={{ width: '65px', textAlign: 'center', background: '#fafafa', fontSize: '9px', top: '34px', borderTop: 'none', borderBottom: '1px solid #e5e7eb', borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
-                    {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.length > 0 ? filteredData.map((item, idx) => (
-                <tr key={item._id || item.asinCode} className={selectedIds.has(item._id) ? 'selected' : ''}>
-                  <td style={{ position: 'sticky', left: 0, background: idx % 2 === 0 ? '#fff' : '#fafafa', textAlign: 'center', zIndex: 20 }}>
-                    <input type="checkbox" checked={selectedIds.has(item._id)} onChange={() => toggleSelect(item._id)} style={{ width: '13px', height: '13px', cursor: 'pointer', accentColor: '#18181b' }} />
-                  </td>
-                  <td className="text-zinc-400 text-center" style={{ position: 'sticky', left: '40px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>{idx + 1}</td>
-                  <td style={{ position: 'sticky', left: '85px', background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
-                    <a
-                      href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : item.marketplace === 'myntra' ? (item.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${item.asinCode}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="fw-bold text-blue-600 hover-underline"
-                      style={{ fontSize: '11px', textDecoration: 'none' }}
-                    >
-                      {item.asinCode}
-                    </a>
-                  </td>
-                  <td className="text-zinc-500" style={{ maxWidth: '150px', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
-                  <td className="text-center">
-                    {item.currentRating > 0 ? (
-                      <div className="d-inline-flex align-items-center gap-1 px-2 py-0.5 rounded-2 bg-amber-50 text-amber-700 fw-bold border border-amber-100" style={{ fontSize: '11px' }}>
-                        <Star size={11} className="fill-amber-500 text-amber-500" /> {item.currentRating.toFixed(1)}
-                      </div>
-                    ) : <span className="text-zinc-300">—</span>}
-                  </td>
-                  <td className="text-center">
-                    {item.reviewCount > 0 ? (
-                      <div className="d-inline-flex align-items-center gap-1.5 text-zinc-600 fw-semibold" style={{ fontSize: '11px' }}>
-                        <MessageSquare size={12} className="text-zinc-400" /> {item.reviewCount.toLocaleString()}
-                      </div>
-                    ) : <span className="text-zinc-300">—</span>}
-                  </td>
-                  {item.dateValues.map((dv, di) => {
-                    const col = dateColumns[di];
-                    return (
-                      <td key={di} className="text-center" style={{ padding: '4px 2px', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? '2px solid #e5e7eb' : 'none' }}>
-                        <div className="d-flex flex-column align-items-center gap-0.5">
-                          {dv.rating ? (
-                            <span className="fw-bold text-amber-600" style={{ fontSize: '10px' }}>{dv.rating.toFixed(1)}</span>
-                          ) : <span className="text-zinc-300">·</span>}
-                          {dv.reviews !== null ? (
-                            <span className="text-zinc-500" style={{ fontSize: '9px', fontWeight: 500 }}>{dv.reviews.toLocaleString()}</span>
-                          ) : <span className="text-zinc-200" style={{ fontSize: '8px' }}>—</span>}
-                        </div>
-                      </td>
-                    );
-                  })}
-                  <td className="text-center" style={{ background: '#fffbeb', borderLeft: '1px solid #e5e7eb' }}>
-                    {item.woWChange !== 0 ? (
-                      <div className={`trend-badge ${item.wowTrend === 'up' ? 'trend-up' : 'trend-dn'}`}>
-                        {item.wowTrend === 'up' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {Math.abs(item.woWPercent).toFixed(1)}%
-                      </div>
-                    ) : <div className="trend-badge trend-st"><Minus size={11} /> 0.0%</div>}
-                  </td>
-                  <td className="text-center">
-                    {item.trend === 'up' ? <TrendingUp size={16} className="up" /> : item.trend === 'down' ? <TrendingDown size={16} className="dn" /> : <Minus size={16} className="st" />}
-                  </td>
-                </tr>
-              )) : !loading ? (
-                <tr>
-                  <td colSpan={11 + dateColumns.length} className="text-center py-5">
-                    <div className="d-flex flex-column align-items-center opacity-40">
-                      <Star size={48} className="text-zinc-200 mb-3" />
-                      <p className="text-zinc-500 fw-medium" style={{ fontSize: '14px' }}>No analytical data found for current filters</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-
-          {(loading || hasMore) && (
-            <div ref={loaderRef} className="loader-pulse">
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
-            </div>
-          )}
-        </div>
-
-        {/* FOOTER */}
-        <div className="px-4 py-2.5 bg-zinc-50 border-top d-flex justify-content-between align-items-center flex-shrink-0">
-          <div className="d-flex align-items-center gap-4">
-            <span className="text-zinc-500 fw-medium" style={{ fontSize: '11px' }}>
-              Showing <span className="text-zinc-900 fw-bold">{asins.length.toLocaleString()}</span> of <span className="text-zinc-900 fw-bold">{totalCount.toLocaleString()}</span> global records
-            </span>
-            {selectedIds.size > 0 && (
-              <span className="badge bg-blue-600 text-white rounded-pill px-3 py-1.5" style={{ fontSize: '10px' }}>
-                {selectedIds.size} Selected for Batch Action
-              </span>
-            )}
-          </div>
-          <div className="d-flex align-items-center gap-2 text-zinc-400" style={{ fontSize: '11px' }}>
-            <Loader2 size={12} className={loading ? "animate-spin" : "d-none"} />
-            {loading ? 'Fetching records...' : hasMore ? 'Scroll down to load more analytical history' : 'All historical records loaded'}
-          </div>
-        </div>
       </div>
-    </div>, document.body
+
+      {filterBadges.length > 0 && (
+        <div className="px-3 py-1.5 d-flex align-items-center flex-wrap gap-1.5" style={{ background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}>
+          <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: C.textSecondary, marginRight: 4 }}>Context</span>
+          {filterBadges.map(b => (
+            <div key={b.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: C.white, border: `1px solid ${C.border}`, color: C.text }}>
+              {b.icon}{b.label}
+              <button className="btn btn-link p-0" onClick={b.onRemove} style={{ color: C.textSecondary, lineHeight: 1, border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+          <button className="btn btn-link p-0 ms-auto" onClick={resetAllFilters} style={{ fontSize: 9, fontWeight: 700, color: C.danger, textDecoration: 'none', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+            CLEAR ALL
+          </button>
+        </div>
+      )}
+
+      {showFilters && (
+        <div className="px-3 py-2 d-flex gap-3 align-items-center flex-shrink-0" style={{ background: C.bg, borderBottom: `1px solid ${C.borderLight}` }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.textSecondary }}>Rating Range:</span>
+          <div className="d-flex align-items-center gap-1 bg-white p-1 rounded-2 border" style={{ borderColor: C.border }}>
+            <input type="number" step="0.1" className="inp-sm border-0" placeholder="Min" value={filterRatingRange.min}
+              onChange={e => setFilterRatingRange(prev => ({ ...prev, min: e.target.value }))}
+              style={{ fontSize: 11, height: 28, border: 'none', borderRadius: 6, padding: '2px 10px', width: 80, outline: 'none' }} />
+            <span style={{ color: C.border }}>/</span>
+            <input type="number" step="0.1" className="inp-sm border-0" placeholder="Max" value={filterRatingRange.max}
+              onChange={e => setFilterRatingRange(prev => ({ ...prev, max: e.target.value }))}
+              style={{ fontSize: 11, height: 28, border: 'none', borderRadius: 6, padding: '2px 10px', width: 80, outline: 'none' }} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex-grow-1 overflow-auto position-relative">
+        <table className="rt">
+          <thead>
+            <tr>
+              <th rowSpan={2} style={{ width: 36, position: 'sticky', left: 0, zIndex: 40, background: '#fafafa', textAlign: 'center' }}>
+                <input type="checkbox" checked={selectedIds.size === filteredData.length && filteredData.length > 0} onChange={toggleSelectAll} />
+              </th>
+              <th rowSpan={2} style={{ width: 36, position: 'sticky', left: 36, zIndex: 40, background: '#fafafa', textAlign: 'center' }}>#</th>
+              <th rowSpan={2} style={{ width: 100, position: 'sticky', left: 72, zIndex: 40, background: '#fff' }} onClick={() => handleSort('asinCode')}>
+                <div className="d-flex align-items-center gap-1">ASIN <SortIcon field="asinCode" /></div>
+              </th>
+              <th rowSpan={2} style={{ width: 120 }}>SKU</th>
+              <th rowSpan={2} style={{ width: 70, textAlign: 'center' }} onClick={() => handleSort('rating')}>
+                <div className="d-flex align-items-center justify-content-center gap-1">SCORE <SortIcon field="rating" /></div>
+              </th>
+              <th rowSpan={2} style={{ width: 75, textAlign: 'center' }} onClick={() => handleSort('reviews')}>
+                <div className="d-flex align-items-center justify-content-center gap-1">VOLUME <SortIcon field="reviews" /></div>
+              </th>
+              {weekGroups.map((grp, idx) => (
+                <th key={grp.name} colSpan={grp.colSpan} style={{
+                  textAlign: 'center', background: C.warningBg, color: '#9a3412', fontSize: 10,
+                  borderRight: idx !== weekGroups.length - 1 ? `2px solid ${C.border}` : `1px solid ${C.border}`,
+                  letterSpacing: '0.05em'
+                }}>{grp.name}</th>
+              ))}
+              <th rowSpan={2} style={{ width: 75, textAlign: 'center', background: C.warningBg, borderLeft: `1px solid ${C.border}` }} onClick={() => handleSort('wowPercent')}>
+                <div className="d-flex align-items-center justify-content-center gap-1">WoW % <SortIcon field="wowPercent" /></div>
+              </th>
+              <th rowSpan={2} style={{ width: 55, textAlign: 'center' }}>TREND</th>
+            </tr>
+            <tr>
+              {dateColumns.map((col, idx) => (
+                <th key={col.date} style={{ width: 58, textAlign: 'center', background: '#fafafa', fontSize: 9, top: 32, borderRight: col.isLastOfWeek && idx !== dateColumns.length - 1 ? `2px solid ${C.border}` : 'none' }}>
+                  {new Date(col.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' }).toUpperCase()}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.length > 0 ? filteredData.map((item, idx) => (
+              <tr key={item._id || item.asinCode} className={selectedIds.has(item._id) ? 'selected' : ''}>
+                <td style={{ position: 'sticky', left: 0, background: idx % 2 === 0 ? '#fff' : '#fafafa', textAlign: 'center', zIndex: 20 }}>
+                  <input type="checkbox" checked={selectedIds.has(item._id)} onChange={() => toggleSelect(item._id)} />
+                </td>
+                <td style={{ position: 'sticky', left: 36, background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20, textAlign: 'center', color: C.textSecondary }}>{idx + 1}</td>
+                <td style={{ position: 'sticky', left: 72, background: idx % 2 === 0 ? '#fff' : '#fafafa', zIndex: 20 }}>
+                  <a href={item.marketplace === 'ajio' ? (item.pageUrl || `https://www.ajio.com/p/${item.asinCode}`) : item.marketplace === 'myntra' ? (item.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${item.asinCode}`}
+                    target="_blank" rel="noopener noreferrer" style={{ color: C.primary, fontWeight: 600, fontSize: 11, textDecoration: 'none' }}>
+                    {item.asinCode}
+                  </a>
+                </td>
+                <td style={{ maxWidth: 120, fontSize: 10, color: C.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.sku || ''}>{item.sku || '—'}</td>
+                <td className="text-center">
+                  {item.currentRating > 0 ? (
+                    <div className="d-inline-flex align-items-center gap-1 px-2 py-0.5 rounded-2 fw-bold" style={{ fontSize: 11, background: C.warningBg, color: C.warning, border: `1px solid #fde68a` }}>
+                      <Star size={11} color={C.warning} /> {item.currentRating.toFixed(1)}
+                    </div>
+                  ) : <span style={{ color: C.border }}>—</span>}
+                </td>
+                <td className="text-center">
+                  {item.reviewCount > 0 ? (
+                    <span className="d-inline-flex align-items-center gap-1.5 fw-semibold" style={{ fontSize: 11, color: C.textSecondary }}>
+                      <MessageSquare size={12} style={{ color: C.textSecondary }} /> {item.reviewCount.toLocaleString()}
+                    </span>
+                  ) : <span style={{ color: C.border }}>—</span>}
+                </td>
+                {item.dateValues.map((dv, di) => {
+                  const col = dateColumns[di];
+                  return (
+                    <td key={di} className="text-center" style={{ padding: '4px 2px', borderRight: col.isLastOfWeek && di !== dateColumns.length - 1 ? `2px solid ${C.border}` : 'none' }}>
+                      <div className="d-flex flex-column align-items-center gap-0.5">
+                        {dv.rating ? <span className="fw-bold" style={{ fontSize: 10, color: C.warning }}>{dv.rating.toFixed(1)}</span> : <span style={{ color: C.border }}>·</span>}
+                        {dv.reviews !== null ? <span style={{ fontSize: 9, fontWeight: 500, color: C.textSecondary }}>{dv.reviews.toLocaleString()}</span> : <span style={{ fontSize: 8, color: C.border }}>—</span>}
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="text-center" style={{ background: C.warningBg, borderLeft: `1px solid ${C.border}` }}>
+                  {item.woWChange !== 0 ? (
+                    <div className={`trend-badge ${item.wowTrend === 'up' ? 'trend-up' : 'trend-dn'}`}>
+                      {item.wowTrend === 'up' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                      {Math.abs(item.woWPercent).toFixed(1)}%
+                    </div>
+                  ) : <div className="trend-badge trend-st"><Minus size={11} /> 0.0%</div>}
+                </td>
+                <td className="text-center">
+                  {item.trend === 'up' ? <TrendingUp size={15} className="up" /> : item.trend === 'down' ? <TrendingDown size={15} className="dn" /> : <Minus size={15} className="st" />}
+                </td>
+              </tr>
+            )) : !loading ? (
+              <tr><td colSpan={11 + dateColumns.length} className="text-center py-5" style={{ color: C.textSecondary }}>
+                <Star size={40} style={{ color: C.border, marginBottom: 12, opacity: 0.4 }} />
+                <div style={{ fontWeight: 500 }}>No analytical data found for current filters</div>
+              </td></tr>
+            ) : null}
+          </tbody>
+        </table>
+        {(loading || hasMore) && (
+          <div ref={loaderRef} className="loader-pulse"><div className="pulse-dot" /><div className="pulse-dot" /><div className="pulse-dot" /></div>
+        )}
+      </div>
+
+      <div className="px-3 py-2 d-flex justify-content-between align-items-center flex-shrink-0 border-top" style={{ background: C.bg }}>
+        <div className="d-flex align-items-center gap-3">
+          <span style={{ fontSize: 11, color: C.textSecondary, fontWeight: 500 }}>
+            Showing {asins.length.toLocaleString()} of {totalCount.toLocaleString()} records
+          </span>
+          {selectedIds.size > 0 && (
+            <Badge count={`${selectedIds.size} Selected`} style={{ backgroundColor: C.primary, fontSize: 10, fontWeight: 600, border: 'none' }} overflowCount={999999} />
+          )}
+        </div>
+        <span style={{ fontSize: 11, color: C.textSecondary }}>
+          {loading ? 'Fetching records...' : hasMore ? 'Scroll down to load more' : 'All historical records loaded'}
+        </span>
+      </div>
+    </Modal>
   );
 };
 

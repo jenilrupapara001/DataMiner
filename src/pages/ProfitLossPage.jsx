@@ -117,9 +117,6 @@ const ProfitLossPage = () => {
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
-      <div className="page-header">
-        <h1 className="page-title"><i className="bi bi-currency-dollar"></i>Profit & Loss</h1>
-      </div>
       <div className="page-content">
         <Filters filters={filters} onFilterChange={handleFilterChange} showDateRange={true} showSearch={true} />
 

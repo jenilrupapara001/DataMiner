@@ -188,7 +188,6 @@ export default function WebhookSettingsPage() {
         <div className="ws-header-left">
           <div className="ws-header-icon"><Webhook size={20} /></div>
           <div>
-            <h1 className="ws-title">Webhook &amp; Notifications</h1>
             <p className="ws-subtitle">
               Connect RetailOps to Pabbly Connect to receive email &amp; automation alerts for any event
             </p>

@@ -894,9 +894,6 @@ const ScheduledRunsPage = () => {
                     }}>
                         <Activity size={11} /> Automation Hub
                     </div>
-                    <Title level={2} style={{ margin: 0, fontWeight: 800, fontSize: '24px', color: tokens.text.primary, letterSpacing: '-0.025em' }}>
-                        Pipeline Scheduler & Telemetry
-                    </Title>
                     <Text style={{ fontSize: '13px', color: tokens.text.tertiary }}>
                         Monitor ingestion pipelines, analyze seller performance, and manage automation schedules.
                     </Text>

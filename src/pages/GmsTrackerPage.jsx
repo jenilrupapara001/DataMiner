@@ -1167,7 +1167,6 @@ export default function GmsTrackerPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 800, fontSize: '1.25rem' }}>GMS Tracker</Title>
             <Tag color="blue" style={{ border: 'none', fontWeight: 700, borderRadius: 4, fontSize: 10 }}>Interactive</Tag>
           </div>
           <Text type="secondary" style={{ fontSize: 10.5, display: 'block', marginTop: 1 }}>

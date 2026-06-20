@@ -296,23 +296,42 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
     setExportProgress(0);
 
     try {
+      const now = new Date();
+      const toISODate = (d) => d.toISOString().split('T')[0];
+
+      let exportDateRange = dateOption;
+      let isHistorical = false;
+
+      if (dateOption === 'today' || dateOption === 'yesterday') {
+        exportDateRange = 'all';
+      } else if (dateOption === '7days') {
+        const start = new Date(now);
+        start.setDate(start.getDate() - 7);
+        exportDateRange = { start: start.toISOString(), end: now.toISOString() };
+        isHistorical = true;
+      } else if (dateOption === '30days') {
+        const start = new Date(now);
+        start.setDate(start.getDate() - 30);
+        exportDateRange = { start: start.toISOString(), end: now.toISOString() };
+        isHistorical = true;
+      } else if (dateOption === 'custom' && customDateRange) {
+        const startISO = customDateRange[0].toISOString();
+        const endISO = customDateRange[1].toISOString();
+        const startDay = toISODate(customDateRange[0]);
+        const endDay = toISODate(customDateRange[1]);
+        exportDateRange = { start: startISO, end: endISO };
+        if (startDay !== endDay) {
+          isHistorical = true;
+        }
+      }
+
       const exportParams = {
         fields: selectedFields,
         format: exportFormat,
-        dateRange: dateOption === 'custom' && customDateRange 
-          ? { start: customDateRange[0].toISOString(), end: customDateRange[1].toISOString() } 
-          : dateOption,
+        dateRange: exportDateRange,
         sellerIds: selectedSellerIds,
+        isHistorical,
       };
-
-      if (dateOption === 'custom' && customDateRange) {
-        // Check if multiple dates are selected (start and end are not on the same day)
-        const startDay = customDateRange[0].toISOString().split('T')[0];
-        const endDay = customDateRange[1].toISOString().split('T')[0];
-        if (startDay !== endDay) {
-          exportParams.isHistorical = true;
-        }
-      }
 
       if (exportType === 'selected') {
         exportParams.asinIds = selectedIds;

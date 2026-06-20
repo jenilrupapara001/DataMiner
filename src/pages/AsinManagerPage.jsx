@@ -60,7 +60,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
-import { usePageTitle } from '../contexts/PageTitleContext';
+import { useHeader } from '../contexts/HeaderContext';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 const AsinDetailModal = lazy(() => import('../components/AsinDetailModal'));
@@ -409,12 +409,15 @@ const AsinManagerPage = (props) => {
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
   const [sortBy, setSortBy] = useState('lastLiveSyncAt');
   const [sortOrder, setSortOrder] = useState('desc');
-  const { setPageTitle } = usePageTitle();
+  const { setPageMeta } = useHeader();
 
   useEffect(() => {
-    setPageTitle('ASIN Manager');
-    return () => setPageTitle('');
-  }, [setPageTitle]);
+    setPageMeta({
+      title: 'ASIN Manager',
+      subtitle: `Managing ${pagination.total} ASINs`,
+      breadcrumbs: [{ label: 'Workspace' }, { label: 'ASIN Manager' }],
+    });
+  }, [setPageMeta, pagination.total]);
   const [scrapeProgress, setScrapeProgress] = useState(null);
   const socket = useSocket();
   const [selectedAsin, setSelectedAsin] = useState(null);
@@ -2177,8 +2180,8 @@ const AsinManagerPage = (props) => {
       {/* Relocated header actions to Table Toolbar for dense view UI */}
 
       {/* ANALYTICS MODULE AREA - RECTANGULAR PILLS STYLE */}
-      <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '72px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
-        <div className="px-3 pt-2 pb-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
+      <div className="flex-shrink-0 overflow-hidden" style={{ maxHeight: showDashboard ? '52px' : '0px', transition: 'all 0.3s ease', opacity: showDashboard ? 1 : 0, pointerEvents: showDashboard ? 'auto' : 'none' }}>
+        <div className="px-3 py-1 d-flex align-items-center gap-2 overflow-x-auto custom-scrollbar" style={{ width: '100%' }}>
           {kpis.map((kpi, idx) => (
             <Tooltip key={idx} title={kpi.sub || null} placement="bottom" mouseEnterDelay={0.3}>
               <div
@@ -2238,7 +2241,7 @@ const AsinManagerPage = (props) => {
         </div>
       )}
 
-      <div className="page-content flex-grow-1 d-flex flex-column overflow-hidden px-3 pt-1 pb-3" style={{ minHeight: 0 }}>
+      <div className="page-content flex-grow-1 d-flex flex-column overflow-hidden px-3 pb-3" style={{ minHeight: 0 }}>
         {/* Alerts & Errors row */}
         {error && (
           <div className="alert alert-danger border-0 shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2" role="alert">
@@ -2314,18 +2317,17 @@ const AsinManagerPage = (props) => {
                   .asin-page-container {
                     display: flex;
                     flex-direction: column;
-                    height: calc(100vh - 60px);
+                    height: 100%;
                     overflow: hidden;
-                    background-color: #f4f7fe;
-                    margin: -1.5rem -2rem;
+                    background-color: #f4f5f7;
                   }
                   .asin-toolbar {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     flex-shrink: 0;
-                    gap: 16px;
-                    padding: 10px 16px;
+                    gap: 12px;
+                    padding: 8px 16px;
                   }
                   .asin-toolbar-left {
                     display: flex;
@@ -2384,260 +2386,218 @@ const AsinManagerPage = (props) => {
 
           {/* Table Toolbar */}
           <div className="asin-toolbar border-bottom bg-white">
-            <div className="asin-toolbar-left flex-grow-1">
-              <div className="d-flex align-items-center gap-2">
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#27272a', letterSpacing: '0.02em', whiteSpace: 'nowrap' }} className="text-uppercase">
-                  Inventory
-                  <span className="ms-2 bg-light border text-secondary px-2 py-0.5 rounded-pill" style={{ fontSize: '10px', fontWeight: 600 }}>
-                    {pagination.total.toLocaleString()}
-                  </span>
+            <div className="asin-toolbar-left d-flex align-items-center gap-2 flex-grow-1" style={{ flexWrap: 'wrap', minWidth: 0 }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#27272a', letterSpacing: '0.02em', whiteSpace: 'nowrap' }} className="text-uppercase d-flex align-items-center gap-1">
+                Inventory
+                <span className="bg-light border text-secondary px-1.5 rounded-pill fw-semibold" style={{ fontSize: '10px', lineHeight: '18px' }}>
+                  {pagination.total.toLocaleString()}
                 </span>
                 <button
                   type="button"
-                  className="btn btn-ghost p-1 ms-1 rounded-circle text-secondary hover-bg-light d-flex align-items-center justify-content-center"
+                  className="btn btn-ghost p-0 ms-1 rounded-circle text-secondary d-flex align-items-center justify-content-center"
                   onClick={() => setShowDashboard(!showDashboard)}
-                  style={{ width: '22px', height: '22px', border: 'none' }}
+                  style={{ width: '20px', height: '20px', border: 'none', background: 'transparent' }}
                   title={showDashboard ? 'Collapse Overview' : 'Expand Overview'}
                 >
-                  {showDashboard ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  {showDashboard ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
-              </div>
+              </span>
 
-              <div className="d-flex align-items-center gap-2">
-                {/* MARKETPLACE SWITCHER - RELOCATED */}
-                <Segmented
-                  size="small"
-                  value={marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'amazon.in' : marketplaceFilter}
-                  onChange={(val) => {
-                    setMarketplaceFilter(val);
-                    loadData(1, pagination.limit, selectedSeller, val);
+              {/* MARKETPLACE SWITCHER */}
+              <Segmented
+                size="small"
+                value={marketplaceFilter === 'amazon.in' || (marketplaceFilter === 'all' && !canAccessAjio && !canAccessMyntra) ? 'amazon.in' : marketplaceFilter}
+                onChange={(val) => {
+                  setMarketplaceFilter(val);
+                  loadData(1, pagination.limit, selectedSeller, val);
+                }}
+                options={[
+                  {
+                    value: 'amazon.in',
+                    label: (
+                      <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'amazon.in' ? 'none' : 'grayscale(100%)' }} alt="Amazon" />
+                      </span>
+                    )
+                  },
+                  {
+                    value: 'ajio',
+                    label: (
+                      <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                        <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '9px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%)' }} alt="Ajio" />
+                      </span>
+                    )
+                  },
+                  ...(canAccessMyntra ? [{
+                    value: 'myntra',
+                    label: (
+                      <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
+                        <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%)' }} alt="Myntra" />
+                      </span>
+                    )
+                  }] : [])
+                ]}
+                style={{ background: '#f4f4f5', padding: '2px', borderRadius: '6px', flexShrink: 0 }}
+              />
+
+              <Input.Search
+                placeholder="Search ASIN, SKU, Title..."
+                size="small"
+                enterButton="Find"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onSearch={handleApplySearch}
+                className="antd-dense-search asin-search-input"
+              />
+              <div className="asin-seller-select-wrapper">
+                <InfiniteScrollSelect
+                  fetchData={fetchSellerDropdownData}
+                  value={selectedSeller}
+                  onSelect={(val) => {
+                    setSelectedSeller(val);
+                    loadData(1, pagination.limit, val);
                   }}
-                  options={[
-                    {
-                      value: 'amazon.in',
-                      label: (
-                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'amazon.in' ? 'none' : 'grayscale(100%)' }} alt="Amazon" />
-                        </span>
-                      )
-                    },
-                    {
-                      value: 'ajio',
-                      label: (
-                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
-                          <img src="https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png?c=1bxid64Mup7aczewSAYMX&t=1776791426160" style={{ height: '9px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'ajio' ? 'none' : 'grayscale(100%)' }} alt="Ajio" />
-                        </span>
-                      )
-                    },
-                    ...(canAccessMyntra ? [{
-                      value: 'myntra',
-                      label: (
-                        <span className="d-flex align-items-center justify-content-center" style={{ height: '20px', padding: '0 4px' }}>
-                          <img src="https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg?c=1bxid64Mup7aczewSAYMX&t=1772274333492" style={{ height: '10px', width: 'auto', objectFit: 'contain', filter: marketplaceFilter === 'myntra' ? 'none' : 'grayscale(100%)' }} alt="Myntra" />
-                        </span>
-                      )
-                    }] : [])
-                  ]}
-                  style={{ background: '#f4f4f5', padding: '2px', borderRadius: '6px' }}
+                  placeholder="All Sellers"
                 />
               </div>
 
-              <div className="d-flex align-items-center gap-2">
-                <Input.Search
-                  placeholder="Search ASIN, SKU, Title..."
-                  size="middle"
-                  enterButton="Find"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onSearch={handleApplySearch}
-                  className="antd-dense-search asin-search-input"
-                />
-                <div className="asin-seller-select-wrapper">
-                  <InfiniteScrollSelect
-                    fetchData={fetchSellerDropdownData}
-                    value={selectedSeller}
-                    onSelect={(val) => {
-                      setSelectedSeller(val);
-                      loadData(1, pagination.limit, val);
-                    }}
-                    placeholder="All Sellers"
-                  />
-                </div>
-
-                {/* MODERNIZED ACTIONS DROPDOWN */}
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'filters-grp',
-                        type: 'group',
-                        label: 'QUICK FILTERS',
-                        children: [
-                          {
-                            key: 'price-dispute',
-                            label: appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only',
-                            icon: <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />,
-                            onClick: () => {
-                              const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
-                              setAppliedFilters(newFilters);
-                              setFilters(newFilters);
-                            }
-                          },
-                          {
-                            key: 'bsr-trend',
-                            label: appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR',
-                            icon: <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />,
-                            onClick: () => {
-                              const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
-                              setAppliedFilters(newFilters);
-                              setFilters(newFilters);
-                            }
-                          },
-                          {
-                            key: 'rating-trend',
-                            label: appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings',
-                            icon: <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />,
-                            onClick: () => {
-                              const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
-                              setAppliedFilters(newFilters);
-                              setFilters(newFilters);
-                            }
+              {/* ACTIONS DROPDOWN */}
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'filters-grp',
+                      type: 'group',
+                      label: 'QUICK FILTERS',
+                      children: [
+                        {
+                          key: 'price-dispute',
+                          label: appliedFilters.priceDispute === 'true' ? 'Show All Products' : 'Show Dispute Only',
+                          icon: <AlertTriangle size={14} className={appliedFilters.priceDispute === 'true' ? "text-amber-600" : "text-amber-400"} />,
+                          onClick: () => {
+                            const newFilters = { ...appliedFilters, priceDispute: appliedFilters.priceDispute === 'true' ? '' : 'true' };
+                            setAppliedFilters(newFilters);
+                            setFilters(newFilters);
                           }
-                        ]
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'views-grp',
-                        type: 'group',
-                        label: 'QUICK VIEWS',
-                        children: [
-                          {
-                            key: 'bsr-matrix',
-                            label: 'BSR Ranking Matrix',
-                            icon: <BarChart2 size={14} className="text-indigo-500" />,
-                            onClick: () => setShowAllBsrHistory(true)
-                          },
-                          {
-                            key: 'rating-analytics',
-                            label: 'Rating Analytics',
-                            icon: <LayoutGrid size={14} className="text-purple-500" />,
-                            onClick: () => setShowAllRatingHistory(true)
+                        },
+                        {
+                          key: 'bsr-trend',
+                          label: appliedFilters.bsrTrend === 'Down' ? 'Clear BSR Filter' : 'Show Falling BSR',
+                          icon: <TrendingDown size={14} className={appliedFilters.bsrTrend === 'Down' ? "text-rose-600" : "text-rose-400"} />,
+                          onClick: () => {
+                            const newFilters = { ...appliedFilters, bsrTrend: appliedFilters.bsrTrend === 'Down' ? '' : 'Down' };
+                            setAppliedFilters(newFilters);
+                            setFilters(newFilters);
                           }
-                        ]
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'bulk-grp',
-                        type: 'group',
-                        label: (
-                          <div className="d-flex justify-content-between align-items-center w-100">
-                            <span>BULK ACTIONS</span>
-                            {selectedIds.size === 0 && <Tag style={{ fontSize: '9px', borderRadius: '4px' }}>SELECT ROWS</Tag>}
-                          </div>
-                        ),
-                        children: [
-                          {
-                            key: 'mark-dispute',
-                            label: 'Mark as Price Dispute',
-                            icon: <AlertTriangle size={14} className="text-amber-500" />,
-                            disabled: selectedIds.size === 0,
-                            onClick: () => handleBulkPriceDispute(true)
-                          },
-                          {
-                            key: 'resolve-dispute',
-                            label: 'Resolve Dispute',
-                            icon: <RefreshCw size={14} className="text-emerald-500" />,
-                            disabled: selectedIds.size === 0,
-                            onClick: () => handleBulkPriceDispute(false)
-                          },
-                          {
-                            key: 'run-rulesets',
-                            label: 'Run Rulesets on Selected',
-                            icon: <PlayCircle size={14} className="text-indigo-500" />,
-                            disabled: selectedIds.size === 0,
-                            onClick: handleRunRulesets
-                          },
-                          {
-                            key: 'create-task',
-                            label: 'Create Task for Selected',
-                            icon: <PlusCircle size={14} className="text-emerald-500" />,
-                            disabled: selectedIds.size === 0,
-                            onClick: handleOpenTaskModal
+                        },
+                        {
+                          key: 'rating-trend',
+                          label: appliedFilters.ratingTrend === 'Down' ? 'Clear Rating Filter' : 'Show Falling Ratings',
+                          icon: <Star size={14} className={appliedFilters.ratingTrend === 'Down' ? "text-amber-600" : "text-amber-400"} />,
+                          onClick: () => {
+                            const newFilters = { ...appliedFilters, ratingTrend: appliedFilters.ratingTrend === 'Down' ? '' : 'Down' };
+                            setAppliedFilters(newFilters);
+                            setFilters(newFilters);
                           }
-                        ]
-                      }
-                    ]
-                  }}
-                  trigger={['click']}
-                  placement="bottomRight"
-                >
-                  <Button
-                    icon={<MoreVertical size={14} />}
-                    className={`d-flex align-items-center gap-2 rounded-3 shadow-sm ${selectedIds.size > 0 ? 'border-indigo-500 text-indigo-600' : ''}`}
-                    style={{
-                      height: '32px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      borderRadius: '8px'
-                    }}
-                  >
-                    Actions
-                  </Button>
-                </Dropdown>
-
-                {/* Scrape Progress */}
-                {scrapeProgress && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-2 px-2 d-flex align-items-center gap-2" style={{ height: '32px' }}>
-                    <RefreshCw size={12} className="text-indigo-600 spin" />
-                    <span className="fw-bold text-indigo-700 font-monospace small">{scrapeProgress.processed}/{scrapeProgress.total}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="asin-toolbar-right">
-              <Button
-                icon={<RefreshCw size={14} className={syncing ? 'spin' : ''} />}
-                onClick={handleBulkScrape}
-                disabled={syncing}
-                style={{
-                  height: '32px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  borderRadius: '8px'
+                        }
+                      ]
+                    },
+                    { type: 'divider' },
+                    {
+                      key: 'views-grp',
+                      type: 'group',
+                      label: 'QUICK VIEWS',
+                      children: [
+                        {
+                          key: 'bsr-matrix',
+                          label: 'BSR Ranking Matrix',
+                          icon: <BarChart2 size={14} />,
+                          onClick: () => setShowAllBsrHistory(true)
+                        },
+                        {
+                          key: 'rating-analytics',
+                          label: 'Rating Analytics',
+                          icon: <LayoutGrid size={14} />,
+                          onClick: () => setShowAllRatingHistory(true)
+                        }
+                      ]
+                    },
+                    { type: 'divider' },
+                    {
+                      key: 'bulk-grp',
+                      type: 'group',
+                      label: (
+                        <div className="d-flex justify-content-between align-items-center w-100">
+                          <span>BULK ACTIONS</span>
+                          {selectedIds.size === 0 && <Tag style={{ fontSize: '9px', borderRadius: '4px' }}>SELECT ROWS</Tag>}
+                        </div>
+                      ),
+                      children: [
+                        {
+                          key: 'mark-dispute',
+                          label: 'Mark as Price Dispute',
+                          icon: <AlertTriangle size={14} className="text-amber-500" />,
+                          disabled: selectedIds.size === 0,
+                          onClick: () => handleBulkPriceDispute(true)
+                        },
+                        {
+                          key: 'resolve-dispute',
+                          label: 'Resolve Dispute',
+                          icon: <RefreshCw size={14} className="text-emerald-500" />,
+                          disabled: selectedIds.size === 0,
+                          onClick: () => handleBulkPriceDispute(false)
+                        },
+                        {
+                          key: 'run-rulesets',
+                          label: 'Run Rulesets on Selected',
+                          icon: <PlayCircle size={14} />,
+                          disabled: selectedIds.size === 0,
+                          onClick: handleRunRulesets
+                        },
+                        {
+                          key: 'create-task',
+                          label: 'Create Task for Selected',
+                          icon: <PlusCircle size={14} className="text-emerald-500" />,
+                          disabled: selectedIds.size === 0,
+                          onClick: handleOpenTaskModal
+                        }
+                      ]
+                    }
+                  ]
                 }}
-                className="d-flex align-items-center gap-2 shadow-sm"
+                trigger={['click']}
+                placement="bottomRight"
               >
-                Sync
-              </Button>
-
-              {/* FILTERS Button */}
-              <Button
-                onClick={() => setFilterPanelOpen(!filterPanelOpen)}
-                type={filterPanelOpen ? 'primary' : 'default'}
-                icon={<ListChecks size={14} />}
-                style={{
-                  height: '32px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  borderRadius: '8px'
-                }}
-                className="d-flex align-items-center gap-2 shadow-sm"
-              >
-                {(() => {
-                  const count = Object.values(appliedFilters).filter(v =>
-                    v !== '' && (!Array.isArray(v) || v.length > 0)
-                  ).length;
-                  return `Filters ${count > 0 ? `(${count})` : ''}`;
-                })()}
-              </Button>
-
-              {/* ✅ COLUMNS Button */}
-              <div className="position-relative">
                 <Button
-                  onClick={() => setShowColumnPanel(!showColumnPanel)}
-                  type={showColumnPanel ? 'primary' : 'default'}
-                  icon={<LayoutGrid size={14} />}
+                  icon={<MoreVertical size={14} />}
+                  style={{
+                    height: '32px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '8px'
+                  }}
+                  className="d-flex align-items-center gap-1 shadow-sm"
+                >
+                  Actions
+                </Button>
+              </Dropdown>
+
+              {/* Scrape Progress */}
+              {scrapeProgress && (
+                <div className="bg-light border rounded-2 px-2 d-flex align-items-center gap-2" style={{ height: '32px', borderColor: '#e4e4e7' }}>
+                  <RefreshCw size={12} className="spin" style={{ color: '#fb4f40' }} />
+                  <span className="fw-bold font-monospace small" style={{ color: '#27272a' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
+                </div>
+              )}
+
+              {/* Spacer */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }} />
+
+              <div className="d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
+                <Button
+                  icon={<RefreshCw size={14} className={syncing ? 'spin' : ''} />}
+                  onClick={handleBulkScrape}
+                  disabled={syncing}
                   style={{
                     height: '32px',
                     fontSize: '11px',
@@ -2646,28 +2606,63 @@ const AsinManagerPage = (props) => {
                   }}
                   className="d-flex align-items-center gap-2 shadow-sm"
                 >
-                  Columns
+                  Sync
                 </Button>
 
-                <ColumnVisibilityPanel
-                  isOpen={showColumnPanel}
-                  onClose={() => setShowColumnPanel(false)}
-                  visibleColumns={visibleColumns}
-                  onApply={updateVisibleColumns}
-                  allColumns={allColumns}
-                  columnCategories={columnCategories}
-                />
-              </div>
+                <Button
+                  onClick={() => setFilterPanelOpen(!filterPanelOpen)}
+                  type={filterPanelOpen ? 'primary' : 'default'}
+                  icon={<ListChecks size={14} />}
+                  style={{
+                    height: '32px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '8px'
+                  }}
+                  className="d-flex align-items-center gap-2 shadow-sm"
+                >
+                  {(() => {
+                    const count = Object.values(appliedFilters).filter(v =>
+                      v !== '' && (!Array.isArray(v) || v.length > 0)
+                    ).length;
+                    return `Filters ${count > 0 ? `(${count})` : ''}`;
+                  })()}
+                </Button>
 
-              <div className="vr mx-1 text-secondary opacity-25" style={{ height: '20px' }} />
+                <div className="position-relative">
+                  <Button
+                    onClick={() => setShowColumnPanel(!showColumnPanel)}
+                    type={showColumnPanel ? 'primary' : 'default'}
+                    icon={<LayoutGrid size={14} />}
+                    style={{
+                      height: '32px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      borderRadius: '8px'
+                    }}
+                    className="d-flex align-items-center gap-2 shadow-sm"
+                  >
+                    Columns
+                  </Button>
 
-              <div className="d-flex align-items-center gap-1">
+                  <ColumnVisibilityPanel
+                    isOpen={showColumnPanel}
+                    onClose={() => setShowColumnPanel(false)}
+                    visibleColumns={visibleColumns}
+                    onApply={updateVisibleColumns}
+                    allColumns={allColumns}
+                    columnCategories={columnCategories}
+                  />
+                </div>
+
+                <div className="vr mx-1 text-secondary opacity-25" style={{ height: '20px' }} />
+
                 {hasPermission('asinmanager_manage') && (
                   <Tooltip title="Bulk Optimization">
                     <Button
                       onClick={handleBulkCreateActions}
                       disabled={asins.length === 0 || syncing}
-                      icon={<Zap size={14} className={syncing ? 'spin text-amber-500' : 'text-amber-500 fill-amber-500'} />}
+                      icon={<Zap size={14} style={{ color: '#fb4f40' }} />}
                       style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                       className="d-flex align-items-center justify-content-center shadow-sm"
                     />
@@ -2678,7 +2673,7 @@ const AsinManagerPage = (props) => {
                   <Tooltip title="Export">
                     <Button
                       onClick={() => setShowExportModal(true)}
-                      icon={<Download size={14} className="text-indigo-500" />}
+                      icon={<Download size={14} style={{ color: '#27272a' }} />}
                       style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                       className="d-flex align-items-center justify-content-center shadow-sm"
                     />

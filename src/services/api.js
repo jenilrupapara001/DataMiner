@@ -563,6 +563,19 @@ export const sellerApi = {
     }, 5 * 60 * 1000); // 5 min TTL
   },
 
+  getStats: async (params = {}) => {
+    const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
+      if (val !== undefined && val !== null && val !== '') acc[key] = val;
+      return acc;
+    }, {});
+    const query = new URLSearchParams(cleanParams).toString();
+    const res = await fetch(`${API_BASE}/sellers/stats?${query}`, {
+      headers: { ...getAuthHeader() },
+    });
+    if (!res.ok) throw new Error('Failed to fetch seller stats');
+    return res.json();
+  },
+
   getById: async (id) => {
     const cacheKey = `seller:${id}`;
     return cachedFetch(cacheKey, async () => {

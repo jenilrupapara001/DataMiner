@@ -5,22 +5,26 @@ import React, {
   useRef, Suspense, lazy
 } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
-import { sellerApi, asinApi, marketSyncApi } from '../services/api';
+import { sellerApi, userApi, asinApi, marketSyncApi } from '../services/api';
 import {
-  Table, Button, Input, Segmented, Select, Space,
+  Table, Button, Select, Space,
   Tag, Typography, Tooltip, Avatar, Empty,
   Divider, Badge, Card, Popconfirm
 } from 'antd';
 import {
-  Package, Search, Plus, FileUp, Upload,
-  Clock, Trash2, Play, Pause, LayoutGrid,
-  RefreshCw, Edit3, ChevronRight, Star, Zap
+  Package, FileUp,
+  Clock, Trash2, Play, Pause,
+  RefreshCw, Edit3, Star, Zap
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useHeader } from '../contexts/HeaderContext';
 import { useSocket } from '../contexts/SocketContext';
+import SellerPageHeader from '../components/sellers/SellerPageHeader';
+import SellerStatsStrip from '../components/sellers/SellerStatsStrip';
+import SellerToolbar from '../components/sellers/SellerToolbar';
 
 const AddSellerModal = lazy(() => import('../components/sellers/AddSellerModal'));
 const ImportSellerModal = lazy(() => import('../components/sellers/ImportSellerModal'));
@@ -28,18 +32,18 @@ const SellerAsinsModal = lazy(() => import('../components/sellers/SellerAsinsMod
 const PoolManagementModal = lazy(() => import('../components/sellers/PoolManagementModal'));
 const BulkImportModal = lazy(() => import('../components/asins/BulkImportModal'));
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
 const GRADIENTS = [
-  'linear-gradient(135deg, #4f46e5, #7c3aed)',
-  'linear-gradient(135deg, #2563eb, #3b82f6)',
-  'linear-gradient(135deg, #059669, #10b981)',
-  'linear-gradient(135deg, #ea580c, #f97316)',
-  'linear-gradient(135deg, #db2777, #ec4899)',
-  'linear-gradient(135deg, #1e1b4b, #312e81)',
-  'linear-gradient(135deg, #0f766e, #14b8a6)',
+  'linear-gradient(135deg, #d94033, #fb4f40)',
+  'linear-gradient(135deg, #c2352a, #e8634e)',
+  'linear-gradient(135deg, #e04a3a, #ff7a6b)',
+  'linear-gradient(135deg, #b8251a, #d94033)',
+  'linear-gradient(135deg, #d94033, #fb6f5f)',
+  'linear-gradient(135deg, #a31e14, #c2352a)',
+  'linear-gradient(135deg, #c2352a, #e04a3a)',
 ];
 
 function getStoreGradient(str = '') {
@@ -66,6 +70,7 @@ function formatTimeAgo(dateString) {
 const SellersPage = () => {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
   const { addToast } = useToast();
+  const { setPageMeta } = useHeader();
   const socket = useSocket();
 
   const isBrandManager = useMemo(() => {
@@ -78,13 +83,25 @@ const SellersPage = () => {
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
 
+  useEffect(() => {
+    setPageMeta({
+      title: 'Seller Management',
+      subtitle: `Manage ${totalItems} storefronts`,
+      breadcrumbs: [{ label: 'Global' }, { label: 'Sellers' }],
+    });
+  }, [setPageMeta, totalItems]);
+
   // ── Filter state ───────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [marketplaceFilter, setMarketplaceFilter] = useState('all');
+  const [managerFilter, setManagerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [managersList, setManagersList] = useState([]);
+  const [dbStats, setDbStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   // ── Modal / UI state ───────────────────────────────────────────────────
   const [showAddModal, setShowAddModal] = useState(false);
@@ -123,12 +140,23 @@ const SellersPage = () => {
     else if (canAccessAmazon && !canAccessAjio) setMarketplaceFilter('amazon.in');
   }, []); // eslint-disable-line
 
+  // Fetch managers list for filter dropdown
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await userApi.getManagers();
+        if (res.success) setManagersList(res.data || []);
+      } catch (err) { console.error('Failed to fetch managers:', err); }
+    })();
+  }, []);
+
   // ── Core fetch (stable — never changes) ────────────────────────────────
   const loadSellers = useCallback(async (params = {}) => {
     const {
       page: p = 1, limit: l = 50,
       activeTab: tab = 'all',
       marketplaceFilter: mf = 'all',
+      managerFilter: mgr = 'all',
       statusFilter: sf = 'all',
       search: q = '',
       silent = false
@@ -140,6 +168,7 @@ const SellersPage = () => {
         page: p, limit: l,
         status: sf !== 'all' ? sf : tab !== 'all' ? tab : undefined,
         marketplace: mf !== 'all' ? mf : undefined,
+        manager: mgr !== 'all' ? mgr : undefined,
         search: q || undefined,
       });
 
@@ -170,17 +199,35 @@ const SellersPage = () => {
     }
   }, []); // stable forever
 
+  // Fetch aggregated stats from backend whenever filters change
+  useEffect(() => {
+    (async () => {
+      setStatsLoading(true);
+      try {
+        const params = {};
+        if (marketplaceFilter !== 'all') params.marketplace = marketplaceFilter;
+        if (managerFilter !== 'all') params.manager = managerFilter;
+        if (activeTab !== 'all') params.status = activeTab;
+        if (statusFilter !== 'all') params.status = statusFilter;
+        if (debouncedSearch) params.search = debouncedSearch;
+        const res = await sellerApi.getStats(params);
+        if (res.success) setDbStats(res.data);
+      } catch (err) { console.error('Failed to fetch seller stats:', err); }
+      finally { setStatsLoading(false); }
+    })();
+  }, [activeTab, marketplaceFilter, managerFilter, statusFilter, debouncedSearch]);
+
   // Trigger on filter change
   useEffect(() => {
     setPage(1);
-    void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch });
-  }, [activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
+    void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch });
+  }, [activeTab, marketplaceFilter, managerFilter, statusFilter, debouncedSearch, loadSellers]);
 
   // Trigger on page/limit change only (skip initial render — already handled above)
   const isFirstPageRender = useRef(true);
   useEffect(() => {
     if (isFirstPageRender.current) { isFirstPageRender.current = false; return; }
-    void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch });
+    void loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch });
   }, [page, limit]); // eslint-disable-line
 
   // Socket: silent refresh via ref
@@ -204,7 +251,7 @@ const SellersPage = () => {
     if (!socket) return;
     const handleAsinsUpdated = (data) => {
       void loadSellersRef.current({
-        page, limit, activeTab, marketplaceFilter, statusFilter,
+        page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter,
         search: debouncedSearch, silent: true
       });
     };
@@ -237,7 +284,7 @@ const SellersPage = () => {
 
   useEffect(() => {
     setSelectedSellerIds([]);
-  }, [page, activeTab, marketplaceFilter, debouncedSearch]);
+  }, [page, activeTab, marketplaceFilter, managerFilter, debouncedSearch]);
 
   // ── OPTIMISTIC: Toggle status (instant — no refetch) ──────────────────
   const handleToggleStatus = useCallback(async (sellerId) => {
@@ -331,11 +378,11 @@ const SellersPage = () => {
     } catch (error) {
       // Rollback edit
       if (editingSeller) {
-        void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+        void loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch, silent: true });
       }
       toastRef.current('Failed to save: ' + error.message, 'error');
     }
-  }, [editingSeller, page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
+  }, [editingSeller, page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, debouncedSearch, loadSellers]);
 
   const handleEditSeller = useCallback((seller) => {
     setEditingSeller(seller);
@@ -349,7 +396,7 @@ const SellersPage = () => {
       if (response.success) {
         toastRef.current(`${sellersData.length} storefronts onboarded.`, 'success');
         // Silent refresh to get server-assigned IDs
-        void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+        void loadSellers({ page: 1, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch, silent: true });
         setShowImportModal(false);
         return true;
       }
@@ -357,7 +404,7 @@ const SellersPage = () => {
       toastRef.current(error.message || 'Check CSV format and try again.', 'error');
     }
     return false;
-  }, [limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch, loadSellers]);
+  }, [limit, activeTab, marketplaceFilter, managerFilter, statusFilter, debouncedSearch, loadSellers]);
 
   // ── ASIN management ────────────────────────────────────────────────────
   const handleViewAsins = useCallback(async (seller, pageNum = 1) => {
@@ -533,7 +580,7 @@ const SellersPage = () => {
               toastRef.current('Live sync complete.', 'success');
             }
             // Refresh seller list to show updated metrics
-            void loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+            void loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch, silent: true });
           }
         } catch (e) {
           console.error('Live sync poll error:', e);
@@ -594,7 +641,7 @@ const SellersPage = () => {
               clearInterval(globalSyncPollRef.current);
               setGlobalSyncing(false);
               toastRef.current('Global live sync completed!', 'success');
-              loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true });
+              loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch, silent: true });
             }
           } catch (e) {
             console.error('Global sync poll error:', e);
@@ -608,7 +655,7 @@ const SellersPage = () => {
       toastRef.current(error.message, 'error');
       setGlobalSyncing(false);
     }
-  }, [page, limit, activeTab, marketplaceFilter, statusFilter, debouncedSearch]);
+  }, [page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, debouncedSearch]);
 
   // Cleanup poll on unmount
   useEffect(() => {
@@ -632,19 +679,17 @@ const SellersPage = () => {
   // ── Badges ─────────────────────────────────────────────────────────────
   const getMarketplaceBadge = useCallback((marketplace) => {
     const m = marketplace?.toLowerCase();
-    let color = '#52525b', bg = '#f4f4f5', border = '#e4e4e7', logo = null;
-    if (m === 'amazon.in') { color = '#1d4ed8'; bg = '#eff6ff'; border = '#bfdbfe'; logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg'; }
-    else if (m === 'ajio') { color = '#6d28d9'; bg = '#f5f3ff'; border = '#ddd6fe'; logo = 'https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png'; }
-    else if (m === 'myntra') { color = '#be185d'; bg = '#fdf2f8'; border = '#fbcfe8'; logo = 'https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg'; }
+    let logo = null, bg = '#f4f4f5', border = '#d9e6e9';
+    if (m === 'amazon.in') { bg = '#eff6ff'; border = '#bfdbfe'; logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg'; }
+    else if (m === 'ajio') { bg = '#f5f3ff'; border = '#ddd6fe'; logo = 'https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png'; }
+    else if (m === 'myntra') { bg = '#fdf2f8'; border = '#fbcfe8'; logo = 'https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg'; }
     return (
       <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '0 8px', height: 24, fontSize: 10, fontWeight: 700,
-        textTransform: 'uppercase', borderRadius: 6,
-        color, background: bg, border: `1px solid ${border}`, letterSpacing: '0.03em'
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 24, height: 24, borderRadius: 6,
+        background: bg, border: `1px solid ${border}`
       }}>
-        {logo && <img src={logo} style={{ height: 11, width: 'auto', objectFit: 'contain' }} alt="" />}
-        {marketplace}
+        {logo ? <img src={logo} style={{ height: 12, width: 'auto', objectFit: 'contain' }} alt={marketplace} /> : <Text style={{ fontSize: 8, color: '#8c8e8f' }}>?</Text>}
       </span>
     );
   }, []);
@@ -678,23 +723,23 @@ const SellersPage = () => {
         {isGlobalUser && (
           <Tooltip title="Edit Details">
             <Button type="text" size="small" icon={<Edit3 size={14} />}
-              onClick={() => handleEditSeller(seller)} style={{ color: '#64748b' }} />
+              onClick={() => handleEditSeller(seller)} style={{ color: '#8c8e8f' }} />
           </Tooltip>
         )}
         <Tooltip title="Manage Catalog">
           <Button type="text" size="small" icon={<Package size={14} />}
-            onClick={() => handleViewAsins(seller)} style={{ color: '#64748b' }} />
+            onClick={() => handleViewAsins(seller)} style={{ color: '#8c8e8f' }} />
         </Tooltip>
         <Tooltip title="Catalog Sync">
           <Button type="text" size="small" icon={<FileUp size={14} />}
-            onClick={() => handleCatalogSync(seller)} style={{ color: '#64748b' }} />
+            onClick={() => handleCatalogSync(seller)} style={{ color: '#8c8e8f' }} />
         </Tooltip>
         <Tooltip title="Sync Store">
           <Button type="text" size="small"
             icon={<RefreshCw size={14} className={isSyncing ? 'spin' : ''} />}
             loading={isSyncing}
             onClick={() => handleSyncSeller(seller._id)}
-            style={{ color: '#64748b' }} />
+            style={{ color: '#8c8e8f' }} />
         </Tooltip>
         {seller.marketplace?.toLowerCase() === 'amazon.in' && (() => {
           const lsStatus = liveSyncStatuses[seller._id];
@@ -714,10 +759,10 @@ const SellersPage = () => {
                   borderRadius: 6,
                   fontWeight: 700,
                   fontSize: 10,
-                  background: isLiveSyncing ? '#e9d5ff' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
-                  borderColor: isLiveSyncing ? '#c4b5fd' : '#7c3aed',
-                  color: isLiveSyncing ? '#6d28d9' : '#fff',
-                  boxShadow: isLiveSyncing ? 'none' : '0 1px 3px rgba(124,58,237,0.3)',
+                  background: isLiveSyncing ? '#ffe0dc' : 'linear-gradient(135deg, #d94033, #fb4f40)',
+                  borderColor: isLiveSyncing ? '#ffb3ae' : '#d94033',
+                  color: isLiveSyncing ? '#c2352a' : '#fff',
+                  boxShadow: isLiveSyncing ? 'none' : '0 1px 3px rgba(217,64,51,0.3)',
                   height: 26,
                   padding: '0 8px',
                 }}
@@ -776,62 +821,50 @@ const SellersPage = () => {
   // ── Table columns ──────────────────────────────────────────────────────
   const staticColumns = useMemo(() => [
     {
-      title: 'STORE DETAILS', dataIndex: 'name', key: 'name', width: 280,
+      title: 'STORE DETAILS', dataIndex: 'name', key: 'name', width: 300,
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
-      render: (_, seller) => {
-        if (seller?.isGroupHeader) {
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      render: (_, seller) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            background: getStoreGradient(seller.name || ''),
+            color: '#fff', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontWeight: 800, fontSize: 10
+          }}>
+            {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
+          </div>
+          <div style={{ lineHeight: 1.2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Text strong style={{ fontSize: 12.5, color: '#121b1e' }}>{seller.name}</Text>
+              {seller.isPriority && <Star size={12} fill="#f59e0b" stroke="#f59e0b" style={{ marginTop: '-2px' }} />}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
               {getMarketplaceBadge(seller.marketplace)}
-              <Text type="secondary" style={{ fontSize: 10, fontWeight: 700 }}>
-                {seller.count} STORES
-              </Text>
-            </div>
-          );
-        }
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-              background: getStoreGradient(seller.name || ''),
-              color: '#fff', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontWeight: 800, fontSize: 10
-            }}>
-              {seller.name?.slice(0, 3).toUpperCase() || 'SEL'}
-            </div>
-            <div style={{ lineHeight: 1.2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Text strong style={{ fontSize: 12.5, color: '#1e293b' }}>{seller.name}</Text>
-                {seller.isPriority && <Star size={12} fill="#f59e0b" stroke="#f59e0b" style={{ marginTop: '-2px' }} />}
-              </div>
               {seller.sellerId && (
-                <div style={{ marginTop: 1 }}>
-                  <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 4px', borderRadius: 4, color: '#64748b' }}>
-                    {seller.sellerId}
-                  </Text>
-                </div>
+                <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#f4f5f7', padding: '1px 4px', borderRadius: 4, color: '#8c8e8f' }}>
+                  {seller.sellerId}
+                </Text>
               )}
             </div>
           </div>
-        );
-      }
+        </div>
+      )
     },
     {
       title: 'ACCOUNT MANAGER', dataIndex: 'managers', key: 'managers', width: 220,
-      render: (managers, record) => {
-        if (record?.isGroupHeader) return null;
+      render: (managers) => {
         if (!managers?.length) return <Text type="secondary" italic style={{ fontSize: 10 }}>Unassigned</Text>;
         return (
           <Space wrap size={2}>
             {managers.map((m) => (
               <span key={m._id} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: '#f8fafc', padding: '2px 6px', borderRadius: 12, border: '1px solid #f1f5f9'
+                background: '#f4f5f7', padding: '2px 6px', borderRadius: 12, border: '1px solid #d9e6e9'
               }}>
-                <Avatar size={18} style={{ backgroundColor: '#e2e8f0', color: '#334155', fontSize: 9, fontWeight: 700 }}>
+                <Avatar size={18} style={{ backgroundColor: '#cbd0d4', color: '#121b1e', fontSize: 9, fontWeight: 700 }}>
                   {m.firstName?.charAt(0)}{m.lastName?.charAt(0)}
                 </Avatar>
-                <Text style={{ fontSize: 10.5, color: '#475569' }}>{m.firstName} {m.lastName}</Text>
+                <Text style={{ fontSize: 10.5, color: '#121b1e' }}>{m.firstName} {m.lastName}</Text>
               </span>
             ))}
           </Space>
@@ -840,82 +873,55 @@ const SellersPage = () => {
     },
     {
       title: 'INVENTORY', dataIndex: 'totalAsins', key: 'totalAsins', width: 140,
-      render: (total, seller) => {
-        if (seller?.isGroupHeader) return null;
-        return (
-          <Button type="link" onClick={() => handleViewAsins(seller)}
-            style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#1e293b', height: 'auto' }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Package size={14} color="#64748b" />
+      render: (total, seller) => (
+        <Button type="link" onClick={() => handleViewAsins(seller)}
+          style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#121b1e', height: 'auto' }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: '#f4f5f7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Package size={14} color="#8c8e8f" />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+            <Text strong style={{ fontSize: 11.5 }}>{total || 0} Total</Text>
+            <div style={{ fontSize: 9, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
+              {seller.activeAsins || 0} Active
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
-              <Text strong style={{ fontSize: 11.5 }}>{total || 0} Total</Text>
-              <div style={{ fontSize: 9, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
-                {seller.activeAsins || 0} Active
-              </div>
-            </div>
-          </Button>
-        );
-      }
+          </div>
+        </Button>
+      )
     },
     {
       title: 'LAST ACTIVITY', dataIndex: 'lastScraped', key: 'lastScraped', width: 150,
-      render: (lastScraped, record) => {
-        if (record?.isGroupHeader) return null;
-        return (
-          <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Clock size={11} style={{ color: '#94a3b8' }} />
-              {formatTimeAgo(lastScraped)}
-            </div>
-            {lastScraped && (
-              <div style={{ fontSize: 9, color: '#94a3b8', paddingLeft: 15 }}>
-                {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-              </div>
-            )}
+      render: (lastScraped) => (
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#121b1e', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Clock size={11} style={{ color: '#8c8e8f' }} />
+            {formatTimeAgo(lastScraped)}
           </div>
-        );
-      }
+          {lastScraped && (
+            <div style={{ fontSize: 9, color: '#8c8e8f', paddingLeft: 15 }}>
+              {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </div>
+          )}
+        </div>
+      )
     },
     {
       title: 'STATUS', dataIndex: 'status', key: 'status', align: 'center', width: 100,
-      render: (status, record) => {
-        if (record?.isGroupHeader) return null;
-        return getStatusBadge(status);
-      }
+      render: (status) => getStatusBadge(status)
     },
   ], [getMarketplaceBadge, getStatusBadge, handleViewAsins]);
 
   const actionColumn = useMemo(() => ({
     title: 'ACTIONS', key: 'actions', fixed: 'right', width: 180, align: 'right',
-    render: (_, seller) => {
-      if (seller?.isGroupHeader) return null;
-      return renderActions(seller);
-    }
+    render: (_, seller) => renderActions(seller)
   }), [renderActions]);
 
   const columns = useMemo(() => [...staticColumns, actionColumn], [staticColumns, actionColumn]);
 
-  const groupedDataSource = useMemo(() => {
-    const grouped = {};
-    sellers.forEach(seller => {
-      const market = seller.marketplace || 'Unknown';
-      if (!grouped[market]) grouped[market] = [];
-      grouped[market].push(seller);
-    });
-    const data = [];
-    Object.entries(grouped).forEach(([market, group]) => {
-      data.push({ _id: `group-${market}`, marketplace: market, count: group.length, isGroupHeader: true });
-      data.push(...group);
-    });
-    return data;
-  }, [sellers]);
-
   const rowSelection = useMemo(() => ({
     selectedRowKeys: selectedSellerIds,
     onChange: (keys) => setSelectedSellerIds(keys),
-    getCheckboxProps: (record) => ({ disabled: record.isGroupHeader, name: record.name }),
+    getCheckboxProps: (record) => ({ name: record.name }),
   }), [selectedSellerIds]);
 
   if (loading && sellers.length === 0) {
@@ -923,156 +929,81 @@ const SellersPage = () => {
   }
 
   return (
-    <div style={{ margin: '-1.5rem -2rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100%' }}>
       {loading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
           <LoadingIndicator type="line-simple" size="md" />
         </div>
       )}
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div style={{
-        padding: '16px 24px', background: '#ffffff', borderBottom: '1px solid #f1f5f9',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16
-      }}>
-        <div>
-          <Space size={4} style={{ color: '#94a3b8', fontSize: 11, marginBottom: 2 }}>
-            <Text style={{ color: '#94a3b8' }}>Global</Text>
-            <ChevronRight size={10} />
-            <Text strong style={{ color: '#64748b' }}>Sellers</Text>
-          </Space>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Title level={4} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.02em', color: '#0f172a' }}>
-              Seller Management
-            </Title>
-            <Tag color="blue" style={{ borderRadius: 6, fontWeight: 700, border: 'none', margin: 0, background: '#eff6ff', color: '#1d4ed8' }}>
-              {totalItems} Stores
-            </Tag>
-          </div>
-        </div>
+      {/* ── Row 1: Page Header ───────────────────────────────────── */}
+      <SellerPageHeader
+        totalItems={totalItems}
+        onOpenAddStore={() => setShowAddModal(true)}
+        onOpenCsvImport={() => setShowImportModal(true)}
+        globalSyncing={globalSyncing}
+        handleGlobalLiveSync={handleGlobalLiveSync}
+        isBrandManager={isBrandManager}
+      />
 
-        <Space size={8} wrap>
-          {isGlobalUser && (
-            <Space size={8}>
-              <Button onClick={() => setShowPoolModal(true)} icon={<LayoutGrid size={13} />}
-                size="middle" style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}>
-                Octoparse Pool ({poolStats.available})
-              </Button>
-              <Popconfirm
-                title="Start batch ingestion?"
-                description="This will check all Octoparse tasks and ingest new results."
-                onConfirm={handleIngestAll}
-                okText="Start" cancelText="Cancel"
-              >
-                <Button loading={loading} icon={<RefreshCw size={13} />}
-                  size="middle" style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}>
-                  Fetch Latest
-                </Button>
-              </Popconfirm>
-            </Space>
-          )}
-          {!isBrandManager && (
-            <Space size={8}>
-              <Button type="default" icon={<Upload size={13} />}
-                onClick={() => { setBulkImportConfig({ sellerId: '', tab: 'catalog' }); setShowBulkImportModal(true); }}
-                size="middle" style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}>
-                Bulk Import
-              </Button>
-              <Button icon={<FileUp size={13} />} onClick={() => setShowImportModal(true)}
-                size="middle" style={{ fontWeight: 600, fontSize: 12, borderRadius: 8 }}>
-                CSV
-              </Button>
-              <Button type="primary" icon={<Plus size={14} />} onClick={() => setShowAddModal(true)}
-                size="middle" style={{ background: '#0f172a', borderColor: '#0f172a', fontWeight: 700, fontSize: 12, borderRadius: 8 }}>
-                Add Store
-              </Button>
-            </Space>
-          )}
-        </Space>
-      </div>
+      {/* ── Row 2: Stats Strip ────────────────────────────────────── */}
+      <SellerStatsStrip
+        dbStats={dbStats}
+        statsLoading={statsLoading}
+        onStatClick={(type, value) => {
+          if (type === 'status') {
+            setActiveTab(value);
+            setStatusFilter('all');
+          }
+        }}
+      />
 
-      {/* ── Filters ──────────────────────────────────────────────── */}
-      <div style={{
-        padding: '10px 24px', background: '#fcfcfd', borderBottom: '1px solid #f1f5f9',
-        display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between'
-      }}>
-        <Space wrap size={12}>
-          <Segmented
-            size="middle"
-            options={[{ label: 'All Stores', value: 'all' }, { label: 'Active', value: 'Active' }, { label: 'Paused', value: 'Paused' }]}
-            value={activeTab}
-            onChange={(v) => { setActiveTab(v); setStatusFilter('all'); }}
-            style={{ fontWeight: 600, borderRadius: 8, padding: 2 }}
-          />
-          <Select value={marketplaceFilter} onChange={setMarketplaceFilter} style={{ width: 150 }} size="middle"
-            options={[
-              { label: 'All Markets', value: 'all' },
-              ...(canAccessAmazon ? [{ label: 'Amazon.in', value: 'amazon.in' }] : []),
-              ...(canAccessAjio ? [{ label: 'Ajio', value: 'ajio' }] : []),
-              ...(canAccessMyntra ? [{ label: 'Myntra', value: 'myntra' }] : []),
-            ]}
-          />
-          <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: 12, height: 16, display: 'flex', alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 10.5, fontWeight: 500, color: '#94a3b8' }}>
-              <strong style={{ color: '#475569' }}>{sellers.length}</strong> loaded |{' '}
-              <strong style={{ color: '#475569' }}>{totalItems}</strong> total
-            </Text>
-            {(activeTab !== 'all' || marketplaceFilter !== 'all' || searchQuery) && (
-              <>
-                <Divider orientation="vertical" />
-                <Button type="link" size="small"
-                  style={{ fontSize: 10, padding: 0, height: 'auto', color: '#ef4444', fontWeight: 600 }}
-                  onClick={() => { setActiveTab('all'); setMarketplaceFilter('all'); setStatusFilter('all'); setSearchQuery(''); }}>
-                  Reset
-                </Button>
-              </>
-            )}
-          </div>
-        </Space>
-        <Space size={12}>
-          <Input placeholder="Search storefronts..." value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
-            style={{ width: 240, borderRadius: 8 }} allowClear size="middle" />
-          <Tooltip title={globalSyncing ? 'Sync in progress...' : 'Sync all brands live data'}>
-            <Button 
-              type={globalSyncing ? 'default' : 'primary'}
-              icon={<Zap size={13} className={globalSyncing ? 'spin' : ''} />}
-              loading={globalSyncing}
-              onClick={handleGlobalLiveSync}
-              style={{ 
-                borderRadius: 8, 
-                fontWeight: 600,
-                background: globalSyncing ? undefined : 'linear-gradient(135deg, #7c3aed, #a855f7)',
-                borderColor: globalSyncing ? undefined : '#7c3aed'
-              }}>
-              {globalSyncing ? 'Syncing...' : 'Sync All Brands'}
-            </Button>
-          </Tooltip>
-          <Tooltip title="Refresh">
-            <Button size="middle" icon={<RefreshCw size={13} />}
-              onClick={() => loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch })}
-              style={{ borderRadius: 8 }} />
-          </Tooltip>
-        </Space>
-      </div>
+      {/* ── Row 3: Toolbar ────────────────────────────────────────── */}
+      <SellerToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        marketplaceFilter={marketplaceFilter}
+        onMarketplaceChange={setMarketplaceFilter}
+        managerFilter={managerFilter}
+        onManagerChange={setManagerFilter}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        canAccessAmazon={canAccessAmazon}
+        canAccessAjio={canAccessAjio}
+        canAccessMyntra={canAccessMyntra}
+        managersList={managersList}
+        onRefresh={() => loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch })}
+        loading={loading}
+        isBrandManager={isBrandManager}
+        isGlobalUser={isGlobalUser}
+        poolStats={poolStats}
+        onOpenPool={() => setShowPoolModal(true)}
+        onOpenBulkImport={() => { setBulkImportConfig({ sellerId: '', tab: 'catalog' }); setShowBulkImportModal(true); }}
+        onIngestAll={handleIngestAll}
+        sellersLength={sellers.length}
+        totalItems={totalItems}
+        onReset={() => { setActiveTab('all'); setMarketplaceFilter('all'); setManagerFilter('all'); setStatusFilter('all'); setSearchQuery(''); }}
+        hasActiveFilters={activeTab !== 'all' || marketplaceFilter !== 'all' || managerFilter !== 'all' || searchQuery}
+      />
 
       {/* ── Global Live Sync Progress ──────────────────────────────── */}
       {globalSyncing && globalSyncProgress && (
         <div style={{
           padding: '10px 24px', 
-          background: 'linear-gradient(135deg, #faf5ff, #ede9fe)', 
-          borderBottom: '1px solid #e9d5ff',
+          background: 'linear-gradient(135deg, #fff0f0, #ffe0dc)', 
+          borderBottom: '1px solid #ffb3ae',
           display: 'flex', alignItems: 'center', gap: 12
         }}>
-          <Zap size={14} className="spin" style={{ color: '#7c3aed' }} />
-          <Text style={{ color: '#6d28d9', fontSize: 12, fontWeight: 600 }}>
+          <Zap size={14} className="spin" style={{ color: '#d94033' }} />
+          <Text style={{ color: '#c2352a', fontSize: 12, fontWeight: 600 }}>
             Global Live Sync Running
           </Text>
           {globalSyncProgress.activeSyncs > 0 && (
-            <Tag color="purple">{globalSyncProgress.activeSyncs} sellers syncing</Tag>
+            <Tag color="red">{globalSyncProgress.activeSyncs} sellers syncing</Tag>
           )}
-          <Text style={{ color: '#94a3b8', fontSize: 11 }}>
+          <Text style={{ color: '#8c8e8f', fontSize: 11 }}>
             Updates appear within minutes. You can continue using the app.
           </Text>
         </div>
@@ -1081,12 +1012,12 @@ const SellersPage = () => {
       {/* ── Bulk action bar ───────────────────────────────────────── */}
       {selectedSellerIds.length > 0 && (
         <div style={{
-          padding: '8px 24px', background: '#0f172a', color: '#fff',
+          padding: '8px 24px', background: '#121b1e', color: '#fff',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           animation: 'slideDown 0.2s ease-out'
         }}>
           <Text strong style={{ color: '#fff', fontSize: 11 }}>
-            <Badge count={selectedSellerIds.length} style={{ backgroundColor: '#3b82f6', border: 'none', fontWeight: 800 }} /> Storefronts Selected
+            <Badge count={selectedSellerIds.length} style={{ backgroundColor: '#fb4f40', border: 'none', fontWeight: 800 }} /> Storefronts Selected
           </Text>
           <Space size={8}>
             <Popconfirm
@@ -1097,12 +1028,12 @@ const SellersPage = () => {
             >
               <Button size="small" type="primary" icon={<RefreshCw size={12} />}
                 loading={bulkSyncing}
-                style={{ borderRadius: 6, fontWeight: 600, background: '#2563eb', borderColor: '#2563eb' }}>
+                style={{ borderRadius: 6, fontWeight: 600, background: '#d94033', borderColor: '#d94033' }}>
                 Sync Selected
               </Button>
             </Popconfirm>
             <Button size="small" type="text" onClick={() => setSelectedSellerIds([])}
-              style={{ color: '#cbd5e1', fontSize: 11 }}>
+              style={{ color: '#8c8e8f', fontSize: 11 }}>
               Clear
             </Button>
           </Space>
@@ -1110,12 +1041,12 @@ const SellersPage = () => {
       )}
 
       {/* ── Table ─────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 24px', flex: 1, background: '#fafafa' }}>
+      <div style={{ padding: '20px 24px', flex: 1, background: '#f4f5f7' }}>
         <Card styles={{ body: { padding: 0 } }}
-          style={{ borderRadius: 12, border: '1px solid #f0f0f0', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+          style={{ borderRadius: 12, border: '1px solid #d9e6e9', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
           <Table
             columns={columns}
-            dataSource={groupedDataSource}
+            dataSource={sellers}
             rowKey="_id"
             loading={loading}
             rowSelection={rowSelection}
@@ -1138,14 +1069,10 @@ const SellersPage = () => {
             locale={{
               emptyText: (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 12 }}>No storefront entries match your current query.</span>}
+                  description={<span style={{ fontWeight: 600, color: '#8c8e8f', fontSize: 12 }}>No storefront entries match your current query.</span>}
                 />
               )
             }}
-            onRow={(record) => record.isGroupHeader
-              ? { style: { background: '#f8fafc', fontWeight: 700 } }
-              : {}
-            }
           />
         </Card>
       </div>
@@ -1154,12 +1081,12 @@ const SellersPage = () => {
         .spin { animation: spin 1.5s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .premium-seller-table .ant-table-thead > tr > th {
-          background: #fafafa !important; font-size: 10px !important; color: #8c8c8c !important;
+          background: #f4f5f7 !important; font-size: 10px !important; color: #8c8e8f !important;
           font-weight: 800 !important; letter-spacing: 0.1em !important;
-          padding: 14px 16px !important; border-bottom: 1px solid #f0f0f0 !important;
+          padding: 14px 16px !important; border-bottom: 1px solid #d9e6e9 !important;
         }
-        .premium-seller-table .ant-table-row:hover > td { background: #fdfdfd !important; }
-        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #f0f0f0 !important; }
+        .premium-seller-table .ant-table-row:hover > td { background: #fcfcfd !important; }
+        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #d9e6e9 !important; }
         .premium-seller-table .ant-table-pagination { margin: 16px !important; }
         @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>
@@ -1201,7 +1128,7 @@ const SellersPage = () => {
         <BulkImportModal
           isOpen={showBulkImportModal}
           onClose={() => setShowBulkImportModal(false)}
-          onComplete={() => loadSellers({ page, limit, activeTab, marketplaceFilter, statusFilter, search: debouncedSearch, silent: true })}
+          onComplete={() => loadSellers({ page, limit, activeTab, marketplaceFilter, managerFilter, statusFilter, search: debouncedSearch, silent: true })}
           initialSellerId={bulkImportConfig.sellerId}
           initialTab={bulkImportConfig.tab}
         />

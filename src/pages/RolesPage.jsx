@@ -467,7 +467,6 @@ const RolesPage = () => {
                         <Shield size={20} />
                     </div>
                     <div>
-                        <h3 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18, letterSpacing: '-0.02em' }}>Roles & Matrix Catalog</h3>
                         <Text type="secondary" style={{ fontSize: 12 }}>Fine-tune permission logic across hierarchical enterprise access tiers.</Text>
                     </div>
                 </Space>

@@ -131,12 +131,6 @@ const RuleSetsPage = () => {
       {/* ── Page Header ──────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ padding: '6px', background: '#e0e7ff', color: '#4f46e5', borderRadius: 8, display: 'flex' }}>
-              <Zap size={20} />
-            </div>
-            Rule Sets
-          </Title>
           <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 4 }}>
             Automated rules for bid management, pricing, inventory alerts & more.
           </Text>

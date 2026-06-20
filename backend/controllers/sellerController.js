@@ -92,13 +92,82 @@ const enrichSellersWithAsinCounts = async (sellers) => {
   });
 };
 
+// Get aggregate seller stats (filtered, respecting RBAC)
+exports.getSellerStats = async (req, res) => {
+  try {
+    const roleName = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const { marketplace, manager, status, search } = req.query;
+    const pool = await getPool();
+    const reqObj = pool.request();
+    let whereClause = 'WHERE 1=1';
+
+    if (!isGlobalUser) {
+      const sellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
+      if (sellerIds.length === 0) {
+        return res.json({ success: true, data: { totalStores: 0, activeStores: 0, pausedStores: 0, totalAsins: 0, activeAsins: 0, marketplaces: 0, activeToday: 0 } });
+      }
+      const inClause = buildInClause(reqObj, 'gssSid', sellerIds);
+      whereClause += ` AND S.Id IN (${inClause})`;
+    }
+
+    if (manager) {
+      whereClause += ' AND S.Id IN (SELECT SellerId FROM UserSellers WHERE UserId = @gssManager)';
+      reqObj.input('gssManager', sql.VarChar, manager);
+    }
+    if (status) {
+      whereClause += ' AND S.IsActive = @gssStatus';
+      reqObj.input('gssStatus', sql.Bit, status === 'Active' ? 1 : 0);
+    }
+    if (marketplace) {
+      whereClause += ' AND S.Marketplace = @gssMarketplace';
+      reqObj.input('gssMarketplace', sql.NVarChar, marketplace);
+    }
+    if (search) {
+      whereClause += ' AND (S.Name LIKE @gssSearch OR S.SellerId LIKE @gssSearch)';
+      reqObj.input('gssSearch', sql.NVarChar, `%${search}%`);
+    }
+
+    const result = await reqObj.query(`
+      SELECT
+        COUNT(DISTINCT S.Id) as totalStores,
+        SUM(CASE WHEN S.IsActive = 1 THEN 1 ELSE 0 END) as activeStores,
+        SUM(CASE WHEN S.IsActive = 0 OR S.IsActive IS NULL THEN 1 ELSE 0 END) as pausedStores,
+        COUNT(DISTINCT S.Marketplace) as marketplaces,
+        SUM(CASE WHEN S.LastScrapedAt >= DATEADD(HOUR, -24, GETDATE()) THEN 1 ELSE 0 END) as activeToday,
+        COUNT(A.Id) as totalAsins,
+        SUM(CASE WHEN A.Status IS NULL OR A.Status != 'Inactive' THEN 1 ELSE 0 END) as activeAsins
+      FROM Sellers S
+      LEFT JOIN Asins A ON S.Id = A.SellerId
+      ${whereClause}
+    `);
+
+    const stats = result.recordset[0];
+    res.json({
+      success: true,
+      data: {
+        totalStores: Number(stats.totalStores) || 0,
+        activeStores: Number(stats.activeStores) || 0,
+        pausedStores: Number(stats.pausedStores) || 0,
+        totalAsins: Number(stats.totalAsins) || 0,
+        activeAsins: Number(stats.activeAsins) || 0,
+        marketplaces: Number(stats.marketplaces) || 0,
+        activeToday: Number(stats.activeToday) || 0,
+      }
+    });
+  } catch (error) {
+    console.error('getSellerStats error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get all sellers
 exports.getSellers = async (req, res) => {
   try {
     const roleName = req.user?.role?.name || req.user?.role;
     const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
 
-    const { status, marketplace, search, page = 1, limit = 200 } = req.query;
+    const { status, marketplace, manager, search, page = 1, limit = 200 } = req.query;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
@@ -107,6 +176,7 @@ exports.getSellers = async (req, res) => {
     const cacheKey = JSON.stringify({
       status,
       marketplace,
+      manager,
       search,
       page: pageNum,
       limit: limitNum,
@@ -131,6 +201,7 @@ exports.getSellers = async (req, res) => {
     const applyInputs = (reqObj) => {
       if (status) reqObj.input('status', sql.Bit, status === 'Active' ? 1 : 0);
       if (marketplace) reqObj.input('marketplace', sql.NVarChar, marketplace);
+      if (manager) reqObj.input('manager', sql.VarChar, manager);
       if (search) reqObj.input('search', sql.NVarChar, `%${search}%`);
       return reqObj;
     };
@@ -149,6 +220,7 @@ exports.getSellers = async (req, res) => {
 
     if (status) whereClause += ' AND IsActive = @status';
     if (marketplace) whereClause += ' AND Marketplace = @marketplace';
+    if (manager) whereClause += ' AND Id IN (SELECT SellerId FROM UserSellers WHERE UserId = @manager)';
     if (search) whereClause += ' AND (Name LIKE @search OR SellerId LIKE @search)';
 
     applyInputs(sellerReq);

@@ -160,11 +160,13 @@ const CommandPalette = () => {
       closable={false}
       width={620}
       centered
-      destroyOnClose
+      destroyOnHidden
       className="cmd-palette-modal"
-      maskStyle={{
-        background: 'rgba(18,27,30,0.45)',
-        backdropFilter: 'blur(4px)',
+      styles={{
+        mask: {
+          background: 'rgba(18,27,30,0.45)',
+          backdropFilter: 'blur(4px)',
+        }
       }}
     >
       <div className="cmd-palette-input-wrap">

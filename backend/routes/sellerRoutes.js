@@ -4,6 +4,7 @@ const sellerController = require('../controllers/sellerController');
 const { authenticate, requirePermission, checkSellerAccess } = require('../middleware/auth');
 
 router.get('/', authenticate, requirePermission('seller_view'), sellerController.getSellers);
+router.get('/stats', authenticate, requirePermission('seller_view'), sellerController.getSellerStats);
 router.get('/:id', authenticate, requirePermission('seller_view'), checkSellerAccess, sellerController.getSeller);
 router.post('/', authenticate, requirePermission('seller_manage'), sellerController.createSeller);
 router.put('/:id', authenticate, requirePermission('seller_manage'), checkSellerAccess, sellerController.updateSeller);

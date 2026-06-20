@@ -904,17 +904,7 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
                 marginBottom: 6,
                 flexWrap: 'wrap'
               }}>
-                <h1 style={{
-                  margin: 0,
-                  fontSize: 19,
-                  fontWeight: 700,
-                  color: '#0f172a',
-                  letterSpacing: '-0.3px',
-                  textTransform: 'capitalize'
-                }}>
-                  {parsed.hasNumber ? parsed.cleanName : seller.name}
-                </h1>
-                {parsed.hasNumber && (
+                  {parsed.hasNumber && (
                   <span style={{
                     fontSize: 11,
                     fontWeight: 700,

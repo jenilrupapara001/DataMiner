@@ -177,7 +177,7 @@ const UserMenu = () => {
       menu={{ items: menuItems }}
       placement="bottomRight"
       trigger={['click']}
-      overlayStyle={{ minWidth: '260px' }}
+      styles={{ root: { minWidth: '260px' } }}
     >
       <button className="user-avatar-trigger" aria-label="User menu">
         <Avatar

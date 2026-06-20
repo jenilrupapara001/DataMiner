@@ -22,7 +22,7 @@ import {
   message as antdMessage, Typography, Spin, Tag, Tooltip
 } from 'antd';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
@@ -688,16 +688,6 @@ const TasksPage = () => {
                 </span>
               </div>
 
-              <h1 style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '-0.5px',
-                lineHeight: 1.2
-              }}>
-                Task Matrix & OKR Operations
-              </h1>
               <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'block' }}>
                 Synthesize objectives, orchestrate key results & track optimization protocols
               </Text>

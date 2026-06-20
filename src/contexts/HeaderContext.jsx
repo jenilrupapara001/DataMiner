@@ -17,6 +17,7 @@ export const HeaderProvider = ({ children }) => {
   const [datePreset, setDatePreset] = useState('last30');
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(dayjs());
 
@@ -35,6 +36,7 @@ export const HeaderProvider = ({ children }) => {
         datePreset, setDatePreset,
         cmdOpen, setCmdOpen,
         notifOpen, setNotifOpen,
+        downloadOpen, setDownloadOpen,
         isSyncing, triggerSync,
         lastSyncedAt,
       }}

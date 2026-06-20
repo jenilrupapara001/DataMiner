@@ -48,9 +48,10 @@ exports.getDashboardData = async (req, res) => {
     // 1. Base Filters & Merchant Selection
     let finalSellerIds = sellerIds;
     if (sellerId && sellerId !== 'all') {
-      const parsedSellerId = sellerId.trim();
-      if (isGlobalUser || sellerIds.includes(parsedSellerId)) {
-        finalSellerIds = [parsedSellerId];
+      const parsedSellerIds = sellerId.split(',').map(s => s.trim()).filter(Boolean);
+      const authorizedIds = parsedSellerIds.filter(id => isGlobalUser || sellerIds.includes(id));
+      if (authorizedIds.length > 0) {
+        finalSellerIds = authorizedIds;
       } else {
         // Unauthorized selected seller fallback
         finalSellerIds = ['000000000000000000000000'];

@@ -613,7 +613,6 @@ const efficiencyMetrics = useMemo(() => {
               <div className="p-2 bg-indigo-subtle text-indigo-600 rounded-3">
                 <Megaphone size={20} />
               </div>
-              <h1 className="page-title mb-0">Ads Intelligence</h1>
             </div>
             <p className="text-muted small mb-0">Cross-channel Advertising Performance & Attribution</p>
           </div>

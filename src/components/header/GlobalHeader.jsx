@@ -1,6 +1,7 @@
 import React from 'react';
 import HeaderBrand from './HeaderBrand';
 import SearchTrigger from './SearchTrigger';
+import DownloadDrawer from './DownloadDrawer';
 import CommandPalette from './CommandPalette';
 import DateRangeSelector from './DateRangeSelector';
 import NotificationCenter from './NotificationCenter';
@@ -28,6 +29,7 @@ const GlobalHeader = () => {
 
           <div className="header-divider" />
 
+          <DownloadDrawer />
           <QuickActions />
           <NotificationCenter />
 

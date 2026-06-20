@@ -48,6 +48,7 @@ export interface OrchestrationConfig {
     defaultRetryAttempts?: number;
     backoffBaseMs?: number;
     sellerId?: string;
+    managerId?: string;
     startDate?: string;
     endDate?: string;
     period?: string;
@@ -86,6 +87,7 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
         defaultRetryAttempts: rawRetries = 3,
         backoffBaseMs: rawBaseMs = 1_000,
         sellerId,
+        managerId,
         startDate,
         endDate,
         period,
@@ -119,43 +121,7 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
     // ── 2 · Progressive skeleton ──────────────────────────────────────────────
     const loader = useProgressiveLoad(PROGRESSIVE_DEFINITIONS);
 
-    // ── 3 · React Query — dashboard (includes filter params in key) ───────────
-    // ✅ Fix 1: REMOVED withRetry — React Query handles retries natively.
-    // Double-retry (fetchWithRetry × React Query retry) = N² retry storm.
-    const dashboardQuery = useQuery({
-        queryKey: [...QK_DASHBOARD, sellerId, startDate, endDate, period],
-        queryFn: async () => {
-            const r = await apiClient.get('/dashboard', {
-                params: { sellerId, startDate, endDate, period }
-            });
-            return (r as any).data;
-        },
-        staleTime: 5 * 60_000,
-        gcTime: 10 * 60_000,
-        placeholderData: keepPreviousData,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: true,
-        retry: retries,
-        retryDelay: dashboardBackoff,
-    });
-
-    // ✅ Fix 3: alerts + targets query keys include filter params
-    // Previously they had static keys — never refetched when seller/date changed
-    const alertsQuery = useQuery({
-        queryKey: [...QK_ALERTS, sellerId],
-        queryFn: async () => {
-            const r = await apiClient.get('/alerts', { params: { sellerId } });
-            return (r as any).data?.data ?? (r as any).data;
-        },
-        staleTime: 2 * 60_000,
-        gcTime: 4 * 60_000,
-        placeholderData: keepPreviousData,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: true,
-        retry: 2,
-        retryDelay: alertsBackoff,
-    });
-
+    // ── 3 · Fetch targets first — needed to resolve manager → seller mapping ──
     const targetsQuery = useQuery({
         queryKey: [...QK_TARGETS, sellerId],
         queryFn: async () => {
@@ -169,6 +135,58 @@ export function useDashboardOrchestration(cfg: OrchestrationConfig = {}) {
         refetchOnReconnect: true,
         retry: retries,
         retryDelay: targetsBackoff,
+    });
+
+    // ── 3b · Resolve effective seller IDs from seller + manager filters ────
+    const effectiveSellerId = useMemo(() => {
+        if (sellerId && sellerId !== 'all') return sellerId;
+        if (managerId && managerId !== 'all') {
+            const targetsData = targetsQuery.data ?? [];
+            const ids = Array.from(new Set(
+                targetsData
+                    .filter((t: any) => t.BrandManager === managerId)
+                    .map((t: any) => t.SellerId)
+                    .filter(Boolean)
+            ));
+            return ids.length > 0 ? ids.join(',') : undefined;
+        }
+        return undefined;
+    }, [sellerId, managerId, targetsQuery.data]);
+
+    // ── 4 · React Query — dashboard (includes resolved seller IDs in key) ───
+    // ✅ Fix 1: REMOVED withRetry — React Query handles retries natively.
+    // Double-retry (fetchWithRetry × React Query retry) = N² retry storm.
+    const dashboardQuery = useQuery({
+        queryKey: [...QK_DASHBOARD, effectiveSellerId, startDate, endDate, period],
+        queryFn: async () => {
+            const r = await apiClient.get('/dashboard', {
+                params: { sellerId: effectiveSellerId, startDate, endDate, period }
+            });
+            return (r as any).data;
+        },
+        staleTime: 5 * 60_000,
+        gcTime: 10 * 60_000,
+        placeholderData: keepPreviousData,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: true,
+        retry: retries,
+        retryDelay: dashboardBackoff,
+    });
+
+    // ✅ Fix 3: alerts query key includes filter params
+    const alertsQuery = useQuery({
+        queryKey: [...QK_ALERTS, sellerId],
+        queryFn: async () => {
+            const r = await apiClient.get('/alerts', { params: { sellerId } });
+            return (r as any).data?.data ?? (r as any).data;
+        },
+        staleTime: 2 * 60_000,
+        gcTime: 4 * 60_000,
+        placeholderData: keepPreviousData,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: true,
+        retry: 2,
+        retryDelay: alertsBackoff,
     });
 
     // ── 4 · Route query results into progressive loader ───────────────────────

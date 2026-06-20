@@ -15,7 +15,7 @@ import {
 import api, { userApi } from '../services/api';
 
 const { Sider, Content } = Layout;
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 // ─────────────────────────────────────────────────────────────────
@@ -493,9 +493,6 @@ const TeamManagementPage = () => {
                     </Avatar>
                     <div>
                       <Space align="center">
-                        <Title level={4} style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18 }}>
-                          {activeTeam.name || 'Unnamed Team'}
-                        </Title>
                         <Tag color="success" icon={<CheckCircleOutlined />}>Active</Tag>
                       </Space>
                       <Paragraph type="secondary" style={{ margin: '4px 0 0 0', fontSize: 13 }}>

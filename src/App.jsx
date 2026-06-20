@@ -8,6 +8,7 @@ import { DateRangeProvider } from './contexts/DateRangeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import GlobalHeader from './components/header/GlobalHeader';
 import { HeaderProvider } from './contexts/HeaderContext';
+import RoutePageMeta from './components/layout/RoutePageMeta';
 import Sidebar from './components/common/Sidebar';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
@@ -165,6 +166,7 @@ function AppRoutes() {
             <ProtectedRoute>
               <AppLayout>
                 <Suspense fallback={<PageSkeleton />}>
+                <RoutePageMeta />
                 <Routes>
                   <Route path="/" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<ProtectedRoute permission="dashboard_view"><Dashboard /></ProtectedRoute>} />

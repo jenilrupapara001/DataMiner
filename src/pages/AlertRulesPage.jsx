@@ -67,12 +67,6 @@ const AlertRulesPage = () => {
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">
-          <i className="bi bi-gear"></i>
-          Alert Rules
-        </h1>
-      </div>
       <div className="page-content">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <p className="text-muted mb-0">Configure automatic alerts based on your business metrics</p>

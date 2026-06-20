@@ -700,26 +700,7 @@ const UsersPage = () => {
                 }
             `}</style>
 
-            {/* Page Title */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                        width: 38, height: 38, borderRadius: 6, background: '#1e293b',
-                        border: '1px solid #0f172a', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', color: '#ffffff'
-                    }}>
-                        <Users size={18} strokeWidth={2} />
-                    </div>
-                    <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>
-                            Users & Permissions
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                            Manage team members, roles, and access control policies
-                        </div>
-                    </div>
-                </div>
-                <Space size={8}>
+            <Space size={8}>
                     <Button icon={<RefreshCw size={13} strokeWidth={2} />} onClick={loadUsers}
                         style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
                         Refresh
@@ -738,7 +719,6 @@ const UsersPage = () => {
                         </Button>
                     )}
                 </Space>
-            </div>
 
             {/* Tab Switcher + Filters */}
             <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', marginBottom: 16 }}

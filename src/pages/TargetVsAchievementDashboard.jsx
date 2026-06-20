@@ -32,7 +32,7 @@ import {
     Cell
 } from 'recharts';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 const MONTH_NAMES = [
@@ -779,9 +779,6 @@ const TargetVsAchievementDashboard = () => {
                             <BarChart size={28} />
                         </div>
                         <div>
-                            <h2 style={{ margin: 0, fontWeight: 900, color: '#ffffff', fontSize: 24, letterSpacing: '-0.5px' }}>
-                                Target Analytics Dashboard
-                            </h2>
                             <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: 500 }}>
                                 Analyze sales achievements, trend models, brand comparisons, and plan Recaps in real-time.
                             </Text>

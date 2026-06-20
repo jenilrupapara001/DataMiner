@@ -253,9 +253,6 @@ const ScrapeTasksPage = () => {
       <div className="page-header-v2">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-4">
           <div>
-            <h1 className="page-title d-flex align-items-center h2 mb-1">
-              Data Pipeline Status
-            </h1>
             <p className="text-muted small mb-0">Live monitoring of Amazon marketplace extraction tasks.</p>
           </div>
           <div className="d-flex gap-2">

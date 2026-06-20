@@ -181,7 +181,6 @@ return (
         {/* Breadcrumb & Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h4 className="fw-bold mb-1" style={{ color: '#0f172a' }}>API Keys Management</h4>
                     <p className="text-muted small mb-0">Manage all your secure API integrations from one place</p>
                 </div>
                 <div className="d-flex align-items-center gap-3">

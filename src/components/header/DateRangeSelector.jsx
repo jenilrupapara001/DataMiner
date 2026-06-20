@@ -114,10 +114,12 @@ const DateRangeSelector = () => {
       placement="bottomRight"
       arrow={false}
       overlayClassName="date-range-popover"
-      overlayInnerStyle={{
-        padding: 0,
-        borderRadius: 12,
-        boxShadow: '0 12px 40px -8px rgba(18,27,30,0.18)',
+      styles={{
+        container: {
+          padding: 0,
+          borderRadius: 12,
+          boxShadow: '0 12px 40px -8px rgba(18,27,30,0.18)',
+        }
       }}
     >
       <button className="date-range-trigger">

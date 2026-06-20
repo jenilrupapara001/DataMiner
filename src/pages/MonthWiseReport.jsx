@@ -184,7 +184,6 @@ const MonthWiseReport = () => {
           <div>
             <div className="d-flex align-items-center gap-2 mb-1">
               <div className="bg-secondary text-white p-1 rounded-2"><CalendarDays size={18} /></div>
-              <h1 className="h4 fw-800 mb-0" style={{ letterSpacing: '-0.02em' }}>Monthly Intelligence</h1>
             </div>
             <p className="text-muted small mb-0">Fiscal Performance & Multi-Month Trends</p>
           </div>

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, useRef, Suspense } from 'react';
 import {
   Segmented, Select, Button, Input, Tooltip, Typography, Card, Row, Col,
   Modal, Badge, Dropdown, Space, Statistic, Table, Tabs, Tag, message, DatePicker
 } from 'antd';
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
+const TablePagination = lazy(() => import('@mui/material/TablePagination'));
 import {
   Package, Activity, TrendingUp, TrendingDown,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
@@ -19,7 +20,7 @@ import AdsImportModal from '../components/ads/AdsImportModal';
 import Chart from 'react-apexcharts';
 import { CHART_COLORS, areaChartOptions } from '../utils/chartTheme';
 import { useDateRange } from '../contexts/DateRangeContext';
-import { usePageTitle } from '../contexts/PageTitleContext';
+
 import { format } from 'date-fns';
 import dayjs from 'dayjs';
 
@@ -27,7 +28,7 @@ import dayjs from 'dayjs';
 // METRIC MAP
 // ═══════════════════════════════════════════════════════════════
 const METRIC_MAP = {
-  spend: { label: 'Ads Spend', color: '#4f46e5', type: 'currency', seriesType: 'column' },
+  spend: { label: 'Ads Spend', color: '#fb4f40', type: 'currency', seriesType: 'column' },
   sales: { label: 'Ads Sales', color: '#10b981', type: 'currency', seriesType: 'column' },
   totalSales: { label: 'Total Sales', color: '#0284c7', type: 'currency', seriesType: 'column' },
   organicSales: { label: 'Organic Sales', color: '#059669', type: 'currency', seriesType: 'column' },
@@ -101,6 +102,60 @@ const calculateColumnsWidth = (columns) => columns.reduce((total, column) => {
   }
   return total + getColumnWidth(column);
 }, 0);
+
+const getColumnDepth = (cols) => {
+  let max = 0;
+  for (const col of cols) {
+    if (col.children?.length > 0) {
+      max = Math.max(max, getColumnDepth(col.children));
+    }
+  }
+  return max + 1;
+};
+
+const getLeafColumns = (cols) => {
+  const result = [];
+  for (const col of cols) {
+    if (col.children?.length > 0) {
+      result.push(...getLeafColumns(col.children));
+    } else {
+      result.push(col);
+    }
+  }
+  return result;
+};
+
+const buildHeaderRows = (cols) => {
+  const depth = getColumnDepth(cols);
+  const rows = Array.from({ length: depth }, () => []);
+  const stickyLeft = {};
+  const stickyRight = {};
+  let leftAcc = 0;
+  let rightAcc = 0;
+  for (const col of cols) {
+    if (col.fixed === 'left') {
+      stickyLeft[col.key] = leftAcc;
+      leftAcc += col.width || 0;
+    }
+    if (col.fixed === 'right') {
+      stickyRight[col.key] = rightAcc;
+      rightAcc += col.width || 0;
+    }
+  }
+  const walk = (arr, level) => {
+    for (const col of arr) {
+      if (col.children?.length > 0) {
+        const leafCount = getLeafColumns(col.children).length;
+        rows[level].push({ ...col, colSpan: leafCount, rowSpan: 1, isGroup: true });
+        walk(col.children, level + 1);
+      } else {
+        rows[level].push({ ...col, colSpan: 1, rowSpan: depth - level });
+      }
+    }
+  };
+  walk(cols, 0);
+  return { rows, depth, stickyLeft, stickyRight };
+};
 
 const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   if (!prevValue) return <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600 }}>-</span>;
@@ -267,7 +322,7 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
           <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace', fontWeight: 500 }}>
             {fullHistory.length} days recorded
           </span>
-          <Button onClick={onClose} type="primary" style={{ background: '#1e293b', borderColor: '#1e293b', fontWeight: 600, borderRadius: 6, fontSize: 12 }}>
+          <Button onClick={onClose} type="primary" style={{ fontWeight: 600, borderRadius: 6, fontSize: 12 }}>
             Close
           </Button>
         </div>
@@ -281,11 +336,8 @@ const AdsHistoryModal = ({ isOpen, onClose, rowData }) => {
 // ═══════════════════════════════════════════════════════════════
 export default function AdsManagerPage() {
   const { startDate, endDate, updateDateRange } = useDateRange();
-  const { setPageTitle } = usePageTitle();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState([]);
-
-  useEffect(() => { setPageTitle('Ads Manager'); }, [setPageTitle]);
 
   const [chartConfigMetrics, setChartConfigMetrics] = useState(['spend', 'sales', 'acos']);
   const [selectedSeller, setSelectedSeller] = useState(() => localStorage.getItem('selectedSeller') || '');
@@ -339,10 +391,6 @@ export default function AdsManagerPage() {
   const [activeHistoryRow, setActiveHistoryRow] = useState(null);
   const [showDashboardCharts, setShowDashboardCharts] = useState(true);
 
-  const tableScrollY = useMemo(() => {
-    return showDashboardCharts ? 'calc(100vh - 660px)' : 'calc(100vh - 245px)';
-  }, [showDashboardCharts]);
-
 
 
   const toggleParentExpand = (parentAsin) => {
@@ -369,6 +417,15 @@ export default function AdsManagerPage() {
   const [globalChartData, setGlobalChartData] = useState([]);
 
   const toggleCol = (colKey) => { setExpandedCols(prev => ({ ...prev, [colKey]: !prev[colKey] })); };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage + 1);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setPageSize(parseInt(event.target.value, 10));
+    setPage(1);
+  };
 
   const fetchAdsData = useCallback(async () => {
     try {
@@ -405,11 +462,6 @@ export default function AdsManagerPage() {
   const activeDates = historyStructure[0]?.dates || [];
 
   const paginatedData = data;
-  const totalPages = Math.ceil(totalCount / pageSize);
-
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
-  };
 
   // Date picker handler
   const handleDateChange = (dates) => {
@@ -463,9 +515,9 @@ export default function AdsManagerPage() {
   const getAntColumns = () => {
     const fixedLeftCols = [
       {
-        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', width: 60,
+        title: 'IMAGE', dataIndex: 'imageUrl', key: 'imageUrl', width: 48, fixed: 'left',
         render: (url, record) => (
-          <div style={{ width: 40, height: 40, margin: 'auto', background: '#f8fafc', borderRadius: 4, border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
+          <div style={{ width: 36, height: 36, margin: 'auto', background: '#f8fafc', borderRadius: 4, border: '1px solid #e5e7eb', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setActiveHistoryRow(record)}>
             {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Package size={14} style={{ color: '#cbd5e1' }} />}
           </div>
         )
@@ -479,7 +531,7 @@ export default function AdsManagerPage() {
             </div>
           </div>
         ),
-        key: 'identifier', width: 185,
+        key: 'identifier', width: 155, fixed: 'left',
         render: (_, record) => {
           const isParentRow = record.isParent === true;
           return (
@@ -499,23 +551,29 @@ export default function AdsManagerPage() {
         }
       },
       {
-        title: 'SKU', dataIndex: 'sku', key: 'sku', width: 110,
+        title: 'SKU', dataIndex: 'sku', key: 'sku', width: 80, fixed: 'left',
         render: (sku, record) => record.isParent
           ? <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', background: '#f1f5f9', border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 4 }}>GROUP</span>
           : <span style={{ fontWeight: 600, color: '#475569', fontSize: 10 }}>{sku}</span>
       },
       {
-        title: 'PRODUCT DETAILS', key: 'productDetails', width: 320,
-        ellipsis: true,
+        title: 'PRODUCT DETAILS', key: 'productDetails', width: 170, fixed: 'left',
         render: (_, record) => (
-          <div style={{ width: '100%', maxWidth: 308, overflow: 'hidden' }}>
-            <Text strong style={{ fontSize: 11, color: '#0f172a', display: 'block' }} ellipsis={{ tooltip: record.title || 'Loading...' }}>
-              {record.title || 'Loading title...'}
-            </Text>
-            <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 2, display: 'block' }} ellipsis={{ tooltip: `${record.brand} · ${record.category}` }}>
-              {record.brand} · {record.category}
-            </Text>
-          </div>
+          <Tooltip title={
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{record.title || 'Loading...'}</div>
+              {record.brand && <div style={{ fontSize: 11, color: '#cbd5e1' }}>{record.brand}{record.category ? ` · ${record.category}` : ''}</div>}
+            </div>
+          }>
+            <div style={{ width: '100%', overflow: 'hidden' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {record.title || 'Loading...'}
+              </div>
+              <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {record.brand || ''}{record.brand && record.category ? ' · ' : ''}{record.category || ''}
+              </div>
+            </div>
+          </Tooltip>
         )
       }
     ];
@@ -527,8 +585,8 @@ export default function AdsManagerPage() {
       const date = new Date(year, parseInt(month) - 1);
       const monthName = date.toLocaleString('default', { month: 'short' }).toUpperCase();
       const groupKey = `targets_group_${monthKey}`;
-      const valuesWidth = 100;
-      const achievedWidth = 110;
+      const valuesWidth = 80;
+      const achievedWidth = 88;
       const achievedColumn = expandedCols[groupKey] ? {
         title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>ACHIEVED</span>,
         key: `target_achieved_${monthKey}`, width: achievedWidth, align: 'left',
@@ -581,9 +639,9 @@ export default function AdsManagerPage() {
 
     const buildMetricGroup = (title, key, icon, isCurrency = false, isPercent = false) => {
       const isExpanded = expandedCols[key];
-      const avgWidth = 80;
-      const trendWidth = 65;
-      const dateWidth = 70;
+      const avgWidth = 64;
+      const trendWidth = 50;
+      const dateWidth = 56;
       const children = [
         {
           title: <span style={{ fontSize: 8, fontWeight: 700, color: '#64748b' }}>AVG</span>,
@@ -676,7 +734,7 @@ export default function AdsManagerPage() {
     cols.push(buildMetricGroup('VIEWS', 'pageViews', <Eye size={11} />, false, false));
 
     cols.push({
-      title: 'ACTIONS', key: 'actions', fixed: 'right', width: 60, align: 'center',
+      title: 'ACTIONS', key: 'actions', fixed: 'right', width: 48, align: 'center',
       render: (_, record) => (
         <Tooltip title="View Details">
           <Button type="text" size="small" icon={<Eye size={13} />}
@@ -689,8 +747,6 @@ export default function AdsManagerPage() {
   };
 
   const tableColumns = useMemo(() => getAntColumns(), [activeDates, data, expandedCols, selectedSeller]);
-
-  const calculatedTableWidth = useMemo(() => calculateColumnsWidth(tableColumns), [tableColumns]);
 
   // ═══════════════════════════════════════════════════════════════
   // RENDER
@@ -712,32 +768,25 @@ export default function AdsManagerPage() {
 
       {/* HEADER */}
       <div className="ads-header-bar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 6, background: '#1e293b', border: '1px solid #0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff' }}>
-            <BarChart3 size={16} strokeWidth={2} />
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>Ads Manager</div>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Campaign performance and ASIN-level analytics</div>
-          </div>
-        </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Input.Search
             placeholder="Search ASIN, SKU..."
             allowClear
             onSearch={setSearchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: 220, borderRadius: 6 }}
+            style={{ width: 220, borderRadius: 8 }}
+            size="small"
           />
           <Segmented value={groupBy} onChange={setGroupBy}
+            size="small"
             options={[{ label: 'ASIN Level', value: 'asin' }, { label: 'Parent Level', value: 'parent' }]}
           />
           <RangePicker
             value={startDate && endDate ? [dayjs(startDate), dayjs(endDate)] : null}
             onChange={handleDateChange}
             format="DD MMM YYYY"
-            style={{ borderRadius: 6 }}
+            style={{ borderRadius: 8 }}
+            size="small"
             presets={[
               { label: 'Last 7 Days', value: [dayjs().subtract(6, 'day'), dayjs()] },
               { label: 'Last 30 Days', value: [dayjs().subtract(29, 'day'), dayjs()] },
@@ -746,11 +795,11 @@ export default function AdsManagerPage() {
             ]}
           />
           <Button onClick={fetchAdsData} loading={loading} icon={<RefreshCw size={13} strokeWidth={2} />}
-            style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
+            style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
             Refresh
           </Button>
           <Button type="primary" onClick={() => setShowImportModal(true)} icon={<Download size={13} strokeWidth={2} />}
-            style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
+            style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
             Import
           </Button>
         </div>
@@ -760,7 +809,7 @@ export default function AdsManagerPage() {
       <div className="ads-kpi-strip" style={{ maxHeight: showDashboardCharts ? 48 : 0, opacity: showDashboardCharts ? 1 : 0 }}>
         <div className="ads-kpi-scroll">
           {[
-            { label: 'Ads Spend', key: 'spend', color: '#1e293b' },
+            { label: 'Ads Spend', key: 'spend', color: '#fb4f40' },
             { label: 'Ads Sales', key: 'sales', color: '#15803d' },
             { label: 'Organic Sales', key: 'organicSales', color: '#059669' },
             { label: 'ACOS', key: 'acos', color: '#b91c1c' },
@@ -793,7 +842,7 @@ export default function AdsManagerPage() {
           <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb' }} styles={{ body: { padding: '10px 14px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 3, height: 14, background: '#1e293b', borderRadius: 2 }} />
+                <div style={{ width: 3, height: 14, background: '#fb4f40', borderRadius: 2 }} />
                 <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Campaign Trends</Text>
               </div>
               <Select mode="multiple" value={chartConfigMetrics} onChange={setChartConfigMetrics}
@@ -844,7 +893,7 @@ export default function AdsManagerPage() {
           type={showDashboardCharts ? 'primary' : 'default'}
           icon={showDashboardCharts ? <ChevronUp size={13} /> : <BarChart3 size={13} />}
           onClick={() => setShowDashboardCharts(!showDashboardCharts)}
-          style={showDashboardCharts ? { background: '#1e293b', borderColor: '#1e293b', fontWeight: 600, fontSize: 12, borderRadius: 6, height: 32 } : { fontWeight: 600, fontSize: 12, borderRadius: 6, height: 32 }}
+          style={showDashboardCharts ? { fontWeight: 600, fontSize: 11, borderRadius: 8, height: 32 } : { fontWeight: 600, fontSize: 11, borderRadius: 8, height: 32 }}
         >
           {showDashboardCharts ? 'Hide Analytics' : 'View Analytics'}
         </Button>
@@ -858,75 +907,163 @@ export default function AdsManagerPage() {
 
       {/* TABLE */}
       <div className="ads-table-wrapper">
-        <div className="ads-table-scroll-area">
-          <Table
-            columns={tableColumns}
-            dataSource={paginatedData}
-            rowKey={(record) => record.id || record.asin}
-            loading={loading}
-            pagination={false}
-            scroll={{ x: calculatedTableWidth, y: tableScrollY }}
-            size="small"
-            bordered
-            onChange={(pagination, filters, sorter) => {
-              if (sorter.field) {
-                setSortBy(sorter.field);
-                setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
-                setPage(1);
-              }
-            }}
-            rowClassName={(record, index) => index % 2 === 1 ? 'table-row-alt' : ''}
-            expandable={{
-              expandedRowRender: () => null,
-              rowExpandable: record => record.isParent,
-              expandedRowKeys: Array.from(expandedParents),
-              expandIcon: () => null
-            }}
-          />
+        <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+          {loading ? (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontWeight: 600, fontSize: 12 }}>
+              Loading data...
+            </div>
+          ) : paginatedData.length === 0 ? (
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+              <Package size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+              <span style={{ fontSize: 12, fontWeight: 500 }}>No ads data found</span>
+            </div>
+          ) : (() => {
+            const { rows: hRows, stickyLeft, stickyRight } = buildHeaderRows(tableColumns);
+            const leafCols = getLeafColumns(tableColumns);
+            return (
+              <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+                  {hRows.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((col) => {
+                        const isFixed = stickyLeft[col.key] !== undefined || stickyRight[col.key] !== undefined;
+                        const s = {
+                          fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
+                          letterSpacing: '0.04em', color: '#4b5563', padding: '6px 6px',
+                          background: '#f8fafc', position: 'sticky', top: 0,
+                          border: '1px solid #e5e7eb', whiteSpace: 'nowrap',
+                          ...(col.align === 'center' ? { textAlign: 'center' } : col.align === 'right' ? { textAlign: 'right' } : {}),
+                        };
+                        if (isFixed && col.width) s.width = col.width;
+                        if (stickyLeft[col.key] !== undefined) {
+                          s.left = stickyLeft[col.key];
+                          s.zIndex = ri === 0 ? 22 : 17;
+                          s.background = '#f8fafc';
+                        }
+                        if (stickyRight[col.key] !== undefined) {
+                          s.right = stickyRight[col.key];
+                          s.zIndex = ri === 0 ? 22 : 17;
+                          s.background = '#f8fafc';
+                          if (ri === 0) s.borderLeft = '1px solid #d1d5db';
+                        }
+                        let titleContent = col.title;
+                        if (!col.isGroup && col.sorter) {
+                          const isActive = sortBy === col.key;
+                          titleContent = (
+                            <div
+                              onClick={() => {
+                                const nextOrder = sortBy === col.key && sortOrder === 'desc' ? 'asc' : 'desc';
+                                setSortBy(col.key);
+                                setSortOrder(nextOrder);
+                                setPage(1);
+                              }}
+                              style={{
+                                cursor: 'pointer', userSelect: 'none',
+                                display: 'flex', alignItems: 'center',
+                                justifyContent: col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'space-between',
+                                gap: 3
+                              }}
+                            >
+                              <span>{col.title}</span>
+                              <div style={{
+                                display: 'flex', flexDirection: 'column',
+                                fontSize: '7px', lineHeight: 1,
+                                opacity: isActive ? 1 : 0.4
+                              }}>
+                                <ChevronUp size={8} strokeWidth={4} style={{
+                                  color: isActive && sortOrder === 'asc' ? '#1890ff' : '#8c8c8c',
+                                  marginBottom: '0px'
+                                }} />
+                                <ChevronDown size={8} strokeWidth={4} style={{
+                                  color: isActive && sortOrder === 'desc' ? '#1890ff' : '#8c8c8c'
+                                }} />
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <th key={col.key} colSpan={col.colSpan} rowSpan={col.rowSpan} style={s}>
+                            {titleContent}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {paginatedData.map((record, idx) => (
+                    <tr key={record.id || record.asin || idx} className="table-row-hover">
+                      {leafCols.map((col) => {
+                        const val = col.dataIndex ? record[col.dataIndex] : undefined;
+                        const rendered = col.render ? col.render(val, record, idx) : (val ?? '');
+                        const isFixed = stickyLeft[col.key] !== undefined || stickyRight[col.key] !== undefined;
+                        const bg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
+                        const s = {
+                          padding: '2px 5px', fontSize: '0.65rem',
+                          border: '1px solid #f0f0f0', verticalAlign: 'middle',
+                          color: '#27272a', background: bg,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          ...(col.align === 'center' ? { textAlign: 'center' } : col.align === 'right' ? { textAlign: 'right' } : {}),
+                        };
+                        if (isFixed && col.width) {
+                          s.minWidth = col.width;
+                          s.maxWidth = col.width;
+                        }
+                        if (stickyLeft[col.key] !== undefined) {
+                          s.position = 'sticky';
+                          s.left = stickyLeft[col.key];
+                          s.zIndex = 5;
+                          s.background = bg;
+                        }
+                        if (stickyRight[col.key] !== undefined) {
+                          s.position = 'sticky';
+                          s.right = stickyRight[col.key];
+                          s.zIndex = 5;
+                          s.background = bg;
+                        }
+                        return (
+                          <td key={col.key} style={s}>
+                            {rendered}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
 
         {/* FOOTER */}
-        <div className="ads-table-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>
-              {totalCount.toLocaleString()} {groupBy === 'parent' ? 'entries' : 'ASINs'} total
-            </span>
-            <div style={{ height: 12, width: 1, background: '#e5e7eb' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Rows:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                style={{ border: 'none', background: 'transparent', fontWeight: 700, fontSize: 11, cursor: 'pointer', color: '#0f172a' }}
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
-          </div>
-
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => handlePageChange(page - 1)} disabled={page === 1}
-                style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.4 : 1 }}>
-                <ChevronLeft size={14} />
-              </button>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>
-                {page} <span style={{ color: '#94a3b8', fontWeight: 500 }}>of {totalPages}</span>
-              </span>
-              <button onClick={() => handlePageChange(page + 1)} disabled={page === totalPages}
-                style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.4 : 1 }}>
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803d' }} />
-            <span style={{ fontSize: 9, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Live</span>
-          </div>
+        <div style={{ background: '#f9fafb', borderTop: '1px solid #e5e7eb', flexShrink: 0 }}>
+          <Suspense fallback={<div className="h-10 w-full animate-pulse bg-zinc-100" />}>
+            <TablePagination
+              component="div"
+              count={totalCount || 0}
+              page={(page || 1) - 1}
+              onPageChange={handleChangePage}
+              rowsPerPage={pageSize || 50}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[25, 50, 100, 200, 300, 500]}
+              sx={{
+                fontSize: '11px',
+                minHeight: '36px',
+                '.MuiToolbar-root': {
+                  minHeight: '36px', height: '36px',
+                  paddingLeft: '12px', paddingRight: '12px'
+                },
+                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  fontSize: '11px', fontWeight: 600, color: '#6b7280', margin: 0
+                },
+                '.MuiTablePagination-select': { fontSize: '11px', fontWeight: 600 },
+                '.MuiTablePagination-actions': {
+                  marginLeft: '8px',
+                  '& .MuiIconButton-root': { padding: '4px' }
+                }
+              }}
+            />
+          </Suspense>
         </div>
       </div>
 
@@ -938,8 +1075,6 @@ export default function AdsManagerPage() {
     flex: 1;
     overflow: hidden;
     background: #fafafa;
-    margin: -1.5rem -2rem;
-    height: calc(100vh - 60px);
 }
 .ads-header-bar {
     display: flex;
@@ -950,7 +1085,6 @@ export default function AdsManagerPage() {
     border-bottom: 1px solid #e5e7eb;
     flex-shrink: 0;
     overflow: visible;
-    z-index: 100;
     flex-wrap: wrap;
     gap: 12px;
 }
@@ -969,9 +1103,6 @@ export default function AdsManagerPage() {
     overflow-x: auto;
     scrollbar-width: none;
 }
-.ads-kpi-scroll::-webkit-scrollbar {
-    display: none;
-}
 .ads-chart-area {
     flex-shrink: 0;
     overflow: hidden;
@@ -989,125 +1120,22 @@ export default function AdsManagerPage() {
     overflow: hidden;
     position: relative;
 }
-.ads-table-scroll-area {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    width: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-}
-
-.ads-table-scroll-area .ant-table-body::-webkit-scrollbar {
+.ads-table-wrapper::-webkit-scrollbar,
+.ads-table-wrapper *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
-.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-track {
+.ads-table-wrapper::-webkit-scrollbar-track,
+.ads-table-wrapper *::-webkit-scrollbar-track {
     background: #f1f5f9;
 }
-.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-thumb {
+.ads-table-wrapper::-webkit-scrollbar-thumb,
+.ads-table-wrapper *::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
 }
-.ads-table-scroll-area .ant-table-body::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-.ads-table-scroll-area .ant-table-content::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-track {
-    background: #f1f5f9;
-}
-.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-.ads-table-scroll-area .ant-table-content::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-.table-row-alt > td {
-    background: #fafbfc !important;
-}
-.ads-table-footer {
-    flex-shrink: 0 !important;
-    padding: 10px 16px;
-    border-top: 1px solid #e5e7eb;
-    background: #ffffff !important;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 10;
-}
-.ant-picker-dropdown {
-    z-index: 9999 !important;
-}
-.ant-select-dropdown {
-    z-index: 9999 !important;
-}
-.ant-tooltip {
-    z-index: 9998 !important;
-}
-.ant-modal-wrap {
-    z-index: 1050 !important;
-}
-.ant-modal-mask {
-    z-index: 1050 !important;
-}
-/* ===== Fixed Column Styling — No Overlap ===== */
-.ads-table-scroll-area .ant-table-cell-fix-left,
-.ads-table-scroll-area .ant-table-cell-fix-right {
-    background: #ffffff !important;
-    z-index: 4 !important;
-}
-.ads-table-scroll-area .table-row-alt .ant-table-cell-fix-left,
-.ads-table-scroll-area .table-row-alt .ant-table-cell-fix-right {
-    background: #fafbfc !important;
-}
-.ads-table-scroll-area .ant-table-thead .ant-table-cell-fix-left,
-.ads-table-scroll-area .ant-table-thead .ant-table-cell-fix-right {
-    background: #f8fafc !important;
-    z-index: 12 !important;
-}
-.ads-table-scroll-area .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
-.ads-table-scroll-area .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
-    background: #eef2ff !important;
-}
-/* Shadow separator on last fixed-left column */
-.ads-table-scroll-area .ant-table-cell-fix-left-last::after {
-    position: absolute !important;
-    top: 0 !important;
-    right: -1px !important;
-    bottom: -1px !important;
-    width: 20px !important;
-    content: '' !important;
-    pointer-events: none !important;
-    box-shadow: inset 10px 0 8px -8px rgba(15, 23, 42, 0.1) !important;
-    transform: translateX(100%) !important;
-}
-/* Shadow separator on first fixed-right column */
-.ads-table-scroll-area .ant-table-cell-fix-right-first::after {
-    position: absolute !important;
-    top: 0 !important;
-    left: -1px !important;
-    bottom: -1px !important;
-    width: 20px !important;
-    content: '' !important;
-    pointer-events: none !important;
-    box-shadow: inset -10px 0 8px -8px rgba(15, 23, 42, 0.1) !important;
-    transform: translateX(-100%) !important;
-}
-@media (max-width: 768px) {
-    .ads-pro-page {
-        margin: -0.75rem;
-        height: auto;
-        overflow: visible;
-    }
-    .ads-table-wrapper {
-        min-height: 400px;
-    }
+.table-row-hover:hover td {
+    background: #fef2f2 !important;
 }
 `}</style>
 

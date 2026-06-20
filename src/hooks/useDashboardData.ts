@@ -73,7 +73,8 @@ export function useDashboardData(filters: DashboardFilters) {
 
     // Use existing orchestration hook
     const orch = useDashboardOrchestration({
-        sellerId: filters.sellerId,
+        sellerId: filters.sellerId === 'all' ? undefined : filters.sellerId,
+        managerId: filters.managerId === 'all' ? undefined : filters.managerId,
         startDate: filters.dateRange.start 
             ? format(filters.dateRange.start, 'yyyy-MM-dd') 
             : undefined,

@@ -346,40 +346,7 @@ const SettingsPage = () => {
                 }
             `}</style>
 
-            {/* Page Title */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                marginBottom: 24
-            }}>
-                <div style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 6,
-                    background: '#1e293b',
-                    border: '1px solid #0f172a',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff'
-                }}>
-                    <Settings size={18} strokeWidth={2} />
-                </div>
-                <div>
-                    <div style={{
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: '#0f172a',
-                        letterSpacing: '-0.2px'
-                    }}>
-                        System Configuration
-                    </div>
-                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                        Environment variables, integrations, and automation schedules
-                    </div>
-                </div>
-            </div>
+
 
             <Row gutter={[20, 0]}>
                 {/* LEFT COLUMN */}

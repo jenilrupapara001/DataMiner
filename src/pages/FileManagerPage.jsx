@@ -289,10 +289,6 @@ const FileManagerPage = () => {
                 borderRight: '1px solid #E2E8F0',
                 display: 'flex', flexDirection: 'column', padding: '1.25rem 0 0',
             }}>
-                <div style={{ padding: '0 1rem 1rem', fontWeight: 800, fontSize: '1rem', color: '#0f172a', letterSpacing: '-0.02em' }}>
-                    File Manager
-                </div>
-
                 <div style={{ padding: '0 1rem 1rem' }}>
                     <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleUpload} />
                     <button onClick={() => fileInputRef.current.click()} disabled={uploading}
