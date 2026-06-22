@@ -14,10 +14,11 @@ import {
 import {
   Card, Typography, Space, Button, Input,
   Select, Table, Tag, Avatar, Tooltip, Alert,
-  message, Tabs, Empty, Spin, ConfigProvider, Divider,
+  message, Tabs, Empty, ConfigProvider, Divider,
   Modal, Form, DatePicker
 } from 'antd';
 import api from '../services/api';
+import { PageLoading } from '../components/application/loading-indicator';
 
 const { Text } = Typography;
 
@@ -148,8 +149,8 @@ const StatCard = memo(({ icon: Icon, label, value, color = '#475569' }) => (
   <div style={{
     padding: '14px 16px',
     background: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: 6
+    border: '1px solid #d9e6e9',
+    borderRadius: 12
   }}>
     <div style={{
       display: 'flex',
@@ -159,9 +160,8 @@ const StatCard = memo(({ icon: Icon, label, value, color = '#475569' }) => (
       <div style={{
         width: 34,
         height: 34,
-        borderRadius: 6,
-        background: '#f8fafc',
-        border: '1px solid #e5e7eb',
+        borderRadius: 10,
+        background: `${color}0D`,
         color,
         display: 'flex',
         alignItems: 'center',
@@ -174,7 +174,7 @@ const StatCard = memo(({ icon: Icon, label, value, color = '#475569' }) => (
         <div style={{
           fontSize: 11,
           fontWeight: 600,
-          color: '#64748b',
+          color: '#8c8e8f',
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
           marginBottom: 3
@@ -184,7 +184,7 @@ const StatCard = memo(({ icon: Icon, label, value, color = '#475569' }) => (
         <div style={{
           fontSize: 20,
           fontWeight: 700,
-          color: '#0f172a',
+          color: '#121b1e',
           letterSpacing: '-0.3px',
           lineHeight: 1
         }}>
@@ -855,14 +855,14 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
   ];
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fafafa' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--color-surface-1)' }}>
       {/* ═══════════════════════════════════════════════════
                 SELLER HEADER (Clean, Professional)
             ═══════════════════════════════════════════════════ */}
       <div style={{
         padding: '20px 28px',
         background: '#ffffff',
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid var(--color-border)',
         flexShrink: 0
       }}>
         <div style={{
@@ -964,33 +964,18 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
 
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
+              size="small"
               icon={<Plus size={13} strokeWidth={2} />}
               onClick={() => setIsTaskModalOpen(true)}
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 6,
-                height: 36,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6
-              }}
             >
               Add Task
             </Button>
             <Button
               type="primary"
+              size="small"
               onClick={() => onSync(seller._id)}
               loading={syncing}
               icon={<RefreshCw size={13} strokeWidth={2} className={syncing ? 'spin-animation' : ''} />}
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 6,
-                height: 36,
-                background: '#1e293b',
-                borderColor: '#1e293b'
-              }}
             >
               {syncing ? 'Syncing' : 'Sync Now'}
             </Button>
@@ -1371,25 +1356,16 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
                 ].map((action, i) => {
                   const ActionIcon = action.icon;
                   return (
-                    <button key={i} onClick={action.onClick} className="quick-action-pro" style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '9px 12px',
-                      background: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#334155',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                      textAlign: 'left',
-                      width: '100%'
-                    }}>
-                      <ActionIcon size={13} strokeWidth={2} style={{ color: '#64748b' }} />
+                    <Button
+                      key={i}
+                      size="small"
+                      block
+                      icon={<ActionIcon size={13} strokeWidth={2} />}
+                      onClick={action.onClick}
+                      style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                    >
                       {action.label}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -1415,7 +1391,7 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
         okText="Create Task"
         cancelText="Cancel"
         okButtonProps={{
-          style: { background: '#1e293b', borderColor: '#1e293b', fontWeight: 600 }
+          style: { borderRadius: 8, fontWeight: 600 }
         }}
       >
         <Form
@@ -1583,177 +1559,74 @@ const SellerAsinTrackerPage = () => {
   }, [sellers, sellerSearch]);
 
   if (loading && sellers.length === 0) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 'calc(100vh - 60px)',
-        background: '#fafafa'
-      }}>
-        <div style={{
-          background: '#ffffff',
-          padding: 36,
-          borderRadius: 8,
-          border: '1px solid #e5e7eb',
-          textAlign: 'center'
-        }}>
-          <Spin size="large" />
-          <div style={{ marginTop: 16, fontSize: 13, color: '#64748b', fontWeight: 500 }}>
-            Loading seller data...
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoading message="Loading seller tracker..." subMessage="Fetching seller catalog and activity data" />;
   }
 
   return (
-    <ConfigProvider theme={{ token: { colorPrimary: '#1e293b', borderRadius: 6 } }}>
-      <div className="seller-tracker-pro">
-        <style>{`
-                    .seller-tracker-pro {
-                        height: calc(100vh - 60px);
-                        background: #fafafa;
-                        margin: -1.5rem -2rem;
-                        display: flex;
-                        flex-direction: column;
-                        overflow: hidden;
-                    }
-                    .seller-card-pro:hover {
-                        background: #f8fafc !important;
-                        border-color: #cbd5e1 !important;
-                    }
-                    .seller-card-pro.active:hover {
-                        background: #f1f5f9 !important;
-                    }
-                    .timeline-item-row:hover,
-                    .task-item-row:hover {
-                        border-color: #cbd5e1 !important;
-                        background: #fafbfc !important;
-                    }
-                    .quick-action-pro:hover {
-                        background: #f8fafc !important;
-                        border-color: #cbd5e1 !important;
-                    }
-                    .pro-seller-tabs .ant-tabs-tab {
-                        font-weight: 600 !important;
-                        font-size: 12px !important;
-                        padding: 12px 0 !important;
-                        color: #64748b !important;
-                    }
-                    .pro-seller-tabs .ant-tabs-tab-active {
-                        color: #0f172a !important;
-                    }
-                    .pro-seller-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-                        color: #0f172a !important;
-                    }
-                    .pro-seller-tabs .ant-tabs-ink-bar {
-                        background: #1e293b !important;
-                        height: 2px !important;
-                    }
-                    .pro-asin-table .ant-table-thead > tr > th {
-                        background: #f8fafc !important;
-                        font-size: 11px !important;
-                        font-weight: 700 !important;
-                        color: #475569 !important;
-                        text-transform: uppercase !important;
-                        letter-spacing: 0.04em !important;
-                        border-bottom: 1px solid #e5e7eb !important;
-                    }
-                    .pro-asin-table .ant-table-tbody > tr > td {
-                        padding: 12px 16px !important;
-                        border-bottom: 1px solid #f1f5f9 !important;
-                    }
-                    @keyframes spin-animation {
-                        to { transform: rotate(360deg); }
-                    }
-                    .spin-animation {
-                        animation: spin-animation 1s linear infinite;
-                    }
-                    ::-webkit-scrollbar { width: 8px; height: 8px; }
-                    ::-webkit-scrollbar-track { background: #f1f5f9; }
-                    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-                    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-                `}</style>
-
-        {/* ═══════════════════════════════════════════════════
-                    TOP HEADER BAR (Clean, Corporate)
-                ═══════════════════════════════════════════════════ */}
-        <div style={{
-          background: '#ffffff',
-          padding: '14px 28px',
-          borderBottom: '1px solid #e5e7eb',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              width: 38,
-              height: 38,
-              borderRadius: 6,
-              background: '#1e293b',
-              border: '1px solid #0f172a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff'
-            }}>
-              <Store size={18} strokeWidth={2} />
-            </div>
-            <div>
-              <div style={{
-                fontSize: 15,
-                fontWeight: 700,
-                color: '#0f172a',
-                letterSpacing: '-0.2px'
-              }}>
-                Seller Tracker
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                {sellers.length} active sellers · Automated synchronization
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {tokenStatus && (
-              <div style={{
-                padding: '6px 12px',
-                background: '#f8fafc',
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6
-              }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  API Tokens:
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
-                  {tokenStatus.tokensLeft?.toLocaleString()}
-                </span>
-              </div>
-            )}
-            <Button
-              type="primary"
-              onClick={handleSyncAll}
-              loading={syncingAll}
-              icon={<RefreshCw size={13} strokeWidth={2} className={syncingAll ? 'spin-animation' : ''} />}
-              style={{
-                background: '#1e293b',
-                borderColor: '#1e293b',
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 6,
-                height: 34
-              }}
-            >
-              Sync All Sellers
-            </Button>
-          </div>
-        </div>
+    <div className="seller-tracker-pro">
+      <style>{`
+        .seller-tracker-pro {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          overflow: hidden;
+          background: #fafafa;
+        }
+        .seller-card-pro:hover {
+          background: var(--color-surface-1) !important;
+          border-color: var(--color-border-strong) !important;
+        }
+        .seller-card-pro.active:hover {
+          background: var(--color-surface-2) !important;
+        }
+        .timeline-item-row:hover,
+        .task-item-row:hover {
+          border-color: var(--color-border-strong) !important;
+        }
+        .quick-action-pro:hover {
+          background: var(--color-surface-1) !important;
+          border-color: var(--color-border-strong) !important;
+        }
+        .pro-seller-tabs .ant-tabs-tab {
+          font-weight: 600 !important;
+          font-size: 12px !important;
+          padding: 12px 0 !important;
+          color: var(--color-text-muted) !important;
+        }
+        .pro-seller-tabs .ant-tabs-tab-active {
+          color: var(--color-text-primary) !important;
+        }
+        .pro-seller-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+          color: var(--color-text-primary) !important;
+        }
+        .pro-seller-tabs .ant-tabs-ink-bar {
+          background: var(--color-brand-500) !important;
+          height: 2px !important;
+        }
+        .pro-asin-table .ant-table-thead > tr > th {
+          background: var(--color-surface-1) !important;
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          color: var(--color-text-secondary) !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.04em !important;
+          border-bottom: 1px solid var(--color-border) !important;
+        }
+        .pro-asin-table .ant-table-tbody > tr > td {
+          padding: 12px 16px !important;
+          border-bottom: 1px solid var(--color-surface-1) !important;
+        }
+        @keyframes spin-animation {
+          to { transform: rotate(360deg); }
+        }
+        .spin-animation {
+          animation: spin-animation 1s linear infinite;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--color-surface-1); }
+        ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+      `}</style>
 
         {keepaKeyMissing && (
           <Alert
@@ -1774,23 +1647,36 @@ const SellerAsinTrackerPage = () => {
           <div style={{
             width: 290,
             background: '#ffffff',
-            borderRight: '1px solid #e5e7eb',
+            borderRight: '1px solid var(--color-border)',
             display: 'flex',
             flexDirection: 'column',
             flexShrink: 0
           }}>
             <div style={{
               padding: '14px 14px',
-              borderBottom: '1px solid #f1f5f9'
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8
             }}>
               <Input
                 placeholder="Search sellers..."
                 prefix={<Search size={13} style={{ color: '#94a3b8' }} />}
                 value={sellerSearch}
                 onChange={e => setSellerSearch(e.target.value)}
-                style={{ borderRadius: 6 }}
+                size="small"
                 allowClear
               />
+              <Button
+                type="primary"
+                size="small"
+                block
+                icon={<RefreshCw size={12} strokeWidth={2} className={syncingAll ? 'spin-animation' : ''} />}
+                onClick={handleSyncAll}
+                loading={syncingAll}
+              >
+                Sync All ({sellers.length})
+              </Button>
             </div>
 
             <div style={{
@@ -1829,7 +1715,6 @@ const SellerAsinTrackerPage = () => {
           />
         </div>
       </div>
-    </ConfigProvider>
   );
 };
 

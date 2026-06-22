@@ -484,47 +484,133 @@ exports.getParentAsinReport = async (req, res) => {
     try {
         const { startDate, endDate, sellerId } = req.query;
         const pool = await getPool();
-
         const request = pool.request();
-        let whereClause = "WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> ''";
 
+        let sellerFilter = '';
         if (sellerId) {
-            whereClause += " AND a.SellerId = @sellerId";
-            request.input('sellerId', sql.VarChar, sellerId);
+            const ids = Array.isArray(sellerId) ? sellerId : [sellerId];
+            const inClause = ids.map((id, i) => { request.input(`sp_${i}`, sql.VarChar, id); return `@sp_${i}`; }).join(',');
+            sellerFilter = ` AND a.SellerId IN (${inClause})`;
         }
 
-        if (startDate) {
-            request.input('startDate', sql.Date, startDate);
-        }
-        if (endDate) {
-            request.input('endDate', sql.Date, endDate);
-        }
+        if (startDate) request.input('startDate', sql.Date, startDate);
+        if (endDate) request.input('endDate', sql.Date, endDate);
 
-        // Aggregate metrics by ParentAsin
-        const query = `
-            SELECT 
+        const dateFilterAds = startDate || endDate
+            ? `AND p.Date ${startDate ? '>= @startDate' : ''} ${startDate && endDate ? 'AND' : ''} ${endDate ? 'p.Date <= @endDate' : ''}`
+            : '';
+        const dateFilterGms = startDate || endDate
+            ? `AND g.Date ${startDate ? '>= @startDate' : ''} ${startDate && endDate ? 'AND' : ''} ${endDate ? 'g.Date <= @endDate' : ''}`
+            : '';
+
+        // Step 1: Get parent ASIN catalog data (fast — no joins to big tables)
+        const catalogQuery = `
+            SELECT
                 a.ParentAsin as parent_asin,
                 MAX(a.Title) as title,
                 MAX(a.Brand) as brand,
+                MAX(a.Category) as category,
+                MAX(s.Name) as seller,
+                MAX(a.SellerId) as sellerId,
                 COUNT(DISTINCT a.AsinCode) as childCount,
-                SUM(ISNULL(p.AdSales, 0) + ISNULL(p.OrganicSales, 0)) as total_revenue,
-                CASE WHEN SUM(ISNULL(p.AdSales, 0)) > 0 
-                     THEN (SUM(ISNULL(p.AdSpend, 0)) / SUM(ISNULL(p.AdSales, 0))) * 100 
-                     ELSE 0 END as acos,
-                CASE WHEN SUM(ISNULL(p.AdSpend, 0)) > 0 
-                     THEN SUM(ISNULL(p.AdSales, 0)) / SUM(ISNULL(p.AdSpend, 0)) 
-                     ELSE 0 END as roas
+                AVG(a.Rating) as avg_rating,
+                SUM(ISNULL(a.ReviewCount, 0)) as total_reviews,
+                AVG(a.LQS) as avg_lqs,
+                SUM(CASE WHEN a.BuyBoxWin = 1 THEN 1 ELSE 0 END) as buybox_wins,
+                SUM(CASE WHEN a.HasAplus = 1 THEN 1 ELSE 0 END) as with_aplus,
+                AVG(a.CurrentPrice) as avg_price,
+                MIN(a.BSR) as best_bsr
             FROM Asins a
-            LEFT JOIN AdsPerformance p ON a.AsinCode = p.Asin 
-                ${startDate ? 'AND p.Date >= @startDate' : ''}
-                ${endDate ? 'AND p.Date <= @endDate' : ''}
-            ${whereClause}
+            LEFT JOIN Sellers s ON a.SellerId = s.Id
+            WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
             GROUP BY a.ParentAsin
-            ORDER BY total_revenue DESC
         `;
+        const catalogResult = await request.query(catalogQuery);
+        const parents = catalogResult.recordset;
 
-        const result = await request.query(query);
-        res.json({ success: true, data: result.recordset });
+        if (parents.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        // Step 2: Get ads data per parent ASIN
+        const adsQuery = `
+            SELECT
+                a.ParentAsin as parent_asin,
+                SUM(ISNULL(p.AdSpend, 0)) as ad_spend,
+                SUM(ISNULL(p.AdSales, 0)) as ad_sales,
+                SUM(ISNULL(p.OrganicSales, 0)) as organic_sales,
+                SUM(ISNULL(p.Impressions, 0)) as impressions,
+                SUM(ISNULL(p.Clicks, 0)) as clicks,
+                SUM(ISNULL(p.Orders, 0)) as orders
+            FROM AdsPerformance p
+            INNER JOIN Asins a ON p.Asin = a.AsinCode
+            WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter} ${dateFilterAds}
+            GROUP BY a.ParentAsin
+        `;
+        const adsResult = await request.query(adsQuery);
+        const adsMap = {};
+        adsResult.recordset.forEach(r => { adsMap[r.parent_asin] = r; });
+
+        // Step 3: Get GMS data per parent ASIN
+        const gmsQuery = `
+            SELECT
+                a.ParentAsin as parent_asin,
+                SUM(ISNULL(g.OrderedRevenue, 0)) as ordered_revenue,
+                SUM(ISNULL(g.OrderedUnits, 0)) as ordered_units,
+                SUM(ISNULL(g.ShippedRevenue, 0)) as shipped_revenue,
+                SUM(ISNULL(g.ShippedCOGS, 0)) as shipped_cogs,
+                SUM(ISNULL(g.CustomerReturns, 0)) as customer_returns
+            FROM GmsDailyPerformance g
+            INNER JOIN Asins a ON g.Asin = a.AsinCode
+            WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter} ${dateFilterGms}
+            GROUP BY a.ParentAsin
+        `;
+        const gmsResult = await request.query(gmsQuery);
+        const gmsMap = {};
+        gmsResult.recordset.forEach(r => { gmsMap[r.parent_asin] = r; });
+
+        // Step 4: Merge all data
+        const merged = parents.map(p => {
+            const ads = adsMap[p.parent_asin] || {};
+            const gms = gmsMap[p.parent_asin] || {};
+            const totalRevenue = (ads.ad_sales || 0) + (ads.organic_sales || 0) + (gms.ordered_revenue || 0);
+            const adSales = ads.ad_sales || 0;
+            const adSpend = ads.ad_spend || 0;
+
+            return {
+                parent_asin: p.parent_asin,
+                title: p.title,
+                brand: p.brand,
+                category: p.category,
+                seller: p.seller,
+                sellerId: p.sellerId,
+                childCount: p.childCount,
+                total_revenue: totalRevenue,
+                ad_spend: adSpend,
+                ad_sales: adSales,
+                organic_sales: ads.organic_sales || 0,
+                impressions: ads.impressions || 0,
+                clicks: ads.clicks || 0,
+                orders: ads.orders || 0,
+                acos: adSales > 0 ? (adSpend / adSales) * 100 : 0,
+                roas: adSpend > 0 ? adSales / adSpend : 0,
+                ordered_revenue: gms.ordered_revenue || 0,
+                ordered_units: gms.ordered_units || 0,
+                shipped_revenue: gms.shipped_revenue || 0,
+                shipped_cogs: gms.shipped_cogs || 0,
+                customer_returns: gms.customer_returns || 0,
+                avg_rating: p.avg_rating || 0,
+                total_reviews: p.total_reviews || 0,
+                avg_lqs: p.avg_lqs || 0,
+                buybox_wins: p.buybox_wins || 0,
+                with_aplus: p.with_aplus || 0,
+                avg_price: p.avg_price || 0,
+                best_bsr: p.best_bsr || 0,
+            };
+        });
+
+        merged.sort((a, b) => b.total_revenue - a.total_revenue);
+        res.json({ success: true, data: merged });
     } catch (error) {
         console.error('getParentAsinReport error:', error);
         res.status(500).json({ success: false, message: error.message });
