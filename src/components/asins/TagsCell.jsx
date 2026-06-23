@@ -134,29 +134,22 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
         ? DEFAULT_TAGS.filter(t => t.toLowerCase().includes(search.toLowerCase()))
         : DEFAULT_TAGS;
 
-    // Determine display colors based on tag type
+    // Determine display colors based on tag type — light bg + colored text + border
     const getTagColor = (tag) => {
         const t = tag.toLowerCase();
-        // Green
         if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential'))
-            return { bg: '#10b981', text: '#ffffff' };
-        // Red
+            return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
         if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
-            return { bg: '#ef4444', text: '#ffffff' };
-        // Amber/Orange
+            return { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' };
         if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
-            return { bg: '#f59e0b', text: '#ffffff' };
-        // Blue
+            return { bg: '#fffbeb', color: '#d97706', border: '#fde68a' };
         if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
-            return { bg: '#3b82f6', text: '#ffffff' };
-        // Indigo/Purple
+            return { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
         if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
-            return { bg: '#6366f1', text: '#ffffff' };
-        // Orange-Red
+            return { bg: '#f5f3ff', color: '#7c3aed', border: '#ddd6fe' };
         if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
-            return { bg: '#f97316', text: '#ffffff' };
-        // Default Gray
-        return { bg: '#71717a', text: '#ffffff' };
+            return { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa' };
+        return { bg: '#f4f4f5', color: '#52525b', border: '#e4e4e7' };
     };
 
     const tooltipContent = (
@@ -166,15 +159,15 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                 return (
                     <span
                         key={idx}
-                        className="badge d-flex align-items-center gap-1 shadow-sm"
+                        className="badge"
                         style={{
                             backgroundColor: color.bg,
-                            color: color.text,
-                            border: 'none',
+                            color: color.color,
+                            border: `1px solid ${color.border}`,
                             fontSize: '9px',
-                            fontWeight: 700,
-                            padding: '3px 8px',
-                            borderRadius: '5px',
+                            fontWeight: 600,
+                            padding: '2px 7px',
+                            borderRadius: '4px',
                             whiteSpace: 'nowrap'
                         }}
                     >
@@ -212,8 +205,7 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                 >
                     {tags.length === 0 ? (
                         <span
-                            className="d-flex align-items-center gap-1 text-zinc-400"
-                            style={{ fontSize: '10px', cursor: 'pointer' }}
+                            style={{ fontSize: '10px', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                             <Plus size={10} />
                             <span>Tags</span>
@@ -225,17 +217,20 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                                 return (
                                     <span
                                         key={idx}
-                                        className="badge d-flex align-items-center gap-1 shadow-sm"
+                                        className="badge"
                                         style={{
                                             backgroundColor: color.bg,
-                                            color: color.text,
-                                            border: 'none',
+                                            color: color.color,
+                                            border: `1px solid ${color.border}`,
                                             fontSize: '9px',
-                                            fontWeight: 700,
-                                            padding: '3px 8px',
-                                            borderRadius: '5px',
+                                            fontWeight: 600,
+                                            padding: '2px 7px',
+                                            borderRadius: '4px',
                                             whiteSpace: 'nowrap',
-                                            cursor: 'pointer'
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 3
                                         }}
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -245,35 +240,42 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
                                         }}
                                     >
                                         {tag.length > 14 ? tag.substring(0, 13) + '…' : tag}
-                                        <X size={10} style={{ cursor: 'pointer', opacity: 0.8 }} />
+                                        <X size={9} style={{ cursor: 'pointer', opacity: 0.6 }} />
                                     </span>
                                 );
                             })}
                             {tags.length > 2 && (
                                 <span
-                                    className="badge bg-zinc-100 text-zinc-500 border border-zinc-200"
-                                    style={{ fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}
+                                    className="badge"
+                                    style={{
+                                        backgroundColor: '#f4f4f5',
+                                        color: '#71717a',
+                                        border: '1px solid #e4e4e7',
+                                        fontSize: '9px',
+                                        fontWeight: 600,
+                                        padding: '2px 6px',
+                                        borderRadius: '4px'
+                                    }}
                                 >
                                     +{tags.length - 2}
                                 </span>
                             )}
                             {saving && (
-                                <span className="text-zinc-400" style={{ fontSize: '8px' }}>saving...</span>
+                                <span style={{ fontSize: '8px', color: '#9ca3af' }}>saving...</span>
                             )}
                         </>
                     )}
 
-                    {/* History Button - Only show if tags exist or on hover potentially, but let's keep it visible for easy audit */}
+                    {/* History Button */}
                     <button
-                        className="btn btn-ghost p-0 border-0 ms-auto text-zinc-300 hover-text-zinc-500 transition-colors"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', marginLeft: 'auto', color: '#cbd5e1', opacity: tags.length > 0 ? 1 : 0, transition: 'opacity 0.2s' }}
                         onClick={(e) => {
                             e.stopPropagation();
                             setHistoryVisible(true);
                         }}
                         title="View Tags History"
-                        style={{ opacity: tags.length > 0 ? 1 : 0, transition: 'opacity 0.2s' }}
                     >
-                        <Eye size={12} />
+                        <Eye size={11} />
                     </button>
                 </div>
             </Tooltip>

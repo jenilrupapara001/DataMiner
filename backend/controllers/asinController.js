@@ -198,6 +198,10 @@ exports.getAsins = async (req, res) => {
         if (req.query.bsrTrend) reqObj.input('bsrTrend', sql.NVarChar, req.query.bsrTrend);
         if (req.query.ratingTrend) reqObj.input('ratingTrend', sql.NVarChar, req.query.ratingTrend);
         if (req.query.ads !== undefined && req.query.ads !== '') reqObj.input('ads', sql.Bit, req.query.ads === 'true' ? 1 : 0);
+        if (req.query.availabilityStatus) reqObj.input('availabilityStatus', sql.NVarChar, req.query.availabilityStatus);
+        if (req.query.manufacturer) reqObj.input('manufacturer', sql.NVarChar, `%${req.query.manufacturer}%`);
+        if (req.query.dealAccessType) reqObj.input('dealAccessType', sql.NVarChar, req.query.dealAccessType);
+        if (req.query.hasDeal !== undefined && req.query.hasDeal !== '') reqObj.input('hasDeal', sql.Bit, req.query.hasDeal === 'true' ? 1 : 0);
         return reqObj;
     };
 
@@ -293,6 +297,15 @@ exports.getAsins = async (req, res) => {
     }
     if (req.query.ads !== undefined && req.query.ads !== '') {
       whereClause += ' AND a.Ads = @ads';
+    }
+    if (req.query.availabilityStatus) {
+      whereClause += ' AND a.AvailabilityStatus = @availabilityStatus';
+    }
+    if (req.query.manufacturer) {
+      whereClause += ' AND a.Manufacturer LIKE @manufacturer';
+    }
+    if (req.query.dealAccessType) {
+      whereClause += ' AND a.DealAccessType = @dealAccessType';
     }
 
     if (req.query.minTitleScore) {
@@ -471,20 +484,20 @@ exports.getAsins = async (req, res) => {
         AND Date >= DATEADD(day, -14, dbo.GetEnvDate())
         ORDER BY Date ASC, CreatedAt DESC
       `),
-      // [7.4] Available months
+      // [7.4] Available months (from GMS for orders)
       pool.request().query(`
-        SELECT DISTINCT ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month 
-        FROM AdsPerformance WITH (NOLOCK)
-        WHERE Month IS NOT NULL OR Date IS NOT NULL
+        SELECT DISTINCT FORMAT(Date, 'yyyy-MM') as Month 
+        FROM GmsDailyPerformance WITH (NOLOCK)
+        WHERE Date IS NOT NULL
         ORDER BY Month ASC
       `),
-      // [7.5] Monthly orders
+      // [7.5] Monthly orders (from GMS)
       histOrdersReq.query(`
-        SELECT Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1)) as Month, SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) as Orders
-        FROM AdsPerformance WITH (NOLOCK)
+        SELECT Asin, FORMAT(Date, 'yyyy-MM') as Month, SUM(ISNULL(OrderedUnits, 0)) as Orders
+        FROM GmsDailyPerformance WITH (NOLOCK)
         WHERE Asin IN (${histAsinCodes})
-        AND (Month IS NOT NULL OR Date IS NOT NULL)
-        GROUP BY Asin, ISNULL(Month, DATEFROMPARTS(YEAR(Date), MONTH(Date), 1))
+        AND Date IS NOT NULL
+        GROUP BY Asin, FORMAT(Date, 'yyyy-MM')
       `)
     ]);
 
