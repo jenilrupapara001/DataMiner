@@ -3588,25 +3588,43 @@ const AsinManagerPage = (props) => {
                         {isVisible('currentBuybox') && (
                           <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
                             {(() => {
-                              // Current BuyBox winner info
-                              const seller = asin.soldBy || null;
-                              const price = asin.currentPrice || 0;
+                              const buyBoxes = asin.buyBoxes || [];
+                              const winner = buyBoxes.find(b => b.isBuyBoxWinner) || buyBoxes[0];
+                              const seller = winner?.seller || asin.soldBy || null;
+                              const price = winner?.priceAmount || asin.currentPrice || 0;
+                              const mrp = winner?.mrpAmount || 0;
+                              const savings = winner?.savingsAmount || 0;
+                              const savingsPct = winner?.savingsPercentage || 0;
+                              const condition = winner?.condition?.value || '';
+                              const availability = winner?.availability || '';
 
                               if (!seller && !price) return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
 
                               return (
-                                <div className="d-flex flex-column gap-1">
-                                  <span
-                                    className="fw-bold text-zinc-800 text-truncate"
-                                    style={{ fontSize: '10px' }}
-                                    title={seller || 'Unknown'}
-                                  >
-                                    {seller || 'Unknown'}
-                                  </span>
-                                  <span className="fw-bold text-indigo-600" style={{ fontSize: '11px' }}>
-                                    ₹{price.toLocaleString()}
-                                  </span>
-                                </div>
+                                <Tooltip title={
+                                  <div style={{ fontSize: 11 }}>
+                                    <div><b>Seller:</b> {seller || 'Unknown'}</div>
+                                    <div><b>Price:</b> ₹{price.toLocaleString()}</div>
+                                    {mrp > 0 && <div><b>MRP:</b> ₹{mrp.toLocaleString()}</div>}
+                                    {savings > 0 && <div><b>Savings:</b> ₹{savings.toLocaleString()} ({savingsPct}% OFF)</div>}
+                                    {condition && <div><b>Condition:</b> {condition}</div>}
+                                    {availability && <div><b>Avail:</b> {availability}</div>}
+                                  </div>
+                                } placement="left" overlayStyle={{ fontSize: 11 }}>
+                                  <div className="d-flex flex-column gap-1">
+                                    <span className="fw-bold text-zinc-800 text-truncate" style={{ fontSize: '10px' }} title={seller || 'Unknown'}>
+                                      {seller || 'Unknown'}
+                                    </span>
+                                    <span className="fw-bold text-indigo-600" style={{ fontSize: '11px' }}>
+                                      ₹{price.toLocaleString()}
+                                    </span>
+                                    {savings > 0 && (
+                                      <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>
+                                        {savingsPct}% OFF
+                                      </span>
+                                    )}
+                                  </div>
+                                </Tooltip>
                               );
                             })()}
                           </td>
@@ -3616,102 +3634,69 @@ const AsinManagerPage = (props) => {
                         {isVisible('otherBuybox') && (
                           <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
                             {(() => {
-                              // Get all offers and find the non-winner
+                              const buyBoxes = asin.buyBoxes || [];
                               const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
                                 ? asin.allOffers
                                 : [];
 
-                              // Filter out the BuyBox winner
+                              // Merge buyBoxes and allOffers for richer data
+                              const otherBuyBoxes = buyBoxes.filter(b => !b.isBuyBoxWinner && b.seller && b.seller.trim() !== '' && b.seller.toLowerCase() !== (asin.soldBy || '').toLowerCase());
                               const otherOffers = allOffers.filter(o => {
-                                // Skip the winner
                                 if (o.isBuyBoxWinner === true) return false;
-                                // Skip if same as current seller
-                                if (o.seller && asin.soldBy &&
-                                  o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
-                                // Must have a seller name
+                                if (o.seller && asin.soldBy && o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
                                 if (!o.seller || o.seller.trim() === '') return false;
                                 const sellerLower = o.seller.toLowerCase().trim();
                                 if (sellerLower === 'unknown' || sellerLower === 'view details') return false;
                                 return true;
                               });
 
-                              // ✅ If otherOffers has data, show it
-                              if (otherOffers.length > 0) {
-                                const firstOther = otherOffers[0];
-                                const remainingCount = otherOffers.length - 1;
+                              // Prefer buyBoxes (richer), fallback to allOffers
+                              const firstOther = otherBuyBoxes[0] || otherOffers[0];
+                              const remainingCount = Math.max(otherBuyBoxes.length, otherOffers.length) - 1;
+
+                              if (firstOther) {
+                                const otherPrice = firstOther.priceAmount || firstOther.price || 0;
+                                const otherMrp = firstOther.mrpAmount || 0;
+                                const otherSavings = firstOther.savingsAmount || 0;
+                                const otherSavingsPct = firstOther.savingsPercentage || 0;
 
                                 return (
-                                  <div className="d-flex flex-column gap-1">
-                                    <span
-                                      className="fw-medium text-zinc-600 text-truncate"
-                                      style={{ fontSize: '10px', maxWidth: '100px' }}
-                                      title={firstOther.seller}
-                                    >
-                                      {firstOther.seller}
-                                    </span>
-                                    {firstOther.price > 0 ? (
-                                      <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                        ₹{firstOther.price.toLocaleString()}
+                                  <Tooltip title={
+                                    <div style={{ fontSize: 11 }}>
+                                      <div><b>Seller:</b> {firstOther.seller}</div>
+                                      <div><b>Price:</b> ₹{(otherPrice).toLocaleString()}</div>
+                                      {otherMrp > 0 && <div><b>MRP:</b> ₹{otherMrp.toLocaleString()}</div>}
+                                      {otherSavings > 0 && <div><b>Savings:</b> ₹{otherSavings.toLocaleString()} ({otherSavingsPct}% OFF)</div>}
+                                      {firstOther.condition?.value && <div><b>Condition:</b> {firstOther.condition.value}</div>}
+                                    </div>
+                                  } placement="left" overlayStyle={{ fontSize: 11 }}>
+                                    <div className="d-flex flex-column gap-1">
+                                      <span className="fw-medium text-zinc-600 text-truncate" style={{ fontSize: '10px', maxWidth: '100px' }} title={firstOther.seller}>
+                                        {firstOther.seller}
                                       </span>
-                                    ) : (
-                                      <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
-                                    )}
-                                    {firstOther.delivery && (
-                                      <span
-                                        className="text-zinc-400 text-truncate"
-                                        style={{ fontSize: '8px', maxWidth: '100px', cursor: 'help' }}
-                                        title={firstOther.delivery}
-                                      >
-                                        🚚 {firstOther.delivery}
-                                      </span>
-                                    )}
-                                    {remainingCount > 0 && (
-                                      <span className="text-zinc-400" style={{ fontSize: '8px' }}
-                                        title={otherOffers.slice(1).map(o => `${o.seller}${o.delivery ? ` (${o.delivery})` : ''}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
-                                        +{remainingCount} more
-                                      </span>
-                                    )}
-                                  </div>
+                                      {otherPrice > 0 ? (
+                                        <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
+                                          ₹{otherPrice.toLocaleString()}
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
+                                      )}
+                                      {remainingCount > 0 && (
+                                        <span className="text-zinc-400" style={{ fontSize: '8px' }}>
+                                          +{remainingCount} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </Tooltip>
                                 );
                               }
 
-                              // ✅ FALLBACK: Use legacy soldBySec/secondAsp
-                              const secSeller = (asin.soldBySec || '').trim();
-                              const secPrice = parseFloat(asin.secondAsp) || 0;
-                              const secSellerLower = secSeller.toLowerCase();
-
-                              // Check if it's different from the current seller
-                              if (secSeller && secSellerLower !== 'unknown' && secSellerLower !== 'details' && secSellerLower !== 'view details' && secSeller.length > 0) {
-                                const isSameAsCurrent = asin.soldBy &&
-                                  secSellerLower === (asin.soldBy || '').toLowerCase();
-
-                                if (!isSameAsCurrent) {
-                                  return (
-                                    <div className="d-flex flex-column gap-1">
-                                      <span
-                                        className="fw-medium text-zinc-600 text-truncate"
-                                        style={{ fontSize: '10px', maxWidth: '100px' }}
-                                        title={secSeller}
-                                      >
-                                        {secSeller}
-                                      </span>
-                                      {secPrice > 0 ? (
-                                        <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                          ₹{secPrice.toLocaleString()}
-                                        </span>
-                                      ) : (
-                                        <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // ✅ Nothing found
+                              // No other offers
                               return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
                             })()}
                           </td>
                         )}
+
                         {isVisible('mrp') && (
                           <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
                             ₹{(asin.mrp || 0).toLocaleString()}

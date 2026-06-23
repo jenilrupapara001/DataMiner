@@ -616,6 +616,9 @@ exports.getAsins = async (req, res) => {
         let lqsDetails = [];
         try { lqsDetails = a.LqsDetails ? (typeof a.LqsDetails === 'string' ? JSON.parse(a.LqsDetails) : a.LqsDetails) : []; } catch (e) { lqsDetails = []; }
 
+        let buyBoxes = [];
+        try { buyBoxes = a.BuyBoxes ? (typeof a.BuyBoxes === 'string' ? JSON.parse(a.BuyBoxes) : a.BuyBoxes) : []; } catch (e) { buyBoxes = []; }
+
         let cdqComponents = {};
         try { cdqComponents = a.CdqComponents ? (typeof a.CdqComponents === 'string' ? JSON.parse(a.CdqComponents) : a.CdqComponents) : {}; } catch (e) { cdqComponents = {}; }
 
@@ -691,7 +694,7 @@ exports.getAsins = async (req, res) => {
             dealBadge: a.DealBadge || 'No deal found',
             priceType: a.PriceType || 'Standard Price',
             discountPercentage: parseInt(a.DiscountPercentage) || 0,
-            priceDispute: a.PriceDispute === 1 || a.PriceDispute === true,
+            priceDispute: priceDisputeValue,
             hasDeal: hasDeal,
             manufacturer: a.Manufacturer || null,
             dealStartTime: a.DealStartTime || null,
@@ -772,6 +775,7 @@ exports.getAsins = async (req, res) => {
             
             // Parsed JSON arrays/objects
             allOffers: allOffers,
+            buyBoxes: buyBoxes,
             subBSRs: subBSRs,
             images: images,
             bulletPointsText: bulletPointsText,

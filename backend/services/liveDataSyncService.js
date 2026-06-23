@@ -504,6 +504,10 @@ class LiveDataSyncService extends EventEmitter {
                 .input('variantImages', sql.NVarChar(sql.MAX), JSON.stringify(extracted.variantImages))
                 .input('dimensions', sql.NVarChar(sql.MAX), JSON.stringify(extracted.dimensions))
                 .input('buyBoxes', sql.NVarChar(sql.MAX), JSON.stringify(extracted.buyBoxes))
+                .input('soldBy', sql.NVarChar, extracted.soldBy)
+                .input('soldBySec', sql.NVarChar, extracted.soldBySec)
+                .input('buyBoxWin', sql.Bit, extracted.buyBoxWin ? 1 : 0)
+                .input('allOffersJson', sql.NVarChar(sql.MAX), JSON.stringify(extracted.allOffers))
                 .query(`
                     UPDATE Asins SET
                         Title = @title,
@@ -522,6 +526,10 @@ class LiveDataSyncService extends EventEmitter {
                         BulletPoints = @bulletPointCount,
                         BulletPointsText = @bulletPoints,
 
+                        SoldBy = @soldBy,
+                        SoldBySec = @soldBySec,
+                        BuyBoxWin = @buyBoxWin,
+                        AllOffers = @allOffersJson,
                         SellerExternalId = @sellerId,
                         CategoryPath = @categoryPath,
                         VariantImages = @variantImages,
@@ -735,6 +743,19 @@ class LiveDataSyncService extends EventEmitter {
                 type: l.type
             }))
         };
+
+        // Derive SoldBy and AllOffers from buyBoxes
+        const buyBoxWinner = extracted.buyBoxes.find(b => b.isBuyBoxWinner) || extracted.buyBoxes[0];
+        extracted.soldBy = buyBoxWinner?.seller || extracted.seller || null;
+        extracted.soldBySec = extracted.buyBoxes.find(b => !b.isBuyBoxWinner && b.seller)?.seller || null;
+        extracted.buyBoxWin = extracted.buyBoxes.some(b => b.isBuyBoxWinner);
+        extracted.allOffers = extracted.buyBoxes.map(b => ({
+            seller: b.seller,
+            price: b.priceAmount || 0,
+            isBuyBoxWinner: b.isBuyBoxWinner
+        }));
+
+        return extracted;
     }
     
     // Parse BSR from ranking string like "#367 in Unknown"
