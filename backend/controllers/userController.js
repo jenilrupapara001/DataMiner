@@ -88,8 +88,9 @@ exports.getUsers = async (req, res) => {
       `);
 
     // Fetch assigned sellers for each user
+    const userIds = usersResult.recordset.map(u => u.Id);
     const userReq = pool.request();
-    const userIdPlaceholders = buildInClause(userReq, 'userId', usersResult.recordset.map(u => u.Id));
+    const userIdPlaceholders = buildInClause(userReq, 'userId', userIds);
     let sellerMap = {};
     
     if (usersResult.recordset.length > 0) {
@@ -113,11 +114,13 @@ exports.getUsers = async (req, res) => {
     // Fetch supervisors for each user
     let supervisorMap = {};
     if (userIds.length > 0) {
-      const supervisorsResult = await pool.request().query(`
+      const supReq = pool.request();
+      const supPlaceholders = buildInClause(supReq, 'supId', userIds);
+      const supervisorsResult = await supReq.query(`
         SELECT US.UserId, S.Id as SupervisorId, S.FirstName, S.LastName, S.Email
         FROM UserSupervisors US
         JOIN Users S ON US.SupervisorId = S.Id
-        WHERE US.UserId IN (${userIds})
+        WHERE US.UserId IN (${supPlaceholders})
       `);
       
       supervisorsResult.recordset.forEach(s => {
@@ -135,8 +138,10 @@ exports.getUsers = async (req, res) => {
     // Fetch brand managers map for each user
     let brandManagersMap = {};
     if (userIds.length > 0) {
-      const bmResult = await pool.request().query(`
-        SELECT UserId, BrandManagerId FROM UserBrandManagers WHERE UserId IN (${userIds})
+      const bmReq = pool.request();
+      const bmPlaceholders = buildInClause(bmReq, 'bmId', userIds);
+      const bmResult = await bmReq.query(`
+        SELECT UserId, BrandManagerId FROM UserBrandManagers WHERE UserId IN (${bmPlaceholders})
       `);
       bmResult.recordset.forEach(bm => {
         if (!brandManagersMap[bm.UserId]) brandManagersMap[bm.UserId] = [];

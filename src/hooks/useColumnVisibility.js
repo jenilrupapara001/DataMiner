@@ -15,11 +15,12 @@ export const ALL_COLUMNS = [
   { key: 'tags', label: 'Tags', defaultVisible: true, category: 'Core' },
   { key: 'releaseDate', label: 'Release Date', defaultVisible: false, category: 'Core' },
   
-  { key: 'titleScore', label: 'Title Score (TTL)', defaultVisible: true, category: 'LQS' },
-  { key: 'bulletScore', label: 'Bullet Score (BLT)', defaultVisible: true, category: 'LQS' },
-  { key: 'imageScore', label: 'Image Score (IMG)', defaultVisible: true, category: 'LQS' },
-  { key: 'descriptionScore', label: 'Desc Score (DSC)', defaultVisible: true, category: 'LQS' },
-  { key: 'lqs', label: 'Total LQS', defaultVisible: true, category: 'LQS' },
+  // LQS columns disabled per user request
+  // { key: 'titleScore', label: 'Title Score (TTL)', defaultVisible: true, category: 'LQS' },
+  // { key: 'bulletScore', label: 'Bullet Score (BLT)', defaultVisible: true, category: 'LQS' },
+  // { key: 'imageScore', label: 'Image Score (IMG)', defaultVisible: true, category: 'LQS' },
+  // { key: 'descriptionScore', label: 'Desc Score (DSC)', defaultVisible: true, category: 'LQS' },
+  // { key: 'lqs', label: 'Total LQS', defaultVisible: true, category: 'LQS' },
   // CDQ columns disabled per user request
   // { key: 'cdq', label: 'CDQ', defaultVisible: false, category: 'LQS' },
   // { key: 'cdqGrade', label: 'CDQ Grade', defaultVisible: false, category: 'LQS' },
@@ -43,10 +44,13 @@ export const ALL_COLUMNS = [
   { key: 'ratingTrend', label: 'Rating History (7D)', defaultVisible: false, category: 'Trends' },
   { key: 'reviewTrend', label: 'Review History (7D)', defaultVisible: false, category: 'Trends' },
   
-  { key: 'status', label: 'Status', defaultVisible: true, category: 'Info' },
-  { key: 'ads', label: 'Ads Active', defaultVisible: true, category: 'Info' },
   { key: 'totalOrders', label: 'Total Orders', defaultVisible: true, category: 'Info' },
-  { key: 'availability', label: 'Availability', defaultVisible: false, category: 'Info' },
+  { key: 'availability', label: 'Availability', defaultVisible: true, category: 'Info' },
+  { key: 'availabilityStatus', label: 'Availability Status', defaultVisible: true, category: 'Info' },
+  { key: 'manufacturer', label: 'Manufacturer', defaultVisible: true, category: 'Info' },
+  { key: 'dealStartTime', label: 'Deal Start', defaultVisible: true, category: 'Pricing' },
+  { key: 'dealEndTime', label: 'Deal End', defaultVisible: true, category: 'Pricing' },
+  { key: 'dealAccessType', label: 'Deal Type', defaultVisible: false, category: 'Pricing' },
   { key: 'currentBuybox', label: 'Current BuyBox', defaultVisible: true, category: 'BuyBox' },
   { key: 'otherBuybox', label: 'Other BuyBox', defaultVisible: true, category: 'BuyBox' },
   

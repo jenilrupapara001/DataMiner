@@ -20,6 +20,7 @@ const ALL_ASIN_FIELDS = [
     { key: 'sku', label: 'SKU', category: 'Basic' },
     { key: 'title', label: 'Product Title', category: 'Basic' },
     { key: 'brand', label: 'Brand', category: 'Basic' },
+    { key: 'manufacturer', label: 'Manufacturer', category: 'Basic' },
     { key: 'category', label: 'Category', category: 'Basic' },
     { key: 'status', label: 'Status', category: 'Basic' },
     { key: 'tags', label: 'Tags', category: 'Basic' },
@@ -27,6 +28,9 @@ const ALL_ASIN_FIELDS = [
     { key: 'currentPrice', label: 'Current Price (₹)', category: 'Pricing' },
     { key: 'mrp', label: 'MRP (₹)', category: 'Pricing' },
     { key: 'dealBadge', label: 'Deal Badge', category: 'Pricing' },
+    { key: 'dealStartTime', label: 'Deal Start Date', category: 'Pricing' },
+    { key: 'dealEndTime', label: 'Deal End Date', category: 'Pricing' },
+    { key: 'dealAccessType', label: 'Deal Access Type', category: 'Pricing' },
     { key: 'priceType', label: 'Price Type', category: 'Pricing' },
     { key: 'discountPercentage', label: 'Discount %', category: 'Pricing' },
     { key: 'secondAsp', label: 'Second ASP (₹)', category: 'Pricing' },
@@ -276,11 +280,9 @@ async function processExportJob(downloadId, params, userId) {
             }
             if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
                 if (priceDispute === 'true' || priceDispute === true) {
-                    // Price dispute: > ₹5 difference and no deal badge
-                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 5 AND a.UploadedPrice > 0 AND a.CurrentPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+                    whereClause += ' AND a.PriceDispute = 1';
                 } else {
-                    // No dispute: within ₹5, or no uploaded price, or has deal badge
-                    whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 5 OR a.UploadedPrice <= 0 OR a.CurrentPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+                    whereClause += ' AND (a.PriceDispute = 0 OR a.PriceDispute IS NULL)';
                 }
             }
             if (minPrice) {
@@ -390,6 +392,10 @@ async function processExportJob(downloadId, params, userId) {
             'currentPrice': 'a.CurrentPrice',
             'mrp': 'a.Mrp',
             'dealBadge': 'a.DealBadge',
+            'dealStartTime': 'a.DealStartTime',
+            'dealEndTime': 'a.DealEndTime',
+            'dealAccessType': 'a.DealAccessType',
+            'manufacturer': 'a.Manufacturer',
             'priceDispute': 'a.PriceDispute',
             'priceType': 'a.PriceType',
             'discountPercentage': 'a.DiscountPercentage',

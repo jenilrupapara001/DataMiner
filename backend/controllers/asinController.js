@@ -247,9 +247,9 @@ exports.getAsins = async (req, res) => {
     if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxWin = @buyBoxStatus';
     if (priceDispute !== undefined && priceDispute !== '') {
       if (priceDispute === 'true') {
-        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+        whereClause += ' AND a.PriceDispute = 1';
       } else {
-        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+        whereClause += ' AND (a.PriceDispute = 0 OR a.PriceDispute IS NULL)';
       }
     }
 
@@ -389,9 +389,14 @@ exports.getAsins = async (req, res) => {
                     sortBy === 'videoCount' ? 'a.VideoCount' :
                     sortBy === 'imagesCount' ? 'a.ImagesCount' :
                     sortBy === 'hasAplus' ? 'a.HasAplus' :
-                    sortBy === 'orders' || sortBy === 'totalOrders' ? '(SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode)' :
+                    sortBy === 'orders' || sortBy === 'totalOrders' ? '(SELECT SUM(ISNULL(OrderedUnits, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)' :
                     sortBy === 'lastLiveSyncAt' ? 'a.LastLiveSyncAt' :
-                    sortBy === 'lastScraped' ? 'a.LastScrapedAt' : 'a.CreatedAt';
+                    sortBy === 'lastScraped' ? 'a.LastScrapedAt' :
+                    sortBy === 'manufacturer' ? 'a.Manufacturer' :
+                    sortBy === 'availabilityStatus' ? 'a.AvailabilityStatus' :
+                    sortBy === 'dealStartTime' ? 'a.DealStartTime' :
+                    sortBy === 'dealEndTime' ? 'a.DealEndTime' :
+                    sortBy === 'dealAccessType' ? 'a.DealAccessType' : 'a.CreatedAt';
         return `${col} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
     };
     
@@ -412,7 +417,7 @@ exports.getAsins = async (req, res) => {
         .input('limit', sql.Int, limitNum)
         .query(`
             SELECT a.*, s.Name as sellerName, s.Marketplace as sellerMarketplace,
-                   (SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WITH (NOLOCK) WHERE Asin = a.AsinCode) as TotalOrders
+                   (SELECT SUM(ISNULL(OrderedUnits, 0)) FROM GmsDailyPerformance WITH (NOLOCK) WHERE Asin = a.AsinCode) as TotalOrders
             FROM Asins a WITH (NOLOCK)
             JOIN Sellers s WITH (NOLOCK) ON a.SellerId = s.Id
             ${whereClause}
@@ -634,12 +639,15 @@ exports.getAsins = async (req, res) => {
         }
 
         const hasDeal = a.DealBadge && a.DealBadge !== '' && a.DealBadge !== 'No deal found';
+        // Only PROPER Amazon deal types suppress dispute
+        const PROPER_DEAL_PATTERN = /^(lightning|limited time deal|best deal|prime exclusive|subscribe.?and.?save|deal of the day|coupon)$/i;
+        const hasProperDeal = hasDeal && PROPER_DEAL_PATTERN.test((a.DealBadge || '').trim());
         
-        // Price dispute: only if > ₹5 difference and no deal badge
+        // Price dispute: only if > ₹5 difference and no proper deal badge
         let priceDisputeValue = false;
         if (a.UploadedPrice > 0 && (a.CurrentPrice || 0) > 0) {
             const priceDiff = Math.abs(a.UploadedPrice - (a.CurrentPrice || 0));
-            if (!hasDeal && priceDiff > 5) {
+            if (!hasProperDeal && priceDiff > 5) {
                 priceDisputeValue = true;
             }
         }
@@ -672,6 +680,11 @@ exports.getAsins = async (req, res) => {
             discountPercentage: parseInt(a.DiscountPercentage) || 0,
             priceDispute: a.PriceDispute === 1 || a.PriceDispute === true,
             hasDeal: hasDeal,
+            manufacturer: a.Manufacturer || null,
+            dealStartTime: a.DealStartTime || null,
+            dealEndTime: a.DealEndTime || null,
+            dealAccessType: a.DealAccessType || null,
+            dealPercentClaimed: a.DealPercentClaimed || null,
             
             // BSR & Ratings
             bsr: parseInt(a.BSR) || 0,
@@ -2684,9 +2697,9 @@ exports.exportData = async (req, res) => {
     }
     if (priceDispute !== undefined && priceDispute !== '') {
       if (priceDispute === 'true') {
-        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) > 0.01 AND a.UploadedPrice > 0 AND (a.DealBadge IS NULL OR a.DealBadge = '' OR a.DealBadge = 'No deal found'))";
+        whereClause += ' AND a.PriceDispute = 1';
       } else {
-        whereClause += " AND (ABS(a.UploadedPrice - a.CurrentPrice) <= 0.01 OR a.UploadedPrice <= 0 OR (a.DealBadge IS NOT NULL AND a.DealBadge != '' AND a.DealBadge != 'No deal found'))";
+        whereClause += ' AND (a.PriceDispute = 0 OR a.PriceDispute IS NULL)';
       }
     }
     if (search) {

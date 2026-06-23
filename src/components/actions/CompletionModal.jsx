@@ -1,294 +1,234 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mic, Square, Play, Pause, Clock, Calendar, Repeat } from 'lucide-react';
+import {
+  Modal, Form, Input, InputNumber, Radio, Button, Space,
+  Typography, Tag, Avatar, Alert, message, Divider,
+} from 'antd';
+import {
+  EyeOutlined, CheckCircleOutlined, UserOutlined,
+  ClockCircleOutlined,
+} from '@ant-design/icons';
+import {
+  MODAL_STYLES, formatUserName, getStatusStyle, can,
+} from './modalHelpers';
 
-const CompletionModal = ({ action, isOpen, onClose, onComplete }) => {
-    const [formData, setFormData] = useState({
-        remarks: '',
-        stage: 'COMPLETED',
-        recurring: {
-            enabled: false,
-            frequency: 'WEEKLY',
-            daysOfWeek: []
-        }
-    });
+const { Text } = Typography;
+const { TextArea } = Input;
 
-    const [isRecording, setIsRecording] = useState(false);
-    const [audioBlob, setAudioBlob] = useState(null);
-    const [transcript, setTranscript] = useState('');
-    const [mediaRecorder, setMediaRecorder] = useState(null);
-    const [recognition, setRecognition] = useState(null);
+const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [stage, setStage] = useState('REVIEW');
 
-    useEffect(() => {
-        // Initialize Web Speech API
-        if ('webkitSpeechRecognition' in window) {
-            const speechRecognition = new window.webkitSpeechRecognition();
-            speechRecognition.continuous = true;
-            speechRecognition.interimResults = true;
-            speechRecognition.lang = 'en-US';
+  const hasReviewer = action?.reviewer;
+  const canSelfComplete = !hasReviewer && can(action?.currentUser || {}, 'approve_reject');
 
-            speechRecognition.onresult = (event) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript + ' ';
-                    }
-                }
-                if (finalTranscript) {
-                    setTranscript(prev => prev + finalTranscript);
-                    setFormData(prev => ({
-                        ...prev,
-                        remarks: prev.remarks + finalTranscript
-                    }));
-                }
-            };
+  useEffect(() => {
+    if (isOpen && action) {
+      form.resetFields();
+      form.setFieldsValue({
+        summary: '',
+        outcome: '',
+        timeSpent: action.estimatedHours || undefined,
+      });
+      setStage(hasReviewer ? 'REVIEW' : 'COMPLETED');
+    }
+  }, [isOpen, action, form, hasReviewer]);
 
-            setRecognition(speechRecognition);
-        }
-    }, []);
+  if (!action) return null;
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      setSubmitting(true);
 
-    const toggleRecurring = () => {
-        setFormData(prev => ({
-            ...prev,
-            recurring: { ...prev.recurring, enabled: !prev.recurring.enabled }
-        }));
-    };
+      const data = {
+        stage,
+        summary: values.summary,
+        outcome: values.outcome || '',
+        timeSpent: values.timeSpent || null,
+        completedAt: new Date().toISOString(),
+      };
 
-    const toggleDay = (day) => {
-        setFormData(prev => {
-            const days = prev.recurring.daysOfWeek.includes(day)
-                ? prev.recurring.daysOfWeek.filter(d => d !== day)
-                : [...prev.recurring.daysOfWeek, day];
-            return {
-                ...prev,
-                recurring: { ...prev.recurring, daysOfWeek: days }
-            };
-        });
-    };
+      await onComplete(action._id || action.id, data);
+      message.success(stage === 'REVIEW' ? 'Submitted for review' : 'Task completed');
+      form.resetFields();
+      onClose();
+    } catch (err) {
+      if (err.errorFields) return;
+      message.error(err?.message || 'Submission failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
-            const chunks = [];
+  const labelStyle = MODAL_STYLES.labelStyle;
+  const inputStyle = MODAL_STYLES.inputStyle;
+  const statusStyle = getStatusStyle(action.status);
+  const reviewerName = action.reviewer ? formatUserName(action.reviewer) : null;
 
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
-                setAudioBlob(blob);
-            };
+  return (
+    <Modal
+      open={isOpen}
+      onCancel={() => { form.resetFields(); onClose(); }}
+      footer={null}
+      width={540}
+      centered
+      destroyOnClose
+    >
+      <div style={MODAL_STYLES.headerStyle}>
+        <Space size={12} align="center">
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+            Submit Work
+          </span>
+        </Space>
+      </div>
 
-            recorder.start();
-            setMediaRecorder(recorder);
-            setIsRecording(true);
+      <div style={{ ...MODAL_STYLES.bodyStyle, maxHeight: '70vh', overflowY: 'auto' }}>
+        <Card
+          styles={{ body: { padding: '12px 16px' } }}
+          style={{ borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16, background: '#fafbfc' }}
+        >
+          <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+            <Text strong style={{ fontSize: 14, color: '#1e293b' }}>{action.title}</Text>
+            <Space size={8}>
+              <Tag style={{ borderRadius: 6, fontSize: 11, fontWeight: 600, color: statusStyle.color, background: statusStyle.bg, border: `1px solid ${statusStyle.border}`, margin: 0 }}>
+                {action.status}
+              </Tag>
+            </Space>
+            {reviewerName ? (
+              <Space size={6}>
+                <Avatar size={20} icon={<UserOutlined />} style={{ background: '#f5f3ff', color: '#8b5cf6' }} />
+                <Text style={{ fontSize: 12, color: '#64748b' }}>Reviewer: {reviewerName}</Text>
+              </Space>
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                message="No reviewer assigned — you can mark this complete directly"
+                style={{ fontSize: 12, borderRadius: 6, padding: '6px 12px' }}
+              />
+            )}
+          </Space>
+        </Card>
 
-            // Start speech recognition
-            if (recognition) {
-                recognition.start();
-            }
-        } catch (error) {
-            console.error('Error accessing microphone:', error);
-            alert('Could not access microphone. Please check permissions.');
-        }
-    };
+        <Form form={form} layout="vertical" scrollToFirstError>
+          <Form.Item
+            name="summary"
+            label={<span style={labelStyle}>Completion Summary <span style={{ color: '#ef4444' }}>*</span></span>}
+            rules={[
+              { required: true, message: 'Summary is required' },
+              { min: 20, message: 'Minimum 20 characters' },
+              { max: 2000, message: 'Maximum 2000 characters' },
+            ]}
+          >
+            <TextArea
+              rows={4}
+              maxLength={2000}
+              showCount
+              placeholder="Describe what was done and what changed..."
+              style={{ borderRadius: 8, fontSize: 13 }}
+            />
+          </Form.Item>
 
-    const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
-        }
-        if (recognition) {
-            recognition.stop();
-        }
-        setIsRecording(false);
-    };
+          <Form.Item
+            name="outcome"
+            label={<span style={labelStyle}>Outcome / Result</span>}
+          >
+            <Input placeholder="e.g. ACoS reduced from 22% to 15%" style={{ ...inputStyle, height: 40 }} />
+          </Form.Item>
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+          <Form.Item
+            name="timeSpent"
+            label={<span style={labelStyle}>Time Spent</span>}
+          >
+            <InputNumber
+              min={0}
+              max={999}
+              step={0.5}
+              style={{ width: '100%', ...inputStyle }}
+              addonAfter="hours"
+              placeholder="Est: {action.estimatedHours || 0}h"
+            />
+          </Form.Item>
 
-        const completionData = {
-            ...formData,
-            audioBlob,
-            transcript,
-            completedAt: new Date()
-        };
+          <Divider style={{ margin: '12px 0' }} />
 
-        onComplete(action._id, completionData);
-    };
+          <Form.Item
+            label={<span style={labelStyle}>Completion Stage <span style={{ color: '#ef4444' }}>*</span></span>}
+          >
+            <Radio.Group
+              value={stage}
+              onChange={e => setStage(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Radio
+                  value="REVIEW"
+                  style={{
+                    display: 'flex', alignItems: 'center', padding: '12px 16px',
+                    border: `1px solid ${stage === 'REVIEW' ? '#8b5cf6' : '#e2e8f0'}`,
+                    borderRadius: 8, background: stage === 'REVIEW' ? '#f5f3ff' : 'white',
+                    width: '100%', height: 'auto', margin: 0,
+                  }}
+                >
+                  <Space size={12}>
+                    <EyeOutlined style={{ fontSize: 18, color: stage === 'REVIEW' ? '#8b5cf6' : '#94a3b8' }} />
+                    <Space orientation="vertical" size={2}>
+                      <Text strong style={{ fontSize: 13, color: stage === 'REVIEW' ? '#8b5cf6' : '#374151' }}>
+                        Submit for Review
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Send to {reviewerName || 'reviewer'} for approval
+                      </Text>
+                    </Space>
+                  </Space>
+                </Radio>
 
-    if (!isOpen) return null;
+                <Radio
+                  value="COMPLETED"
+                  disabled={!!hasReviewer}
+                  style={{
+                    display: 'flex', alignItems: 'center', padding: '12px 16px',
+                    border: `1px solid ${stage === 'COMPLETED' ? '#10b981' : '#e2e8f0'}`,
+                    borderRadius: 8, background: stage === 'COMPLETED' ? '#ecfdf5' : 'white',
+                    width: '100%', height: 'auto', margin: 0,
+                    opacity: hasReviewer ? 0.5 : 1,
+                  }}
+                >
+                  <Space size={12}>
+                    <CheckCircleOutlined style={{ fontSize: 18, color: stage === 'COMPLETED' ? '#10b981' : '#94a3b8' }} />
+                    <Space orientation="vertical" size={2}>
+                      <Text strong style={{ fontSize: 13, color: stage === 'COMPLETED' ? '#10b981' : '#374151' }}>
+                        Mark as Complete
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>
+                        {hasReviewer ? 'Disabled — reviewer assigned' : 'Mark done without review'}
+                      </Text>
+                    </Space>
+                  </Space>
+                </Radio>
+              </Space>
+            </Radio.Group>
+          </Form.Item>
+        </Form>
+      </div>
 
-    const duration = action.timeTracking?.startedAt
-        ? Math.floor((new Date() - new Date(action.timeTracking.startedAt)) / 1000 / 60)
-        : 0;
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h5 className="modal-title">Complete Task</h5>
-                        <button type="button" className="btn-close" onClick={onClose} aria-label="Close">
-                            <X style={{ width: '20px', height: '20px' }} />
-                        </button>
-                    </div>
-
-                    <form onSubmit={handleSubmit}>
-                        <div className="modal-body">
-                            {/* Task Summary */}
-                            <div className="mb-3">
-                                <h6 className="text-muted mb-2">Task: {action.title}</h6>
-                                <div className="d-flex align-items-center gap-3 text-sm text-muted">
-                                    <span>
-                                        <Clock style={{ width: '14px', height: '14px' }} className="me-1" />
-                                        Duration: {duration} minutes
-                                    </span>
-                                    {action.timeTracking?.timeLimit && (
-                                        <span className={duration > action.timeTracking.timeLimit ? 'text-danger' : ''}>
-                                            Limit: {action.timeTracking.timeLimit} minutes
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Completion Remarks */}
-                            <div className="mb-3">
-                                <label className="form-label">Completion Remarks *</label>
-                                <div className="position-relative">
-                                    <textarea
-                                        name="remarks"
-                                        value={formData.remarks}
-                                        onChange={handleChange}
-                                        required
-                                        rows="5"
-                                        className="form-control"
-                                        placeholder="Describe what you did, challenges faced, and outcomes..."
-                                    />
-                                    <button
-                                        type="button"
-                                        className={`btn btn-sm position-absolute ${isRecording ? 'btn-danger' : 'btn-outline-primary'}`}
-                                        style={{ top: '10px', right: '10px' }}
-                                        onClick={isRecording ? stopRecording : startRecording}
-                                        title={isRecording ? 'Stop Recording' : 'Start Voice Recording'}
-                                    >
-                                        {isRecording ? (
-                                            <>
-                                                <Square style={{ width: '14px', height: '14px' }} className="me-1" />
-                                                Stop
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Mic style={{ width: '14px', height: '14px' }} className="me-1" />
-                                                Record
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                                {isRecording && (
-                                    <small className="text-danger d-flex align-items-center mt-1">
-                                        <span className="recording-indicator me-2"></span>
-                                        Recording... Speak clearly into your microphone
-                                    </small>
-                                )}
-                                {transcript && (
-                                    <small className="text-success mt-1 d-block">
-                                        ✓ Transcribed {transcript.split(' ').length} words
-                                    </small>
-                                )}
-                            </div>
-
-                            {/* Stage Selection */}
-                            <div className="mb-3">
-                                <label className="form-label">Final Stage</label>
-                                <select
-                                    name="stage"
-                                    value={formData.stage}
-                                    onChange={handleChange}
-                                    className="form-select"
-                                >
-                                    <option value="REVIEW">Review Required</option>
-                                    <option value="COMPLETED">Completed</option>
-                                </select>
-                            </div>
-
-                            {/* Recurring Task Configuration */}
-                            <div className="mb-3">
-                                <div className="form-check mb-2">
-                                    <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        id="recurringCheck"
-                                        checked={formData.recurring.enabled}
-                                        onChange={toggleRecurring}
-                                    />
-                                    <label className="form-check-label" htmlFor="recurringCheck">
-                                        <Repeat style={{ width: '14px', height: '14px' }} className="me-1" />
-                                        Repeat this task
-                                    </label>
-                                </div>
-
-                                {formData.recurring.enabled && (
-                                    <div className="recurring-config ps-4">
-                                        <div className="mb-2">
-                                            <label className="form-label">Frequency</label>
-                                            <select
-                                                value={formData.recurring.frequency}
-                                                onChange={(e) => setFormData(prev => ({
-                                                    ...prev,
-                                                    recurring: { ...prev.recurring, frequency: e.target.value }
-                                                }))}
-                                                className="form-select form-select-sm"
-                                            >
-                                                <option value="DAILY">Daily</option>
-                                                <option value="WEEKLY">Weekly</option>
-                                                <option value="MONTHLY">Monthly</option>
-                                            </select>
-                                        </div>
-
-                                        {formData.recurring.frequency === 'WEEKLY' && (
-                                            <div>
-                                                <label className="form-label">Repeat on</label>
-                                                <div className="day-selector d-flex gap-2 flex-wrap">
-                                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
-                                                        <div key={i} className="form-check">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="form-check-input"
-                                                                id={`day-${i}`}
-                                                                checked={formData.recurring.daysOfWeek.includes(i)}
-                                                                onChange={() => toggleDay(i)}
-                                                            />
-                                                            <label className="form-check-label" htmlFor={`day-${i}`}>
-                                                                {day}
-                                                            </label>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="modal-footer">
-                            <button type="button" onClick={onClose} className="btn btn-secondary">
-                                Cancel
-                            </button>
-                            <button type="submit" className="btn btn-success">
-                                <i className="bi bi-check-circle me-2"></i>
-                                Complete Task
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    );
+      <div style={MODAL_STYLES.footerStyle}>
+        <Button onClick={() => { form.resetFields(); onClose(); }} style={MODAL_STYLES.cancelBtn}>Cancel</Button>
+        <Button
+          type="primary"
+          onClick={handleSubmit}
+          loading={submitting}
+          style={{
+            ...MODAL_STYLES.primaryBtn,
+            background: stage === 'COMPLETED' ? '#10b981' : '#6366f1',
+          }}
+        >
+          {stage === 'REVIEW' ? 'Submit for Review' : 'Mark Complete'}
+        </Button>
+      </div>
+    </Modal>
+  );
 };
 
 export default CompletionModal;

@@ -53,12 +53,15 @@ exports.getObjectives = async (req, res) => {
         `);
 
         // Fetch ALL key results in a single query instead of N+1
-        const objectiveIds = objectivesResult.recordset.map(o => `'${o.Id}'`).join(',');
-        const allKRsResult = objectiveIds.length > 0 
-            ? await pool.request().query(`
-                SELECT * FROM KeyResults WHERE ObjectiveId IN (${objectiveIds}) ORDER BY CreatedAt ASC
-            `)
-            : { recordset: [] };
+        const objectiveIdValues = objectivesResult.recordset.map(o => o.Id);
+        let allKRsResult = { recordset: [] };
+        if (objectiveIdValues.length > 0) {
+            const krReq = pool.request();
+            const krPlaceholders = buildInClause(krReq, 'objId', objectiveIdValues);
+            allKRsResult = await krReq.query(`
+                SELECT * FROM KeyResults WHERE ObjectiveId IN (${krPlaceholders}) ORDER BY CreatedAt ASC
+            `);
+        }
         
         // Build key results map by objectiveId
         const krsByObjective = {};

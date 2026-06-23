@@ -544,6 +544,97 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
             </Row>
           </Card>
 
+          {/* Brand, Manufacturer, Product Info, Deal, Availability */}
+          <Card style={{ borderRadius: 12, border: `1px solid ${C.borderLight}` }} styles={{ body: { padding: 24 } }}>
+            <Row gutter={[16, 16]}>
+              {/* Brand & Manufacturer */}
+              <Col xs={24} sm={12} lg={8}>
+                <div style={{ background: C.white, padding: '14px 16px', borderRadius: 10, border: `1px solid ${C.borderLight}`, height: '100%' }}>
+                  <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Brand & Manufacturer</Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 10 }}>Brand</Text>
+                      <Text strong style={{ fontSize: 14, display: 'block', color: C.dark }}>{asin.brand || '—'}</Text>
+                    </div>
+                    {asin.manufacturer && (
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 10 }}>Manufacturer</Text>
+                        <Text strong style={{ fontSize: 13, display: 'block', color: C.text }}>{asin.manufacturer}</Text>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Col>
+
+              {/* Product Info (Dimensions, Weight) */}
+              <Col xs={24} sm={12} lg={8}>
+                <div style={{ background: C.white, padding: '14px 16px', borderRadius: 10, border: `1px solid ${C.borderLight}`, height: '100%' }}>
+                  <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Product Details</Text>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {asin.dimensions?.length && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Length</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.dimensions.length.converted || asin.dimensions.length.value + ' ' + asin.dimensions.length.unit}</Text></div>
+                    )}
+                    {asin.dimensions?.width && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Width</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.dimensions.width.converted || asin.dimensions.width.value + ' ' + asin.dimensions.width.unit}</Text></div>
+                    )}
+                    {asin.dimensions?.height && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Height</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.dimensions.height.converted || asin.dimensions.height.value + ' ' + asin.dimensions.height.unit}</Text></div>
+                    )}
+                    {asin.dimensions?.weight && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Weight</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.dimensions.weight.converted || asin.dimensions.weight.value + ' ' + asin.dimensions.weight.unit}</Text></div>
+                    )}
+                    {asin.productInfo?.color && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Color</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.productInfo.color}</Text></div>
+                    )}
+                    {asin.productInfo?.size && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Size</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.productInfo.size}</Text></div>
+                    )}
+                    {asin.productInfo?.binding && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Binding</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.productInfo.binding}</Text></div>
+                    )}
+                    {asin.productInfo?.unitCount && (
+                      <div><Text type="secondary" style={{ fontSize: 10 }}>Unit Count</Text><Text strong style={{ fontSize: 13, display: 'block' }}>{asin.productInfo.unitCount}</Text></div>
+                    )}
+                  </div>
+                </div>
+              </Col>
+
+              {/* Deal Badge & Availability */}
+              <Col xs={24} sm={12} lg={8}>
+                <div style={{ background: C.white, padding: '14px 16px', borderRadius: 10, border: `1px solid ${C.borderLight}`, height: '100%' }}>
+                  <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Deal & Availability</Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
+                      <div style={{ padding: '8px 10px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>🎁 {asin.dealBadge}</span>
+                          {asin.hasDeal && <Tag color="warning" style={{ border: 'none', fontSize: 9, padding: '0 4px', lineHeight: '16px', fontWeight: 700 }}>ACTIVE</Tag>}
+                        </div>
+                        {asin.dealStartTime && (
+                          <div style={{ fontSize: 10, color: '#92400e', display: 'flex', gap: 8 }}>
+                            <span>Start: {new Date(asin.dealStartTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                            {asin.dealEndTime && <span>End: {new Date(asin.dealEndTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: C.textSecondary }}>No active deal</div>
+                    )}
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Availability</Text>
+                      <div style={{ marginTop: 4 }}>
+                        <Tag color={asin.availabilityStatus === 'In stock' || (asin.availabilityStatus && asin.availabilityStatus.toLowerCase().includes('stock')) ? 'success' : asin.availabilityStatus === 'Out of Stock' ? 'error' : 'default'}
+                          style={{ borderRadius: 6, border: 'none', fontWeight: 700, fontSize: 11 }}>
+                          {asin.availabilityStatus || asin.availability?.status || 'Unknown'}
+                        </Tag>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+
           <Card style={{ borderRadius: 12, border: `1px solid ${C.borderLight}` }} styles={{ body: { padding: 24 } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
               <div style={{ background: C.primaryLight, color: C.primary, padding: 8, borderRadius: 8 }}><ListChecks size={18} /></div>

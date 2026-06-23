@@ -550,6 +550,13 @@ const AsinManagerPage = (props) => {
     if (!isVisible('totalOrders')) return 0;
     return ordersExpanded ? availableMonths.length + 1 : 1;
   }, [isVisible, ordersExpanded, availableMonths]);
+
+  const hasSecondHeaderRow = useMemo(() => {
+    if (visibleLQSCount > 0) return true;
+    if (ordersExpanded && isVisible('totalOrders')) return true;
+    if (isVisible('priceTrend') || isVisible('bsrTrend') || isVisible('ratingTrend') || isVisible('reviewTrend') || isVisible('imageTrend')) return true;
+    return false;
+  }, [visibleLQSCount, ordersExpanded, isVisible]);
   const visiblePriceTrendCount = useMemo(() => {
     if (!isVisible('priceTrend')) return 0;
     return visibleHistoryCols;
@@ -2820,18 +2827,17 @@ const AsinManagerPage = (props) => {
                   )}
                   {isVisible('tags') && <th rowSpan={2} style={{ ...thStyle, width: '100px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>TAGS</th>}
 
+                  {/* LQS columns disabled per user request
                   {visibleLQSCount > 0 && (
                     <th colSpan={visibleLQSCount} style={{ ...thStyle, background: '#f8fafc', color: '#1e293b', textAlign: 'center', borderBottom: '1px solid #e2e8f0' }}>
                       LISTING QUALITY (LQS)
                     </th>
                   )}
+                  */}
 
-                  {/* ===== STATUS & DEAL COLUMNS (Slate Palette) ===== */}
-                  {isVisible('status') && (
-                    <th rowSpan={2} style={{ ...thStyle, width: '85px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>
-                      {renderSortableHeader('STATUS', 'status', 'center')}
-                    </th>
-                  )}
+                  {/* ===== DEAL & MANUFACTURER COLUMNS (Slate Palette) ===== */}
+                  {isVisible('manufacturer') && <th rowSpan={2} style={{ ...thStyle, width: '120px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>MANUFACTURER</th>}
+                  {isVisible('availabilityStatus') && <th rowSpan={2} style={{ ...thStyle, width: '100px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>AVAILABILITY</th>}
 
                   {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>ADS</th>}
                   {visibleOrdersCount > 0 && (
@@ -2858,6 +2864,9 @@ const AsinManagerPage = (props) => {
                     </th>
                   )}
                   {isVisible('dealBadge') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL</th>}
+                  {isVisible('dealStartTime') && <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL START</th>}
+                  {isVisible('dealEndTime') && <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL END</th>}
+                  {isVisible('dealAccessType') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL TYPE</th>}
                   {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
                   {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
 
@@ -3017,12 +3026,15 @@ const AsinManagerPage = (props) => {
                     ACTIONS
                   </th>
                 </tr>
+
                 <tr>
+                  {/* LQS sub-columns disabled per user request
                   {isVisible('titleScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Title Quality Score">TTL</th>}
                   {isVisible('bulletScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Bullet Points Score">BLT</th>}
                   {isVisible('imageScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Image Quality Score">IMG</th>}
                   {isVisible('descriptionScore') && <th style={{ ...thStyle, width: '45px', textAlign: 'center', background: '#f8fafc' }} title="Description Score">DSC</th>}
                   {isVisible('lqs') && <th style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#f1f5f9', fontWeight: 800 }} title="Overall LQS Score">TOTAL</th>}
+                  */}
 
                   {/* Orders Expanded Monthly Columns */}
                   {ordersExpanded && isVisible('totalOrders') && availableMonths.map((month, idx) => (
@@ -3173,6 +3185,7 @@ const AsinManagerPage = (props) => {
                     ))
                   ))}
                 </tr>
+
               </thead>
               <tbody>
                 {filteredAsins.length === 0 ? (
@@ -3190,184 +3203,184 @@ const AsinManagerPage = (props) => {
                   filteredAsins.map((asin, idx) => {
                     const historyMap = {};
                     asin.history?.forEach(h => historyMap[normalizeDateStr(h.date)] = h);
-                    
+
                     const weekHistoryMap = {};
                     asin.weekHistory?.forEach(w => weekHistoryMap[normalizeDateStr(w.date)] = w);
-                    
+
                     const subBsrHistoryMap = {};
                     asin.subBsrHistory?.forEach(h => subBsrHistoryMap[normalizeDateStr(h.date)] = h);
-                    
+
                     return (
-                    <tr key={asin._id || idx} className="table-row-hover" style={{
-                      background: idx % 2 === 0 ? '#fff' : '#f9fafb'
-                    }}>
-                      {isVisible('checkbox') && (
-                        <td style={{
-                          ...tdStyle,
-                          width: '40px',
-                          position: 'sticky',
-                          left: 0,
-                          background: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                          zIndex: 6,
-                          textAlign: 'center',
-                          padding: 0
-                        }}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(asin._id)}
-                            onChange={() => handleToggleSelectRow(asin._id)}
-                            style={{ cursor: 'pointer', verticalAlign: 'middle', width: '13px', height: '13px' }}
-                          />
-                        </td>
-                      )}
-                      {isVisible('asinCode') && (
-                        <td style={{
-                          ...tdStyle,
-                          fontWeight: 600,
-                          color: '#2563eb',
-                          cursor: 'pointer',
-                          position: 'sticky',
-                          width: '110px',
-                          left: isVisible('checkbox') ? '40px' : '0px',
-                          background: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                          zIndex: 5,
-                          borderRight: '2px solid #e5e7eb'
-                        }}
-                          onClick={() => handleViewAsin(asin)}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <span>{asin.asinCode}</span>
-                            <a
-                              href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
-                              style={{
-                                color: '#9ca3af',
-                                display: 'flex',
-                                alignItems: 'center',
-                                marginLeft: '4px',
-                                transition: 'color 0.2s'
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
-                              onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
-                            >
-                              <ExternalLink size={13} />
-                            </a>
-                          </div>
-                        </td>
-                      )}
-                      {/* ===== RELEASE DATE ===== */}
-                      {isVisible('releaseDate') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          {asin.releaseDate ? (
-                            <div className="d-flex align-items-center justify-content-center gap-2" style={{ whiteSpace: 'nowrap' }}>
-                              <span style={{ fontSize: '10px', fontWeight: 600 }}>
-                                {new Date(asin.releaseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                      <tr key={asin._id || idx} className="table-row-hover" style={{
+                        background: idx % 2 === 0 ? '#fff' : '#f9fafb'
+                      }}>
+                        {isVisible('checkbox') && (
+                          <td style={{
+                            ...tdStyle,
+                            width: '40px',
+                            position: 'sticky',
+                            left: 0,
+                            background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                            zIndex: 6,
+                            textAlign: 'center',
+                            padding: 0
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(asin._id)}
+                              onChange={() => handleToggleSelectRow(asin._id)}
+                              style={{ cursor: 'pointer', verticalAlign: 'middle', width: '13px', height: '13px' }}
+                            />
+                          </td>
+                        )}
+                        {isVisible('asinCode') && (
+                          <td style={{
+                            ...tdStyle,
+                            fontWeight: 600,
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            position: 'sticky',
+                            width: '110px',
+                            left: isVisible('checkbox') ? '40px' : '0px',
+                            background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                            zIndex: 5,
+                            borderRight: '2px solid #e5e7eb'
+                          }}
+                            onClick={() => handleViewAsin(asin)}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              <span>{asin.asinCode}</span>
+                              <a
+                                href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? (asin.pageUrl || `https://www.ajio.com/p/${asin.asinCode}`) : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? (asin.pageUrl || 'https://www.myntra.com') : `https://www.amazon.in/dp/${asin.asinCode}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open on Ajio" : "Open on Amazon"}
+                                style={{
+                                  color: '#9ca3af',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  marginLeft: '4px',
+                                  transition: 'color 0.2s'
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                                onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
+                              >
+                                <ExternalLink size={13} />
+                              </a>
+                            </div>
+                          </td>
+                        )}
+                        {/* ===== RELEASE DATE ===== */}
+                        {isVisible('releaseDate') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.releaseDate ? (
+                              <div className="d-flex align-items-center justify-content-center gap-2" style={{ whiteSpace: 'nowrap' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 600 }}>
+                                  {new Date(asin.releaseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                </span>
+                                <span className="badge bg-light text-zinc-500 border border-light" style={{ fontSize: '8px', padding: '2px 4px' }}>
+                                  {(() => {
+                                    const days = Math.floor((Date.now() - new Date(asin.releaseDate)) / (1000 * 60 * 60 * 24));
+                                    if (days <= 30) return `${days}d`;
+                                    if (days <= 60) return `${days}d⚡`;
+                                    return `${Math.floor(days / 30)}m`;
+                                  })()}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                            )}
+                          </td>
+                        )}
+                        {/* ===== PARENT ASIN ===== */}
+                        {isVisible('parentAsin') && (
+                          <td style={tdStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                              {(() => {
+                                const pAsin = asin.parentAsin || asin.ParentAsin;
+                                if (!pAsin) return <span style={{ color: '#d1d5db' }}>-</span>;
+                                return (
+                                  <>
+                                    <span style={{ fontWeight: 600, color: '#2563eb' }}>{pAsin}</span>
+                                    <a
+                                      href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? `https://www.ajio.com/p/${pAsin}` : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? 'https://www.myntra.com' : `https://www.amazon.in/dp/${pAsin}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open Parent on Ajio" : "Open Parent on Amazon"}
+                                      style={{
+                                        color: '#9ca3af',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        marginLeft: '4px',
+                                        transition: 'color 0.2s'
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                                      onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
+                                    >
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </td>
+                        )}
+                        {isVisible('sellerBrand') && (
+                          <td style={tdStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                                {asin.seller?.name || asin.seller || 'Global'}
                               </span>
-                              <span className="badge bg-light text-zinc-500 border border-light" style={{ fontSize: '8px', padding: '2px 4px' }}>
-                                {(() => {
-                                  const days = Math.floor((Date.now() - new Date(asin.releaseDate)) / (1000 * 60 * 60 * 24));
-                                  if (days <= 30) return `${days}d`;
-                                  if (days <= 60) return `${days}d⚡`;
-                                  return `${Math.floor(days / 30)}m`;
-                                })()}
+                              {asin.soldBy && <span style={{ fontSize: 9, color: '#9ca3af' }}>• {asin.soldBy}</span>}
+                            </div>
+                          </td>
+                        )}
+                        {isVisible('sku') && <td style={tdStyle}>{asin.sku || '-'}</td>}
+                        {isVisible('title') && (
+                          <td style={{ ...tdStyle, width: '220px', maxWidth: '220px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                              {asin.imageUrl && (
+                                <img src={asin.imageUrl} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
+                              )}
+                              <span style={{
+                                display: 'inline-block',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden',
+                                fontSize: '10.5px',
+                                cursor: 'pointer',
+                                maxWidth: '180px',
+                                fontWeight: 500
+                              }} onClick={() => handleViewAsin(asin)} title={asin.title}>
+                                {asin.title}
                               </span>
                             </div>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-                      {/* ===== PARENT ASIN ===== */}
-                      {isVisible('parentAsin') && (
-                        <td style={tdStyle}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            {(() => {
-                              const pAsin = asin.parentAsin || asin.ParentAsin;
-                              if (!pAsin) return <span style={{ color: '#d1d5db' }}>-</span>;
-                              return (
-                                <>
-                                  <span style={{ fontWeight: 600, color: '#2563eb' }}>{pAsin}</span>
-                                  <a
-                                    href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? `https://www.ajio.com/p/${pAsin}` : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? 'https://www.myntra.com' : `https://www.amazon.in/dp/${pAsin}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={asin.marketplace === 'ajio' || marketplaceFilter === 'ajio' ? "Open Parent on Ajio" : "Open Parent on Amazon"}
-                                    style={{
-                                      color: '#9ca3af',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      marginLeft: '4px',
-                                      transition: 'color 0.2s'
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
-                                    onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
-                                  >
-                                    <ExternalLink size={13} />
-                                  </a>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('sellerBrand') && (
-                        <td style={tdStyle}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                            <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                              {asin.seller?.name || asin.seller || 'Global'}
-                            </span>
-                            {asin.soldBy && <span style={{ fontSize: 9, color: '#9ca3af' }}>• {asin.soldBy}</span>}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('sku') && <td style={tdStyle}>{asin.sku || '-'}</td>}
-                      {isVisible('title') && (
-                        <td style={{ ...tdStyle, width: '220px', maxWidth: '220px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                            {asin.imageUrl && (
-                              <img src={asin.imageUrl} alt="" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} />
-                            )}
-                            <span style={{
-                              display: 'inline-block',
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
-                              overflow: 'hidden',
-                              fontSize: '10.5px',
-                              cursor: 'pointer',
-                              maxWidth: '180px',
-                              fontWeight: 500
-                            }} onClick={() => handleViewAsin(asin)} title={asin.title}>
-                              {asin.title}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('category') && (
-                        <td style={tdStyle}>
-                          <div className="d-flex flex-column" style={{ overflow: 'hidden' }}>
-                            <span style={{
-                              fontWeight: 500,
-                              color: '#4b5563',
-                              fontSize: '10.5px',
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
-                              overflow: 'hidden'
-                            }} title={asin.category?.replace(/&amp;/g, '&')}>
-                              {(asin.category || '').replace(/&amp;/g, '&').split(/[›>]/).pop()?.trim() || '-'}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('tags') && (
-                        <td style={tdStyle}>
-                          <TagsCell asin={asin} onRefresh={loadData} />
-                        </td>
-                      )}
-                      {/* ===== LISTING QUALITY SCORES ===== */}
-                      {isVisible('titleScore') && (
+                          </td>
+                        )}
+                        {isVisible('category') && (
+                          <td style={tdStyle}>
+                            <div className="d-flex flex-column" style={{ overflow: 'hidden' }}>
+                              <span style={{
+                                fontWeight: 500,
+                                color: '#4b5563',
+                                fontSize: '10.5px',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden'
+                              }} title={asin.category?.replace(/&amp;/g, '&')}>
+                                {(asin.category || '').replace(/&amp;/g, '&').split(/[›>]/).pop()?.trim() || '-'}
+                              </span>
+                            </div>
+                          </td>
+                        )}
+                        {isVisible('tags') && (
+                          <td style={tdStyle}>
+                            <TagsCell asin={asin} onRefresh={loadData} />
+                          </td>
+                        )}
+                        {/* ===== LISTING QUALITY SCORES ===== */}
+                        {/* {isVisible('titleScore') && (
                         <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
                           {asin.titleScore != null ? (
                             <span
@@ -3387,782 +3400,803 @@ const AsinManagerPage = (props) => {
                             <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
                           )}
                         </td>
-                      )}
+                      )} */}
 
-                      {isVisible('bulletScore') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
-                          {asin.bulletScore != null ? (
-                            <span
-                              className="badge fw-bold"
-                              style={{
-                                fontSize: '10px',
-                                backgroundColor: (asin.bulletScore || 0) >= 8.5 ? '#059669' :
-                                  (asin.bulletScore || 0) >= 7.0 ? '#d97706' :
-                                    (asin.bulletScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
-                                color: '#fff',
-                                minWidth: '28px'
-                              }}
-                            >
-                              {typeof asin.bulletScore === 'number' ? (asin.bulletScore > 10 ? (asin.bulletScore / 10).toFixed(1) : asin.bulletScore.toFixed(1)) : (parseFloat(asin.bulletScore || 0) > 10 ? (parseFloat(asin.bulletScore || 0) / 10).toFixed(1) : parseFloat(asin.bulletScore || 0).toFixed(1))}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-
-                      {isVisible('imageScore') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
-                          {asin.imageScore != null ? (
-                            <span
-                              className="badge fw-bold"
-                              style={{
-                                fontSize: '10px',
-                                backgroundColor: (asin.imageScore || 0) >= 8.5 ? '#059669' :
-                                  (asin.imageScore || 0) >= 7.0 ? '#d97706' :
-                                    (asin.imageScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
-                                color: '#fff',
-                                minWidth: '28px'
-                              }}
-                            >
-                              {typeof asin.imageScore === 'number' ? (asin.imageScore > 10 ? (asin.imageScore / 10).toFixed(1) : asin.imageScore.toFixed(1)) : (parseFloat(asin.imageScore || 0) > 10 ? (parseFloat(asin.imageScore || 0) / 10).toFixed(1) : parseFloat(asin.imageScore || 0).toFixed(1))}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-
-                      {isVisible('descriptionScore') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
-                          {asin.descriptionScore != null ? (
-                            <span
-                              className="badge fw-bold"
-                              style={{
-                                fontSize: '10px',
-                                backgroundColor: (asin.descriptionScore || 0) >= 8.5 ? '#059669' :
-                                  (asin.descriptionScore || 0) >= 7.0 ? '#d97706' :
-                                    (asin.descriptionScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
-                                color: '#fff',
-                                minWidth: '28px'
-                              }}
-                            >
-                              {typeof asin.descriptionScore === 'number' ? (asin.descriptionScore > 10 ? (asin.descriptionScore / 10).toFixed(1) : asin.descriptionScore.toFixed(1)) : (parseFloat(asin.descriptionScore || 0) > 10 ? (parseFloat(asin.descriptionScore || 0) / 10).toFixed(1) : parseFloat(asin.descriptionScore || 0).toFixed(1))}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-
-                      {isVisible('lqs') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', background: '#f1f5f9', fontWeight: 700 }}>
-                          {asin.lqs != null ? (
-                            <span
-                              className="badge fw-bold"
-                              style={{
-                                fontSize: '11px',
-                                backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' :
-                                  (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' :
-                                    (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
-                                color: '#fff',
-                                padding: '3px 8px',
-                                minWidth: '36px'
-                              }}
-                            >
-                              {typeof asin.lqs === 'number' ? (asin.lqs > 10 ? (asin.lqs / 10).toFixed(1) : asin.lqs.toFixed(1)) : (parseFloat(asin.lqs || 0) > 10 ? (parseFloat(asin.lqs || 0) / 10).toFixed(1) : parseFloat(asin.lqs || 0).toFixed(1))}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-                      {isVisible('status') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: (() => {
-                                const s = (asin.availabilityStatus || 'Available').toLowerCase();
-                                if (s.includes('unavailable') || s.includes('out of stock') || s.trim() === '') return '#dc2626';
-                                if (s.includes('bag') || s.includes('cart') || s.includes('add')) return '#4f46e5';
-                                return '#059669';
-                              })(),
-                              color: '#fff',
-                              fontWeight: 600,
-                              fontSize: '0.75rem',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: '110px',
-                              display: 'inline-block',
-                              verticalAlign: 'middle',
-                              padding: '4px 8px',
-                              borderRadius: '4px'
-                            }}
-                            title={asin.availabilityStatus || 'Available'}
-                          >
-                            {asin.availabilityStatus || 'Available'}
-                          </span>
-                        </td>
-                      )}
-
-                      {isVisible('ads') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          {asin.Ads ? (
-                            <div className="d-flex align-items-center justify-content-center gap-1" title="Advertising Active">
-                              <span className="badge d-flex align-items-center gap-1 shadow-sm" style={{ backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 6px', fontSize: '0.65rem', fontWeight: 800, borderRadius: '4px' }}>
-                                <Megaphone size={10} />
-                                YES
+                        {/* {isVisible('bulletScore') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                            {asin.bulletScore != null ? (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  fontSize: '10px',
+                                  backgroundColor: (asin.bulletScore || 0) >= 8.5 ? '#059669' :
+                                    (asin.bulletScore || 0) >= 7.0 ? '#d97706' :
+                                      (asin.bulletScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  color: '#fff',
+                                  minWidth: '28px'
+                                }}
+                              >
+                                {typeof asin.bulletScore === 'number' ? (asin.bulletScore > 10 ? (asin.bulletScore / 10).toFixed(1) : asin.bulletScore.toFixed(1)) : (parseFloat(asin.bulletScore || 0) > 10 ? (parseFloat(asin.bulletScore || 0) / 10).toFixed(1) : parseFloat(asin.bulletScore || 0).toFixed(1))}
                               </span>
-                            </div>
-                          ) : (
-                            <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
-                          )}
-                        </td>
-                      )}
-                      {/* Orders Monthly Cells */}
-                      {isVisible('totalOrders') && ordersExpanded && availableMonths.map((month, mIdx) => {
-                        const monthOrders = asin.monthlyOrders ? asin.monthlyOrders[month] : 0;
-                        return (
-                          <td key={`ord-c-${mIdx}`} style={{
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                            )}
+                          </td>
+                        )} */}
+
+                        {/* {isVisible('imageScore') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                            {asin.imageScore != null ? (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  fontSize: '10px',
+                                  backgroundColor: (asin.imageScore || 0) >= 8.5 ? '#059669' :
+                                    (asin.imageScore || 0) >= 7.0 ? '#d97706' :
+                                      (asin.imageScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  color: '#fff',
+                                  minWidth: '28px'
+                                }}
+                              >
+                                {typeof asin.imageScore === 'number' ? (asin.imageScore > 10 ? (asin.imageScore / 10).toFixed(1) : asin.imageScore.toFixed(1)) : (parseFloat(asin.imageScore || 0) > 10 ? (parseFloat(asin.imageScore || 0) / 10).toFixed(1) : parseFloat(asin.imageScore || 0).toFixed(1))}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                            )}
+                          </td>
+                        )} */}
+
+                        {/* {isVisible('descriptionScore') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', background: '#fafafa' }}>
+                            {asin.descriptionScore != null ? (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  fontSize: '10px',
+                                  backgroundColor: (asin.descriptionScore || 0) >= 8.5 ? '#059669' :
+                                    (asin.descriptionScore || 0) >= 7.0 ? '#d97706' :
+                                      (asin.descriptionScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  color: '#fff',
+                                  minWidth: '28px'
+                                }}
+                              >
+                                {typeof asin.descriptionScore === 'number' ? (asin.descriptionScore > 10 ? (asin.descriptionScore / 10).toFixed(1) : asin.descriptionScore.toFixed(1)) : (parseFloat(asin.descriptionScore || 0) > 10 ? (parseFloat(asin.descriptionScore || 0) / 10).toFixed(1) : parseFloat(asin.descriptionScore || 0).toFixed(1))}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                            )}
+                          </td>
+                        )} */}
+
+                        {/* {isVisible('lqs') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', background: '#f1f5f9', fontWeight: 700 }}>
+                            {asin.lqs != null ? (
+                              <span
+                                className="badge fw-bold"
+                                style={{
+                                  fontSize: '11px',
+                                  backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' :
+                                    (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' :
+                                      (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
+                                  color: '#fff',
+                                  padding: '3px 8px',
+                                  minWidth: '36px'
+                                }}
+                              >
+                                {typeof asin.lqs === 'number' ? (asin.lqs > 10 ? (asin.lqs / 10).toFixed(1) : asin.lqs.toFixed(1)) : (parseFloat(asin.lqs || 0) > 10 ? (parseFloat(asin.lqs || 0) / 10).toFixed(1) : parseFloat(asin.lqs || 0).toFixed(1))}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>
+                            )}
+                          </td>
+                        )} */}
+                        {isVisible('manufacturer') && (
+                          <td style={{ ...tdStyle, textAlign: 'left' }}>
+                            <span style={{ fontSize: '10px', color: '#334155', maxWidth: '110px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={asin.manufacturer || ''}>
+                              {asin.manufacturer || <span style={{ color: '#9ca3af' }}>-</span>}
+                            </span>
+                          </td>
+                        )}
+                        {isVisible('availabilityStatus') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.availabilityStatus ? (
+                              (() => {
+                                const s = (asin.availabilityStatus || '').toLowerCase();
+                                const isUnavailable = s.includes('unavailable') || s.includes('out of stock') || s.includes('out_of_stock') || s.includes('currently unavailable');
+                                const isInStock = s.includes('in stock') || s.includes('add to bag') || s.includes('add to cart') || s === 'available';
+                                const bgColor = isUnavailable ? '#fef2f2' : isInStock ? '#ecfdf5' : '#f8fafc';
+                                const textColor = isUnavailable ? '#dc2626' : isInStock ? '#059669' : '#334155';
+                                const borderColor = isUnavailable ? '#fecaca' : isInStock ? '#a7f3d0' : '#e2e8f0';
+                                return (
+                                  <Tooltip title={asin.availabilityStatus} placement="top" overlayStyle={{ fontSize: 11 }}>
+                                    <span className="badge" style={{
+                                      backgroundColor: bgColor,
+                                      color: textColor,
+                                      border: `1px solid ${borderColor}`,
+                                      fontWeight: 600, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', maxWidth: '90px', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'default'
+                                    }}>
+                                      {asin.availabilityStatus}
+                                    </span>
+                                  </Tooltip>
+                                );
+                              })()
+                            ) : <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>}
+                          </td>
+                        )}
+
+                        {isVisible('ads') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.Ads ? (
+                              <div className="d-flex align-items-center justify-content-center gap-1" title="Advertising Active">
+                                <span className="badge d-flex align-items-center gap-1 shadow-sm" style={{ backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 6px', fontSize: '0.65rem', fontWeight: 800, borderRadius: '4px' }}>
+                                  <Megaphone size={10} />
+                                  YES
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                            )}
+                          </td>
+                        )}
+                        {/* Orders Monthly Cells */}
+                        {isVisible('totalOrders') && ordersExpanded && availableMonths.map((month, mIdx) => {
+                          const monthOrders = asin.monthlyOrders ? asin.monthlyOrders[month] : 0;
+                          return (
+                            <td key={`ord-c-${mIdx}`} style={{
+                              ...tdStyle,
+                              ...getTransitionStyle(ordersExpanded, mIdx, availableMonths.length + 1, '70px'),
+                              textAlign: 'center'
+                            }}>
+                              <div style={{
+                                width: ordersExpanded ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {monthOrders > 0 ? (
+                                  <span className="text-zinc-600" style={{ fontSize: '11px' }}>
+                                    {monthOrders.toLocaleString()}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        {/* Orders Total Cell */}
+                        {isVisible('totalOrders') && (
+                          <td style={{
                             ...tdStyle,
-                            ...getTransitionStyle(ordersExpanded, mIdx, availableMonths.length + 1, '70px'),
-                            textAlign: 'center'
+                            ...getTransitionStyle(ordersExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
+                            textAlign: 'center',
+                            background: ordersExpanded ? '#f8fafc' : 'transparent'
                           }}>
                             <div style={{
-                              width: ordersExpanded ? 'auto' : '0px',
+                              width: 'auto',
                               overflow: 'hidden',
                               transition: 'all 0.3s ease'
                             }}>
-                              {monthOrders > 0 ? (
-                                <span className="text-zinc-600" style={{ fontSize: '11px' }}>
-                                  {monthOrders.toLocaleString()}
+                              {asin.totalOrders !== undefined && asin.totalOrders > 0 ? (
+                                <span className="fw-bold text-zinc-700" style={{ fontSize: '11px' }}>
+                                  {asin.totalOrders.toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
                               )}
                             </div>
                           </td>
-                        );
-                      })}
-                      {/* Orders Total Cell */}
-                      {isVisible('totalOrders') && (
-                        <td style={{
-                          ...tdStyle,
-                          ...getTransitionStyle(ordersExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
-                          textAlign: 'center',
-                          background: ordersExpanded ? '#f8fafc' : 'transparent'
-                        }}>
-                          <div style={{
-                            width: 'auto',
-                            overflow: 'hidden',
-                            transition: 'all 0.3s ease'
-                          }}>
-                            {asin.totalOrders !== undefined && asin.totalOrders > 0 ? (
-                              <span className="fw-bold text-zinc-700" style={{ fontSize: '11px' }}>
-                                {asin.totalOrders.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('dealBadge') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
-                            <span
-                              className="badge"
-                              style={{
-                                backgroundColor: '#fef2f2',
-                                color: '#dc2626',
-                                border: '1px solid #fecaca',
-                                fontWeight: 700,
-                                fontSize: '0.65rem',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                display: 'inline-block',
-                                maxWidth: '75px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                              title={asin.dealBadge}
-                            >
-                              {asin.dealBadge}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>
-                          )}
-                        </td>
-                      )}
-                      {/* ===== CURRENT BUYBOX ===== */}
-                      {isVisible('currentBuybox') && (
-                        <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
-                          {(() => {
-                            // Current BuyBox winner info
-                            const seller = asin.soldBy || null;
-                            const price = asin.currentPrice || 0;
-
-                            if (!seller && !price) return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
-
-                            return (
-                              <div className="d-flex flex-column gap-1">
+                        )}
+                        {isVisible('dealBadge') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
+                              <Tooltip title={asin.dealBadge} placement="top" overlayStyle={{ fontSize: 11 }}>
                                 <span
-                                  className="fw-bold text-zinc-800 text-truncate"
-                                  style={{ fontSize: '10px' }}
-                                  title={seller || 'Unknown'}
+                                  className="badge"
+                                  style={{
+                                    backgroundColor: '#fef2f2',
+                                    color: '#dc2626',
+                                    border: '1px solid #fecaca',
+                                    fontWeight: 700,
+                                    fontSize: '0.65rem',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    display: 'inline-block',
+                                    maxWidth: '75px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    cursor: 'default'
+                                  }}
                                 >
-                                  {seller || 'Unknown'}
+                                  {asin.dealBadge}
                                 </span>
-                                <span className="fw-bold text-indigo-600" style={{ fontSize: '11px' }}>
-                                  ₹{price.toLocaleString()}
-                                </span>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      )}
+                              </Tooltip>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>
+                            )}
+                          </td>
+                        )}
+                        {isVisible('dealStartTime') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.dealStartTime ? (
+                              <span style={{ fontSize: '10px', color: '#334155' }}>
+                                {new Date(asin.dealStartTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                              </span>
+                            ) : <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>}
+                          </td>
+                        )}
+                        {isVisible('dealEndTime') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.dealEndTime ? (
+                              <span style={{ fontSize: '10px', color: '#334155' }}>
+                                {new Date(asin.dealEndTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                              </span>
+                            ) : <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>}
+                          </td>
+                        )}
+                        {isVisible('dealAccessType') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.dealAccessType ? (
+                              <span className="badge" style={{
+                                backgroundColor: asin.dealAccessType === 'ALL' ? '#ecfdf5' : '#eff6ff',
+                                color: asin.dealAccessType === 'ALL' ? '#059669' : '#2563eb',
+                                border: `1px solid ${asin.dealAccessType === 'ALL' ? '#a7f3d0' : '#bfdbfe'}`,
+                                fontWeight: 700, fontSize: '0.6rem', padding: '2px 5px', borderRadius: '4px'
+                              }}>
+                                {asin.dealAccessType}
+                              </span>
+                            ) : <span style={{ color: '#9ca3af', fontSize: '9px' }}>-</span>}
+                          </td>
+                        )}
+                        {/* ===== CURRENT BUYBOX ===== */}
+                        {isVisible('currentBuybox') && (
+                          <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
+                            {(() => {
+                              // Current BuyBox winner info
+                              const seller = asin.soldBy || null;
+                              const price = asin.currentPrice || 0;
 
-                      {/* ===== OTHER BUYBOX ===== */}
-                      {isVisible('otherBuybox') && (
-                        <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
-                          {(() => {
-                            // Get all offers and find the non-winner
-                            const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
-                              ? asin.allOffers
-                              : [];
-
-                            // Filter out the BuyBox winner
-                            const otherOffers = allOffers.filter(o => {
-                              // Skip the winner
-                              if (o.isBuyBoxWinner === true) return false;
-                              // Skip if same as current seller
-                              if (o.seller && asin.soldBy &&
-                                o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
-                              // Must have a seller name
-                              if (!o.seller || o.seller.trim() === '') return false;
-                              const sellerLower = o.seller.toLowerCase().trim();
-                              if (sellerLower === 'unknown' || sellerLower === 'view details') return false;
-                              return true;
-                            });
-
-                            // ✅ If otherOffers has data, show it
-                            if (otherOffers.length > 0) {
-                              const firstOther = otherOffers[0];
-                              const remainingCount = otherOffers.length - 1;
+                              if (!seller && !price) return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
 
                               return (
                                 <div className="d-flex flex-column gap-1">
                                   <span
-                                    className="fw-medium text-zinc-600 text-truncate"
-                                    style={{ fontSize: '10px', maxWidth: '100px' }}
-                                    title={firstOther.seller}
+                                    className="fw-bold text-zinc-800 text-truncate"
+                                    style={{ fontSize: '10px' }}
+                                    title={seller || 'Unknown'}
                                   >
-                                    {firstOther.seller}
+                                    {seller || 'Unknown'}
                                   </span>
-                                  {firstOther.price > 0 ? (
-                                    <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                      ₹{firstOther.price.toLocaleString()}
-                                    </span>
-                                  ) : (
-                                    <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
-                                  )}
-                                  {firstOther.delivery && (
-                                    <span
-                                      className="text-zinc-400 text-truncate"
-                                      style={{ fontSize: '8px', maxWidth: '100px', cursor: 'help' }}
-                                      title={firstOther.delivery}
-                                    >
-                                      🚚 {firstOther.delivery}
-                                    </span>
-                                  )}
-                                  {remainingCount > 0 && (
-                                    <span className="text-zinc-400" style={{ fontSize: '8px' }}
-                                      title={otherOffers.slice(1).map(o => `${o.seller}${o.delivery ? ` (${o.delivery})` : ''}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
-                                      +{remainingCount} more
-                                    </span>
-                                  )}
+                                  <span className="fw-bold text-indigo-600" style={{ fontSize: '11px' }}>
+                                    ₹{price.toLocaleString()}
+                                  </span>
                                 </div>
                               );
-                            }
+                            })()}
+                          </td>
+                        )}
 
-                            // ✅ FALLBACK: Use legacy soldBySec/secondAsp
-                            const secSeller = (asin.soldBySec || '').trim();
-                            const secPrice = parseFloat(asin.secondAsp) || 0;
-                            const secSellerLower = secSeller.toLowerCase();
+                        {/* ===== OTHER BUYBOX ===== */}
+                        {isVisible('otherBuybox') && (
+                          <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
+                            {(() => {
+                              // Get all offers and find the non-winner
+                              const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
+                                ? asin.allOffers
+                                : [];
 
-                            // Check if it's different from the current seller
-                            if (secSeller && secSellerLower !== 'unknown' && secSellerLower !== 'details' && secSellerLower !== 'view details' && secSeller.length > 0) {
-                              const isSameAsCurrent = asin.soldBy &&
-                                secSellerLower === (asin.soldBy || '').toLowerCase();
+                              // Filter out the BuyBox winner
+                              const otherOffers = allOffers.filter(o => {
+                                // Skip the winner
+                                if (o.isBuyBoxWinner === true) return false;
+                                // Skip if same as current seller
+                                if (o.seller && asin.soldBy &&
+                                  o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
+                                // Must have a seller name
+                                if (!o.seller || o.seller.trim() === '') return false;
+                                const sellerLower = o.seller.toLowerCase().trim();
+                                if (sellerLower === 'unknown' || sellerLower === 'view details') return false;
+                                return true;
+                              });
 
-                              if (!isSameAsCurrent) {
+                              // ✅ If otherOffers has data, show it
+                              if (otherOffers.length > 0) {
+                                const firstOther = otherOffers[0];
+                                const remainingCount = otherOffers.length - 1;
+
                                 return (
                                   <div className="d-flex flex-column gap-1">
                                     <span
                                       className="fw-medium text-zinc-600 text-truncate"
                                       style={{ fontSize: '10px', maxWidth: '100px' }}
-                                      title={secSeller}
+                                      title={firstOther.seller}
                                     >
-                                      {secSeller}
+                                      {firstOther.seller}
                                     </span>
-                                    {secPrice > 0 ? (
+                                    {firstOther.price > 0 ? (
                                       <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                        ₹{secPrice.toLocaleString()}
+                                        ₹{firstOther.price.toLocaleString()}
                                       </span>
                                     ) : (
-                                      <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
+                                      <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
+                                    )}
+                                    {firstOther.delivery && (
+                                      <span
+                                        className="text-zinc-400 text-truncate"
+                                        style={{ fontSize: '8px', maxWidth: '100px', cursor: 'help' }}
+                                        title={firstOther.delivery}
+                                      >
+                                        🚚 {firstOther.delivery}
+                                      </span>
+                                    )}
+                                    {remainingCount > 0 && (
+                                      <span className="text-zinc-400" style={{ fontSize: '8px' }}
+                                        title={otherOffers.slice(1).map(o => `${o.seller}${o.delivery ? ` (${o.delivery})` : ''}: ₹${(o.price || 0).toLocaleString()}`).join('\n')}>
+                                        +{remainingCount} more
+                                      </span>
                                     )}
                                   </div>
                                 );
                               }
-                            }
 
-                            // ✅ Nothing found
-                            return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
-                          })()}
-                        </td>
-                      )}
-                      {isVisible('mrp') && (
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
-                          ₹{(asin.mrp || 0).toLocaleString()}
-                        </td>
-                      )}
-                      {isVisible('price') && (
-                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, cursor: 'pointer' }}
-                          onClick={(e) => handleViewPrice(asin, e)}
-                          title="View Price Trend Matrix">
-                          <div className="d-flex flex-column align-items-end">
-                            <>
-                              <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
-                                ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                              // ✅ FALLBACK: Use legacy soldBySec/secondAsp
+                              const secSeller = (asin.soldBySec || '').trim();
+                              const secPrice = parseFloat(asin.secondAsp) || 0;
+                              const secSellerLower = secSeller.toLowerCase();
+
+                              // Check if it's different from the current seller
+                              if (secSeller && secSellerLower !== 'unknown' && secSellerLower !== 'details' && secSellerLower !== 'view details' && secSeller.length > 0) {
+                                const isSameAsCurrent = asin.soldBy &&
+                                  secSellerLower === (asin.soldBy || '').toLowerCase();
+
+                                if (!isSameAsCurrent) {
+                                  return (
+                                    <div className="d-flex flex-column gap-1">
+                                      <span
+                                        className="fw-medium text-zinc-600 text-truncate"
+                                        style={{ fontSize: '10px', maxWidth: '100px' }}
+                                        title={secSeller}
+                                      >
+                                        {secSeller}
+                                      </span>
+                                      {secPrice > 0 ? (
+                                        <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
+                                          ₹{secPrice.toLocaleString()}
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price</span>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // ✅ Nothing found
+                              return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
+                            })()}
+                          </td>
+                        )}
+                        {isVisible('mrp') && (
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#6b7280', fontSize: '10.5px' }}>
+                            ₹{(asin.mrp || 0).toLocaleString()}
+                          </td>
+                        )}
+                        {isVisible('price') && (
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, cursor: 'pointer' }}
+                            onClick={(e) => handleViewPrice(asin, e)}
+                            title="View Price Trend Matrix">
+                            <div className="d-flex flex-column align-items-end">
+                              <>
+                                <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
+                                  ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                                </span>
+                                {asin.priceDispute && (
+                                  <span className="badge mt-1 shadow-sm" style={{
+                                    fontSize: '8px',
+                                    padding: '2px 6px',
+                                    fontWeight: 800,
+                                    backgroundColor: '#dc2626',
+                                    color: '#fff',
+                                    borderRadius: '4px',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    PRICE DISPUTE
+                                  </span>
+                                )}
+                              </>
+                            </div>
+                          </td>
+                        )}
+                        {isVisible('discountPercentage') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            <span className="badge bg-danger bg-opacity-10 text-danger" style={{ fontWeight: 700, fontSize: '11px' }}>
+                              {asin.discountPercentage ? `${asin.discountPercentage}% OFF` : '-'}
+                            </span>
+                          </td>
+                        )}
+                        {isVisible('priceDispute') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            <Tooltip title={asin.priceDispute ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" overlayStyle={{ fontSize: 11 }}>
+                              <span className="badge" style={{
+                                backgroundColor: asin.priceDispute ? '#fef2f2' : '#ecfdf5',
+                                color: asin.priceDispute ? '#dc2626' : '#059669',
+                                border: `1px solid ${asin.priceDispute ? '#fecaca' : '#a7f3d0'}`,
+                                fontWeight: 600, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px',
+                                cursor: 'default'
+                              }}>
+                                {asin.priceDispute ? 'DISPUTED' : 'No Dispute'}
                               </span>
-                              {asin.priceDispute && (
-                                <span className="badge mt-1 shadow-sm" style={{
-                                  fontSize: '8px',
-                                  padding: '2px 6px',
-                                  fontWeight: 800,
-                                  backgroundColor: '#dc2626',
-                                  color: '#fff',
-                                  borderRadius: '4px',
-                                  textTransform: 'uppercase'
+                            </Tooltip>
+                          </td>
+                        )}
+                        {isVisible('priceTrend') && historyStructure.map(week => (
+                          week.dates.map((date, dIdx) => {
+                            const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
+                            const currentOrUploadedPrice = asin.currentPrice;
+                            let priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
+                              ? wData.price
+                              : null;
+
+                            // Fallback removed to expose data integrity gaps
+
+                            return (
+                              <td key={`p-${week.label}-${dIdx}`}
+                                onClick={(e) => handleViewPrice(asin, e)}
+                                title="View Price Trend Matrix"
+                                style={{
+                                  ...tdStyle,
+                                  ...getTransitionStyle(priceTrendExpanded, dIdx, week.dates.length),
+                                  textAlign: 'center',
+                                  background: '#f5f3ff33',
+                                  cursor: 'pointer'
                                 }}>
-                                  PRICE DISPUTE
+                                <div style={{
+                                  width: (priceTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                  overflow: 'hidden',
+                                  transition: 'all 0.3s ease'
+                                }}>
+                                  {priceVal ? getWeekHistoryBadge(priceVal, 'price', currentOrUploadedPrice) : '-'}
+                                </div>
+                              </td>
+                            );
+                          })
+                        ))}
+                        {isVisible('mainBsr') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
+                            onClick={(e) => handleViewBsr(asin, e)}>
+                            <div className="d-flex flex-column align-items-center">
+                              <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
+                                {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
+                              </div>
+                              {asin.bsr && asin.category && (
+                                <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
+                                  in {asin.category}
                                 </span>
                               )}
-                            </>
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('discountPercentage') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <span className="badge bg-danger bg-opacity-10 text-danger" style={{ fontWeight: 700, fontSize: '11px' }}>
-                            {asin.discountPercentage ? `${asin.discountPercentage}% OFF` : '-'}
-                          </span>
-                        </td>
-                      )}
-                      {isVisible('priceDispute') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          <div className="d-flex justify-content-center">
-                            {asin.priceDispute ? (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center gap-1" style={{
-                                backgroundColor: '#dc2626',
-                                color: '#fff',
-                                fontSize: '10px',
-                                fontWeight: 800,
-                                padding: '5px 12px',
-                                borderRadius: '4px',
-                                minWidth: '55px'
-                              }}>
-                                <AlertTriangle size={10} />
-                                YES
-                              </span>
-                            ) : (
-                              <span className="badge shadow-sm d-flex align-items-center justify-content-center" style={{
-                                backgroundColor: '#16a34a',
-                                color: '#fff',
-                                fontSize: '10px',
-                                fontWeight: 800,
-                                padding: '5px 12px',
-                                borderRadius: '4px',
-                                minWidth: '55px'
-                              }}>
-                                NO
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('priceTrend') && historyStructure.map(week => (
-                        week.dates.map((date, dIdx) => {
-                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
-                          const currentOrUploadedPrice = asin.currentPrice;
-                          let priceVal = (wData && wData.price !== undefined && wData.price !== null && wData.price !== 0)
-                            ? wData.price
-                            : null;
-
-                          // Fallback removed to expose data integrity gaps
-
-                          return (
-                            <td key={`p-${week.label}-${dIdx}`}
-                              onClick={(e) => handleViewPrice(asin, e)}
-                              title="View Price Trend Matrix"
-                              style={{
-                                ...tdStyle,
-                                ...getTransitionStyle(priceTrendExpanded, dIdx, week.dates.length),
-                                textAlign: 'center',
-                                background: '#f5f3ff33',
-                                cursor: 'pointer'
-                              }}>
-                              <div style={{
-                                width: (priceTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
-                                overflow: 'hidden',
-                                transition: 'all 0.3s ease'
-                              }}>
-                                {priceVal ? getWeekHistoryBadge(priceVal, 'price', currentOrUploadedPrice) : '-'}
-                              </div>
-                            </td>
-                          );
-                        })
-                      ))}
-                      {isVisible('mainBsr') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
-                          onClick={(e) => handleViewBsr(asin, e)}>
-                          <div className="d-flex flex-column align-items-center">
-                            <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
-                              {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                             </div>
-                            {asin.bsr && asin.category && (
-                              <span className="text-zinc-400 text-truncate" style={{ fontSize: '8px', maxWidth: '75px' }} title={asin.category}>
-                                in {asin.category}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                          </td>
+                        )}
 
-                      {isVisible('subBsr') && (
-                        <td style={{ ...tdStyle, width: '120px' }}>
-                          {(() => {
-                            const subBsrValue = (asin.subBsr && asin.subBsr !== '0' && asin.subBsr !== 0) ? asin.subBsr : ((Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '');
-                            const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
-                            let rank = subBsrValue;
-                            let category = '';
-                            if (typeof subBsrValue === 'string' && subBsrValue.includes(' in ')) {
-                              const parts = subBsrValue.split(' in ');
-                              rank = parts[0];
-                              category = parts.slice(1).join(' in ');
-                            }
+                        {isVisible('subBsr') && (
+                          <td style={{ ...tdStyle, width: '120px' }}>
+                            {(() => {
+                              const subBsrValue = (asin.subBsr && asin.subBsr !== '0' && asin.subBsr !== 0) ? asin.subBsr : ((Array.isArray(asin.subBSRs) && asin.subBSRs[0]) || '');
+                              const hasMultiple = Array.isArray(asin.subBSRs) && asin.subBSRs.length > 1;
+                              let rank = subBsrValue;
+                              let category = '';
+                              if (typeof subBsrValue === 'string' && subBsrValue.includes(' in ')) {
+                                const parts = subBsrValue.split(' in ');
+                                rank = parts[0];
+                                category = parts.slice(1).join(' in ');
+                              }
 
-                            return subBsrValue && subBsrValue !== '0' ? (
-                              <div className="d-flex flex-column gap-1">
-                                <div className="d-flex align-items-center gap-1">
-                                  <span style={{
-                                    fontSize: '10px',
-                                    color: '#4b5563',
-                                    fontWeight: 600,
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: hasMultiple ? '85px' : '110px'
-                                  }} title={rank}>
-                                    {rank}
-                                  </span>
-                                  {hasMultiple && (
-                                    <span
-                                      className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200"
-                                      style={{ fontSize: '8px', padding: '1px 4px' }}
-                                      title={asin.subBSRs.slice(1).join('\n')}
-                                    >
-                                      +{asin.subBSRs.length - 1}
+                              return subBsrValue && subBsrValue !== '0' ? (
+                                <div className="d-flex flex-column gap-1">
+                                  <div className="d-flex align-items-center gap-1">
+                                    <span style={{
+                                      fontSize: '10px',
+                                      color: '#4b5563',
+                                      fontWeight: 600,
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      maxWidth: hasMultiple ? '85px' : '110px'
+                                    }} title={rank}>
+                                      {rank}
+                                    </span>
+                                    {hasMultiple && (
+                                      <span
+                                        className="badge rounded-pill bg-zinc-100 text-zinc-500 border border-zinc-200"
+                                        style={{ fontSize: '8px', padding: '1px 4px' }}
+                                        title={asin.subBSRs.slice(1).join('\n')}
+                                      >
+                                        +{asin.subBSRs.length - 1}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {category && (
+                                    <span style={{
+                                      fontSize: '9px',
+                                      color: '#6b7280',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      maxWidth: '110px'
+                                    }} title={category}>
+                                      {category}
                                     </span>
                                   )}
                                 </div>
-                                {category && (
-                                  <span style={{
-                                    fontSize: '9px',
-                                    color: '#6b7280',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: '110px'
-                                  }} title={category}>
-                                    {category}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ color: '#9ca3af' }}>-</span>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      {isVisible('bsrTrendStatus') && (
-                        <td
-                          style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a', cursor: 'pointer' }}
-                          onClick={() => handleViewTrends(asin, 'bsr')}
-                        >
-                          <TrendBadge status={asin.bsrTrend} />
-                        </td>
-                      )}
-                      {isVisible('bsrTrend') && historyStructure.map(week => (
-                        week.dates.map((date, dIdx) => {
-                          const hDate = date.raw;
-                          const subBsrPoint = subBsrHistoryMap[hDate];
-                          const displayVal = subBsrPoint?.rank ?? asin.subBsr;
-                          return (
-                            <td key={`b-${week.label}-${dIdx}`}
-                              onClick={(e) => handleViewBsr(asin, e)}
-                              style={{
-                                ...tdStyle,
-                                ...getTransitionStyle(bsrTrendExpanded, dIdx, week.dates.length),
-                                textAlign: 'center',
-                                background: '#f5f3ff33',
-                                cursor: 'pointer'
-                              }}>
-                              <div style={{
-                                width: (bsrTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
-                                overflow: 'hidden',
-                                transition: 'all 0.3s ease'
-                              }}>
-                                {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
-                              </div>
-                            </td>
-                          );
-                        })
-                      ))}
-                      {isVisible('rating') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
-                          onClick={(e) => handleViewRating(asin, e)}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                            <Star size={10} className="text-warning fill-warning" />
-                            <span style={{ fontWeight: 600 }}>
-                              {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '-')}
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                      {isVisible('reviewCount') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
-                          {asin.reviewCount !== null && asin.reviewCount !== undefined ? asin.reviewCount.toLocaleString() : '-'}
-                        </td>
-                      )}
-                      {isVisible('ratingTrendStatus') && (
-                        <td
-                          style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
-                          onClick={() => handleViewTrends(asin, 'rating')}
-                        >
-                          <TrendBadge status={asin.ratingTrend} />
-                        </td>
-                      )}
-                      {isVisible('ratingTrend') && historyStructure.map(week => (
-                        week.dates.map((date, dIdx) => {
-                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
-                          const ratingVal = (wData && wData.rating !== undefined && wData.rating !== null) ? wData.rating : asin.rating;
-                          return (
-                            <td key={`r-${week.label}-${dIdx}`}
-                              onClick={(e) => handleViewRating(asin, e)}
-                              style={{
-                                ...tdStyle,
-                                ...getTransitionStyle(ratingTrendExpanded, dIdx, week.dates.length),
-                                textAlign: 'center',
-                                background: '#fffbeb33',
-                                cursor: 'pointer'
-                              }}>
-                              <div style={{
-                                width: (ratingTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
-                                overflow: 'hidden',
-                                transition: 'all 0.3s ease'
-                              }}>
-                                {(ratingVal !== undefined && ratingVal !== null && ratingVal !== '') ? getWeekHistoryBadge(ratingVal, 'rating') : '-'}
-                              </div>
-                            </td>
-                          );
-                        })
-                      ))}
-                      {isVisible('reviewCount') && (
-                        <td
-                          style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
-                          onClick={() => handleViewTrends(asin, 'reviews')}
-                        >
-                          <TrendBadge status={getReviewTrendStatus(asin)} />
-                        </td>
-                      )}
-                      {isVisible('reviewTrend') && historyStructure.map(week => (
-                        week.dates.map((date, dIdx) => {
-                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
-                          const reviewsVal = (wData && wData.reviews !== undefined && wData.reviews !== null) ? wData.reviews : (wData?.reviewCount !== undefined && wData?.reviewCount !== null ? wData.reviewCount : asin.reviewCount);
-                          return (
-                            <td key={`rev-${week.label}-${dIdx}`}
-                              onClick={(e) => handleViewRating(asin, e)}
-                              style={{
-                                ...tdStyle,
-                                ...getTransitionStyle(reviewTrendExpanded, dIdx, week.dates.length),
-                                textAlign: 'center',
-                                background: '#fffbeb33',
-                                cursor: 'pointer'
-                              }}>
-                              <div style={{
-                                width: (reviewTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
-                                overflow: 'hidden',
-                                transition: 'all 0.3s ease'
-                              }}>
-                                {(reviewsVal !== undefined && reviewsVal !== null && reviewsVal !== '') ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{reviewsVal.toLocaleString()}</span> : '-'}
-                              </div>
-                            </td>
-                          );
-                        })
-                      ))}
-                      {isVisible('video') && (
-                        <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
-                              color: '#fff',
-                              fontWeight: 600,
-                              fontSize: '0.75rem'
-                            }}
+                              ) : (
+                                <span style={{ color: '#9ca3af' }}>-</span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {isVisible('bsrTrendStatus') && (
+                          <td
+                            style={{ ...tdStyle, textAlign: 'center', background: '#f5f3ff1a', cursor: 'pointer' }}
+                            onClick={() => handleViewTrends(asin, 'bsr')}
                           >
-                            {asin.videoCount > 0 ? 'Yes' : 'No'}
-                          </span>
-                        </td>
-                      )}
-                      {isVisible('imagesCount') && <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>}
-
-                      {isVisible('imageTrend') && historyStructure.map(week => (
-                        week.dates.map((date, dIdx) => {
-                          const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
-                          return (
-                            <td key={`i-${week.label}-${dIdx}`}
-                              style={{
-                                ...tdStyle,
-                                ...getTransitionStyle(imageTrendExpanded, dIdx, week.dates.length),
-                                textAlign: 'center',
-                                background: '#fdf2f833',
-                                borderRight: '1px solid #fce7f3'
-                              }}>
-                              <div style={{
-                                width: (imageTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
-                                overflow: 'hidden',
-                                transition: 'all 0.3s ease'
-                              }}>
-                                <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
-                                  {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
-                                </span>
-                              </div>
-                            </td>
-                          );
-                        })
-                      ))}
-
-                      {isVisible('bulletPoints') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
-                          {asin.bulletPoints || asin.bulletPointsText?.length || 0}
-                        </td>
-                      )}
-
-                      {isVisible('hasAplus') && (
-                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                          {asin.status === 'Scraping' ? (
-                            <span style={{ color: '#9ca3af' }}>-</span>
-                          ) : (
+                            <TrendBadge status={asin.bsrTrend} />
+                          </td>
+                        )}
+                        {isVisible('bsrTrend') && historyStructure.map(week => (
+                          week.dates.map((date, dIdx) => {
+                            const hDate = date.raw;
+                            const subBsrPoint = subBsrHistoryMap[hDate];
+                            const displayVal = subBsrPoint?.rank ?? asin.subBsr;
+                            return (
+                              <td key={`b-${week.label}-${dIdx}`}
+                                onClick={(e) => handleViewBsr(asin, e)}
+                                style={{
+                                  ...tdStyle,
+                                  ...getTransitionStyle(bsrTrendExpanded, dIdx, week.dates.length),
+                                  textAlign: 'center',
+                                  background: '#f5f3ff33',
+                                  cursor: 'pointer'
+                                }}>
+                                <div style={{
+                                  width: (bsrTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                  overflow: 'hidden',
+                                  transition: 'all 0.3s ease'
+                                }}>
+                                  {displayVal ? getWeekHistoryBadge(displayVal, 'subBsr') : '-'}
+                                </div>
+                              </td>
+                            );
+                          })
+                        ))}
+                        {isVisible('rating') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                            onClick={(e) => handleViewRating(asin, e)}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                              <Star size={10} className="text-warning fill-warning" />
+                              <span style={{ fontWeight: 600 }}>
+                                {typeof asin.rating === 'number' ? asin.rating.toFixed(1) : (asin.rating || '-')}
+                              </span>
+                            </div>
+                          </td>
+                        )}
+                        {isVisible('reviewCount') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
+                            {asin.reviewCount !== null && asin.reviewCount !== undefined ? asin.reviewCount.toLocaleString() : '-'}
+                          </td>
+                        )}
+                        {isVisible('ratingTrendStatus') && (
+                          <td
+                            style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                            onClick={() => handleViewTrends(asin, 'rating')}
+                          >
+                            <TrendBadge status={asin.ratingTrend} />
+                          </td>
+                        )}
+                        {isVisible('ratingTrend') && historyStructure.map(week => (
+                          week.dates.map((date, dIdx) => {
+                            const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
+                            const ratingVal = (wData && wData.rating !== undefined && wData.rating !== null) ? wData.rating : asin.rating;
+                            return (
+                              <td key={`r-${week.label}-${dIdx}`}
+                                onClick={(e) => handleViewRating(asin, e)}
+                                style={{
+                                  ...tdStyle,
+                                  ...getTransitionStyle(ratingTrendExpanded, dIdx, week.dates.length),
+                                  textAlign: 'center',
+                                  background: '#fffbeb33',
+                                  cursor: 'pointer'
+                                }}>
+                                <div style={{
+                                  width: (ratingTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                  overflow: 'hidden',
+                                  transition: 'all 0.3s ease'
+                                }}>
+                                  {(ratingVal !== undefined && ratingVal !== null && ratingVal !== '') ? getWeekHistoryBadge(ratingVal, 'rating') : '-'}
+                                </div>
+                              </td>
+                            );
+                          })
+                        ))}
+                        {isVisible('reviewCount') && (
+                          <td
+                            style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                            onClick={() => handleViewTrends(asin, 'reviews')}
+                          >
+                            <TrendBadge status={getReviewTrendStatus(asin)} />
+                          </td>
+                        )}
+                        {isVisible('reviewTrend') && historyStructure.map(week => (
+                          week.dates.map((date, dIdx) => {
+                            const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
+                            const reviewsVal = (wData && wData.reviews !== undefined && wData.reviews !== null) ? wData.reviews : (wData?.reviewCount !== undefined && wData?.reviewCount !== null ? wData.reviewCount : asin.reviewCount);
+                            return (
+                              <td key={`rev-${week.label}-${dIdx}`}
+                                onClick={(e) => handleViewRating(asin, e)}
+                                style={{
+                                  ...tdStyle,
+                                  ...getTransitionStyle(reviewTrendExpanded, dIdx, week.dates.length),
+                                  textAlign: 'center',
+                                  background: '#fffbeb33',
+                                  cursor: 'pointer'
+                                }}>
+                                <div style={{
+                                  width: (reviewTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                  overflow: 'hidden',
+                                  transition: 'all 0.3s ease'
+                                }}>
+                                  {(reviewsVal !== undefined && reviewsVal !== null && reviewsVal !== '') ? <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 600 }}>{reviewsVal.toLocaleString()}</span> : '-'}
+                                </div>
+                              </td>
+                            );
+                          })
+                        ))}
+                        {isVisible('video') && (
+                          <td style={{ ...tdStyle, width: '50px', textAlign: 'center' }}>
                             <span
                               className="badge"
                               style={{
-                                backgroundColor: asin.hasAplus ? '#059669' : '#6b7280',
+                                backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
                                 color: '#fff',
                                 fontWeight: 600,
                                 fontSize: '0.75rem'
                               }}
                             >
-                              {asin.hasAplus ? 'Yes' : 'No'}
+                              {asin.videoCount > 0 ? 'Yes' : 'No'}
                             </span>
-                          )}
-                        </td>
-                      )}
+                          </td>
+                        )}
+                        {isVisible('imagesCount') && <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{asin.imagesCount || 0}</td>}
 
-                      {isVisible('aplusDays') && (
-                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
-                          {asin.aplusAbsentSince && !asin.hasAplus
-                            ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24))
-                            : '-'}
+                        {isVisible('imageTrend') && historyStructure.map(week => (
+                          week.dates.map((date, dIdx) => {
+                            const wData = weekHistoryMap[date.raw] || historyMap[date.raw];
+                            return (
+                              <td key={`i-${week.label}-${dIdx}`}
+                                style={{
+                                  ...tdStyle,
+                                  ...getTransitionStyle(imageTrendExpanded, dIdx, week.dates.length),
+                                  textAlign: 'center',
+                                  background: '#fdf2f833',
+                                  borderRight: '1px solid #fce7f3'
+                                }}>
+                                <div style={{
+                                  width: (imageTrendExpanded || dIdx === week.dates.length - 1) ? 'auto' : '0px',
+                                  overflow: 'hidden',
+                                  transition: 'all 0.3s ease'
+                                }}>
+                                  <span style={{ fontSize: '10px', color: '#db2777', fontWeight: 600 }}>
+                                    {wData?.imageCount !== undefined ? wData.imageCount : (asin.imagesCount || '-')}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })
+                        ))}
+
+                        {isVisible('bulletPoints') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
+                            {asin.bulletPoints || asin.bulletPointsText?.length || 0}
+                          </td>
+                        )}
+
+                        {isVisible('hasAplus') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.status === 'Scraping' ? (
+                              <span style={{ color: '#9ca3af' }}>-</span>
+                            ) : (
+                              <span
+                                className="badge"
+                                style={{
+                                  backgroundColor: asin.hasAplus ? '#059669' : '#6b7280',
+                                  color: '#fff',
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                {asin.hasAplus ? 'Yes' : 'No'}
+                              </span>
+                            )}
+                          </td>
+                        )}
+
+                        {isVisible('aplusDays') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                            {asin.aplusAbsentSince && !asin.hasAplus
+                              ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24))
+                              : '-'}
+                          </td>
+                        )}
+                        {/* ===== ROW ACTIONS ===== */}
+                        <td style={{
+                          ...tdStyle,
+                          width: '60px',
+                          textAlign: 'center',
+                          position: 'sticky',
+                          right: 0,
+                          background: idx % 2 === 0 ? '#fff' : '#f9fafb',
+                          zIndex: 6,
+                          borderLeft: '1px solid #e5e7eb',
+                          padding: '4px'
+                        }}>
+                          <Dropdown
+                            menu={{
+                              items: [
+                                {
+                                  key: 'view',
+                                  label: 'View Details',
+                                  icon: <Eye size={14} className="text-blue-500" />,
+                                  onClick: () => handleViewAsin(asin)
+                                },
+                                {
+                                  key: 'trends',
+                                  label: 'View Trends',
+                                  icon: <TrendingUp size={14} className="text-indigo-500" />,
+                                  onClick: () => handleViewTrends(asin)
+                                },
+                                {
+                                  key: 'sync',
+                                  label: 'Sync Marketplace',
+                                  icon: <RefreshCw size={14} className="text-emerald-500" />,
+                                  onClick: () => handleSyncAsin(asin._id)
+                                },
+                                {
+                                  key: 'edit',
+                                  label: 'Edit ASIN',
+                                  icon: <Edit3 size={14} className="text-amber-500" />,
+                                  onClick: () => {
+                                    setEditingAsin(asin);
+                                    setShowEditModal(true);
+                                  }
+                                },
+                                {
+                                  key: 'toggle',
+                                  label: asin.status === 'Active' ? 'Deactivate' : 'Activate',
+                                  icon: asin.status === 'Active' ? <PauseCircle size={14} className="text-zinc-500" /> : <PlayCircle size={14} className="text-emerald-500" />,
+                                  onClick: () => handleToggleAsinStatus(asin._id, asin.status)
+                                },
+                                isAdmin ? { type: 'divider' } : null,
+                                isAdmin ? {
+                                  key: 'delete',
+                                  label: 'Delete ASIN',
+                                  icon: <Trash2 size={14} className="text-rose-500" />,
+                                  danger: true,
+                                  onClick: () => handleDeleteAsin(asin._id)
+                                } : null
+                              ].filter(Boolean)
+                            }}
+                            trigger={['click']}
+                            placement="bottomRight"
+                          >
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<MoreHorizontal size={16} color="#71717a" />}
+                              className="hover-bg-zinc-100 rounded-circle"
+                              style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            />
+                          </Dropdown>
                         </td>
-                      )}
-                      {/* ===== ROW ACTIONS ===== */}
-                      <td style={{
-                        ...tdStyle,
-                        width: '60px',
-                        textAlign: 'center',
-                        position: 'sticky',
-                        right: 0,
-                        background: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                        zIndex: 6,
-                        borderLeft: '1px solid #e5e7eb',
-                        padding: '4px'
-                      }}>
-                        <Dropdown
-                          menu={{
-                            items: [
-                              {
-                                key: 'view',
-                                label: 'View Details',
-                                icon: <Eye size={14} className="text-blue-500" />,
-                                onClick: () => handleViewAsin(asin)
-                              },
-                              {
-                                key: 'trends',
-                                label: 'View Trends',
-                                icon: <TrendingUp size={14} className="text-indigo-500" />,
-                                onClick: () => handleViewTrends(asin)
-                              },
-                              {
-                                key: 'sync',
-                                label: 'Sync Marketplace',
-                                icon: <RefreshCw size={14} className="text-emerald-500" />,
-                                onClick: () => handleSyncAsin(asin._id)
-                              },
-                              {
-                                key: 'edit',
-                                label: 'Edit ASIN',
-                                icon: <Edit3 size={14} className="text-amber-500" />,
-                                onClick: () => {
-                                  setEditingAsin(asin);
-                                  setShowEditModal(true);
-                                }
-                              },
-                              {
-                                key: 'toggle',
-                                label: asin.status === 'Active' ? 'Deactivate' : 'Activate',
-                                icon: asin.status === 'Active' ? <PauseCircle size={14} className="text-zinc-500" /> : <PlayCircle size={14} className="text-emerald-500" />,
-                                onClick: () => handleToggleAsinStatus(asin._id, asin.status)
-                              },
-                              isAdmin ? { type: 'divider' } : null,
-                              isAdmin ? {
-                                key: 'delete',
-                                label: 'Delete ASIN',
-                                icon: <Trash2 size={14} className="text-rose-500" />,
-                                danger: true,
-                                onClick: () => handleDeleteAsin(asin._id)
-                              } : null
-                            ].filter(Boolean)
-                          }}
-                          trigger={['click']}
-                          placement="bottomRight"
-                        >
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<MoreHorizontal size={16} color="#71717a" />}
-                            className="hover-bg-zinc-100 rounded-circle"
-                            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          />
-                        </Dropdown>
-                      </td>
-                    </tr>
-                  );
+                      </tr>
+                    );
                   }))}
               </tbody>
             </table>

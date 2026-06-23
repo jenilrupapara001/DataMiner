@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Edit2, Trash2, CheckCircle, Clock, AlertTriangle, Filter, Search, Play, Square, Plus, Sparkles, Loader2, BarChart2, Calendar, AlertCircle, ArrowDown, Minus, ThumbsUp, ThumbsDown, RotateCcw, FileText, RefreshCw, Eye } from 'lucide-react';
+import { Edit2, Trash2, CheckCircle, Clock, AlertTriangle, Filter, Search, Play, Square, Plus, Sparkles, Loader2, Calendar, AlertCircle, ArrowDown, Minus, ThumbsUp, ThumbsDown, RotateCcw, FileText, RefreshCw, Eye } from 'lucide-react';
 import CompletionModal from './CompletionModal';
 import ActionDetailModal from './ActionDetailModal';
 import Popover from '../common/Popover';
 import { Badge } from 'reactstrap';
-import { motion, AnimatePresence } from 'framer-motion';
+
 
 
 /* ── Reusable review-remark popover ─────────────────────────────── */
@@ -144,14 +144,6 @@ const ActionList = ({
         if (val >= 100000) return `₹${(val / 100000).toFixed(2)}L`;
         return `₹${val.toLocaleString()}`;
     };
-
-    const COLUMNS = [
-        { id: 'PENDING', label: 'Pending', icon: Clock, color: 'slate' },
-        { id: 'IN_PROGRESS', label: 'In Progress', icon: Play, color: 'blue' },
-        { id: 'REVIEW', label: 'Review', icon: Eye, color: 'indigo' },
-        { id: 'COMPLETED', label: 'Completed', icon: CheckCircle, color: 'emerald' }
-    ];
-
 
     const handleSync = async (e, kr) => {
         e.stopPropagation();
@@ -928,165 +920,12 @@ const ActionList = ({
             default: return 'text-slate-500 bg-slate-50 border-slate-100';
         }
     };
-
-    const renderBoardView = () => {
-        const boardActions = [];
-        objectives.forEach(obj => {
-            (obj.keyResults || []).forEach(kr => {
-                (kr.actions || []).forEach(action => {
-                    boardActions.push({ ...action, objectiveTitle: obj.title, krTitle: kr.title });
-                });
-            });
-        });
-        
-        standaloneActions.forEach(action => {
-            boardActions.push({ ...action, objectiveTitle: 'System', krTitle: 'Direct Action' });
-        });
-
-        const filtered = boardActions.filter(matchesFilters);
-
-        return (
-            <div className="kanban-container">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-                    {COLUMNS.map(col => {
-                        const colActions = filtered.filter(a => (a.status || 'PENDING') === col.id);
-                        return (
-                            <div key={col.id} className="kanban-column bg-slate-50/70 backdrop-blur-sm rounded-3xl p-4 border border-slate-100 min-h-[600px] flex flex-col">
-                                <div className="flex items-center justify-between mb-5 px-2">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className={`p-2 rounded-xl bg-${col.color === 'slate' ? 'slate-200' : col.color + '-100'} text-${col.color === 'slate' ? 'slate-600' : col.color + '-600'}`}>
-                                            <col.icon size={16} strokeWidth={2.5} />
-                                        </div>
-                                        <h3 className="text-[13px] font-black text-slate-800 uppercase tracking-wider">{col.label}</h3>
-                                        <span className="text-[10px] font-black text-slate-400 bg-white shadow-sm px-2.5 py-0.5 rounded-full">
-                                            {colActions.length}
-                                        </span>
-                                    </div>
-                                    <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">
-                                        <Plus size={16} />
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar-thin">
-                                    <AnimatePresence mode="popLayout">
-                                        {colActions.map(action => (
-                                            <motion.div
-                                                key={action._id || action.id}
-                                                layout
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
-                                                whileHover={{ y: -4, shadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
-                                                onClick={(e) => handleViewAction(e, action, 'ACTION')}
-                                                className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-indigo-200 transition-all cursor-pointer group relative overflow-hidden"
-                                            >
-                                                {/* Status Accent Bar */}
-                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                                                    action.status === 'COMPLETED' ? 'bg-emerald-500' :
-                                                    action.status === 'IN_PROGRESS' ? 'bg-blue-500' :
-                                                    action.status === 'REVIEW' ? 'bg-indigo-500' : 'bg-slate-300'
-                                                }`} />
-
-                                                <div className="flex items-start justify-between mb-3.5">
-                                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${getPriorityColor(action.priority)}`}>
-                                                        {action.priority}
-                                                    </span>
-                                                    <div className="flex gap-1">
-                                                        {(isOwnerOfItem(action, currentUser) || hasAdminPrivileges(currentUser)) && (
-                                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                {!isTaskCompleted(action) && !isTaskStarted(action) && action.status !== 'REVIEW' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); handleStartTask(action); }} 
-                                                                        className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all"
-                                                                        title="Start Task"
-                                                                    >
-                                                                        <Play size={12} fill="currentColor" />
-                                                                    </button>
-                                                                )}
-                                                                {!isTaskCompleted(action) && isTaskStarted(action) && action.status === 'IN_PROGRESS' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); onSubmitForReview(action); }} 
-                                                                        className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-all"
-                                                                        title="Submit for Review"
-                                                                    >
-                                                                        <FileText size={12} />
-                                                                    </button>
-                                                                )}
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); onEdit(action, 'ACTION'); }} 
-                                                                    className="p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-all"
-                                                                    title="Edit Task"
-                                                                >
-                                                                    <Edit2 size={12} />
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <h4 className="text-sm font-bold text-slate-900 mb-2 leading-relaxed group-hover:text-indigo-600 transition-colors">
-                                                    {action.title}
-                                                </h4>
-                                                
-                                                <div className="flex items-center gap-2 mb-5">
-                                                    <span className="text-[11px] text-slate-400 font-bold truncate">
-                                                        {action.objectiveTitle} • {action.krTitle}
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white border-2 border-white shadow-sm flex items-center justify-center text-[9px] font-black">
-                                                            {(action.assignedTo?.firstName || 'U').charAt(0)}
-                                                        </div>
-                                                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-tight">
-                                                            {action.assignedTo?.firstName || 'User'}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    {action.timeTracking?.deadline ? (
-                                                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
-                                                            new Date(action.timeTracking.deadline) < new Date() 
-                                                                ? 'bg-rose-50 text-rose-500 border-rose-100' 
-                                                                : 'bg-slate-50 text-slate-500 border-slate-100'
-                                                        }`}>
-                                                            <Clock size={10} strokeWidth={2.5} />
-                                                            <span className="text-[10px] font-black uppercase tracking-tight">
-                                                                {new Date(action.timeTracking.deadline).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                                                            </span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">No Deadline</div>
-                                                    )}
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </AnimatePresence>
-
-                                    {colActions.length === 0 && (
-                                        <div className="h-32 border-2 border-dashed border-slate-100 rounded-3xl flex flex-col items-center justify-center text-slate-200">
-                                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-2">
-                                                <Minus size={20} />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-50">No Tasks</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="action-list-enhanced py-4">
             {renderFilters()}
             
             <div className="view-transition-container">
-                {viewMode === 'BOARD' ? renderBoardView() : 
-                 viewMode === 'STRATEGIC' ? renderTreeTable() : renderFlatTable()}
+                {viewMode === 'STRATEGIC' ? renderTreeTable() : renderFlatTable()}
             </div>
 
             {/* Modal & Panels */}
@@ -1110,15 +949,7 @@ const ActionList = ({
                 />
             )}
 
-            <style>{`
-                .kanban-column {
-                    max-height: calc(100vh - 250px);
-                }
-                .custom-scrollbar-thin::-webkit-scrollbar { width: 4px; }
-                .custom-scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar-thin::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-                .hover-bg-slate-100:hover { background-color: #f1f5f9 !important; }
-            `}</style>
+
         </div>
     );
 };

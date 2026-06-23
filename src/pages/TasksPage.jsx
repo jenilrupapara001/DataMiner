@@ -1,1133 +1,1694 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Card, Table, Tag, Badge, Button, Input, Select,
+  Space, Tooltip, Dropdown, Modal, Empty, Typography,
+  Row, Col, Avatar, Progress, Divider, Collapse, Layout, Segmented, Spin,
+  message as antdMessage
+} from 'antd';
+import {
+  PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
+  EyeOutlined, EditOutlined, DeleteOutlined, PlusOutlined,
+  SearchOutlined, ReloadOutlined, ThunderboltOutlined,
+  ShopOutlined, BarsOutlined, WarningOutlined,
+  ClockCircleOutlined, CheckOutlined, CloseOutlined,
+  MoreOutlined, RightOutlined, DownOutlined,
+  CalendarOutlined, ArrowUpOutlined,
+  ArrowDownOutlined, MinusOutlined, LockOutlined,
+  UnorderedListOutlined, ExclamationCircleOutlined,
+  SyncOutlined, CheckSquareOutlined,
+  SendOutlined, LoadingOutlined
+} from '@ant-design/icons';
 import { db } from '../services/db';
-import ActionListEnhanced from '../components/actions/ActionListEnhanced';
 import ActionModal from '../components/actions/ActionModal';
 import ObjectiveManager from '../components/actions/ObjectiveManager';
-import CompletionModal from '../components/actions/CompletionModal';
-import ReviewModal from '../components/actions/ReviewModal';
-import BrandTaskView from '../components/actions/BrandTaskView';
-import BrandTaskWizard from '../components/actions/BrandTaskWizard';
-import {
-  Plus, Calendar, AlertTriangle, List, BarChart2, TrendingUp,
-  ClipboardList, Search, LayoutGrid, Activity, CheckCircle2,
-  Clock, XCircle, PlayCircle, Target, Sparkles, Filter,
-  ArrowUpRight, Trash2, Zap, FileText, Users, Award,
-  TrendingDown, X, Building2
-} from 'lucide-react';
+
+import StartTaskModal from '../components/actions/StartTaskModal';
+import SubmitTaskModal from '../components/actions/SubmitTaskModal';
+import ReviewDecisionModal from '../components/actions/ReviewDecisionModal';
+import TaskDetailDrawer from '../components/actions/TaskDetailDrawer';
+import WorkflowActionButton from '../components/actions/WorkflowActionButton';
+import RejectedTaskBanner from '../components/actions/RejectedTaskBanner';
+import { useWorkflow } from '../hooks/useWorkflow.jsx';
+import { getDisplayStatus, hasEverBeenStarted } from '../services/workflowEngine';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { PageLoading } from '../components/application/loading-indicator';
 import { usePageTitle } from '../contexts/PageTitleContext';
-import {
-  Space, Button, Segmented, Modal, Divider,
-  message as antdMessage, Typography, Spin, Tag, Tooltip
-} from 'antd';
 
-const { Text } = Typography;
+dayjs.extend(relativeTime);
 
-// ═══════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════
-const formatNumber = (val) => {
-  if (val === undefined || val === null || isNaN(val)) return '0';
-  const num = Math.round(val);
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toLocaleString('en-IN');
+const { Content } = Layout;
+const { Text, Title } = Typography;
+const { Option } = Select;
+const { TextArea } = Input;
+/* ─── STATUS CONFIGURATION ──────────────────────────────────────────── */
+const STATUS_META = {
+  TODO: { label: 'To Do', color: '#64748b', bg: '#f1f5f9', antColor: 'default', icon: <BarsOutlined /> },
+  PENDING: { label: 'Pending', color: '#d97706', bg: '#fef3c7', antColor: 'warning', icon: <ClockCircleOutlined /> },
+  IN_PROGRESS: { label: 'In Progress', color: '#6366f1', bg: '#eef2ff', antColor: 'processing', icon: <SyncOutlined spin /> },
+  REVIEW: { label: 'Review', color: '#8b5cf6', bg: '#f5f3ff', antColor: 'purple', icon: <EyeOutlined /> },
+  COMPLETED: { label: 'Completed', color: '#059669', bg: '#ecfdf5', antColor: 'success', icon: <CheckCircleOutlined /> },
+  REJECTED: { label: 'Rejected', color: '#e11d48', bg: '#fff1f2', antColor: 'error', icon: <CloseCircleOutlined /> },
+  OVERDUE: { label: 'Overdue', color: '#dc2626', bg: '#fef2f2', antColor: 'error', icon: <ExclamationCircleOutlined /> },
 };
 
-// ═══════════════════════════════════════════════════════════════
-// STAT CARD COMPONENT
-// ═══════════════════════════════════════════════════════════════
-const StatCard = ({ icon: Icon, label, value, color, animate, highlight }) => (
-  <div
-    className={`task-stat-premium ${highlight ? 'highlight-card' : ''}`}
-    style={{
-      background: highlight ? `${color}08` : '#ffffff',
-      border: `1px solid ${highlight ? `${color}30` : '#e2e8f0'}`,
-      borderRadius: 12,
-      padding: '10px 14px',
-      minWidth: 110,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-      cursor: 'default',
-      position: 'relative',
-      overflow: 'hidden'
-    }}
-  >
-    {/* Top accent for highlighted */}
-    {highlight && (
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 2,
-        background: color
-      }} />
-    )}
+const PRIORITY_META = {
+  CRITICAL: { label: 'Critical', color: '#b91c1c', bg: '#fee2e2', icon: <ExclamationCircleOutlined /> },
+  HIGH: { label: 'High', color: '#c2410c', bg: '#ffedd5', icon: <ArrowUpOutlined /> },
+  MEDIUM: { label: 'Medium', color: '#b45309', bg: '#fef3c7', icon: <MinusOutlined /> },
+  LOW: { label: 'Low', color: '#475569', bg: '#f1f5f9', icon: <ArrowDownOutlined /> },
+};
 
-    <div style={{
-      width: 32,
-      height: 32,
-      borderRadius: 9,
-      background: `${color}12`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color,
-      flexShrink: 0
-    }}>
-      <Icon
-        size={15}
-        strokeWidth={2.5}
-        className={animate ? 'spin-animation' : ''}
-      />
-    </div>
+const SELLER_PALETTE = [
+  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
+  '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
+];
 
-    <div style={{ minWidth: 0 }}>
-      <div style={{
-        fontSize: 18,
-        fontWeight: 800,
-        color: highlight ? color : '#0f172a',
-        letterSpacing: '-0.3px',
-        lineHeight: 1
-      }}>
-        {formatNumber(value)}
-      </div>
-      <div style={{
-        fontSize: 9,
-        fontWeight: 700,
-        color: '#94a3b8',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        marginTop: 3
-      }}>
-        {label}
-      </div>
-    </div>
-  </div>
-);
+/* ─── UTILITIES ─────────────────────────────────────────────────────── */
+const getSellerColor = (name) => {
+  if (!name) return SELLER_PALETTE[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return SELLER_PALETTE[Math.abs(h) % SELLER_PALETTE.length];
+};
 
-// ═══════════════════════════════════════════════════════════════
-// FILTER PILL COMPONENT
-// ═══════════════════════════════════════════════════════════════
-const FilterPill = ({ pill, isActive, onClick }) => {
-  if (pill.isDivider) {
-    return (
-      <div style={{
-        width: 1,
-        height: 20,
-        background: '#cbd5e1',
-        margin: '0 6px',
-        flexShrink: 0
-      }} />
-    );
+const getSellerInitial = (name) => {
+  if (!name) return '?';
+  const parts = name.split('-');
+  return (parts[parts.length - 1] || name).charAt(0).toUpperCase();
+};
+
+const getRoleColor = (role) => {
+  const r = (role?.name || role || '').toLowerCase();
+  if (r.includes('admin')) return '#6366f1';
+  if (r.includes('manager')) return '#8b5cf6';
+  if (r.includes('analyst')) return '#06b6d4';
+  return '#10b981';
+};
+
+const getUserInitial = (u) =>
+  (u?.firstName?.charAt(0) || u?.name?.charAt(0) || 'U').toUpperCase();
+
+const fmtTime = (iso) => {
+  if (!iso) return null;
+  const d = dayjs(iso);
+  const h = dayjs().diff(d, 'hour');
+  if (h < 1) return `${dayjs().diff(d, 'minute')}m ago`;
+  if (h < 24) return `${h}h ago`;
+  if (h < 168) return `${dayjs().diff(d, 'day')}d ago`;
+  return d.format('MMM D');
+};
+
+const fmtDuration = (start, end) => {
+  if (!start) return null;
+  const s = dayjs(start), e = end ? dayjs(end) : dayjs();
+  const h = e.diff(s, 'hour'), m = e.diff(s, 'minute') % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
+const fmtExact = (iso) => iso ? dayjs(iso).format('ddd, D MMM YYYY [at] h:mm A') : '';
+
+const getProgressColor = (pct) => {
+  if (pct === 0) return '#e2e8f0';
+  if (pct <= 25) return '#fb7185';
+  if (pct <= 50) return '#fbbf24';
+  if (pct <= 75) return '#818cf8';
+  if (pct < 100) return '#6366f1';
+  return '#10b981';
+};
+
+const matchesFilter = (a, f) => {
+  if (f === 'ALL') return true;
+  const s = (a.status || 'PENDING').toUpperCase();
+  const now = new Date();
+  switch (f) {
+    case 'TODO': return s !== 'COMPLETED' && s !== 'REJECTED';
+    case 'OVERDUE': {
+      const dl = a.timeTracking?.deadline || a.DueDate;
+      return dl && new Date(dl) < now && s !== 'COMPLETED';
+    }
+    case 'TOMORROW': {
+      const dl = a.timeTracking?.deadline || a.DueDate;
+      if (!dl) return false;
+      const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(0, 0, 0, 0);
+      const da = new Date(t); da.setDate(t.getDate() + 1);
+      const d = new Date(dl);
+      return d >= t && d < da;
+    }
+    case 'UPCOMING': {
+      const dl = a.timeTracking?.deadline || a.DueDate;
+      if (!dl) return false;
+      const da = new Date(); da.setDate(da.getDate() + 2); da.setHours(0, 0, 0, 0);
+      return new Date(dl) >= da;
+    }
+    case 'PENDING': return s === 'PENDING';
+    case 'IN_PROGRESS': return s === 'IN_PROGRESS';
+    case 'REVIEW': return s === 'REVIEW';
+    case 'REJECTED': return s === 'REJECTED';
+    case 'COMPLETED': return s === 'COMPLETED';
+    default: return true;
   }
+};
 
+const matchesSearch = (a, q) => {
+  if (!q) return true;
+  const lower = q.toLowerCase();
   return (
-    <button
-      onClick={() => onClick(pill.type)}
-      className="filter-pill-premium"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '5px 11px',
-        borderRadius: 16,
-        border: `1.5px solid ${isActive ? pill.color : '#e2e8f0'}`,
-        background: isActive ? `${pill.color}10` : '#ffffff',
-        color: isActive ? pill.color : '#475569',
-        cursor: 'pointer',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        fontSize: 11,
-        fontWeight: 700,
-        whiteSpace: 'nowrap',
-        flexShrink: 0,
-        boxShadow: isActive ? `0 4px 10px -2px ${pill.color}30` : 'none'
-      }}
-    >
-      <span style={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        background: pill.color,
-        boxShadow: isActive ? `0 0 6px ${pill.color}` : 'none',
-        transition: 'box-shadow 0.2s'
-      }} />
-      <span style={{
-        textTransform: 'uppercase',
-        letterSpacing: '0.04em',
-        fontSize: 10
-      }}>
-        {pill.label}
-      </span>
-      <span style={{
-        background: isActive ? pill.color : '#f1f5f9',
-        color: isActive ? '#ffffff' : '#475569',
-        fontSize: 10,
-        fontWeight: 800,
-        borderRadius: 10,
-        padding: '1px 7px',
-        minWidth: 18,
-        textAlign: 'center',
-        transition: 'all 0.2s'
-      }}>
-        {pill.count}
-      </span>
-    </button>
+    (a.action || a.title || a.name || '').toLowerCase().includes(lower) ||
+    (a.description || '').toLowerCase().includes(lower)
   );
 };
 
-// ═══════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════════
+const buildSellerHierarchy = (objectives, allActions, sellers) => {
+  const map = {};
+
+  const resolveSeller = (obj) => {
+    let sid = obj.sellerId || obj.SellerId || obj.brandId;
+    let sname = '';
+    if (typeof sid === 'object' && sid?._id) { sname = sid.name || ''; sid = sid._id; }
+    if (sid && !sname) {
+      const s = sellers.find(x => x._id === sid);
+      if (s) sname = s.name || s.sellerName || '';
+    }
+    if (!sid) { sid = 'unassigned'; sname = 'Unassigned'; }
+    return { sellerId: sid, sellerName: sname || sid };
+  };
+
+  objectives.forEach(obj => {
+    const { sellerId, sellerName } = resolveSeller(obj);
+    if (!map[sellerId]) map[sellerId] = { sellerId, sellerName, objectives: [], directTasks: [] };
+    const tasks = [];
+    if (obj.keyResults) {
+      obj.keyResults.forEach(kr => {
+        if (kr.actions) {
+          kr.actions.forEach(a => {
+            const subs = allActions.filter(x =>
+              x.parentTaskId === (a._id || a.id) || x.parentId === (a._id || a.id)
+            );
+            tasks.push({ ...a, subtasks: subs, krTitle: kr.title, objectiveTitle: obj.title });
+          });
+        }
+      });
+    }
+    const done = tasks.filter(t => t.status === 'COMPLETED').length;
+    const progress = tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
+    map[sellerId].objectives.push({ ...obj, tasks, progress });
+  });
+
+  const standalone = allActions.filter(a =>
+    !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId &&
+    !a.parentTaskId && !a.parentId
+  );
+
+  standalone.forEach(a => {
+    let sid = a.sellerId || a.SellerId;
+    let sname = '';
+    if (typeof sid === 'object' && sid?._id) { sname = sid.name || ''; sid = sid._id; }
+    if (sid && !sname) {
+      const s = sellers.find(x => x._id === sid);
+      if (s) sname = s.name || s.sellerName || '';
+    }
+    if (!sid) { sid = 'unassigned'; sname = 'Unassigned'; }
+    if (!map[sid]) map[sid] = { sellerId: sid, sellerName: sname || sid, objectives: [], directTasks: [] };
+    const subs = allActions.filter(x =>
+      x.parentTaskId === (a._id || a.id) || x.parentId === (a._id || a.id)
+    );
+    map[sid].directTasks.push({ ...a, subtasks: subs });
+  });
+
+  return Object.values(map).sort((a, b) => a.sellerName.localeCompare(b.sellerName));
+};
+
+/* ─── SMALL REUSABLE COMPONENTS ─────────────────────────────────────── */
+
+const StatusTag = ({ status, size = 'default' }) => {
+  const cfg = STATUS_META[status] || STATUS_META.PENDING;
+  return (
+    <Tag
+      icon={cfg.icon}
+      style={{
+        background: cfg.bg,
+        color: cfg.color,
+        border: `1px solid ${cfg.color}30`,
+        borderRadius: 20,
+        fontWeight: 600,
+        fontSize: size === 'small' ? 10 : 11,
+        padding: size === 'small' ? '0 6px' : '1px 8px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+      }}
+    >
+      {cfg.label}
+    </Tag>
+  );
+};
+
+const PriorityTag = ({ priority }) => {
+  const cfg = PRIORITY_META[priority] || PRIORITY_META.MEDIUM;
+  return (
+    <Tag
+      icon={cfg.icon}
+      style={{
+        background: cfg.bg,
+        color: cfg.color,
+        border: `1px solid ${cfg.color}30`,
+        borderRadius: 20,
+        fontWeight: 600,
+        fontSize: 11,
+        padding: '1px 8px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+      }}
+    >
+      {cfg.label}
+    </Tag>
+  );
+};
+
+const UserChip = ({ user }) => {
+  if (!user) return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+  const color = getRoleColor(user?.role);
+  const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'User';
+  const role = user.role?.name || user.role || 'User';
+  return (
+    <Tooltip title={`${name} · ${role}`}>
+      <Space size={6}>
+        <Avatar size={22} style={{ background: color, fontSize: 11, fontWeight: 700 }}>
+          {getUserInitial(user)}
+        </Avatar>
+        <Text style={{ fontSize: 12, fontWeight: 500 }}>{name.split(' ')[0]}</Text>
+      </Space>
+    </Tooltip>
+  );
+};
+
+const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
+  const items = [];
+  if (createdAt) items.push({
+    label: 'Created',
+    value: fmtTime(createdAt),
+    exact: fmtExact(createdAt),
+    color: '#94a3b8',
+    icon: <CalendarOutlined style={{ color: '#94a3b8', fontSize: 10 }} />,
+  });
+  if (startedAt) items.push({
+    label: 'Started',
+    value: fmtTime(startedAt),
+    exact: fmtExact(startedAt),
+    color: '#6366f1',
+    icon: <PlayCircleOutlined style={{ color: '#6366f1', fontSize: 10 }} />,
+  });
+  if (completedAt) items.push({
+    label: 'Done',
+    value: fmtTime(completedAt),
+    exact: fmtExact(completedAt),
+    color: '#10b981',
+    icon: <CheckCircleOutlined style={{ color: '#10b981', fontSize: 10 }} />,
+  });
+
+  const duration = startedAt ? fmtDuration(startedAt, completedAt) : null;
+
+  const content = (
+    <Space direction="vertical" size={2}>
+      {items.map((it, i) => (
+        <Text key={i} style={{ fontSize: 11, color: '#64748b' }}>{it.label}: {it.exact}</Text>
+      ))}
+    </Space>
+  );
+
+  if (items.length === 0) return <Text style={{ color: '#cbd5e1', fontSize: 12 }}>—</Text>;
+
+  return (
+    <Tooltip title={content}>
+      <Space direction="vertical" size={2}>
+        {items.slice(-2).map((it, i) => (
+          <Space key={i} size={4}>
+            {it.icon}
+            <Text style={{ fontSize: 10, color: '#94a3b8' }}>{it.label}</Text>
+            <Text style={{ fontSize: 11, fontWeight: 600, color: it.color }}>{it.value}</Text>
+          </Space>
+        ))}
+        {duration && (
+          <Tag style={{
+            marginTop: 2,
+            fontSize: 10,
+            fontFamily: 'monospace',
+            background: status === 'COMPLETED' ? '#ecfdf5' : '#eef2ff',
+            color: status === 'COMPLETED' ? '#059669' : '#6366f1',
+            border: 'none',
+            borderRadius: 4,
+            padding: '0 6px',
+          }}>
+            {duration}
+          </Tag>
+        )}
+      </Space>
+    </Tooltip>
+  );
+};
+
+const ProgressCell = ({ pct }) => {
+  const color = getProgressColor(pct);
+  return (
+    <Space direction="vertical" size={2} style={{ width: 80 }}>
+      <Progress
+        percent={pct}
+        size="small"
+        showInfo={false}
+        strokeColor={color}
+        railColor="#f1f5f9"
+      />
+      <Text style={{ fontSize: 11, color: '#64748b', fontVariantNumeric: 'tabular-nums', textAlign: 'center', display: 'block' }}>
+        {pct}%
+      </Text>
+    </Space>
+  );
+};
+
+const RejectionForm = ({ onSubmit, onCancel }) => {
+  const [text, setText] = useState('');
+  return (
+    <Card
+      size="small"
+      style={{
+        margin: '4px 16px 8px 16px',
+        borderLeft: '4px solid #f59e0b',
+        borderRadius: 8,
+        background: '#fffbeb',
+      }}
+      styles={{ body: { padding: '12px 16px' } }}
+    >
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Text strong style={{ fontSize: 12, color: '#92400e' }}>
+          <ExclamationCircleOutlined style={{ marginRight: 6 }} />
+          Rejection Reason (Required)
+        </Text>
+        <TextArea
+          rows={2}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="Describe what needs to be changed..."
+          style={{ fontSize: 12, borderRadius: 6 }}
+        />
+        <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
+          <Button size="small" onClick={onCancel}>Cancel</Button>
+          <Button
+            size="small"
+            danger
+            type="primary"
+            disabled={!text.trim()}
+            onClick={() => onSubmit(text)}
+          >
+            Submit Rejection
+          </Button>
+        </Space>
+      </Space>
+    </Card>
+  );
+};
+
+/* ─── MAIN PAGE ─────────────────────────────────────────────────────── */
 const TasksPage = () => {
   const [messageApi, contextHolder] = antdMessage.useMessage();
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { setPageTitle } = usePageTitle();
 
-  useEffect(() => {
-    setPageTitle('Optimization Tasks');
-  }, [setPageTitle]);
-
+  /* ── State ── */
   const [objectives, setObjectives] = useState([]);
   const [allActions, setAllActions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
-  const [isObjectiveModalOpen, setIsObjectiveModalOpen] = useState(false);
-  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
-  const [editingAction, setEditingAction] = useState(null);
-  const [completingAction, setCompletingAction] = useState(null);
-  const [reviewingAction, setReviewingAction] = useState(null);
-  const [editingObjective, setEditingObjective] = useState(null);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [isBrandWizardOpen, setIsBrandWizardOpen] = useState(false);
-  const [viewMode, setViewMode] = useState('STRATEGIC');
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const activeFilter = searchParams.get('filter') || 'ALL';
-  const searchQuery = searchParams.get('q') || '';
-  const selectedKeyResultIdFromUrl = searchParams.get('krId');
-
-  const [selectedKeyResultId, setSelectedKeyResultId] = useState(selectedKeyResultIdFromUrl);
-  const [users, setUsers] = useState([]);
   const [sellers, setSellers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [asins, setAsins] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // KPI States
+  const [viewMode, setViewMode] = useState('ALL_TASKS');
+  const [activeFilter, setActiveFilter] = useState(searchParams.get('filter') || 'ALL');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [priorityFilter, setPriorityFilter] = useState(null);
+
+  const [startingTask,    setStartingTask]    = useState(null);
+  const [submittingTask,  setSubmittingTask]  = useState(null);
+  const [reviewingTask,   setReviewingTask]   = useState(null);
+  const [viewingTask,     setViewingTask]     = useState(null);
+  const [editingAction,   setEditingAction]   = useState(null);
+  const [editingObjective, setEditingObjective] = useState(null);
+  const [completingAction, setCompletingAction] = useState(null);
+
+  const [isStartModalOpen,  setIsStartModalOpen]  = useState(false);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isObjectiveModalOpen, setIsObjectiveModalOpen] = useState(false);
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [selectedKeyResultId, setSelectedKeyResultId] = useState(null);
+
+  const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+  const [rejectionForms, setRejectionForms] = useState({});
+
   const [kpis, setKpis] = useState({
     all: 0, todo: 0, overdue: 0, tomorrow: 0, upcoming: 0,
     status: { pending: 0, inProgress: 0, review: 0, completed: 0, rejected: 0 }
   });
 
-  const navigate = useNavigate();
-
-  // ═══════════════════════════════════════════════════════════════
-  // DATA LOADING
-  // ═══════════════════════════════════════════════════════════════
-  const loadData = async () => {
+  /* ── Data Loading ── */
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const objectivesData = await db.getObjectives();
-      const loadedObjectives = objectivesData?.data || objectivesData || [];
-      setObjectives(loadedObjectives);
+      const [objRes, actRes, userRes, sellRes, asinRes] = await Promise.allSettled([
+        db.getObjectives(),
+        db.getActions(),
+        db.getUsers(),
+        db.getSellers(),
+        db.getAsins(),
+      ]);
 
-      const actionsData = await db.getActions();
-      const loadedActions = actionsData?.data || actionsData || [];
+      const objs = objRes.status === 'fulfilled'
+        ? (objRes.value?.data || objRes.value || []) : [];
+      const acts = actRes.status === 'fulfilled'
+        ? (actRes.value?.data || actRes.value || []) : [];
 
-      calculateKPIs(loadedObjectives, loadedActions);
+      setObjectives(objs);
+      const combined = computeAllActions(objs, acts);
+      calculateKPIs(combined);
 
-      const usersRes = await db.getUsers();
-      if (usersRes && usersRes.success !== false) {
-        const usersList = Array.isArray(usersRes) ? usersRes : (usersRes.data?.users || usersRes.data || []);
-        setUsers(Array.isArray(usersList) ? usersList : []);
+      if (userRes.status === 'fulfilled') {
+        const v = userRes.value;
+        setUsers(Array.isArray(v) ? v : (v?.data?.users || v?.data || []));
       }
-
-      const sellersRes = await db.getSellers();
-      if (sellersRes) {
-        const sellersList = Array.isArray(sellersRes) ? sellersRes : (sellersRes.sellers || sellersRes.data || []);
-        setSellers(Array.isArray(sellersList) ? sellersList : []);
+      if (sellRes.status === 'fulfilled') {
+        const v = sellRes.value;
+        setSellers(Array.isArray(v) ? v : (v?.sellers || v?.data || []));
       }
-
-      const asinsRes = await db.getAsins();
-      if (asinsRes && asinsRes.success !== false) setAsins(Array.isArray(asinsRes) ? asinsRes : asinsRes.asins || asinsRes.data || []);
-
-    } catch (error) {
-      console.error('Failed to load OKR data:', error);
+      if (asinRes.status === 'fulfilled') {
+        const v = asinRes.value;
+        setAsins(Array.isArray(v) ? v : (v?.asins || v?.data || []));
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const addToast = (message, type = 'success') => {
-    if (type === 'danger' || type === 'error') {
-      messageApi.error(message);
-    } else {
-      messageApi.success(message);
-    }
-  };
-
-  const calculateKPIs = (objs, directActions = []) => {
-    const actions = [...directActions];
-
+  const computeAllActions = (objs, directActs) => {
+    const combined = [...directActs];
     objs.forEach(obj => {
-      if (obj.keyResults) {
-        obj.keyResults.forEach(kr => {
-          if (kr.actions) {
-            kr.actions.forEach(a => {
-              const id = a._id || a.id;
-              if (!actions.some(existing => (existing._id || existing.id) === id)) {
-                actions.push(a);
-              }
-            });
-          }
+      obj.keyResults?.forEach(kr => {
+        kr.actions?.forEach(a => {
+          const id = a._id || a.id;
+          if (!combined.some(x => (x._id || x.id) === id)) combined.push(a);
         });
-      }
+      });
     });
+    setAllActions(combined);
+    return combined;
+  };
 
-    setAllActions(actions);
-
+  const calculateKPIs = (combined) => {
+    const actions = [...combined];
     const now = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    const dayAfter = new Date(tomorrow);
-    dayAfter.setDate(tomorrow.getDate() + 1);
+    const tomorrow = new Date(); tomorrow.setDate(now.getDate() + 1); tomorrow.setHours(0, 0, 0, 0);
+    const dayAfter = new Date(tomorrow); dayAfter.setDate(tomorrow.getDate() + 1);
 
-    const counts = {
+    const c = {
       all: actions.length, todo: 0, overdue: 0, tomorrow: 0, upcoming: 0,
       status: { pending: 0, inProgress: 0, review: 0, completed: 0, rejected: 0 }
     };
 
     actions.forEach(a => {
-      const currentStatus = String(a.status || a.Status || 'PENDING').toUpperCase();
-      let statusKey = 'pending';
-      if (currentStatus === 'IN_PROGRESS') statusKey = 'inProgress';
-      else if (currentStatus === 'COMPLETED' || currentStatus === 'DONE') statusKey = 'completed';
-      else if (currentStatus === 'REVIEW' || currentStatus === 'IN_REVIEW') statusKey = 'review';
-      else if (currentStatus === 'REJECTED') statusKey = 'rejected';
-      else statusKey = 'pending';
+      const s = String(a.status || 'PENDING').toUpperCase();
+      if (s === 'IN_PROGRESS') c.status.inProgress++;
+      else if (s === 'COMPLETED') c.status.completed++;
+      else if (s === 'REVIEW') c.status.review++;
+      else if (s === 'REJECTED') c.status.rejected++;
+      else c.status.pending++;
 
-      if (counts.status[statusKey] !== undefined) {
-        counts.status[statusKey]++;
-      }
-
-      if (currentStatus !== 'COMPLETED') {
-        counts.todo++;
-        const deadlineVal = a.timeTracking?.deadline || a.DueDate;
-        if (deadlineVal) {
-          const deadline = new Date(deadlineVal);
-          if (deadline < now) counts.overdue++;
-          else if (deadline >= tomorrow && deadline < dayAfter) counts.tomorrow++;
-          else if (deadline >= dayAfter) counts.upcoming++;
+      if (s !== 'COMPLETED') {
+        c.todo++;
+        const dl = a.timeTracking?.deadline || a.DueDate;
+        if (dl) {
+          const d = new Date(dl);
+          if (d < now) c.overdue++;
+          else if (d >= tomorrow && d < dayAfter) c.tomorrow++;
+          else if (d >= dayAfter) c.upcoming++;
         }
       }
     });
 
-    setKpis(counts);
+    setKpis(c);
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { setPageTitle('Optimization Tasks'); }, [setPageTitle]);
 
-  // ═══════════════════════════════════════════════════════════════
-  // HANDLERS (Same as before - all functionality preserved)
-  // ═══════════════════════════════════════════════════════════════
-  const handleCreateObjective = () => {
-    setEditingObjective(null);
-    setIsObjectiveModalOpen(true);
-  };
+  /* ── Handlers ── */
+  const addToast = (msg, type = 'success') =>
+    type === 'error' ? messageApi.error(msg) : messageApi.success(msg);
 
-  const handleCreateAction = () => {
-    setEditingAction(null);
-    setIsActionModalOpen(true);
-  };
+  const handleCreateAction = () => { setEditingAction(null); setIsActionModalOpen(true); };
+  const handleCreateObjective = () => { setEditingObjective(null); setIsObjectiveModalOpen(true); };
 
   const handleEdit = (item, type = 'ACTION') => {
-    if (type === 'ACTION') {
-      setEditingAction(item);
-      setIsActionModalOpen(true);
-    } else if (type === 'OBJECTIVE') {
-      setEditingObjective(item);
-      setIsObjectiveModalOpen(true);
-    } else if (type === 'KR') {
-      const newTitle = prompt('Update Key Result Title:', item.title);
-      if (newTitle) {
-        db.updateKeyResult(item._id || item.id, { title: newTitle }).then(() => loadData());
-      }
-    }
+    if (type === 'ACTION') { setEditingAction(item); setIsActionModalOpen(true); }
+    else { setEditingObjective(item); setIsObjectiveModalOpen(true); }
   };
 
   const handleDelete = (id, type = 'ACTION') => {
     Modal.confirm({
       title: `Delete this ${type.toLowerCase()}?`,
-      content: `Are you sure you want to delete this ${type.toLowerCase()}? This action cannot be undone.`,
-      okText: 'Delete',
-      okType: 'danger',
-      cancelText: 'Cancel',
-      centered: true,
+      icon: <ExclamationCircleOutlined />,
+      content: 'This action cannot be undone.',
+      okText: 'Delete', okType: 'danger', cancelText: 'Cancel', centered: true,
       onOk: async () => {
         try {
-          if (type === 'ACTION') {
-            await db.deleteAction(id);
-          } else if (type === 'OBJECTIVE') {
-            await db.deleteObjective(id);
-          } else if (type === 'KR') {
-            await db.deleteKeyResult(id);
-          }
-          loadData();
-          addToast(`${type} deleted successfully`, 'success');
-        } catch (error) {
-          console.error(`Failed to delete ${type}`, error);
-          addToast(`Failed to delete ${type}`, 'danger');
-        }
-      }
+          if (type === 'ACTION') await db.deleteAction(id);
+          else await db.deleteObjective(id);
+          loadData(); addToast('Deleted successfully');
+        } catch { addToast('Delete failed', 'error'); }
+      },
     });
-  };
-
-  const handleDeleteAll = () => {
-    const totalObjectives = objectives.length;
-    Modal.confirm({
-      title: '⚠️ Permanent Deletion Prompt',
-      content: `This will permanently delete ALL ${totalObjectives} objectives, their key results, and ALL actions from the database. This cannot be undone. Continue?`,
-      okText: 'Delete All Data',
-      okType: 'danger',
-      cancelText: 'Cancel',
-      centered: true,
-      onOk: async () => {
-        try {
-          await db.deleteAllObjectives();
-          addToast(`All objectives, key results, and actions deleted successfully`, 'success');
-          loadData();
-        } catch (error) {
-          console.error('Failed to delete all data', error);
-          addToast('Failed to delete all data', 'danger');
-        }
-      }
-    });
-  };
-
-  const handleAddActionForKR = (krId) => {
-    setSelectedKeyResultId(krId);
-    setEditingAction(null);
-    setIsActionModalOpen(true);
   };
 
   const handleSaveAction = async (data) => {
     try {
-      if (data._id || data.id) {
-        await db.updateAction(data._id || data.id, data);
-      } else {
-        await db.createAction(data);
-      }
-      setIsActionModalOpen(false);
-      loadData();
+      if (data._id || data.id) await db.updateAction(data._id || data.id, data);
+      else await db.createAction(data);
+      setIsActionModalOpen(false); loadData();
       setSelectedKeyResultId(null);
-      addToast('Action saved successfully', 'success');
-    } catch (error) {
-      console.error('Failed to save action', error);
-      addToast('Failed to save action', 'danger');
-    }
+      addToast('Task saved');
+    } catch { addToast('Save failed', 'error'); }
   };
 
-  const handleStartTask = async (action) => {
-    const id = action?._id || action?.id || action;
-    try {
-      await db.startAction(id);
-      loadData();
-      addToast('Task marked as in progress', 'success');
-    } catch (error) {
-      console.error('Failed to start task:', error);
-      addToast('Failed to start task', 'danger');
-    }
+  const {
+    handleStart,
+    handleSubmitForReview: workflowSubmit,
+    handleApprove,
+    handleReject,
+    handleForceComplete,
+    handleReopen,
+    isLoading:  isWorkflowLoading,
+    loadingTaskId,
+  } = useWorkflow({
+    currentUser,
+    onSuccess: loadData,   // auto-refresh after every transition
+  });
+
+  const openStartModal = (task) => {
+    setStartingTask(task);
+    setIsStartModalOpen(true);
   };
 
-  const handleCompleteTask = async (action, data) => {
-    const id = action?._id || action?.id || action;
-    try {
-      setLoading(true);
-      await db.completeAction(id, data);
-      setIsCompletionModalOpen(false);
-      setCompletingAction(null);
-      loadData();
-      addToast('Task completed successfully', 'success');
-    } catch (error) {
-      console.error('Failed to complete task:', error);
-      addToast('Failed to complete task', 'danger');
-    } finally {
-      setLoading(false);
-    }
+  const openSubmitModal = (task) => {
+    setSubmittingTask(task);
+    setIsSubmitModalOpen(true);
   };
 
-  const handleSubmitForReview = (action) => {
-    setCompletingAction(action);
-    setIsCompletionModalOpen(true);
-  };
-
-  const handleCompletionSubmit = async (actionId, data) => {
-    try {
-      setLoading(true);
-
-      if (data.stage === 'REVIEW') {
-        await db.submitActionForReview(actionId, data);
-        addToast('Submitted for review', 'success');
-      } else {
-        await db.completeAction(actionId, data);
-        addToast('Task completed successfully', 'success');
-      }
-
-      setIsCompletionModalOpen(false);
-      setCompletingAction(null);
-      loadData();
-    } catch (error) {
-      console.error('Failed to process task completion:', error);
-      messageApi.error('Action failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReviewAction = async (action, decision, comments) => {
-    if (!action) return;
-
-    try {
-      setLoading(true);
-      await db.reviewAction(action._id || action.id, decision, comments);
-      await loadData();
-
-      if (decision === 'APPROVE') {
-        addToast(`Task "${action.title}" approved successfully!`, 'success');
-      } else {
-        addToast(`Task "${action.title}" rejected and moved back to pending.`, 'danger');
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Failed to review action:', error);
-      addToast('Review failed. Please try again.', 'danger');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openReviewModal = (action) => {
-    setReviewingAction(action);
+  const openReviewModal = (task) => {
+    setReviewingTask(task);
     setIsReviewModalOpen(true);
   };
 
-  const handleCreateBrandTask = () => {
-    setIsBrandWizardOpen(true);
-  };
-
-  const handleSaveBulkTasks = async (tasks) => {
-    try {
-      setLoading(true);
-      const promises = tasks.map(task => db.createAction(task));
-      await Promise.all(promises);
-      setIsBrandWizardOpen(false);
-      loadData();
-      addToast(`${tasks.length} brand task${tasks.length !== 1 ? 's' : ''} created successfully`, 'success');
-    } catch (error) {
-      console.error('Failed to create brand tasks:', error);
-      addToast('Failed to create brand tasks', 'danger');
-    } finally {
-      setLoading(false);
+  const handleConfirmStart = async (taskId, startPayload) => {
+    const task = allActions.find(a => (a._id || a.id) === taskId);
+    if (!task) return;
+    const result = await handleStart(task, startPayload);
+    if (result?.success) {
+      setIsStartModalOpen(false);
+      setStartingTask(null);
     }
   };
 
-  const handleAISuggest = async (kr) => {
-    try {
-      setLoading(true);
-      const result = await db.getAISuggestions(kr.title);
-
-      if (result && result.success && result.data) {
-        const tasks = Array.isArray(result.data) ? result.data : (result.data.tasks || []);
-
-        const taskPromises = tasks.map(task => {
-          return db.createAction({
-            title: task.title || task.name || 'Suggested Task',
-            type: task.type || 'GENERAL_OPTIMIZATION',
-            priority: task.priority || 'MEDIUM',
-            keyResultId: kr.id || kr._id,
-            status: 'PENDING',
-            description: task.description || `AI suggested task for: ${kr.title}`
-          });
-        });
-
-        await Promise.all(taskPromises);
-        loadData();
-        messageApi.success('AI Suggestions generated successfully');
-      }
-    } catch (error) {
-      console.error('AI Suggestion failed', error);
-      messageApi.error('AI Suggestion failed. Please check your configuration.');
-    } finally {
-      setLoading(false);
+  const handleConfirmSubmit = async (taskId, submissionData) => {
+    const task = allActions.find(a => (a._id || a.id) === taskId);
+    if (!task) return;
+    const result = await workflowSubmit(task, submissionData);
+    if (result?.success) {
+      setIsSubmitModalOpen(false);
+      setSubmittingTask(null);
     }
   };
 
-  const handleFilterClick = (filterType) => {
-    const newFilter = activeFilter === filterType ? 'ALL' : filterType;
+  const handleConfirmDecision = async (taskId, decision, decisionData) => {
+    const task = allActions.find(a => (a._id || a.id) === taskId);
+    if (!task) return;
+    let result;
+    if (decision === 'APPROVE') {
+      result = await handleApprove(task, decisionData);
+    } else {
+      result = await handleReject(task, decisionData);
+    }
+    if (result?.success) {
+      setIsReviewModalOpen(false);
+      setReviewingTask(null);
+    }
+  };
+
+  const handleViewTask = (task) => {
+    setViewingTask(task);
+    setIsDetailDrawerOpen(true);
+  };
+
+  const clearFilters = () => {
+    setActiveFilter('ALL');
+    setSearchQuery('');
+    setStatusFilter(null);
+    setPriorityFilter(null);
+    setSearchParams({});
+  };
+
+  const handleFilterClick = (f) => {
+    const next = activeFilter === f ? 'ALL' : f;
+    setActiveFilter(next);
     setSearchParams(prev => {
-      if (newFilter === 'ALL') {
-        prev.delete('filter');
-      } else {
-        prev.set('filter', newFilter);
-      }
-      return prev;
+      const params = new URLSearchParams(prev);
+      if (next === 'ALL') params.delete('filter'); else params.set('filter', next);
+      if (searchQuery) params.set('q', searchQuery);
+      return params;
     });
   };
 
-  const handleSearchChange = (query) => {
+  const handleSearchChange = useCallback((value) => {
+    setSearchQuery(value);
     setSearchParams(prev => {
-      if (!query) {
-        prev.delete('q');
-      } else {
-        prev.set('q', query);
-      }
-      return prev;
+      const params = new URLSearchParams(prev);
+      if (value) params.set('q', value); else params.delete('q');
+      if (activeFilter !== 'ALL') params.set('filter', activeFilter);
+      return params;
     });
-  };
+  }, [activeFilter, setSearchParams]);
 
-  // ═══════════════════════════════════════════════════════════════
-  // COMPLETION RATE
-  // ═══════════════════════════════════════════════════════════════
-  const completionRate = useMemo(() => {
-    if (kpis.all === 0) return 0;
-    return Math.round((kpis.status.completed / kpis.all) * 100);
-  }, [kpis]);
+  /* ── Computed Data ── */
+  const sellerGroups = useMemo(
+    () => buildSellerHierarchy(objectives, allActions, sellers),
+    [objectives, allActions, sellers]
+  );
 
-  // Pill options mapping
-  const filterPills = [
-    { type: 'ALL', label: 'All', count: kpis.all, color: '#6366f1' },
-    { type: 'TODO', label: 'To Do', count: kpis.todo, color: '#3b82f6' },
-    { type: 'OVERDUE', label: 'Overdue', count: kpis.overdue, color: '#ef4444' },
-    { type: 'TOMORROW', label: 'Tomorrow', count: kpis.tomorrow, color: '#f59e0b' },
-    { type: 'UPCOMING', label: 'Upcoming', count: kpis.upcoming, color: '#06b6d4' },
-    { isDivider: true },
-    { type: 'PENDING', label: 'Pending', count: kpis.status.pending, color: '#f59e0b' },
-    { type: 'IN_PROGRESS', label: 'In Progress', count: kpis.status.inProgress, color: '#3b82f6' },
-    { type: 'REVIEW', label: 'Review', count: kpis.status.review, color: '#06b6d4' },
-    { type: 'REJECTED', label: 'Rejected', count: kpis.status.rejected, color: '#ef4444' },
-    { type: 'COMPLETED', label: 'Completed', count: kpis.status.completed, color: '#10b981' },
-  ];
+  const reviewCount = useMemo(() => {
+    return allActions.filter(a => (a.status || '').toUpperCase() === 'REVIEW').length;
+  }, [allActions]);
+
+  const filteredActions = useMemo(() => {
+    return allActions.filter(a => {
+      if (statusFilter && (a.status || '').toUpperCase() !== statusFilter) return false;
+      if (priorityFilter && (a.priority || '').toUpperCase() !== priorityFilter) return false;
+      if (!matchesFilter(a, activeFilter)) return false;
+      if (!matchesSearch(a, searchQuery)) return false;
+      return true;
+    });
+  }, [allActions, activeFilter, searchQuery, statusFilter, priorityFilter]);
 
   const isAdmin = currentUser?.role?.name === 'admin' || currentUser?.role === 'admin';
 
+  /* ── Filter Pills ── */
+  const filterPills = [
+    { type: 'ALL', label: 'All', count: kpis.all, color: '#64748b' },
+    { type: 'TODO', label: 'To Do', count: kpis.todo, color: '#3b82f6' },
+    { type: 'OVERDUE', label: 'Overdue', count: kpis.overdue, color: '#ef4444' },
+    { type: 'TOMORROW', label: 'Tomorrow', count: kpis.tomorrow, color: '#f97316' },
+    { type: 'UPCOMING', label: 'Upcoming', count: kpis.upcoming, color: '#eab308' },
+    null,
+    { type: 'PENDING', label: 'Pending', count: kpis.status.pending, color: '#94a3b8' },
+    { type: 'IN_PROGRESS', label: 'In Progress', count: kpis.status.inProgress, color: '#6366f1' },
+    { type: 'REVIEW', label: 'Review', count: kpis.status.review, color: '#8b5cf6' },
+    { type: 'REJECTED', label: 'Rejected', count: kpis.status.rejected, color: '#f43f5e' },
+    { type: 'COMPLETED', label: 'Completed', count: kpis.status.completed, color: '#10b981' },
+  ];
+
+  /* ── ALL TASKS TABLE ── */
+  const renderActionMenu = (task) => {
+    const displayStatus = getDisplayStatus(task);
+    const everStarted = hasEverBeenStarted(task);
+    const id = task._id || task.id;
+    const items = [];
+
+    items.push({
+      key: 'view',
+      icon: <EyeOutlined style={{ color: '#6366f1' }} />,
+      label: 'View Details',
+      onClick: () => handleViewTask(task)
+    });
+
+    const isPending = ['PENDING', 'TODO'].includes(displayStatus) && !everStarted;
+    const isInProgress = ['IN_PROGRESS', 'OVERDUE'].includes(displayStatus) || (displayStatus === 'PENDING' && everStarted);
+    const isReview = displayStatus === 'REVIEW';
+
+    if (isPending) {
+      items.push({
+        key: 'start',
+        icon: <PlayCircleOutlined style={{ color: '#6366f1' }} />,
+        label: 'Start Task',
+        onClick: () => openStartModal(task),
+      });
+    }
+    if (isInProgress) {
+      items.push({
+        key: 'review',
+        icon: <SendOutlined style={{ color: '#8b5cf6' }} />,
+        label: 'Submit for Review',
+        onClick: () => openSubmitModal(task),
+      });
+    }
+    if (isReview) {
+      items.push({
+        key: 'review-action',
+        icon: <CheckCircleOutlined style={{ color: '#10b981' }} />,
+        label: 'Review Submission',
+        onClick: () => openReviewModal(task),
+      });
+    }
+
+    items.push({ type: 'divider' });
+    items.push({ key: 'edit', icon: <EditOutlined />, label: 'Edit Task', onClick: () => handleEdit(task) });
+    items.push({ key: 'delete', icon: <DeleteOutlined />, label: 'Delete', danger: true, onClick: () => handleDelete(id) });
+    return { items };
+  };
+
+  const taskTableColumns = [
+    {
+      title: '#',
+      key: 'index',
+      width: 48,
+      render: (_, __, idx) => (
+        <Text style={{ fontSize: 12, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+          {idx + 1}
+        </Text>
+      ),
+    },
+    {
+      title: 'Task Name',
+      key: 'name',
+      width: 280,
+      render: (_, task) => {
+        const name = task.action || task.title || task.name || 'Untitled';
+        const asins = task.asins?.length || task.asinCount || 0;
+        return (
+          <Space direction="vertical" size={2}>
+            <Text strong style={{ fontSize: 13, color: '#1e293b' }}>{name}</Text>
+            {asins > 0 && (
+              <Tag style={{ fontSize: 10, borderRadius: 4, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }}>
+                {asins} ASIN{asins > 1 ? 's' : ''}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Category',
+      key: 'type',
+      width: 120,
+      render: (_, task) => {
+        const cat = task.type || task.category || task.actionType || 'General';
+        return (
+          <Tag style={{
+            fontSize: 11, borderRadius: 4,
+            background: '#f8fafc', color: '#475569',
+            border: '1px solid #e2e8f0',
+          }}>
+            {cat}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: 'Progress',
+      key: 'progress',
+      width: 100,
+      align: 'center',
+      render: (_, task) => {
+        const pct = task.status === 'COMPLETED' ? 100 : task.status === 'IN_PROGRESS' ? 50 : 0;
+        return <ProgressCell pct={pct} />;
+      },
+    },
+    {
+      title: 'Assigned',
+      key: 'assigned',
+      width: 130,
+      render: (_, task) => {
+        const u = task.assignedTo;
+        if (!u) return <Text style={{ color: '#cbd5e1', fontSize: 12 }}>—</Text>;
+        const users = Array.isArray(u) ? u : [u];
+        return (
+          <Space size={4}>
+            {users.slice(0, 2).map((usr, i) => (
+              <UserChip key={i} user={usr} />
+            ))}
+            {users.length > 2 && (
+              <Tag style={{ fontSize: 10 }}>+{users.length - 2}</Tag>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Priority',
+      key: 'priority',
+      width: 100,
+      render: (_, task) => task.priority
+        ? <PriorityTag priority={(task.priority || '').toUpperCase()} />
+        : <Text style={{ color: '#cbd5e1', fontSize: 12 }}>—</Text>,
+    },
+    {
+      title: 'Status / Review',
+      key: 'review',
+      width: 200,
+      render: (_, task) => (
+        <WorkflowActionButton
+          task={task}
+          currentUser={currentUser}
+          onStart={openStartModal}
+          onSubmit={openSubmitModal}
+          onApprove={openReviewModal}
+          onReject={openReviewModal}
+          onReopen={(t) => handleReopen(t)}
+          size="small"
+          isLoading={isWorkflowLoading(task._id || task.id, null)}
+        />
+      ),
+    },
+    {
+      title: 'Timeline',
+      key: 'timeline',
+      width: 160,
+      render: (_, task) => (
+        <TimelineCell
+          createdAt={task.createdAt}
+          startedAt={task.timeTracking?.startedAt}
+          completedAt={task.timeTracking?.completedAt}
+          status={(task.status || '').toUpperCase()}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 60,
+      align: 'right',
+      render: (_, task) => (
+        <Dropdown menu={renderActionMenu(task)} trigger={['click']} placement="bottomRight">
+          <Button
+            type="text"
+            icon={<MoreOutlined />}
+            size="small"
+            style={{ color: '#94a3b8' }}
+          />
+        </Dropdown>
+      ),
+    },
+  ];
+
+  /* ── SELLER VIEW ── */
+  const renderSellerView = () => {
+    if (sellerGroups.length === 0) return (
+      <Empty description="No seller data available" style={{ padding: 60 }} />
+    );
+
+    const visibleGroups = sellerGroups.map(group => {
+      const allTasks = [
+        ...group.objectives.flatMap(o => o.tasks),
+        ...group.directTasks,
+      ].filter(t => {
+        if (statusFilter && (t.status || '').toUpperCase() !== statusFilter) return false;
+        if (priorityFilter && (t.priority || '').toUpperCase() !== priorityFilter) return false;
+        if (!matchesFilter(t, activeFilter)) return false;
+        if (!matchesSearch(t, searchQuery)) return false;
+        return true;
+      });
+      return { ...group, filteredTasks: allTasks };
+    }).filter(g => g.filteredTasks.length > 0);
+
+    const buildCollapseItems = (group) => {
+      const items = [];
+
+      group.objectives.forEach((obj, oi) => {
+        const objTasks = obj.tasks.filter(t => {
+          if (statusFilter && (t.status || '').toUpperCase() !== statusFilter) return false;
+          if (priorityFilter && (t.priority || '').toUpperCase() !== priorityFilter) return false;
+          if (!matchesFilter(t, activeFilter)) return false;
+          if (!matchesSearch(t, searchQuery)) return false;
+          return true;
+        });
+        if (objTasks.length === 0) return;
+
+        const objDone = objTasks.filter(t => t.status === 'COMPLETED').length;
+        const objPct = objTasks.length === 0 ? 0 : Math.round((objDone / objTasks.length) * 100);
+        const hasReview = objTasks.some(t => t.status === 'REVIEW');
+        const childIncomplete = objTasks.some(t => t.status !== 'COMPLETED');
+
+        items.push({
+          key: obj._id || `obj-${oi}`,
+          label: (
+            <Row align="middle" gutter={16} style={{ width: '100%' }}>
+              <Col>
+                <Tag style={{
+                  fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
+                  background: '#eef2ff', color: '#6366f1',
+                  border: '1px solid #c7d2fe', borderRadius: 4,
+                  minWidth: 36, textAlign: 'center',
+                }}>OBJ</Tag>
+              </Col>
+              <Col flex={1}>
+                <Space size={8}>
+                  {hasReview && <Tooltip title="Has tasks awaiting review"><Badge dot color="#f59e0b" /></Tooltip>}
+                  {childIncomplete && <Tooltip title="Not all tasks complete"><LockOutlined style={{ color: '#fbbf24', fontSize: 12 }} /></Tooltip>}
+                  <Text strong style={{ fontSize: 13, color: '#1e293b' }}>{obj.title || 'Untitled Objective'}</Text>
+                  {obj.isStandalone && <Tag style={{ fontSize: 10, background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0' }}>Direct Actions</Tag>}
+                </Space>
+              </Col>
+              <Col>
+                <Space size={12} align="center">
+                  <Text style={{ fontSize: 11, color: '#94a3b8' }}>{objDone}/{objTasks.length} done</Text>
+                  <Progress percent={objPct} size="small" style={{ width: 80, margin: 0 }} strokeColor={objPct === 100 ? '#10b981' : '#6366f1'} railColor="#f1f5f9" showInfo={false} />
+                  <Text style={{ fontSize: 11, color: '#64748b', fontVariantNumeric: 'tabular-nums', minWidth: 32 }}>{objPct}%</Text>
+                </Space>
+              </Col>
+            </Row>
+          ),
+          children: (
+            <Table
+              dataSource={objTasks.map((t, i) => ({ ...t, _tableKey: `${t._id || t.id}-${i}` }))}
+              rowKey="_tableKey"
+              columns={taskTableColumns}
+              size="small"
+              pagination={false}
+              showHeader={false}
+              style={{ background: 'white' }}
+              rowClassName={(_, idx) => idx % 2 === 0 ? 'task-row-even' : 'task-row-odd'}
+              expandable={{
+                expandedRowRender: (task) => {
+                  const id = task._id || task.id;
+                  return (
+                    <div>
+                      {rejectionForms[id]?.open && <RejectionForm onSubmit={(r) => submitRejection(id, r)} onCancel={() => closeRejectionForm(id)} />}
+                      {task.subtasks && task.subtasks.length > 0 && (
+                        <div style={{ padding: '8px 16px 8px 48px', background: '#f8fafc' }}>
+                          {task.subtasks.map((sub, si) => (
+                            <Row key={sub._id || sub.id || si} align="middle" gutter={16} style={{ padding: '6px 12px', background: 'white', borderRadius: 6, marginBottom: 4, border: '1px solid #f1f5f9' }}>
+                              <Col flex={1}>
+                                <Space size={8}>
+                                  <Tag style={{ fontSize: 10, fontWeight: 700, fontFamily: 'monospace', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: 4 }}>SUB</Tag>
+                                  <Text style={{ fontSize: 12, color: '#374151' }}>{sub.action || sub.title || sub.name || 'Untitled'}</Text>
+                                </Space>
+                              </Col>
+                              <Col><StatusTag status={(sub.status || 'PENDING').toUpperCase()} size="small" /></Col>
+                              <Col><TimelineCell createdAt={sub.createdAt} startedAt={sub.timeTracking?.startedAt} completedAt={sub.timeTracking?.completedAt} status={(sub.status || '').toUpperCase()} /></Col>
+                            </Row>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                },
+                rowExpandable: (task) => (task.subtasks && task.subtasks.length > 0) || !!rejectionForms[task._id || task.id]?.open,
+              }}
+            />
+          ),
+          style: { background: '#fafbfc', borderBottom: '1px solid #f1f5f9' },
+        });
+      });
+
+      if (group.directTasks.length > 0) {
+        const filteredDirect = group.directTasks.filter(t => {
+          if (statusFilter && (t.status || '').toUpperCase() !== statusFilter) return false;
+          if (!matchesFilter(t, activeFilter)) return false;
+          if (!matchesSearch(t, searchQuery)) return false;
+          return true;
+        });
+        if (filteredDirect.length > 0) {
+          items.push({
+            key: 'direct-tasks',
+            label: (
+              <Space>
+                <Tag style={{ fontSize: 10, fontWeight: 700, fontFamily: 'monospace', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 4 }}>DIRECT</Tag>
+                <Text strong style={{ fontSize: 13, color: '#1e293b' }}>Direct Tasks</Text>
+                <Tag style={{ fontSize: 11, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 12 }}>{filteredDirect.length} tasks</Tag>
+              </Space>
+            ),
+            children: (
+              <Table
+                dataSource={filteredDirect.map((t, i) => ({ ...t, _tableKey: `d-${t._id || t.id}-${i}` }))}
+                rowKey="_tableKey"
+                columns={taskTableColumns}
+                size="small"
+                pagination={false}
+                showHeader={false}
+                style={{ background: 'white' }}
+              />
+            ),
+            style: { background: '#fafbfc', borderBottom: '1px solid #f1f5f9' },
+          });
+        }
+      }
+
+      return items;
+    };
+
+    return (
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {visibleGroups.map(group => {
+          const totalTasks = group.filteredTasks.length;
+          const doneTasks = group.filteredTasks.filter(t => (t.status || '').toUpperCase() === 'COMPLETED').length;
+          const overdueTasks = group.filteredTasks.filter(t => {
+            const dl = t.timeTracking?.deadline || t.DueDate;
+            return dl && new Date(dl) < new Date() && (t.status || '').toUpperCase() !== 'COMPLETED';
+          }).length;
+          const inProgTasks = group.filteredTasks.filter(t => (t.status || '').toUpperCase() === 'IN_PROGRESS').length;
+          const reviewTasks = group.filteredTasks.filter(t => (t.status || '').toUpperCase() === 'REVIEW').length;
+          const pct = totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
+          const sellerColor = getSellerColor(group.sellerName);
+          const collapseItems = buildCollapseItems(group);
+
+          if (collapseItems.length === 0) return null;
+
+          return (
+            <Card key={group.sellerId} style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }} styles={{ body: { padding: 0 } }}>
+              <div style={{ padding: '12px 20px', background: `linear-gradient(135deg, ${sellerColor}10, #ffffff)`, borderBottom: '1px solid #f1f5f9', borderLeft: `4px solid ${sellerColor}` }}>
+                <Row align="middle" gutter={16} style={{ width: '100%' }}>
+                  <Col>
+                    <Avatar size={36} style={{ background: sellerColor, fontSize: 15, fontWeight: 700 }}>
+                      {getSellerInitial(group.sellerName)}
+                    </Avatar>
+                  </Col>
+                  <Col flex={1}>
+                    <Space size={8} wrap>
+                      <Text strong style={{ fontSize: 14, color: '#1e293b' }}>{group.sellerName}</Text>
+                      <Tag style={{ borderRadius: 12, fontSize: 11, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                        {group.objectives.length} objective{group.objectives.length !== 1 ? 's' : ''}
+                      </Tag>
+                      <Tag style={{ borderRadius: 12, fontSize: 11, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                        {totalTasks} task{totalTasks !== 1 ? 's' : ''}
+                      </Tag>
+                      {overdueTasks > 0 && <Tag style={{ borderRadius: 12, fontSize: 11, background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}><ExclamationCircleOutlined style={{ marginRight: 4 }} />{overdueTasks} overdue</Tag>}
+                      {reviewTasks > 0 && <Tag style={{ borderRadius: 12, fontSize: 11, background: '#f5f3ff', color: '#8b5cf6', border: '1px solid #ddd6fe' }}><EyeOutlined style={{ marginRight: 4 }} />{reviewTasks} needs review</Tag>}
+                    </Space>
+                  </Col>
+                  <Col>
+                    <Space size={16} align="center">
+                      <Space size={8}>
+                        <Badge color="#10b981" text={<Text style={{ fontSize: 12 }}>{doneTasks}</Text>} />
+                        <Badge color="#6366f1" text={<Text style={{ fontSize: 12 }}>{inProgTasks}</Text>} />
+                      </Space>
+                      <Progress percent={pct} size="small" style={{ width: 100, margin: 0 }} strokeColor={sellerColor} railColor="#f1f5f9" format={p => <Text style={{ fontSize: 11, color: '#64748b' }}>{p}%</Text>} />
+                    </Space>
+                  </Col>
+                </Row>
+              </div>
+
+              <Collapse ghost items={collapseItems} style={{ background: 'transparent' }} />
+            </Card>
+          );
+        })}
+      </Space>
+    );
+  };
+
+  /* ── KPI CARDS ── */
+  const kpiCards = [
+    {
+      title: 'Total Tasks', value: kpis.all,
+      icon: <UnorderedListOutlined style={{ fontSize: 20, color: '#6366f1' }} />,
+      color: '#6366f1', bg: '#eef2ff',
+    },
+    {
+      title: 'In Progress', value: kpis.status.inProgress,
+      icon: <SyncOutlined spin={kpis.status.inProgress > 0} style={{ fontSize: 20, color: '#06b6d4' }} />,
+      color: '#06b6d4', bg: '#ecfeff',
+    },
+    {
+      title: 'Pending Review', value: kpis.status.review,
+      icon: <EyeOutlined style={{ fontSize: 20, color: '#8b5cf6' }} />,
+      color: '#8b5cf6', bg: '#f5f3ff',
+    },
+    {
+      title: 'Overdue', value: kpis.overdue,
+      icon: <WarningOutlined style={{ fontSize: 20, color: '#ef4444' }} />,
+      color: '#ef4444', bg: '#fef2f2',
+    },
+    {
+      title: 'Completed', value: kpis.status.completed,
+      icon: <CheckCircleOutlined style={{ fontSize: 20, color: '#10b981' }} />,
+      color: '#10b981', bg: '#ecfdf5',
+    },
+  ];
+
+  /* ── RENDER ── */
+  if (loading && allActions.length === 0 && objectives.length === 0) return <PageLoading message="Loading tasks..." subMessage="Fetching objectives, actions, and seller data" />;
+
   return (
-    <div className="tasks-page-container">
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'auto', background: '#f8fafc' }}>
       {contextHolder}
 
-      {/* ═══════════════════════════════════════════════════
-          1. PREMIUM HEADER
-      ═══════════════════════════════════════════════════ */}
-      <div className="tasks-header-premium">
-        {/* Decorative gradient */}
-        <div style={{
-          position: 'absolute',
-          top: -40,
-          right: -40,
-          width: 200,
-          height: 200,
-          background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
-          borderRadius: '50%',
-          pointerEvents: 'none'
-        }} />
+      {/* ═══ PAGE HEADER ═══════════════════════════════════════════════ */}
+      <div style={{
+        background: 'white',
+        padding: '0 24px',
+        flexShrink: 0,
+      }}>
+        {/* Top bar */}
+        <Row align="middle" justify="end" style={{ height: 48 }}>
+          <Col>
+            <Space size={12} align="center">
+              {/* KPI quick numbers - clean inline */}
+              <Space direction="vertical" size={0} style={{ textAlign: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {kpis.all}
+                </Text>
+                <Text style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>
+                  Total
+                </Text>
+              </Space>
+              <Divider vertical style={{ margin: 0, height: 25 }} />
+              <Space direction="vertical" size={0} style={{ textAlign: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: 800, color: '#ffa200ff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  {kpis.todo}
+                </Text>
+                <Text style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>
+                  Outstanding
+                </Text>
+              </Space>
+              {reviewCount > 0 && (
+                <>
+                  <Divider vertical style={{ margin: 0, height: 28 }} />
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => handleFilterClick('REVIEW')}
+                    style={{
+                      background: '#f5f3ff',
+                      border: '1px solid #ddd6fe',
+                      color: '#8b5cf6',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      fontSize: 12,
+                      height: 28,
+                    }}
+                    icon={<Badge count={reviewCount} size="small" color="#8b5cf6"><EyeOutlined /></Badge>}
+                  >
+                    Review Queue
+                  </Button>
+                </>
+              )}
+              <Divider vertical style={{ margin: 0, height: 28 }} />
+              <Button
+                icon={<ThunderboltOutlined />}
+                style={{
+                  height: 32, borderRadius: 8, border: '1px solid #e2e8f0',
+                  fontWeight: 600, fontSize: 12,
+                }}
+                onClick={handleCreateAction}
+              >
+                Quick Task
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                style={{
+                  height: 32, borderRadius: 8, fontWeight: 600, fontSize: 12,
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  border: 'none',
+                  boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
+                }}
+                onClick={handleCreateObjective}
+              >
+                New Project
+              </Button>
+            </Space>
+          </Col>
+        </Row>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, position: 'relative' }}>
-          {/* LEFT: Title with Icon */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div className="page-header-icon-badge" style={{
-              width: 46,
-              height: 46,
-              borderRadius: 13,
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 8px 20px -6px rgba(99, 102, 241, 0.5)',
-              position: 'relative',
-              flexShrink: 0
-            }}>
-              <ClipboardList size={22} strokeWidth={2.5} />
-              <span className="status-pulse-dot" style={{
-                position: 'absolute',
-                bottom: -2,
-                right: -2,
-                width: 12,
-                height: 12,
-                background: '#10b981',
-                border: '2px solid #ffffff',
-                borderRadius: '50%'
-              }} />
-            </div>
+        {/* View Tabs */}
+        <Row align="middle" justify="space-between" style={{ borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', paddingTop: 7, paddingBottom: 7 }}>
+          <Col>
+            <Space size={12}>
+              <Segmented
+                value={viewMode}
+                onChange={setViewMode}
+                options={[
+                  {
+                    value: 'ALL_TASKS',
+                    label: (
+                      <Space size={6}>
+                        <UnorderedListOutlined />
+                        <span>All Tasks</span>
+                      </Space>
+                    ),
+                  },
+                  {
+                    value: 'BY_SELLER',
+                    label: (
+                      <Space size={6}>
+                        <ShopOutlined />
+                        <span>By Seller</span>
+                      </Space>
+                    ),
+                  },
+                ]}
+                style={{
+                  background: '#f1f5f9',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              />
+              <Divider vertical style={{ height: 20, margin: 0 }} />
+            </Space>
+          </Col>
+          <Col>
+            <Space size={8}>
+              <Input
+                prefix={<SearchOutlined style={{ color: '#94a3b8', fontSize: 13 }} />}
+                suffix={searchQuery
+                  ? <CloseOutlined style={{ fontSize: 11, color: '#94a3b8', cursor: 'pointer' }} onClick={() => handleSearchChange('')} />
+                  : null
+                }
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                style={{ width: 220, height: 32, borderRadius: 8, fontSize: 12 }}
+              />
+              <Select
+                allowClear
+                placeholder="All Statuses"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                style={{ width: 130, height: 32 }}
+                size="small"
+              >
+                {Object.entries(STATUS_META).map(([k, v]) => (
+                  <Option key={k} value={k}>
+                    <Space size={6}>
+                      <Badge dot color={v.color} />
+                      {v.label}
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+              <Select
+                allowClear
+                placeholder="All Priorities"
+                value={priorityFilter}
+                onChange={setPriorityFilter}
+                style={{ width: 130, height: 32 }}
+                size="small"
+              >
+                {Object.entries(PRIORITY_META).map(([k, v]) => (
+                  <Option key={k} value={k}>
+                    <Space size={6}>
+                      {v.icon}
+                      {v.label}
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+              <Tooltip title="Refresh">
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={loadData}
+                  loading={loading}
+                  style={{ height: 32, width: 32, borderRadius: 8, border: '1px solid #e2e8f0', padding: 0 }}
+                />
+              </Tooltip>
+              {isAdmin && (
+                <Tooltip title="Admin: Delete all data">
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    style={{ height: 32, width: 32, borderRadius: 8, padding: 0 }}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: 'Delete all data?',
+                        icon: <ExclamationCircleOutlined />,
+                        content: 'This will permanently delete ALL objectives and tasks.',
+                        okText: 'Delete All', okType: 'danger',
+                        onOk: async () => { await db.deleteAllObjectives(); loadData(); },
+                      });
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </Space>
+          </Col>
+        </Row>
 
-            <div>
-              {/* Breadcrumb */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                <span style={{
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', paddingTop: 7, paddingBottom: 7, gap: 6, overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch', borderTop: '1px solid #f1f5f9' }} className="filter-pills-row">
+          {filterPills.map((pill, idx) => {
+            if (pill === null) return (
+              <Divider key={`div-${idx}`} type="vertical" style={{ height: 18, margin: '0 4px' }} />
+            );
+            const isActive = activeFilter === pill.type;
+            return (
+              <div
+                key={pill.type}
+                onClick={() => handleFilterClick(pill.type)}
+                style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                  fontSize: 9,
-                  fontWeight: 800,
-                  color: '#7c3aed',
-                  background: '#f5f3ff',
-                  border: '1px solid #ddd6fe',
-                  padding: '2px 8px',
-                  borderRadius: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em'
+                  padding: '0 10px',
+                  height: 26,
+                  borderRadius: 13,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: isActive ? 700 : 500,
+                  border: isActive ? `1.5px solid ${pill.color}` : '1px solid #e2e8f0',
+                  background: isActive ? `${pill.color}18` : 'white',
+                  color: isActive ? pill.color : '#64748b',
+                  transition: 'all 0.15s ease',
+                  userSelect: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: pill.color, flexShrink: 0,
+                  ...(isActive && pill.type === 'IN_PROGRESS' ? { animation: 'taskStatusPulse 1.5s infinite' } : {}),
+                }} />
+                <span>{pill.label}</span>
+                <span style={{
+                  fontWeight: 700, fontSize: 10, fontVariantNumeric: 'tabular-nums',
+                  background: 'transparent',
+                  marginLeft: 2,
+                  color: isActive ? pill.color : '#94a3b8',
                 }}>
-                  <Sparkles size={9} strokeWidth={2.5} />
-                  Strategy Workbench
+                  {pill.count}
                 </span>
               </div>
-
-              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'block' }}>
-                Synthesize objectives, orchestrate key results & track optimization protocols
-              </Text>
-            </div>
-          </div>
-
-          {/* RIGHT: Stats Cards */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <StatCard
-              icon={Target}
-              label="Total"
-              value={kpis.all}
-              color="#6366f1"
-            />
-            <StatCard
-              icon={Clock}
-              label="Outstanding"
-              value={kpis.todo}
-              color="#3b82f6"
-            />
-            {kpis.overdue > 0 && (
-              <StatCard
-                icon={AlertTriangle}
-                label="Overdue"
-                value={kpis.overdue}
-                color="#ef4444"
-                highlight
-              />
-            )}
-            {kpis.status.review > 0 && (
-              <StatCard
-                icon={Activity}
-                label="In Review"
-                value={kpis.status.review}
-                color="#f59e0b"
-                highlight
-                animate
-              />
-            )}
-            {completionRate > 0 && (
-              <StatCard
-                icon={Award}
-                label="Completion"
-                value={`${completionRate}%`}
-                color={completionRate >= 70 ? '#10b981' : completionRate >= 40 ? '#f59e0b' : '#64748b'}
-              />
-            )}
-          </div>
+            );
+          })}
+          {(activeFilter !== 'ALL' || searchQuery || statusFilter || priorityFilter) && (
+            <>
+              <Divider vertical style={{ height: 18, margin: '0 4px' }} />
+              <Button
+                size="small"
+                onClick={clearFilters}
+                icon={<CloseOutlined />}
+                style={{
+                  height: 26, borderRadius: 13, fontSize: 11, fontWeight: 600,
+                  background: '#ef4444', color: 'white', border: 'none',
+                  display: 'inline-flex', alignItems: 'center',
+                }}
+              >
+                Clear
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════
-          2. CONTROL STRIP (View + Search + Actions)
-      ═══════════════════════════════════════════════════ */}
-      <div className="tasks-control-strip">
-        {/* LEFT: View Mode Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-            fontSize: 10,
-            fontWeight: 800,
-            color: '#64748b',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em'
-          }}>
-            <LayoutGrid size={11} strokeWidth={2.5} />
-            View
-          </span>
-          <Segmented
-            value={viewMode}
-            onChange={setViewMode}
-            options={[
-              {
-                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <List size={12} strokeWidth={2.5} /> Strategic
-                </span>,
-                value: 'STRATEGIC'
-              },
-              {
-                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <BarChart2 size={12} strokeWidth={2.5} /> Kanban
-                </span>,
-                value: 'BOARD'
-              },
-              {
-                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Calendar size={12} strokeWidth={2.5} /> Registry
-                </span>,
-                value: 'FLAT'
-              },
-              {
-                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Building2 size={12} strokeWidth={2.5} /> Brand View
-                </span>,
-                value: 'BRAND'
-              }
-            ]}
-            className="segmented-tasks-premium"
-          />
-        </div>
+      {/* ═══ CONTENT ═══════════════════════════════════════════════════ */}
+      <Content style={{ padding: '16px 24px 0' }}>
 
-        {/* RIGHT: Search + Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          {/* Search Input */}
-          <div style={{ position: 'relative', width: 240 }}>
-            <Search
-              size={13}
-              style={{
-                position: 'absolute',
-                left: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#94a3b8'
-              }}
-              strokeWidth={2.5}
-            />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="task-search-input"
-              style={{
-                width: '100%',
-                padding: '7px 12px 7px 32px',
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 10,
-                border: '1.5px solid #e2e8f0',
-                background: '#ffffff',
-                outline: 'none',
-                transition: 'all 0.2s',
-                color: '#0f172a'
-              }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => handleSearchChange('')}
+        {/* KPI Strip */}
+        <Row gutter={12} style={{ marginBottom: 14 }}>
+          {kpiCards.map((card, i) => (
+            <Col key={i} flex={1} style={{ minWidth: 0 }}>
+              <Card
+                styles={{ body: { padding: '12px 14px' } }}
                 style={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: '#f1f5f9',
-                  border: 'none',
-                  width: 18,
-                  height: 18,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#64748b'
-                }}
-              >
-                <X size={11} strokeWidth={2.5} />
-              </button>
-            )}
-          </div>
-
-          <Tooltip title="View Performance Report">
-            <button
-              onClick={() => navigate('/actions/achievement-report')}
-              className="header-action-btn-secondary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '7px 13px',
-                background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
-                color: '#7c3aed',
-                border: '1px solid #ddd6fe',
-                borderRadius: 10,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                height: 34
-              }}
-            >
-              <TrendingUp size={12} strokeWidth={2.5} />
-              Performance
-            </button>
-          </Tooltip>
-
-          {viewMode === 'BRAND' && (
-            <button
-              onClick={handleCreateBrandTask}
-              className="header-action-btn-brand"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '7px 13px',
-                background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
-                color: '#7c3aed',
-                border: '1px solid #c4b5fd',
-                borderRadius: 10,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                height: 34
-              }}
-            >
-              <Building2 size={12} strokeWidth={2.5} />
-              Brand Task
-            </button>
-          )}
-
-          <div style={{ width: 1, height: 22, background: '#e2e8f0', margin: '0 2px' }} />
-
-          <button
-            onClick={handleCreateAction}
-            className="header-action-btn-default"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '7px 13px',
-              background: '#ffffff',
-              color: '#475569',
-              border: '1px solid #e2e8f0',
-              borderRadius: 10,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              height: 34
-            }}
-          >
-            <Zap size={12} strokeWidth={2.5} />
-            Quick Task
-          </button>
-
-          <button
-            onClick={handleCreateObjective}
-            className="header-action-btn-primary"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '7px 14px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: '0 4px 12px -2px rgba(99, 102, 241, 0.4)',
-              height: 34
-            }}
-          >
-            <Plus size={13} strokeWidth={2.5} />
-            New Project
-          </button>
-
-          {isAdmin && (
-            <Tooltip title="Admin: Delete all data">
-              <button
-                onClick={handleDeleteAll}
-                className="header-action-btn-danger"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '7px 10px',
-                  background: '#fef2f2',
-                  color: '#ef4444',
-                  border: '1.5px dashed #fecaca',
+                  height: 76,
                   borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  height: 34
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  borderLeft: `3px solid ${card.color}`,
+                  cursor: 'default',
+                  transition: 'box-shadow 0.15s',
                 }}
+                hoverable
               >
-                <Trash2 size={12} strokeWidth={2.5} />
-              </button>
-            </Tooltip>
-          )}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════
-          3. FILTER PILLS RIBBON
-      ═══════════════════════════════════════════════════ */}
-      <div className="tasks-filter-ribbon">
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          fontSize: 10,
-          fontWeight: 800,
-          color: '#64748b',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          marginRight: 10,
-          whiteSpace: 'nowrap',
-          flexShrink: 0
-        }}>
-          <Filter size={11} strokeWidth={2.5} />
-          Filters
-        </span>
-
-        <div style={{
-          display: 'flex',
-          gap: 6,
-          alignItems: 'center',
-          flexWrap: 'nowrap',
-          overflowX: 'auto'
-        }} className="scrollbar-hidden">
-          {filterPills.map((pill, idx) => (
-            <FilterPill
-              key={pill.type || `divider-${idx}`}
-              pill={pill}
-              isActive={activeFilter === pill.type}
-              onClick={handleFilterClick}
-            />
+                <Row align="middle" gutter={10} wrap={false}>
+                  <Col flex="none">
+                    <div style={{
+                      width: 34, height: 34,
+                      background: card.bg,
+                      borderRadius: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {card.icon}
+                    </div>
+                  </Col>
+                  <Col>
+                    <Text style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', display: 'block', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                      {card.value}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {card.title}
+                    </Text>
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
           ))}
-        </div>
+        </Row>
 
-        {/* Active filter indicator */}
-        {(activeFilter !== 'ALL' || searchQuery) && (
-          <button
-            onClick={() => {
-              setSearchParams(prev => {
-                prev.delete('filter');
-                prev.delete('q');
-                return prev;
-              });
-            }}
+        {/* Overall Progress Bar */}
+        <Card
+          styles={{ body: { padding: '8px 16px' } }}
+          style={{
+            borderRadius: 10,
+            border: '1px solid #e2e8f0',
+            marginBottom: 0,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <Row align="middle" gutter={12}>
+            <Col>
+              <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Overall Progress</Text>
+            </Col>
+            <Col flex={1}>
+              <Progress
+                percent={kpis.all === 0 ? 0 : Math.round((kpis.status.completed / kpis.all) * 100)}
+                strokeColor={{ '0%': '#6366f1', '100%': '#10b981' }}
+                railColor="#f1f5f9"
+                size={6}
+                showInfo={false}
+                style={{ margin: 0 }}
+              />
+            </Col>
+            <Col>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+                {kpis.all === 0 ? 0 : Math.round((kpis.status.completed / kpis.all) * 100)}% complete
+              </Text>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* Main View */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <Spin
+              indicator={<LoadingOutlined style={{ fontSize: 32, color: '#6366f1' }} spin />}
+              tip={<Text style={{ color: '#64748b', fontSize: 13, marginTop: 12 }}>Loading tasks...</Text>}
+            />
+          </div>
+        ) : viewMode === 'ALL_TASKS' ? (
+          <Card
+            styles={{ body: { padding: 0 } }}
             style={{
-              marginLeft: 'auto',
-              padding: '4px 10px',
-              background: '#fef2f2',
-              color: '#ef4444',
-              border: '1px solid #fecaca',
               borderRadius: 12,
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              transition: 'all 0.2s',
-              flexShrink: 0
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
             }}
           >
-            <X size={11} strokeWidth={2.5} />
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════
-          4. TASKS CONTENT AREA
-      ═══════════════════════════════════════════════════ */}
-      <div className="tasks-scroll-content animate-fade-up">
-        {loading ? (
-          <div style={{
-            display: 'flex',
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '400px',
-            flexDirection: 'column',
-            gap: 16
-          }}>
             <div style={{
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #eef2ff 0%, #ddd6fe 100%)',
+              padding: '14px 20px',
+              borderBottom: '1px solid #f1f5f9',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #c7d2fe'
+              justifyContent: 'space-between',
+              background: '#fafbfc',
             }}>
-              <Spin size="large" />
+              <Space>
+                <UnorderedListOutlined style={{ color: '#6366f1' }} />
+                <Text strong style={{ fontSize: 14, color: '#1e293b' }}>
+                  All Tasks
+                </Text>
+                <Tag style={{ borderRadius: 12, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', fontSize: 11 }}>
+                  {filteredActions.length} tasks
+                </Tag>
+              </Space>
+              <Text style={{ fontSize: 12, color: '#94a3b8' }}>
+                Showing {filteredActions.length} of {kpis.all} total
+              </Text>
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
-              Syncing Optimization Matrix...
-            </div>
-          </div>
-        ) : viewMode === 'BRAND' ? (
-          <div style={{ flex: 1 }}>
-            <BrandTaskView
-              actions={allActions}
-              sellers={sellers}
-              currentUser={currentUser}
-              activeFilter={activeFilter}
-              searchQuery={searchQuery}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onStart={handleStartTask}
-              onSubmitForReview={handleSubmitForReview}
-              onReviewAction={(action) => openReviewModal(action)}
-              onCreateBrandTask={handleCreateBrandTask}
-            />
-          </div>
-        ) : (
-          <div style={{ flex: 1 }}>
-            <ActionListEnhanced
-              objectives={objectives}
-              actions={allActions}
-              standaloneActions={allActions.filter(a => !a.GoalId && !a.ObjectiveId && !a.KeyResultId && !a.keyResultId)}
-              loading={loading}
-              activeFilter={activeFilter}
-              searchQuery={searchQuery}
-              currentUser={currentUser}
-              onSearchChange={handleSearchChange}
-              onEdit={handleEdit}
-              onAddAction={handleAddActionForKR}
-              onAISuggest={handleAISuggest}
-              onDelete={handleDelete}
-              onStartTask={handleStartTask}
-              onCompleteTask={handleCompleteTask}
-              onSubmitForReview={handleSubmitForReview}
-              onReviewAction={(action) => openReviewModal(action)}
-              viewMode={viewMode}
-            />
-          </div>
-        )}
-      </div>
 
-      {/* ═══════════════════════════════════════════════════
-          MODALS (Same as before)
-      ═══════════════════════════════════════════════════ */}
+            {filteredActions.length === 0 ? (
+              <div style={{ padding: 60, textAlign: 'center' }}>
+                <Empty
+                  description={
+                    <Space direction="vertical" size={8}>
+                      <Text style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>
+                        No tasks found
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#94a3b8' }}>
+                        {searchQuery || activeFilter !== 'ALL' || statusFilter || priorityFilter
+                          ? 'Try clearing your filters'
+                          : 'Create your first task to get started'
+                        }
+                      </Text>
+                    </Space>
+                  }
+                >
+                  <Space>
+                    {(searchQuery || activeFilter !== 'ALL' || statusFilter || priorityFilter) && (
+                      <Button onClick={clearFilters} icon={<CloseOutlined />}>Clear Filters</Button>
+                    )}
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={handleCreateAction}
+                      style={{ background: '#6366f1', border: 'none' }}
+                    >
+                      New Task
+                    </Button>
+                  </Space>
+                </Empty>
+              </div>
+            ) : (
+              <Table
+                dataSource={filteredActions.map((t, i) => ({ ...t, _tableKey: `all-${t._id || t.id}-${i}` }))}
+                rowKey="_tableKey"
+                columns={taskTableColumns}
+                size="middle"
+                scroll={{ x: 1100 }}
+                pagination={{
+                  pageSize: 20,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['10', '20', '50', '100'],
+                  showTotal: (total) => (
+                    <Text style={{ fontSize: 12, color: '#94a3b8' }}>{total} tasks</Text>
+                  ),
+                  style: { padding: '12px 20px', margin: 0, borderTop: '1px solid #f1f5f9' },
+                  size: 'small',
+                }}
+                rowClassName={(_, idx) => idx % 2 === 0 ? '' : 'task-row-stripe'}
+                expandable={{
+                  expandedRowRender: (task) => {
+                    const id      = task._id || task.id;
+                    const hasForm = !!rejectionForms[id]?.open;
+                    const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+                    const wasRejected = Array.isArray(task.rejections) && task.rejections.length > 0;
+                    const isInProgress = (task.status || '').toUpperCase() === 'IN_PROGRESS';
+
+                    if (!hasForm && !hasSubtasks && !wasRejected) return null;
+
+                    return (
+                      <div style={{ padding: '0 16px 8px' }}>
+                        {/* Show rejection history banner if task is back in progress after rejection */}
+                        {wasRejected && isInProgress && (
+                          <RejectedTaskBanner task={task} />
+                        )}
+                        {hasForm && (
+                          <RejectionForm
+                            onSubmit={(r) => submitRejection(id, r)}
+                            onCancel={() => closeRejectionForm(id)}
+                          />
+                        )}
+                        {hasSubtasks && (
+                          <div style={{ padding: '4px 0 0 32px', background: '#f8fafc', borderRadius: 8 }}>
+                            <Text style={{
+                              fontSize: 11, color: '#94a3b8', fontWeight: 700,
+                              textTransform: 'uppercase', letterSpacing: 0.5,
+                              display: 'block', marginBottom: 6, padding: '6px 12px 0',
+                            }}>
+                              Subtasks ({task.subtasks.length})
+                            </Text>
+                            <Space direction="vertical" size={4} style={{ width: '100%', padding: '0 12px 8px' }}>
+                              {task.subtasks.map((sub, si) => (
+                                <Row
+                                  key={si}
+                                  align="middle"
+                                  gutter={12}
+                                  style={{
+                                    padding: '7px 10px',
+                                    background: 'white',
+                                    borderRadius: 8,
+                                    border: '1px solid #f1f5f9',
+                                  }}
+                                >
+                                  <Col>
+                                    <Tag style={{
+                                      fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
+                                      background: '#f0fdfa', color: '#0d9488',
+                                      border: '1px solid #99f6e4', borderRadius: 4,
+                                    }}>SUB</Tag>
+                                  </Col>
+                                  <Col flex={1}>
+                                    <Text style={{ fontSize: 12, color: '#374151' }}>
+                                      {sub.action || sub.title || sub.name || 'Untitled'}
+                                    </Text>
+                                  </Col>
+                                  <Col>
+                                    <WorkflowActionButton
+                                      task={sub}
+                                      currentUser={currentUser}
+                                      onStart={openStartModal}
+                                      onSubmit={openSubmitModal}
+                                      onApprove={openReviewModal}
+                                      onReject={openReviewModal}
+                                      size="small"
+                                      showStatus={true}
+                                    />
+                                  </Col>
+                                </Row>
+                              ))}
+                            </Space>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  },
+                  rowExpandable: (task) => {
+                    const id = task._id || task.id;
+                    return (task.subtasks && task.subtasks.length > 0) ||
+                      !!rejectionForms[id]?.open;
+                  },
+                  expandIcon: ({ expanded, onExpand, record }) =>
+                    (record.subtasks?.length > 0 || rejectionForms[record._id || record.id]?.open)
+                      ? (
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={expanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
+                          onClick={e => onExpand(record, e)}
+                          style={{ width: 20, height: 20, padding: 0, color: '#94a3b8' }}
+                        />
+                      ) : null,
+                }}
+                onRow={(record) => ({
+                  style: {
+                    cursor: 'default',
+                    transition: 'background 0.1s',
+                    ...(rejectionForms[record._id || record.id]?.open
+                      ? { background: '#fffbeb' }
+                      : {}),
+                  },
+                })}
+              />
+            )}
+          </Card>
+        ) : (
+          renderSellerView()
+        )}
+      </Content>
+
+      {/* ═══ MODALS ═══════════════════════════════════════════════════ */}
       <Modal
         open={isObjectiveModalOpen}
-        onCancel={() => {
-          setIsObjectiveModalOpen(false);
-          setEditingObjective(null);
-        }}
+        onCancel={() => { setIsObjectiveModalOpen(false); setEditingObjective(null); }}
         footer={null}
         closable={false}
         styles={{ body: { padding: 0 } }}
@@ -1138,25 +1699,14 @@ const TasksPage = () => {
         <ObjectiveManager
           objective={editingObjective}
           users={users}
-          onClose={() => {
-            setIsObjectiveModalOpen(false);
-            setEditingObjective(null);
-          }}
-          onObjectiveCreated={() => {
-            setIsObjectiveModalOpen(false);
-            setEditingObjective(null);
-            loadData();
-          }}
+          onClose={() => { setIsObjectiveModalOpen(false); setEditingObjective(null); }}
+          onObjectiveCreated={() => { setIsObjectiveModalOpen(false); setEditingObjective(null); loadData(); }}
         />
       </Modal>
 
       <ActionModal
         isOpen={isActionModalOpen}
-        onClose={() => {
-          setIsActionModalOpen(false);
-          setEditingAction(null);
-          setSelectedKeyResultId(null);
-        }}
+        onClose={() => { setIsActionModalOpen(false); setEditingAction(null); setSelectedKeyResultId(null); }}
         onSave={handleSaveAction}
         action={editingAction}
         currentUser={currentUser}
@@ -1166,197 +1716,128 @@ const TasksPage = () => {
         initialKeyResultId={selectedKeyResultId}
       />
 
-      <ReviewModal
+
+
+
+
+      <StartTaskModal
+        isOpen={isStartModalOpen}
+        task={startingTask}
+        currentUser={currentUser}
+        onClose={() => {
+          setIsStartModalOpen(false);
+          setStartingTask(null);
+        }}
+        onConfirm={handleConfirmStart}
+      />
+
+      <SubmitTaskModal
+        isOpen={isSubmitModalOpen}
+        task={submittingTask}
+        currentUser={currentUser}
+        onClose={() => {
+          setIsSubmitModalOpen(false);
+          setSubmittingTask(null);
+        }}
+        onSubmit={handleConfirmSubmit}
+      />
+
+      <ReviewDecisionModal
         isOpen={isReviewModalOpen}
-        action={reviewingAction}
+        task={reviewingTask}
+        currentUser={currentUser}
         onClose={() => {
           setIsReviewModalOpen(false);
-          setReviewingAction(null);
+          setReviewingTask(null);
         }}
-        onReview={handleReviewAction}
+        onDecision={handleConfirmDecision}
       />
 
-      <BrandTaskWizard
-        isOpen={isBrandWizardOpen}
-        onClose={() => setIsBrandWizardOpen(false)}
-        sellers={sellers}
-        asins={asins}
-        users={users}
-        onSaveMultiple={handleSaveBulkTasks}
+      <TaskDetailDrawer
+        isOpen={isDetailDrawerOpen}
+        action={viewingTask}
+        currentUser={currentUser}
+        onClose={() => { setIsDetailDrawerOpen(false); setViewingTask(null); }}
+        onEdit={handleEdit}
+        onStart={openStartModal}
+        onSubmit={openSubmitModal}
+        onReview={openReviewModal}
       />
 
-      {isCompletionModalOpen && completingAction && (
-        <CompletionModal
-          isOpen={isCompletionModalOpen}
-          action={completingAction}
-          onClose={() => {
-            setIsCompletionModalOpen(false);
-            setCompletingAction(null);
-          }}
-          onComplete={handleCompletionSubmit}
-        />
-      )}
-
-      {/* ═══════════════════════════════════════════════════
-          STYLES
-      ═══════════════════════════════════════════════════ */}
+      {/* ═══ GLOBAL STYLES ════════════════════════════════════════════ */}
       <style>{`
-        .tasks-page-container {
-          display: flex;
-          flex-direction: column;
-          height: calc(100vh - 60px);
-          overflow: hidden;
-          background-color: #f8fafc;
-          margin: -1.5rem -2rem;
-        }
-
-        .tasks-header-premium {
-          background: linear-gradient(135deg, #ffffff 0%, #fafbff 100%);
-          padding: 18px 24px;
-          border-bottom: 1px solid #e2e8f0;
-          position: relative;
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-
-        .tasks-control-strip {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 12px 24px;
-          background: #ffffff;
-          border-bottom: 1px solid #e2e8f0;
-          flex-wrap: wrap;
-          gap: 16px;
-          flex-shrink: 0;
-        }
-
-        .tasks-filter-ribbon {
-          padding: 10px 24px;
-          background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
-          border-bottom: 1px solid #e2e8f0;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-shrink: 0;
-        }
-
-        .tasks-scroll-content {
-          flex: 1;
-          overflow-y: auto;
-          padding: 20px 24px;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .task-stat-premium:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.06);
-          border-color: #cbd5e1 !important;
-        }
-        .task-stat-premium.highlight-card:hover {
-          border-color: currentColor !important;
-        }
-
-        .filter-pill-premium:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.06);
-          border-color: currentColor !important;
-        }
-
-        .task-search-input:focus {
-          border-color: #6366f1 !important;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
-        }
-        .task-search-input:hover {
-          border-color: #cbd5e1 !important;
-        }
-        .task-search-input::placeholder {
-          color: #94a3b8;
-          font-weight: 500;
-        }
-
-        .header-action-btn-default:hover {
+        .task-row-stripe td { background: #fafbfc !important; }
+        .task-row-stripe:hover td { background: #f1f5f9 !important; }
+        .ant-table-tbody > tr:hover > td { background: #f8faff !important; }
+        .ant-table-thead > tr > th {
           background: #f8fafc !important;
-          border-color: #cbd5e1 !important;
-          color: #0f172a !important;
-          transform: translateY(-1px);
-        }
-
-        .header-action-btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 16px -2px rgba(99, 102, 241, 0.5) !important;
-        }
-
-        .header-action-btn-secondary:hover {
-          background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
-          border-color: #c4b5fd !important;
-          transform: translateY(-1px);
-        }
-
-        .header-action-btn-danger:hover {
-          background: #fee2e2 !important;
-          transform: translateY(-1px);
-        }
-
-        .header-action-btn-brand:hover {
-          background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%) !important;
-          border-color: #a78bfa !important;
-          transform: translateY(-1px);
-        }
-
-        .segmented-tasks-premium .ant-segmented-item-selected {
-          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
-          color: #ffffff !important;
+          font-size: 11px !important;
           font-weight: 700 !important;
-          box-shadow: 0 4px 8px -2px rgba(99, 102, 241, 0.4) !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.6px !important;
+          color: #94a3b8 !important;
+          border-bottom: 2px solid #e2e8f0 !important;
+          padding: 10px 12px !important;
         }
-        .segmented-tasks-premium .ant-segmented-item-selected .ant-segmented-item-label {
-          color: #ffffff !important;
+        .ant-table-tbody > tr > td {
+          padding: 10px 12px !important;
+          border-bottom: 1px solid #f1f5f9 !important;
+          vertical-align: middle !important;
         }
-        .segmented-tasks-premium .ant-segmented-item {
-          font-weight: 600;
-          font-size: 11px;
-          color: #475569;
+        .ant-table-expanded-row > td {
+          padding: 0 !important;
+          background: #f8fafc !important;
         }
-
-        @keyframes pulse-status {
-          0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
-          50% { transform: scale(1.15); opacity: 0.9; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+        .ant-segmented-item-selected {
+          background: white !important;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
+          font-weight: 700 !important;
+          color: #6366f1 !important;
         }
-        .status-pulse-dot {
-          animation: pulse-status 2s ease-in-out infinite;
+        .ant-segmented-item {
+          font-weight: 500 !important;
+          font-size: 13px !important;
         }
-
-        @keyframes spin-animation {
-          to { transform: rotate(360deg); }
+        .ant-collapse-header {
+          padding: 10px 16px !important;
+          background: #fafbfc !important;
         }
-        .spin-animation {
-          animation: spin-animation 1.5s linear infinite;
+        .ant-collapse-content-box {
+          padding: 0 !important;
         }
-
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
+        .ant-collapse-item {
+          border-bottom: 1px solid #f1f5f9 !important;
         }
-        .animate-fade-up {
-          animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        .ant-progress-inner {
+          border-radius: 4px !important;
         }
-
-        .scrollbar-hidden::-webkit-scrollbar {
-          display: none;
+        .ant-progress-bg {
+          border-radius: 4px !important;
         }
-        .scrollbar-hidden {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+        .ant-tag {
+          line-height: 1.4 !important;
         }
-
-        @media (max-width: 992px) {
-          .tasks-page-container {
-            margin: -0.75rem;
-            height: auto;
-            overflow: visible;
-          }
+        .ant-select-selector {
+          border-radius: 8px !important;
+          font-size: 12px !important;
+        }
+        .ant-input-affix-wrapper {
+          border-radius: 8px !important;
+        }
+        .ant-btn {
+          font-weight: 500 !important;
+        }
+        .ant-pagination {
+          margin: 0 !important;
+        }
+        .filter-pills-row::-webkit-scrollbar { display: none; }
+        @keyframes taskStatusPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @keyframes wfPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.5; transform: scale(1.15); }
         }
       `}</style>
     </div>

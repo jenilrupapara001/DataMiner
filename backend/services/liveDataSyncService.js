@@ -3,6 +3,7 @@ const pLimitModule = require('p-limit');
 const pLimit = pLimitModule.default || pLimitModule;
 const { sql, getPool } = require('../database/db');
 const SystemLogService = require('./SystemLogService');
+const notificationController = require('../controllers/notificationController');
 const listingQualityService = require('./listingQualityService');
 const rulesetEngineService = require('./rulesetEngineService');
 const EventEmitter = require('events');
@@ -15,11 +16,11 @@ class LiveDataSyncService extends EventEmitter {
             _t: 'https://api.amazon.co.uk/auth/o2/token',
             _b: 'https://creatorsapi.amazon',
             maxPerRequest: 10,
-            concurrency: 3,
-            requestDelay: 1500,
+            concurrency: 2,
+            requestDelay: 2000,
             sellerDelay: 2000,
             maxRetries: 3,
-            retryDelay: 3000,
+            retryDelay: 5000,
             rateLimitPerSecond: 1
         };
         
@@ -76,6 +77,7 @@ class LiveDataSyncService extends EventEmitter {
             totalAsins: 0,
             successCount: 0,
             failedCount: 0,
+            failedAsinCodes: [],
             errors: [],
             duration: 0
         };
@@ -95,7 +97,7 @@ class LiveDataSyncService extends EventEmitter {
                     SELECT Id, AsinCode 
                     FROM Asins 
                     WHERE SellerId = @sellerId 
-                    AND Status = 'Active'
+                    AND Status IN ('Active', 'Error')
                 `);
             
             const allAsins = asinsResult.recordset;
@@ -134,10 +136,15 @@ class LiveDataSyncService extends EventEmitter {
                             total: batches.length
                         });
 
-                        // Yield execution slightly to avoid rate limit spikes
+                        // Yield execution to respect rate limits
                         await this._delay(this._config.requestDelay);
                     } catch (e) {
                         stats.errors.push({ batch: index, error: e.message });
+                        // Track ASINs from failed batches (e.g. 429 rate limit)
+                        for (const asinRecord of batch) {
+                            stats.failedCount++;
+                            stats.failedAsinCodes.push(asinRecord.AsinCode);
+                        }
                     }
                 })
             );
@@ -174,6 +181,7 @@ class LiveDataSyncService extends EventEmitter {
                         totalAsins: stats.totalAsins,
                         updatedAsins: stats.successCount,
                         failedAsins: stats.failedCount,
+                        failedAsinCodes: stats.failedAsinCodes,
                         duration: stats.duration
                     });
                     // Also emit ASIN update event for ASIN manager auto-refresh
@@ -183,6 +191,23 @@ class LiveDataSyncService extends EventEmitter {
                     console.warn('⚠️ SocketService not initialized, skipping socket emission');
                 }
             } catch (e) { console.error('Socket emission error:', e.message); }
+            
+            // 8. If there are failed ASINs, schedule auto-retry after 30s
+            if (stats.failedAsinCodes.length > 0) {
+                const failedCodes = [...stats.failedAsinCodes];
+                console.log(`🔄 Scheduling re-sync for ${failedCodes.length} failed ASINs in 30s...`);
+                
+                setTimeout(async () => {
+                    try {
+                        await this._resyncFailedAsins(sellerIdStr, failedCodes, creds);
+                    } catch (reSyncErr) {
+                        console.error(`Re-sync of failed ASINs error:`, reSyncErr.message);
+                    }
+                }, 30000);
+            }
+            
+            // 9. Notify users about sync results
+            await this._notifySyncResult(sellerIdStr, stats);
             
             stats.completedAt = new Date().toISOString();
             stats.status = 'COMPLETED';
@@ -194,6 +219,7 @@ class LiveDataSyncService extends EventEmitter {
                 totalAsins: stats.totalAsins,
                 updatedAsins: stats.successCount,
                 failedAsins: stats.failedCount,
+                failedAsinCodes: stats.failedAsinCodes,
                 duration: stats.duration,
                 completedAt: stats.completedAt
             };
@@ -377,6 +403,7 @@ class LiveDataSyncService extends EventEmitter {
                     const item = items.find(i => i.asin === asinRecord.AsinCode);
                     if (!item) {
                         stats.failedCount++;
+                        stats.failedAsinCodes.push(asinRecord.AsinCode);
                         return;
                     }
                     
@@ -384,6 +411,7 @@ class LiveDataSyncService extends EventEmitter {
                     stats.successCount++;
                 } catch (e) {
                     stats.failedCount++;
+                    stats.failedAsinCodes.push(asinRecord.AsinCode);
                     stats.errors.push({ asin: asinRecord.AsinCode, error: e.message });
                 }
             });
@@ -392,7 +420,9 @@ class LiveDataSyncService extends EventEmitter {
             
         } catch (error) {
             if (error.response?.status === 429 && retry < this._config.maxRetries) {
-                await this._delay(this._config.retryDelay * Math.pow(2, retry));
+                const backoff = this._config.retryDelay * Math.pow(2, retry + 1);
+                console.log(`⏳ Rate limited on batch, retrying in ${(backoff / 1000).toFixed(0)}s (attempt ${retry + 1}/${this._config.maxRetries})...`);
+                await this._delay(backoff);
                 return this._processBatch(sellerId, batch, token, creds, stats, retry + 1);
             }
             
@@ -421,12 +451,17 @@ class LiveDataSyncService extends EventEmitter {
             // Price Dispute Calculation
             const uploadedPrice = item.uploadedPrice || item.UploadedPrice || 0;
             const currentPrice = extracted.priceAmount || 0;
-            const hasDeal = extracted.hasDeal;
+            const dealBadge = extracted.dealBadge || '';
+            
+            // Only PROPER Amazon deal types suppress dispute.
+            // "% off" badges, "Sale", "Ends in..." countdown banners do NOT suppress.
+            const PROPER_DEAL_PATTERN = /^(lightning|limited time deal|best deal|prime exclusive|subscribe.?and.?save|deal of the day|coupon)$/i;
+            const hasProperDeal = PROPER_DEAL_PATTERN.test(dealBadge.trim());
             
             let priceDispute = false;
             if (uploadedPrice > 0 && currentPrice > 0) {
                 const priceDiff = Math.abs(uploadedPrice - currentPrice);
-                if (!hasDeal && priceDiff > 5) {
+                if (!hasProperDeal && priceDiff > 5) {
                     priceDispute = true;
                 }
             }
@@ -460,7 +495,11 @@ class LiveDataSyncService extends EventEmitter {
                 .input('imagesJson', sql.NVarChar(sql.MAX), JSON.stringify([extracted.mainImage, ...extracted.variantImages].filter(Boolean)))
                 .input('hasDeal', sql.Bit, extracted.hasDeal ? 1 : 0)
                 .input('dealType', sql.NVarChar, extracted.dealType)
+                .input('dealStartTime', sql.DateTime, extracted.dealStartTime)
                 .input('dealEndTime', sql.DateTime, extracted.dealEndTime)
+                .input('dealAccessType', sql.NVarChar, extracted.dealAccessType)
+                .input('dealPercentClaimed', sql.NVarChar, extracted.dealPercentClaimed)
+                .input('manufacturer', sql.NVarChar, extracted.manufacturer)
                 .input('priceDispute', sql.Bit, priceDispute ? 1 : 0)
                 .input('variantImages', sql.NVarChar(sql.MAX), JSON.stringify(extracted.variantImages))
                 .input('dimensions', sql.NVarChar(sql.MAX), JSON.stringify(extracted.dimensions))
@@ -489,13 +528,19 @@ class LiveDataSyncService extends EventEmitter {
                         Dimensions = @dimensions,
                         BuyBoxes = @buyBoxes,
                         HasDeal = @hasDeal,
+                        DealBadge = @dealType,
                         DealType = @dealType,
+                        DealStartTime = @dealStartTime,
                         DealEndTime = @dealEndTime,
+                        DealAccessType = @dealAccessType,
+                        DealPercentClaimed = @dealPercentClaimed,
+                        Manufacturer = @manufacturer,
                         PriceDispute = @priceDispute,
                         DiscountPercentage = @discount,
                         LastLiveSyncAt = dbo.GetEnvDate(),
                         LastSyncSource = 'LIVE',
-                        UpdatedAt = dbo.GetEnvDate()
+                        UpdatedAt = dbo.GetEnvDate(),
+                        AvailabilityStatus = @availability
                     WHERE Id = @asinId
                 `);
             
@@ -612,10 +657,32 @@ class LiveDataSyncService extends EventEmitter {
                           || item.variantImages 
                           || [];
         
-        // ── Deals ───────────────────────────────────────────────────────
-        const deals = item.deals || [];
-        const hasDeal = deals.length > 0;
-        const activeDeal = deals[0];
+        // ── Deals (Creators API: from listing.dealDetails, NOT item.deals) ──
+        const listingDealDetails = listing?.dealDetails || null;
+        const hasDeal = !!(listingDealDetails && (listingDealDetails.badge || listingDealDetails.type || listingDealDetails.hasDeal));
+        const activeDeal = listingDealDetails;
+        
+        // ── Manufacturer ──────────────────────────────────────────────
+        const manufacturer = item.itemInfo?.byLineInfo?.manufacturer?.displayValue 
+                           || item.itemInfo?.byLineInfo?.brand?.displayValue
+                           || null;
+        
+        // ── Deal details with dates ──────────────────────────────────
+        const dealBadge = (activeDeal?.badge || activeDeal?.type || null);
+        const dealStartTime = activeDeal?.startDate ? new Date(activeDeal.startDate) 
+                            : activeDeal?.startTime ? new Date(activeDeal.startTime) 
+                            : null;
+        const dealEndTime = activeDeal?.endDate ? new Date(activeDeal.endDate)
+                          : activeDeal?.endTime ? new Date(activeDeal.endTime)
+                          : null;
+        const dealAccessType = activeDeal?.accessType || null;
+        const dealPercentClaimed = activeDeal?.percentClaimed != null ? `${activeDeal.percentClaimed}%` : null;
+        
+        // ── Availability ────────────────────────────────────────────
+        const availability = listing?.availability?.message 
+                           || listing?.availability?.type 
+                           || item.stock?.status 
+                           || 'Unknown';
         
         return {
             title: item.itemInfo?.title?.displayValue || item.productName || null,
@@ -623,7 +690,7 @@ class LiveDataSyncService extends EventEmitter {
             priceAmount: priceAmount,
             mrpAmount: mrpAmount,
             discountPercent: discountPercent,
-            availability: listing?.availability?.type || item.stock?.status || listing?.availability || 'Unknown',
+            availability: availability,
             seller: listing?.merchantInfo?.name || listing?.seller || null,
             sellerId: listing?.merchantInfo?.id || listing?.sellerId || null,
             rating: rating,
@@ -639,8 +706,12 @@ class LiveDataSyncService extends EventEmitter {
             bulletPoints: item.itemInfo?.features?.displayValues || item.bulletPoints || [],
             bulletPointCount: item.itemInfo?.features?.displayValues?.length || item.bulletPointsCount || item.bulletPoints?.length || 0,
             hasDeal: hasDeal,
-            dealType: activeDeal?.badge || activeDeal?.dealType || null,
-            dealEndTime: activeDeal?.endTime ? new Date(activeDeal.endTime) : null,
+            dealType: dealBadge,
+            dealStartTime: dealStartTime,
+            dealEndTime: dealEndTime,
+            dealAccessType: dealAccessType,
+            dealPercentClaimed: dealPercentClaimed,
+            manufacturer: manufacturer,
             variantImages: variantImages,
             dimensions: item.dimensions || null,
             buyBoxes: (item.offersV2?.listings || item.buyBoxes || []).map(l => ({
@@ -796,6 +867,171 @@ class LiveDataSyncService extends EventEmitter {
             });
         } catch (e) {
             console.error('Logging sync failed:', e);
+        }
+    }
+
+    // ============================================
+    // Re-sync only failed ASINs (called after main sync)
+    // ============================================
+    async _resyncFailedAsins(sellerId, failedCodes, creds) {
+        const pool = await getPool();
+        const startTime = Date.now();
+        const stats = {
+            sellerId,
+            syncType: 'RE_SYNC',
+            totalAsins: failedCodes.length,
+            successCount: 0,
+            failedCount: 0,
+            failedAsinCodes: [],
+            errors: []
+        };
+
+        try {
+            console.log(`🔄 Re-sync: Starting for ${failedCodes.length} failed ASINs...`);
+
+            const request = pool.request()
+                .input('sellerId', sql.VarChar, sellerId);
+            failedCodes.forEach((code, i) => request.input(`code${i}`, sql.VarChar, code));
+            const asinsResult = await request.query(`
+                    SELECT Id, AsinCode 
+                    FROM Asins 
+                    WHERE SellerId = @sellerId 
+                    AND AsinCode IN (${failedCodes.map((_, i) => `@code${i}`).join(',')})
+                `);
+            const asinsToRetry = asinsResult.recordset;
+
+            if (asinsToRetry.length === 0) {
+                console.log(`🔄 Re-sync: No ASINs found to retry`);
+                return;
+            }
+
+            const token = await this._getToken(creds);
+            const batches = this._createBatches(asinsToRetry, this._config.maxPerRequest);
+            const limit = pLimit(this._config.concurrency);
+
+            const promises = batches.map((batch) =>
+                limit(async () => {
+                    try {
+                        await this._processBatch(sellerId, batch, token, creds, stats);
+                        await this._delay(this._config.requestDelay);
+                    } catch (e) {
+                        stats.errors.push({ error: e.message });
+                    }
+                })
+            );
+
+            await Promise.all(promises);
+            stats.duration = Date.now() - startTime;
+
+            console.log(`🔄 Re-sync complete: Seller ${sellerId}`, {
+                success: stats.successCount,
+                failed: stats.failedCount,
+                duration: `${(stats.duration / 1000).toFixed(2)}s`
+            });
+
+            // Emit socket events for UI refresh
+            try {
+                const SocketService = require('./socketService');
+                const io = SocketService.getIo();
+                if (io) {
+                    io.emit('liveSync:reSyncCompleted', {
+                        sellerId,
+                        retried: failedCodes.length,
+                        successCount: stats.successCount,
+                        failedCount: stats.failedCount,
+                        failedAsinCodes: stats.failedAsinCodes,
+                        duration: stats.duration
+                    });
+                    io.emit('ASINS_UPDATED', { sellerId });
+                }
+            } catch (e) { console.error('Socket emission error:', e.message); }
+
+            // Log re-sync
+            let sellerName = sellerId;
+            try {
+                const nameResult = await pool.request()
+                    .input('id', sql.VarChar, sellerId)
+                    .query('SELECT Name FROM Sellers WHERE Id = @id');
+                if (nameResult.recordset.length > 0) {
+                    sellerName = nameResult.recordset[0].Name;
+                }
+            } catch (e) { /* fallback */ }
+
+            await SystemLogService.log({
+                type: 'RE_SYNC',
+                entityType: 'SELLER',
+                entityId: sellerId,
+                entityTitle: sellerName,
+                description: `Re-sync of ${failedCodes.length} failed ASINs for ${sellerName}. Success: ${stats.successCount}, Still Failed: ${stats.failedCount}, Duration: ${(stats.duration / 1000).toFixed(1)}s${stats.failedAsinCodes.length > 0 ? '. Still failed: ' + stats.failedAsinCodes.slice(0, 5).join(', ') + (stats.failedAsinCodes.length > 5 ? '...' : '') : ''}`,
+                metadata: { ...stats, sellerName, failedAsinCodes: stats.failedAsinCodes }
+            });
+
+            // Notify users about re-sync result
+            const failedStill = stats.failedAsinCodes.length;
+            const reSyncMsg = failedStill === 0
+                ? `✅ Re-sync successful! All ${stats.successCount} previously failed ASINs for ${sellerName} are now synced.`
+                : `⚠️ Re-sync for ${sellerName}: ${stats.successCount} recovered, ${failedStill} still failing. ASINs: ${stats.failedAsinCodes.slice(0, 3).join(', ')}${failedStill > 3 ? '...' : ''}`;
+
+            await this._sendNotificationToAllAdmins('RE_SYNC', sellerId, sellerName, reSyncMsg);
+
+        } catch (error) {
+            console.error(`🔄 Re-sync error for seller ${sellerId}:`, error.message);
+            await SystemLogService.log({
+                type: 'RE_SYNC_ERROR',
+                entityType: 'SELLER',
+                entityId: sellerId,
+                entityTitle: sellerId,
+                description: `Re-sync failed for seller ${sellerId}: ${error.message}`,
+                metadata: { error: error.message, failedCodes }
+            });
+        }
+    }
+
+    // ============================================
+    // Notify users about sync result
+    // ============================================
+    async _notifySyncResult(sellerId, stats) {
+        try {
+            let sellerName = sellerId;
+            try {
+                const pool = await getPool();
+                const nameResult = await pool.request()
+                    .input('id', sql.VarChar, sellerId)
+                    .query('SELECT Name FROM Sellers WHERE Id = @id');
+                if (nameResult.recordset.length > 0) {
+                    sellerName = nameResult.recordset[0].Name;
+                }
+            } catch (e) { /* fallback */ }
+
+            const message = stats.failedCount === 0
+                ? `✅ Live sync completed for ${sellerName}. All ${stats.successCount} ASINs updated successfully.`
+                : `⚠️ Live sync for ${sellerName}: ${stats.successCount} updated, ${stats.failedCount} failed. Re-sync scheduled in 30s for ${stats.failedCount} failed ASINs.`;
+
+            await this._sendNotificationToAllAdmins('LIVE_SYNC', sellerId, sellerName, message);
+        } catch (e) {
+            console.error('Failed to send sync notification:', e.message);
+        }
+    }
+
+    // ============================================
+    // Helper: Send notification to all active users
+    // ============================================
+    async _sendNotificationToAllAdmins(type, referenceId, referenceTitle, message) {
+        try {
+            const pool = await getPool();
+            const users = await pool.request().query('SELECT Id FROM Users WHERE IsActive = 1');
+            
+            for (const user of users.recordset) {
+                await notificationController.createNotification(
+                    user.Id,
+                    type,
+                    'Seller',
+                    referenceId,
+                    message
+                );
+            }
+        } catch (e) {
+            console.error('Failed to send admin notifications:', e.message);
         }
     }
     

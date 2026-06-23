@@ -1,945 +1,492 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, User, Tag, AlertCircle, CheckCircle, ThumbsUp, ThumbsDown, ChevronRight, ChevronLeft, Check, Search } from 'lucide-react';
-import ActionChat from './ActionChat';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Modal, Form, Input, Select, DatePicker, Radio, InputNumber,
+  Tag, Space, Divider, Button, message, Row, Col, Avatar, Badge,
+} from 'antd';
+import {
+  ArrowDownOutlined, MinusOutlined, ArrowUpOutlined,
+  ExclamationCircleOutlined, UserOutlined, ClockCircleOutlined,
+  TagOutlined,
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
+import {
+  TASK_TYPES, ACTION_TYPES, STATUS_OPTIONS, PRIORITY_OPTIONS,
+  can, formatUserName, buildUserSelectOptions, getReviewerCandidates,
+  getInitials, MODAL_STYLES,
+} from './modalHelpers';
 import { db } from '../../services/db';
-import './ActionModal.css';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 
-const ActionModal = ({ action, isOpen, onClose, onSave, asins = [], users = [], sellers = [], actions = [], onNavigateToAction, initialKeyResultId = null }) => {
-    const [messages, setMessages] = useState([]);
-    const [templates, setTemplates] = useState([]);
-    const [selectedTemplate, setSelectedTemplate] = useState('');
-    const [activeTab, setActiveTab] = useState('details');
-    const [currentStep, setCurrentStep] = useState(1);
-    const [showGoalSettings, setShowGoalSettings] = useState(false);
-    const [asinSearch, setAsinSearch] = useState('');
+const { TextArea } = Input;
+const { Option } = Select;
 
-    // ... (rest of the state and handlers remain the same) ...
-    // RESTORED FORM STATE
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        type: 'TITLE_OPTIMIZATION',
-        priority: 'MEDIUM',
-        status: 'PENDING',
-        asins: [],
-        assignedTo: '',
-        startDate: '',
-        deadline: '',
-        keyResultId: initialKeyResultId || '',
-        measurementMetric: 'NONE',
-        scopeType: 'ASIN', // 'BRAND' | 'ASIN'
-        scopeIds: [],
-        impactWeight: 5,
-        expectedImpact: { metric: 'GMS', value: 0 },
-        aiReason: '',
-        aiGenerated: false,
-        goalSettings: {
-            targetValue: '',
-            timeframe: 1,
-            frequency: 'MONTHLY',
-            isGoalPrimary: false
+const ActionModal = ({ isOpen, onClose, onSave, action, currentUser, users, sellers, asins, initialKeyResultId }) => {
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [objectives, setObjectives] = useState([]);
+
+  const isEditMode = !!action;
+
+  useEffect(() => {
+    if (isOpen) {
+      db.getObjectives()
+        .then(res => {
+          const d = res?.data || res;
+          setObjectives(Array.isArray(d) ? d : []);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (action) {
+        form.setFieldsValue({
+          title: action.title || '',
+          description: action.description || '',
+          type: action.type || undefined,
+          actionType: action.actionType || undefined,
+          assignedTo: action.assignedTo
+            ? (Array.isArray(action.assignedTo)
+              ? action.assignedTo.map(u => (typeof u === 'string' ? u : u._id || u.id))
+              : [typeof action.assignedTo === 'string' ? action.assignedTo : action.assignedTo._id || action.assignedTo.id])
+            : [],
+          reviewer: action.reviewer
+            ? (typeof action.reviewer === 'string' ? action.reviewer : action.reviewer._id || action.reviewer.id)
+            : undefined,
+          seller: action.seller
+            ? (typeof action.seller === 'string' ? action.seller : action.seller._id || action.seller.id)
+            : undefined,
+          priority: action.priority || 'MEDIUM',
+          dueDate: action.dueDate ? dayjs(action.dueDate) : null,
+          estimatedHours: action.estimatedHours || undefined,
+          keyResultId: initialKeyResultId || action.keyResultId || undefined,
+          linkedAsins: action.asins
+            ? action.asins.map(a => (typeof a === 'string' ? a : a._id || a.id))
+            : [],
+          tags: action.tags || [],
+          statusOverride: action.status || undefined,
+          internalNotes: action.internalNotes || '',
+        });
+      } else {
+        form.resetFields();
+        if (initialKeyResultId) {
+          form.setFieldValue('keyResultId', initialKeyResultId);
         }
-    });
+      }
+    }
+  }, [isOpen, action, initialKeyResultId, form]);
 
-    // Fetch templates
-    useEffect(() => {
-        const fetchTemplates = async () => {
-            try {
-                const res = await db.getTaskTemplates();
-                if (res && res.success && Array.isArray(res.data)) {
-                    setTemplates(res.data);
-                } else if (Array.isArray(res)) {
-                    setTemplates(res);
-                } else {
-                    console.error("Invalid templates data format:", res);
-                    setTemplates([]);
-                }
-            } catch (err) {
-                console.error("Failed to fetch templates:", err);
-                setTemplates([]);
-            }
-        };
-        if (isOpen) fetchTemplates();
-    }, [isOpen]);
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeSellers = Array.isArray(sellers) ? sellers : [];
+  const safeAsins = Array.isArray(asins) ? asins : [];
 
-    // RESTORED EFFECT FOR FORM DATA SYNC
-    useEffect(() => {
-        if (action) {
-            setFormData({
-                title: action.title || '',
-                description: action.description || '',
-                type: action.type || 'TITLE_OPTIMIZATION',
-                priority: action.priority || 'MEDIUM',
-                status: action.status || 'PENDING',
-                asins: action.asins?.map(a => a._id || a) || [],
-                assignedTo: action.assignedTo?._id || action.assignedTo || action.assignee || '',
-                startDate: (action.timeTracking?.startDate || action.startDate) ? new Date(action.timeTracking?.startDate || action.startDate) : null,
-                deadline: (action.timeTracking?.deadline || action.deadline || action.dueDate) ? new Date(action.timeTracking?.deadline || action.deadline || action.dueDate) : null,
-                recurring: action.recurring || { enabled: false, frequency: 'WEEKLY', daysOfWeek: [] },
-                keyResultId: action.keyResultId || initialKeyResultId || '',
-                measurementMetric: action.expectedImpact?.metric || 'NONE',
-                scopeType: action.scopeType || 'ASIN',
-                scopeIds: action.scopeIds || [],
-                impactWeight: action.impactWeight || 5,
-                expectedImpact: action.expectedImpact || { metric: 'GMS', value: 0 },
-                aiReason: action.aiReason || action.aiReasoning || '',
-                aiGenerated: action.aiGenerated || action.isAIGenerated || false,
-                goalSettings: {
-                    targetValue: action.goalSettings?.targetValue || '',
-                    timeframe: action.goalSettings?.timeframe || 1,
-                    frequency: action.goalSettings?.frequency || 'MONTHLY',
-                    isGoalPrimary: action.goalSettings?.isGoalPrimary || false
-                }
-            });
-        }
-        setSelectedTemplate('');
-        setCurrentStep(1);
-        setShowGoalSettings(false);
-    }, [action, isOpen, initialKeyResultId]);
+  const userOptions = useMemo(() => buildUserSelectOptions(safeUsers), [safeUsers]);
 
-    // Handle Template Change
-    const handleTemplateChange = (templateId) => {
-        setSelectedTemplate(templateId);
-        if (!templateId) return;
+  const reviewerOptions = useMemo(() => {
+    const candidates = getReviewerCandidates(safeUsers);
+    return buildUserSelectOptions(candidates);
+  }, [safeUsers]);
 
-        const template = templates.find(t => (t._id || t.id) === templateId);
-        if (template) {
-            setFormData(prev => ({
-                ...prev,
-                title: template.title,
-                description: template.description,
-                type: template.type,
-                priority: template.priority || prev.priority
-            }));
-        }
-    };
+  const sellerOptions = useMemo(() => {
+    return safeSellers.map(s => ({
+      value: s._id || s.id,
+      label: s.name || s.sellerName || s.businessName || 'Unknown',
+    }));
+  }, [safeSellers]);
 
-    // RESTORED HANDLERS
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+  const asinOptions = useMemo(() => {
+    return safeAsins.map(a => ({
+      value: a._id || a.id,
+      label: `${a.asin || a.code || ''} — ${a.title || a.name || ''}`,
+    }));
+  }, [safeAsins]);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        const submissionData = {
-            ...formData,
-            _id: action?._id,
-            timeTracking: {
-                ...action?.timeTracking,
-                startDate: formData.startDate,
-                deadline: formData.deadline
-            }
-        };
-        onSave(submissionData);
-    };
+  const objectiveOptions = useMemo(() => {
+    if (!objectives || !Array.isArray(objectives)) return [];
+    return objectives.map(o => ({
+      value: o._id || o.id,
+      label: o.title || 'Untitled Objective',
+    }));
+  }, [objectives]);
 
-    useEffect(() => {
-        if (action?.messages) {
-            setMessages(action.messages);
-        } else {
-            setMessages([]);
-        }
-    }, [action]);
+  const canAssign = can(currentUser, 'assign_users');
+  const canSetReviewer = can(currentUser, 'set_reviewer');
+  const canSetPriority = can(currentUser, 'set_priority');
+  const canAdminSection = can(currentUser, 'delete_task');
 
-    const handleSendMessage = async (content) => {
-        try {
-            const result = await db.addMessage(action._id || action.id, content);
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      setSubmitting(true);
 
-            if (result.success) {
-                const newMessage = result.data;
-                setMessages(prev => [...prev, newMessage]);
-            }
-        } catch (error) {
-            console.error("Failed to send message", error);
-        }
-    };
+      const data = {
+        ...values,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : null,
+        estimatedHours: values.estimatedHours || null,
+      };
 
-    // Step indicator component
-    const StepIndicator = () => (
-        <div className="d-flex align-items-center justify-content-center mb-4">
-            <div className="d-flex align-items-center">
-                {/* Step 1 */}
-                <div className="d-flex align-items-center">
-                    <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: currentStep >= 1 ? 'var(--color-brand-600)' : 'var(--color-surface-2)',
-                        color: currentStep >= 1 ? '#fff' : 'var(--color-text-muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 600,
-                        fontSize: '14px',
-                        transition: 'all 200ms'
-                    }}>
-                        {currentStep > 1 ? <Check size={16} /> : '1'}
-                    </div>
-                    <span style={{
-                        marginLeft: '8px',
-                        fontWeight: currentStep === 1 ? 600 : 400,
-                        color: currentStep === 1 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        fontSize: '14px'
-                    }}>
-                        Task Details
-                    </span>
-                </div>
+      if (isEditMode) {
+        data._id = action._id || action.id;
+        if (!data.statusOverride) data.status = action.status;
+      }
 
-                {/* Connector */}
-                <div style={{
-                    width: '80px',
-                    height: '2px',
-                    backgroundColor: currentStep > 1 ? 'var(--color-brand-600)' : 'var(--color-border)',
-                    margin: '0 12px'
-                }} />
+      if (!isEditMode) {
+        data.status = 'PENDING';
+      }
 
-                {/* Step 2 */}
-                <div className="d-flex align-items-center">
-                    <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: currentStep >= 2 ? 'var(--color-brand-600)' : 'var(--color-surface-2)',
-                        color: currentStep >= 2 ? '#fff' : 'var(--color-text-muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 600,
-                        fontSize: '14px',
-                        transition: 'all 200ms'
-                    }}>
-                        {currentStep > 2 ? <Check size={16} /> : '2'}
-                    </div>
-                    <span style={{
-                        marginLeft: '8px',
-                        fontWeight: currentStep === 2 ? 600 : 400,
-                        color: currentStep === 2 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        fontSize: '14px'
-                    }}>
-                        Assignment
-                    </span>
-                </div>
-            </div>
-        </div>
-    );
+      delete data.statusOverride;
 
-    // Priority pill buttons
-    const PriorityPills = () => (
-        <div className="d-flex gap-2">
-            {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map(p => (
-                <button
-                    key={p}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, priority: p })}
-                    style={{
-                        padding: '8px 16px',
-                        borderRadius: '20px',
-                        border: formData.priority === p ? 'none' : '1px solid var(--color-border)',
-                        backgroundColor: formData.priority === p
-                            ? p === 'LOW' ? 'var(--color-neutral-500)'
-                                : p === 'MEDIUM' ? 'var(--color-brand-500)'
-                                    : p === 'HIGH' ? 'var(--color-warning-500)'
-                                        : 'var(--color-danger-500)'
-                            : 'transparent',
-                        color: formData.priority === p ? '#fff' : 'var(--color-text-secondary)',
-                        fontWeight: 600,
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        transition: 'all 150ms'
-                    }}
-                >
-                    {p}
-                </button>
-            ))}
-        </div>
-    );
+      await onSave(data);
+      message.success(isEditMode ? 'Task updated' : 'Task created');
+      form.resetFields();
+      onClose();
+    } catch (err) {
+      if (err.errorFields) return;
+      message.error(err?.message || 'Save failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    // Status dropdown with colored dots
-    const StatusDropdown = () => {
-        return (
-            <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-surface-0)',
-                    fontWeight: 500,
-                    fontSize: '14px',
-                    color: 'var(--color-text-primary)'
-                }}
+  const inputStyle = { ...MODAL_STYLES.inputStyle };
+  const labelStyle = MODAL_STYLES.labelStyle;
+
+  return (
+    <Modal
+      open={isOpen}
+      onCancel={() => { form.resetFields(); onClose(); }}
+      footer={null}
+      width={720}
+      centered
+      destroyOnClose
+    >
+      <div style={MODAL_STYLES.headerStyle}>
+        <Space size={12} align="center">
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+            {isEditMode ? 'Edit Task' : 'Create Task'}
+          </span>
+          <Tag color={isEditMode ? (action?.status === 'COMPLETED' ? 'green' : action?.status === 'REVIEW' ? 'purple' : 'blue') : 'blue'}>
+            {isEditMode ? (action?.status || 'Draft') : 'New Task'}
+          </Tag>
+        </Space>
+      </div>
+
+      <div style={{ ...MODAL_STYLES.bodyStyle, maxHeight: '70vh', overflowY: 'auto' }}>
+        <Form form={form} layout="vertical" scrollToFirstError>
+          <Divider orientation="left" style={MODAL_STYLES.sectionDivider}>
+            Basic Information
+          </Divider>
+
+          <Form.Item
+            name="title"
+            label={<span style={labelStyle}>Task Title <span style={{ color: '#ef4444' }}>*</span></span>}
+            rules={[
+              { required: true, message: 'Title is required' },
+              { min: 3, message: 'Minimum 3 characters' },
+              { max: 200, message: 'Maximum 200 characters' },
+            ]}
+          >
+            <Input
+              placeholder="Enter task title..."
+              maxLength={200}
+              showCount
+              style={{ ...inputStyle, height: 40 }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label={<span style={labelStyle}>Description</span>}
+            rules={[{ max: 1000, message: 'Maximum 1000 characters' }]}
+          >
+            <TextArea rows={3} maxLength={1000} showCount placeholder="Describe the task..." style={{ borderRadius: 8, fontSize: 13 }} />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="type"
+                label={<span style={labelStyle}>Task Type <span style={{ color: '#ef4444' }}>*</span></span>}
+                rules={[{ required: true, message: 'Select a type' }]}
+              >
+                <Select placeholder="Select type" style={inputStyle}>
+                  {TASK_TYPES.map(t => (
+                    <Option key={t.value} value={t.value}>{t.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="actionType"
+                label={<span style={labelStyle}>Action Type</span>}
+              >
+                <Select placeholder="Select action type" style={inputStyle} allowClear>
+                  {ACTION_TYPES.map(t => (
+                    <Option key={t.value} value={t.value}>{t.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left" style={MODAL_STYLES.sectionDivider}>
+            Assignment &amp; Scheduling
+          </Divider>
+
+          {canAssign ? (
+            <Form.Item
+              name="assignedTo"
+              label={<span style={labelStyle}>Assigned To</span>}
             >
-                <option value="PENDING">Pending</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="REVIEW">Needs Review</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-            </select>
-        );
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-dialog modal-xl" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-content action-modal-content border-0">
-                    <div className="action-modal-header py-3 px-4 bg-white border-bottom">
-                        <div className="action-header-info">
-                            <div className={`p-2 rounded-3 bg-soft-${formData.priority === 'HIGH' || formData.priority === 'URGENT' ? 'danger' : 'primary'}`}>
-                                <Tag size={24} className={formData.priority === 'HIGH' || formData.priority === 'URGENT' ? 'text-danger' : 'text-primary'} />
-                            </div>
-                            <div>
-                                <h1 className="action-modal-title">{action ? formData.title : 'New Task'}</h1>
-                                <div className="d-flex align-items-center gap-2 mt-1">
-                                    <span className={`badge ${formData.status === 'COMPLETED' ? 'bg-success' : 'bg-primary'} rounded-pill px-3`}>
-                                        {formData.status.replace('_', ' ')}
-                                    </span>
-                                    <span className="text-muted small">• Created {action ? new Date(action.createdAt).toLocaleDateString() : 'Just now'}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="button" className="btn btn-icon btn-light rounded-circle shadow-sm" onClick={onClose}>
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    {/* Tabs - only show Discussion tab when editing */}
-                    {action && (
-                        <div className="action-modal-tabs px-4">
-                            <button
-                                className={`action-tab-btn ${activeTab === 'details' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('details')}
-                            >
-                                {action ? 'Task Overview' : 'New Task'}
-                            </button>
-                            <button
-                                className={`action-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('chat')}
-                            >
-                                Discussion & Activity
-                                {messages.length > 0 && <span className="ms-2 badge bg-soft-primary text-primary rounded-pill">{messages.length}</span>}
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="action-modal-body bg-light">
-                        {activeTab === 'details' ? (
-                            <form onSubmit={handleSubmit} className="p-4">
-                                {/* Step Indicator */}
-                                <StepIndicator />
-
-                                {/* Step 1: Task Details */}
-                                {currentStep === 1 && (
-                                    <div className="animate-fadeIn">
-                                        <div className="row g-4">
-                                            {/* Task Title - Full Width */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Task Title
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="title"
-                                                    value={formData.title}
-                                                    onChange={handleChange}
-                                                    required
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '12px 16px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '16px',
-                                                        fontWeight: 600,
-                                                        color: 'var(--color-text-primary)',
-                                                        backgroundColor: 'var(--color-surface-0)'
-                                                    }}
-                                                    placeholder="What needs to be done?"
-                                                />
-                                            </div>
-
-                                            {/* Description */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Description / Instructions
-                                                </label>
-                                                <textarea
-                                                    name="description"
-                                                    value={formData.description}
-                                                    onChange={handleChange}
-                                                    rows="4"
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '12px 16px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '14px',
-                                                        color: 'var(--color-text-primary)',
-                                                        backgroundColor: 'var(--color-surface-0)',
-                                                        resize: 'vertical'
-                                                    }}
-                                                    placeholder="Provide detailed instructions or context for this task..."
-                                                />
-                                            </div>
-
-                                            {/* Task Classification - Side by Side */}
-                                            <div className="col-md-6">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Task Type
-                                                </label>
-                                                <select
-                                                    name="type"
-                                                    value={formData.type}
-                                                    onChange={handleChange}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '10px 12px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '14px',
-                                                        fontWeight: 500,
-                                                        color: 'var(--color-text-primary)',
-                                                        backgroundColor: 'var(--color-surface-0)'
-                                                    }}
-                                                >
-                                                    <option value="TITLE_OPTIMIZATION">Title Optimization</option>
-                                                    <option value="DESCRIPTION_OPTIMIZATION">Description Optimization</option>
-                                                    <option value="IMAGE_OPTIMIZATION">Image Optimization</option>
-                                                    <option value="BULLET_POINTS">Bullet Points</option>
-                                                    <option value="A_PLUS_CONTENT">A+ Content</option>
-                                                    <option value="GENERAL_OPTIMIZATION">General Optimization</option>
-                                                </select>
-                                            </div>
-
-                                            <div className="col-md-6">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Measurement Metric
-                                                </label>
-                                                <select
-                                                    name="measurementMetric"
-                                                    value={formData.measurementMetric}
-                                                    onChange={handleChange}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '10px 12px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '14px',
-                                                        color: 'var(--color-text-primary)',
-                                                        backgroundColor: 'var(--color-surface-0)'
-                                                    }}
-                                                >
-                                                    <option value="NONE">No Specific Metric</option>
-                                                    <option value="GMS">GMS (Gross Merchandise Sales)</option>
-                                                    <option value="ACOS">ACOS (Advertising Cost of Sales)</option>
-                                                    <option value="ROI">ROI (Return on Investment)</option>
-                                                    <option value="PROFIT">Profit</option>
-                                                    <option value="CONVERSION_RATE">Conversion Rate</option>
-                                                    <option value="ORDER_COUNT">Order Count</option>
-                                                </select>
-                                            </div>
-
-                                            {/* Priority Selector */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Priority
-                                                </label>
-                                                <PriorityPills />
-                                            </div>
-
-                                            {/* Status Selector */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Status
-                                                </label>
-                                                <StatusDropdown />
-                                            </div>
-
-                                            {/* [GROWTH ENGINE] AI REASONING & IMPACT */}
-                                            {formData.aiGenerated && (
-                                                <div className="col-12">
-                                                    <div className="p-3 rounded-3" style={{ backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                                                        <div className="d-flex align-items-center gap-2 mb-2">
-                                                            <AlertCircle size={16} className="text-info" />
-                                                            <span className="fw-700 text-info small uppercase" style={{ letterSpacing: '0.05em' }}>AI STRATEGIC REASONING</span>
-                                                        </div>
-                                                        <p className="mb-0 text-zinc-700 small italic">"{formData.aiReason}"</p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="col-md-6">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Expected Impact Value (%)
-                                                </label>
-                                                <div className="d-flex align-items-center gap-2">
-                                                    <input
-                                                        type="number"
-                                                        value={formData.expectedImpact?.value || 0}
-                                                        onChange={(e) => setFormData({ 
-                                                            ...formData, 
-                                                            expectedImpact: { ...formData.expectedImpact, value: parseFloat(e.target.value) } 
-                                                        })}
-                                                        className="form-control"
-                                                        style={{ borderRadius: '12px' }}
-                                                    />
-                                                    <span className="text-muted fw-bold">%</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="col-md-6">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Impact Weight (1-10)
-                                                </label>
-                                                <input
-                                                    type="range"
-                                                    min="1"
-                                                    max="10"
-                                                    value={formData.impactWeight || 5}
-                                                    onChange={(e) => setFormData({ ...formData, impactWeight: parseInt(e.target.value) })}
-                                                    className="form-range"
-                                                />
-                                                <div className="d-flex justify-content-between text-muted x-small">
-                                                    <span>Low Impact</span>
-                                                    <span className="fw-bold text-primary">{formData.impactWeight}</span>
-                                                    <span>Critical</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Step 1 CTA */}
-                                        <div className="d-flex justify-content-end mt-4 pt-3 border-top">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentStep(2)}
-                                                className="btn btn-primary px-4 py-2 d-flex align-items-center gap-2"
-                                                style={{ fontWeight: 600 }}
-                                            >
-                                                Continue to Assignment
-                                                <ChevronRight size={18} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Step 2: Assignment & Schedule */}
-                                {currentStep === 2 && (
-                                    <div className="animate-fadeIn">
-                                        <div className="row g-4">
-                                            {/* Assigned To */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Assigned To
-                                                </label>
-                                                <select
-                                                    name="assignedTo"
-                                                    value={formData.assignedTo}
-                                                    onChange={handleChange}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '10px 12px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '14px',
-                                                        color: 'var(--color-text-primary)',
-                                                        backgroundColor: 'var(--color-surface-0)'
-                                                    }}
-                                                >
-                                                    <option value="">Unassigned</option>
-                                                    {/* Group users by their assigned seller */}
-                                                    {(() => {
-                                                        const sellerMap = {};
-                                                        const noSeller = [];
-
-                                                        users.forEach(u => {
-                                                            const userSellerId = u.sellerId?._id || u.sellerId;
-                                                            if (userSellerId) {
-                                                                if (!sellerMap[userSellerId]) {
-                                                                    const sellerData = sellers.find(s => (s._id || s.id) === userSellerId || (s._id || s.id)?.toString() === userSellerId?.toString());
-                                                                    sellerMap[userSellerId] = { seller: sellerData, users: [] };
-                                                                }
-                                                                sellerMap[userSellerId].users.push(u);
-                                                            } else {
-                                                                noSeller.push(u);
-                                                            }
-                                                        });
-
-                                                        const groups = Object.values(sellerMap);
-
-                                                        return (
-                                                            <>
-                                                                {groups.map((group, idx) => {
-                                                                    const managerNames = group.seller?.managers && group.seller.managers.length > 0
-                                                                        ? group.seller.managers.map(m => `${m.firstName} ${m.lastName}`).join(', ')
-                                                                        : null;
-                                                                    return (
-                                                                        <optgroup key={idx} label={group.seller ? `${group.seller.name} (${group.seller.marketplace})${managerNames ? ` — Mgr: ${managerNames}` : ''}` : 'Seller Account'}>
-                                                                            {group.users.map(u => (
-                                                                                <option key={u.id || u._id} value={u.id || u._id}>
-                                                                                    {u.firstName ? `${u.firstName} ${u.lastName}` : (u.name || u.email)}
-                                                                                </option>
-                                                                            ))}
-                                                                        </optgroup>
-                                                                    );
-                                                                })}
-                                                                {noSeller.length > 0 && (
-                                                                    <optgroup label="General / Admin">
-                                                                        {noSeller.map(u => (
-                                                                            <option key={u.id || u._id} value={u.id || u._id}>
-                                                                                {u.firstName ? `${u.firstName} ${u.lastName}` : (u.name || u.email)}
-                                                                            </option>
-                                                                        ))}
-                                                                    </optgroup>
-                                                                )}
-                                                            </>
-                                                        );
-                                                    })()}
-                                                </select>
-                                            </div>
-
-                                            {/* Date Range Picker */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    <Calendar size={14} className="me-2" />
-                                                    Task Duration (Start → Deadline)
-                                                </label>
-                                                <div style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    backgroundColor: 'var(--color-surface-0)',
-                                                    border: '1px solid var(--color-border)',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    padding: '4px 12px'
-                                                }}>
-                                                    <DatePicker
-                                                        selectsRange={true}
-                                                        startDate={formData.startDate}
-                                                        endDate={formData.deadline}
-                                                        onChange={(update) => {
-                                                            const [start, end] = update;
-                                                            setFormData({ ...formData, startDate: start, deadline: end });
-                                                        }}
-                                                        className="form-control border-0 bg-transparent"
-                                                        style={{ flex: 1 }}
-                                                        dateFormat="MMM d, yyyy"
-                                                        placeholderText="Select duration range"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* [GROWTH ENGINE] SCOPE SELECTOR */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Execution Scope
-                                                </label>
-                                                <div className="d-flex gap-3 mb-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setFormData({ ...formData, scopeType: 'BRAND' })}
-                                                        className={`btn btn-sm px-4 rounded-pill transition-all ${formData.scopeType === 'BRAND' ? 'btn-primary' : 'btn-outline-zinc text-zinc-500'}`}
-                                                        style={{ fontSize: '12px' }}
-                                                    >
-                                                        Brand Level
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setFormData({ ...formData, scopeType: 'ASIN' })}
-                                                        className={`btn btn-sm px-4 rounded-pill transition-all ${formData.scopeType === 'ASIN' ? 'btn-primary' : 'btn-outline-zinc text-zinc-500'}`}
-                                                        style={{ fontSize: '12px' }}
-                                                    >
-                                                        ASIN Level
-                                                    </button>
-                                                </div>
-
-                                                {formData.scopeType === 'BRAND' ? (
-                                                    <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-3 mb-3">
-                                                        <p className="small text-zinc-600 mb-0">
-                                                            <AlertCircle size={14} className="me-2 text-primary" />
-                                                            This task will affect <strong>all ASINs</strong> owned by the selected Brand.
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="mb-3">
-                                                        <p className="small text-zinc-500 mb-2">Select the specific products that this task focuses on.</p>
-                                                    </div>
-                                                 )}
-                                            </div>
-
-                                            {/* Related ASINs - Only show if scope is ASIN or for reference */}
-                                            <div className="col-12">
-                                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                    Related ASINs ({formData.asins?.length || 0})
-                                                </label>
-
-                                                {/* Search Input */}
-                                                <div style={{ position: 'relative', marginBottom: '12px' }}>
-                                                    <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search ASINs..."
-                                                        value={asinSearch}
-                                                        onChange={(e) => setAsinSearch(e.target.value)}
-                                                        style={{
-                                                            width: '100%',
-                                                            padding: '10px 12px 10px 36px',
-                                                            borderRadius: 'var(--radius-md)',
-                                                            border: '1px solid var(--color-border)',
-                                                            fontSize: '14px',
-                                                            backgroundColor: 'var(--color-surface-0)'
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                {/* Selected Chips */}
-                                                {formData.asins?.length > 0 && (
-                                                    <div className="d-flex flex-wrap gap-2 mb-3">
-                                                        {formData.asins.map(asinId => {
-                                                            const asinData = asins.find(a => (a.id || a._id) === asinId);
-                                                            if (!asinData) return null;
-                                                            return (
-                                                                <div
-                                                                    key={asinId}
-                                                                    style={{
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: '6px',
-                                                                        padding: '6px 12px',
-                                                                        backgroundColor: 'var(--color-brand-50)',
-                                                                        border: '1px solid var(--color-brand-200)',
-                                                                        borderRadius: '20px',
-                                                                        fontSize: '13px',
-                                                                        color: 'var(--color-brand-700)'
-                                                                    }}
-                                                                >
-                                                                    <span>{asinData.asin || asinData.asinCode}</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setFormData({ ...formData, asins: formData.asins.filter(id => id !== asinId) })}
-                                                                        style={{
-                                                                            background: 'none',
-                                                                            border: 'none',
-                                                                            padding: 0,
-                                                                            cursor: 'pointer',
-                                                                            color: 'var(--color-brand-500)',
-                                                                            display: 'flex'
-                                                                        }}
-                                                                    >
-                                                                        <X size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-
-                                                {/* ASIN Dropdown */}
-                                                <select
-                                                    value=""
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val && formData.asins && !formData.asins.includes(val)) {
-                                                            setFormData({ ...formData, asins: [...formData.asins, val] });
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '10px 12px',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        border: '1px solid var(--color-border)',
-                                                        fontSize: '14px',
-                                                        backgroundColor: 'var(--color-surface-0)'
-                                                    }}
-                                                >
-                                                    <option value="">Add Product to Task...</option>
-                                                    {asins
-                                                        .filter(a =>
-                                                            formData.asins && !formData.asins.includes(a.id || a._id) &&
-                                                            (!asinSearch || (a.asin || a.asinCode || '').toLowerCase().includes(asinSearch.toLowerCase()))
-                                                        )
-                                                        .slice(0, 10)
-                                                        .map(a => (
-                                                            <option key={a.id || a._id} value={a.id || a._id}>
-                                                                {a.asin || a.asinCode} - {(a.title || a.productName || 'Unknown Product').substring(0, 40)}...
-                                                            </option>
-                                                        ))
-                                                    }
-                                                </select>
-                                            </div>
-
-                                            {/* Goal Settings - Collapsible */}
-                                            <div className="col-12">
-                                                <div
-                                                    onClick={() => setShowGoalSettings(!showGoalSettings)}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        padding: '12px 16px',
-                                                        backgroundColor: showGoalSettings ? 'var(--color-brand-50)' : 'var(--color-surface-1)',
-                                                        border: '1px solid var(--color-border)',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        cursor: 'pointer',
-                                                        marginBottom: showGoalSettings ? '16px' : '0'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <AlertCircle size={16} style={{ color: 'var(--color-brand-600)' }} />
-                                                        <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--color-text-primary)' }}>
-                                                            Goal Settings
-                                                        </span>
-                                                        {formData.goalSettings?.isGoalPrimary && (
-                                                            <span className="badge bg-success" style={{ fontSize: '10px' }}>Enabled</span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{
-                                                        transform: showGoalSettings ? 'rotate(180deg)' : 'rotate(0deg)',
-                                                        transition: 'transform 200ms'
-                                                    }}>
-                                                        <ChevronRight size={20} />
-                                                    </div>
-                                                </div>
-
-                                                {showGoalSettings && (
-                                                    <div className="p-3 bg-light border border-top-0 rounded-bottom" style={{ borderColor: 'var(--color-border)' }}>
-                                                        {/* Enable Goal Toggle */}
-                                                        <div className="d-flex align-items-center justify-content-between mb-3">
-                                                            <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                                                                Enable Goal-Based Generation
-                                                            </label>
-                                                            <div className="form-check form-switch m-0">
-                                                                <input
-                                                                    className="form-check-input"
-                                                                    type="checkbox"
-                                                                    checked={formData.goalSettings?.isGoalPrimary}
-                                                                    onChange={(e) => setFormData({
-                                                                        ...formData,
-                                                                        goalSettings: { ...formData.goalSettings, isGoalPrimary: e.target.checked }
-                                                                    })}
-                                                                    style={{ cursor: 'pointer' }}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        {formData.goalSettings?.isGoalPrimary && (
-                                                            <div className="row g-3">
-                                                                <div className="col-md-4">
-                                                                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                                                                        Target Value ({formData.measurementMetric})
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        placeholder="e.g. 10000000"
-                                                                        value={formData.goalSettings.targetValue}
-                                                                        onChange={(e) => setFormData({
-                                                                            ...formData,
-                                                                            goalSettings: { ...formData.goalSettings, targetValue: e.target.value }
-                                                                        })}
-                                                                    />
-                                                                </div>
-                                                                <div className="col-md-4">
-                                                                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                                                                        Frequency
-                                                                    </label>
-                                                                    <select
-                                                                        className="form-control"
-                                                                        value={formData.goalSettings.frequency || 'MONTHLY'}
-                                                                        onChange={(e) => setFormData({
-                                                                            ...formData,
-                                                                            goalSettings: { ...formData.goalSettings, frequency: e.target.value }
-                                                                        })}
-                                                                    >
-                                                                        <option value="DAILY">Daily</option>
-                                                                        <option value="WEEKLY">Weekly</option>
-                                                                        <option value="MONTHLY">Monthly</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div className="col-md-4">
-                                                                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
-                                                                        Duration
-                                                                    </label>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        min="1"
-                                                                        max="24"
-                                                                        value={formData.goalSettings.timeframe}
-                                                                        onChange={(e) => setFormData({
-                                                                            ...formData,
-                                                                            goalSettings: { ...formData.goalSettings, timeframe: e.target.value }
-                                                                        })}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Step 2 CTAs */}
-                                        <div className="d-flex justify-content-between mt-4 pt-3 border-top">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentStep(1)}
-                                                className="btn btn-outline-secondary px-4 py-2 d-flex align-items-center gap-2"
-                                                style={{ fontWeight: 600 }}
-                                            >
-                                                <ChevronLeft size={18} />
-                                                Back
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className="btn btn-primary px-4 py-2 d-flex align-items-center gap-2"
-                                                style={{ fontWeight: 600 }}
-                                            >
-                                                <Save size={18} />
-                                                {action ? 'Update Task' : 'Save Task'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </form>
-                        ) : (
-                            <div className="h-100 bg-white shadow-inner">
-                                <ActionChat
-                                    actionId={action._id || action.id}
-                                    messages={messages}
-                                    onSendMessage={handleSendMessage}
-                                    users={users}
-                                    tasks={actions}
-                                    onNavigateToAction={onNavigateToAction}
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
+              <Select
+                mode="multiple"
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select assignees"
+                style={inputStyle}
+                options={userOptions.map(u => ({
+                  ...u,
+                  label: (
+                    <Space size={8}>
+                      <Avatar size={20} icon={<UserOutlined />} />
+                      <span>{u.label}</span>
+                      <Tag style={{ fontSize: 10, lineHeight: '16px', marginLeft: 4 }}>{u.role}</Tag>
+                    </Space>
+                  ),
+                }))}
+              />
+            </Form.Item>
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <span style={labelStyle}>Assigned To</span>
+              <div style={{ marginTop: 4 }}>
+                <Tag color="blue">{formatUserName(currentUser)}</Tag>
+              </div>
             </div>
-            <style>{`
-                .modal-xl { max-width: 800px; }
-                .bg-soft-primary { background-color: #eef2ff; }
-                .bg-soft-danger { background-color: #fef2f0; }
-                .bg-soft-info { background-color: #f0f9ff; }
-                .text-primary { color: #4f46e5 !important; }
-                .text-danger { color: #ef4444 !important; }
-                .text-info { color: #0891b2 !important; }
-                .h-fit { height: fit-content; }
-                .animate-fadeIn {
-                    animation: fadeIn 200ms ease-out;
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
-        </div>
-    );
+          )}
+
+          {canSetReviewer && (
+            <Form.Item
+              name="reviewer"
+              label={<span style={labelStyle}>Reviewer</span>}
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select reviewer"
+                style={inputStyle}
+                allowClear
+                options={reviewerOptions.map(u => ({
+                  ...u,
+                  label: (
+                    <Space size={8}>
+                      <Avatar size={20} icon={<UserOutlined />} />
+                      <span>{u.label}</span>
+                    </Space>
+                  ),
+                }))}
+              />
+            </Form.Item>
+          )}
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="seller"
+                label={<span style={labelStyle}>Seller</span>}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Select seller"
+                  style={inputStyle}
+                  allowClear
+                  options={sellerOptions}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="dueDate"
+                label={<span style={labelStyle}>Due Date</span>}
+                rules={[
+                  {
+                    validator: (_, value) =>
+                      value && value.isBefore(dayjs().startOf('day'))
+                        ? Promise.reject(new Error('Due date cannot be in the past'))
+                        : Promise.resolve(),
+                  },
+                ]}
+              >
+                <DatePicker
+                  style={{ width: '100%', ...inputStyle }}
+                  disabledDate={(d) => d && d.isBefore(dayjs().startOf('day'))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="priority"
+                label={<span style={labelStyle}>Priority <span style={{ color: '#ef4444' }}>*</span></span>}
+                rules={[{ required: true, message: 'Select priority' }]}
+              >
+                <Radio.Group
+                  disabled={!canSetPriority}
+                  style={{ display: 'flex', gap: 8, width: '100%' }}
+                >
+                  {PRIORITY_OPTIONS.map(p => (
+                    <Radio.Button
+                      key={p.value}
+                      value={p.value}
+                      style={{
+                        flex: 1, textAlign: 'center', height: 34, lineHeight: '32px',
+                        borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        borderColor: '#e2e8f0',
+                      }}
+                    >
+                      <Space size={4}>
+                        <span style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: p.color, display: 'inline-block',
+                        }} />
+                        {p.label}
+                      </Space>
+                    </Radio.Button>
+                  ))}
+                </Radio.Group>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="estimatedHours"
+                label={<span style={labelStyle}>Estimated Hours</span>}
+              >
+                <InputNumber
+                  min={0}
+                  max={9999}
+                  step={0.5}
+                  style={{ width: '100%', ...inputStyle }}
+                  addonAfter="hrs"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left" style={MODAL_STYLES.sectionDivider}>
+            Linked Resources
+          </Divider>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="keyResultId"
+                label={<span style={labelStyle}>Parent Objective / Key Result</span>}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Link to objective"
+                  style={inputStyle}
+                  allowClear
+                  options={objectiveOptions}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="linkedAsins"
+                label={<span style={labelStyle}>Linked ASINs</span>}
+              >
+                <Select
+                  mode="multiple"
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Search ASINs..."
+                  style={inputStyle}
+                  options={asinOptions.map(a => ({ ...a, label: a.label }))}
+                  tagRender={(props) => {
+                    const { label, closable, onClose } = props;
+                    return (
+                      <Tag closable={closable} onClose={onClose} style={{ borderRadius: 6, fontSize: 11, margin: 2 }}>
+                        {label}
+                      </Tag>
+                    );
+                  }}
+                  maxTagCount={3}
+                />
+              </Form.Item>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -12 }}>
+                {form.getFieldValue('linkedAsins')?.length || 0} ASINs linked
+              </div>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="tags"
+            label={<span style={labelStyle}>Tags</span>}
+          >
+            <Select
+              mode="tags"
+              placeholder="Type to add tags"
+              style={inputStyle}
+              tokenSeparators={[',']}
+            />
+          </Form.Item>
+
+          {canAdminSection && (
+            <>
+              <Divider orientation="left" style={MODAL_STYLES.sectionDivider}>
+                Admin Settings
+              </Divider>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="statusOverride"
+                    label={<span style={labelStyle}>Status Override</span>}
+                  >
+                    <Select style={inputStyle} allowClear placeholder="Override status">
+                      {STATUS_OPTIONS.map(s => (
+                        <Option key={s.value} value={s.value}>
+                          <Space size={6}>
+                            <Badge dot color={s.color} />
+                            {s.label}
+                          </Space>
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item
+                name="internalNotes"
+                label={<span style={labelStyle}>Internal Notes</span>}
+              >
+                <TextArea rows={2} placeholder="Admin notes (not visible to assignees)" style={{ borderRadius: 8, fontSize: 13 }} />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </div>
+
+      <div style={MODAL_STYLES.footerStyle}>
+        <Button onClick={() => { form.resetFields(); onClose(); }} style={MODAL_STYLES.cancelBtn}>
+          Cancel
+        </Button>
+        <Button
+          type="primary"
+          onClick={handleSubmit}
+          loading={submitting}
+          style={MODAL_STYLES.primaryBtn}
+        >
+          {isEditMode ? 'Save Changes' : 'Create Task'}
+        </Button>
+      </div>
+    </Modal>
+  );
 };
 
 export default ActionModal;

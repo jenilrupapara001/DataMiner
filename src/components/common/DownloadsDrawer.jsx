@@ -279,7 +279,6 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                 placement="right"
                 onClose={onClose}
                 open={isOpen}
-                width={420}
                 extra={
                     <Space size="small">
                         <Button
@@ -298,6 +297,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                     </Space>
                 }
                 styles={{
+                    wrapper: { width: 420 },
                     body: { padding: '16px', background: '#f8fafc' },
                     header: { padding: '16px 20px', background: '#ffffff', borderBottom: '1px solid #e2e8f0' }
                 }}

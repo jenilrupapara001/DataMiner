@@ -71,8 +71,8 @@ const ParentAsinReport = () => {
 
   useEffect(() => {
     (async () => {
-      try { const r = await sellerApi.getAll({ limit: 1000 }); if (r.success) setSellers(r.data?.sellers || []); } catch {}
-      try { const r = await api.get('/users/managers'); if (r.success) setManagers(r.data || []); } catch {}
+      try { const r = await sellerApi.getAll({ limit: 1000 }); if (r.success) setSellers(r.data?.sellers || []); } catch { }
+      try { const r = await api.get('/users/managers'); if (r.success) setManagers(r.data || []); } catch { }
     })();
   }, []);
 
@@ -141,8 +141,10 @@ const ParentAsinReport = () => {
     const totalChildren = d.reduce((s, x) => s + x.childCount, 0);
     const avgAcos = totalAdSales > 0 ? ((totalAdSpend / totalAdSales) * 100).toFixed(1) : '0.0';
     const avgRoas = totalAdSpend > 0 ? (totalAdSales / totalAdSpend).toFixed(2) : '0.00';
-    return { totalRevenue, totalAdSpend, totalAdSales, totalOrders, totalChildren,
-      totalCollections: d.length, avgAcos, avgRoas };
+    return {
+      totalRevenue, totalAdSpend, totalAdSales, totalOrders, totalChildren,
+      totalCollections: d.length, avgAcos, avgRoas
+    };
   }, [filteredData]);
 
   const charts = useMemo(() => {
@@ -189,7 +191,8 @@ const ParentAsinReport = () => {
   ];
 
   const columns = [
-    { title: 'Parent ASIN', dataIndex: 'parentAsin', key: 'pa', width: 140, fixed: 'left',
+    {
+      title: 'Parent ASIN', dataIndex: 'parentAsin', key: 'pa', width: 140, fixed: 'left',
       sorter: (a, b) => (a.parentAsin || '').localeCompare(b.parentAsin || ''),
       render: (asin, rec) => (
         <Tooltip title={rec.title}>
@@ -198,47 +201,65 @@ const ParentAsinReport = () => {
             {asin}
           </Button>
         </Tooltip>
-      ) },
-    { title: 'Brand', dataIndex: 'brand', key: 'brand', width: 160,
+      )
+    },
+    {
+      title: 'Brand', dataIndex: 'brand', key: 'brand', width: 160,
       sorter: (a, b) => (a.brand || '').localeCompare(b.brand || ''),
       render: (b) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ width: 20, height: 20, borderRadius: 4, background: '#e0e7ff', color: '#4338ca', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{(b || '?')[0]}</span>
           <span style={{ fontSize: 12, fontWeight: 500, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b}</span>
         </div>
-      ) },
-    { title: 'Children', dataIndex: 'childCount', key: 'cc', width: 90, align: 'center',
+      )
+    },
+    {
+      title: 'Children', dataIndex: 'childCount', key: 'cc', width: 90, align: 'center',
       sorter: (a, b) => a.childCount - b.childCount,
-      render: (c) => <Tag style={{ borderRadius: 4, fontWeight: 700, fontSize: 11, color: c > 100 ? '#7c3aed' : '#475569' }}>{c}</Tag> },
-    { title: 'Revenue', dataIndex: 'totalRevenue', key: 'rev', width: 130, align: 'right',
+      render: (c) => <Tag style={{ borderRadius: 4, fontWeight: 700, fontSize: 11, color: c > 100 ? '#7c3aed' : '#475569' }}>{c}</Tag>
+    },
+    {
+      title: 'Revenue', dataIndex: 'totalRevenue', key: 'rev', width: 130, align: 'right',
       sorter: (a, b) => a.totalRevenue - b.totalRevenue,
-      render: (v) => <span style={{ fontWeight: 600, fontSize: 12, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span> },
-    { title: 'Ad Spend', dataIndex: 'adSpend', key: 'as', width: 110, align: 'right',
+      render: (v) => <span style={{ fontWeight: 600, fontSize: 12, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
+    },
+    {
+      title: 'Ad Spend', dataIndex: 'adSpend', key: 'as', width: 110, align: 'right',
       sorter: (a, b) => a.adSpend - b.adSpend,
       render: (v) => v === 0 ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span> : (
         <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#e11d48' : v > 10000 ? '#d97706' : '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
-      ) },
-    { title: 'Ad Sales', dataIndex: 'adSales', key: 'asl', width: 110, align: 'right',
+      )
+    },
+    {
+      title: 'Ad Sales', dataIndex: 'adSales', key: 'asl', width: 110, align: 'right',
       sorter: (a, b) => a.adSales - b.adSales,
       render: (v) => v === 0 ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span> : (
         <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#059669' : '#059669', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
-      ) },
-    { title: 'Orders', dataIndex: 'orders', key: 'ord', width: 80, align: 'center',
+      )
+    },
+    {
+      title: 'Orders', dataIndex: 'orders', key: 'ord', width: 80, align: 'center',
       sorter: (a, b) => a.orders - b.orders,
-      render: (v) => <span style={{ fontSize: 12, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{(v || 0).toLocaleString('en-IN')}</span> },
-    { title: 'ACOS', dataIndex: 'acos', key: 'acos', width: 90, align: 'center',
+      render: (v) => <span style={{ fontSize: 12, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{(v || 0).toLocaleString('en-IN')}</span>
+    },
+    {
+      title: 'ACOS', dataIndex: 'acos', key: 'acos', width: 90, align: 'center',
       sorter: (a, b) => a.acos - b.acos,
       render: (v) => {
         if (!v) return <Tag style={{ borderRadius: 20, fontSize: 11, color: '#8c8e8f', background: '#f4f5f7' }}>—</Tag>;
         return <Tag style={{ borderRadius: 20, fontSize: 11, fontWeight: 700, border: 'none', color: v < 10 ? '#059669' : v < 15 ? '#d97706' : '#dc2626', background: v < 10 ? '#ecfdf5' : v < 15 ? '#fffbeb' : '#fef2f2' }}>{v}%</Tag>;
-      } },
-    { title: 'ROAS', dataIndex: 'roas', key: 'roas', width: 80, align: 'center',
+      }
+    },
+    {
+      title: 'ROAS', dataIndex: 'roas', key: 'roas', width: 80, align: 'center',
       sorter: (a, b) => a.roas - b.roas,
       render: (v) => {
         if (!v) return <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>;
         return <span style={{ fontWeight: v >= 8 ? 700 : v >= 5 ? 600 : 500, fontSize: 12, color: v >= 8 ? '#059669' : v >= 5 ? '#0f172a' : '#d97706', fontVariantNumeric: 'tabular-nums' }}>{v}<span style={{ color: '#8c8e8f', fontWeight: 400, fontSize: 11, marginLeft: 1 }}>x</span></span>;
-      } },
-    { title: 'Rating', dataIndex: 'avgRating', key: 'rat', width: 110, align: 'center',
+      }
+    },
+    {
+      title: 'Rating', dataIndex: 'avgRating', key: 'rat', width: 110, align: 'center',
       render: (v) => {
         if (!v) return <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>;
         const full = Math.floor(v);
@@ -248,15 +269,18 @@ const ParentAsinReport = () => {
             <span style={{ fontSize: 11, color: '#8c8e8f', marginLeft: 2 }}>{v.toFixed(1)}</span>
           </span>
         );
-      } },
-    { title: 'Growth', dataIndex: 'growth', key: 'grow', width: 90, align: 'center',
+      }
+    },
+    {
+      title: 'Growth', dataIndex: 'growth', key: 'grow', width: 90, align: 'center',
       sorter: (a, b) => (a.growth || 0) - (b.growth || 0),
       render: (v) => {
         if (v == null) return <span style={{ color: '#cbd5e1' }}>—</span>;
         if (v > 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#059669' }}><ArrowUpRight size={11} />{v.toFixed(1)}%</span>;
         if (v < 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#dc2626' }}><ArrowDownRight size={11} />{Math.abs(v).toFixed(1)}%</span>;
         return <span style={{ color: '#cbd5e1' }}><Minus size={11} /></span>;
-      } },
+      }
+    },
   ];
 
   if (loading && !data.length) {
@@ -275,7 +299,7 @@ const ParentAsinReport = () => {
           options={managers.map(m => ({ value: m._id || m.Id, label: `${m.firstName || ''} ${m.lastName || ''}`.trim() || m.name || m.email }))} />
         <Segmented size="small" value={view} onChange={setView}
           options={[{ label: <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><LayoutList size={13} />Table</span>, value: 'table' },
-                    { label: <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><BarChart2 size={13} />Charts</span>, value: 'charts' }]} />
+          { label: <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><BarChart2 size={13} />Charts</span>, value: 'charts' }]} />
         <Button size="small" icon={<RefreshCw size={13} className={loading ? 'spin-animation' : ''} />} loading={loading} onClick={loadData} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Refresh</Button>
       </div>
 

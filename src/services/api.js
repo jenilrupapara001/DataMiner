@@ -1448,6 +1448,12 @@ const api = {
     },
     markAllAsRead: async () => {
       return api.put('/notifications/read', { notificationId: 'all' });
+    },
+    deleteNotification: async (id) => {
+      return api.delete(`/notifications/${id}`);
+    },
+    deleteAllRead: async () => {
+      return api.delete('/notifications/all-read');
     }
   },
   chatApi: {

@@ -3246,3 +3246,26 @@ a:hover {
   border-right: none;
   border-bottom: 0.5px solid #f1f5f9;
 }
+
+/* ==========================================================================
+   Ant Design Input Box Styling Overrides & Alignment Fixes
+   ========================================================================== */
+.ant-input-affix-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.ant-input-affix-wrapper > input.ant-input {
+  height: 100% !important;
+  line-height: normal !important;
+}
+
+.ant-input-affix-wrapper .ant-input-prefix,
+.ant-input-affix-wrapper .ant-input-suffix {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.ant-input {
+  line-height: normal !important;
+}
