@@ -2788,8 +2788,7 @@ const AsinManagerPage = (props) => {
                   {isVisible('dealStartTime') && <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL START</th>}
                   {isVisible('dealEndTime') && <th rowSpan={2} style={{ ...thStyle, width: '90px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL END</th>}
                   {isVisible('dealAccessType') && <th rowSpan={2} style={{ ...thStyle, width: '80px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>DEAL TYPE</th>}
-                  {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>CURRENT BUYBOX</th>}
-                  {isVisible('otherBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '110px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>OTHER BUYBOX</th>}
+                  {isVisible('currentBuybox') && <th rowSpan={2} style={{ ...thStyle, width: '140px', textAlign: 'left', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>BUYBOX</th>}
 
                   {/* ===== PRICE COLUMNS (MRP, Price, Dispute, Price Trend) (Indigo Palette) ===== */}
                   {isVisible('mrp') && (
@@ -3626,73 +3625,6 @@ const AsinManagerPage = (props) => {
                                   </div>
                                 </Tooltip>
                               );
-                            })()}
-                          </td>
-                        )}
-
-                        {/* ===== OTHER BUYBOX ===== */}
-                        {isVisible('otherBuybox') && (
-                          <td style={{ ...tdStyle, width: '110px', padding: '4px 8px' }}>
-                            {(() => {
-                              const buyBoxes = asin.buyBoxes || [];
-                              const allOffers = (asin.allOffers && Array.isArray(asin.allOffers) && asin.allOffers.length > 0)
-                                ? asin.allOffers
-                                : [];
-
-                              // Merge buyBoxes and allOffers for richer data
-                              const otherBuyBoxes = buyBoxes.filter(b => !b.isBuyBoxWinner && b.seller && b.seller.trim() !== '' && b.seller.toLowerCase() !== (asin.soldBy || '').toLowerCase());
-                              const otherOffers = allOffers.filter(o => {
-                                if (o.isBuyBoxWinner === true) return false;
-                                if (o.seller && asin.soldBy && o.seller.toLowerCase().trim() === asin.soldBy.toLowerCase().trim()) return false;
-                                if (!o.seller || o.seller.trim() === '') return false;
-                                const sellerLower = o.seller.toLowerCase().trim();
-                                if (sellerLower === 'unknown' || sellerLower === 'view details') return false;
-                                return true;
-                              });
-
-                              // Prefer buyBoxes (richer), fallback to allOffers
-                              const firstOther = otherBuyBoxes[0] || otherOffers[0];
-                              const remainingCount = Math.max(otherBuyBoxes.length, otherOffers.length) - 1;
-
-                              if (firstOther) {
-                                const otherPrice = firstOther.priceAmount || firstOther.price || 0;
-                                const otherMrp = firstOther.mrpAmount || 0;
-                                const otherSavings = firstOther.savingsAmount || 0;
-                                const otherSavingsPct = firstOther.savingsPercentage || 0;
-
-                                return (
-                                  <Tooltip title={
-                                    <div style={{ fontSize: 11 }}>
-                                      <div><b>Seller:</b> {firstOther.seller}</div>
-                                      <div><b>Price:</b> ₹{(otherPrice).toLocaleString()}</div>
-                                      {otherMrp > 0 && <div><b>MRP:</b> ₹{otherMrp.toLocaleString()}</div>}
-                                      {otherSavings > 0 && <div><b>Savings:</b> ₹{otherSavings.toLocaleString()} ({otherSavingsPct}% OFF)</div>}
-                                      {firstOther.condition?.value && <div><b>Condition:</b> {firstOther.condition.value}</div>}
-                                    </div>
-                                  } placement="left" overlayStyle={{ fontSize: 11 }}>
-                                    <div className="d-flex flex-column gap-1">
-                                      <span className="fw-medium text-zinc-600 text-truncate" style={{ fontSize: '10px', maxWidth: '100px' }} title={firstOther.seller}>
-                                        {firstOther.seller}
-                                      </span>
-                                      {otherPrice > 0 ? (
-                                        <span className="fw-bold text-zinc-500" style={{ fontSize: '11px' }}>
-                                          ₹{otherPrice.toLocaleString()}
-                                        </span>
-                                      ) : (
-                                        <span style={{ color: '#9ca3af', fontSize: '9px' }}>No price data</span>
-                                      )}
-                                      {remainingCount > 0 && (
-                                        <span className="text-zinc-400" style={{ fontSize: '8px' }}>
-                                          +{remainingCount} more
-                                        </span>
-                                      )}
-                                    </div>
-                                  </Tooltip>
-                                );
-                              }
-
-                              // No other offers
-                              return <span style={{ color: '#9ca3af', fontSize: '10px' }}>-</span>;
                             })()}
                           </td>
                         )}
