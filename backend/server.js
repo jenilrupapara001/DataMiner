@@ -45,7 +45,13 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true
 }));
-app.use(helmet({ crossOriginResourcePolicy: false })); // Use helmet, but allow cross-origin for static images if needed
+app.use(helmet({
+  contentSecurityPolicy: false,
+  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
 // 1000 users support: Apply Rate Limiting
 const globalLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -56,11 +62,26 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
+// HTTPS redirect in production
+const httpsRedirect = require('./middleware/httpsRedirect');
+app.use(httpsRedirect);
+
+// Stricter rate limit for sensitive mutation endpoints
+const strictLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests to this endpoint, please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // 1000 users support: Shrink payload limit to save Memory
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(apiCallLogger);
 const path = require('path');
+const requestGuard = require('./middleware/requestGuard');
+app.use(requestGuard);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
@@ -123,6 +144,8 @@ const chatRoutes = require('./routes/chatRoutes');
 const marketSyncRoutes = require('./routes/marketDataSyncRoutes');
 const growthExecutionRoutes = require('./routes/growthExecutionRoutes');
 const systemLogRoutes = require('./routes/systemLogRoutes');
+const securityRoutes = require('./routes/securityRoutes');
+const setupWizardRoutes = require('./routes/setupWizardRoutes');
 const systemSettingRoutes = require('./routes/systemSettingRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const sellerAsinTrackerRoutes = require('./routes/sellerAsinTrackerRoutes');
@@ -143,9 +166,9 @@ app.use('/api/export', exportRoutes);
 app.use('/api', rulesetRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/asins', asinRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/roles', roleRoutes);
+app.use('/api/auth', strictLimiter, authRoutes);
+app.use('/api/users', strictLimiter, userRoutes);
+app.use('/api/roles', strictLimiter, roleRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/revenue', revenueCalculatorRoutes);
 app.use('/api/actions', actionRoutes);
@@ -158,6 +181,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/market-sync', marketSyncRoutes);
 app.use('/api', growthExecutionRoutes);
 app.use('/api/logs', systemLogRoutes);
+app.use('/api/security', securityRoutes);
+app.use('/api/setup-wizard', setupWizardRoutes);
 app.use('/api/settings', systemSettingRoutes);
 app.use('/api/strategy', aiRoutes);
 app.use('/api/seller-tracker', sellerAsinTrackerRoutes);
@@ -214,8 +239,7 @@ app.use(async (err, req, res, next) => {
   }
 
   res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
+    error: 'Internal server error'
   });
 });
 
@@ -228,6 +252,9 @@ const server = http.createServer(app);
 server.timeout = 600000; // 10 minutes
 server.keepAliveTimeout = 610000;
 server.headersTimeout = 620000;
+
+// Scheduled jobs
+require('./jobs/otpCleanup');
 
 // --- Socket.io Integration ---
 const { Server } = require('socket.io');
@@ -275,38 +302,56 @@ app.set('io', io);
 const onlineUsers = new Map();
 
 io.on('connection', async (socket) => {
-  // Silent connection logs
-
-  socket.on('join', async (userId) => {
-    try {
-      socket.userId = userId;
-      onlineUsers.set(userId, socket.id);
-
-      // Update user status in DB using SQL
-      const pool = await getPool();
-      await pool.request()
-        .input('id', sql.VarChar, userId)
-        .query("UPDATE Users SET IsOnline = 1, LastSeen = dbo.GetEnvDate() WHERE Id = @id");
-
-      // Get user's assigned sellers to join rooms
-      const sellersResult = await pool.request()
-        .input('userId', sql.VarChar, userId)
-        .query("SELECT SellerId FROM UserSellers WHERE UserId = @userId");
-
-      // Join personal room
-      socket.join(userId);
-
-      // Join rooms for each seller
-      sellersResult.recordset.forEach(row => {
-        socket.join(`seller:${row.SellerId}`);
-      });
-
-      // Silent join logs
-      io.emit('user_status_change', { userId, status: 'online' });
-    } catch (err) {
-      console.error('Socket join error:', err);
+  // Validate JWT token from handshake
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  if (!token) {
+    socket.disconnect(true);
+    return;
+  }
+  
+  let decoded;
+  try {
+    const jwt = require('jsonwebtoken');
+    const config = require('./config/env');
+    if (!config.jwtSecret) {
+      socket.disconnect(true);
+      return;
     }
+    decoded = jwt.verify(token, config.jwtSecret);
+  } catch (err) {
+    socket.disconnect(true);
+    return;
+  }
+  
+  const userId = decoded.userId;
+  if (!userId) {
+    socket.disconnect(true);
+    return;
+  }
+
+  socket.userId = userId;
+  onlineUsers.set(userId, socket.id);
+
+  // Update user status in DB using SQL
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.VarChar, userId)
+    .query("UPDATE Users SET IsOnline = 1, LastSeen = dbo.GetEnvDate() WHERE Id = @id");
+
+  // Get user's assigned sellers to join rooms
+  const sellersResult = await pool.request()
+    .input('userId', sql.VarChar, userId)
+    .query("SELECT SellerId FROM UserSellers WHERE UserId = @userId");
+
+  // Join personal room
+  socket.join(userId);
+
+  // Join rooms for each seller
+  sellersResult.recordset.forEach(row => {
+    socket.join(`seller:${row.SellerId}`);
   });
+
+  io.emit('user_status_change', { userId, status: 'online' });
 
   socket.on('join_room', (roomId) => {
     if (typeof roomId === 'string') {

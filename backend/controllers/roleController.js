@@ -36,12 +36,16 @@ exports.getRoles = async (req, res) => {
     const roles = rolesResult.recordset;
 
     // Fetch ALL permissions in a single query instead of N+1
-    const roleIds = roles.map(r => `'${r.Id}'`).join(',');
-    const allPermsResult = await pool.request()
+    const permReq = pool.request();
+    const roleIds = roles.map((r, i) => {
+        permReq.input(`roleId${i}`, sql.VarChar, r.Id);
+        return `@roleId${i}`;
+    });
+    const allPermsResult = await permReq
         .query(`SELECT P.*, RP.RoleId 
                 FROM Permissions P 
                 JOIN RolePermissions RP ON P.Id = RP.PermissionId 
-                WHERE RP.RoleId IN (${roleIds})`);
+                WHERE RP.RoleId IN (${roleIds.join(',')})`);
     
     // Build permission map by roleId
     const permsByRole = {};

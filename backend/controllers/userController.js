@@ -635,9 +635,36 @@ exports.resetUserPassword = async (req, res) => {
     await pool.request()
       .input('id', sql.VarChar, id)
       .input('pw', sql.NVarChar, hashed)
-      .query('UPDATE Users SET Password = @pw, LoginAttempts = 0, LockUntil = NULL WHERE Id = @id');
+      .query(`UPDATE Users SET Password = @pw, LoginAttempts = 0, LockUntil = NULL,
+              ForcePasswordReset = 0, RefreshToken = NULL,
+              PasswordChangedAt = dbo.GetEnvDate(),
+              PasswordExpiresAt = DATEADD(day, 90, dbo.GetEnvDate()) WHERE Id = @id`);
+
+    // Revoke all sessions
+    const tokenBlacklist = require('../services/tokenBlacklistService');
+    await tokenBlacklist.blacklistUser(id);
 
     res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.forcePasswordReset = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getPool();
+    
+    // Clear refresh token to force logout
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('UPDATE Users SET ForcePasswordReset = 1, RefreshToken = NULL WHERE Id = @id');
+
+    // Revoke all tokens for this user
+    const tokenBlacklist = require('../services/tokenBlacklistService');
+    await tokenBlacklist.blacklistUser(id);
+
+    res.json({ success: true, message: 'User must reset password on next login' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

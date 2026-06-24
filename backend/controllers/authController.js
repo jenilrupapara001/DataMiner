@@ -3,10 +3,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config/env');
 const SystemLogService = require('../services/SystemLogService');
+const otpService = require('../services/otpService');
+const trustedDeviceService = require('../services/trustedDeviceService');
+const tokenBlacklist = require('../services/tokenBlacklistService');
 
-const generateTokens = (userId) => {
-  const accessToken = jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
-  const refreshToken = jwt.sign({ userId, type: 'refresh' }, config.jwtSecret, { expiresIn: '30d' });
+const generateTokens = (userId, fingerprint) => {
+  const accessToken = jwt.sign({ userId, type: 'access', fp: fingerprint || null }, config.jwtSecret, { expiresIn: config.jwtExpiresIn || '15m' });
+  const refreshToken = jwt.sign({ userId, type: 'refresh', fp: fingerprint || null }, config.jwtSecret, { expiresIn: config.refreshTokenExpiresIn || '7d' });
   return { accessToken, refreshToken };
 };
 
@@ -177,26 +180,50 @@ exports.login = async (req, res) => {
       .input('id', sql.VarChar, user.Id)
       .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL, LastSeen = dbo.GetEnvDate() WHERE Id = @id');
 
-    const { accessToken, refreshToken } = generateTokens(user.Id);
-    await pool.request()
-      .input('id', sql.VarChar, user.Id)
-      .input('token', sql.NVarChar, refreshToken)
-      .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
+    // Check force password reset
+    if (user.ForcePasswordReset) {
+      return res.json({
+        success: true,
+        forcePasswordReset: true,
+        message: 'Password must be changed before continuing',
+        data: { user: { _id: user.Id, email: user.Email, forcePasswordReset: true } }
+      });
+    }
 
-    const resolvedUser = await getResolvedUserResponse(user, pool);
+    // Check password expiry
+    if (user.PasswordExpiresAt && new Date(user.PasswordExpiresAt) < new Date()) {
+      return res.json({
+        success: true,
+        forcePasswordReset: true,
+        reason: 'PASSWORD_EXPIRED',
+        message: 'Your password has expired. Please reset it.',
+        data: { user: { _id: user.Id, email: user.Email, forcePasswordReset: true } }
+      });
+    }
 
-    // Log success
-    await SystemLogService.log({
-      type: 'AUTH_SUCCESS',
-      entityType: 'USER',
-      entityId: user.Id,
-      entityTitle: `${resolvedUser.FirstName} ${resolvedUser.LastName}`,
-      user: user.Id,
-      description: `${resolvedUser.FirstName} ${resolvedUser.LastName} logged in`,
-      metadata: { ip: clientIp }
-    });
+    // Check trusted device — skip OTP if trusted
+    const fingerprint = Buffer.from(`${req.headers['user-agent'] || ''}|${clientIp}`).toString('base64').slice(0, 32);
+    const isTrustedDevice = await trustedDeviceService.isTrusted(user.Id, fingerprint);
 
-    res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken } });
+    if (isTrustedDevice) {
+      // Direct login from trusted device
+      const { accessToken, refreshToken } = generateTokens(user.Id, fingerprint);
+      await pool.request().input('id', sql.VarChar, user.Id).input('token', sql.NVarChar, refreshToken)
+        .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
+      const resolvedUser = await getResolvedUserResponse(user, pool);
+      await SystemLogService.log({ type: 'AUTH_SUCCESS', entityType: 'USER', entityId: user.Id, entityTitle: resolvedUser.FirstName + ' ' + resolvedUser.LastName, user: user.Id, description: `${resolvedUser.FirstName} logged in (trusted device)`, metadata: { ip: clientIp } });
+      return res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, trustedDevice: true, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt });
+    }
+
+    // OTP REQUIRED — Generate temp token and send OTP
+    const tempToken = jwt.sign({ userId: user.Id, email: user.Email, step: 'PASSWORD_VERIFIED', purpose: 'OTP_VERIFICATION' }, config.jwtSecret, { expiresIn: '10m' });
+
+    try {
+      const otpResult = await otpService.sendOtp(user.Id, user.Email, 'LOGIN', { ipAddress: clientIp, userAgent: req.headers['user-agent'] });
+      return res.json({ success: true, requiresOtp: true, tempToken, destination: otpResult.destination, expiresIn: otpResult.expiresIn, message: `Verification code sent to ${otpResult.destination}` });
+    } catch (otpError) {
+      return res.status(429).json({ success: false, message: otpError.message || 'Failed to send verification code' });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -232,6 +259,11 @@ exports.logout = async (req, res) => {
   try {
     const pool = await getPool();
     await pool.request().input('id', sql.VarChar, req.userId).query('UPDATE Users SET RefreshToken = NULL WHERE Id = @id');
+    
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      await tokenBlacklist.blacklist(authHeader.split(' ')[1]);
+    }
     
     // Log Logout
     if (req.userId) {
@@ -292,20 +324,117 @@ exports.changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const pool = await getPool();
 
-    const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT Password FROM Users WHERE Id = @id');
+    const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT * FROM Users WHERE Id = @id');
     const user = result.recordset[0];
 
     const isMatch = await bcrypt.compare(currentPassword, user.Password);
     if (!isMatch) return res.status(400).json({ success: false, message: 'Current password incorrect' });
 
+    // Prevent reuse of last 5 passwords
+    const historyResult = await pool.request()
+      .input('id', sql.VarChar, req.userId)
+      .query('SELECT TOP 5 PasswordHash FROM PasswordHistory WHERE UserId = @id ORDER BY ChangedAt DESC');
+    for (const row of historyResult.recordset) {
+      if (await bcrypt.compare(newPassword, row.PasswordHash)) {
+        return res.status(400).json({ success: false, message: 'Cannot reuse last 5 passwords' });
+      }
+    }
+
     const hashed = await bcrypt.hash(newPassword, 12);
+    
+    // Save current password to history
+    const histId = require('crypto').randomBytes(12).toString('hex');
+    await pool.request()
+      .input('id', sql.VarChar, req.userId)
+      .input('hash', sql.NVarChar, user.Password)
+      .input('hid', sql.VarChar, histId)
+      .query('INSERT INTO PasswordHistory (Id, UserId, PasswordHash, ChangedAt) VALUES (@hid, @id, @hash, dbo.GetEnvDate())');
+
+    // Update password, clear force reset, clear refresh token (logout all devices)
     await pool.request()
       .input('id', sql.VarChar, req.userId)
       .input('pw', sql.NVarChar, hashed)
-      .query('UPDATE Users SET Password = @pw, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id');
+      .query(`UPDATE Users SET Password = @pw, ForcePasswordReset = 0, 
+              PasswordChangedAt = dbo.GetEnvDate(), 
+              PasswordExpiresAt = DATEADD(day, 90, dbo.GetEnvDate()),
+              RefreshToken = NULL, UpdatedAt = dbo.GetEnvDate() WHERE Id = @id`);
 
-    res.json({ success: true });
+    // Revoke all sessions
+    await tokenBlacklist.blacklistUser(req.userId);
+
+    res.json({ success: true, message: 'Password changed. Please login again.' });
   } catch (error) {
     res.status(500).json({ success: false });
+  }
+};
+
+exports.verifyOtp = async (req, res) => {
+  try {
+    const { tempToken, otp, trustDevice } = req.body;
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    if (!tempToken || !otp) return res.status(400).json({ success: false, message: 'Token and OTP are required' });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, config.jwtSecret);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please login again.', code: 'SESSION_EXPIRED' });
+    }
+
+    if (decoded.purpose !== 'OTP_VERIFICATION' || decoded.step !== 'PASSWORD_VERIFIED') {
+      return res.status(401).json({ success: false, message: 'Invalid session token' });
+    }
+
+    const pool = await getPool();
+    const result = await pool.request().input('id', sql.VarChar, decoded.userId).query('SELECT * FROM Users WHERE Id = @id AND IsActive = 1');
+    const user = result.recordset[0];
+    if (!user) return res.status(401).json({ success: false, message: 'User not found' });
+
+    // Verify OTP
+    await otpService.verifyOtp(user.Id, otp, 'LOGIN', { ipAddress: clientIp, userAgent });
+
+    // Trust device if requested
+    const fingerprint = Buffer.from(`${userAgent || ''}|${clientIp}`).toString('base64').slice(0, 32);
+    if (trustDevice) {
+      await trustedDeviceService.trust(user.Id, fingerprint, { ipAddress: clientIp, userAgent });
+    }
+
+    // Complete login — generate tokens
+    const { accessToken, refreshToken } = generateTokens(user.Id, fingerprint);
+    await pool.request().input('id', sql.VarChar, user.Id).input('token', sql.NVarChar, refreshToken)
+      .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
+
+    const resolvedUser = await getResolvedUserResponse(user, pool);
+    await SystemLogService.log({ type: 'AUTH_SUCCESS', entityType: 'USER', entityId: user.Id, entityTitle: resolvedUser.FirstName + ' ' + resolvedUser.LastName, user: user.Id, description: `${resolvedUser.FirstName} logged in (OTP verified)`, metadata: { ip: clientIp } });
+
+    res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt });
+  } catch (error) {
+    if (error.message && error.message.includes('OTP')) {
+      return res.status(401).json({ success: false, message: error.message });
+    }
+    res.status(500).json({ success: false, message: 'OTP verification failed' });
+  }
+};
+
+exports.resendOtp = async (req, res) => {
+  try {
+    const { tempToken } = req.body;
+    if (!tempToken) return res.status(400).json({ success: false, message: 'Token required' });
+
+    let decoded;
+    try { decoded = jwt.verify(tempToken, config.jwtSecret); } catch (e) { return res.status(401).json({ success: false, message: 'Session expired' }); }
+
+    const pool = await getPool();
+    const result = await pool.request().input('id', sql.VarChar, decoded.userId).query('SELECT Email FROM Users WHERE Id = @id AND IsActive = 1');
+    const user = result.recordset[0];
+    if (!user) return res.status(401).json({ success: false, message: 'User not found' });
+
+    const otpResult = await otpService.resendOtp(decoded.userId, user.Email, 'LOGIN', { ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress, userAgent: req.headers['user-agent'] });
+
+    res.json({ success: true, destination: otpResult.destination, expiresIn: otpResult.expiresIn, message: `New code sent to ${otpResult.destination}` });
+  } catch (error) {
+    res.status(429).json({ success: false, message: error.message || 'Failed to resend code' });
   }
 };

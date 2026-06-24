@@ -79,6 +79,18 @@ export const AuthProvider = ({ children }) => {
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.message || 'Login failed');
 
+            // OTP required — return OTP data without setting user
+            if (result.requiresOtp) {
+                setBootstrapping(false);
+                return { success: true, requiresOtp: true, tempToken: result.tempToken, destination: result.destination, expiresIn: result.expiresIn };
+            }
+
+            // Trusted device or forcePasswordReset — return directly
+            if (result.forcePasswordReset) {
+                setBootstrapping(false);
+                return { success: true, forcePasswordReset: true, reason: result.reason };
+            }
+
             const { user: rawUser, accessToken } = result.data;
             let normalized = normalizeUser(rawUser);
 
@@ -221,6 +233,44 @@ export const AuthProvider = ({ children }) => {
         return permissionNames.some(name => hasPermission(name));
     };
 
+    // ----- Complete Login (after OTP verification) -----
+    const completeLogin = async (loginData) => {
+        try {
+            const { user: rawUser, accessToken, refreshToken } = loginData.data || loginData;
+            const normalized = normalizeUser(rawUser);
+
+            // Store tokens
+            localStorage.setItem('authToken', accessToken);
+            if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+            localStorage.setItem('user', JSON.stringify(normalized));
+            setUser(normalized);
+
+            // Check if setup wizard is needed
+            if (loginData.requiresSetup || loginData.data?.requiresSetup) {
+                // Will be handled by route protection
+            }
+
+            // Fetch permissions if missing
+            if (!normalized.permissions || normalized.permissions.length === 0) {
+                try {
+                    const meRes = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/auth/me`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    if (meRes.ok) {
+                        const meResult = await meRes.json();
+                        if (meResult.success && meResult.data) {
+                            const updated = normalizeUser({ ...normalized, permissions: meResult.data.permissions || [] });
+                            setUser(updated);
+                            localStorage.setItem('user', JSON.stringify(updated));
+                        }
+                    }
+                } catch (e) { console.warn('Permission fetch failed:', e.message); }
+            }
+        } catch (err) {
+            console.error('completeLogin error:', err);
+        }
+    };
+
     const value = {
         user,
         loading,
@@ -228,6 +278,7 @@ export const AuthProvider = ({ children }) => {
         bootstrapping,
         error,
         login,
+        completeLogin,
         register,
         logout,
         refreshUser,
@@ -237,6 +288,7 @@ export const AuthProvider = ({ children }) => {
         isAdmin: ['admin', 'super_admin', 'super admin', 'supert admin'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()) || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('super') || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('supert'),
         isOperationalManager: (user?.role?.name || user?.role || '').toString().toLowerCase() === 'operational_manager',
         isGlobalUser: ['admin', 'super_admin', 'super admin', 'supert admin', 'operational_manager'].includes((user?.role?.name || user?.role || '').toString().toLowerCase()) || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('super') || (user?.role?.name || user?.role || '').toString().toLowerCase().includes('supert'),
+        isFirstLogin: !!user?.isFirstLogin,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

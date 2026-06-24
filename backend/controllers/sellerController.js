@@ -347,8 +347,6 @@ exports.getSellers = async (req, res) => {
           scrapeUsed: seller.ScrapeUsed,
           lastScraped: seller.LastScrapedAt,
           liveSyncClientId: seller.LiveSyncClientId,
-          liveSyncClientSecret: seller.LiveSyncClientSecret,
-          partnerTag: seller.PartnerTag,
           liveSyncEnabled: !!seller.LiveSyncEnabled
         },
         asins: asinsResult.recordset.map(a => ({ ...a, _id: a.Id }))

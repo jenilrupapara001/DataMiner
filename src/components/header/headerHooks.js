@@ -7,8 +7,9 @@ export const useKeyboardShortcut = (
 ) => {
   useEffect(() => {
     const handler = (e) => {
-      const key = e.key.toLowerCase();
-      const matchKey = keys.some((k) => k.toLowerCase() === key);
+      const key = e.key?.toLowerCase();
+      if (!key) return;
+      const matchKey = keys.some((k) => k ? k.toLowerCase() === key : false);
       if (!matchKey) return;
 
       const metaMatch = options.metaKey ? e.metaKey || e.ctrlKey : true;

@@ -28,17 +28,17 @@ export const SocketProvider = ({ children }) => {
             const socketUrl = (import.meta.env.VITE_API_URL || window.location.origin + '/api').replace('/api', '');
             console.log('[DEBUG] Socket URL:', socketUrl);
 
+            const token = localStorage.getItem('authToken');
             const newSocket = io(socketUrl, {
-                transports: ['websocket'], // WebSocket-only (avoids polling stickiness issues with PM2 cluster)
+                transports: ['websocket'],
                 autoConnect: true,
                 reconnection: true,
                 reconnectionDelay: 1000,
                 reconnectionDelayMax: 5000,
-                reconnectionAttempts: Infinity
+                reconnectionAttempts: Infinity,
+                auth: { token }
             });
             setSocket(newSocket);
-
-            newSocket.emit('join', user._id || user.id);
 
             // Notification handling
             newSocket.on('receive_message', (message) => {

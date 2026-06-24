@@ -41,12 +41,58 @@ export const authApi = {
       throw new Error(error.message || 'Login failed');
     }
     const data = await res.json();
-    if (data.success) {
+    // Only store tokens if this is a direct login (trusted device)
+    if (data.success && data.data?.accessToken) {
       localStorage.setItem('authToken', data.data.accessToken);
       localStorage.setItem('refreshToken', data.data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.data.user));
     }
     return data;
+  },
+
+  verifyOtp: async (tempToken, otp, trustDevice = false) => {
+    const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempToken, otp, trustDevice }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'OTP verification failed');
+    if (data.success && data.data?.accessToken) {
+      localStorage.setItem('authToken', data.data.accessToken);
+      localStorage.setItem('refreshToken', data.data.refreshToken);
+      localStorage.setItem('user', JSON.stringify(data.data.user));
+    }
+    return data;
+  },
+
+  resendOtp: async (tempToken) => {
+    const res = await fetch(`${API_BASE}/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempToken }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to resend OTP');
+    return data;
+  },
+
+  post: async (endpoint, body = {}) => {
+    const token = localStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Request failed');
+    return data;
+  },
+
+  getMe: async () => {
+    const token = localStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE}/auth/me`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    return res.json();
   },
 
   register: async (userData) => {

@@ -13,6 +13,7 @@ GMS Dashboard Pro is an enterprise-grade **E-commerce Intelligence Platform** ta
 The platform is designed around a **Service-Oriented MERN Stack**, prioritizing data integrity, high-speed aggregations, and automated marketplace synchronization.
 
 ### High-Level Ecosystem
+
 ```mermaid
 graph TD
     subgraph "Frontend Layer (React 19)"
@@ -35,50 +36,6 @@ graph TD
         Controllers --> MongoDB[(MongoDB Atlas)]
         MongoDB --> Models[Mongoose Schema Layer]
     end
-```
-
----
-
-## 💻 Technology Stack
-
-### Frontend
-- **Framework:** React 19 (via Vite)
-- **Design System:** Custom Zinc UI (Glassmorphic)
-- **Visualizations:** ApexCharts (Triple-stack for BSR, Price, Rating)
-- **Icons:** Lucide React
-- **State Management:** Context API & Zustand
-- **Real-Time:** Socket.io-client, CometChat React UI Kit
-
-### Backend
-- **Runtime & Framework:** Node.js, Express.js
-- **Database:** MongoDB Atlas (Mongoose ODM)
-- **Authentication:** Clerk SDK + Custom JWT Auth
-- **File Processing:** Multer, xlsx
-- **Scheduling:** node-cron
-
-### Integrations
-- **Web Scraping:** Octoparse OpenAPI v1.0
-- **AI Analytics:** Perplexity API
-- **Asset Generation:** NVIDIA NIM (SD3 Medium)
-- **Communications:** CometChat
-
----
-
-## 📂 Project Structure
-
-```text
-gms-dashboard/
-├── backend/                # Node.js / Express Server
-│   ├── config/             # DB & App Configuration
-│   ├── controllers/        # Business Logic (30+ Controllers)
-│   ├── cron/               # Scheduled Task Orchestration
-│   ├── middleware/         # Auth, Upload, RBAC Logic
-│   ├── models/             # Mongoose Schemas (33 Models)
-│   ├── routes/             # REST API Definition
-│   ├── services/           # External API Wrappers (Octoparse, NIM)
-│   ├── uploads/            # Local Asset Storage (ASIN Images)
-│   └── utils/              # Calculation & Validation Helpers
-├── src/                    # React 19 Frontend
 │   ├── components/         # Premium UI Component Library
 │   ├── contexts/           # Global State Management
 │   ├── hooks/              # Reusable Logic (API, UI)
@@ -87,9 +44,6 @@ gms-dashboard/
 │   └── utils/              # Frontend formatting & UI logic
 ├── public/                 # Static Assets
 └── package.json            # Core Dependencies
-```
-
----
 
 ## 🗄️ Database Strategy & Core Schemas
 
@@ -167,6 +121,7 @@ PERPLEXITY_API_KEY=...
 ```
 
 ### Development
+
 ```bash
 # Start Backend
 cd backend
@@ -178,13 +133,16 @@ npm run dev
 ```
 
 ### Performance Optimization
+
 - **MongoDB Indexing:** Compound indexes on `asinCode + seller` ensure sub-100ms queries.
 - **Vercel Edge Rendering:** Optimized zero-latency loading for massive React DataTables.
 
 ---
 
 ## 🎨 Design System: Zinc Pro
+
 Focuses on clarity and data density:
+
 - **Typography:** Inter (UI) / Outfit (Headers).
 - **Styling:** Tailwind-based with glassmorphism (12px backdrop blur).
 - **Iconography:** Lucide React icons standardized across the platform.
@@ -192,5 +150,6 @@ Focuses on clarity and data density:
 ---
 
 ## 📄 License
-© 2026 Easysell Projects. Distributed under the ISC License. 
+
+© 2026 Easysell Projects. Distributed under the ISC License.
 Confidential and Proprietary. All Rights Reserved.

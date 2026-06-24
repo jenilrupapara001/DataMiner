@@ -7,6 +7,7 @@ const actionController = require('../controllers/actionController');
 const { authenticate: protect, requireAnyPermission, requireRole } = require('../middleware/auth');
 const { createNotification } = require('../controllers/notificationController');
 const SystemLogService = require('../services/SystemLogService');
+const validate = require('../middleware/validate');
 
 // Configure multer for audio file uploads
 const storage = multer.diskStorage({
@@ -49,7 +50,7 @@ function sendSseEvent(eventName, data) {
 
 // Action routes
 router.get('/', protect, requireAnyPermission(['actions_view', 'actions_manage']), actionController.getActions);
-router.post('/', protect, requireAnyPermission(['actions_create', 'actions_manage']), actionController.createAction);
+router.post('/', protect, requireAnyPermission(['actions_create', 'actions_manage']), validate('createAction'), actionController.createAction);
 
 // Task Templates
 router.get('/templates', protect, actionController.getTemplates);

@@ -60,6 +60,7 @@ const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage'));
 const FileManagerPage = lazy(() => import('./pages/FileManagerPage'));
 const TeamManagementPage = lazy(() => import('./pages/TeamManagementPage'));
 const WebhookSettingsPage = lazy(() => import('./pages/WebhookSettingsPage'));
+const SetupWizardPage = lazy(() => import('./pages/SetupWizardPage'));
 
 // Minimal full-screen spinner — used only for the outer auth Suspense boundary
 // (login / register pages are tiny; the skeleton would be jarring there)
@@ -158,6 +159,7 @@ function AppRoutes() {
         {/* Public routes */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
+        <Route path="/setup-wizard" element={<ProtectedRoute><SetupWizardPage /></ProtectedRoute>} />
 
         {/* Protected routes with sidebar + header layout */}
         <Route

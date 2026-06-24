@@ -169,10 +169,18 @@ exports.getActions = async (req, res) => {
         const isGlobalUser = ['admin', 'super admin', 'super_admin', 'superadmin', 'operational_manager'].includes(roleClean);
         let whereClauses = [];
 
-        if (status) whereClauses.push(`Status = '${status}'`);
-        if (priority) whereClauses.push(`Priority = '${priority}'`);
-        if (assignedTo) whereClauses.push(`AssignedTo = '${assignedTo}'`);
-
+        if (status) {
+            filterReq.input('filterStatus', sql.NVarChar, status);
+            whereClauses.push('Status = @filterStatus');
+        }
+        if (priority) {
+            filterReq.input('filterPriority', sql.NVarChar, priority);
+            whereClauses.push('Priority = @filterPriority');
+        }
+        if (assignedTo) {
+            filterReq.input('filterAssignedTo', sql.NVarChar, assignedTo);
+            whereClauses.push('AssignedTo = @filterAssignedTo');
+        }
         // Data isolation for non-global users
         const filterReq = pool.request();
         if (!isGlobalUser) {
@@ -532,8 +540,8 @@ exports.updateAction = async (req, res) => {
         };
 
         Object.entries(req.body).forEach(([key, value]) => {
-            const dbColumn = columnMap[key] || columnMap[key.toLowerCase()] || key;
-            if (!['_id', 'Id', 'createdAt', 'updatedAt', 'createdBy'].includes(dbColumn)) {
+            const dbColumn = columnMap[key] || columnMap[key.toLowerCase()];
+            if (!dbColumn || ['_id', 'Id', 'createdAt', 'updatedAt', 'createdBy'].includes(dbColumn)) return;
                 const paramName = `p${paramIndex++}`;
                 let sqlValue = value;
                 let sqlType = sql.NVarChar;
@@ -552,7 +560,6 @@ exports.updateAction = async (req, res) => {
 
                 updates.push(`${dbColumn} = @${paramName}`);
                 request.input(paramName, sqlType, sqlValue);
-            }
         });
 
         if (updates.length > 0) {

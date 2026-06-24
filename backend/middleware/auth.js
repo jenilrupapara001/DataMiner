@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../database/db');
 const config = require('../config/env');
+const tokenBlacklist = require('../services/tokenBlacklistService');
 
 const DEMO_MODE = process.env.DEMO_MODE === 'true'; // Strictly require DEMO_MODE=true in .env to prevent accidental bypass in production
 
@@ -34,7 +35,17 @@ exports.authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    
+    if (await tokenBlacklist.isBlacklisted(token)) {
+      return res.status(401).json({ success: false, message: 'Token revoked' });
+    }
+    
     const decoded = jwt.verify(token, config.jwtSecret);
+    
+    if (await tokenBlacklist.isUserBlacklisted(decoded.userId, decoded.iat)) {
+      return res.status(401).json({ success: false, message: 'Session invalidated' });
+    }
+    
     const pool = await getPool();
 
     // 1. Fetch User and Role
@@ -54,6 +65,19 @@ exports.authenticate = async (req, res, next) => {
     const userData = userResult.recordset[0];
     if (!userData.IsActive) {
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
+    }
+
+    // Fingerprint verification (soft - log but don't block on first mismatch)
+    if (decoded.fp) {
+      const currentFp = Buffer.from(`${req.headers['user-agent'] || ''}|${req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''}`).toString('base64').slice(0, 32);
+      if (decoded.fp !== currentFp) {
+        console.warn(`[SECURITY] Fingerprint mismatch for user ${decoded.userId}`);
+      }
+    }
+
+    // Password expiry check (90 days)
+    if (userData.PasswordExpiresAt && new Date(userData.PasswordExpiresAt) < new Date()) {
+      req.forcePasswordReset = true;
     }
 
     // 2. Fetch Permissions
