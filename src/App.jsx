@@ -191,7 +191,7 @@ function AppRoutes() {
                   <Route path="/alert-rules" element={<ProtectedRoute permission="rules_view"><AlertRulesPage /></ProtectedRoute>} />
                   <Route path="/rule-sets" element={<ProtectedRoute permission="rules_view"><RuleSetsPage /></ProtectedRoute>} />
                   <Route path="/rule-sets/new" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
-                  <Route path="/rule-sets/:id/edit" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
+                  <Route path="/rule-sets/:id" element={<ProtectedRoute permission="rules_manage"><RulesetBuilderPage /></ProtectedRoute>} />
                    <Route path="/scrape-tasks" element={<ProtectedRoute permission="scraping_view"><ScrapeTasksPage /></ProtectedRoute>} />
                   <Route path="/scheduled-runs" element={<ProtectedRoute permission="scraping_view"><ScheduledRunsPage /></ProtectedRoute>} />
                   <Route path="/sellers" element={<ProtectedRoute permission="seller_view"><SellersPage /></ProtectedRoute>} />

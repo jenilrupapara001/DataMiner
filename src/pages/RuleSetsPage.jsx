@@ -1,391 +1,300 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Layout, Button, Input, Select, Space, Typography, Tag, Tooltip, 
-  Popconfirm, message, Divider, Pagination, Card, Row, Col, Switch, Badge
+import { useNavigate } from 'react-router-dom';
+import {
+  Button, Input, Select, Space, Tag, Tooltip, Popconfirm, Card,
+  Switch, Badge, Pagination, Empty, Spin, Typography
 } from 'antd';
-import { 
-  Plus, Search, Play, Trash2, Copy, Sliders, Zap, Settings, 
-  Target, Package, DollarSign, TrendingUp, Star, BarChart2, RefreshCw
+const { Text } = Typography;
+import {
+  Plus, Search, Play, Trash2, Copy, SlidersHorizontal, Zap,
+  Settings, Activity, RefreshCw, Clock, CheckCircle2, PauseCircle,
+  Package, PlayCircle
 } from 'lucide-react';
 import { rulesetApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
-const { Content } = Layout;
-const { Title, Text } = Typography;
-const { Option } = Select;
-
-const RULE_TYPE_INFO = [
-  { value: 'ASIN', label: 'ASIN/Product', icon: Package, color: '#f59e0b', bg: '#fffbeb', desc: 'Evaluate ASIN data and take actions' },
-  { value: 'Inventory', label: 'Inventory', icon: Package, color: '#06b6d4', bg: '#ecfeff', desc: 'Monitor stock and trigger reorder alerts' },
-  { value: 'Pricing', label: 'Pricing', icon: DollarSign, color: '#10b981', bg: '#f0fdf4', desc: 'Adjust prices based on competitors' },
-  { value: 'Product', label: 'Product', icon: Star, color: '#ec4899', bg: '#fdf2f8', desc: 'Product-level rules and actions' }
+const RULE_TYPE_OPTIONS = [
+  { value: 'ASIN', label: 'ASIN Operations', icon: <Activity size={13} /> },
 ];
 
+const typeColors = {
+  ASIN: { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+};
+
+const TypeBadge = ({ type }) => {
+  const c = typeColors[type] || typeColors.ASIN;
+  return (
+    <span className="badge" style={{
+      background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+      fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+      textTransform: 'uppercase', letterSpacing: '0.03em'
+    }}>
+      {type || 'ASIN'}
+    </span>
+  );
+};
+
 const RuleSetsPage = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [rulesets, setRulesets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [executing, setExecuting] = useState(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 20;
 
-  useEffect(() => {
-    loadRulesets();
-  }, [filterType, pagination.page]);
+  useEffect(() => { loadRulesets(); }, [page, filterStatus]);
 
   const loadRulesets = async () => {
     try {
       setLoading(true);
-      const params = { page: pagination.page, limit: pagination.limit };
-      if (filterType !== 'all') params.type = filterType;
-      
-      const response = await rulesetApi.getAll(params);
-      setRulesets(response.data || []);
-      if (response.pagination) {
-        setPagination(prev => ({ ...prev, ...response.pagination }));
-      } else {
-        setPagination(prev => ({ ...prev, total: (response.data || []).length }));
-      }
-    } catch (error) {
-      console.error('Error loading rulesets:', error);
-      message.error('Failed to load rulesets');
+      const params = { page, limit: pageSize };
+      const res = await rulesetApi.getAll(params);
+      setRulesets(res.data || []);
+      setTotal(res.pagination?.total || (res.data || []).length);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredRulesets = useMemo(() => {
-    if (!searchQuery.trim()) return rulesets;
-    const query = searchQuery.toLowerCase();
-    return rulesets.filter(rs => 
-      (rs.name || '').toLowerCase().includes(query) ||
-      (rs.type || '').toLowerCase().includes(query)
-    );
-  }, [rulesets, searchQuery]);
+  const filtered = useMemo(() => {
+    let list = rulesets;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(r => (r.name || '').toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q));
+    }
+    if (filterStatus === 'active') list = list.filter(r => r.isActive);
+    if (filterStatus === 'paused') list = list.filter(r => !r.isActive);
+    return list;
+  }, [rulesets, searchQuery, filterStatus]);
 
-  const handleToggle = async (rulesetId, currentActive) => {
+  const activeCount = useMemo(() => rulesets.filter(r => r.isActive).length, [rulesets]);
+  const autoCount = useMemo(() => rulesets.filter(r => r.isAutomated).length, [rulesets]);
+
+  const handleToggle = async (id) => {
     try {
-      await rulesetApi.toggle(rulesetId);
-      message.success(`Ruleset ${currentActive ? 'disabled' : 'enabled'} successfully`);
+      await rulesetApi.toggle(id);
+      setRulesets(prev => prev.map(r => (r._id === id || r.id === id) ? { ...r, isActive: !r.isActive } : r));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await rulesetApi.delete(id);
+      setRulesets(prev => prev.filter(r => (r._id !== id && r.id !== id)));
+      setTotal(prev => Math.max(0, prev - 1));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleExecute = async (id) => {
+    try {
+      setExecuting(id);
+      await rulesetApi.execute(id);
       loadRulesets();
-    } catch (error) {
-      console.error('Error toggling ruleset:', error);
-      message.error('Failed to toggle ruleset status');
-    }
+    } catch (e) { console.error(e); }
+    finally { setExecuting(null); }
   };
 
-  const handleDelete = async (ruleset) => {
+  const handleDuplicate = async (id) => {
     try {
-      await rulesetApi.delete(ruleset._id);
-      message.success('Ruleset deleted successfully');
-      loadRulesets();
-    } catch (error) {
-      console.error('Error deleting ruleset:', error);
-      message.error('Failed to delete ruleset');
-    }
+      const res = await rulesetApi.duplicate(id);
+      const newId = res.data?._id || res.data?.id;
+      if (newId) navigate(`/rule-sets/${newId}`);
+    } catch (e) { console.error(e); }
   };
 
-  const handleExecute = async (rulesetId) => {
-    try {
-      setExecuting(rulesetId);
-      message.info('Executing ruleset actions...');
-      const result = await rulesetApi.execute(rulesetId);
-      const summary = result.data?.summary || result.summary;
-      message.success(
-        `Execution Complete! Matched: ${summary?.totalMatched || 0}, Actioned: ${summary?.totalActioned || 0}`
-      );
-    } catch (error) {
-      console.error('Error executing ruleset:', error);
-      message.error('Failed to execute ruleset actions');
-    } finally {
-      setExecuting(null);
-    }
-  };
-
-  const handleDuplicate = async (ruleset) => {
-    try {
-      const result = await rulesetApi.duplicate(ruleset._id);
-      message.success(`Duplicated successfully! New ruleset: ${result.data?.Name || result.data?.name || ''}`);
-      loadRulesets();
-    } catch (error) {
-      console.error('Error duplicating ruleset:', error);
-      message.error('Failed to duplicate ruleset');
-    }
-  };
-
-  const navigateToBuilder = (rulesetId = null) => {
-    window.location.href = rulesetId ? `/rule-sets/${rulesetId}/edit` : '/rule-sets/new';
-  };
-
-  const getTypeInfo = (type) => RULE_TYPE_INFO.find(t => t.value === type) || RULE_TYPE_INFO[2];
-
-  const formatDate = (date) => {
+  const formatTime = (date) => {
     if (!date) return 'Never';
-    return new Date(date).toLocaleDateString('en-US', { 
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    const d = new Date(date);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   };
 
   return (
-    <Layout style={{ minHeight: 'calc(100vh - 72px)', background: '#f8fafc', padding: '24px 32px' }}>
-      {/* ── Page Header ──────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 4 }}>
-            Automated rules for bid management, pricing, inventory alerts & more.
-          </Text>
-        </div>
-
-        <Button 
-          type="primary" 
-          icon={<Plus size={14} />} 
-          onClick={() => navigateToBuilder()}
-          style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, borderRadius: 20 }}
-        >
-          New Ruleset
-        </Button>
-      </div>
-
-      {/* ── Toolbar with search + filters ───────────────────── */}
-      <div style={{
-        background: '#fff', padding: '16px 24px',
-        borderRadius: 12, border: '1px solid #e2e8f0',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
-        marginBottom: 24, flexWrap: 'wrap'
-      }}>
-        <Input
-          prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
-          placeholder="Search rulesets..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          allowClear
-          style={{ width: 280, borderRadius: 6 }}
-        />
-
-        <Space size={12}>
-          <Select 
-            value={filterType} 
-            onChange={v => { setFilterType(v); setPagination(p => ({ ...p, page: 1 })); }}
-            style={{ width: 160 }}
-          >
-            <Option value="all">All Types</Option>
-            {RULE_TYPE_INFO.map(t => (
-              <Option key={t.value} value={t.value}>{t.label}</Option>
-            ))}
-          </Select>
-
-          <Tag color="blue" style={{ borderRadius: 20, padding: '2px 10px', fontWeight: 600, border: 'none', background: '#e0e7ff', color: '#4f46e5' }}>
-            {pagination.total} Rulesets
-          </Tag>
-          <Tag color="green" style={{ borderRadius: 20, padding: '2px 10px', fontWeight: 600, border: 'none', background: '#d1fae5', color: '#059669' }}>
-            {rulesets.filter(r => r.isActive).length} Active
-          </Tag>
-        </Space>
-      </div>
-
-      {/* ── Grid List Content ─────────────────────────────────── */}
-      <Content style={{ minHeight: 0 }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '64px 0' }}>
-            <RefreshCw size={24} className="animate-spin text-primary" style={{ color: '#4f46e5', animation: 'spin 1.5s linear infinite' }} />
-            <Text style={{ display: 'block', marginTop: 12, color: '#94a3b8' }}>Loading rulesets...</Text>
+    <div style={{ background: '#fff', minHeight: 'calc(100vh - 60px)' }}>
+      {/* Page Header */}
+      <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f4f4f7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0 }}>Automation Rules</h2>
+            <p style={{ fontSize: 12, color: '#71717a', margin: 0, marginTop: 4 }}>Automated rules for listing quality, pricing, inventory alerts & task creation</p>
           </div>
-        ) : filteredRulesets.length === 0 ? (
-          <div style={{
-            background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0',
-            padding: '64px 24px', textAlign: 'center'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Zap size={24} color="#94a3b8" />
-              </div>
-              <div>
-                <Title level={5} style={{ margin: '0 0 4px', fontWeight: 600, color: '#475569' }}>
-                  No rulesets configured
-                </Title>
-                <Text style={{ fontSize: 12, color: '#94a3b8' }}>
-                  Create your first ruleset to automate your retail operations
-                </Text>
-              </div>
-              <Button type="primary" style={{ marginTop: 8 }} onClick={() => navigateToBuilder()}>
-                Create First Ruleset
-              </Button>
+          <Button type="primary" icon={<Plus size={13} />} onClick={() => navigate('/rule-sets/new')}
+            style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
+            Create Ruleset
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ padding: '16px 28px' }}>
+        {/* KPI Strip */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#18181b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Zap size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#18181b' }}>{total}</div>
             </div>
           </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#ecfdf5', borderRadius: 8, border: '1px solid #d1fae5' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle2 size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#065f46' }}>{activeCount}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Activity size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Auto-run</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#1e40af' }}>{autoCount}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Input prefix={<Search size={12} style={{ color: '#a1a1aa' }} />}
+            placeholder="Search rulesets..." allowClear value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            size="small" style={{ width: 240, borderRadius: 8 }} />
+          <Select size="small" value={filterStatus} style={{ width: 120, borderRadius: 8 }}
+            onChange={v => { setFilterStatus(v); setPage(1); }}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'active', label: 'Active' },
+              { value: 'paused', label: 'Paused' },
+            ]} />
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}><Spin /></div>
+        ) : filtered.length === 0 ? (
+          <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, padding: '60px 24px', textAlign: 'center' }}>
+            <Empty description={
+              <span style={{ color: '#a1a1aa', fontSize: 12 }}>
+                {searchQuery ? 'No rulesets match your search' : 'No rulesets yet — create your first automation rule'}
+              </span>
+            } />
+            {!searchQuery && (
+              <Button type="primary" icon={<Plus size={13} />} onClick={() => navigate('/rule-sets/new')}
+                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, marginTop: 8 }}>
+                Create First Ruleset
+              </Button>
+            )}
+          </div>
         ) : (
-          <Row gutter={[20, 20]}>
-            {filteredRulesets.map(ruleset => {
-              const typeInfo = getTypeInfo(ruleset.type);
-              const TypeIcon = typeInfo.icon || Settings;
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+              {filtered.map(rs => {
+                const rules = (() => { try { return JSON.parse(rs.rules || '[]'); } catch { return []; } })();
+                let summary = {};
+                try { summary = JSON.parse(rs.lastRunSummary || '{}'); } catch {}
 
-              return (
-                <Col key={ruleset._id} xs={24} sm={12} lg={8}>
-                  <Card
-                    hoverable
-                    style={{
-                      borderRadius: 12,
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      overflow: 'hidden'
-                    }}
-                    bodyStyle={{ padding: 20 }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div style={{
-                          padding: 8,
-                          borderRadius: 8,
-                          background: typeInfo.bg,
-                          color: typeInfo.color,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <TypeIcon size={18} />
+                return (
+                  <div key={rs._id || rs.id} style={{
+                    border: '1px solid #e4e4e7', borderRadius: 12, overflow: 'hidden',
+                    background: rs.isActive ? '#fff' : '#fafafa',
+                    opacity: rs.isActive ? 1 : 0.7, transition: 'all 0.15s'
+                  }}>
+                    {/* Card Header */}
+                    <div style={{ padding: '12px 16px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#18181b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {rs.name}
+                          </span>
+                          <TypeBadge type={rs.type} />
                         </div>
-                        <div>
-                          <Text strong style={{ fontSize: 14, color: '#1e293b', display: 'block' }}>
-                            {ruleset.name}
-                          </Text>
-                          <Tag style={{
-                            margin: 0,
-                            borderRadius: 12,
-                            fontSize: 9,
-                            fontWeight: 600,
-                            background: typeInfo.bg,
-                            color: typeInfo.color,
-                            border: `1px solid ${typeInfo.color}30`
-                          }}>
-                            {typeInfo.label}
+                        {rs.description && (
+                          <p style={{ fontSize: 11, color: '#71717a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {rs.description}
+                          </p>
+                        )}
+                      </div>
+                      <Switch size="small" checked={rs.isActive} onChange={() => handleToggle(rs._id || rs.id)} />
+                    </div>
+
+                    {/* Stats */}
+                    <div style={{ padding: '10px 16px', display: 'flex', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 10, color: '#a1a1aa' }}>Rules</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#18181b' }}>{rules.length}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 10, color: '#a1a1aa' }}>Runs</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#18181b' }}>{rs.totalRunCount || 0}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 10, color: '#a1a1aa' }}>Matched</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>{summary.totalMatched || 0}</span>
+                      </div>
+                      <div style={{ flex: 1 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {rs.isAutomated && (
+                          <Tag style={{ fontSize: 9, fontWeight: 700, borderRadius: 4, padding: '1px 5px', margin: 0, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                            <Clock size={9} style={{ marginRight: 2 }} />
+                            {rs.runFrequency || 'Daily'}
                           </Tag>
-                        </div>
-                      </div>
-                      <Switch 
-                        checked={ruleset.isActive}
-                        onChange={() => handleToggle(ruleset._id, ruleset.isActive)}
-                        size="small"
-                      />
-                    </div>
-
-                    {/* Description */}
-                    <div style={{ height: 40, overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 12 }}>
-                      <Text type="secondary" style={{ fontSize: 12, lineHeight: '18px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {ruleset.description || typeInfo.desc}
-                      </Text>
-                    </div>
-
-                    {/* Badges / Run info */}
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-                      <Tag style={{ borderRadius: 4, background: '#f1f5f9', border: 'none', color: '#475569', fontWeight: 600, fontSize: 10 }}>
-                        {ruleset.rules?.length || 0} Rules
-                      </Tag>
-                      <Tag style={{ borderRadius: 4, background: '#f1f5f9', border: 'none', color: '#475569', fontWeight: 600, fontSize: 10 }}>
-                        {ruleset.runFrequency || 'Manual'}
-                      </Tag>
-                    </div>
-
-                    {/* Stats panel */}
-                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, display: 'flex', justifyContent: 'space-around', marginBottom: 16 }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text strong style={{ display: 'block', fontSize: 13, color: '#4f46e5' }}>{ruleset.totalRunCount || 0}</Text>
-                        <Text style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Runs</Text>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text strong style={{ display: 'block', fontSize: 13, color: '#059669' }}>{ruleset.lastRunAt ? '✓' : '—'}</Text>
-                        <Text style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Last Run</Text>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <Text strong style={{ display: 'block', fontSize: 13, color: '#0f172a' }}>{ruleset.isAutomated ? 'Auto' : 'Manual'}</Text>
-                        <Text style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Mode</Text>
+                        )}
+                        <span style={{ fontSize: 10, color: '#a1a1aa' }}>
+                          {rs.lastRunAt ? formatTime(rs.lastRunAt) : 'Never run'}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Footer Actions */}
-                    <Divider style={{ margin: '12px 0' }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Space size={6}>
-                        <Tooltip title="Run Ruleset">
-                          <Button 
-                            shape="circle" 
-                            size="small" 
-                            icon={<Play size={12} />} 
-                            onClick={() => handleExecute(ruleset._id)}
-                            disabled={executing === ruleset._id}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          />
+                    {/* Actions */}
+                    <div style={{ padding: '8px 16px 12px', borderTop: '1px solid #f4f4f5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Space size={4}>
+                        <Tooltip title="Run Now">
+                          <Button type="text" size="small" icon={<PlayCircle size={13} />}
+                            loading={executing === (rs._id || rs.id)}
+                            onClick={() => handleExecute(rs._id || rs.id)}
+                            style={{ color: '#059669' }} />
                         </Tooltip>
                         <Tooltip title="Duplicate">
-                          <Button 
-                            shape="circle" 
-                            size="small" 
-                            icon={<Copy size={12} />} 
-                            onClick={() => handleDuplicate(ruleset)}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          />
+                          <Button type="text" size="small" icon={<Copy size={13} />}
+                            onClick={() => handleDuplicate(rs._id || rs.id)} />
                         </Tooltip>
-                        <Tooltip title="Configure / Edit">
-                          <Button 
-                            shape="circle" 
-                            size="small" 
-                            icon={<Sliders size={12} />} 
-                            onClick={() => navigateToBuilder(ruleset._id)}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          />
+                        <Tooltip title="Edit">
+                          <Button type="text" size="small" icon={<SlidersHorizontal size={13} />}
+                            onClick={() => navigate(`/rule-sets/${rs._id || rs.id}`)} />
                         </Tooltip>
-                        <Tooltip title="Delete">
-                          <Popconfirm
-                            title="Delete this ruleset?"
-                            description={`Are you sure you want to delete "${ruleset.name}"?`}
-                            onConfirm={() => handleDelete(ruleset)}
-                            okText="Delete"
-                            cancelText="Cancel"
-                            okButtonProps={{ danger: true }}
-                          >
-                            <Button 
-                              danger 
-                              shape="circle" 
-                              size="small" 
-                              icon={<Trash2 size={12} />} 
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            />
-                          </Popconfirm>
-                        </Tooltip>
+                        <Popconfirm title="Delete this ruleset?" onConfirm={() => handleDelete(rs._id || rs.id)} okText="Delete" okButtonProps={{ danger: true }}>
+                          <Button type="text" danger size="small" icon={<Trash2 size={13} />} />
+                        </Popconfirm>
                       </Space>
-                      
-                      <Text style={{ fontSize: 10, color: '#94a3b8' }}>
-                        Run: {formatDate(ruleset.lastRunAt)}
-                      </Text>
                     </div>
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-        )}
+                  </div>
+                );
+              })}
+            </div>
 
-        {/* ── Pagination ───────────────────────────────────────── */}
-        {!loading && filteredRulesets.length > 0 && pagination.totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-            <Pagination
-              current={pagination.page}
-              pageSize={pagination.limit}
-              total={pagination.total}
-              onChange={p => setPagination(prev => ({ ...prev, page: p }))}
-              showSizeChanger={false}
-            />
-          </div>
+            {total > pageSize && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                <Pagination size="small" current={page} pageSize={pageSize} total={total}
+                  onChange={p => setPage(p)} showSizeChanger={false} />
+              </div>
+            )}
+          </>
         )}
-      </Content>
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </Layout>
+      </div>
+    </div>
   );
 };
 

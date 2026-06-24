@@ -1,77 +1,45 @@
 export const ATTRIBUTES_BY_TYPE = {
   ASIN: [
-    { value: 'orders', label: 'Orders', type: 'number', unit: '', group: 'Performance' },
-    { value: 'units_sold', label: 'Units Sold', type: 'number', unit: '', group: 'Performance' },
-    { value: 'revenue', label: 'Revenue', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'sessions', label: 'Sessions', type: 'number', unit: '', group: 'Performance' },
-    { value: 'cvr', label: 'Conversion Rate', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'buy_box_rate', label: 'Buy Box Win Rate', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'bsr', label: 'BSR', type: 'number', unit: '', group: 'Listing' },
-    { value: 'rating', label: 'Rating', type: 'number', unit: '★', group: 'Listing' },
-    { value: 'review_count', label: 'Review Count', type: 'number', unit: '', group: 'Listing' },
-    { value: 'lqs', label: 'LQS Score', type: 'number', unit: '', group: 'Listing' },
-    { value: 'image_count', label: 'Image Count', type: 'number', unit: '', group: 'Listing' },
-    { value: 'has_aplus', label: 'Has A+ Content', type: 'boolean', unit: '', group: 'Listing' },
-    { value: 'buy_box_winner', label: 'Is Buy Box Winner', type: 'boolean', unit: '', group: 'Listing' },
-    { value: 'current_price', label: 'Current Price', type: 'number', unit: '₹', group: 'Pricing' },
-    { value: 'discount_pct', label: 'Discount %', type: 'percent', unit: '%', group: 'Pricing' },
-    { value: 'profit_margin', label: 'Profit Margin', type: 'percent', unit: '%', group: 'Pricing' },
-    { value: 'price_gap', label: 'Price Gap vs Comp.', type: 'number', unit: '₹', group: 'Pricing' },
-    { value: 'stock_level', label: 'Stock Level', type: 'number', unit: 'units', group: 'Inventory' },
-    { value: 'days_inventory', label: 'Days of Inventory', type: 'number', unit: 'days', group: 'Inventory' },
-    { value: 'fba_units', label: 'FBA Available Units', type: 'number', unit: 'units', group: 'Inventory' },
-    { value: 'ad_spend', label: 'Ad Spend', type: 'number', unit: '₹', group: 'Ads' },
-    { value: 'ad_sales', label: 'Ad Sales', type: 'number', unit: '₹', group: 'Ads' },
-    { value: 'acos', label: 'ACoS', type: 'percent', unit: '%', group: 'Ads' },
-    { value: 'tacos', label: 'TACOS', type: 'percent', unit: '%', group: 'Ads' },
-    { value: 'roas', label: 'ROAS', type: 'number', unit: 'x', group: 'Ads' },
-    { value: 'asin_status', label: 'ASIN Status', type: 'enum', unit: '', group: 'Status', options: ['Active', 'Inactive', 'Suppressed', 'Stranded'] },
-    { value: 'category', label: 'Category', type: 'text', unit: '', group: 'Status' },
-    { value: 'brand', label: 'Brand', type: 'text', unit: '', group: 'Status' },
-    { value: 'tags', label: 'Tags', type: 'list', unit: '', group: 'Status' },
-  ],
+    { value: 'lqs', label: 'LQS Score', type: 'number', unit: 'pts', group: 'Listing Quality', description: 'Listing Quality Score (0-100)' },
+    { value: 'titleScore', label: 'Title Score', type: 'number', unit: 'pts', group: 'Listing Quality', description: 'Title quality metric' },
+    { value: 'bulletScore', label: 'Bullet Score', type: 'number', unit: 'pts', group: 'Listing Quality', description: 'Bullet points quality metric' },
+    { value: 'imageScore', label: 'Image Score', type: 'number', unit: 'pts', group: 'Listing Quality', description: 'Image quality metric' },
+    { value: 'descriptionScore', label: 'Description Score', type: 'number', unit: 'pts', group: 'Listing Quality', description: 'Description quality metric' },
+    { value: 'imagesCount', label: 'Image Count', type: 'number', unit: 'images', group: 'Listing Quality', description: 'Number of product images' },
+    { value: 'bulletPoints', label: 'Bullet Points', type: 'number', unit: 'bullets', group: 'Listing Quality', description: 'Number of bullet points' },
+    { value: 'hasAplus', label: 'Has A+ Content', type: 'boolean', unit: '', group: 'Listing Quality', description: 'Whether A+ Content is present' },
 
-  Product: [
-    { value: 'orders', label: 'Orders', type: 'number', unit: '', group: 'Performance' },
-    { value: 'units_sold', label: 'Units Sold', type: 'number', unit: '', group: 'Performance' },
-    { value: 'revenue', label: 'Revenue', type: 'number', unit: '₹', group: 'Performance' },
-    { value: 'sessions', label: 'Sessions', type: 'number', unit: '', group: 'Performance' },
-    { value: 'cvr', label: 'Conversion Rate', type: 'percent', unit: '%', group: 'Performance' },
-    { value: 'bsr', label: 'BSR', type: 'number', unit: '', group: 'Listing' },
-    { value: 'rating', label: 'Rating', type: 'number', unit: '★', group: 'Listing' },
-    { value: 'review_count', label: 'Review Count', type: 'number', unit: '', group: 'Listing' },
-    { value: 'current_price', label: 'Current Price', type: 'number', unit: '₹', group: 'Pricing' },
-    { value: 'stock_level', label: 'Stock Level', type: 'number', unit: 'units', group: 'Inventory' },
-  ],
+    { value: 'priceDispute', label: 'Price Dispute', type: 'boolean', unit: '', group: 'Price & Buybox', description: 'Channel price differs from current price by >₹5' },
+    { value: 'uploadedPrice', label: 'Channel Price', type: 'number', unit: '₹', group: 'Price & Buybox', description: 'Master/channel price set by team' },
+    { value: 'currentPrice', label: 'Current Price', type: 'number', unit: '₹', group: 'Price & Buybox', description: 'Live buybox price on marketplace' },
+    { value: 'mrp', label: 'MRP', type: 'number', unit: '₹', group: 'Price & Buybox', description: 'Maximum Retail Price' },
+    { value: 'discountPercentage', label: 'Discount %', type: 'number', unit: '%', group: 'Price & Buybox', description: 'Discount percentage from MRP' },
+    { value: 'buyBoxWin', label: 'BuyBox Status', type: 'boolean', unit: '', group: 'Price & Buybox', description: 'Our seller winning BuyBox' },
+    { value: 'hasDeal', label: 'Active Deal', type: 'boolean', unit: '', group: 'Price & Buybox', description: 'Has active deal (Lightning/Limited/Best Deal)' },
+    { value: 'dealBadge', label: 'Deal Badge', type: 'text', unit: '', group: 'Price & Buybox', description: 'Type of active deal' },
 
-  Inventory: [
-    { value: 'stock_level', label: 'Stock Level', type: 'number', unit: 'units', group: 'Stock' },
-    { value: 'days_inventory', label: 'Days of Inventory Remaining', type: 'number', unit: 'days', group: 'Stock' },
-    { value: 'reorder_point', label: 'Reorder Point', type: 'number', unit: 'units', group: 'Stock' },
-    { value: 'sales_velocity', label: 'Sales Velocity', type: 'number', unit: 'units/day', group: 'Velocity' },
-    { value: 'fba_units', label: 'FBA Available Units', type: 'number', unit: 'units', group: 'Stock' },
-    { value: 'lead_time', label: 'Lead Time', type: 'number', unit: 'days', group: 'Lead Time' },
-    { value: 'stranded_units', label: 'Stranded Units', type: 'number', unit: 'units', group: 'Stock' },
-    { value: 'reserved_units', label: 'Reserved Units', type: 'number', unit: 'units', group: 'Stock' },
-    { value: 'inbound_units', label: 'Inbound Units', type: 'number', unit: 'units', group: 'Stock' },
-  ],
+    { value: 'stockLevel', label: 'Stock Level', type: 'number', unit: 'units', group: 'Inventory', description: 'Current stock/availability' },
+    { value: 'availabilityStatus', label: 'Availability Status', type: 'enum', unit: '', group: 'Inventory', options: ['In stock', 'Out of Stock', 'Available', 'Currently unavailable'], description: 'Marketplace availability status' },
+    { value: 'daysInventory', label: 'Days of Inventory', type: 'number', unit: 'days', group: 'Inventory', description: 'Estimated days stock will last' },
 
-  Pricing: [
-    { value: 'current_price', label: 'Current Price', type: 'number', unit: '₹', group: 'Price' },
-    { value: 'mrp', label: 'MRP', type: 'number', unit: '₹', group: 'Price' },
-    { value: 'buy_box_price', label: 'Buy Box Price', type: 'number', unit: '₹', group: 'Price' },
-    { value: 'lowest_competitor_price', label: 'Lowest Competitor Price', type: 'number', unit: '₹', group: 'Competitor' },
-    { value: 'profit_margin', label: 'Profit Margin', type: 'percent', unit: '%', group: 'Profit' },
-    { value: 'acos', label: 'ACoS', type: 'percent', unit: '%', group: 'Ads' },
-    { value: 'tacos', label: 'TACOS', type: 'percent', unit: '%', group: 'Ads' },
-    { value: 'bsr', label: 'BSR', type: 'number', unit: '', group: 'Listing' },
-    { value: 'stock_level', label: 'Stock Level', type: 'number', unit: 'units', group: 'Inventory' },
-    { value: 'review_count', label: 'Review Count', type: 'number', unit: '', group: 'Listing' },
-    { value: 'rating', label: 'Rating', type: 'number', unit: '★', group: 'Listing' },
-  ]
+    { value: 'bsr', label: 'Main BSR', type: 'number', unit: 'rank', group: 'Performance', description: 'Best Seller Rank (main category)' },
+    { value: 'subBsr', label: 'Sub BSR', type: 'number', unit: 'rank', group: 'Performance', description: 'Best Seller Rank (sub-category)' },
+    { value: 'bsrTrend', label: 'BSR Trend', type: 'enum', unit: '', group: 'Performance', options: ['Grow', 'Down', 'Stable'], description: 'BSR trend direction' },
+    { value: 'rating', label: 'Rating', type: 'number', unit: '★', group: 'Performance', description: 'Customer rating (1-5)' },
+    { value: 'reviewCount', label: 'Review Count', type: 'number', unit: 'reviews', group: 'Performance', description: 'Total customer reviews' },
+    { value: 'ratingTrend', label: 'Rating Trend', type: 'enum', unit: '', group: 'Performance', options: ['Grow', 'Down', 'Stable'], description: 'Rating trend direction' },
+    { value: 'totalOrders', label: 'Total Orders', type: 'number', unit: 'orders', group: 'Performance', description: 'Total orders from GMS data' },
+
+    { value: 'ads', label: 'Ads Active', type: 'boolean', unit: '', group: 'Ads', description: 'Whether ads campaign is running' },
+    { value: 'tags', label: 'Tags', type: 'list', unit: '', group: 'Filters', description: 'ASIN tags (comma-separated)' },
+    { value: 'category', label: 'Category', type: 'text', unit: '', group: 'Filters', description: 'Product category' },
+    { value: 'brand', label: 'Brand', type: 'text', unit: '', group: 'Filters', description: 'Product brand name' },
+    { value: 'seller', label: 'Seller', type: 'text', unit: '', group: 'Filters', description: 'Seller/brand name' },
+    { value: 'asinStatus', label: 'ASIN Status', type: 'enum', unit: '', group: 'Filters', options: ['Active', 'Error', 'Archived'], description: 'ASIN sync/status state' },
+  ],
 };
 
-export const OPERATORS_BY_TYPE = {
+export const OPERATORS = {
   number: [
     { value: '=', label: 'equals' },
     { value: '≠', label: 'not equals' },
@@ -85,11 +53,8 @@ export const OPERATORS_BY_TYPE = {
   ],
   percent: [
     { value: '=', label: 'equals' },
-    { value: '≠', label: 'not equals' },
     { value: '<', label: 'less than' },
-    { value: '<=', label: 'less than or equal' },
     { value: '>', label: 'greater than' },
-    { value: '>=', label: 'greater than or equal' },
     { value: 'between', label: 'between' },
   ],
   text: [
@@ -99,35 +64,19 @@ export const OPERATORS_BY_TYPE = {
     { value: 'not contains', label: 'does not contain' },
     { value: 'starts with', label: 'starts with' },
     { value: 'is empty', label: 'is empty' },
-    { value: 'is not empty', label: 'is not empty' },
   ],
   enum: [
     { value: '=', label: 'equals' },
     { value: '≠', label: 'not equals' },
   ],
   boolean: [
-    { value: '=', label: 'equals' },
+    { value: '=', label: 'is' },
   ],
   list: [
-    { value: '=', label: 'equals' },
-    { value: '≠', label: 'not equals' },
     { value: 'contains', label: 'contains' },
     { value: 'not contains', label: 'does not contain' },
   ],
-  date: [
-    { value: '=', label: 'equals' },
-    { value: '≠', label: 'not equals' },
-    { value: '<', label: 'before' },
-    { value: '>', label: 'after' },
-    { value: 'between', label: 'between' },
-  ]
 };
-
-export const VALUE_TYPES = [
-  { value: 'Absolute Value', label: 'Absolute Value' },
-  { value: '% of Target', label: '% of Target' },
-  { value: 'Statistically Significant Count', label: 'Statistically Significant Count' },
-];
 
 export const DATE_RANGES = [
   { value: 'Last 7 days', label: 'Last 7 days' },
@@ -135,23 +84,18 @@ export const DATE_RANGES = [
   { value: 'Last 30 days', label: 'Last 30 days' },
   { value: 'Last 60 days', label: 'Last 60 days' },
   { value: 'Last 90 days', label: 'Last 90 days' },
-  { value: 'Last 6 months', label: 'Last 6 months' },
-  { value: 'Last 1 year', label: 'Last 1 year' },
 ];
 
 export const EXCLUDE_OPTIONS = [
   { value: 'Latest day', label: 'Latest day' },
   { value: 'Latest 2 days', label: 'Latest 2 days' },
   { value: 'Latest 3 days', label: 'Latest 3 days' },
-  { value: 'Latest 7 days', label: 'Latest 7 days' },
   { value: 'None', label: 'None' },
 ];
 
 export const FREQUENCY_OPTIONS = [
-  { value: 'Hourly', label: 'Hourly' },
-  { value: 'Every 6 hours', label: 'Every 6 hours' },
-  { value: 'Every 12 hours', label: 'Every 12 hours' },
   { value: 'Daily', label: 'Daily' },
+  { value: 'Every 12 hours', label: 'Every 12 hours' },
   { value: 'Weekly', label: 'Weekly' },
 ];
 
@@ -163,8 +107,7 @@ export const TIME_OPTIONS = [
 
 export default {
   ATTRIBUTES_BY_TYPE,
-  OPERATORS_BY_TYPE,
-  VALUE_TYPES,
+  OPERATORS,
   DATE_RANGES,
   EXCLUDE_OPTIONS,
   FREQUENCY_OPTIONS,

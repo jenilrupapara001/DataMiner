@@ -30,38 +30,6 @@ const FieldLabel = ({ children }) => (
     </div>
 );
 
-const StatCard = ({ icon: Icon, label, value, color = '#1e293b' }) => (
-    <Card
-        style={{ borderRadius: 6, border: '1px solid #e5e7eb' }}
-        styles={{ body: { padding: '16px 18px' } }}
-    >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-                width: 36, height: 36, borderRadius: 6,
-                background: '#f8fafc', border: '1px solid #e5e7eb',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color
-            }}>
-                <Icon size={16} strokeWidth={2} />
-            </div>
-            <div>
-                <div style={{
-                    fontSize: 11, fontWeight: 600, color: '#64748b',
-                    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3
-                }}>
-                    {label}
-                </div>
-                <div style={{
-                    fontSize: 20, fontWeight: 700, color: '#0f172a',
-                    letterSpacing: '-0.3px', lineHeight: 1
-                }}>
-                    {value}
-                </div>
-            </div>
-        </div>
-    </Card>
-);
-
 const UsersPage = () => {
     const socket = useSocket();
     const [messageApi, messageContextHolder] = antdMessage.useMessage();
@@ -85,6 +53,8 @@ const UsersPage = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [totalRecords, setTotalRecords] = useState(0);
+    const [serverActiveCount, setServerActiveCount] = useState(0);
+    const [serverInactiveCount, setServerInactiveCount] = useState(0);
     const [permissionSearch, setPermissionSearch] = useState('');
     const [showUserModal, setShowUserModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -130,9 +100,9 @@ const UsersPage = () => {
         });
     }, [sellers, managers, userFormData.brandManagers]);
 
-    const activeCount = useMemo(() => users.filter(u => u.isActive).length, [users]);
+    const activeCount = useMemo(() => serverActiveCount, [serverActiveCount]);
     const totalRecordCount = useMemo(() => totalRecords || users.length, [totalRecords, users]);
-    const inactiveCount = useMemo(() => Math.max(0, totalRecordCount - activeCount), [totalRecordCount, activeCount]);
+    const inactiveCount = useMemo(() => serverInactiveCount, [serverInactiveCount]);
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -145,6 +115,8 @@ const UsersPage = () => {
             if (response.success) {
                 setUsers(response.data.users || []);
                 setTotalRecords(response.data.pagination?.total || 0);
+                setServerActiveCount(response.data.pagination?.activeCount || 0);
+                setServerInactiveCount(response.data.pagination?.inactiveCount || 0);
             }
         } catch (error) {
             console.error('Failed to load users:', error);
@@ -650,76 +622,59 @@ const UsersPage = () => {
         </div>
     );
 
+    const StatCard = ({ icon: Icon, label, value, color = '#18181b' }) => (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={14} color="#fff" />
+            </div>
+            <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#18181b' }}>{value}</div>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="users-pro">
+        <div style={{ background: '#fff', minHeight: 'calc(100vh - 60px)' }}>
             {messageContextHolder}
             {notificationContextHolder}
 
             <style>{`
-                .users-pro {
-                    background: #fafafa;
-                    min-height: calc(100vh - 60px);
-                    padding: 24px 28px;
-                }
-                .pro-table .ant-table-thead > tr > th {
-                    background: #f8fafc !important;
-                    font-size: 11px !important;
-                    font-weight: 700 !important;
-                    color: #475569 !important;
-                    text-transform: uppercase !important;
-                    letter-spacing: 0.04em !important;
-                    border-bottom: 1px solid #e5e7eb !important;
-                }
-                .pro-table .ant-table-tbody > tr > td {
-                    border-bottom: 1px solid #f1f5f9 !important;
-                    padding: 12px 16px !important;
-                }
-                .pro-table .ant-table-tbody > tr:hover > td {
-                    background: #fafbfc !important;
-                }
-                .matrix-panel {
-                    background: #ffffff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 6px;
-                    overflow: hidden;
-                    margin-bottom: 16px;
-                }
                 .matrix-check {
-                    display: inline-flex;
-                    width: 20px; height: 20px;
-                    border-radius: 4px;
-                    border: 2px solid #cbd5e1;
-                    align-items: center;
-                    justify-content: center;
-                    cursor: pointer;
-                    transition: all 0.15s;
+                    display: inline-flex; width: 20px; height: 20px;
+                    border-radius: 4px; border: 2px solid #d4d4d8;
+                    align-items: center; justify-content: center;
+                    cursor: pointer; transition: all 0.15s;
                 }
-                .matrix-check.on {
-                    background-color: #15803d;
-                    border-color: #15803d;
-                }
+                .matrix-check:hover { border-color: #71717a; }
+                .matrix-check.on { background-color: #059669; border-color: #059669; }
             `}</style>
 
-            <Space size={8}>
-                    <Button icon={<RefreshCw size={13} strokeWidth={2} />} onClick={loadUsers}
-                        style={{ borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
-                        Refresh
-                    </Button>
-                    {activeTab === 'users' ? (
-                        <Button type="primary" icon={<UserPlus size={13} strokeWidth={2} />}
-                            onClick={() => handleOpenUserModal()}
-                            style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
-                            Add User
+            {/* Page Header */}
+            <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f4f5f7' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
+                    <div>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0, lineHeight: 1.3 }}>Team Members</h2>
+                        <p style={{ fontSize: 12, color: '#71717a', margin: 0, marginTop: 4 }}>Manage users, roles and permissions across your team</p>
+                    </div>
+                    <Space size={8}>
+                        <Button icon={<RefreshCw size={13} />} onClick={loadUsers} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
+                            Refresh
                         </Button>
-                    ) : (
-                        <Button type="primary" icon={<Plus size={13} strokeWidth={2} />}
-                            onClick={() => handleOpenRoleModal()}
-                            style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12, height: 34 }}>
-                            Create Role
-                        </Button>
-                    )}
-                </Space>
-
+                        {activeTab === 'users' ? (
+                            <Button type="primary" icon={<UserPlus size={13} />} onClick={() => handleOpenUserModal()}
+                                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
+                                Add User
+                            </Button>
+                        ) : (
+                            <Button type="primary" icon={<Plus size={13} />} onClick={() => handleOpenRoleModal()}
+                                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
+                                Create Role
+                            </Button>
+                        )}
+                    </Space>
+                </div>
+            </div>
             {/* Tab Switcher + Filters */}
             <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb', marginBottom: 16 }}
                 styles={{ body: { padding: '12px 16px' } }}>
@@ -894,10 +849,11 @@ const UsersPage = () => {
                     </span>
                 </div>}
                 open={showUserModal} onCancel={() => setShowUserModal(false)} centered destroyOnHidden width={720}
+                styles={{ body: { padding: '16px 20px' } }}
                 footer={[
-                    <Button key="cancel" onClick={() => setShowUserModal(false)} style={{ borderRadius: 6, fontWeight: 600, fontSize: 12 }}>Cancel</Button>,
+                    <Button key="cancel" onClick={() => setShowUserModal(false)} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Cancel</Button>,
                     <Button key="save" type="primary" onClick={handleSaveUser}
-                        style={{ background: '#1e293b', borderColor: '#1e293b', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>
+                        style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>
                         {editingUser ? 'Save Changes' : 'Create User'}
                     </Button>
                 ]}

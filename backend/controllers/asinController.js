@@ -161,7 +161,10 @@ exports.getAsins = async (req, res) => {
         if (brand) reqObj.input('brand', sql.NVarChar, brand);
         if (scrapeStatus) reqObj.input('scrapeStatus', sql.NVarChar, scrapeStatus);
         if (hasAplus !== undefined && hasAplus !== '') reqObj.input('hasAplus', sql.Bit, hasAplus === 'true' ? 1 : 0);
-        if (buyBoxWin !== undefined && buyBoxWin !== '') reqObj.input('buyBoxStatus', sql.Bit, buyBoxWin === 'true' ? 1 : 0);
+        if (buyBoxWin !== undefined && buyBoxWin !== '') {
+          const ownSellers = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEz'];
+          ownSellers.forEach((s, i) => reqObj.input(`ownSeller${i}`, sql.NVarChar, s));
+        }
         if (minPrice) reqObj.input('minPrice', sql.Decimal(18, 2), parseFloat(minPrice));
         if (maxPrice) reqObj.input('maxPrice', sql.Decimal(18, 2), parseFloat(maxPrice));
         if (minBSR) reqObj.input('minBSR', sql.Int, parseInt(minBSR));
@@ -248,7 +251,14 @@ exports.getAsins = async (req, res) => {
     if (brand) whereClause += ' AND s.Name = @brand';
     if (scrapeStatus) whereClause += ' AND ScrapeStatus = @scrapeStatus';
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
-    if (buyBoxWin !== undefined && buyBoxWin !== '') whereClause += ' AND BuyBoxWin = @buyBoxStatus';
+    if (buyBoxWin !== undefined && buyBoxWin !== '') {
+      const ownSellers = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEz'];
+      if (buyBoxWin === 'true') {
+        whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ')})`;
+      } else {
+        whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy != @ownSeller${i}`).join(' AND ')})`;
+      }
+    }
     if (priceDispute !== undefined && priceDispute !== '') {
       if (priceDispute === 'true') {
         whereClause += ' AND a.PriceDispute = 1';
@@ -743,9 +753,9 @@ exports.getAsins = async (req, res) => {
             // Fee Preview
             feePreview: feePreview,
             
-            // BuyBox (BOOLEAN CONVERSION)
-            buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true || a.BuyBoxWin === 'true',
-            buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true || a.BuyBoxStatus === 'true',
+            // BuyBox (computed dynamically from SoldBy)
+            buyBoxWin: isBuyBoxWinner(a.SoldBy),
+            buyBoxStatus: isBuyBoxWinner(a.SoldBy),
             buyBoxSellerId: a.BuyBoxSellerId || a.SoldBy || '',
             
             // Seller Info
@@ -932,9 +942,9 @@ exports.getAsin = async (req, res) => {
       reviewCount: a.ReviewCount !== null && a.ReviewCount !== undefined ? parseInt(a.ReviewCount) : null,
       lqs: parseFloat(a.LQS) || 0,
       
-      buyBoxWin: a.BuyBoxWin === 1 || a.BuyBoxWin === true,
+      buyBoxWin: isBuyBoxWinner(a.SoldBy),
       hasAplus: a.HasAplus === 1 || a.HasAplus === true,
-      buyBoxStatus: a.BuyBoxStatus === 1 || a.BuyBoxStatus === true,
+      buyBoxStatus: isBuyBoxWinner(a.SoldBy),
       
       soldBy: a.SoldBy || '',
       soldBySec: a.SoldBySec || '',

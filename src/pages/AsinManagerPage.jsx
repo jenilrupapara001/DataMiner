@@ -1951,7 +1951,7 @@ const AsinManagerPage = (props) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>BuyBox</div>
-                <Select size="small" placeholder="All" value={filters.buyBoxWin || undefined} onChange={(v) => setFilters({ ...filters, buyBoxWin: v || '' })} allowClear style={{ width: '100%', borderRadius: 8 }} options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]} />
+                <Select size="small" placeholder="All" value={filters.buyBoxWin || undefined} onChange={(v) => setFilters({ ...filters, buyBoxWin: v || '' })} allowClear style={{ width: '100%', borderRadius: 8 }} options={[{ value: 'true', label: 'Won (Own)' }, { value: 'false', label: 'Lost (Other)' }]} />
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>A+ Content</div>
@@ -3443,7 +3443,7 @@ const AsinManagerPage = (props) => {
                                 const textColor = isUnavailable ? '#dc2626' : isInStock ? '#059669' : '#334155';
                                 const borderColor = isUnavailable ? '#fecaca' : isInStock ? '#a7f3d0' : '#e2e8f0';
                                 return (
-                                  <Tooltip title={asin.availabilityStatus} placement="top" overlayStyle={{ fontSize: 11 }}>
+                                  <Tooltip title={asin.availabilityStatus} placement="top" styles={{ root: { fontSize: 11 } }}>
                                     <span className="badge" style={{
                                       backgroundColor: bgColor,
                                       color: textColor,
@@ -3524,7 +3524,7 @@ const AsinManagerPage = (props) => {
                         {isVisible('dealBadge') && (
                           <td style={{ ...tdStyle, textAlign: 'center' }}>
                             {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
-                              <Tooltip title={asin.dealBadge} placement="top" overlayStyle={{ fontSize: 11 }}>
+                              <Tooltip title={asin.dealBadge} placement="top" styles={{ root: { fontSize: 11 } }}>
                                 <span
                                   className="badge"
                                   style={{
@@ -3609,7 +3609,7 @@ const AsinManagerPage = (props) => {
                                     {condition && <div><b>Condition:</b> {condition}</div>}
                                     {availability && <div><b>Avail:</b> {availability}</div>}
                                   </div>
-                                } placement="left" overlayStyle={{ fontSize: 11 }}>
+                                } placement="left" styles={{ root: { fontSize: 11 } }}>
                                   <div className="d-flex flex-column gap-1">
                                     <span className="fw-bold text-zinc-800 text-truncate" style={{ fontSize: '10px' }} title={seller || 'Unknown'}>
                                       {seller || 'Unknown'}
@@ -3669,7 +3669,7 @@ const AsinManagerPage = (props) => {
                         )}
                         {isVisible('priceDispute') && (
                           <td style={{ ...tdStyle, textAlign: 'center' }}>
-                            <Tooltip title={asin.priceDispute ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" overlayStyle={{ fontSize: 11 }}>
+                            <Tooltip title={asin.priceDispute ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" styles={{ root: { fontSize: 11 } }}>
                               <span className="badge" style={{
                                 backgroundColor: asin.priceDispute ? '#fef2f2' : '#ecfdf5',
                                 color: asin.priceDispute ? '#dc2626' : '#059669',

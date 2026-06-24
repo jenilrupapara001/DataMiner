@@ -1,36 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { 
+import {
   RefreshCw, LayoutGrid, TrendingUp, Search, Plus,
-  Trash2, Loader2, Check, ChevronDown,
-  ChevronUp, Flag, Calendar, 
+  Trash2, Check, ChevronDown, ChevronUp, Flag,
   Circle, CheckCircle2, AlertCircle, Zap,
-  ListChecks, Gauge
+  ListChecks, Gauge, Calendar, X, Send
 } from 'lucide-react';
-import { 
-  Layout, Card, Row, Col, Statistic, Button, Space, Table, Input, 
-  Badge, Alert, Tag, Progress, Typography, Popconfirm, 
-  Tooltip, Select, Segmented, Modal, Divider, message as antdMessage 
+import {
+  Button, Input, Select, Space, Badge, Tag, Progress,
+  Typography, Popconfirm, Tooltip, Modal, Divider,
+  Table, Switch, Card, Row, Col, message as antdMessage, Spin
 } from 'antd';
 import { db } from '../services/db';
-import { usePageTitle } from '../contexts/PageTitleContext';
-import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 const OKR_STATUS_COLORS = {
-  'ON_TRACK': { color: '#16a34a', bg: '#dcfce7', label: 'On Track' },
-  'AT_RISK': { color: '#d97706', bg: '#fef3c7', label: 'At Risk' },
-  'BEHIND': { color: '#dc2626', bg: '#fee2e2', label: 'Behind' },
-  'COMPLETED': { color: '#2563eb', bg: '#dbeafe', label: 'Completed' }
+  'ON_TRACK': { color: '#059669', bg: '#ecfdf5', label: 'On Track' },
+  'AT_RISK': { color: '#d97706', bg: '#fffbeb', label: 'At Risk' },
+  'BEHIND': { color: '#dc2626', bg: '#fef2f2', label: 'Behind' },
 };
 
 const PRIORITY_COLORS = {
-  'URGENT': { bg: '#fee2e2', color: '#ef4444' },
-  'HIGH': { bg: '#fef3c7', color: '#f59e0b' },
-  'MEDIUM': { bg: '#dbeafe', color: '#3b82f6' },
-  'LOW': { bg: '#f3f4f6', color: '#6b7280' }
+  'URGENT': { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+  'HIGH': { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+  'MEDIUM': { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+  'LOW': { bg: '#f4f4f5', color: '#71717a', border: '#e4e4e7' }
 };
 
 const STATUS_OPTIONS = [
@@ -46,27 +42,55 @@ const TASK_TYPES = [
   { value: 'TITLE_OPTIMIZATION', label: 'Title SEO', category: 'SEO & Content' },
   { value: 'A_PLUS_CONTENT', label: 'A+ Content', category: 'SEO & Content' },
   { value: 'PRICING_STRATEGY', label: 'Pricing', category: 'Sales & Marketing' },
-  { value: 'INVENTORY_MANAGEMENT', label: 'Inventory', category: 'Operations & General' },
-  { value: 'GENERAL_OPTIMIZATION', label: 'General', category: 'Operations & General' },
+  { value: 'INVENTORY_MANAGEMENT', label: 'Inventory', category: 'Operations' },
+  { value: 'GENERAL_OPTIMIZATION', label: 'General', category: 'Operations' },
   { value: 'IMAGE_OPTIMIZATION', label: 'Images', category: 'SEO & Content' },
   { value: 'DESCRIPTION_OPTIMIZATION', label: 'Description', category: 'SEO & Content' },
   { value: 'REVIEW_MANAGEMENT', label: 'Reviews', category: 'Sales & Marketing' },
-  { value: 'PPC_OPTIMIZATION', label: 'PPC Ads', category: 'PPC & Advertising' },
-  { value: 'COMPLIANCE', label: 'Compliance', category: 'Compliance & Legal' }
+  { value: 'PPC_OPTIMIZATION', label: 'PPC Ads', category: 'Advertising' },
+  { value: 'COMPLIANCE', label: 'Compliance', category: 'Compliance' }
 ];
 
-const TASK_CATEGORIES = ['SEO & Content', 'Sales & Marketing', 'Operations & General', 'PPC & Advertising', 'Compliance & Legal'];
+const TASK_CATEGORIES = ['SEO & Content', 'Sales & Marketing', 'Operations', 'Advertising', 'Compliance'];
+
+const PriorityTag = ({ priority }) => {
+  const c = PRIORITY_COLORS[priority] || PRIORITY_COLORS.MEDIUM;
+  return (
+    <span className="badge" style={{
+      background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+      fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+      textTransform: 'uppercase', letterSpacing: '0.03em'
+    }}>
+      {priority}
+    </span>
+  );
+};
+
+const StatusTag = ({ status }) => {
+  const map = {
+    PENDING: { bg: '#f4f4f5', color: '#71717a', border: '#e4e4e7' },
+    IN_PROGRESS: { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+    REVIEW: { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+    COMPLETED: { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+    CANCELLED: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+  };
+  const c = map[status] || map.PENDING;
+  return (
+    <span className="badge" style={{
+      background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+      fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+      textTransform: 'uppercase', letterSpacing: '0.03em'
+    }}>
+      {status?.replace('_', ' ')}
+    </span>
+  );
+};
 
 const ActionsPage = () => {
   const queryClient = useQueryClient();
   const [messageApi, contextHolder] = antdMessage.useMessage();
-  const { setPageTitle } = usePageTitle();
-  
-  useEffect(() => {
-    setPageTitle('Workflows');
-  }, [setPageTitle]);
 
-  const [activeView, setActiveView] = useState('okr'); // 'okr' | 'tasks' | 'board' | 'auto'
+  const [activeView, setActiveView] = useState('tasks');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -80,69 +104,43 @@ const ActionsPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoGenerating, setAutoGenerating] = useState(false);
 
-  // Helper function to get category from task type
-  const getTaskCategory = (type) => {
-    const taskType = TASK_TYPES.find(t => t.value === type);
-    return taskType?.category || 'Operations & General';
-  };
+  const getTaskCategory = (type) => TASK_TYPES.find(t => t.value === type)?.category || 'Operations';
 
-  // Form states
   const [objectiveForm, setObjectiveForm] = useState({
-    title: '',
-    description: '',
-    type: 'MONTHLY',
-    startDate: new Date(),
-    endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+    title: '', description: '', type: 'MONTHLY',
+    startDate: new Date(), endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     owner: ''
   });
 
   const [keyResultForm, setKeyResultForm] = useState({
-    title: '',
-    targetValue: '',
-    currentValue: 0,
-    unit: '%',
-    metric: 'GMS',
-    deadline: new Date()
+    title: '', targetValue: '', currentValue: 0, unit: '%', metric: 'GMS', deadline: new Date()
   });
 
   const [taskForm, setTaskForm] = useState({
-    title: '',
-    description: '',
-    type: 'GENERAL_OPTIMIZATION',
-    priority: 'MEDIUM',
-    objectiveId: '',
-    keyResultId: ''
+    title: '', description: '', type: 'GENERAL_OPTIMIZATION',
+    priority: 'MEDIUM', objectiveId: '', keyResultId: ''
   });
 
-  // Fetch Objectives with Key Results via API
   const { data: objectivesData, isLoading: objectivesLoading, refetch: refetchObjectives } = useQuery({
     queryKey: ['objectives'],
     queryFn: async () => {
       try {
         const res = await db.getObjectives();
         return Array.isArray(res) ? res : (res?.data || []);
-      } catch (error) {
-        console.error('Failed to fetch objectives:', error);
-        return [];
-      }
+      } catch { return []; }
     }
   });
 
-  // Fetch Actions/Tasks via API
   const { data: tasksData, isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
     queryKey: ['actions'],
     queryFn: async () => {
       try {
         const res = await db.getActions();
         return Array.isArray(res) ? res : (res?.data || []);
-      } catch (error) {
-        console.error('Failed to fetch actions:', error);
-        return [];
-      }
+      } catch { return []; }
     }
   });
 
-  // Fetch Users via API
   const { data: usersData } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
@@ -152,16 +150,13 @@ const ActionsPage = () => {
         if (res?.data && Array.isArray(res.data)) return res.data;
         if (res?.success && Array.isArray(res.data)) return res.data;
         return [];
-      } catch (error) {
-        console.error('Failed to fetch users:', error);
-        return [];
-      }
+      } catch { return []; }
     }
   });
 
   const objectives = useMemo(() => {
     const data = objectivesData || [];
-    return searchQuery ? data.filter(o => 
+    return searchQuery ? data.filter(o =>
       o.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       o.description?.toLowerCase().includes(searchQuery.toLowerCase())
     ) : data;
@@ -169,148 +164,98 @@ const ActionsPage = () => {
 
   const tasks = useMemo(() => {
     let taskList = tasksData || [];
-    
-    if (filterStatus) {
-      taskList = taskList.filter(t => t.status === filterStatus);
-    }
-    if (filterPriority) {
-      taskList = taskList.filter(t => t.priority === filterPriority);
-    }
-    if (filterCategory) {
-      taskList = taskList.filter(t => getTaskCategory(t.type) === filterCategory);
-    }
-    if (searchQuery) {
-      taskList = taskList.filter(t => 
-        t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+    if (filterStatus) taskList = taskList.filter(t => t.status === filterStatus);
+    if (filterPriority) taskList = taskList.filter(t => t.priority === filterPriority);
+    if (filterCategory) taskList = taskList.filter(t => getTaskCategory(t.type) === filterCategory);
+    if (searchQuery) taskList = taskList.filter(t =>
+      t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     return taskList;
   }, [tasksData, filterStatus, filterPriority, filterCategory, searchQuery]);
 
-  // Group tasks by category
   const tasksByCategory = useMemo(() => {
     const groups = {};
-    TASK_CATEGORIES.forEach(cat => {
-      groups[cat] = [];
-    });
+    TASK_CATEGORIES.forEach(cat => { groups[cat] = []; });
     tasks.forEach(task => {
       const cat = getTaskCategory(task.type);
-      if (groups[cat]) {
-        groups[cat].push(task);
-      } else {
-        groups['Operations & General'].push(task);
-      }
+      (groups[cat] || groups['Operations']).push(task);
     });
     return groups;
   }, [tasks]);
 
-  const toggleObjectiveExpand = (id) => {
-    setExpandedObjectives(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  const toggleObjectiveExpand = (id) => setExpandedObjectives(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Calculate objective progress from key results
   const getObjectiveProgress = (objective) => {
     const krs = objective.keyResults || [];
     if (krs.length === 0) return 0;
-    const totalProgress = krs.reduce((sum, kr) => {
+    const total = krs.reduce((sum, kr) => {
       const target = parseFloat(kr.targetValue) || 1;
       const current = parseFloat(kr.currentValue) || 0;
       return sum + Math.min(100, (current / target) * 100);
     }, 0);
-    return Math.round(totalProgress / krs.length);
+    return Math.round(total / krs.length);
   };
 
-  // Handle create objective
   const handleCreateObjective = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const objectiveData = {
+      const res = await db.createObjective({
         title: objectiveForm.title,
         description: objectiveForm.description,
         type: objectiveForm.type,
         startDate: objectiveForm.startDate.toISOString(),
         endDate: objectiveForm.endDate.toISOString(),
         owners: objectiveForm.owner ? [objectiveForm.owner] : []
-      };
-      const res = await db.createObjective(objectiveData);
+      });
       if (res?.success || res?._id) {
         await refetchObjectives();
         setShowObjectiveModal(false);
-        setObjectiveForm({
-          title: '', description: '', type: 'MONTHLY',
-          startDate: new Date(),
-          endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
-          owner: ''
-        });
-        messageApi.success('Objective created successfully');
+        setObjectiveForm({ title: '', description: '', type: 'MONTHLY', startDate: new Date(), endDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), owner: '' });
+        messageApi.success('Objective created');
       }
-    } catch (error) {
-      console.error('Create objective error:', error);
-      messageApi.error('Failed to create objective: ' + (error.message || 'Server error'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (e) { messageApi.error('Failed to create objective'); }
+    finally { setIsSubmitting(false); }
   };
 
-  // Handle create key result
   const handleCreateKeyResult = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const krData = {
+      const res = await db.createKeyResult({
         title: keyResultForm.title,
         targetValue: parseFloat(keyResultForm.targetValue) || 0,
         currentValue: 0,
         unit: keyResultForm.unit,
         metric: keyResultForm.metric,
-        metricType: keyResultForm.metric,
         objectiveId: selectedObjective?._id,
         startDate: new Date().toISOString(),
         deadline: keyResultForm.deadline?.toISOString ? keyResultForm.deadline.toISOString() : new Date(keyResultForm.deadline).toISOString()
-      };
-      const res = await db.createKeyResult(krData);
+      });
       if (res?.success || res?._id) {
         await refetchObjectives();
         setShowKeyResultModal(false);
-        setKeyResultForm({
-          title: '', targetValue: '', currentValue: 0, unit: '%',
-          metric: 'GMS', deadline: new Date()
-        });
-        messageApi.success('Key Result added successfully');
+        setKeyResultForm({ title: '', targetValue: '', currentValue: 0, unit: '%', metric: 'GMS', deadline: new Date() });
+        messageApi.success('Key Result added');
       }
-    } catch (error) {
-      console.error('Create key result error:', error);
-      messageApi.error('Failed to create key result: ' + (error.message || 'Server error'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (e) { messageApi.error('Failed to add key result'); }
+    finally { setIsSubmitting(false); }
   };
 
-  // Handle update key result progress
   const handleUpdateKeyResult = async (krId, newValue) => {
     try {
       const result = await db.updateKeyResult(krId, { currentValue: parseFloat(newValue) });
-      if (result?.success || result?._id) {
-        await refetchObjectives();
-        messageApi.success('Progress updated');
-      } else {
-        messageApi.error(result?.message || 'Failed to update progress');
-      }
-    } catch (error) {
-      console.error('Key result update error:', error);
-      messageApi.error('Failed to update progress: ' + (error.message || 'Server error'));
-    }
+      if (result?.success || result?._id) { await refetchObjectives(); messageApi.success('Progress updated'); }
+    } catch (e) { messageApi.error('Failed to update'); }
   };
 
-  // Handle create task
   const handleCreateTask = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const user = db.getUser();
-      const taskData = {
+      const res = await db.createAction({
         title: taskForm.title,
         description: taskForm.description,
         type: taskForm.type,
@@ -319,60 +264,35 @@ const ActionsPage = () => {
         createdBy: user?._id || user?.id,
         objectiveId: taskForm.objectiveId || null,
         keyResultId: taskForm.keyResultId || null
-      };
-      const res = await db.createAction(taskData);
+      });
       if (res?.success || res?._id) {
         await refetchTasks();
         setShowTaskModal(false);
-        setTaskForm({
-          title: '', description: '', type: 'GENERAL_OPTIMIZATION',
-          priority: 'MEDIUM', objectiveId: '', keyResultId: ''
-        });
-        messageApi.success('Task created successfully');
+        setTaskForm({ title: '', description: '', type: 'GENERAL_OPTIMIZATION', priority: 'MEDIUM', objectiveId: '', keyResultId: '' });
+        messageApi.success('Task created');
       }
-    } catch (error) {
-      console.error('Create task error:', error);
-      messageApi.error('Failed to create task: ' + (error.message || 'Server error'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (e) { messageApi.error('Failed to create task'); }
+    finally { setIsSubmitting(false); }
   };
 
-  // Handle status change
   const handleStatusChange = async (taskId, newStatus) => {
     try {
       const result = await db.updateAction(taskId, { status: newStatus });
-      if (!result?.success) {
-        messageApi.error(result?.message || 'Failed to update task status');
-        return;
-      }
-      messageApi.success('Task status updated');
+      if (!result?.success) { messageApi.error(result?.message || 'Failed to update'); return; }
+      messageApi.success('Status updated');
       await refetchTasks();
-    } catch (error) {
-      console.error('Status update error:', error);
-      const errorMsg = error.response?.data?.message || error.message || 'Server error';
-      messageApi.error('Failed to update status: ' + errorMsg);
-    }
+    } catch (e) { messageApi.error('Failed to update status'); }
   };
 
-  // Handle delete task
   const handleDeleteTask = async (taskId) => {
     try {
       const result = await db.deleteAction(taskId);
-      if (!result?.success) {
-        messageApi.error(result?.message || 'Failed to delete task');
-        return;
-      }
-      messageApi.success('Task deleted successfully');
+      if (!result?.success) { messageApi.error(result?.message || 'Failed to delete'); return; }
+      messageApi.success('Task deleted');
       await refetchTasks();
-    } catch (error) {
-      console.error('Delete task error:', error);
-      const errorMsg = error.response?.data?.message || error.message || 'Server error';
-      messageApi.error('Failed to delete task: ' + errorMsg);
-    }
+    } catch (e) { messageApi.error('Failed to delete task'); }
   };
 
-  // Handle auto-generate bulk tasks from ASIN analysis
   const handleAutoGenerateTasks = async () => {
     setAutoGenerating(true);
     try {
@@ -380,19 +300,12 @@ const ActionsPage = () => {
       if (result?.success || result?.count > 0) {
         await refetchTasks();
         setShowAutoGenerateModal(false);
-        messageApi.success(`Successfully generated ${result?.count || 0} auto-tasks`);
-      } else if (result?.message) {
-        messageApi.info(result.message);
+        messageApi.success(`Generated ${result?.count || 0} tasks`);
       }
-    } catch (error) {
-      console.error('Auto-generate error:', error);
-      messageApi.error('Failed to auto-generate tasks: ' + (error.message || 'Server error'));
-    } finally {
-      setAutoGenerating(false);
-    }
+    } catch (e) { messageApi.error('Failed to auto-generate'); }
+    finally { setAutoGenerating(false); }
   };
 
-  // Stats calculation
   const stats = useMemo(() => {
     const taskList = tasksData || [];
     return {
@@ -405,974 +318,497 @@ const ActionsPage = () => {
     };
   }, [tasksData, objectives]);
 
-  // Ant Design Table Columns for All Tasks
-  const taskColumns = [
-    {
-      title: '#',
-      key: 'index',
-      width: 60,
-      align: 'center',
-      render: (_, __, index) => <Text type="secondary" style={{ fontSize: '12px' }}>{index + 1}</Text>
-    },
-    {
-      title: 'Task Title & Description',
-      key: 'task',
-      render: (_, record) => (
-        <div>
-          <Text strong style={{ color: '#1e293b', fontSize: '13px' }}>{record.title}</Text>
-          <div style={{ color: '#64748b', fontSize: '11px', maxWidth: '360px' }} className="text-truncate">
-            {record.description || 'No description provided'}
-          </div>
-        </div>
-      )
-    },
-    {
-      title: 'Objective Mapping',
-      key: 'objective',
-      render: (_, record) => {
-        const mapping = objectives.find(o => o._id === record.objectiveId);
-        return mapping ? (
-          <Tag color="blue" style={{ fontSize: '11px', borderRadius: '4px' }}>{mapping.title}</Tag>
-        ) : (
-          <Text type="secondary" style={{ fontSize: '11px' }}>--</Text>
-        );
-      }
-    },
-    {
-      title: 'Priority',
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (priority) => (
-        <Tag 
-          color={PRIORITY_COLORS[priority]?.color || '#64748b'} 
-          style={{ border: 'none', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', minWidth: '70px', textAlign: 'center' }}
-        >
-          {priority}
-        </Tag>
-      )
-    },
-    {
-      title: 'Task Status',
-      key: 'status',
-      render: (_, record) => (
-        <Select 
-          value={record.status}
-          onChange={(val) => handleStatusChange(record._id, val)}
-          size="small"
-          style={{ width: 120 }}
-          options={STATUS_OPTIONS.slice(1).map(opt => ({ label: opt.label, value: opt.value }))}
-        />
-      )
-    },
-    {
-      title: 'Due Date',
-      dataIndex: 'dueDate',
-      key: 'dueDate',
-      render: (date) => date ? (
-        <Text style={{ fontSize: '12px', color: '#475569' }}>
-          <Calendar size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-          {new Date(date).toLocaleDateString()}
-        </Text>
-      ) : (
-        <Text type="secondary" style={{ fontSize: '11px' }}>--</Text>
-      )
-    },
-    {
-      title: 'Actions',
-      key: 'action',
-      align: 'right',
-      render: (_, record) => (
-        <Popconfirm
-          title="Delete optimization task?"
-          description="This cannot be undone."
-          onConfirm={() => handleDeleteTask(record._id)}
-          okText="Delete"
-          cancelText="Cancel"
-          okButtonProps={{ danger: true }}
-        >
-          <Button type="text" danger icon={<Trash2 size={14} />} size="small" />
-        </Popconfirm>
-      )
-    }
-  ];
-
-  // Table columns for OKR Linked Tasks
-  const linkedTaskColumns = [
-    {
-      title: 'Task',
-      dataIndex: 'title',
-      key: 'title',
-      render: (text) => <Text strong style={{ fontSize: '12px', color: '#475569' }}>{text}</Text>
-    },
-    {
-      title: 'Priority',
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (p) => (
-        <Tag color={PRIORITY_COLORS[p]?.color} style={{ border: 'none', fontWeight: 650, fontSize: '9px' }}>
-          {p}
-        </Tag>
-      )
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (s) => (
-        <Tag color={s === 'COMPLETED' ? 'success' : 'warning'} style={{ fontSize: '9px', fontWeight: 600 }}>
-          {s}
-        </Tag>
-      )
-    },
-    {
-      title: 'Due Date',
-      dataIndex: 'dueDate',
-      key: 'dueDate',
-      render: (d) => d ? <span style={{ fontSize: '11px', color: '#64748b' }}>{new Date(d).toLocaleDateString()}</span> : '--'
-    }
-  ];
-
   if (objectivesLoading || tasksLoading) {
-    return <PageLoader message="Loading OKR Dashboard..." />;
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}><Spin size="large" /></div>;
   }
 
   return (
-    <div className="actions-page-container">
+    <div style={{ background: '#fff', minHeight: 'calc(100vh - 60px)' }}>
       {contextHolder}
-      
-      {/* Custom CSS rules injected to support viewport height fills */}
-      <style>{`
-        .actions-page-container {
-          display: flex;
-          flex-direction: column;
-          height: calc(100vh - 60px);
-          overflow: hidden;
-          background-color: #f8fafc;
-          margin: -1.5rem -2rem;
-        }
-        .actions-main-content {
-          flex: 1;
-          overflow-y: auto;
-          padding: 12px 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-        
-        /* Visual Animations */
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-slide-up {
-          animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-        
-        /* KPI Metrics & Board styling */
-        .dashboard-segmented .ant-segmented-item-selected {
-          background-color: #3b82f6 !important;
-          color: #ffffff !important;
-          font-weight: 650 !important;
-        }
-        
-        .okr-collapsible-card {
-          border-radius: 12px !important;
-          overflow: hidden !important;
-          transition: all 0.2s ease;
-          border: 1px solid #e2e8f0 !important;
-        }
-        .okr-collapsible-card:hover {
-          box-shadow: 0 8px 20px rgba(0,0,0,0.04) !important;
-          border-color: #cbd5e1 !important;
-        }
-        
-        .kanban-lane {
-          background-color: #f1f5f9;
-          border-radius: 12px;
-          padding: 12px;
-          min-height: 450px;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .kanban-card {
-          background: #ffffff;
-          border-radius: 8px;
-          padding: 14px;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-          border: 1px solid #e2e8f0;
-          transition: all 0.2s ease;
-        }
-        .kanban-card:hover {
-          box-shadow: 0 4px 12px rgba(0,0,0,0.07);
-          transform: translateY(-2px);
-        }
-        .auto-category-card {
-          border-radius: 12px !important;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-        }
 
-        .spin { animation: spin 1.2s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-        @media (max-width: 992px) {
-          .actions-page-container {
-            margin: -0.75rem;
-            height: auto;
-            overflow: visible;
-          }
-        }
-      `}</style>
-
-      {/* MAIN CONTENT LAYOUT */}
-      <div className="actions-main-content animate-slide-up">
-        
-        {/* COMPACT VIEW SWITCHER & ACTION TOOLBAR */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
-          <Segmented
-            className="dashboard-segmented"
-            size="middle"
-            options={[
-              { label: <Space size={6}><Flag size={14} /><span>OKR Board</span></Space>, value: 'okr' },
-              { label: <Space size={6}><ListChecks size={14} /><span>All Tasks</span></Space>, value: 'tasks' },
-              { label: <Space size={6}><LayoutGrid size={14} /><span>Kanban</span></Space>, value: 'board' },
-              { label: <Space size={6}><Zap size={14} /><span>Auto-Tasks</span></Space>, value: 'auto' }
-            ]}
-            value={activeView}
-            onChange={setActiveView}
-          />
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Button 
-              size="middle"
-              onClick={() => { refetchObjectives(); refetchTasks(); }}
-              icon={<RefreshCw size={13} />}
-              style={{ display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
-            >
-              Refresh
-            </Button>
-            <Button 
-              type="default" 
-              size="middle"
-              style={{ borderColor: '#f59e0b', color: '#d97706', backgroundColor: '#fffbeb', display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
-              icon={<Zap size={13} />} 
-              onClick={() => setShowAutoGenerateModal(true)}
-            >
-              Auto-Generate
-            </Button>
-            <Button 
-              type="primary" 
-              size="middle"
-              style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6', display: 'flex', alignItems: 'center', fontWeight: 600, fontSize: '12px' }}
-              icon={<Plus size={14} />} 
-              onClick={() => setShowTaskModal(true)}
-            >
-              New Task
-            </Button>
+      {/* Page Header */}
+      <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f4f4f7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0 }}>Workflows & Tasks</h2>
+            <p style={{ fontSize: 12, color: '#71717a', margin: 0, marginTop: 4 }}>Manage objectives, track tasks, and automate operations</p>
           </div>
+          <Space size={8}>
+            <Button icon={<RefreshCw size={13} />} onClick={() => { refetchObjectives(); refetchTasks(); }}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>Refresh</Button>
+            <Button icon={<Zap size={13} />} onClick={() => setShowAutoGenerateModal(true)}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, color: '#d97706', borderColor: '#d97706' }}>Auto-Generate</Button>
+            <Button type="primary" icon={<Plus size={13} />} onClick={() => setShowTaskModal(true)}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>New Task</Button>
+          </Space>
         </div>
-
-        {/* HIGH-DENSITY KPI CARDS STRIP */}
-        <Row gutter={[10, 10]} align="stretch" style={{ margin: 0, width: '100%' }}>
-          <Col xs={12} sm={6} md={4}>
-            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>Objectives</span>} value={stats.objectivesTotal} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#3b82f6' } }} />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>In Progress</span>} value={stats.inProgress} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#f59e0b' } }} />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0' }}>
-              <Statistic title={<span style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em' }}>Completed</span>} value={stats.completed} styles={{ content: { fontSize: 16, fontWeight: 800, color: '#10b981' } }} />
-            </Card>
-          </Col>
-          <Col xs={24} md={12}>
-            <Card styles={{ body: { padding: '6px 12px' } }} style={{ borderRadius: 8, border: '1px solid #e2e8f0', height: '100%', display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '16px', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <TrendingUp size={14} style={{ color: '#2563eb' }} />
-                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>
-                    Progress
-                  </span>
-                </div>
-                <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '80%' }}>
-                  <Progress 
-                    percent={stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0} 
-                    size="small" 
-                    strokeColor="#10b981" 
-                    railColor="#f1f5f9"
-                    style={{ margin: 0 }}
-                  />
-                </div>
-              </div>
-            </Card>
-          </Col>
-        </Row>
-
-        {/* ================= VIEW 1: OKR BOARD ================= */}
-        {activeView === 'okr' && (
-          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            <div className="d-flex justify-content-between align-items-center">
-              <Title level={5} style={{ margin: 0, fontWeight: 700, color: '#334155' }}>Objectives & Strategic Milestones</Title>
-              <Button 
-                type="primary" 
-                ghost 
-                icon={<Plus size={13} />} 
-                onClick={() => setShowObjectiveModal(true)}
-                size="small"
-                className="fw-bold"
-              >
-                Add Objective
-              </Button>
-            </div>
-
-            {objectives && objectives.length > 0 ? (
-              objectives.map((objective, idx) => {
-                const progress = getObjectiveProgress(objective);
-                const status = progress >= 70 ? 'ON_TRACK' : progress >= 30 ? 'AT_RISK' : 'BEHIND';
-                const statusStyle = OKR_STATUS_COLORS[status] || OKR_STATUS_COLORS.BEHIND;
-                const isExpanded = expandedObjectives[objective._id];
-                
-                return (
-                  <Card 
-                    key={objective._id || idx} 
-                    className="okr-collapsible-card"
-                    styles={{ body: { padding: 0 } }}
-                  >
-                    {/* Card Interactive Header */}
-                    <div 
-                      className="d-flex justify-content-between align-items-center flex-wrap gap-3" 
-                      style={{ padding: '16px 20px', cursor: 'pointer', background: '#ffffff' }}
-                      onClick={() => toggleObjectiveExpand(objective._id)}
-                    >
-                      <div className="d-flex align-items-center gap-3 flex-grow-1">
-                        <div className="p-2 rounded-3" style={{ backgroundColor: statusStyle.bg }}>
-                          <Gauge size={18} style={{ color: statusStyle.color }} />
-                        </div>
-                        <div>
-                          <Text strong style={{ fontSize: '15px', color: '#1e293b' }}>{objective.title}</Text>
-                          <div className="d-flex align-items-center gap-2 flex-wrap">
-                            <span style={{ fontSize: '12px', color: '#64748b' }}>{objective.description || 'No description defined'}</span>
-                            {objective.startDate && objective.endDate && (
-                              <Tag color="default" style={{ fontSize: '10px', borderRadius: '4px', fontWeight: 600 }}>
-                                {new Date(objective.startDate).toLocaleDateString()} - {new Date(objective.endDate).toLocaleDateString()}
-                              </Tag>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="d-flex align-items-center gap-4">
-                        <div style={{ minWidth: '80px', textAlign: 'right' }}>
-                          <div style={{ fontWeight: 800, color: statusStyle.color, fontSize: '16px' }}>{progress}%</div>
-                          <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>COMPLETION</div>
-                        </div>
-                        <Tag color={statusStyle.color} style={{ border: 'none', fontWeight: 700, textTransform: 'uppercase', borderRadius: '4px' }}>
-                          {statusStyle.label}
-                        </Tag>
-                        {isExpanded ? <ChevronUp size={16} style={{ color: '#94a3b8' }} /> : <ChevronDown size={16} style={{ color: '#94a3b8' }} />}
-                      </div>
-                    </div>
-
-                    {/* Expanded Objective Details Body */}
-                    {isExpanded && (
-                      <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>
-                        
-                        {/* Key Results Internal Grid */}
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                          <Title level={5} style={{ margin: 0, fontSize: '13px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Operational Key Results</Title>
-                          <Button 
-                            type="dashed" 
-                            size="small" 
-                            icon={<Plus size={12} />} 
-                            onClick={(e) => { e.stopPropagation(); setSelectedObjective(objective); setShowKeyResultModal(true); }}
-                          >
-                            Add Key Result
-                          </Button>
-                        </div>
-
-                        <Row gutter={[16, 16]}>
-                          {(objective.keyResults || []).map((kr, krIdx) => {
-                            const krProgress = kr.targetValue ? Math.min(100, ((kr.currentValue || 0) / kr.targetValue) * 100) : 0;
-                            const progressColor = krProgress >= 70 ? '#10b981' : krProgress >= 30 ? '#f59e0b' : '#ef4444';
-                            return (
-                              <Col xs={24} md={12} key={krIdx}>
-                                <Card style={{ borderRadius: 8, border: '1px solid #e2e8f0', height: '100%' }} styles={{ body: { padding: 16 } }}>
-                                  <div className="d-flex justify-content-between align-items-start mb-1">
-                                    <Text strong style={{ fontSize: '13px', color: '#334155' }}>{kr.title}</Text>
-                                    <Tag style={{ border: 'none', fontWeight: 700, color: '#64748b', backgroundColor: '#f1f5f9' }}>{kr.metric}</Tag>
-                                  </div>
-                                  
-                                  <div className="mb-3 mt-2">
-                                    <Progress percent={Math.round(krProgress)} strokeColor={progressColor} size="small" />
-                                  </div>
-
-                                  <div className="d-flex justify-content-between align-items-center pt-1 border-top" style={{ borderColor: '#f1f5f9' }}>
-                                    <Input 
-                                      type="number" 
-                                      size="small"
-                                      addonBefore="Value Now" 
-                                      style={{ maxWidth: 130 }} 
-                                      defaultValue={kr.currentValue || 0}
-                                      onBlur={(e) => handleUpdateKeyResult(kr._id, e.target.value)}
-                                    />
-                                    <Text style={{ fontSize: '12px', color: '#64748b' }}>
-                                      Target: <Text strong style={{ color: '#1e293b' }}>{kr.targetValue} {kr.unit}</Text>
-                                    </Text>
-                                  </div>
-                                </Card>
-                              </Col>
-                            );
-                          })}
-                          {(objective.keyResults || []).length === 0 && (
-                            <Col span={24}>
-                              <div className="text-center py-3 border rounded-3 bg-white" style={{ borderStyle: 'dashed', color: '#94a3b8', fontSize: '13px' }}>
-                                No key results added to this objective milestone yet.
-                              </div>
-                            </Col>
-                          )}
-                        </Row>
-
-                        {/* Linked Tasks List */}
-                        <div className="mt-4">
-                          <div style={{ fontSize: '13px', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px' }}>
-                            Linked Optimization Tasks
-                          </div>
-                          <div className="border rounded-3 overflow-hidden bg-white">
-                            <Table 
-                              dataSource={tasks.filter(t => t.objectiveId === objective._id).slice(0, 5)}
-                              columns={linkedTaskColumns}
-                              pagination={false}
-                              rowKey="_id"
-                              size="small"
-                              locale={{ emptyText: 'No active tasks mapped to this objective.' }}
-                            />
-                          </div>
-                        </div>
-
-                      </div>
-                    )}
-                  </Card>
-                );
-              })
-            ) : (
-              <Card style={{ borderRadius: 12, borderStyle: 'dashed' }}>
-                <div className="text-center py-5">
-                  <Flag size={44} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-                  <div style={{ color: '#475569', fontWeight: 700, fontSize: '16px' }}>No Strategic Objectives Found</div>
-                  <Paragraph style={{ color: '#94a3b8', marginBottom: 16 }}>Create high-level monthly or quarterly goals to start cascading down tracking mechanisms.</Paragraph>
-                  <Button type="primary" icon={<Plus size={14} />} onClick={() => setShowObjectiveModal(true)}>
-                    Create First Objective
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </Space>
-        )}
-
-        {/* ================= VIEW 2: ALL TASKS ================= */}
-        {activeView === 'tasks' && (
-          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-            
-            {/* Filter Controls Strip */}
-            <Card styles={{ body: { padding: 12 } }} style={{ borderRadius: 12 }}>
-              <Row gutter={[12, 12]} align="middle">
-                <Col xs={24} md={10}>
-                  <Input 
-                    placeholder="Search tasks description or titles..." 
-                    prefix={<Search size={14} style={{ color: '#94a3b8' }} />} 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    allowClear
-                  />
-                </Col>
-                
-                <Col xs={12} md={5}>
-                  <Select 
-                    style={{ width: '100%' }} 
-                    placeholder="Filter Status" 
-                    value={filterStatus}
-                    onChange={setFilterStatus}
-                    options={STATUS_OPTIONS.map(o => ({ label: o.label || 'All Statuses', value: o.value }))}
-                  />
-                </Col>
-                
-                <Col xs={12} md={5}>
-                  <Select 
-                    style={{ width: '100%' }} 
-                    placeholder="Filter Priority" 
-                    value={filterPriority}
-                    onChange={setFilterPriority}
-                    options={[
-                      { label: 'All Priorities', value: '' },
-                      { label: 'Urgent', value: 'URGENT' },
-                      { label: 'High', value: 'HIGH' },
-                      { label: 'Medium', value: 'MEDIUM' },
-                      { label: 'Low', value: 'LOW' }
-                    ]}
-                  />
-                </Col>
-                
-                <Col xs={24} md={4} style={{ textAlign: 'right' }}>
-                  <Text type="secondary" style={{ fontSize: '13px', fontWeight: 600 }}>{tasks.length} tasks filtered</Text>
-                </Col>
-              </Row>
-            </Card>
-
-            {/* Main Dynamic Datatable */}
-            <div className="border rounded-3 bg-white" style={{ overflow: 'hidden', borderColor: '#e2e8f0' }}>
-              <Table 
-                dataSource={tasks}
-                columns={taskColumns}
-                rowKey={(record) => record._id}
-                pagination={{ pageSize: 10, showSizeChanger: false, size: 'small' }}
-                scroll={{ x: 'max-content' }}
-                size="middle"
-              />
-            </div>
-          </Space>
-        )}
-
-        {/* ================= VIEW 3: KANBAN BOARD ================= */}
-        {activeView === 'board' && (
-          <Row gutter={[16, 16]}>
-            {['PENDING', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'].map(status => {
-              const laneTasks = tasks.filter(t => t.status === status);
-              const colorMap = {
-                'PENDING': '#64748b',
-                'IN_PROGRESS': '#f59e0b',
-                'REVIEW': '#3b82f6',
-                'COMPLETED': '#10b981'
-              };
-              
-              return (
-                <Col xs={24} sm={12} lg={6} key={status}>
-                  <div className="kanban-lane">
-                    <div className="d-flex justify-content-between align-items-center mb-1 px-1">
-                      <Text strong style={{ textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.04em', color: '#475569' }}>
-                        {status.replace('_', ' ')}
-                      </Text>
-                      <Badge 
-                        count={laneTasks.length} 
-                        showZero 
-                        style={{ backgroundColor: colorMap[status] || '#94a3b8', border: 'none' }} 
-                      />
-                    </div>
-
-                    {/* Scroll Container for Cards */}
-                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 'calc(100vh - 290px)', paddingBottom: 20 }}>
-                      {laneTasks.map(task => (
-                        <div className="kanban-card" key={task._id}>
-                          <div style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b', marginBottom: 4 }}>{task.title}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: 12 }} className="text-truncate">{task.description || 'No details'}</div>
-                          
-                          <div className="d-flex justify-content-between align-items-center">
-                            <Tag 
-                              color={PRIORITY_COLORS[task.priority]?.color || '#64748b'} 
-                              style={{ border: 'none', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' }}
-                            >
-                              {task.priority}
-                            </Tag>
-
-                            {/* Fast Action Toggle */}
-                            <Tooltip title={status === 'COMPLETED' ? "Re-open task" : "Mark completed"}>
-                              <Button 
-                                type="text" 
-                                size="small" 
-                                icon={status === 'COMPLETED' ? <CheckCircle2 size={16} className="text-success" /> : <Circle size={16} className="text-muted" />} 
-                                onClick={() => handleStatusChange(task._id, status === 'COMPLETED' ? 'PENDING' : 'COMPLETED')}
-                              />
-                            </Tooltip>
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {laneTasks.length === 0 && (
-                        <div style={{ margin: 'auto', padding: '20px 0', color: '#94a3b8', textAlign: 'center', fontSize: '12px', border: '1px dashed #cbd5e1', borderRadius: 8 }}>
-                          No tasks here.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Col>
-              );
-            })}
-          </Row>
-        )}
-
-        {/* ================= VIEW 4: AUTO-TASKS GENERATION ================= */}
-        {activeView === 'auto' && (
-          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div>
-                <Title level={5} style={{ margin: 0, color: '#334155' }}>System Inferred Optimization Tasks</Title>
-                <Paragraph style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Tasks extracted automatically through real-time catalog structure parsing and ASIN analytics.</Paragraph>
-              </div>
-              <Button 
-                type="primary" 
-                style={{ backgroundColor: '#d97706', borderColor: '#d97706' }}
-                icon={<Zap size={14} />}
-                onClick={() => setShowAutoGenerateModal(true)}
-              >
-                Auto-Generate Stream
-              </Button>
-            </div>
-
-            <Row gutter={[16, 16]}>
-              {TASK_CATEGORIES.map(category => {
-                const categoryTasks = tasksByCategory[category] || [];
-                if (categoryTasks.length === 0) return null;
-
-                return (
-                  <Col span={24} key={category}>
-                    <Card 
-                      className="auto-category-card"
-                      title={
-                        <div className="d-flex justify-content-between align-items-center">
-                          <Text strong style={{ color: '#1e293b' }}>{category}</Text>
-                          <Tag color="blue" style={{ borderRadius: '12px', fontWeight: 700 }}>{categoryTasks.length}</Tag>
-                        </div>
-                      }
-                      styles={{ body: { padding: '12px 16px' } }}
-                    >
-                      <Row gutter={[12, 12]}>
-                        {categoryTasks.map(task => (
-                          <Col xs={24} md={12} key={task._id}>
-                            <Card hoverable styles={{ body: { padding: 14 } }} style={{ border: '1px solid #f1f5f9', borderRadius: 8 }}>
-                              <div className="d-flex justify-content-between align-items-start">
-                                <div>
-                                  <Text strong style={{ color: '#334155', fontSize: '13px' }}>{task.title}</Text>
-                                  <div style={{ fontSize: '11px', color: '#64748b', maxWidth: 400 }} className="text-truncate">{task.description}</div>
-                                  {task.autoGenerated?.isAuto && (
-                                    <Tag color="cyan" style={{ fontSize: '9px', marginTop: 6, border: 'none', fontWeight: 700 }}>AUTO_GENERATED</Tag>
-                                  )}
-                                </div>
-                                <div className="d-flex flex-column align-items-end gap-1 flex-shrink-0">
-                                  <Tag color={PRIORITY_COLORS[task.priority]?.color} style={{ fontSize: '9px', fontWeight: 750, border: 'none' }}>{task.priority}</Tag>
-                                  <Tag color={task.status === 'COMPLETED' ? 'success' : 'warning'} style={{ fontSize: '9px', fontWeight: 600 }}>{task.status}</Tag>
-                                </div>
-                              </div>
-                              
-                              <Divider style={{ margin: '10px 0' }} />
-                              
-                              <div className="d-flex justify-content-between align-items-center">
-                                <Text code style={{ fontSize: '10px' }}>{task.type}</Text>
-                                <Space>
-                                  <Button 
-                                    size="small" 
-                                    type="primary"
-                                    ghost
-                                    onClick={() => handleStatusChange(task._id, task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED')}
-                                  >
-                                    {task.status === 'COMPLETED' ? 'Reopen' : 'Complete'}
-                                  </Button>
-                                  <Popconfirm
-                                    title="Delete Task?"
-                                    onConfirm={() => handleDeleteTask(task._id)}
-                                    okButtonProps={{ danger: true }}
-                                  >
-                                    <Button size="small" danger type="text" icon={<Trash2 size={12} />} />
-                                  </Popconfirm>
-                                </Space>
-                              </div>
-                            </Card>
-                          </Col>
-                        ))}
-                      </Row>
-                    </Card>
-                  </Col>
-                );
-              })}
-            </Row>
-
-            {tasks.length === 0 && (
-              <Card style={{ borderRadius: 12, borderStyle: 'dashed' }}>
-                <div className="text-center py-5">
-                  <Zap size={40} style={{ color: '#f59e0b', marginBottom: 12 }} />
-                  <div style={{ color: '#475569', fontWeight: 700, fontSize: '16px' }}>No Auto-Generated Tasks Pipeline</div>
-                  <Paragraph style={{ color: '#94a3b8', marginBottom: 16 }}>No tasks found. Run the intelligent generation mechanism to derive optimizing workflows automatically.</Paragraph>
-                  <Button type="primary" style={{ backgroundColor: '#d97706', borderColor: '#d97706' }} icon={<Zap size={14} />} onClick={() => setShowAutoGenerateModal(true)}>
-                    Run AI Stream Generator
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </Space>
-        )}
-
       </div>
 
-      {/* ================= MODALS (ANT DESIGN OVERLAYS) ================= */}
-
-      {/* Objective Creation Modal */}
-      <Modal
-        open={showObjectiveModal}
-        title={<Title level={4} style={{ margin: 0 }}>Create Strategic Objective</Title>}
-        onCancel={() => setShowObjectiveModal(false)}
-        footer={null}
-        centered
-        destroyOnHidden
-      >
-        <form onSubmit={handleCreateObjective} style={{ marginTop: 16 }}>
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Objective Title</label>
-            <Input placeholder="What is the core goal?" required value={objectiveForm.title} onChange={(e) => setObjectiveForm({...objectiveForm, title: e.target.value})} />
-          </div>
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Detailed Description</label>
-            <TextArea rows={3} placeholder="Explain the logic/impact of this goal..." value={objectiveForm.description} onChange={(e) => setObjectiveForm({...objectiveForm, description: e.target.value})} />
-          </div>
-          
-          <Row gutter={16} className="mb-3">
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Period Type</label>
-              <Select 
-                style={{ width: '100%' }} 
-                value={objectiveForm.type} 
-                onChange={(val) => setObjectiveForm({...objectiveForm, type: val})}
-                options={[
-                  { label: 'Daily', value: 'DAILY' },
-                  { label: 'Weekly', value: 'WEEKLY' },
-                  { label: 'Monthly', value: 'MONTHLY' },
-                  { label: 'Quarterly', value: 'QUARTERLY' }
-                ]}
-              />
-            </Col>
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Goal Owner</label>
-              <Select 
-                style={{ width: '100%' }} 
-                placeholder="Select Owner"
-                value={objectiveForm.owner} 
-                onChange={(val) => setObjectiveForm({...objectiveForm, owner: val})}
-                options={Array.isArray(usersData) ? usersData.map(u => ({ label: u.name || u.email, value: u._id })) : []}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16} className="mb-4">
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Start Date</label>
-              <Input type="date" required value={objectiveForm.startDate ? new Date(objectiveForm.startDate).toISOString().split('T')[0] : ''} onChange={(e) => setObjectiveForm({...objectiveForm, startDate: new Date(e.target.value)})} />
-            </Col>
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>End/Deadline Date</label>
-              <Input type="date" required value={objectiveForm.endDate ? new Date(objectiveForm.endDate).toISOString().split('T')[0] : ''} onChange={(e) => setObjectiveForm({...objectiveForm, endDate: new Date(e.target.value)})} />
-            </Col>
-          </Row>
-
-          <div className="d-flex justify-content-end gap-2">
-            <Button onClick={() => setShowObjectiveModal(false)}>Cancel</Button>
-            <Button type="primary" htmlType="submit" loading={isSubmitting} style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6' }} icon={<Check size={14} />}>
-              Create Objective
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Add Key Result Modal */}
-      <Modal
-        open={showKeyResultModal && !!selectedObjective}
-        title={
-          <div>
-            <Title level={4} style={{ margin: 0 }}>Add Metric/Key Result</Title>
-            <Text type="secondary" style={{ fontSize: '12px' }}>Targeted to Objective: {selectedObjective?.title}</Text>
-          </div>
-        }
-        onCancel={() => setShowKeyResultModal(false)}
-        footer={null}
-        centered
-        destroyOnHidden
-      >
-        <form onSubmit={handleCreateKeyResult} style={{ marginTop: 16 }}>
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Key Result Title</label>
-            <Input placeholder="e.g., Scale overall storefront GMS by 15%" required value={keyResultForm.title} onChange={(e) => setKeyResultForm({...keyResultForm, title: e.target.value})} />
-          </div>
-
-          <Row gutter={16} className="mb-3">
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Target Value</label>
-              <Input type="number" placeholder="e.g., 150" required value={keyResultForm.targetValue} onChange={(e) => setKeyResultForm({...keyResultForm, targetValue: e.target.value})} />
-            </Col>
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Target Unit</label>
-              <Select 
-                style={{ width: '100%' }} 
-                value={keyResultForm.unit} 
-                onChange={(val) => setKeyResultForm({...keyResultForm, unit: val})}
-                options={[
-                  { label: '% (Percentage)', value: '%' },
-                  { label: '$ (Currency Value)', value: '$' },
-                  { label: '# (Quantitative Count)', value: '#' }
-                ]}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16} className="mb-4">
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Metric Indicator</label>
-              <Select 
-                style={{ width: '100%' }} 
-                value={keyResultForm.metric} 
-                onChange={(val) => setKeyResultForm({...keyResultForm, metric: val})}
-                options={[
-                  { label: 'GMS Revenue', value: 'GMS' },
-                  { label: 'Units Sold', value: 'UNITS' },
-                  { label: 'ROAS', value: 'ROAS' },
-                  { label: 'ACOS', value: 'ACOS' },
-                  { label: 'Rating Index', value: 'RATING' },
-                  { label: 'Reviews Generation', value: 'REVIEW' },
-                  { label: 'BSR Ranking Tracking', value: 'BSR' },
-                  { label: 'Net Oper. Profit', value: 'PROFIT' }
-                ]}
-              />
-            </Col>
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Metric Deadline</label>
-              <Input type="date" value={keyResultForm.deadline ? new Date(keyResultForm.deadline).toISOString().split('T')[0] : ''} onChange={(e) => setKeyResultForm({...keyResultForm, deadline: new Date(e.target.value)})} />
-            </Col>
-          </Row>
-
-          <div className="d-flex justify-content-end gap-2">
-            <Button onClick={() => setShowKeyResultModal(false)}>Cancel</Button>
-            <Button type="primary" htmlType="submit" loading={isSubmitting} style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
-              Add Key Result
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Task Creation Modal */}
-      <Modal
-        open={showTaskModal}
-        title={<Title level={4} style={{ margin: 0 }}>Create Optimization Task</Title>}
-        onCancel={() => setShowTaskModal(false)}
-        footer={null}
-        centered
-        destroyOnHidden
-      >
-        <form onSubmit={handleCreateTask} style={{ marginTop: 16 }}>
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Task Short Title</label>
-            <Input placeholder="e.g., Revise PPC bidding keywords" required value={taskForm.title} onChange={(e) => setTaskForm({...taskForm, title: e.target.value})} />
-          </div>
-          
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Action Items / Steps</label>
-            <TextArea rows={3} placeholder="List operational execution checklist..." value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} />
-          </div>
-
-          <Row gutter={16} className="mb-3">
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Operation Type</label>
-              <Select 
-                style={{ width: '100%' }} 
-                value={taskForm.type} 
-                onChange={(val) => setTaskForm({...taskForm, type: val})}
-                options={TASK_TYPES.map(t => ({ label: t.label, value: t.value }))}
-              />
-            </Col>
-            <Col span={12}>
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Priority Priority</label>
-              <Select 
-                style={{ width: '100%' }} 
-                value={taskForm.priority} 
-                onChange={(val) => setTaskForm({...taskForm, priority: val})}
-                options={[
-                  { label: 'Low Impact', value: 'LOW' },
-                  { label: 'Medium Baseline', value: 'MEDIUM' },
-                  { label: 'High Focus', value: 'HIGH' },
-                  { label: 'Urgent Immediate', value: 'URGENT' }
-                ]}
-              />
-            </Col>
-          </Row>
-
-          <div className="mb-3">
-            <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Cascade/Link to Objective (Optional)</label>
-            <Select 
-              style={{ width: '100%' }} 
-              placeholder="No direct link"
-              value={taskForm.objectiveId} 
-              onChange={(val) => setTaskForm({...taskForm, objectiveId: val, keyResultId: ''})}
-              options={[{ label: 'None / Loose Standing', value: '' }, ...(objectives || []).map(o => ({ label: o.title, value: o._id }))] }
-            />
-          </div>
-
-          {taskForm.objectiveId && (
-            <div className="mb-4">
-              <label className="form-label smallest fw-bold text-muted text-uppercase" style={{ fontSize: '11px' }}>Direct to Key Result Mapping</label>
-              <Select 
-                style={{ width: '100%' }} 
-                placeholder="Link to specific KR"
-                value={taskForm.keyResultId} 
-                onChange={(val) => setTaskForm({...taskForm, keyResultId: val})}
-                options={[{ label: 'Any related key result', value: '' }, ...(objectives?.find(o => o._id === taskForm.objectiveId)?.keyResults?.map(kr => ({ label: kr.title, value: kr._id })) || [])]}
-              />
+      <div style={{ padding: '16px 28px' }}>
+        {/* KPI Strip */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#18181b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ListChecks size={13} color="#fff" />
             </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Tasks</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#18181b' }}>{stats.total}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Gauge size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>In Progress</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#92400e' }}>{stats.inProgress}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#ecfdf5', borderRadius: 8, border: '1px solid #d1fae5' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle2 size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completed</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#065f46' }}>{stats.completed}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Flag size={13} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Objectives</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#1e40af' }}>{stats.objectivesTotal}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* View Tabs + Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', background: '#f4f4f5', borderRadius: 8, padding: 2 }}>
+            {[
+              { key: 'tasks', label: 'Tasks', icon: <ListChecks size={13} /> },
+              { key: 'okr', label: 'OKR Board', icon: <Flag size={13} /> },
+              { key: 'board', label: 'Kanban', icon: <LayoutGrid size={13} /> },
+              { key: 'auto', label: 'Auto-Tasks', icon: <Zap size={13} /> },
+            ].map(tab => (
+              <button key={tab.key} onClick={() => setActiveView(tab.key)} style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                background: activeView === tab.key ? '#18181b' : 'transparent',
+                color: activeView === tab.key ? '#fff' : '#71717a',
+                cursor: 'pointer', transition: 'all 0.15s'
+              }}>
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <Input prefix={<Search size={12} style={{ color: '#a1a1aa' }} />}
+            placeholder="Search..." allowClear value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            size="small" style={{ width: 200, borderRadius: 8 }} />
+
+          {activeView === 'tasks' && (
+            <>
+              <Select size="small" value={filterStatus || undefined} placeholder="Status" allowClear
+                onChange={v => setFilterStatus(v || '')} style={{ width: 120, borderRadius: 8 }}
+                options={STATUS_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))} />
+              <Select size="small" value={filterPriority || undefined} placeholder="Priority" allowClear
+                onChange={v => setFilterPriority(v || '')} style={{ width: 120, borderRadius: 8 }}
+                options={[{ value: 'URGENT', label: 'Urgent' }, { value: 'HIGH', label: 'High' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'LOW', label: 'Low' }]} />
+            </>
           )}
 
-          <div className="d-flex justify-content-end gap-2 mt-4">
-            <Button onClick={() => setShowTaskModal(false)}>Cancel</Button>
-            <Button type="primary" htmlType="submit" loading={isSubmitting} style={{ backgroundColor: '#3b82f6', borderColor: '#3b82f6' }}>
-              Create Optimization Task
+          {activeView !== 'okr' && (
+            <Button size="small" type="primary" icon={<Plus size={13} />}
+              onClick={() => activeView === 'auto' ? setShowAutoGenerateModal(true) : setShowTaskModal(true)}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>
+              {activeView === 'auto' ? 'Generate' : 'New Task'}
             </Button>
+          )}
+        </div>
+
+        {/* ================= VIEW: TASKS TABLE ================= */}
+        {activeView === 'tasks' && (
+          <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, overflow: 'hidden' }}>
+            <Table
+              dataSource={tasks.map(t => ({ ...t, key: t._id || t.id }))}
+              rowKey={(r) => r._id || r.id}
+              pagination={{ pageSize: 15, showSizeChanger: false, size: 'small', showTotal: (t) => `${t} tasks` }}
+              size="small"
+              scroll={{ x: 900 }}
+              columns={[
+                { title: '#', key: 'idx', width: 50, align: 'center', render: (_, __, i) => <span style={{ fontSize: 11, color: '#a1a1aa' }}>{i + 1}</span> },
+                { title: 'Task', key: 'task', render: (_, r) => (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#18181b' }}>{r.title}</div>
+                    <div style={{ fontSize: 11, color: '#71717a', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.description || '—'}</div>
+                  </div>
+                )},
+                { title: 'Priority', dataIndex: 'priority', key: 'priority', width: 90, render: (p) => <PriorityTag priority={p} /> },
+                { title: 'Type', dataIndex: 'type', key: 'type', width: 120, render: (t) => {
+                  const cat = getTaskCategory(t);
+                  return <Tag style={{ fontSize: 9, borderRadius: 4, fontWeight: 600, margin: 0 }}>{TASK_TYPES.find(x => x.value === t)?.label || t}</Tag>;
+                }},
+                { title: 'Status', key: 'status', width: 140, render: (_, r) => (
+                  <Select size="small" value={r.status} style={{ width: 120, borderRadius: 6 }}
+                    onChange={v => handleStatusChange(r._id || r.id, v)}
+                    options={STATUS_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))} />
+                )},
+                { title: 'Due', dataIndex: 'dueDate', key: 'dueDate', width: 100, render: (d) => d
+                  ? <span style={{ fontSize: 11, color: '#71717a' }}><Calendar size={11} style={{ marginRight: 3 }} />{new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                  : <span style={{ fontSize: 11, color: '#d4d4d8' }}>—</span>
+                },
+                { title: '', key: 'action', width: 50, align: 'right', render: (_, r) => (
+                  <Popconfirm title="Delete?" onConfirm={() => handleDeleteTask(r._id || r.id)} okText="Delete" okButtonProps={{ danger: true }}>
+                    <Button type="text" danger size="small" icon={<Trash2 size={13} />} />
+                  </Popconfirm>
+                )},
+              ]}
+            />
+          </div>
+        )}
+
+        {/* ================= VIEW: OKR BOARD ================= */}
+        {activeView === 'okr' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#18181b' }}>Objectives & Key Results</span>
+              <Button size="small" icon={<Plus size={13} />} onClick={() => setShowObjectiveModal(true)}
+                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Add Objective</Button>
+            </div>
+
+            {objectives.length === 0 ? (
+              <div style={{ border: '1px dashed #e4e4e7', borderRadius: 12, padding: '48px 24px', textAlign: 'center' }}>
+                <Flag size={36} style={{ color: '#d4d4d8', marginBottom: 12 }} />
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#18181b', marginBottom: 4 }}>No Objectives Yet</div>
+                <div style={{ fontSize: 12, color: '#a1a1aa', marginBottom: 16 }}>Create objectives to define strategic goals for your team</div>
+                <Button type="primary" icon={<Plus size={13} />} onClick={() => setShowObjectiveModal(true)} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Create First Objective</Button>
+              </div>
+            ) : objectives.map((obj, idx) => {
+              const progress = getObjectiveProgress(obj);
+              const status = progress >= 70 ? 'ON_TRACK' : progress >= 30 ? 'AT_RISK' : 'BEHIND';
+              const statusStyle = OKR_STATUS_COLORS[status];
+              const isExpanded = expandedObjectives[obj._id];
+
+              return (
+                <div key={obj._id || idx} style={{
+                  border: '1px solid #e4e4e7', borderRadius: 12, marginBottom: 10,
+                  overflow: 'hidden', background: '#fff'
+                }}>
+                  <div onClick={() => toggleObjectiveExpand(obj._id)}
+                    style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 8, background: statusStyle.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Gauge size={16} style={{ color: statusStyle.color }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>{obj.title}</div>
+                        <div style={{ fontSize: 11, color: '#71717a', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          {obj.description && <span>{obj.description}</span>}
+                          {obj.startDate && obj.endDate && (
+                            <Tag style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', margin: 0 }}>
+                              {new Date(obj.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} — {new Date(obj.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </Tag>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ textAlign: 'right', minWidth: 60 }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: statusStyle.color }}>{progress}%</div>
+                        <div style={{ fontSize: 9, color: '#a1a1aa', fontWeight: 700 }}>PROGRESS</div>
+                      </div>
+                      <span className="badge" style={{
+                        background: statusStyle.bg, color: statusStyle.color,
+                        border: `1px solid ${statusStyle.border || statusStyle.bg}`,
+                        fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+                        textTransform: 'uppercase'
+                      }}>{statusStyle.label}</span>
+                      {isExpanded ? <ChevronUp size={14} style={{ color: '#a1a1aa' }} /> : <ChevronDown size={14} style={{ color: '#a1a1aa' }} />}
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: '16px 18px', background: '#fafafa', borderTop: '1px solid #f4f4f5' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Key Results</span>
+                        <Button size="small" type="dashed" icon={<Plus size={12} />}
+                          onClick={(e) => { e.stopPropagation(); setSelectedObjective(obj); setShowKeyResultModal(true); }}
+                          style={{ borderRadius: 6, fontSize: 10 }}>Add KR</Button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                        {(obj.keyResults || []).map((kr, krIdx) => {
+                          const krProgress = kr.targetValue ? Math.min(100, ((kr.currentValue || 0) / kr.targetValue) * 100) : 0;
+                          const pColor = krProgress >= 70 ? '#059669' : krProgress >= 30 ? '#d97706' : '#dc2626';
+                          return (
+                            <div key={krIdx} style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 8, padding: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#18181b' }}>{kr.title}</span>
+                                <Tag style={{ fontSize: 8, borderRadius: 3, padding: '1px 5px', margin: 0, fontWeight: 700, background: '#f4f4f5', color: '#71717a', border: 'none' }}>{kr.metric}</Tag>
+                              </div>
+                              <Progress percent={Math.round(krProgress)} strokeColor={pColor} size="small" style={{ marginBottom: 8 }} />
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Input size="small" type="number" addonBefore="Now" style={{ width: 120, borderRadius: 6 }}
+                                  defaultValue={kr.currentValue || 0}
+                                  onBlur={(e) => handleUpdateKeyResult(kr._id, e.target.value)} />
+                                <span style={{ fontSize: 11, color: '#71717a' }}>Target: <b style={{ color: '#18181b' }}>{kr.targetValue} {kr.unit}</b></span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(obj.keyResults || []).length === 0 && (
+                          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 16, border: '1px dashed #e4e4e7', borderRadius: 8, color: '#a1a1aa', fontSize: 11 }}>No key results yet</div>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Linked Tasks</div>
+                      <div style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 8, overflow: 'hidden' }}>
+                        <Table dataSource={tasks.filter(t => t.objectiveId === (obj._id || obj.id)).slice(0, 5)}
+                          columns={[
+                            { title: 'Task', dataIndex: 'title', key: 'title', render: (t) => <span style={{ fontSize: 11, fontWeight: 600 }}>{t}</span> },
+                            { title: 'Priority', dataIndex: 'priority', key: 'priority', width: 80, render: (p) => <PriorityTag priority={p} /> },
+                            { title: 'Status', dataIndex: 'status', key: 'status', width: 100, render: (s) => <StatusTag status={s} /> },
+                          ]}
+                          pagination={false} size="small" rowKey="_id"
+                          locale={{ emptyText: <span style={{ fontSize: 11, color: '#a1a1aa' }}>No linked tasks</span> }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ================= VIEW: KANBAN ================= */}
+        {activeView === 'board' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            {['PENDING', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'].map(status => {
+              const laneTasks = tasks.filter(t => t.status === status);
+              const colorMap = { PENDING: '#71717a', IN_PROGRESS: '#d97706', REVIEW: '#2563eb', COMPLETED: '#059669' };
+              return (
+                <div key={status} style={{ background: '#fafafa', borderRadius: 12, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px 6px', borderBottom: '1px solid #e4e4e7' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#18181b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {status.replace('_', ' ')}
+                    </span>
+                    <span className="badge" style={{ background: colorMap[status], color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>
+                      {laneTasks.length}
+                    </span>
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 'calc(100vh - 300px)' }}>
+                    {laneTasks.map(task => (
+                      <div key={task._id || task.id} style={{
+                        background: '#fff', border: '1px solid #e4e4e7', borderRadius: 8, padding: 12,
+                        cursor: 'pointer', transition: 'all 0.15s'
+                      }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#18181b', marginBottom: 4 }}>{task.title}</div>
+                        <div style={{ fontSize: 11, color: '#71717a', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description || '—'}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <PriorityTag priority={task.priority} />
+                          <Tooltip title={status === 'COMPLETED' ? 'Reopen' : 'Mark complete'}>
+                            <Button type="text" size="small"
+                              icon={status === 'COMPLETED' ? <CheckCircle2 size={14} style={{ color: '#059669' }} /> : <Circle size={14} style={{ color: '#d4d4d8' }} />}
+                              onClick={() => handleStatusChange(task._id || task.id, status === 'COMPLETED' ? 'PENDING' : 'COMPLETED')} />
+                          </Tooltip>
+                        </div>
+                      </div>
+                    ))}
+                    {laneTasks.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '20px 8px', color: '#d4d4d8', fontSize: 11, border: '1px dashed #e4e4e7', borderRadius: 8 }}>No tasks</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ================= VIEW: AUTO-TASKS ================= */}
+        {activeView === 'auto' && (
+          <div>
+            {tasks.length === 0 ? (
+              <div style={{ border: '1px dashed #e4e4e7', borderRadius: 12, padding: '48px 24px', textAlign: 'center' }}>
+                <Zap size={36} style={{ color: '#d97706', marginBottom: 12 }} />
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#18181b', marginBottom: 4 }}>No Tasks Generated</div>
+                <div style={{ fontSize: 12, color: '#a1a1aa', marginBottom: 16 }}>Auto-generate tasks from ASIN analysis</div>
+                <Button type="primary" icon={<Zap size={13} />} onClick={() => setShowAutoGenerateModal(true)}
+                  style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, background: '#d97706', borderColor: '#d97706' }}>Generate Tasks</Button>
+              </div>
+            ) : TASK_CATEGORIES.map(category => {
+              const catTasks = tasksByCategory[category] || [];
+              if (catTasks.length === 0) return null;
+              return (
+                <div key={category} style={{ border: '1px solid #e4e4e7', borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 16px', background: '#fafafa', borderBottom: '1px solid #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#18181b' }}>{category}</span>
+                    <span className="badge" style={{ background: '#f4f4f5', color: '#71717a', fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>{catTasks.length}</span>
+                  </div>
+                  <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {catTasks.map(task => (
+                      <div key={task._id || task.id} style={{ border: '1px solid #f4f4f5', borderRadius: 8, padding: 12, background: '#fff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#18181b' }}>{task.title}</div>
+                            <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>{task.description || '—'}</div>
+                          </div>
+                          <PriorityTag priority={task.priority} />
+                        </div>
+                        <Divider style={{ margin: '6px 0' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <StatusTag status={task.status} />
+                          <Space size={4}>
+                            <Button size="small" type="link" onClick={() => handleStatusChange(task._id || task.id, task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED')}
+                              style={{ fontSize: 11, fontWeight: 600 }}>
+                              {task.status === 'COMPLETED' ? 'Reopen' : 'Complete'}
+                            </Button>
+                            <Popconfirm title="Delete?" onConfirm={() => handleDeleteTask(task._id || task.id)} okButtonProps={{ danger: true }}>
+                              <Button type="text" danger size="small" icon={<Trash2 size={12} />} />
+                            </Popconfirm>
+                          </Space>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ================= MODALS ================= */}
+
+      {/* Objective Modal */}
+      <Modal open={showObjectiveModal} onCancel={() => setShowObjectiveModal(false)} centered destroyOnHidden width={520}
+        title={<span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Create Objective</span>}
+        footer={null}>
+        <form onSubmit={handleCreateObjective} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Title *</div>
+            <Input size="small" placeholder="What is the goal?" required value={objectiveForm.title} onChange={e => setObjectiveForm({ ...objectiveForm, title: e.target.value })} style={{ borderRadius: 8 }} /></div>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Description</div>
+            <TextArea size="small" rows={3} placeholder="Describe the objective..." value={objectiveForm.description} onChange={e => setObjectiveForm({ ...objectiveForm, description: e.target.value })} style={{ borderRadius: 8 }} /></div>
+          <Row gutter={12}>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Period</div>
+              <Select size="small" value={objectiveForm.type} style={{ width: '100%', borderRadius: 8 }}
+                onChange={v => setObjectiveForm({ ...objectiveForm, type: v })}
+                options={[{ value: 'MONTHLY', label: 'Monthly' }, { value: 'QUARTERLY', label: 'Quarterly' }, { value: 'WEEKLY', label: 'Weekly' }]} /></Col>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Owner</div>
+              <Select size="small" placeholder="Select" style={{ width: '100%', borderRadius: 8 }}
+                value={objectiveForm.owner || undefined}
+                onChange={v => setObjectiveForm({ ...objectiveForm, owner: v })}
+                options={(Array.isArray(usersData) ? usersData : []).map(u => ({ value: u._id || u.id, label: `${u.firstName || ''} ${u.lastName || ''}` || u.email }))} /></Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Start Date</div>
+              <Input size="small" type="date" value={objectiveForm.startDate ? new Date(objectiveForm.startDate).toISOString().split('T')[0] : ''} onChange={e => setObjectiveForm({ ...objectiveForm, startDate: new Date(e.target.value) })} style={{ borderRadius: 8 }} /></Col>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>End Date</div>
+              <Input size="small" type="date" value={objectiveForm.endDate ? new Date(objectiveForm.endDate).toISOString().split('T')[0] : ''} onChange={e => setObjectiveForm({ ...objectiveForm, endDate: new Date(e.target.value) })} style={{ borderRadius: 8 }} /></Col>
+          </Row>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <Button onClick={() => setShowObjectiveModal(false)} style={{ borderRadius: 8, fontSize: 11 }}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={isSubmitting} icon={<Check size={13} />}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Create</Button>
           </div>
         </form>
       </Modal>
 
-      {/* Auto-Tasks Batch Stream Processing confirmation */}
-      <Modal
-        open={showAutoGenerateModal}
-        title={
-          <div className="d-flex align-items-center gap-2">
-            <Zap size={20} style={{ color: '#d97706' }} />
-            <Title level={4} style={{ margin: 0 }}>Batch Auto-Generate Workflow Streams</Title>
+      {/* Key Result Modal */}
+      <Modal open={showKeyResultModal && !!selectedObjective} onCancel={() => setShowKeyResultModal(false)} centered destroyOnHidden width={520}
+        title={<div><span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Add Key Result</span>
+          <div style={{ fontSize: 11, color: '#a1a1aa', marginTop: 2 }}>For: {selectedObjective?.title}</div></div>}
+        footer={null}>
+        <form onSubmit={handleCreateKeyResult} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Title *</div>
+            <Input size="small" placeholder="e.g. Scale GMS by 15%" required value={keyResultForm.title} onChange={e => setKeyResultForm({ ...keyResultForm, title: e.target.value })} style={{ borderRadius: 8 }} /></div>
+          <Row gutter={12}>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Target *</div>
+              <Input size="small" type="number" placeholder="150" required value={keyResultForm.targetValue} onChange={e => setKeyResultForm({ ...keyResultForm, targetValue: e.target.value })} style={{ borderRadius: 8 }} /></Col>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Unit</div>
+              <Select size="small" value={keyResultForm.unit} style={{ width: '100%', borderRadius: 8 }}
+                onChange={v => setKeyResultForm({ ...keyResultForm, unit: v })}
+                options={[{ value: '%', label: '% (Percentage)' }, { value: '₹', label: '₹ (Revenue)' }, { value: '#', label: '# (Count)' }]} /></Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Metric</div>
+              <Select size="small" value={keyResultForm.metric} style={{ width: '100%', borderRadius: 8 }}
+                onChange={v => setKeyResultForm({ ...keyResultForm, metric: v })}
+                options={[{ value: 'GMS', label: 'GMS Revenue' }, { value: 'UNITS', label: 'Units Sold' }, { value: 'ROAS', label: 'ROAS' }, { value: 'ACOS', label: 'ACOS' }, { value: 'RATING', label: 'Rating' }, { value: 'REVIEW', label: 'Reviews' }, { value: 'BSR', label: 'BSR Ranking' }]} /></Col>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Deadline</div>
+              <Input size="small" type="date" value={keyResultForm.deadline ? new Date(keyResultForm.deadline).toISOString().split('T')[0] : ''} onChange={e => setKeyResultForm({ ...keyResultForm, deadline: new Date(e.target.value) })} style={{ borderRadius: 8 }} /></Col>
+          </Row>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <Button onClick={() => setShowKeyResultModal(false)} style={{ borderRadius: 8, fontSize: 11 }}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={isSubmitting} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Add KR</Button>
           </div>
-        }
-        onCancel={() => setShowAutoGenerateModal(false)}
-        footer={null}
-        centered
-      >
+        </form>
+      </Modal>
+
+      {/* Task Modal */}
+      <Modal open={showTaskModal} onCancel={() => setShowTaskModal(false)} centered destroyOnHidden width={520}
+        title={<span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Create Task</span>}
+        footer={null}>
+        <form onSubmit={handleCreateTask} style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Title *</div>
+            <Input size="small" placeholder="What needs to be done?" required value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} style={{ borderRadius: 8 }} /></div>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Description</div>
+            <TextArea size="small" rows={3} placeholder="Action items / steps..." value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} style={{ borderRadius: 8 }} /></div>
+          <Row gutter={12}>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Type</div>
+              <Select size="small" value={taskForm.type} style={{ width: '100%', borderRadius: 8 }}
+                onChange={v => setTaskForm({ ...taskForm, type: v })}
+                options={TASK_TYPES.map(t => ({ value: t.value, label: t.label }))} /></Col>
+            <Col span={12}><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Priority</div>
+              <Select size="small" value={taskForm.priority} style={{ width: '100%', borderRadius: 8 }}
+                onChange={v => setTaskForm({ ...taskForm, priority: v })}
+                options={[{ value: 'LOW', label: 'Low' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'HIGH', label: 'High' }, { value: 'URGENT', label: 'Urgent' }]} /></Col>
+          </Row>
+          <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Link to Objective</div>
+            <Select size="small" placeholder="Optional" allowClear style={{ width: '100%', borderRadius: 8 }}
+              value={taskForm.objectiveId || undefined}
+              onChange={v => setTaskForm({ ...taskForm, objectiveId: v || '', keyResultId: '' })}
+              options={[{ label: 'None', value: '' }, ...(objectives || []).map(o => ({ label: o.title, value: o._id || o.id }))] } /></div>
+          {taskForm.objectiveId && (
+            <div><div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Key Result</div>
+              <Select size="small" placeholder="Optional" allowClear style={{ width: '100%', borderRadius: 8 }}
+                value={taskForm.keyResultId || undefined}
+                onChange={v => setTaskForm({ ...taskForm, keyResultId: v || '' })}
+                options={[{ label: 'Any', value: '' }, ...(objectives?.find(o => (o._id || o.id) === taskForm.objectiveId)?.keyResults?.map(kr => ({ label: kr.title, value: kr._id || kr.id })) || [])]} /></div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <Button onClick={() => setShowTaskModal(false)} style={{ borderRadius: 8, fontSize: 11 }}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={isSubmitting} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Create Task</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Auto-Generate Modal */}
+      <Modal open={showAutoGenerateModal} onCancel={() => setShowAutoGenerateModal(false)} centered width={480}
+        title={<span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Auto-Generate Tasks</span>}
+        footer={null}>
         <div style={{ marginTop: 12 }}>
-          <Paragraph>This will automatically cross-reference active ASIN catalog diagnostics and generate critical optimization tasks targeting:</Paragraph>
-          
-          <ul className="list-unstyled" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-            <li className="d-flex align-items-center gap-2"><Badge status="processing" color="blue" /> <Text strong style={{ fontSize: '13px' }}>Catalog Titles:</Text> Missing SEO markers</li>
-            <li className="d-flex align-items-center gap-2"><Badge status="processing" color="blue" /> <Text strong style={{ fontSize: '13px' }}>Media Ingest:</Text> Underdeveloped Image arrays</li>
-            <li className="d-flex align-items-center gap-2"><Badge status="processing" color="blue" /> <Text strong style={{ fontSize: '13px' }}>Structural A+:</Text> Missing modules on top listings</li>
-            <li className="d-flex align-items-center gap-2"><Badge status="processing" color="blue" /> <Text strong style={{ fontSize: '13px' }}>LQS Health:</Text> Items performing below quality threshold</li>
-          </ul>
-
-          <Alert 
-            title="Tasks created will be grouped into Categories and displayed directly within the Auto-Tasks Dashboard panel." 
-            type="info" 
-            showIcon 
-            style={{ marginBottom: 24, borderRadius: 6 }}
-          />
-
-          <div className="d-flex justify-content-end gap-2">
-            <Button onClick={() => setShowAutoGenerateModal(false)}>Cancel</Button>
-            <Button 
-              type="primary" 
-              loading={autoGenerating} 
-              style={{ backgroundColor: '#d97706', borderColor: '#d97706' }}
-              icon={!autoGenerating && <Zap size={14} />}
+          <p style={{ fontSize: 12, color: '#71717a', marginBottom: 12 }}>This will analyze your ASIN catalog and generate optimization tasks for:</p>
+          {['Titles — Missing SEO keywords', 'Images — Underdeveloped galleries', 'A+ Content — Missing modules', 'LQS — Below quality threshold'].map((item, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, color: '#18181b' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb', flexShrink: 0 }} />
+              {item}
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <Button onClick={() => setShowAutoGenerateModal(false)} style={{ borderRadius: 8, fontSize: 11 }}>Cancel</Button>
+            <Button type="primary" loading={autoGenerating} icon={<Zap size={13} />}
               onClick={handleAutoGenerateTasks}
-            >
-              {autoGenerating ? 'Processing Streams...' : 'Trigger Generation'}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, background: '#d97706', borderColor: '#d97706' }}>
+              {autoGenerating ? 'Generating...' : 'Generate Tasks'}
             </Button>
           </div>
         </div>
       </Modal>
-
     </div>
   );
 };

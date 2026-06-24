@@ -223,7 +223,7 @@ const NotificationCenter = () => {
       <Drawer
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
-        width={420}
+        size={420}
         className="notif-drawer"
         title={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

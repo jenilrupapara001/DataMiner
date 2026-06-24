@@ -65,6 +65,45 @@ exports.getUsers = async (req, res) => {
     `);
     const total = countResult.recordset[0].total;
 
+    // Active/Inactive counts (without isActive filter, but with other filters)
+    let countWhereClause = whereClause.replace(/AND U\.IsActive = @isActive/, '');
+    if (isActive !== undefined && isActive !== '' && isActive !== 'all') {
+      // Re-add the isActive param to the base where (removed above), but we need separate queries
+    }
+    const countReq = pool.request();
+    // Rebuild params for the status counts
+    if (search) countReq.input('search', sql.NVarChar, `%${search}%`);
+    if (role && role !== 'all') {
+      countReq.input('roleName', sql.VarChar, role);
+      countReq.input('roleId', sql.VarChar, role);
+    }
+    if (sellerId) countReq.input('sellerId', sql.VarChar, sellerId);
+    // Re-add RBAC
+    let countWhere = 'WHERE 1=1';
+    if (!isAdmin) {
+      const userId2 = (req.user?.Id || req.user?.id || req.user?._id || '').toString();
+      const subordinates2 = await getSubordinateIds(pool, userId2);
+      subordinates2.push(userId2);
+      if (subordinates2.length > 0) {
+        const subPlaceholders2 = buildInClause(countReq, 'subId2', subordinates2);
+        countWhere += ` AND U.Id IN (${subPlaceholders2})`;
+      }
+    }
+    if (search) countWhere += ' AND (U.FirstName LIKE @search OR U.LastName LIKE @search OR U.Email LIKE @search)';
+    if (role && role !== 'all') countWhere += ' AND (R.Name = @roleName OR R.Id = @roleId)';
+    if (sellerId) countWhere += ' AND EXISTS (SELECT 1 FROM UserSellers US WHERE US.UserId = U.Id AND US.SellerId = @sellerId)';
+
+    const statusCountResult = await countReq.query(`
+      SELECT 
+        SUM(CASE WHEN U.IsActive = 1 THEN 1 ELSE 0 END) as activeCount,
+        SUM(CASE WHEN U.IsActive = 0 THEN 1 ELSE 0 END) as inactiveCount
+      FROM Users U
+      LEFT JOIN Roles R ON U.RoleId = R.Id
+      ${countWhere}
+    `);
+    const activeCountResult = statusCountResult.recordset[0].activeCount || 0;
+    const inactiveCountResult = statusCountResult.recordset[0].inactiveCount || 0;
+
     // Fetch users with role info
     const sortField = sortBy === 'name' ? 'U.FirstName' : 
                       sortBy === 'email' ? 'U.Email' : 
@@ -206,7 +245,9 @@ exports.getUsers = async (req, res) => {
           page: pageNum,
           limit: limitNum,
           total,
-          totalPages: Math.ceil(total / limitNum)
+          totalPages: Math.ceil(total / limitNum),
+          activeCount: activeCountResult,
+          inactiveCount: inactiveCountResult
         }
       }
     });

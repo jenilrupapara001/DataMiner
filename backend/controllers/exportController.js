@@ -275,8 +275,13 @@ async function processExportJob(downloadId, params, userId) {
                 whereClause += ' AND a.HasAplus = @hasAplus';
             }
             if (buyBoxWin !== undefined && buyBoxWin !== '' && buyBoxWin !== null) {
-                request.input('buyBoxStatus', sql.Bit, (buyBoxWin === true || buyBoxWin === 'true') ? 1 : 0);
-                whereClause += ' AND a.BuyBoxWin = @buyBoxStatus';
+                const ownSellers = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEz'];
+                ownSellers.forEach((s, i) => request.input(`ownSeller${i}`, sql.NVarChar, s));
+                if (buyBoxWin === true || buyBoxWin === 'true') {
+                    whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ')})`;
+                } else {
+                    whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy != @ownSeller${i}`).join(' AND ')})`;
+                }
             }
             if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
                 if (priceDispute === 'true' || priceDispute === true) {
