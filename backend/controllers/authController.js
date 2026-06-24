@@ -180,26 +180,8 @@ exports.login = async (req, res) => {
       .input('id', sql.VarChar, user.Id)
       .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL, LastSeen = dbo.GetEnvDate() WHERE Id = @id');
 
-    // Check force password reset
-    if (user.ForcePasswordReset) {
-      return res.json({
-        success: true,
-        forcePasswordReset: true,
-        message: 'Password must be changed before continuing',
-        data: { user: { _id: user.Id, email: user.Email, forcePasswordReset: true } }
-      });
-    }
-
-    // Check password expiry
-    if (user.PasswordExpiresAt && new Date(user.PasswordExpiresAt) < new Date()) {
-      return res.json({
-        success: true,
-        forcePasswordReset: true,
-        reason: 'PASSWORD_EXPIRED',
-        message: 'Your password has expired. Please reset it.',
-        data: { user: { _id: user.Id, email: user.Email, forcePasswordReset: true } }
-      });
-    }
+    // Track force password reset (don't block login — wizard handles it)
+    const needsPasswordReset = !!(user.ForcePasswordReset) || (user.PasswordExpiresAt && new Date(user.PasswordExpiresAt) < new Date());
 
     // Check trusted device — skip OTP if trusted
     const fingerprint = Buffer.from(`${req.headers['user-agent'] || ''}|${clientIp}`).toString('base64').slice(0, 32);
