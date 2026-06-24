@@ -124,7 +124,12 @@ export const AuthProvider = ({ children }) => {
                 }
             }
 
-            return { success: true };
+            return { 
+                success: true, 
+                requiresSetup: result.requiresSetup, 
+                needsPasswordReset: result.needsPasswordReset, 
+                forcePasswordReset: result.forcePasswordReset 
+            };
         } catch (err) {
             setError(err.message);
             return { success: false, error: err.message };

@@ -78,7 +78,16 @@ class SetupWizardService {
 
     const hashed = await bcrypt.hash(newPassword, 12);
     await pool.request().input('id', sql.VarChar, userId).input('pw', sql.NVarChar, hashed)
-      .query('UPDATE Users SET Password = @pw, PasswordChangedAt = GETDATE(), PasswordExpiresAt = DATEADD(day, 90, GETDATE()), RefreshToken = NULL WHERE Id = @id');
+      .query('UPDATE Users SET Password = @pw, PasswordChangedAt = GETDATE(), PasswordExpiresAt = DATEADD(day, 90, GETDATE()), RefreshToken = NULL, ForcePasswordReset = 0, IsFirstLogin = 1 WHERE Id = @id');
+
+    // Record the change_password step as completed in progress
+    await pool.request()
+      .input('userId', sql.VarChar, userId)
+      .input('step', sql.NVarChar, 'change_password')
+      .query(`IF EXISTS (SELECT 1 FROM SetupWizardProgress WHERE UserId = @userId AND StepName = @step)
+        UPDATE SetupWizardProgress SET Status = 'COMPLETED', CompletedAt = GETDATE() WHERE UserId = @userId AND StepName = @step
+      ELSE
+        INSERT INTO SetupWizardProgress (UserId, StepName, Status, CompletedAt) VALUES (@userId, @step, 'COMPLETED', GETDATE())`);
 
     const histId = require('crypto').randomBytes(12).toString('hex');
     await pool.request().input('id', sql.VarChar, userId).input('hash', sql.NVarChar, user.Password).input('hid', sql.VarChar, histId)
