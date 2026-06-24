@@ -194,7 +194,7 @@ exports.login = async (req, res) => {
         .query('UPDATE Users SET RefreshToken = @token WHERE Id = @id');
       const resolvedUser = await getResolvedUserResponse(user, pool);
       await SystemLogService.log({ type: 'AUTH_SUCCESS', entityType: 'USER', entityId: user.Id, entityTitle: resolvedUser.FirstName + ' ' + resolvedUser.LastName, user: user.Id, description: `${resolvedUser.FirstName} logged in (trusted device)`, metadata: { ip: clientIp } });
-      return res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, trustedDevice: true, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt });
+      return res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, trustedDevice: true, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt, needsPasswordReset });
     }
 
     // OTP REQUIRED — Generate temp token and send OTP
@@ -391,7 +391,8 @@ exports.verifyOtp = async (req, res) => {
     const resolvedUser = await getResolvedUserResponse(user, pool);
     await SystemLogService.log({ type: 'AUTH_SUCCESS', entityType: 'USER', entityId: user.Id, entityTitle: resolvedUser.FirstName + ' ' + resolvedUser.LastName, user: user.Id, description: `${resolvedUser.FirstName} logged in (OTP verified)`, metadata: { ip: clientIp } });
 
-    res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt });
+    const needsPasswordReset = !!(user.ForcePasswordReset) || (user.PasswordExpiresAt && new Date(user.PasswordExpiresAt) < new Date());
+    res.json({ success: true, data: { user: resolvedUser, accessToken, refreshToken }, requiresSetup: !!(user.IsFirstLogin) && !user.SetupCompletedAt, needsPasswordReset });
   } catch (error) {
     if (error.message && error.message.includes('OTP')) {
       return res.status(401).json({ success: false, message: error.message });

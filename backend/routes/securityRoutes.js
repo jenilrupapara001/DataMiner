@@ -4,32 +4,54 @@ const { sql, getPool } = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const trustedDeviceService = require('../services/trustedDeviceService');
 
-// OTP Analytics (admin only)
-router.get('/otp-analytics', authenticate, async (req, res) => {
+// OTP Audit Log (paginated)
+router.get('/otp-logs', authenticate, async (req, res) => {
   try {
-    const role = (req.user.role?.name || req.user.role || '').toLowerCase();
-    if (!['admin', 'superadmin', 'super_admin', 'operational_manager'].includes(role)) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
-    }
-    const hours = parseInt(req.query.hours) || 24;
+    const { page = 1, limit = 50, action, status, email } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     const pool = await getPool();
-    const stats = await pool.request().input('hours', sql.Int, hours).query(`
-      SELECT COUNT(*) as TotalSent,
-        SUM(CASE WHEN Action = 'OTP_VERIFIED' THEN 1 ELSE 0 END) as Verified,
-        SUM(CASE WHEN Action = 'OTP_FAILED' THEN 1 ELSE 0 END) as Failed
-      FROM OtpAuditLog WHERE CreatedAt > DATEADD(HOUR, -@hours, GETUTCDATE())
+    const request = pool.request();
+    
+    let whereClause = 'WHERE 1=1';
+    if (action) { whereClause += ' AND Action = @action'; request.input('action', sql.NVarChar, action); }
+    if (status) { whereClause += ' AND Status = @status'; request.input('status', sql.NVarChar, status); }
+    if (email) { whereClause += ' AND Email LIKE @email'; request.input('email', sql.NVarChar, `%${email}%`); }
+    
+    const countResult = await request.query(`SELECT COUNT(*) as total FROM OtpAuditLog ${whereClause}`);
+    const total = countResult.recordset[0].total;
+    
+    const dataRequest = pool.request();
+    if (action) dataRequest.input('action', sql.NVarChar, action);
+    if (status) dataRequest.input('status', sql.NVarChar, status);
+    if (email) dataRequest.input('email', sql.NVarChar, `%${email}%`);
+    dataRequest.input('offset', sql.Int, offset);
+    dataRequest.input('limit', sql.Int, parseInt(limit));
+    
+    const data = await dataRequest.query(`
+      SELECT ol.*, u.FirstName, u.LastName
+      FROM OtpAuditLog ol
+      LEFT JOIN Users u ON ol.UserId = u.Id
+      ${whereClause}
+      ORDER BY ol.CreatedAt DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
-    const topUsers = await pool.request().input('hours', sql.Int, hours).query(`
-      SELECT TOP 10 Email, COUNT(*) as Count FROM OtpAuditLog
-      WHERE CreatedAt > DATEADD(HOUR, -@hours, GETUTCDATE())
-      GROUP BY Email ORDER BY Count DESC
+    
+    // Stats for the same filters
+    const statsReq = pool.request();
+    if (action) statsReq.input('action', sql.NVarChar, action);
+    if (status) statsReq.input('status', sql.NVarChar, status);
+    if (email) statsReq.input('email', sql.NVarChar, `%${email}%`);
+    const stats = await statsReq.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN Action = 'OTP_SENT' THEN 1 ELSE 0 END) as sent,
+        SUM(CASE WHEN Action = 'OTP_VERIFIED' OR Action = 'VERIFY' THEN 1 ELSE 0 END) as verified,
+        SUM(CASE WHEN Action = 'OTP_FAILED' OR Action = 'VERIFY_FAILED' THEN 1 ELSE 0 END) as failed
+      FROM OtpAuditLog
+      ${whereClause}
     `);
-    const suspicious = await pool.request().input('hours', sql.Int, hours).query(`
-      SELECT TOP 10 IpAddress, COUNT(*) as Attempts FROM OtpAuditLog
-      WHERE Status = 'FAILED' AND CreatedAt > DATEADD(HOUR, -@hours, GETUTCDATE())
-      GROUP BY IpAddress HAVING COUNT(*) > 3 ORDER BY Attempts DESC
-    `);
-    res.json({ success: true, stats: stats.recordset[0], topUsers: topUsers.recordset, suspiciousIps: suspicious.recordset });
+    
+    res.json({ success: true, data: data.recordset, total, stats: stats.recordset[0], page: parseInt(page), limit: parseInt(limit) });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 

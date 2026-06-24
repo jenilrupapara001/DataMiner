@@ -52,7 +52,7 @@ class SetupWizardService {
     }
     if (stepName === 'accept_policies') {
       await pool.request().input('userId', sql.VarChar, userId)
-        .query('UPDATE Users SET SecurityPolicyAccepted = 1, SecurityPolicyAcceptedAt = GETDATE() WHERE Id = @userId');
+        .query('UPDATE Users SET SecurityPolicyAccepted = 1 WHERE Id = @userId');
     }
 
     const progress = await this.getStatus(userId);
@@ -83,10 +83,6 @@ class SetupWizardService {
     const histId = require('crypto').randomBytes(12).toString('hex');
     await pool.request().input('id', sql.VarChar, userId).input('hash', sql.NVarChar, user.Password).input('hid', sql.VarChar, histId)
       .query('INSERT INTO PasswordHistory (Id, UserId, PasswordHash, ChangedAt) VALUES (@hid, @id, @hash, GETDATE())');
-
-    const tokenBlacklist = require('./tokenBlacklistService');
-    await tokenBlacklist.blacklistUser(userId);
-
     return { success: true };
   }
 

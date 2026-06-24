@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Form, Input, Button, Typography, Checkbox, Alert, Spin } from 'antd';
+import { Form, Input, Button, Typography, Alert, Checkbox } from 'antd';
 import { MailOutlined, LockOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -12,6 +13,7 @@ const fadeUp = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0, tr
 // ─── OTP Verification Step ─────────────────────────────────
 const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
   const { completeLogin } = useAuth();
+  const navigate = useNavigate();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -48,6 +50,12 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
       const res = await authApi.verifyOtp(tempToken, code, trustDevice);
       if (res.success) {
         await completeLogin(res);
+        // Redirect to wizard if needed
+        if (res.requiresSetup || res.needsPasswordReset) {
+          setTimeout(() => navigate('/setup-wizard'), 100);
+          return;
+        }
+        setTimeout(() => navigate('/'), 100);
       }
     } catch (e) {
       setError(e.message || 'Verification failed');
@@ -131,6 +139,7 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
 // ─── Main Login Page ────────────────────────────────────────
 const LoginPage = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -143,20 +152,24 @@ const LoginPage = () => {
       const result = await login(values.email.trim(), values.password);
       if (!result.success) throw new Error(result.error || 'Login failed');
 
-      // Check if OTP is required (login returns requiresOtp)
+      // Check if OTP is required
       if (result.requiresOtp) {
         setOtpData({ tempToken: result.tempToken, destination: result.destination, expiresIn: result.expiresIn });
         setStep('otp');
         return;
       }
 
-      // Force password reset
-      if (result.forcePasswordReset) {
-        setError('Password reset required. Please contact administrator.');
+      // Force password reset — redirect to wizard
+      if (result.needsPasswordReset || result.forcePasswordReset) {
+        navigate('/setup-wizard');
         return;
       }
 
-      // Trusted device — direct login already handled by AuthContext
+      // Trusted device — direct login, check if setup needed
+      if (result.requiresSetup) {
+        navigate('/setup-wizard');
+        return;
+      }
     } catch (err) {
       let msg = err.message || 'An unexpected error occurred';
       if (msg.includes('fetch') || msg.includes('network')) msg = 'Unable to connect to the server.';

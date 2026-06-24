@@ -1485,6 +1485,11 @@ const api = {
   asinApi,
   revenueApi,
   settingsApi,
+  securityApi: {
+    getOtpLogs: async (params = {}) => {
+      return api.get('/security/otp-logs', params);
+    },
+  },
   notificationApi: {
     getNotifications: async (params = {}) => {
       return api.get('/notifications', params);

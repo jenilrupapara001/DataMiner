@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/db';
+import api from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
 import {
     Card, Table, Input, Select, Badge, Avatar, Space, Row, Col, Statistic, DatePicker,
@@ -8,7 +9,7 @@ import {
 import {
     Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
     PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
-    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle, Zap
+    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle, Zap, Mail
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
@@ -23,6 +24,14 @@ const ActivityLog = () => {
     const [dateRange, setDateRange] = useState(null);
     const [selectedLog, setSelectedLog] = useState(null);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
+    const [activeTab, setActiveTab] = useState('activity');
+    const [otpLogs, setOtpLogs] = useState([]);
+    const [otpLoading, setOtpLoading] = useState(false);
+    const [otpStats, setOtpStats] = useState({});
+    const [otpPage, setOtpPage] = useState(1);
+    const [otpTotal, setOtpTotal] = useState(0);
+    const [otpActionFilter, setOtpActionFilter] = useState('');
+    const [otpEmailFilter, setOtpEmailFilter] = useState('');
     const socket = useSocket();
 
     useEffect(() => {
@@ -79,6 +88,28 @@ const ActivityLog = () => {
             setLoading(false);
         }
     };
+
+    const loadOtpLogs = async (page = 1) => {
+        setOtpLoading(true);
+        try {
+            const params = { page, limit: 20 };
+            if (otpActionFilter) params.action = otpActionFilter;
+            if (otpEmailFilter) params.email = otpEmailFilter;
+            const res = await api.securityApi.getOtpLogs(params);
+            if (res.success) {
+                setOtpLogs(res.data || []);
+                setOtpTotal(res.total || 0);
+                setOtpStats(res.stats || {});
+                setOtpPage(page);
+            }
+        } catch (error) {
+            console.error('Failed to load OTP logs', error);
+        } finally {
+            setOtpLoading(false);
+        }
+    };
+
+    useEffect(() => { if (activeTab === 'otp') loadOtpLogs(1); }, [activeTab, otpActionFilter, otpEmailFilter]);
 
     const getTypeStyle = (type = '') => {
         const t = type || '';
@@ -338,6 +369,108 @@ const ActivityLog = () => {
         }
     ];
 
+    const otpColumns = [
+        {
+            title: 'Timestamp',
+            dataIndex: 'CreatedAt',
+            key: 'CreatedAt',
+            width: 170,
+            sorter: (a, b) => new Date(a.CreatedAt) - new Date(b.CreatedAt),
+            render: (val) => (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Space size={4} style={{ color: '#1e293b', fontWeight: 500, fontSize: '12px' }}>
+                        <Clock size={12} style={{ color: '#64748b' }} />
+                        <span>{new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: '10px', marginLeft: '16px' }}>
+                        {new Date(val).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                </div>
+            )
+        },
+        {
+            title: 'User',
+            key: 'user',
+            width: 200,
+            render: (_, record) => {
+                const name = [record.FirstName, record.LastName].filter(Boolean).join(' ') || record.Email;
+                const initial = (record.FirstName || record.Email || 'U')[0].toUpperCase();
+                return (
+                    <Space size={8}>
+                        <Avatar size={28} style={{ background: '#4f46e5', fontSize: 11, fontWeight: 700 }}>{initial}</Avatar>
+                        <div>
+                            <Text strong style={{ fontSize: '12px' }}>{name}</Text>
+                            <div style={{ fontSize: '10px', color: '#94a3b8' }}>{record.Email}</div>
+                        </div>
+                    </Space>
+                );
+            }
+        },
+        {
+            title: 'Action',
+            dataIndex: 'Action',
+            key: 'Action',
+            width: 140,
+            render: (val) => {
+                const styles = {
+                    'OTP_SENT': { color: '#3b82f6', label: 'OTP Sent', icon: <Mail size={12} /> },
+                    'OTP_VERIFIED': { color: '#10b981', label: 'Verified', icon: <CheckCircle size={12} /> },
+                    'OTP_FAILED': { color: '#ef4444', label: 'Failed', icon: <XCircle size={12} /> },
+                    'OTP_VERIFY': { color: '#10b981', label: 'Verified', icon: <CheckCircle size={12} /> },
+                    'VERIFY_FAILED': { color: '#ef4444', label: 'Failed', icon: <XCircle size={12} /> },
+                };
+                const s = styles[val] || { color: '#64748b', label: val, icon: <Info size={12} /> };
+                return (
+                    <Tag style={{ backgroundColor: `${s.color}10`, color: s.color, borderColor: `${s.color}30`, display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 10px', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase' }}>
+                        {s.icon} {s.label}
+                    </Tag>
+                );
+            }
+        },
+        {
+            title: 'Status',
+            dataIndex: 'Status',
+            key: 'Status',
+            width: 100,
+            render: (val) => (
+                <Tag style={{ backgroundColor: val === 'SUCCESS' ? '#dcfce7' : '#fee2e2', color: val === 'SUCCESS' ? '#16a34a' : '#dc2626', borderColor: val === 'SUCCESS' ? '#bbf7d0' : '#fecaca', borderRadius: '6px', fontWeight: 600, fontSize: '10px' }}>
+                    {val}
+                </Tag>
+            )
+        },
+        {
+            title: 'Reason',
+            dataIndex: 'Reason',
+            key: 'Reason',
+            width: 200,
+            ellipsis: true,
+            render: (val) => val ? <Tooltip title={val}><span style={{ fontSize: '12px', color: '#64748b' }}>{val}</span></Tooltip> : <span style={{ fontSize: '12px', color: '#d4d4d8' }}>—</span>
+        },
+        {
+            title: 'IP Address',
+            dataIndex: 'IpAddress',
+            key: 'IpAddress',
+            width: 140,
+            render: (val) => <Text style={{ fontSize: '11px', fontFamily: 'monospace', color: '#64748b' }}>{val || '—'}</Text>
+        },
+        {
+            title: 'Browser',
+            dataIndex: 'UserAgent',
+            key: 'UserAgent',
+            width: 120,
+            ellipsis: true,
+            render: (val) => {
+                if (!val) return <span style={{ color: '#d4d4d8', fontSize: '11px' }}>—</span>;
+                let browser = 'Other';
+                if (val.includes('Chrome')) browser = 'Chrome';
+                else if (val.includes('Firefox')) browser = 'Firefox';
+                else if (val.includes('Safari')) browser = 'Safari';
+                else if (val.includes('Edge')) browser = 'Edge';
+                return <Tag style={{ borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>{browser}</Tag>;
+            }
+        }
+    ];
+
     if (loading && logs.length === 0) {
         return <PageLoader message="Initializing Activity Streams..." />;
     }
@@ -359,22 +492,34 @@ const ActivityLog = () => {
                         <div style={{ padding: '6px', background: '#e0e7ff', color: '#4f46e5', borderRadius: 8, display: 'flex' }}>
                             <Activity size={20} />
                         </div>
-                        Activity Streams
+                        {activeTab === 'activity' ? 'Activity Streams' : 'OTP Audit Log'}
                     </Title>
                     <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 4 }}>
-                        Real-time audit trail of all administrative and automated actions within the platform.
+                        {activeTab === 'activity' ? 'Real-time audit trail of all administrative and automated actions.' : 'OTP verification attempts, deliveries, and security events.'}
                     </Text>
                 </div>
 
-                <Button
-                    type="primary"
-                    onClick={loadLogs}
-                    loading={loading}
-                    icon={<RefreshCw size={14} />}
-                    style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, borderRadius: 8, height: '36px' }}
-                >
-                    Sync Streams
-                </Button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ background: '#f4f4f5', borderRadius: 8, padding: 2 }}>
+                        <div style={{ display: 'flex', background: '#fff', borderRadius: 7, border: '1px solid #e4e4e7', overflow: 'hidden' }}>
+                            <button onClick={() => setActiveTab('activity')} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', background: activeTab === 'activity' ? '#18181b' : 'transparent', color: activeTab === 'activity' ? '#fff' : '#71717a' }}>
+                                <Activity size={12} style={{ marginRight: 4 }} />System Logs
+                            </button>
+                            <button onClick={() => setActiveTab('otp')} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', background: activeTab === 'otp' ? '#18181b' : 'transparent', color: activeTab === 'otp' ? '#fff' : '#71717a' }}>
+                                <Shield size={12} style={{ marginRight: 4 }} />OTP Audit
+                            </button>
+                        </div>
+                    </div>
+                    <Button
+                        type="primary"
+                        onClick={activeTab === 'activity' ? loadLogs : () => loadOtpLogs(1)}
+                        loading={loading || otpLoading}
+                        icon={<RefreshCw size={14} />}
+                        style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, borderRadius: 8, height: '34px' }}
+                    >
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             {/* METRICS ROW */}
@@ -491,42 +636,73 @@ const ActivityLog = () => {
                 </div>
             </Card>
 
-            {/* DATA TABLE CARD */}
-            <Card
-                styles={{ body: { padding: 0 } }}
-                style={{
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    overflow: 'hidden',
-                    background: '#fff',
-                    marginBottom: '24px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
-                }}
-            >
-                <Table
-                    columns={columns}
-                    dataSource={filteredLogs}
-                    rowKey={(record) => record._id || Math.random().toString()}
-                    pagination={{
-                        pageSize: 15,
-                        showSizeChanger: true,
-                        pageSizeOptions: ['15', '30', '50', '100'],
-                        showTotal: (total) => <Text type="secondary" style={{ fontSize: '12px' }}>Analyzing <b>{total}</b> system operations</Text>,
-                        style: { padding: '20px' }
-                    }}
-                    loading={loading}
-                    rowClassName="premium-activity-row"
-                    scroll={{ x: 'max-content' }}
-                    locale={{
-                        emptyText: (
-                            <Empty
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                description={<Text type="secondary">No system events matched your filter criteria.</Text>}
-                            />
-                        )
-                    }}
-                />
-            </Card>
+            {/* FILTER & DATA */}
+            {activeTab === 'activity' && (
+                <>
+                    {/* FILTER BAR */}
+                    <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, padding: 0 }} styles={{ body: { padding: '10px 16px' } }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Input prefix={<Search size={12} />} placeholder="Search events..." size="small" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} allowClear style={{ width: 200, borderRadius: 8 }} />
+                            <Select size="small" value={filterType} onChange={setFilterType} style={{ width: 150, borderRadius: 8 }} options={[
+                                { value: 'ALL', label: 'All Types' }, { value: 'CREATE', label: 'Creation' }, { value: 'UPDATE', label: 'Update' },
+                                { value: 'DELETE', label: 'Delete' }, { value: 'AUTH_SUCCESS', label: 'Login' }, { value: 'AUTH_FAILURE', label: 'Login Fail' },
+                                { value: 'LIVE_SYNC', label: 'Live Sync' }, { value: 'SYSTEM_ERROR', label: 'Error' }
+                            ]} />
+                            <DatePicker.RangePicker size="small" value={dateRange} onChange={setDateRange} style={{ width: 220, borderRadius: 8 }} />
+                            {hasActiveFilters && (
+                                <Button size="small" danger onClick={clearAllFilters}>Clear</Button>
+                            )}
+                        </div>
+                    </Card>
+
+                    {/* DATA TABLE */}
+                    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
+                        <Table columns={columns} dataSource={filteredLogs} rowKey={(r) => r._id || Math.random().toString()}
+                            pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: ['15', '30', '50', '100'], showTotal: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t} events</Text> }}
+                            loading={loading} scroll={{ x: 'max-content' }} size="small" />
+                    </Card>
+                </>
+            )}
+
+            {/* OTP AUDIT TABLE */}
+            {activeTab === 'otp' && (
+                <>
+                    {/* OTP Stats Row */}
+                    <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                        {[
+                            { label: 'Total', value: otpStats.total || otpTotal || 0, color: '#3b82f6', bg: '#eff6ff' },
+                            { label: 'Sent', value: otpStats.sent || 0, color: '#2563eb', bg: '#eff6ff' },
+                            { label: 'Verified', value: otpStats.verified || 0, color: '#059669', bg: '#ecfdf5' },
+                            { label: 'Failed', value: otpStats.failed || 0, color: '#dc2626', bg: '#fef2f2' },
+                        ].map((s, i) => (
+                            <Col key={i} xs={12} sm={6}>
+                                <div style={{ padding: '10px 14px', background: s.bg, borderRadius: 10, border: `1px solid ${s.color}20` }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#18181b' }}>{s.value}</div>
+                                </div>
+                            </Col>
+                        ))}
+                    </Row>
+
+                    {/* OTP Filters */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+                        <Select size="small" value={otpActionFilter || undefined} placeholder="Action" allowClear onChange={v => setOtpActionFilter(v || '')}
+                            style={{ width: 150, borderRadius: 8 }} options={[
+                                { value: 'OTP_SENT', label: 'OTP Sent' }, { value: 'OTP_VERIFIED', label: 'Verified' },
+                                { value: 'OTP_FAILED', label: 'Failed' }, { value: 'VERIFY_FAILED', label: 'Verify Failed' }
+                            ]} />
+                        <Input prefix={<Search size={12} />} size="small" placeholder="Filter by email..." value={otpEmailFilter}
+                            onChange={e => setOtpEmailFilter(e.target.value)} allowClear style={{ width: 200, borderRadius: 8 }} />
+                    </div>
+
+                    {/* OTP Data Table */}
+                    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
+                        <Table columns={otpColumns} dataSource={otpLogs} rowKey={(r) => r.Id || r.id}
+                            pagination={{ current: otpPage, pageSize: 20, total: otpTotal, onChange: (p) => loadOtpLogs(p), showTotal: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t} OTP records</Text> }}
+                            loading={otpLoading} scroll={{ x: 'max-content' }} size="small" />
+                    </Card>
+                </>
+            )}
 
             {/* DETAIL MODAL */}
             <Modal
