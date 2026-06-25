@@ -715,7 +715,20 @@ exports.getTemplates = async (req, res) => {
     try {
         const pool = await getPool();
         const result = await pool.request().query('SELECT * FROM TaskTemplates ORDER BY Category, Title');
-        res.json({ success: true, data: result.recordset });
+        const mapped = result.recordset.map(r => ({
+            _id: r.Id,
+            id: r.Id,
+            title: r.Title,
+            description: r.Description,
+            category: r.Category,
+            type: r.Type,
+            priority: r.Priority,
+            estimatedMinutes: r.TimeLimit,
+            isActive: r.IsActive,
+            createdAt: r.CreatedAt,
+            updatedAt: r.UpdatedAt
+        }));
+        res.json({ success: true, data: mapped });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Not yet implemented' });
     }
@@ -730,7 +743,10 @@ exports.createTemplate = async (req, res) => {
             .input('Title', sql.NVarChar, req.body.title)
             .input('Description', sql.NVarChar, req.body.description || '')
             .input('Category', sql.NVarChar, req.body.category || 'GENERAL')
-            .query(`INSERT INTO TaskTemplates (Id, Title, Description, Category, CreatedAt) VALUES (@Id, @Title, @Description, @Category, dbo.GetEnvDate())`);
+            .input('Type', sql.NVarChar, req.body.type || 'GENERAL_OPTIMIZATION')
+            .input('Priority', sql.NVarChar, req.body.priority || 'MEDIUM')
+            .input('TimeLimit', sql.Int, req.body.estimatedMinutes || req.body.timeLimit || 30)
+            .query(`INSERT INTO TaskTemplates (Id, Title, Description, Category, Type, Priority, TimeLimit, IsActive, CreatedAt, UpdatedAt) VALUES (@Id, @Title, @Description, @Category, @Type, @Priority, @TimeLimit, 1, dbo.GetEnvDate(), dbo.GetEnvDate())`);
         const result = await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM TaskTemplates WHERE Id = @id');
         res.status(201).json({ success: true, data: result.recordset[0] });
     } catch (error) {
@@ -780,7 +796,21 @@ exports.getGoalTemplates = async (req, res) => {
     try {
         const pool = await getPool();
         const result = await pool.request().query('SELECT * FROM GoalTemplates ORDER BY Name');
-        res.json({ success: true, data: result.recordset });
+        const mapped = result.recordset.map(r => {
+            let goals = [];
+            try { goals = JSON.parse(r.Goals || '[]'); } catch { goals = []; }
+            return {
+                _id: r.Id,
+                id: r.Id,
+                name: r.Name,
+                description: r.Description,
+                goals,
+                ownerId: r.OwnerId,
+                createdAt: r.CreatedAt,
+                updatedAt: r.UpdatedAt
+            };
+        });
+        res.json({ success: true, data: mapped });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Not yet implemented' });
     }
@@ -790,14 +820,54 @@ exports.createGoalTemplate = async (req, res) => {
     try {
         const pool = await getPool();
         const id = generateId();
+        const goalsJson = JSON.stringify(req.body.goals || []);
         await pool.request()
             .input('Id', sql.VarChar, id)
             .input('Name', sql.NVarChar, req.body.name)
             .input('Description', sql.NVarChar, req.body.description || '')
-            .input('CreatedBy', sql.VarChar, req.user.Id || req.user._id)
-            .query(`INSERT INTO GoalTemplates (Id, Name, Description, CreatedBy, CreatedAt) VALUES (@Id, @Name, @Description, @CreatedBy, dbo.GetEnvDate())`);
+            .input('Goals', sql.NVarChar, goalsJson)
+            .input('OwnerId', sql.VarChar, req.user?.Id || req.user?._id || '')
+            .query(`INSERT INTO GoalTemplates (Id, Name, Description, Goals, OwnerId, CreatedAt, UpdatedAt) VALUES (@Id, @Name, @Description, @Goals, @OwnerId, dbo.GetEnvDate(), dbo.GetEnvDate())`);
         const result = await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM GoalTemplates WHERE Id = @id');
-        res.status(201).json({ success: true, data: result.recordset[0] });
+        const row = result.recordset[0];
+        let goals = [];
+        try { goals = JSON.parse(row.Goals || '[]'); } catch { goals = []; }
+        res.status(201).json({ success: true, data: { _id: row.Id, id: row.Id, name: row.Name, description: row.Description, goals } });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.updateGoalTemplate = async (req, res) => {
+    try {
+        const pool = await getPool();
+        const { id } = req.params;
+        const updates = [];
+        const request = pool.request();
+        let idx = 0;
+        if (req.body.name !== undefined) { updates.push(`Name = @p${idx}`); request.input(`p${idx}`, sql.NVarChar, req.body.name); idx++; }
+        if (req.body.description !== undefined) { updates.push(`Description = @p${idx}`); request.input(`p${idx}`, sql.NVarChar, req.body.description); idx++; }
+        if (req.body.goals !== undefined) { updates.push(`Goals = @p${idx}`); request.input(`p${idx}`, sql.NVarChar, JSON.stringify(req.body.goals)); idx++; }
+        if (updates.length === 0) return res.status(400).json({ success: false, message: 'No updates' });
+        updates.push('UpdatedAt = dbo.GetEnvDate()');
+        request.input('id', sql.VarChar, id);
+        await request.query(`UPDATE GoalTemplates SET ${updates.join(', ')} WHERE Id = @id`);
+        const result = await pool.request().input('id', sql.VarChar, id).query('SELECT * FROM GoalTemplates WHERE Id = @id');
+        if (!result.recordset[0]) return res.status(404).json({ success: false, message: 'Not found' });
+        const row = result.recordset[0];
+        let goals = [];
+        try { goals = JSON.parse(row.Goals || '[]'); } catch { goals = []; }
+        res.json({ success: true, data: { _id: row.Id, id: row.Id, name: row.Name, description: row.Description, goals } });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.deleteGoalTemplate = async (req, res) => {
+    try {
+        const pool = await getPool();
+        await pool.request().input('id', sql.VarChar, req.params.id).query('DELETE FROM GoalTemplates WHERE Id = @id');
+        res.json({ success: true, message: 'Deleted' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -871,6 +941,8 @@ module.exports = {
     deleteTemplate: exports.deleteTemplate,
     getGoalTemplates: exports.getGoalTemplates,
     createGoalTemplate: exports.createGoalTemplate,
+    updateGoalTemplate: exports.updateGoalTemplate,
+    deleteGoalTemplate: exports.deleteGoalTemplate,
     // Additional endpoints
     startAction: exports.startAction,
     submitReview: exports.submitReview,

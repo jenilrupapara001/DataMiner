@@ -59,8 +59,10 @@ router.put('/templates/:id', protect, requireAnyPermission(['actions_manage']), 
 router.delete('/templates/:id', protect, requireAnyPermission(['actions_manage']), actionController.deleteTemplate);
 
 // Goal Templates
-router.get('/goal-templates', protect, actionController.getGoalTemplates);
-router.post('/goal-templates', protect, requireAnyPermission(['actions_manage']), actionController.createGoalTemplate);
+    router.get('/goal-templates', protect, actionController.getGoalTemplates);
+    router.post('/goal-templates', protect, requireAnyPermission(['actions_manage']), actionController.createGoalTemplate);
+    router.put('/goal-templates/:id', protect, requireAnyPermission(['actions_manage']), actionController.updateGoalTemplate);
+    router.delete('/goal-templates/:id', protect, requireAnyPermission(['actions_manage']), actionController.deleteGoalTemplate);
 
 // Bulk creation from analysis
 router.post('/bulk-from-analysis', protect, requireAnyPermission(['actions_create', 'actions_manage']), actionController.bulkCreateFromAnalysis);

@@ -514,15 +514,13 @@ const TemplateManagerPage = () => {
                 .templates-page-container {
                     display: flex;
                     flex-direction: column;
-                    height: calc(100vh - 60px);
-                    overflow: hidden;
-                    background-color: #f8fafc;
-                    margin: -1.5rem -2rem;
+                    min-height: calc(100vh - 60px);
+                    background-color: #fafbfc;
                 }
                 .templates-header {
                     flex-shrink: 0;
                     background: #ffffff;
-                    padding: 18px 24px;
+                    padding: 18px 28px;
                     border-bottom: 1px solid #e2e8f0;
                     display: flex;
                     justify-content: space-between;
@@ -532,39 +530,9 @@ const TemplateManagerPage = () => {
                 .templates-scroll-content {
                     flex: 1;
                     overflow-y: auto;
-                    padding: 20px 24px;
+                    padding: 20px 28px;
                     display: flex;
                     flex-direction: column;
-                }
-                .task-stat-card {
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 12px;
-                    padding: 8px 16px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    min-width: 100px;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-                    transition: all 0.2s ease;
-                }
-                .task-stat-card:hover {
-                    border-color: #cbd5e1;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
-                }
-                .task-stat-card .task-stat-label {
-                    font-size: 10px;
-                    font-weight: 700;
-                    color: #64748b;
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    margin-bottom: 2px;
-                }
-                .task-stat-card .task-stat-value {
-                    font-size: 18px;
-                    font-weight: 800;
                 }
                 .segmented-templates .ant-segmented-item-selected {
                     background-color: #4f46e5 !important;
@@ -576,58 +544,26 @@ const TemplateManagerPage = () => {
                     font-size: 11.5px;
                     color: #475569;
                 }
-                .custom-glass-modal .ant-modal-content {
-                    border-radius: 20px !important;
-                    overflow: hidden !important;
+                .templates-table .ant-table-thead > tr > th {
+                    background: #fafbfc !important;
+                    font-size: 11px !important;
+                    font-weight: 700 !important;
+                    color: #475569 !important;
+                    text-transform: uppercase !important;
+                    letter-spacing: 0.04em !important;
+                    border-bottom: 2px solid #e2e8f0 !important;
                 }
-                .custom-glass-modal .ant-modal-header {
-                    background: #f8fafc !important;
+                .templates-table .ant-table-tbody > tr > td {
                     border-bottom: 1px solid #f1f5f9 !important;
-                    padding: 16px 24px !important;
-                    margin: 0 !important;
                 }
-                .custom-glass-modal .ant-modal-footer {
+                .templates-table .ant-table-tbody > tr:hover > td {
                     background: #f8fafc !important;
-                    border-top: 1px solid #f1f5f9 !important;
-                    padding: 16px 24px !important;
-                    margin: 0 !important;
                 }
-                
-                .metric-form-row {
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 12px;
-                    padding: 12px;
-                    margin-bottom: 10px;
-                    display: flex;
-                    gap: 12px;
-                    align-items: center;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-                    transition: all 0.2s ease;
-                }
-                .metric-form-row:hover {
-                    border-color: #cbd5e1;
-                    box-shadow: 0 3px 6px rgba(0,0,0,0.03);
-                }
-
-                @keyframes fadeInUp {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-fade-up {
-                    animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                }
-                
                 @media (max-width: 768px) {
                     .templates-header {
                         flex-direction: column;
                         align-items: stretch;
                         gap: 12px;
-                    }
-                    .templates-page-container {
-                        margin: -0.75rem;
-                        height: auto;
-                        overflow: visible;
                     }
                 }
             `}</style>
@@ -659,76 +595,47 @@ const TemplateManagerPage = () => {
                 </div>
 
                 {/* Right Side: Search + Action Buttons */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-                    <div style={{ position: 'relative', width: 220 }}>
-                        <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                        <input
-                            type="text"
-                            placeholder={`Search templates...`}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                        <Input
+                            prefix={<Search size={12} style={{ color: '#94a3b8' }} />}
+                            size="small"
+                            placeholder="Search templates..."
+                            allowClear
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '6px 12px 6px 28px',
-                                fontSize: 12,
-                                borderRadius: 8,
-                                border: '1px solid #e2e8f0',
-                                background: '#f8fafc',
-                                outline: 'none',
-                                transition: 'all 0.2s',
-                                fontWeight: 500
-                            }}
-                            onFocus={(e) => {
-                                e.target.style.borderColor = '#4f46e5';
-                                e.target.style.background = '#ffffff';
-                                e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
-                            }}
-                            onBlur={(e) => {
-                                e.target.style.borderColor = '#e2e8f0';
-                                e.target.style.background = '#f8fafc';
-                                e.target.style.boxShadow = 'none';
-                            }}
+                            style={{ width: 220, borderRadius: 8 }}
                         />
-                    </div>
 
                     <Button 
                         onClick={() => setShowAiModal(true)}
                         icon={<Sparkles size={13} />}
-                        shape="round"
                         style={{ 
-                            borderColor: '#6366f1', 
-                            color: '#4f46e5', 
-                            backgroundColor: '#eef2ff', 
-                            fontWeight: 700,
-                            fontSize: 12,
+                            fontWeight: 600,
+                            fontSize: 11,
                             borderRadius: 8,
                             height: 32,
-                            display: 'flex',
-                            alignItems: 'center'
+                            borderColor: '#6366f1', 
+                            color: '#4f46e5', 
+                            background: '#eef2ff'
                         }}
                     >
-                        AI Template Generator
+                        AI Generate
                     </Button>
 
-                    <Divider orientation="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
+                    <Divider type="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
 
                     <Button 
                         type="primary" 
                         onClick={() => activeTab === 'task' ? handleOpenTaskModal() : handleOpenGoalModal()} 
                         icon={<Plus size={13} />}
-                        shape="round"
                         style={{ 
-                            backgroundColor: '#4f46e5', 
-                            borderColor: '#4f46e5', 
-                            fontWeight: 700,
-                            fontSize: 12,
                             borderRadius: 8,
-                            height: 32,
-                            display: 'flex',
-                            alignItems: 'center'
+                            fontSize: 11,
+                            fontWeight: 600,
+                            height: 32
                         }}
                     >
-                        {activeTab === 'task' ? 'New Task Template' : 'New Roadmap'}
+                        {activeTab === 'task' ? 'New Task' : 'New Roadmap'}
                     </Button>
                 </div>
             </div>
@@ -750,8 +657,8 @@ const TemplateManagerPage = () => {
                             position: ['bottomRight']
                         }}
                         scroll={{ x: 900, y: 'calc(100vh - 190px)' }}
-                        size="middle"
-                        className="custom-table-ant"
+                        size="small"
+                        className="templates-table"
                     />
                 </Card>
             </div>
@@ -775,18 +682,17 @@ const TemplateManagerPage = () => {
                 width={580}
                 className="custom-glass-modal"
                 footer={[
-                    <Button key="back" shape="round" onClick={() => setShowTaskModal(false)}>
+                    <Button key="back" onClick={() => setShowTaskModal(false)} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
                         Cancel
                     </Button>,
                     <Button 
                         key="submit" 
                         type="primary" 
-                        shape="round" 
                         loading={isSubmitting}
                         onClick={handleTaskSubmit}
-                        style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
+                        style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}
                     >
-                        {currentTaskTemplate ? 'Save Template' : 'Create Template'}
+                        {currentTaskTemplate ? 'Save' : 'Create'}
                     </Button>
                 ]}
             >
@@ -884,18 +790,17 @@ const TemplateManagerPage = () => {
                 width={760}
                 className="custom-glass-modal"
                 footer={[
-                    <Button key="back" shape="round" onClick={() => setShowGoalModal(false)}>
+                    <Button key="back" onClick={() => setShowGoalModal(false)} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>
                         Cancel
                     </Button>,
                     <Button 
                         key="submit" 
                         type="primary" 
-                        shape="round" 
                         loading={isSubmitting}
                         onClick={handleGoalSubmit}
-                        style={{ background: '#4F46E5', borderColor: '#4F46E5', fontWeight: 600 }}
+                        style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}
                     >
-                        {currentGoalTemplate ? 'Save Template' : 'Deploy Template'}
+                        {currentGoalTemplate ? 'Save' : 'Deploy'}
                     </Button>
                 ]}
             >

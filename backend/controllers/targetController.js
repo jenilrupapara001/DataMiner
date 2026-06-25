@@ -203,8 +203,41 @@ exports.getTargets = async (req, res) => {
                     dailyStats[sId][dateStr] = {
                         adSpend: parseFloat(row.AdSpend || 0),
                         adSales: parseFloat(row.AdSales || 0),
-                        organicSales: parseFloat(row.OrganicSales || 0)
+                        organicSales: parseFloat(row.OrganicSales || 0),
+                        gmsRevenue: 0
                     };
+                }
+            });
+
+            // 4. Fetch GMS daily data for GMS goal type achievements
+            const gmsRequest = pool.request();
+            const gmsSellerClause = buildInClause(gmsRequest, 'sId', sellerIds, sql.NVarChar);
+            gmsRequest.input('gmsMinDate', sql.Date, `${minYear}-01-01`);
+            gmsRequest.input('gmsMaxDate', sql.Date, `${maxYear}-12-31`);
+
+            const gmsQuery = `
+                SELECT s.Id AS ReadableSellerId, g.Date,
+                       SUM(ISNULL(g.OrderedRevenue, 0)) as OrderedRevenue,
+                       SUM(ISNULL(g.OrderedUnits, 0)) as OrderedUnits
+                FROM GmsDailyPerformance g
+                INNER JOIN Asins a ON g.Asin = a.AsinCode
+                INNER JOIN Sellers s ON a.SellerId = s.Id
+                WHERE s.Id IN (${gmsSellerClause})
+                  AND g.Date >= @gmsMinDate AND g.Date <= @gmsMaxDate
+                GROUP BY s.Id, g.Date
+            `;
+            const gmsResult = await gmsRequest.query(gmsQuery);
+
+            gmsResult.recordset.forEach(row => {
+                const sId = row.ReadableSellerId;
+                if (row.Date) {
+                    const dateStr = format(new Date(row.Date), 'yyyy-MM-dd');
+                    if (!dailyStats[sId]) dailyStats[sId] = {};
+                    if (!dailyStats[sId][dateStr]) {
+                        dailyStats[sId][dateStr] = { adSpend: 0, adSales: 0, organicSales: 0, gmsRevenue: 0 };
+                    }
+                    dailyStats[sId][dateStr].gmsRevenue = parseFloat(row.OrderedRevenue || 0);
+                    dailyStats[sId][dateStr].gmsUnits = parseFloat(row.OrderedUnits || 0);
                 }
             });
         }
@@ -217,6 +250,7 @@ exports.getTargets = async (req, res) => {
             let totalAdSpend = 0;
             let totalAdSales = 0;
             let totalOrganicSales = 0;
+            let totalGmsRevenue = 0;
 
             let curr = new Date(startDateStr);
             const end = new Date(endDateStr);
@@ -228,11 +262,14 @@ exports.getTargets = async (req, res) => {
                     totalAdSpend += stats.adSpend;
                     totalAdSales += stats.adSales;
                     totalOrganicSales += stats.organicSales;
+                    totalGmsRevenue += (stats.gmsRevenue || 0);
                 }
                 curr = addDays(curr, 1);
             }
 
-            if (goalType === 'ADS') {
+            if (goalType === 'GMS') {
+                return totalGmsRevenue;
+            } else if (goalType === 'ADS') {
                 return totalAdSpend;
             } else if (goalType === 'ACOS') {
                 return totalAdSales > 0 ? (totalAdSpend / totalAdSales) * 100 : 0;
@@ -248,7 +285,9 @@ exports.getTargets = async (req, res) => {
             const stats = sellerData[dateStr];
             if (!stats) return 0;
 
-            if (goalType === 'ADS') {
+            if (goalType === 'GMS') {
+                return stats.gmsRevenue || 0;
+            } else if (goalType === 'ADS') {
                 return stats.adSpend;
             } else if (goalType === 'ACOS') {
                 return stats.adSales > 0 ? (stats.adSpend / stats.adSales) * 100 : 0;
@@ -269,7 +308,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Month level achievements
             for (const monthItem of monthlyBreakdown) {
-                if (monthItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') {
+                if (monthItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS' || goalType === 'GMS') {
                     const { startDate, endDate } = getMonthRange(year, monthItem.PeriodValue);
                     monthItem.AchievedValue = calculateAchievementInMemory(sellerId, startDate, endDate, goalType);
                 }
@@ -277,7 +316,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Week level achievements
             for (const weekItem of weeklyBreakdown) {
-                if (weekItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') {
+                if (weekItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS' || goalType === 'GMS') {
                     const actualMonth = targetType === 'MONTHLY' ? targetMonth : Math.floor(weekItem.PeriodValue / 10);
                     const actualWeek = targetType === 'MONTHLY' ? weekItem.PeriodValue : (weekItem.PeriodValue % 10);
                     const { startDate, endDate } = getWeekRange(year, actualMonth, actualWeek);
@@ -287,7 +326,7 @@ exports.getTargets = async (req, res) => {
 
             // Dynamic calculation for Day level achievements
             for (const dayItem of dailyBreakdown) {
-                if ((dayItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS') && dayItem.SpecificDate) {
+                if ((dayItem.AchievedValue === null || goalType === 'ADS' || goalType === 'ACOS' || goalType === 'GMS') && dayItem.SpecificDate) {
                     const dateStr = format(new Date(dayItem.SpecificDate), 'yyyy-MM-dd');
                     dayItem.AchievedValue = calculateDayAchievementInMemory(sellerId, dateStr, goalType);
                 }
