@@ -4,18 +4,16 @@ import React, {
   useState, useEffect, useCallback, useMemo, memo
 } from 'react';
 import {
-  Store, LayoutGrid, Globe, Key, Users, AlertCircle
+  Store, LayoutGrid, Globe, Key, Users, ToggleRight
 } from 'lucide-react';
 import { userApi } from '../../services/api';
 import {
-  Modal, Form, Input, Select, Button,
-  Space, Typography, Alert, Spin
+  Modal, Form, Input, Select, Switch, Button,
+  Space, Typography, Alert, Spin, Row, Col
 } from 'antd';
 import { useAuth } from '../../contexts/AuthContext';
 
 const { Text, Title } = Typography;
-
-// ─── Pure helper — outside component, never recreated ────────────────────────
 
 function normaliseManagerIds(managers) {
   if (!Array.isArray(managers)) return [];
@@ -29,8 +27,6 @@ function normaliseManagerList(res) {
   return [];
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 const AddSellerModal = memo(({
   onClose, onSave, isAdmin, isGlobalUser, initialData
 }) => {
@@ -40,7 +36,6 @@ const AddSellerModal = memo(({
   const canAccessAjio = isAdmin || hasPermission('marketplace_ajio');
   const canAccessMyntra = isAdmin || hasPermission('marketplace_myntra');
 
-  // ✅ Fix 4: computed once via useMemo, not a function recreated per render
   const defaultMarketplace = useMemo(() => {
     if (canAccessAmazon) return 'amazon.in';
     if (canAccessAjio) return 'ajio';
@@ -49,57 +44,43 @@ const AddSellerModal = memo(({
   }, [canAccessAmazon, canAccessAjio, canAccessMyntra]);
 
   const [form] = Form.useForm();
-
-  // ✅ Fix 6: separate loading state for managers
   const [managers, setManagers] = useState([]);
   const [loadingManagers, setLoadingManagers] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  // ✅ Fix 8: track marketplace via Form.useWatch — always in sync with form
   const watchedMarketplace = Form.useWatch('marketplace', form);
+  const watchedIsActive = Form.useWatch('isActive', form);
 
-  // ── Fetch managers ─────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     setLoadingManagers(true);
-
     userApi.getManagers()
-      .then(res => {
-        if (cancelled) return;
-        setManagers(normaliseManagerList(res));
-      })
-      .catch(() => {
-        if (!cancelled) setManagers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingManagers(false);
-      });
-
+      .then(res => { if (!cancelled) setManagers(normaliseManagerList(res)); })
+      .catch(() => { if (!cancelled) setManagers([]); })
+      .finally(() => { if (!cancelled) setLoadingManagers(false); });
     return () => { cancelled = true; };
   }, []);
 
-  // ── Fix 3+5: Initialise form correctly when initialData changes ────────
-  // Use form.setFieldsValue with values derived DIRECTLY from initialData —
-  // not from a stale formData state snapshot.
   useEffect(() => {
     if (initialData) {
       form.setFieldsValue({
         name: initialData.name ?? '',
         marketplace: initialData.marketplace ?? defaultMarketplace,
         sellerId: initialData.sellerId ?? '',
-        apiKey: initialData.apiKey ?? 'Default',
-        plan: initialData.plan ?? 'Starter',
-        scrapeLimit: initialData.scrapeLimit ?? 100,
+        isActive: initialData.isActive ?? initialData.IsActive ?? true,
         assignedUserIds: normaliseManagerIds(initialData.managers ?? initialData.assignedUserIds),
       });
     } else {
       form.resetFields();
-      form.setFieldValue('marketplace', defaultMarketplace);
+      form.setFieldsValue({
+        marketplace: defaultMarketplace,
+        isActive: true,
+        assignedUserIds: [],
+      });
     }
   }, [initialData, defaultMarketplace, form]);
 
-  // ── Manager options ─────────────────────────────────────────────────────
   const managerOptions = useMemo(() =>
     managers.map(m => ({
       label: `${m.firstName || ''} ${m.lastName || ''} (${m.email || ''})`.trim(),
@@ -108,22 +89,19 @@ const AddSellerModal = memo(({
     [managers]
   );
 
-  // ── Submit ──────────────────────────────────────────────────────────────
-  // ✅ Fix 1+2: no formData state — use ONLY form values, no dual state
   const handleSubmit = useCallback(async () => {
     setSubmitError(null);
     try {
-      // `validateFields` returns the latest form values — always fresh
       const values = await form.validateFields();
       setSubmitting(true);
-      await onSave(values);
+      await onSave({
+        ...values,
+        status: values.isActive ? 'Active' : 'Inactive',
+      });
     } catch (error) {
-      // Ant Design validation errors are objects with `errorFields`
       if (!error?.errorFields) {
-        // Real API/save error
         setSubmitError(error?.message || 'Failed to save. Please try again.');
       }
-      // Validation errors are already shown inline — no extra handling needed
     } finally {
       setSubmitting(false);
     }
@@ -135,10 +113,9 @@ const AddSellerModal = memo(({
     <Modal
       open={true}
       onCancel={onClose}
-      // ✅ Fix 5: destroyOnHidden ensures form resets cleanly on re-open
       destroyOnHidden
       centered
-      width={520}
+      width={560}
       styles={{
         content: { borderRadius: 16, padding: 0, overflow: 'hidden' },
         header: { padding: '20px 24px 0', borderBottom: 'none' },
@@ -167,128 +144,90 @@ const AddSellerModal = memo(({
       }
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button
-            onClick={onClose}
-            disabled={submitting}
-            style={{ borderRadius: 9, fontWeight: 600, height: 40 }}
-          >
+          <Button onClick={onClose} disabled={submitting}
+            style={{ borderRadius: 8, fontWeight: 600, height: 36, fontSize: 12 }}>
             Cancel
           </Button>
-          <Button
-            type="primary"
-            loading={submitting}
-            onClick={handleSubmit}
+          <Button type="primary" loading={submitting} onClick={handleSubmit}
             style={{
-              borderRadius: 9, fontWeight: 700, height: 40,
-              background: '#0f172a', borderColor: '#0f172a',
-              paddingInline: 24
-            }}
-          >
-            {isEditMode ? 'Save Changes' : 'Launch Store'}
+              borderRadius: 8, fontWeight: 700, height: 36, fontSize: 12,
+              background: '#0f172a', borderColor: '#0f172a', paddingInline: 20
+            }}>
+            {isEditMode ? 'Save Changes' : 'Create Seller'}
           </Button>
         </div>
       }
     >
       {submitError && (
-        <Alert
-          type="error"
-          showIcon
-          message={submitError}
-          closable
+        <Alert type="error" showIcon message={submitError} closable
           onClose={() => setSubmitError(null)}
-          style={{ marginBottom: 16, borderRadius: 9 }}
-        />
+          style={{ marginBottom: 16, borderRadius: 8 }} />
       )}
 
-      <Form
-        form={form}
-        layout="vertical"
-        requiredMark={false}
-        disabled={submitting}
-      >
+      <Form form={form} layout="vertical" requiredMark={false} disabled={submitting}>
         <div style={{ paddingTop: 8 }}>
           {/* Brand Name */}
-          <Form.Item
-            name="name"
+          <Form.Item name="name"
             label={<FieldLabel icon={<LayoutGrid size={13} color="#94a3b8" />} text="BRAND NAME" required />}
             rules={[{ required: true, message: 'Brand name is required' }]}
-            style={{ marginBottom: 16 }}
-          >
-            <Input
-              placeholder="e.g. RetailOps Storefront"
-              style={{ height: 42, borderRadius: 10, fontWeight: 600, fontSize: 13 }}
-              maxLength={100}
-            />
+            style={{ marginBottom: 16 }}>
+            <Input placeholder="e.g. 101-BHARVITA"
+              style={{ height: 38, borderRadius: 8, fontWeight: 600, fontSize: 13 }}
+              maxLength={100} />
           </Form.Item>
 
           {/* Marketplace + Seller ID */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <Form.Item
-              name="marketplace"
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <Form.Item name="marketplace"
               label={<FieldLabel icon={<Globe size={13} color="#94a3b8" />} text="MARKETPLACE" required />}
               rules={[{ required: true }]}
-              style={{ marginBottom: 0 }}
-            >
-              <Select style={{ height: 42, borderRadius: 10 }}>
+              style={{ marginBottom: 0 }}>
+              <Select size="small" style={{ borderRadius: 8 }}>
                 {canAccessAmazon && <Select.Option value="amazon.in">Amazon.in</Select.Option>}
                 {canAccessAjio && <Select.Option value="ajio">Ajio</Select.Option>}
                 {canAccessMyntra && <Select.Option value="myntra">Myntra</Select.Option>}
               </Select>
             </Form.Item>
-
-            <Form.Item
-              name="sellerId"
+            <Form.Item name="sellerId"
               label={
-                <FieldLabel
-                  icon={<Key size={13} color="#94a3b8" />}
+                <FieldLabel icon={<Key size={13} color="#94a3b8" />}
                   text="SELLER ID"
                   required={watchedMarketplace === 'amazon.in'}
-                  optional={watchedMarketplace !== 'amazon.in'}
-                />
+                  optional={watchedMarketplace !== 'amazon.in'} />
               }
               rules={[{
                 required: watchedMarketplace === 'amazon.in',
                 message: 'Seller ID is required for Amazon'
               }]}
-              style={{ marginBottom: 0 }}
-            >
-              <Input
-                placeholder={watchedMarketplace === 'amazon.in' ? 'Merchant ID' : 'Optional'}
-                style={{
-                  height: 42, borderRadius: 10,
-                  fontWeight: 700, fontFamily: 'monospace', color: '#2563eb'
-                }}
-                maxLength={30}
-              />
+              style={{ marginBottom: 0 }}>
+              <Input placeholder={watchedMarketplace === 'amazon.in' ? 'Merchant ID' : 'Optional'}
+                style={{ height: 38, borderRadius: 8, fontWeight: 700, fontFamily: 'monospace', color: '#2563eb' }}
+                maxLength={30} />
+            </Form.Item>
+          </div>
+
+          {/* Active Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <Form.Item name="isActive" label={
+              <FieldLabel icon={<ToggleRight size={13} color="#94a3b8" />} text="STATUS" />
+            } valuePropName="checked" style={{ marginBottom: 0 }}>
+              <Switch checkedChildren="Active" unCheckedChildren="Inactive" />
             </Form.Item>
           </div>
 
           {/* Brand Managers */}
-          <Form.Item
-            name="assignedUserIds"
-            label={
-              <FieldLabel
-                icon={<Users size={13} color="#94a3b8" />}
-                text="BRAND MANAGER"
-              />
-            }
-            style={{ marginBottom: 0 }}
-          >
-            <Select
-              mode="multiple"
-              placeholder={
-                loadingManagers
-                  ? 'Loading managers…'
-                  : '— Unassigned (Public Pool) —'
-              }
-              style={{ borderRadius: 10 }}
+          <Form.Item name="assignedUserIds"
+            label={<FieldLabel icon={<Users size={13} color="#94a3b8" />} text="BRAND MANAGER" />}
+            style={{ marginBottom: 0 }}>
+            <Select mode="multiple" size="small"
+              placeholder={loadingManagers ? 'Loading managers…' : '— Unassigned (Public Pool) —'}
+              style={{ borderRadius: 8 }}
               options={managerOptions}
               maxTagCount="responsive"
               loading={loadingManagers}
               notFoundContent={
-                loadingManagers
-                  ? <Spin size="small" />
-                  : <Text style={{ fontSize: 12, color: '#94a3b8' }}>No managers found</Text>
+                loadingManagers ? <Spin size="small" /> :
+                  <Text style={{ fontSize: 12, color: '#94a3b8' }}>No managers found</Text>
               }
               filterOption={(input, opt) =>
                 (opt?.label || '').toLowerCase().includes(input.toLowerCase())
@@ -301,22 +240,15 @@ const AddSellerModal = memo(({
   );
 });
 
-// ─── Field label sub-component ────────────────────────────────────────────────
-
 const FieldLabel = memo(({ icon, text, required, optional }) => (
-  <Space size={6} style={{ marginBottom: 4 }}>
+  <Space size={4} style={{ marginBottom: 4 }}>
     {icon}
     <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>
       {text}
     </Text>
-    {/* ✅ Fix 11: visual required/optional indicator */}
-    {required && (
-      <span style={{ color: '#ef4444', fontSize: 12, lineHeight: 1 }}>*</span>
-    )}
+    {required && <span style={{ color: '#ef4444', fontSize: 12, lineHeight: 1 }}>*</span>}
     {optional && (
-      <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400, letterSpacing: 0 }}>
-        (optional)
-      </Text>
+      <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</Text>
     )}
   </Space>
 ));

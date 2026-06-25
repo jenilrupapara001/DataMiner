@@ -29,6 +29,18 @@ const schemas = {
   createSeller: Joi.object({
     name: Joi.string().min(2).max(100).required(),
     marketplace: Joi.string().required(),
+    sellerId: Joi.string().max(30).optional().allow('', null),
+    isActive: Joi.boolean().optional(),
+    status: Joi.string().optional(),
+    isPriority: Joi.boolean().optional(),
+    assignedUserIds: Joi.array().items(Joi.string()).optional().default([]),
+    octoparseId: Joi.string().optional().allow('', null),
+    plan: Joi.string().optional(),
+    scrapeLimit: Joi.number().integer().optional(),
+    liveSyncClientId: Joi.string().optional().allow('', null),
+    liveSyncClientSecret: Joi.string().optional().allow('', null),
+    partnerTag: Joi.string().optional().allow('', null),
+    liveSyncEnabled: Joi.boolean().optional(),
   }),
   createObjective: Joi.object({
     title: Joi.string().min(3).max(200).required(),

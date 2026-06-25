@@ -6,9 +6,11 @@ const validate = (schemaName, source = 'body') => {
     if (!schema) return next();
 
     const data = source === 'query' ? req.query : source === 'params' ? req.params : req.body;
+    if (schemaName === 'createSeller') console.log(`[VALIDATE] ${schemaName} incoming:`, JSON.stringify(data));
     const { error, value } = schema.validate(data, { abortEarly: false, stripUnknown: true, convert: true });
 
     if (error) {
+      console.log(`[VALIDATE] ${schemaName} FAILED:`, JSON.stringify(error.details.map(d => ({ field: d.path.join('.'), message: d.message }))));
       return res.status(400).json({
         success: false,
         error: 'Validation failed',

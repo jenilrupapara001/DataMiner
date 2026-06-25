@@ -362,7 +362,10 @@ exports.getSellers = async (req, res) => {
       const userRole = req.user?.role?.name || req.user?.role;
       const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
       const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-      const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
+      const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
+
+      // Resolve active status from either field
+      const isActiveStatus = status === 'Active' || isActive === true || isActive === 1;
 
       const pool = await getPool();
       const id = generateId();
@@ -373,7 +376,7 @@ exports.getSellers = async (req, res) => {
         .input('name', sql.NVarChar, name)
         .input('marketplace', sql.NVarChar, marketplace || 'amazon.in')
         .input('sellerId', sql.NVarChar, sellerId || null)
-        .input('isActive', sql.Bit, status === 'Active' ? 1 : 0)
+        .input('isActive', sql.Bit, isActiveStatus ? 1 : 0)
         .input('isPriority', sql.Bit, isPriority === true ? 1 : 0)
         .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
         .input('plan', sql.NVarChar, req.body.plan || 'Starter')
@@ -404,7 +407,24 @@ exports.getSellers = async (req, res) => {
       }
 
       clearSellerCache();
-      res.status(201).json({ success: true, data: { _id: id, name, marketplace, sellerId, status } });
+
+      // Fetch back the full seller with managers for complete response
+      const createdResult = await pool.request()
+        .input('id', sql.VarChar, id)
+        .query('SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, IsActive as status, IsPriority as isPriority, CreatedAt as createdAt, UpdatedAt as updatedAt FROM Sellers WHERE Id = @id');
+
+      const createdSeller = createdResult.recordset[0] || { _id: id, name, marketplace, sellerId, status };
+      createdSeller.status = createdSeller.status ? 'Active' : 'Inactive';
+
+      // Enrich with managers
+      try {
+        const enriched = await enrichSellersWithManagers([createdSeller]);
+        if (enriched.length > 0) {
+          createdSeller.managers = enriched[0].managers || [];
+        }
+      } catch (e) { createdSeller.managers = []; }
+
+      res.status(201).json({ success: true, data: createdSeller });
 
       // Log Action
       await SystemLogService.log({
