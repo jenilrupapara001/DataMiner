@@ -52,6 +52,7 @@ const ALL_ASIN_FIELDS = [
     { key: 'buyBoxWin', label: 'BuyBox Winner', category: 'BuyBox' },
     { key: 'soldBy', label: 'Sold By (Current BuyBox)', category: 'BuyBox' },
     { key: 'soldBySec', label: 'Sold By (Other BuyBox)', category: 'BuyBox' },
+    { key: 'buyBoxes', label: 'BuyBox Details', category: 'BuyBox' },
     { key: 'hasAplus', label: 'Has A+ Content', category: 'Content' },
     { key: 'imagesCount', label: 'Image Count', category: 'Content' },
     { key: 'videoCount', label: 'Video Count', category: 'Content' },
@@ -407,7 +408,7 @@ async function processExportJob(downloadId, params, userId) {
             'secondAsp': 'a.SecondAsp',
             'aspDifference': 'a.AspDifference',
             'bsr': 'a.BSR',
-            'totalOrders': '(SELECT SUM(ISNULL(Orders, 0) + ISNULL(OrganicOrders, 0)) FROM AdsPerformance WHERE Asin = a.AsinCode)',
+            'totalOrders': '(SELECT SUM(ISNULL(OrderedUnits, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)',
             'subBsr': 'a.SubBsr',
             'subBSRs': 'a.SubBSRs',
             'rating': 'a.Rating',
@@ -420,10 +421,11 @@ async function processExportJob(downloadId, params, userId) {
             'descriptionScore': 'a.DescriptionScore',
             // 'cdq': 'a.Cdq',
             // 'cdqGrade': 'a.CdqGrade',
-            'buyBoxWin': 'a.BuyBoxWin',
+            'buyBoxWin': `CASE WHEN a.SoldBy IN ('ETrade Online','Cocoblu Retail','Clicktech Retail Private Ltd','RetailEZ Pvt Ltd') THEN 'Yes' ELSE 'No' END`,
             'soldBy': 'a.SoldBy',
             'soldBySec': 'a.SoldBySec',
             'allOffers': 'a.AllOffers',
+            'buyBoxes': 'a.BuyBoxes',
             'hasAplus': 'a.HasAplus',
             'imagesCount': 'a.ImagesCount',
             'videoCount': 'a.VideoCount',
@@ -586,8 +588,10 @@ async function processExportJob(downloadId, params, userId) {
 
                 if (field === 'brand' || field === 'Brand') {
                     value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
-                } else if (field === 'buyBoxWin' || field === 'hasAplus') {
+                } else                 if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
+                } else if (field === 'availabilityStatus') {
+                    value = value || 'Available';
                 } else if (field === 'tags' || field === 'Tags') {
                     try {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
@@ -598,6 +602,16 @@ async function processExportJob(downloadId, params, userId) {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
                         value = Array.isArray(parsed) ? parsed.map(b => `${b.category}: ${b.rank}`).join(' | ') : value;
                     } catch { value = value || ''; }
+                } else if (field === 'buyBoxes' || field === 'BuyBoxes') {
+                    try {
+                        const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                        value = Array.isArray(parsed) ? parsed.map(b => `${b.seller || 'N/A'}: ₹${b.priceAmount || 0}${b.isBuyBoxWinner ? ' (Winner)' : ''}`).join(' | ') : '';
+                    } catch { value = ''; }
+                } else if (field === 'allOffers' || field === 'AllOffers') {
+                    try {
+                        const parsed = typeof value === 'string' ? JSON.parse(value || '[]') : (value || []);
+                        value = Array.isArray(parsed) ? parsed.map(o => `${o.seller || 'N/A'}: ₹${o.price || 0}`).join(' | ') : '';
+                    } catch { value = ''; }
                 } else if (field === 'ratingBreakdown' || field === 'RatingBreakdown') {
                     try {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {});

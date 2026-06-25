@@ -209,6 +209,15 @@ export const AuthProvider = ({ children }) => {
         const roleName = (user.role?.name || user.role || '').toString().toLowerCase();
         const isRoleAdmin = roleName === 'admin' || roleName === 'super_admin' || roleName === 'super admin' || roleName === 'supert admin' || roleName.includes('super') || roleName.includes('supert');
         if (isRoleAdmin) return true;
+        
+        // Priority 1: Check database/profile explicit permissions
+        if (user.permissions && Array.isArray(user.permissions)) {
+            if (user.permissions.includes(permissionName)) {
+                return true;
+            }
+        }
+
+        // Priority 2: Fall back to hardcoded default roles for operational manager
         if (roleName === 'operational_manager') {
             const excludedPermissions = [
                 'settings_manage',
@@ -222,9 +231,6 @@ export const AuthProvider = ({ children }) => {
                 return false;
             }
             return true;
-        }
-        if (user.permissions && Array.isArray(user.permissions)) {
-            return user.permissions.includes(permissionName);
         }
         if (!user.role?.permissions) return false;
         return user.role.permissions.some(p => p.name === permissionName);
