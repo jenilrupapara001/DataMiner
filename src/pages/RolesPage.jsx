@@ -721,7 +721,7 @@ const RolesPage = () => {
                                                                 const rolePermIds = col.role?.permissions?.map(p => p._id || p.id || p) || [];
                                                                 const hasPerm = rolePermIds.includes(perm._id || perm.id);
                                                                 
-                                                                const isOperationalManager = col.key === 'operational_manager';
+                                                                const isOperationalManager = false;
                                                                 const isRestrictedForOpManager = isOperationalManager && [
                                                                     'settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'
                                                                 ].includes(perm.name);

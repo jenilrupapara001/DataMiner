@@ -814,7 +814,7 @@ const UsersPage = () => {
                                                 {perms.map(perm => {
                                                     const isAssigned = rolePermIds.includes(perm._id || perm.id);
                                                     const isOpMgr = (role.name || '').toLowerCase() === 'operational_manager';
-                                                    const locked = isOpMgr && ['settings_manage', 'apikeys_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage'].includes(perm.name);
+                                                    const locked = false;
                                                     return (
                                                         <td key={perm._id || perm.id} style={{ padding: '10px', textAlign: 'center', borderLeft: '1px solid #f1f5f9' }}>
                                                             {locked ? (
