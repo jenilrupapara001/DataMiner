@@ -3,7 +3,7 @@ const { getPool, sql } = require('../database/db');
 
 class TrustedDeviceService {
   constructor() {
-    this.TRUST_DURATION_DAYS = 30;
+    this.TRUST_DURATION_DAYS = 0.5; // 12 hours
   }
 
   generateFingerprint(req) {

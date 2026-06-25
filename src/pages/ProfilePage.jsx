@@ -2,632 +2,315 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
-import { 
-    Card, 
-    Input, 
-    Button, 
-    Row, 
-    Col, 
-    Typography, 
-    Avatar, 
-    Badge, 
-    Tag, 
-    Divider, 
-    Modal, 
-    Timeline, 
-    Tooltip, 
-    Space, 
-    message, 
-    notification,
-    Descriptions
+import {
+    Card, Input, Button, Row, Col, Typography, Avatar,
+    Tag, Divider, Modal, Space, message, notification, Switch, Tooltip
 } from 'antd';
 import {
-    User, Mail, Shield, Calendar, Camera, Edit2, Loader2,
-    Smartphone, Briefcase, Clock, LogOut, Key, CheckCircle2,
-    XCircle, Info, ChevronRight, ArrowRight, ShieldCheck,
-    Fingerprint, Settings, Bell, Lock, Activity, AlertCircle, X,
-    ShieldAlert
+    User, Mail, Shield, Calendar, Camera, Edit2,
+    Smartphone, Lock, LogOut, Key, CheckCircle2,
+    ChevronRight, Activity, X, Eye
 } from 'lucide-react';
 import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 const ProfilePage = () => {
     const { id } = useParams();
     const { user: currentUser, refreshUser, logout: authLogout } = useAuth();
-    
+
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [saving, setSaving] = useState(false);
-    
-    const [pwdData, setPwdData] = useState({ current: '', new: '', confirm: '' });
-    const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: ''
-    });
 
-    const [messageApi, messageContextHolder] = message.useMessage();
-    const [notificationApi, notificationContextHolder] = notification.useNotification();
+    const [pwdData, setPwdData] = useState({ current: '', newPw: '', confirm: '' });
+    const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+
+    const [messageApi, msgCtx] = message.useMessage();
 
     useEffect(() => {
         const fetchUser = async () => {
             try {
                 setLoading(true);
                 const targetId = id || currentUser?._id;
-
-                if (!targetId) {
-                    setError('User identifier could not be parsed.');
-                    return;
-                }
-
+                if (!targetId) return;
                 const response = await api.userApi.getById(targetId);
                 if (response.success) {
-                    const userData = response.data;
-                    const normalizedUser = {
-                        ...userData,
-                        firstName: userData.firstName || userData.FirstName || '',
-                        lastName: userData.lastName || userData.LastName || '',
-                        email: userData.email || userData.Email || '',
-                        phone: userData.phone || userData.Phone || ''
-                    };
-                    setUser(normalizedUser);
-                    setFormData({
-                        firstName: normalizedUser.firstName,
-                        lastName: normalizedUser.lastName,
-                        email: normalizedUser.email,
-                        phone: normalizedUser.phone
-                    });
-                } else {
-                    setError('Critical: User dataset not located on active cluster.');
+                    const d = response.data;
+                    const u = { ...d, firstName: d.firstName || d.FirstName || '', lastName: d.lastName || d.LastName || '', email: d.email || d.Email || '', phone: d.phone || d.Phone || '' };
+                    setUser(u);
+                    setFormData({ firstName: u.firstName, lastName: u.lastName, email: u.email, phone: u.phone });
                 }
-            } catch (err) {
-                console.error('Error fetching profile:', err);
-                setError(err.message || 'Network cluster retrieval failed.');
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error(e); } finally { setLoading(false); }
         };
-
         fetchUser();
     }, [id, currentUser?._id]);
 
     const handleSave = async () => {
-        if (!formData.firstName || !formData.lastName) {
-            messageApi.warning('Profile metadata cannot be empty.');
-            return;
-        }
+        if (!formData.firstName || !formData.lastName) { messageApi.warning('Name fields are required'); return; }
         try {
             setSaving(true);
-            const response = await api.userApi.update(user._id, formData);
-            if (response.success) {
-                const updatedUser = response.data;
-                setUser(updatedUser);
+            const res = await api.userApi.update(user._id, formData);
+            if (res.success) {
+                setUser(res.data);
                 setIsEditing(false);
-                if (currentUser?._id === user._id) {
-                    refreshUser(updatedUser);
-                }
-                notificationApi.success({
-                    message: 'Identity Synced',
-                    description: 'Standard profile attributes updated across core databases.',
-                    placement: 'topRight'
-                });
+                if (currentUser?._id === user._id) refreshUser(res.data);
+                messageApi.success('Profile updated');
             }
-        } catch (err) {
-            notificationApi.error({
-                message: 'Sync Rejected',
-                description: err.message || 'Data rejected during pipeline transmission.',
-                placement: 'topRight'
-            });
-        } finally {
-            setSaving(false);
-        }
+        } catch (e) { messageApi.error(e.message || 'Failed to update'); }
+        finally { setSaving(false); }
     };
 
     const handlePasswordChange = async () => {
-        if (pwdData.new !== pwdData.confirm) {
-            messageApi.error('Rotation error: Confirm credentials match rejected.');
-            return;
-        }
+        if (pwdData.newPw !== pwdData.confirm) { messageApi.error('Passwords do not match'); return; }
         try {
             setSaving(true);
-            const response = await api.authApi.changePassword(pwdData.current, pwdData.new);
-            if (response.success) {
+            const res = await api.authApi.changePassword(pwdData.current, pwdData.newPw);
+            if (res.success) {
                 setShowPasswordModal(false);
-                setPwdData({ current: '', new: '', confirm: '' });
-                notificationApi.success({
-                    message: 'Security Keys Rotated',
-                    description: 'Your cryptographic login sequence is now active. Previous keys invalidated.',
-                    placement: 'topRight'
-                });
-            } else {
-                throw new Error(response.message || 'Access control verification failed.');
-            }
-        } catch (err) {
-            notificationApi.error({
-                message: 'Key Rotation Failed',
-                description: err.message || 'Core systems rejected rotation payload.',
-                placement: 'topRight'
-            });
-        } finally {
-            setSaving(false);
-        }
+                setPwdData({ current: '', newPw: '', confirm: '' });
+                messageApi.success('Password changed. Please login again.');
+                setTimeout(() => authLogout(), 1500);
+            } else { messageApi.error(res.message || 'Failed'); }
+        } catch (e) { messageApi.error(e.message || 'Failed'); }
+        finally { setSaving(false); }
     };
 
-    const handleLogout = () => {
-        Modal.confirm({
-            title: 'Sign Out Confirmation',
-            content: 'Are you sure you want to terminate the active operational session?',
-            okText: 'Sign Out',
-            okType: 'danger',
-            cancelText: 'Cancel',
-            centered: true,
-            onOk: () => {
-                authLogout();
-            }
-        });
-    };
+    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-    const formatDate = (dateString) => {
-        if (!dateString) return '—';
-        return new Date(dateString).toLocaleDateString('en-US', {
-            day: 'numeric', month: 'short', year: 'numeric'
-        });
-    };
+    if (loading && !user) return <PageLoader message="Loading profile..." />;
 
-    if (loading && !user) return <PageLoader message="Initializing Identity Vault..." />;
-
-    const roleDisplay = user?.role?.displayName || user?.role?.name || 'Operator Member';
-    const lastLogin = user?.lastLogin ? formatDate(user.lastLogin) : 'Online Now';
+    const roleDisplay = user?.role?.displayName || user?.role?.name || 'Member';
+    const isOwnProfile = currentUser?._id === user?._id || currentUser?.id === user?._id;
 
     return (
-        <div className="luxury-profile-wrapper">
-            {messageContextHolder}
-            {notificationContextHolder}
+        <div style={{ background: '#fff', minHeight: 'calc(100vh - 60px)' }}>
+            {msgCtx}
 
-            <style>{`
-                .luxury-profile-wrapper {
-                    min-height: 100vh;
-                    background-color: #f8fafc;
-                    margin: -1.5rem -2rem;
-                    padding: 32px;
-                    position: relative;
-                    overflow: hidden;
-                }
-                .luxury-profile-bg-flare {
-                    position: absolute;
-                    top: -200px;
-                    right: -200px;
-                    width: 600px;
-                    height: 600px;
-                    background: radial-gradient(circle, rgba(37, 99, 235, 0.05) 0%, rgba(255,255,255,0) 70%);
-                    z-index: 0;
-                    pointer-events: none;
-                }
-                .profile-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 32px;
-                    position: relative;
-                    z-index: 1;
-                }
-                .profile-grid {
-                    position: relative;
-                    z-index: 1;
-                }
-                .profile-master-card {
-                    border-radius: 20px !important;
-                    border: 1px solid #e2e8f0 !important;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
-                    overflow: hidden;
-                }
-                .avatar-ring-base {
-                    position: relative;
-                    display: inline-block;
-                    padding: 8px;
-                    border-radius: 50%;
-                    background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
-                    margin-bottom: 16px;
-                }
-                .avatar-edit-overlay {
-                    position: absolute;
-                    bottom: 10px;
-                    right: 10px;
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    background: #ffffff;
-                    border: 1px solid #e2e8f0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    cursor: pointer;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-                    transition: all 0.2s ease;
-                    color: #64748b;
-                }
-                .avatar-edit-overlay:hover {
-                    background: #1e293b;
-                    color: #ffffff;
-                    transform: translateY(-1px);
-                }
-                .form-block-label {
-                    font-size: 12px;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.03em;
-                    color: #94a3b8;
-                    margin-bottom: 6px;
-                    display: block;
-                }
-                .read-only-pane {
-                    background: #f1f5f9;
-                    padding: 14px 16px;
-                    border-radius: 10px;
-                    font-weight: 600;
-                    color: #1e293b;
-                    font-size: 14.5px;
-                    border: 1px solid #e2e8f0;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
-                .read-only-pane-email {
-                    background: #ffffff;
-                    border-style: dashed;
-                }
-                .security-banner {
-                    border-radius: 14px;
-                    padding: 16px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                }
-                .security-banner.active {
-                    background: #f0fdf4;
-                    border: 1px solid #dcfce7;
-                    color: #15803d;
-                }
-                .security-banner.inactive {
-                    background: #fef2f2;
-                    border: 1px solid #fee2e2;
-                    color: #b91c1c;
-                }
-            `}</style>
-
-            <div className="luxury-profile-bg-flare" />
-
-            {/* 1. HEADER NAVIGATION */}
-            <div className="profile-header">
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <Tag color="blue" style={{ textTransform: 'uppercase', borderRadius: 6, fontWeight: 700 }}>ACTIVE SESSION</Tag>
+            {/* Page Header */}
+            <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f4f4f7' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0 }}>
+                            {isOwnProfile ? 'My Profile' : `${user?.firstName || ''} ${user?.lastName || ''}`}
+                        </h2>
+                        <p style={{ fontSize: 12, color: '#71717a', margin: 0, marginTop: 4 }}>
+                            {isOwnProfile ? 'Manage your account settings and security' : `Viewing ${user?.firstName}'s profile`}
+                        </p>
                     </div>
-                    <Title level={3} style={{ margin: 0, fontWeight: 850, letterSpacing: '-0.03em' }}>My Digital Identity</Title>
-                    <Text type="secondary" style={{ fontSize: 13.5 }}>Analyze personal infrastructure allocation and cryptographic keys.</Text>
+                    {isOwnProfile && (
+                        <Space size={8}>
+                            <Button size="small" icon={<Key size={13} />} onClick={() => setShowPasswordModal(true)}
+                                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>Change Password</Button>
+                            <Button size="small" danger icon={<LogOut size={13} />} onClick={() => Modal.confirm({
+                                title: 'Sign Out', content: 'Are you sure you want to sign out?', okText: 'Sign Out', okType: 'danger', centered: true,
+                                onOk: () => authLogout()
+                            })} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32 }}>Sign Out</Button>
+                        </Space>
+                    )}
                 </div>
-                <Button 
-                    danger 
-                    icon={<LogOut size={15} />} 
-                    onClick={handleLogout}
-                    style={{ borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
-                >
-                    Sign Out
-                </Button>
             </div>
 
-            {/* 2. RESPONSIVE GRID */}
-            <Row gutter={[24, 24]} className="profile-grid">
-                
-                {/* Left Profile Dashboard Card */}
-                <Col xs={24} lg={8}>
-                    <Card className="profile-master-card" style={{ textAlign: 'center', padding: '24px 0 12px' }}>
-                        <div className="avatar-ring-base">
-                            <Avatar 
-                                size={120} 
-                                src={`https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=1e293b&color=fff&size=240&bold=true`}
-                                style={{ border: '4px solid #ffffff', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}
-                            />
-                            <div className="avatar-edit-overlay">
-                                <Camera size={14} />
+            <div style={{ padding: '16px 28px' }}>
+                <Row gutter={[16, 16]}>
+                    {/* Left: Profile Card */}
+                    <Col xs={24} lg={8}>
+                        <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, padding: '24px 20px', textAlign: 'center' }}>
+                            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+                                <Avatar size={80} src={`https://ui-avatars.com/api/?name=${user?.firstName}+${user?.lastName}&background=18181b&color=fff&size=160&bold=true`}
+                                    style={{ border: '3px solid #f4f4f5' }} />
+                                {isOwnProfile && (
+                                    <Tooltip title="Change photo">
+                                        <div style={{ position: 'absolute', bottom: 0, right: 0, width: 24, height: 24, borderRadius: '50%', background: '#fff', border: '1px solid #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                            <Camera size={11} style={{ color: '#71717a' }} />
+                                        </div>
+                                    </Tooltip>
+                                )}
                             </div>
-                        </div>
-
-                        <div style={{ marginBottom: 12 }}>
-                            <Title level={4} style={{ margin: 0, fontWeight: 800 }}>{user?.firstName} {user?.lastName}</Title>
-                            <div style={{ marginTop: 6 }}>
-                                <Tag color="processing" style={{ borderRadius: 20, padding: '2px 12px', fontWeight: 700, border: 'none' }}>
-                                    {roleDisplay.toUpperCase()}
-                                </Tag>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: '#18181b', marginBottom: 4 }}>
+                                {user?.firstName} {user?.lastName}
                             </div>
-                        </div>
+                            <Tag style={{ fontSize: 10, borderRadius: 4, padding: '2px 8px', fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                                {roleDisplay}
+                            </Tag>
 
-                        <Divider style={{ margin: '20px 0' }} />
+                            <Divider style={{ margin: '16px 0' }} />
 
-                        <div style={{ display: 'flex', justifyContent: 'space-around', padding: '0 16px' }}>
-                            <div>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Enlisted</div>
-                                <div style={{ fontWeight: 700, fontSize: 13.5, color: '#334155', marginTop: 2 }}>{formatDate(user?.createdAt)}</div>
-                            </div>
-                            <div style={{ width: 1, backgroundColor: '#f1f5f9' }} />
-                            <div>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Presence</div>
-                                <div style={{ fontWeight: 700, fontSize: 13.5, color: '#334155', marginTop: 2 }}>{lastLogin}</div>
-                            </div>
-                        </div>
-
-                        <Divider style={{ margin: '20px 0' }} />
-
-                        <div style={{ padding: '0 24px 12px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <Button 
-                                type={isEditing ? "dashed" : "primary"} 
-                                danger={isEditing}
-                                block
-                                size="large"
-                                icon={isEditing ? <X size={16} /> : <Edit2 size={15} />}
-                                onClick={() => setIsEditing(!isEditing)}
-                                style={{ borderRadius: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                            >
-                                {isEditing ? 'Discard Edits' : 'Modify Identity Parameters'}
-                            </Button>
-                            <Button 
-                                block 
-                                size="large"
-                                icon={<Lock size={15} />} 
-                                onClick={() => setShowPasswordModal(true)}
-                                style={{ borderRadius: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                            >
-                                Rotate Passkeys
-                            </Button>
-                        </div>
-                    </Card>
-                </Col>
-
-                {/* Right Configuration and Log Panes */}
-                <Col xs={24} lg={16}>
-                    <Space direction="vertical" size={24} style={{ width: '100%' }}>
-                        
-                        {/* Central Attribute Vault */}
-                        <Card 
-                            className="profile-master-card"
-                            title={
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 800, fontSize: 15, color: '#1e293b' }}>
-                                    <User size={18} style={{ color: '#3b82f6' }} />
-                                    <span>Personal Attribute Vault</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: 9, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase' }}>Joined</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{formatDate(user?.createdAt)}</div>
                                 </div>
-                            }
-                            extra={isEditing && (
-                                <Button 
-                                    type="primary" 
-                                    loading={saving} 
-                                    onClick={handleSave} 
-                                    icon={<CheckCircle2 size={15} />}
-                                    style={{ borderRadius: 6, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
-                                >
-                                    Sync Changes
-                                </Button>
+                                <div style={{ width: 1, background: '#f4f4f5' }} />
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: 9, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase' }}>Status</div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: user?.isActive ? '#059669' : '#dc2626', marginTop: 2 }}>
+                                        {user?.isActive ? 'Active' : 'Inactive'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Divider style={{ margin: '16px 0' }} />
+
+                            {isOwnProfile ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <Button block size="small" icon={isEditing ? <X size={13} /> : <Edit2 size={13} />}
+                                        type={isEditing ? 'default' : 'primary'}
+                                        onClick={() => setIsEditing(!isEditing)}
+                                        style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 30 }}>
+                                        {isEditing ? 'Cancel' : 'Edit Profile'}
+                                    </Button>
+                                    <Button block size="small" icon={<Lock size={13} />}
+                                        onClick={() => setShowPasswordModal(true)}
+                                        style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 30 }}>
+                                        Change Password
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: 11, color: '#a1a1aa', textAlign: 'center' }}>
+                                    <Eye size={12} style={{ marginRight: 4 }} /> View Only
+                                </div>
                             )}
-                        >
-                            <Row gutter={[20, 20]}>
-                                <Col xs={24} md={12}>
-                                    <span className="form-block-label">Legal First Name</span>
-                                    {isEditing ? (
-                                        <Input 
-                                            size="large"
-                                            value={formData.firstName} 
-                                            onChange={e => setFormData({...formData, firstName: e.target.value})}
-                                            style={{ borderRadius: 10 }}
-                                        />
-                                    ) : (
-                                        <div className="read-only-pane">{user?.firstName || '—'}</div>
+                        </div>
+                    </Col>
+
+                    {/* Right: Details */}
+                    <Col xs={24} lg={16}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {/* Personal Info */}
+                            <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, padding: '16px 20px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 8, background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <User size={13} style={{ color: '#71717a' }} />
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#18181b' }}>Personal Information</div>
+                                    {isEditing && isOwnProfile && (
+                                        <Button size="small" type="primary" loading={saving} onClick={handleSave}
+                                            style={{ marginLeft: 'auto', borderRadius: 8, fontWeight: 600, fontSize: 11, height: 28 }}>Save</Button>
                                     )}
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <span className="form-block-label">Legal Last Name</span>
-                                    {isEditing ? (
-                                        <Input 
-                                            size="large"
-                                            value={formData.lastName} 
-                                            onChange={e => setFormData({...formData, lastName: e.target.value})}
-                                            style={{ borderRadius: 10 }}
-                                        />
-                                    ) : (
-                                        <div className="read-only-pane">{user?.lastName || '—'}</div>
-                                    )}
-                                </Col>
-                                <Col span={24}>
-                                    <span className="form-block-label">Registered Node Mailbox</span>
-                                    <div className="read-only-pane read-only-pane-email" style={{ justifyContent: 'space-between' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <Mail size={15} style={{ color: '#94a3b8' }} />
-                                            <span style={{ color: '#64748b' }}>{user?.email || '—'}</span>
-                                        </div>
-                                        <Tag color="success" icon={<Fingerprint size={11} style={{ marginBottom: -2, marginRight: 2 }} />} style={{ margin: 0, borderRadius: 6, fontWeight: 650 }}>VERIFIED</Tag>
-                                    </div>
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <span className="form-block-label">Mobile Relay Connection</span>
-                                    {isEditing ? (
-                                        <Input 
-                                            size="large"
-                                            placeholder="+1 000 000 0000"
-                                            prefix={<Smartphone size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                                            value={formData.phone} 
-                                            onChange={e => setFormData({...formData, phone: e.target.value})}
-                                            style={{ borderRadius: 10 }}
-                                        />
-                                    ) : (
-                                        <div className="read-only-pane">
-                                            <Smartphone size={15} style={{ color: '#94a3b8' }} />
-                                            <span>{user?.phone || 'Unlinked'}</span>
-                                        </div>
-                                    )}
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <span className="form-block-label">System Clearance Scope</span>
-                                    <div className="read-only-pane" style={{ background: '#eff6ff', border: '1px solid #dbeafe', color: '#2563eb' }}>
-                                        <Shield size={15} />
-                                        <span style={{ textTransform: 'uppercase', fontSize: 13, letterSpacing: 0.5 }}>{roleDisplay}</span>
-                                    </div>
-                                </Col>
-                            </Row>
-                        </Card>
+                                </div>
 
-                        <Row gutter={[24, 24]}>
-                            {/* Security Metrics Panel */}
-                            <Col xs={24} md={12}>
-                                <Card 
-                                    className="profile-master-card"
-                                    title={
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 800, color: '#334155' }}>
-                                            <ShieldCheck size={16} style={{ color: '#10b981' }} />
-                                            <span>Multi-Factor Shield</span>
-                                        </div>
-                                    }
-                                >
-                                    <div className={`security-banner ${user?.twoFactorEnabled ? 'active' : 'inactive'}`}>
-                                        <div>
-                                            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{user?.twoFactorEnabled ? 'Shield Synced' : 'Shield Disabled'}</div>
-                                            <div style={{ fontSize: 12.5, marginTop: 2, opacity: 0.9 }}>{user?.twoFactorEnabled ? 'Encrypted Session Enforced' : 'Vulnerable To Infiltration'}</div>
-                                        </div>
-                                        {user?.twoFactorEnabled ? <ShieldCheck size={24} /> : <ShieldAlert size={24} />}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>First Name</div>
+                                        {isEditing && isOwnProfile ? (
+                                            <Input size="small" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} style={{ borderRadius: 8 }} />
+                                        ) : (
+                                            <div style={{ padding: '6px 10px', background: '#f4f4f5', borderRadius: 8, fontSize: 13, color: '#18181b', border: '1px solid #e4e4e7' }}>{user?.firstName || '—'}</div>
+                                        )}
                                     </div>
-
-                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#64748b', fontSize: 12.5 }}>
-                                        <Info size={14} />
-                                        <span>Last security sweep: Today, automatic.</span>
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>Last Name</div>
+                                        {isEditing && isOwnProfile ? (
+                                            <Input size="small" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} style={{ borderRadius: 8 }} />
+                                        ) : (
+                                            <div style={{ padding: '6px 10px', background: '#f4f4f5', borderRadius: 8, fontSize: 13, color: '#18181b', border: '1px solid #e4e4e7' }}>{user?.lastName || '—'}</div>
+                                        )}
                                     </div>
-                                </Card>
-                            </Col>
-
-                            {/* Activity Stream Card */}
-                            <Col xs={24} md={12}>
-                                <Card 
-                                    className="profile-master-card"
-                                    title={
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 800, color: '#334155' }}>
-                                            <Activity size={16} style={{ color: '#f59e0b' }} />
-                                            <span>Deployment Stream</span>
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>Email</div>
+                                        <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#71717a', border: '1px dashed #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <span><Mail size={12} style={{ marginRight: 6 }} />{user?.email || '—'}</span>
+                                            <Tag style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', fontWeight: 600 }}>Verified</Tag>
                                         </div>
-                                    }
-                                >
-                                    <Timeline 
-                                        mode="left"
-                                        style={{ marginTop: 8, marginBottom: -12 }}
-                                        items={[
-                                            {
-                                                color: 'blue',
-                                                children: (
-                                                    <div>
-                                                        <div style={{ fontWeight: 700, fontSize: 12.5, color: '#1e293b' }}>Session Established</div>
-                                                        <div style={{ fontSize: 11, color: '#64748b' }}>Today, 2:45 PM (Chrome / Mac)</div>
-                                                    </div>
-                                                ),
-                                            },
-                                            {
-                                                color: 'gray',
-                                                children: (
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, fontSize: 12.5, color: '#64748b' }}>Pipeline Context Refreshed</div>
-                                                        <div style={{ fontSize: 11, color: '#94a3b8' }}>Yesterday, 11:20 AM</div>
-                                                    </div>
-                                                ),
-                                            },
-                                        ]}
-                                    />
-                                </Card>
-                            </Col>
-                        </Row>
-                    </Space>
-                </Col>
-            </Row>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>Phone</div>
+                                        {isEditing && isOwnProfile ? (
+                                            <Input size="small" prefix={<Smartphone size={11} />} placeholder="+91 000 000 0000" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} style={{ borderRadius: 8 }} />
+                                        ) : (
+                                            <div style={{ padding: '6px 10px', background: '#f4f4f5', borderRadius: 8, fontSize: 13, color: '#18181b', border: '1px solid #e4e4e7' }}>
+                                                <Smartphone size={12} style={{ marginRight: 6, color: '#71717a' }} />{user?.phone || 'Not set'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>Role</div>
+                                        <div style={{ padding: '6px 10px', background: '#f4f4f5', borderRadius: 8, fontSize: 13, color: '#18181b', border: '1px solid #e4e4e7' }}>
+                                            <Shield size={12} style={{ marginRight: 6, color: '#71717a' }} />{roleDisplay}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-            {/* DYNAMIC KEY ROTATION MODAL */}
-            <Modal
-                title={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: '#0f172a' }}>
-                        <Key size={18} style={{ color: '#4f46e5' }} />
-                        <span>Access Key Rotation</span>
-                    </div>
-                }
-                open={showPasswordModal}
-                onCancel={() => {
-                    setShowPasswordModal(false);
-                    setPwdData({ current: '', new: '', confirm: '' });
-                }}
+                            {/* Security */}
+                            <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, padding: '16px 20px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 8, background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Shield size={13} style={{ color: '#71717a' }} />
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#18181b' }}>Security</div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                    <div style={{ padding: '10px 12px', background: user?.isFirstLogin ? '#fef2f2' : '#ecfdf5', borderRadius: 8, border: `1px solid ${user?.isFirstLogin ? '#fecaca' : '#d1fae5'}` }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: user?.isFirstLogin ? '#dc2626' : '#059669', textTransform: 'uppercase' }}>Setup Status</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{user?.setupCompletedAt ? 'Complete' : 'Pending Setup'}</div>
+                                    </div>
+                                    <div style={{ padding: '10px 12px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase' }}>Password Changed</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{formatDate(user?.passwordChangedAt)}</div>
+                                    </div>
+                                    <div style={{ padding: '10px 12px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase' }}>Account Created</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{formatDate(user?.createdAt)}</div>
+                                    </div>
+                                    <div style={{ padding: '10px 12px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase' }}>Last Seen</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{user?.lastSeen ? formatDate(user.lastSeen) : 'Now'}</div>
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: 12, padding: '10px 12px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', marginBottom: 4 }}>Role Permissions</div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                        {(user?.role?.permissions || []).slice(0, 8).map(p => (
+                                            <Tag key={p._id || p.id || p} style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', margin: 0, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontWeight: 600 }}>
+                                                {p.displayName || p.name || p}
+                                            </Tag>
+                                        ))}
+                                        {(user?.role?.permissions || []).length > 8 && (
+                                            <Tag style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', margin: 0, background: '#f4f4f5', color: '#71717a', border: '1px solid #e4e4e7', fontWeight: 600 }}>
+                                                +{(user?.role?.permissions || []).length - 8} more
+                                            </Tag>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Col>
+                </Row>
+            </div>
+
+            {/* Password Modal */}
+            <Modal open={showPasswordModal} onCancel={() => { setShowPasswordModal(false); setPwdData({ current: '', newPw: '', confirm: '' }); }}
+                title={<span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Change Password</span>}
+                centered width={420}
                 footer={[
-                    <Button 
-                        key="cancel" 
-                        onClick={() => setShowPasswordModal(false)}
-                        style={{ borderRadius: 6 }}
-                    >
-                        Abort Rotation
-                    </Button>,
-                    <Button 
-                        key="confirm" 
-                        type="primary" 
-                        loading={saving}
-                        disabled={!pwdData.current || !pwdData.new || (pwdData.new !== pwdData.confirm)}
-                        onClick={handlePasswordChange}
-                        style={{ borderRadius: 6, fontWeight: 600 }}
-                    >
-                        Commit New Keys
-                    </Button>
+                    <Button key="cancel" onClick={() => setShowPasswordModal(false)} style={{ borderRadius: 8, fontSize: 11 }}>Cancel</Button>,
+                    <Button key="save" type="primary" loading={saving} disabled={!pwdData.current || !pwdData.newPw || pwdData.newPw !== pwdData.confirm}
+                        onClick={handlePasswordChange} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Change Password</Button>
                 ]}
-                centered
-                width={450}
-            >
-                <div style={{ padding: '12px 0' }}>
-                    <Paragraph type="secondary" style={{ fontSize: 12.5, marginBottom: 20 }}>
-                        Cycle your administrative passkeys. Ensure the confirmation vector matches to commit encryption nodes.
-                    </Paragraph>
-
-                    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                        <div>
-                            <span className="form-block-label">Current Vector Token</span>
-                            <Input.Password 
-                                size="large"
-                                placeholder="••••••••"
-                                value={pwdData.current}
-                                onChange={e => setPwdData({...pwdData, current: e.target.value})}
-                                style={{ borderRadius: 8 }}
-                                prefix={<Lock size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                            />
-                        </div>
-                        <Divider style={{ margin: '4px 0' }} />
-                        <div>
-                            <span className="form-block-label">Target Rotation Passkey</span>
-                            <Input.Password 
-                                size="large"
-                                placeholder="••••••••"
-                                value={pwdData.new}
-                                onChange={e => setPwdData({...pwdData, new: e.target.value})}
-                                style={{ borderRadius: 8 }}
-                                prefix={<Key size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                            />
-                        </div>
-                        <div>
-                            <span className="form-block-label">Confirm Verification Payload</span>
-                            <Input.Password 
-                                size="large"
-                                placeholder="••••••••"
-                                value={pwdData.confirm}
-                                onChange={e => setPwdData({...pwdData, confirm: e.target.value})}
-                                style={{ borderRadius: 8 }}
-                                status={pwdData.confirm && pwdData.new !== pwdData.confirm ? "error" : ""}
-                                prefix={<ShieldCheck size={14} style={{ color: '#94a3b8', marginRight: 6 }} />}
-                            />
-                        </div>
-                    </Space>
+                styles={{ body: { padding: '16px 20px' } }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Current Password *</div>
+                        <Input.Password size="small" value={pwdData.current} onChange={e => setPwdData({ ...pwdData, current: e.target.value })} placeholder="Enter current password" style={{ borderRadius: 8 }} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>New Password *</div>
+                        <Input.Password size="small" value={pwdData.newPw} onChange={e => setPwdData({ ...pwdData, newPw: e.target.value })} placeholder="Enter new password" style={{ borderRadius: 8 }} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Confirm Password *</div>
+                        <Input.Password size="small" value={pwdData.confirm} onChange={e => setPwdData({ ...pwdData, confirm: e.target.value })} placeholder="Confirm new password" style={{ borderRadius: 8 }}
+                            status={pwdData.confirm && pwdData.newPw !== pwdData.confirm ? 'error' : ''} />
+                        {pwdData.confirm && pwdData.newPw !== pwdData.confirm && (
+                            <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2 }}>Passwords do not match</div>
+                        )}
+                    </div>
                 </div>
             </Modal>
-
         </div>
     );
 };

@@ -116,7 +116,7 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
 
         <div style={{ marginBottom: 16 }}>
           <Checkbox checked={trustDevice} onChange={e => setTrustDevice(e.target.checked)}>
-            <span style={{ fontSize: 13 }}>Trust this device for 30 days</span>
+            <span style={{ fontSize: 13 }}>Trust this device for 12 hours</span>
           </Checkbox>
         </div>
 
