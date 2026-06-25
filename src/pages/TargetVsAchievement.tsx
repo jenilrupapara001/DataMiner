@@ -4,7 +4,7 @@ import React, {
     useState, useEffect, useMemo, useCallback, memo
 } from 'react';
 import {
-    Layout, Button, Input, Select, Space, Typography,
+    Button, Input, Select, Space, Typography,
     Tag, Tooltip, Popconfirm, Progress, message,
     Divider, Pagination, Checkbox
 } from 'antd';
@@ -13,15 +13,13 @@ import {
     BarChart3, TrendingUp, X, Upload as UploadIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useTargetsData } from '../hooks/useTargetsData';
-import { useTargetPermissions } from '../hooks/useTargetPermissions';
+import { useTargetsData } from '../hooks/useTargetsData'; import { useTargetPermissions } from '../hooks/useTargetPermissions';
 import { useAuth } from '../contexts/AuthContext';
 
 import { getAchievementTier } from '../utils/targets';
 import { sellerApi } from '../services/api';
 import ImportTargetsModal from '../components/targets/ImportTargetsModal';
 
-const { Content } = Layout;
 const { Text, Title } = Typography;
 const { Option } = Select;
 
@@ -34,7 +32,7 @@ const getWeekHeadersForMonth = (year: number, month: number) => {
     const monthShortNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthLabel = monthShortNames[month - 1];
     const lastDay = new Date(year, month, 0).getDate();
-    
+
     const weeks = [
         `W1 (1-7 ${monthLabel})`,
         `W2 (8-14 ${monthLabel})`,
@@ -600,11 +598,11 @@ const TargetVsAchievement = () => {
         if (planType === 'MONTHLY') {
             // Retrieve YEARLY targets and construct virtual monthly targets
             const yearlyTargets = targets.filter(t => t.TargetType === 'YEARLY');
-            
+
             yearlyTargets.forEach(t => {
                 const monthlyBreakdown = t.monthlyBreakdown || [];
                 const weeklyBreakdown = t.weeklyBreakdown || [];
-                
+
                 // For each month 1 to 12
                 for (let m = 1; m <= 12; m++) {
                     const mBd = monthlyBreakdown.find((b: any) => b.PeriodValue === m);
@@ -774,11 +772,10 @@ const TargetVsAchievement = () => {
     ];
 
     return (
-        <Layout
+        <div
             className="target-achievement-container"
             style={{
-                minHeight: 'calc(100vh - 72px)', background: '#f8fafc',
-                margin: '-1.5rem -2rem -1.5rem -2rem',
+                minHeight: 'calc(100vh - 60px)', background: '#fafbfc',
                 flex: 1, display: 'flex', flexDirection: 'column'
             }}
         >
@@ -786,15 +783,16 @@ const TargetVsAchievement = () => {
             {msgCtx}
 
             {/* ── Page Header ──────────────────────────────────────── */}
-            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 24px 8px' }}>
+            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '20px 28px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                     <div>
-                        <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: 18 }}>
-                            Target v/s Achievements
-                        </Title>
-                        <Text style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 1 }}>
-                            Manage revenue targets, distribution splits, and sales achievements.
-                        </Text>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>Target vs Achievements</h2>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                {totalGroups} brands · {totalGoalRows} goals
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: '#64748b', margin: 0, marginTop: 4, lineHeight: 1.5 }}>Manage revenue targets, distribution splits, and sales achievements.</p>
                     </div>
 
                     <Space size={8} wrap>
@@ -874,9 +872,9 @@ const TargetVsAchievement = () => {
 
             {/* ── Toolbar with search + filters ───────────────────── */}
             <div style={{
-                background: '#fff', padding: '8px 24px',
-                borderBottom: '1px solid #f1f5f9',
-                display: 'flex', flexDirection: 'column', gap: 8
+                background: '#fff', padding: '12px 28px',
+                borderBottom: '1px solid #e2e8f0',
+                display: 'flex', flexDirection: 'column', gap: 10
             }}>
                 {/* Row 1: Search + stats + legend */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -1053,7 +1051,7 @@ const TargetVsAchievement = () => {
             </div>
 
             {/* ── Table Content ─────────────────────────────────────── */}
-            <Content style={{ padding: '24px 32px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px 28px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <div style={{
                     background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0',
                     boxShadow: '0 4px 18px -4px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.02)',
@@ -1151,12 +1149,12 @@ const TargetVsAchievement = () => {
                                                 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                                                         <span style={{ fontSize: 12, fontWeight: 600 }}>{p}</span>
-                                                        <Button 
-                                                            type="text" 
-                                                            size="small" 
+                                                        <Button
+                                                            type="text"
+                                                            size="small"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setCollapsedMonths(prev => 
+                                                                setCollapsedMonths(prev =>
                                                                     prev.includes(monthNum) ? prev.filter(m => m !== monthNum) : [...prev, monthNum]
                                                                 );
                                                             }}
@@ -1462,7 +1460,7 @@ const TargetVsAchievement = () => {
                         </div>
                     )}
                 </div>
-            </Content>
+            </div>
 
             {/* ── NEW: Import Targets Modal ─────────────────────────── */}
             <ImportTargetsModal
@@ -1496,7 +1494,7 @@ const TargetVsAchievement = () => {
                 }
             `}</style>
 
-        </Layout>
+        </div>
     );
 };
 

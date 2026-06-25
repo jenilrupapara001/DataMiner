@@ -32,7 +32,7 @@ import {
     Cell
 } from 'recharts';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Option } = Select;
 
 const MONTH_NAMES = [
@@ -150,52 +150,41 @@ const AnimatedCounter = memo(({ end, duration = 1.0, unit = "₹" }) => {
 // ─── Eased KPI Card Component ────────────────────────────────────────────────
 const KpiCard = memo(({ title, value, subtext, icon, color = '#4f46e5', unit = "₹", trend = null, isAcos = false }) => {
     return (
-        <Card className="kpi-card" style={{ borderRadius: 16, border: '1px solid #e2e8f0', height: '100%' }} styles={{ body: { padding: 20 } }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{title}</span>
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, background: '#fff', height: '100%', transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+            className="kpi-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 14 }}>
+                <span style={{ color: '#64748b', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.4, flex: 1 }}>{title}</span>
                 <div style={{
-                    background: `${color}15`,
-                    color: color,
-                    padding: 8,
-                    borderRadius: 10,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    background: `${color}12`, color: color, padding: 8, borderRadius: 10,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                 }}>
                     {icon}
                 </div>
             </div>
 
-            <div style={{ marginBottom: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+            <div style={{ marginBottom: 12 }}>
+                <h3 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
                     <AnimatedCounter end={value} unit={unit} />
                 </h3>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {trend !== null && (() => {
                     const tier = getAchievementTier(trend, isAcos);
                     return (
                         <span style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 2,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: tier.color,
-                            background: tier.bg,
-                            border: `1px solid ${tier.border}`,
-                            padding: '2px 6px',
-                            borderRadius: 6
+                            display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700,
+                            color: tier.color, background: tier.bg, border: `1px solid ${tier.border}`,
+                            padding: '2px 6px', borderRadius: 6, flexShrink: 0
                         }}>
                             {isAcos ? (trend <= 100 ? <TrendingDown size={13} /> : <TrendingUp size={13} />) : (trend >= 80 ? <TrendingUp size={13} /> : <TrendingDown size={13} />)}
                             {trend.toFixed(1)}%
                         </span>
                     );
                 })()}
-                <span style={{ color: '#64748b', fontSize: 12 }}>{subtext}</span>
+                <span style={{ color: '#64748b', fontSize: 11, lineHeight: 1.4 }}>{subtext}</span>
             </div>
-        </Card>
+        </div>
     );
 });
 
@@ -686,175 +675,76 @@ const TargetVsAchievementDashboard = () => {
 
     return (
         <PermissionGuard allowed={canView} mode="lock">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ background: '#fafbfc', minHeight: 'calc(100vh - 60px)' }}>
                 <style>{`
-                .hover-lift {
-                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-                .hover-lift:hover {
-                    transform: translateY(-4px) scale(1.01);
-                    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
-                }
-                .kpi-card {
-                    border-radius: 24px;
-                    border: 1px solid rgba(255, 255, 255, 0.9);
-                    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-                    box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.05), inset 0 2px 4px rgba(255,255,255,0.8);
-                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-                    position: relative;
-                    overflow: hidden;
-                }
-                .kpi-card::before {
-                    content: '';
-                    position: absolute;
-                    top: 0; left: 0; right: 0; height: 4px;
-                    background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
-                    opacity: 0;
-                    transition: opacity 0.4s ease;
-                }
-                .kpi-card:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.15);
-                    border-color: rgba(99, 102, 241, 0.2);
-                }
-                .kpi-card:hover::before {
-                    opacity: 1;
-                }
-                .premium-header {
-                    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
-                    position: relative;
-                    overflow: hidden;
-                    border-radius: 24px;
-                    padding: 28px 36px;
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.6), inset 0 1px 0 rgba(255,255,255,0.1);
-                }
-                .premium-header::after {
-                    content: '';
-                    position: absolute;
-                    top: -50%;
-                    right: -20%;
-                    width: 80%;
-                    height: 200%;
-                    background: radial-gradient(ellipse at center, rgba(99,102,241,0.15) 0%, transparent 70%);
-                    pointer-events: none;
-                }
-                .chart-container-card {
-                    border-radius: 24px;
-                    border: 1px solid rgba(226, 232, 240, 0.8);
-                    box-shadow: 0 12px 30px -10px rgba(15, 23, 42, 0.06);
-                    background: #ffffff;
-                    height: 100%;
-                    transition: all 0.3s ease;
-                }
-                .chart-container-card:hover {
-                    box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.08);
-                }
-                .chart-container-card .ant-card-head {
-                    border-bottom: 1px solid rgba(241, 245, 249, 0.8);
-                    padding: 20px 24px;
-                    background: rgba(255,255,255,0.5);
-                    backdrop-filter: blur(8px);
-                    border-radius: 24px 24px 0 0;
-                }
-                .chart-container-card .ant-card-body {
-                    padding: 24px;
-                }
-            `}</style>
+                .hover-lift { transition: all 0.2s ease; }
+                .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+                .kpi-card { transition: all 0.2s ease; }
+                .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+                .chart-container-card { transition: all 0.2s ease; border-radius: 12px; }
+                .chart-container-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+                .chart-container-card .ant-card-head { border-bottom: 1px solid #f1f5f9; padding: 16px 20px; }
+                .chart-container-card .ant-card-body { padding: 20px; }
+                .target-dash-table .ant-table-thead > tr > th { background: #fafbfc !important; font-size: 11px !important; font-weight: 700 !important; color: #475569 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; }
+                .target-dash-table .ant-table-tbody > tr > td { border-bottom: 1px solid #f1f5f9 !important; }
+                `}</style>
 
                 <ConnectionBanner targets={targets} />
 
                 {isViewer && <ReadOnlyBanner isBrandManager={isBrandManager} />}
 
-                {/* 1. Page Header (Premium Redesigned) */}
-                <div className="premium-header" style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16
-                }}>
-                    <Space size={16}>
-                        <div style={{
-                            background: 'rgba(255, 255, 255, 0.15)', backdropFilter: 'blur(8px)',
-                            color: '#a5b4fc', padding: 14, borderRadius: 12, display: 'flex',
-                            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2)'
-                        }}>
-                            <BarChart size={28} />
-                        </div>
+                {/* Page Header */}
+                <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '20px 28px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         <div>
-                            <Text style={{ color: '#c7d2fe', fontSize: 13, fontWeight: 500 }}>
-                                Analyze sales achievements, trend models, brand comparisons, and plan Recaps in real-time.
-                            </Text>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>Analytics Dashboard</h2>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                    {filteredTargets.length} targets
+                                </span>
+                            </div>
+                            <p style={{ fontSize: 13, color: '#64748b', margin: 0, marginTop: 4, lineHeight: 1.5 }}>
+                                Analyze sales achievements, brand comparisons, and performance metrics in real-time.
+                            </p>
                         </div>
-                    </Space>
 
-                    <Space size={12} style={{ flexWrap: 'wrap' }}>
-                        {/* Table / Dashboard Navigation Switch */}
-                        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.12)', borderRadius: 10, padding: 3, border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+                        <Space size={10} wrap>
                             <Segmented
                                 value="dashboard"
                                 onChange={handleViewChange}
                                 options={[
-                                    { label: 'Table View', value: 'table' },
-                                    { label: 'Analytics Dashboard', value: 'dashboard' }
+                                    { label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}><BarChart3 size={12} /> Table View</span>, value: 'table' },
+                                    { label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}><Sparkles size={12} /> Analytics</span>, value: 'dashboard' }
                                 ]}
-                                style={{ background: 'transparent', fontWeight: 650, color: '#ffffff' }}
                             />
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.08)', borderRadius: 10, padding: 4, border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                             <Segmented
                                 value={selectedPlanType}
                                 onChange={setSelectedPlanType}
                                 options={[
-                                    { label: 'Yearly Plans', value: 'YEARLY' },
-                                    { label: 'Monthly Plans', value: 'MONTHLY' }
+                                    { label: <span style={{ fontSize: 12, fontWeight: 600 }}>Yearly</span>, value: 'YEARLY' },
+                                    { label: <span style={{ fontSize: 12, fontWeight: 600 }}>Monthly</span>, value: 'MONTHLY' }
                                 ]}
-                                style={{ background: 'transparent', fontWeight: 650, color: '#ffffff' }}
                             />
-                        </div>
-
-                        <Select
-                            value={selectedGoalType}
-                            onChange={setSelectedGoalType}
-                            style={{ width: 120, height: 40 }}
-                            className="glass-select"
-                        >
-                            <Option value="ALL">All Goals</Option>
-                            {availableGoalTypes.map(gt => (
-                                <Option key={gt} value={gt}>{gt}</Option>
-                            ))}
-                        </Select>
-
-                        <Select
-                            value={selectedYear}
-                            onChange={setSelectedYear}
-                            style={{ width: 100, height: 40 }}
-                            className="glass-select"
-                        >
-                            {availableYears.map(year => (
-                                <Option key={year} value={year}>{year}</Option>
-                            ))}
-                        </Select>
-
-                        <Button
-                            shape="round"
-                            icon={<RefreshCw size={15} />}
-                            onClick={refresh}
-                            loading={loading}
-                            style={{
-                                height: 40,
-                                fontWeight: 600,
-                                background: 'rgba(255, 255, 255, 0.08)',
-                                borderColor: 'rgba(255, 255, 255, 0.15)',
-                                color: '#ffffff'
-                            }}
-                        >
-                            Refresh
-                        </Button>
-                    </Space>
+                            <Select value={selectedGoalType} onChange={setSelectedGoalType} style={{ width: 120 }} size="small">
+                                <Option value="ALL">All Goals</Option>
+                                {availableGoalTypes.map(gt => <Option key={gt} value={gt}>{gt}</Option>)}
+                            </Select>
+                            <Select value={selectedYear} onChange={setSelectedYear} style={{ width: 100 }} size="small">
+                                {availableYears.map(year => <Option key={year} value={year}>{year}</Option>)}
+                            </Select>
+                            <Button icon={<RefreshCw size={13} />} onClick={refresh} loading={loading}
+                                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, border: '1px solid #e2e8f0' }}>
+                                Refresh
+                            </Button>
+                        </Space>
+                    </div>
                 </div>
 
+                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
                 {/* 2. KPI Metric Panel */}
-                <Row gutter={[20, 20]}>
-                    <Col xs={24} sm={12} lg={6}>
+                <Row gutter={[16, 16]}>
+                    <Col xs={12} sm={12} lg={6}>
                         <KpiCard
                             title={['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "AVERAGE TARGET GOAL" : "TOTAL TARGET POOL"}
                             value={kpiStats.totalTarget}
@@ -864,7 +754,7 @@ const TargetVsAchievementDashboard = () => {
                             subtext={`Across ${kpiStats.brandCount} brand targets`}
                         />
                     </Col>
-                    <Col xs={24} sm={12} lg={6}>
+                    <Col xs={12} sm={12} lg={6}>
                         <KpiCard
                             title={['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "AVERAGE ACHIEVEMENT" : "TOTAL ACHIEVED"}
                             value={kpiStats.totalAchieved}
@@ -874,7 +764,7 @@ const TargetVsAchievementDashboard = () => {
                             subtext={['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "Paced average realization" : "Paced cumulative achievement"}
                         />
                     </Col>
-                    <Col xs={24} sm={12} lg={6}>
+                    <Col xs={12} sm={12} lg={6}>
                         <KpiCard
                             title="AGGREGATED ACHIEVEMENT RATE"
                             value={kpiStats.achievementRate}
@@ -886,7 +776,7 @@ const TargetVsAchievementDashboard = () => {
                             subtext="Cumulative performance quotient"
                         />
                     </Col>
-                    <Col xs={24} sm={12} lg={6}>
+                    <Col xs={12} sm={12} lg={6}>
                         <KpiCard
                             title={selectedGoalType === 'ACOS' ? "COMPLIANT BRANDS" : "HIGH PERFORMING BRANDS"}
                             value={kpiStats.premiumCount}
@@ -1213,30 +1103,32 @@ const TargetVsAchievementDashboard = () => {
                 </Row>
 
                 {/* 4. Filter search bar & Interactive Table */}
-                <Card style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)' }} styles={{ body: { padding: 0 } }}>
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                     <div style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        borderBottom: '1px solid #e2e8f0', padding: '16px 20px', gap: 16, flexWrap: 'wrap'
+                        borderBottom: '1px solid #e2e8f0', padding: '14px 20px', gap: 16, flexWrap: 'wrap'
                     }}>
-                        <Title level={4} style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
                             Brand-wise Target Fulfillment Status
-                        </Title>
+                        </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <Input
                                 placeholder="Search brand or manager..."
-                                prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
+                                prefix={<Search size={13} style={{ color: '#94a3b8' }} />}
                                 value={searchText}
                                 onChange={(e) => setSearchText(e.target.value)}
                                 allowClear
+                                size="small"
                                 style={{ borderRadius: 8, width: 220 }}
                             />
-                            <span style={{ fontSize: 12, fontWeight: 650, color: '#64748b', whiteSpace: 'nowrap' }}>
-                                {filteredTargets.length} Brands
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>
+                                {filteredTargets.length} brands
                             </span>
                         </div>
                     </div>
 
                     <Table
+                        className="target-dash-table"
                         dataSource={filteredTargets}
                         columns={columns}
                         rowKey="Id"
@@ -1251,9 +1143,10 @@ const TargetVsAchievementDashboard = () => {
                             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} brands`
                         }}
                         scroll={{ x: 800 }}
-                        size="middle"
+                        size="small"
                     />
-                </Card>
+                </div>
+                </div>
             </div>
         </PermissionGuard>
     );
