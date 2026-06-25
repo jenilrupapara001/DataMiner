@@ -284,7 +284,7 @@ const TargetVsAchievementDashboard = () => {
                 const sid = s.sellerId || s.SellerId || s._id || s.Id || s;
                 return {
                     sellerId: sid,
-                    name: s.name || s.SellerName || sellerMap.get(sid) || sid,
+                    name: s.name || s.SellerName || sellerMap.get(sid) || 'Unknown Brand',
                     marketplace: s.marketplace || 'Amazon'
                 };
             });
@@ -294,7 +294,7 @@ const TargetVsAchievementDashboard = () => {
         const sellerCodes = Array.from(new Set((targets || []).map(t => t.SellerId).filter(Boolean)));
         return sellerCodes.map(code => ({
             sellerId: code,
-            name: sellerMap.get(code) || code,
+            name: sellerMap.get(code) || 'Unknown Brand',
             marketplace: 'Amazon'
         }));
     }, [user, targets, sellerMap]);
@@ -308,7 +308,7 @@ const TargetVsAchievementDashboard = () => {
 
             // Search query matches seller ID or manager
             const sLower = searchText.toLowerCase();
-            const sellerName = (sellerMap.get(t.SellerId) || t.SellerId || '').toLowerCase();
+                const sellerName = (sellerMap.get(t.SellerId) || 'Unknown Brand').toLowerCase();
             const matchesSearch =
                 sellerName.includes(sLower) ||
                 (t.BrandManager || '').toLowerCase().includes(sLower);
@@ -419,7 +419,7 @@ const TargetVsAchievementDashboard = () => {
     const sellerChartData = useMemo(() => {
         const selMap = new Map();
         filteredTargets.forEach(t => {
-            const seller = sellerMap.get(t.SellerId) || t.SellerId || 'Unknown';
+            const seller = sellerMap.get(t.SellerId) || 'Unknown Brand';
             if (!selMap.has(seller)) {
                 selMap.set(seller, { TargetSum: 0, AchievedSum: 0, count: 0 });
             }
@@ -497,7 +497,7 @@ const TargetVsAchievementDashboard = () => {
             .map(t => {
                 const pct = t.TotalTargetValue > 0 ? (t.overallAchieved / t.TotalTargetValue) * 100 : 0;
                 return {
-                    name: sellerMap.get(t.SellerId) || t.SellerId || 'Unknown',
+                    name: sellerMap.get(t.SellerId) || 'Unknown Brand',
                     target: t.TotalTargetValue || 0,
                     achieved: t.overallAchieved || 0,
                     rate: parseFloat(pct.toFixed(1))
@@ -538,7 +538,7 @@ const TargetVsAchievementDashboard = () => {
             render: (text, record) => {
                 const pct = record.TotalTargetValue > 0 ? (record.overallAchieved / record.TotalTargetValue) * 100 : 0;
                 const tier = getAchievementTier(pct, record.GoalType === 'ACOS');
-                const displayName = sellerMap.get(text) || text;
+                const displayName = sellerMap.get(text) || 'Unknown Brand';
                 const initial = displayName ? displayName.charAt(0).toUpperCase() : 'B';
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -49,8 +49,9 @@ router.post('/upload/octoparse', authenticate, upload.single('file'), uploadCont
 router.get('/upload/upload-stats', authenticate, uploadController.getUploadStats);
 
 // GMS endpoints
-router.post('/upload/upload-gms', authenticate, requirePermission('gms_tracker_import'), upload.single('file'), uploadController.uploadGmsData);
-router.get('/upload/gms-data', authenticate, requirePermission('gms_tracker_view'), uploadController.getGmsData);
-router.post('/upload/gms-clear', authenticate, requirePermission('gms_tracker_export'), uploadController.clearGmsData);
+    router.post('/upload/upload-gms', authenticate, requirePermission('gms_tracker_import'), upload.single('file'), uploadController.uploadGmsData);
+    router.get('/upload/gms-data', authenticate, requirePermission('gms_tracker_view'), uploadController.getGmsData);
+    router.get('/upload/gms-asins', authenticate, requirePermission('gms_tracker_view'), uploadController.getGmsAsins);
+    router.post('/upload/gms-clear', authenticate, requirePermission('gms_tracker_export'), uploadController.clearGmsData);
 
 module.exports = router;

@@ -657,6 +657,10 @@ class DatabaseService {
     return this.request('/actions/templates', { method: 'POST', body: JSON.stringify(template) }, null);
   }
 
+  async analyzeListing(asinId, autoCreate = false) {
+    return this.request(`/actions/ai-listing-analysis/${asinId}`, { method: 'POST', body: JSON.stringify({ autoCreate }) }, null);
+  }
+
   /**
    * Update a task template
    * @param {string} id

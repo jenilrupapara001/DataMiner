@@ -125,7 +125,7 @@ const GoalDataRow = memo(({
     sellerName?: string; rowKey: string;
     collapsedMonths?: number[];
 }) => {
-    const displayName = sellerName || record.SellerId || '?';
+    const displayName = sellerName || 'Unknown Brand';
     const goalType = resolveGoalType(goalRow);
     const meta = getMeta(goalType);
     const total = goalRow.totalTarget || goalRow.TotalTargetValue || 0;
@@ -453,7 +453,7 @@ const GroupedTable = memo(({
                             onEdit={onEdit}
                             onDelete={onDelete}
                             perms={perms}
-                            sellerName={sellerMap.get(group.SellerId) || group.SellerId}
+                            sellerName={sellerMap.get(group.SellerId) || 'Unknown Brand'}
                             collapsedMonths={collapsedMonths}
                         />
                     );
@@ -510,7 +510,7 @@ const TargetVsAchievement = () => {
                 const sid = s.sellerId || s.SellerId || s._id || s.Id || s;
                 return {
                     sellerId: sid,
-                    name: s.name || s.SellerName || sid,
+                    name: s.name || s.SellerName || sellerMap.get(sid) || 'Unknown Brand',
                     marketplace: s.marketplace || 'Amazon'
                 };
             });
@@ -518,7 +518,7 @@ const TargetVsAchievement = () => {
 
         return sellers.map(s => ({
             sellerId: s._id || s.id,
-            name: s.name || s._id || s.id,
+            name: s.name || 'Unknown Brand',
             marketplace: s.marketplace || 'Amazon'
         }));
     }, [user, sellers]);
@@ -563,7 +563,7 @@ const TargetVsAchievement = () => {
     const availableSellers = useMemo(() => {
         const ids = [...new Set(targets.map(t => t.SellerId as string).filter(Boolean))];
         return ids.map(id => {
-            const labelStr = (sellerMap.get(id as string) || id || '') as string;
+            const labelStr = (sellerMap.get(id as string) || 'Unknown Brand') as string;
             return {
                 value: id,
                 label: labelStr
@@ -661,7 +661,7 @@ const TargetVsAchievement = () => {
             .filter(t => {
                 if (!searchText) return true;
                 const q = searchText.toLowerCase();
-                const sellerName = (sellerMap.get(t.SellerId) || t.SellerId || '').toLowerCase();
+                const sellerName = (sellerMap.get(t.SellerId) || 'Unknown Brand').toLowerCase();
                 return (
                     sellerName.includes(q) ||
                     (t.BrandManager || '').toLowerCase().includes(q)
@@ -990,7 +990,7 @@ const TargetVsAchievement = () => {
                                         color: '#7c3aed', margin: 0, padding: '1px 8px'
                                     }}
                                 >
-                                    Brand: {sellerMap.get(filterSeller) || filterSeller}
+                                    Brand: {sellerMap.get(filterSeller) || 'Unknown Brand'}
                                 </Tag>
                             )}
                             {filterManager && (

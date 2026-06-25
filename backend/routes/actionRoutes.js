@@ -8,6 +8,7 @@ const { authenticate: protect, requireAnyPermission, requireRole } = require('..
 const { createNotification } = require('../controllers/notificationController');
 const SystemLogService = require('../services/SystemLogService');
 const validate = require('../middleware/validate');
+const listingAnalysisService = require('../services/listingAnalysisService');
 
 // Configure multer for audio file uploads
 const storage = multer.diskStorage({
@@ -453,6 +454,53 @@ router.post('/analyze-asin/:asinId', protect, requireAnyPermission(['actions_cre
         res.json({ success: true, data: { asin: asin.AsinCode, suggestedActions, count: suggestedActions.length } });
     } catch (error) {
         console.error('Error analyzing ASIN:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// AI-powered listing quality analysis
+router.post('/ai-listing-analysis/:asinId', protect, requireAnyPermission(['actions_create', 'actions_manage']), async (req, res) => {
+    try {
+        const pool = await actionController.getPool();
+        const asinResult = await pool.request()
+            .input('id', sql.VarChar, req.params.asinId)
+            .query(`
+                SELECT a.Id, a.AsinCode, a.Title, a.Brand, a.BulletPointsText, a.ProductDescription,
+                       a.ImagesCount, a.HasAplus, a.LQS, a.ImageUrl, a.SellerId
+                FROM Asins a WHERE a.Id = @id
+            `);
+
+        if (asinResult.recordset.length === 0) return res.status(404).json({ success: false, message: 'ASIN not found' });
+
+        const asin = asinResult.recordset[0];
+        const analysis = await listingAnalysisService.analyze(asin);
+
+        // Auto-create tasks if requested
+        if (req.body.autoCreate && analysis.tasks?.length > 0) {
+            const createdTasks = [];
+            for (const task of analysis.tasks) {
+                const id = require('../database/db').generateId();
+                await pool.request()
+                    .input('Id', sql.VarChar, id)
+                    .input('Title', sql.NVarChar, task.title)
+                    .input('Description', sql.NVarChar, task.description)
+                    .input('Type', sql.NVarChar, task.type || 'GENERAL_OPTIMIZATION')
+                    .input('Priority', sql.NVarChar, task.priority || 'MEDIUM')
+                    .input('Category', sql.NVarChar, 'Listing Quality')
+                    .input('AsinId', sql.VarChar, asin.Id)
+                    .input('SellerId', sql.VarChar, asin.SellerId)
+                    .input('CreatedBy', sql.VarChar, req.user.Id || req.user._id)
+                    .input('TimeLimit', sql.Int, task.estimatedMinutes || 30)
+                    .query(`INSERT INTO Actions (Id, Title, Description, Type, Priority, Category, AsinId, SellerId, CreatedBy, TimeLimit, Status, CreatedAt, UpdatedAt)
+                            VALUES (@Id, @Title, @Description, @Type, @Priority, @Category, @AsinId, @SellerId, @CreatedBy, @TimeLimit, 'PENDING', dbo.GetEnvDate(), dbo.GetEnvDate())`);
+                createdTasks.push({ id, title: task.title });
+            }
+            return res.json({ success: true, data: { ...analysis, createdTasks, tasksCount: createdTasks.length } });
+        }
+
+        res.json({ success: true, data: analysis });
+    } catch (error) {
+        console.error('AI Listing Analysis Error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

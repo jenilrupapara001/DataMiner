@@ -1928,11 +1928,21 @@ export const gmsApi = {
     });
   },
 
-  getAll: async () => {
-    const res = await fetch(`${API_BASE}/upload/gms-data`, {
+  getAll: async (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    const url = qs ? `${API_BASE}/upload/gms-data?${qs}` : `${API_BASE}/upload/gms-data`;
+    const res = await fetch(url, {
       headers: { ...getAuthHeader() }
     });
     if (!res.ok) throw new Error('Failed to fetch GMS data');
+    return res.json();
+  },
+
+  getAsins: async () => {
+    const res = await fetch(`${API_BASE}/upload/gms-asins`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch GMS ASINs');
     return res.json();
   },
 

@@ -173,7 +173,7 @@ const buildSellerHierarchy = (objectives, allActions, sellers) => {
       if (s) sname = s.name || s.sellerName || '';
     }
     if (!sid) { sid = 'unassigned'; sname = 'Unassigned'; }
-    return { sellerId: sid, sellerName: sname || sid };
+    return { sellerId: sid, sellerName: sname || 'Unknown Brand' };
   };
 
   objectives.forEach(obj => {
@@ -211,7 +211,7 @@ const buildSellerHierarchy = (objectives, allActions, sellers) => {
       if (s) sname = s.name || s.sellerName || '';
     }
     if (!sid) { sid = 'unassigned'; sname = 'Unassigned'; }
-    if (!map[sid]) map[sid] = { sellerId: sid, sellerName: sname || sid, objectives: [], directTasks: [] };
+        if (!map[sid]) map[sid] = { sellerId: sid, sellerName: sname || 'Unknown Brand', objectives: [], directTasks: [] };
     const subs = allActions.filter(x =>
       x.parentTaskId === (a._id || a.id) || x.parentId === (a._id || a.id)
     );

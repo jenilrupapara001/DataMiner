@@ -125,7 +125,7 @@ class AIService {
     async generateTaskInstructions(action) {
         try {
             const completion = await this.nvidiaOpenAI.chat.completions.create({
-                model: "minimaxai/minimax-m2.1",
+                model: "meta/llama-3.1-8b-instruct",
                 messages: [
                     {
                         role: "system",
@@ -162,7 +162,7 @@ class AIService {
     async generateWeeklyTasks(goal) {
         try {
             const completion = await this.nvidiaOpenAI.chat.completions.create({
-                model: "minimaxai/minimax-m2.1",
+                model: "meta/llama-3.1-8b-instruct",
                 messages: [
                     {
                         role: "system",

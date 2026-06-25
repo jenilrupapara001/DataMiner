@@ -1636,6 +1636,52 @@ const AsinManagerPage = (props) => {
     }
   };
 
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
+  const [showAiAnalysisModal, setShowAiAnalysisModal] = useState(false);
+
+  const handleAiListingAnalysis = async () => {
+    const selectedAsinIds = Array.from(selectedIds);
+    if (selectedAsinIds.length === 0) { alert('Please select ASINs first.'); return; }
+    if (selectedAsinIds.length > 5) { alert('AI analysis supports max 5 ASINs at a time for quality results.'); return; }
+
+    setAiAnalysisLoading(true);
+    setShowAiAnalysisModal(true);
+    setAiAnalysisResult(null);
+
+    try {
+      const results = [];
+      for (const asinId of selectedAsinIds) {
+        const res = await db.analyzeListing(asinId, false);
+        if (res?.success && res.data) {
+          results.push({ asinId, ...res.data });
+        }
+      }
+      setAiAnalysisResult(results);
+    } catch (err) {
+      console.error('AI analysis failed:', err);
+      setAiAnalysisResult([{ error: err.message || 'Analysis failed' }]);
+    } finally {
+      setAiAnalysisLoading(false);
+    }
+  };
+
+  const handleAiCreateTasks = async (asinId) => {
+    try {
+      setSyncing(true);
+      const res = await db.analyzeListing(asinId, true);
+      if (res?.success && res.data?.createdTasks) {
+        alert(`✅ Created ${res.data.tasksCount} optimization tasks`);
+        setShowAiAnalysisModal(false);
+        clearSelection();
+      }
+    } catch (err) {
+      alert('Failed to create tasks: ' + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleBulkSyncSelected = async () => {
     const selectedAsinIds = Array.from(selectedIds);
     if (selectedAsinIds.length === 0) return;
@@ -2664,6 +2710,14 @@ const AsinManagerPage = (props) => {
                   style={{ fontSize: '11px' }}
                 >
                   <Zap size={12} className="fill-indigo-700" /> Tasks
+                </button>
+                <button
+                  className="btn btn-sm btn-white border shadow-sm fw-bold rounded-2 d-flex align-items-center gap-1.5"
+                  onClick={handleAiListingAnalysis}
+                  disabled={aiAnalysisLoading}
+                  style={{ fontSize: '11px', borderColor: '#c4b5fd', color: '#6d28d9', backgroundColor: '#f5f3ff' }}
+                >
+                  <Sparkles size={12} /> {aiAnalysisLoading ? 'Analyzing...' : 'AI Analyze'}
                 </button>
               </div>
               <button
@@ -4376,6 +4430,74 @@ const AsinManagerPage = (props) => {
             loadData(pagination.page, pagination.limit);
           }}
         />
+      )}
+
+      {/* AI Listing Analysis Modal */}
+      {showAiAnalysisModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => !aiAnalysisLoading && setShowAiAnalysisModal(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '90%', maxWidth: 800, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6d28d9, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={16} color="#fff" />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>AI Listing Quality Analysis</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Amazon policy compliance & optimization recommendations</div>
+                </div>
+              </div>
+              <button onClick={() => setShowAiAnalysisModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#64748b', fontSize: 18 }}>×</button>
+            </div>
+            <div style={{ padding: 24, overflowY: 'auto', maxHeight: 'calc(85vh - 120px)' }}>
+              {aiAnalysisLoading && (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#6d28d9', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+                  <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>AI is analyzing your listings against Amazon policies...</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>This may take 15-30 seconds per ASIN</div>
+                </div>
+              )}
+              {!aiAnalysisLoading && aiAnalysisResult && aiAnalysisResult.map((result, idx) => (
+                <div key={idx} style={{ marginBottom: 20, border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                  {result.error ? (
+                    <div style={{ padding: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12 }}>Error: {result.error}</div>
+                  ) : (
+                    <>
+                      <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Score: {result.overallScore}/100</span>
+                          <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>{result.summary}</span>
+                        </div>
+                        <button onClick={() => handleAiCreateTasks(result.asinId)}
+                          disabled={syncing}
+                          style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6, background: '#0f172a', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                          {syncing ? 'Creating...' : 'Create Tasks'}
+                        </button>
+                      </div>
+                      {result.issues?.length > 0 && (
+                        <div style={{ padding: 12 }}>
+                          {result.issues.map((issue, i) => (
+                            <div key={i} style={{ padding: '8px 12px', background: issue.severity === 'critical' ? '#fef2f2' : issue.severity === 'high' ? '#fffbeb' : '#f8fafc', borderLeft: `3px solid ${issue.severity === 'critical' ? '#ef4444' : issue.severity === 'high' ? '#f59e0b' : '#6366f1'}`, borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                <span style={{ fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', fontSize: 10 }}>{issue.field} · {issue.severity}</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: issue.priority === 'HIGH' ? '#dc2626' : '#64748b' }}>{issue.priority}</span>
+                              </div>
+                              <div style={{ color: '#334155', marginBottom: 2 }}>{issue.issue}</div>
+                              <div style={{ color: '#059669', fontSize: 11 }}>→ {issue.recommendation}</div>
+                              {issue.amazonPolicy && <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 2 }}>Policy: {issue.amazonPolicy}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

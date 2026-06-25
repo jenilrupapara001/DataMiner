@@ -813,39 +813,74 @@ exports.getGmsData = async (req, res) => {
   try {
     const userRole = req.user.role?.name || req.user.role;
     const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
-    let whereClause = '';
-
+    
     const pool = await getPool();
     const request = pool.request();
+    let whereClauses = [];
 
     if (!isGlobalUser) {
       const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
       if (assignedSellerIds.length === 0) {
         return res.json({ success: true, data: [] });
       }
-      whereClause = `WHERE a.SellerId IN (${buildInClause(request, 'sellerId', assignedSellerIds)})`;
+      whereClauses.push(`a.SellerId IN (${buildInClause(request, 'sellerId', assignedSellerIds)})`);
     }
 
-    const result = await request.query(`
-      SELECT 
-        g.Date as date,
-        g.Asin as asin,
-        g.Brand as brand,
-        g.StoreCode as storeCode,
-        g.OrderedRevenue as orderedRevenue,
-        g.OrderedUnits as orderedUnits,
-        g.ShippedRevenue as shippedRevenue,
-        g.ShippedCOGS as shippedCOGS,
-        g.ShippedUnits as shippedUnits,
-        g.CustomerReturns as customerReturns,
-        s.Name as dbBrand,
-        a.Title as productTitle
-      FROM GmsDailyPerformance g
-      LEFT JOIN Asins a ON g.Asin = a.AsinCode
-      LEFT JOIN Sellers s ON a.SellerId = s.Id
-      ${whereClause}
-      ORDER BY g.Date DESC
-    `);
+    // Date range filter
+    if (req.query.startDate) {
+      request.input('startDate', sql.Date, req.query.startDate);
+      whereClauses.push('g.Date >= @startDate');
+    }
+    if (req.query.endDate) {
+      request.input('endDate', sql.Date, req.query.endDate);
+      whereClauses.push('g.Date <= @endDate');
+    }
+
+    const whereSQL = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+    // For global users, skip the expensive JOINs — frontend resolves brands
+    let query;
+    if (isGlobalUser && !whereClauses.some(c => c.includes('SellerId'))) {
+      query = `
+        SELECT 
+          g.Date as date,
+          g.Asin as asin,
+          g.Brand as brand,
+          g.StoreCode as storeCode,
+          g.OrderedRevenue as orderedRevenue,
+          g.OrderedUnits as orderedUnits,
+          g.ShippedRevenue as shippedRevenue,
+          g.ShippedCOGS as shippedCOGS,
+          g.ShippedUnits as shippedUnits,
+          g.CustomerReturns as customerReturns
+        FROM GmsDailyPerformance g
+        ${whereSQL}
+        ORDER BY g.Date DESC
+      `;
+    } else {
+      query = `
+        SELECT 
+          g.Date as date,
+          g.Asin as asin,
+          g.Brand as brand,
+          g.StoreCode as storeCode,
+          g.OrderedRevenue as orderedRevenue,
+          g.OrderedUnits as orderedUnits,
+          g.ShippedRevenue as shippedRevenue,
+          g.ShippedCOGS as shippedCOGS,
+          g.ShippedUnits as shippedUnits,
+          g.CustomerReturns as customerReturns,
+          s.Name as dbBrand,
+          a.Title as productTitle
+        FROM GmsDailyPerformance g
+        LEFT JOIN Asins a ON g.Asin = a.AsinCode
+        LEFT JOIN Sellers s ON a.SellerId = s.Id
+        ${whereSQL}
+        ORDER BY g.Date DESC
+      `;
+    }
+
+    const result = await request.query(query);
     
     // Format Date object to YYYY-MM-DD avoiding timezone shifts
     const formatted = result.recordset.map(row => {
@@ -874,5 +909,23 @@ exports.clearGmsData = async (req, res) => {
   } catch (error) {
     console.error("❌ Gms clear error:", error);
     res.status(500).json({ success: false, message: "Failed to clear GMS data" });
+  }
+};
+
+// Lightweight ASINs endpoint for GMS tracker (only ASINs with GMS data)
+exports.getGmsAsins = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT DISTINCT a.AsinCode as asinCode, a.Brand as brand, a.SellerId as sellerId,
+             a.Title as title, s.Name as sellerName
+      FROM Asins a
+      INNER JOIN GmsDailyPerformance g ON g.Asin = a.AsinCode
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+    `);
+    res.json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error("GMS asins error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch ASINs" });
   }
 };

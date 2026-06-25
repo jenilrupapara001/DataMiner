@@ -25,6 +25,10 @@ const resolveDbBrands = (data, asins, sellers) => {
   asins.forEach(a => {
     asinMap.set((a.asinCode || '').toUpperCase(), a);
   });
+  const sellerMap = new Map();
+  sellers.forEach(s => {
+    sellerMap.set(s._id || s.id, s.name || '');
+  });
   
   return data.map(d => {
     if (d.resolvedDbBrand) return d;
@@ -36,9 +40,9 @@ const resolveDbBrands = (data, asins, sellers) => {
       } else if (matchedDbAsin.sellerName) {
         dbBrandName = matchedDbAsin.sellerName;
       } else if (matchedDbAsin.sellerId) {
-        const matchedSeller = sellers.find(s => s.id === matchedDbAsin.sellerId);
-        if (matchedSeller) {
-          dbBrandName = matchedSeller.name;
+        const matchedSellerName = sellerMap.get(matchedDbAsin.sellerId);
+        if (matchedSellerName) {
+          dbBrandName = matchedSellerName;
         }
       }
     }
@@ -49,65 +53,45 @@ const resolveDbBrands = (data, asins, sellers) => {
   });
 };
 
-// Helper to calculate the DoD, WoW, and MoM trend for a given ASIN or Seller row
-const getTrend = (row, type, gmsData, level = 'asin') => {
-  let currentVal = 0;
-  let previousVal = 0;
+// Pre-compute MoM, WoW, DoD trends for all rows from grouped data — no gmsData scanning
+const precomputeTrends = (rows) => {
+  rows.forEach(row => {
+    row._momTrends = {};
+    row._wowTrends = {};
+    row._dodTrends = {};
 
-  const matchFn = (d) => {
-    if (level === 'seller') {
-      if (row.isUnmatched) {
-        return (d.resolvedDbBrand === '-' || !d.resolvedDbBrand) && d.brand === row.dbBrand;
-      }
-      return d.resolvedDbBrand === row.dbBrand;
-    } else {
-      return d.asin === row.asin;
-    }
-  };
-
-  if (type === 'month') {
+    // MoM: current month vs previous month from row.monthlyRev
     const months = Object.keys(row.monthlyRev).sort();
-    if (months.length < 1) return null;
-    const latestMonth = months[months.length - 1];
-    currentVal = row.monthlyRev[latestMonth] || 0;
+    for (let i = 1; i < months.length; i++) {
+      const curr = row.monthlyRev[months[i]] || 0;
+      const prev = row.monthlyRev[months[i - 1]] || 0;
+      row._momTrends[months[i]] = prev > 0 ? ((curr - prev) / prev) * 100 : null;
+    }
 
-    const prevMonthStr = dayjs(latestMonth + '-01').subtract(1, 'month').format('YYYY-MM');
-    // Sum from raw data to support previous month if not in current filters
-    const prevMonthData = gmsData.filter(d => matchFn(d) && d.date.startsWith(prevMonthStr));
-    previousVal = prevMonthData.reduce((sum, d) => sum + d.orderedRevenue, 0);
-  } else if (type === 'week') {
+    // WoW: current week vs previous week from row.weeklyRev
     const weeks = Object.keys(row.weeklyRev).sort();
-    if (weeks.length < 1) return null;
-    const latestWeek = weeks[weeks.length - 1];
-    currentVal = row.weeklyRev[latestWeek] || 0;
+    for (let i = 1; i < weeks.length; i++) {
+      const curr = row.weeklyRev[weeks[i]] || 0;
+      const prev = row.weeklyRev[weeks[i - 1]] || 0;
+      row._wowTrends[weeks[i]] = prev > 0 ? ((curr - prev) / prev) * 100 : null;
+    }
 
-    const [year, weekStr] = latestWeek.split('-W');
-    const prevWeekDateObj = dayjs().year(parseInt(year)).isoWeek(parseInt(weekStr)).subtract(1, 'week');
-    const prevWeekNum = prevWeekDateObj.isoWeek();
-    const prevWeekKey = `${prevWeekDateObj.format('YYYY')}-W${String(prevWeekNum).padStart(2, '0')}`;
-
-    // Sum from raw data to support previous week
-    const prevWeekData = gmsData.filter(d => {
-      if (!matchFn(d)) return false;
-      const itemDate = dayjs(d.date);
-      const itemWeekNum = itemDate.isoWeek();
-      const itemWeekKey = `${itemDate.format('YYYY')}-W${String(itemWeekNum).padStart(2, '0')}`;
-      return itemWeekKey === prevWeekKey;
-    });
-    previousVal = prevWeekData.reduce((sum, d) => sum + d.orderedRevenue, 0);
-  } else if (type === 'day') {
+    // DoD: each day vs previous day from row.dailyRev
     const days = Object.keys(row.dailyRev).sort();
-    if (days.length < 1) return null;
-    const latestDay = days[days.length - 1];
-    currentVal = row.dailyRev[latestDay] || 0;
+    for (let i = 1; i < days.length; i++) {
+      const curr = row.dailyRev[days[i]] || 0;
+      const prev = row.dailyRev[days[i - 1]] || 0;
+      row._dodTrends[days[i]] = prev > 0 ? ((curr - prev) / prev) * 100 : null;
+    }
+  });
+  return rows;
+};
 
-    const prevDayStr = dayjs(latestDay).subtract(1, 'day').format('YYYY-MM-DD');
-    const prevDayData = gmsData.filter(d => matchFn(d) && d.date === prevDayStr);
-    previousVal = prevDayData.reduce((sum, d) => sum + d.orderedRevenue, 0);
-  }
-
-  if (!previousVal) return null;
-  return ((currentVal - previousVal) / previousVal) * 100;
+// Get pre-computed trend for a record by period and key
+const getTrend = (record, period, key) => {
+  if (!record || !key || typeof key !== 'string') return null;
+  const trendMap = period === 'month' ? record._momTrends : period === 'week' ? record._wowTrends : record._dodTrends;
+  return trendMap?.[key] ?? null;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -117,6 +101,7 @@ export default function GmsTrackerPage() {
   const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [gmsData, setGmsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isComputing, setIsComputing] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadDate, setUploadDate] = useState(dayjs());
   const [selectedBrands, setSelectedBrands] = useState([]);
@@ -155,8 +140,11 @@ export default function GmsTrackerPage() {
       try {
         const [sellersRes, asinsRes, gmsRes] = await Promise.all([
           sellerApi.getAll({ limit: 1000 }).catch(() => null),
-          asinApi.getAllWithoutPagination().catch(() => null),
-          gmsApi.getAll().catch(() => null)
+          gmsApi.getAsins().catch(() => null),
+          gmsApi.getAll({
+            startDate: startDate ? dayjs(startDate).format('YYYY-MM-DD') : undefined,
+            endDate: endDate ? dayjs(endDate).format('YYYY-MM-DD') : undefined
+          }).catch(() => null)
         ]);
 
         let sellers = [];
@@ -167,7 +155,7 @@ export default function GmsTrackerPage() {
           setDbSellers(sellers);
         }
         if (asinsRes && asinsRes.success && asinsRes.data) {
-          asins = asinsRes.data.asins || asinsRes.data || [];
+          asins = asinsRes.data || [];
           dbAsinsRef.current = asins;
         }
         if (gmsRes && gmsRes.success && gmsRes.data) {
@@ -643,12 +631,12 @@ export default function GmsTrackerPage() {
               align: 'center',
               width: 110,
               render: (_, record) => {
-                const trend = getTrend(record, 'month', gmsData, viewLevel);
+                const trend = getTrend(record, 'month', month.key);
                 if (trend === null) return <span style={{ color: '#94a3b8' }}>-</span>;
                 const isUp = trend >= 0;
-                return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {trend.toFixed(1)}%</Tag>;
+                return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%</Tag>;
               },
-              sorter: (a, b) => (getTrend(a, 'month', gmsData, viewLevel) || 0) - (getTrend(b, 'month', gmsData, viewLevel) || 0)
+              sorter: (a, b) => (getTrend(a, 'month', month.key) || 0) - (getTrend(b, 'month', month.key) || 0)
             }
           ]
         };
@@ -694,12 +682,12 @@ export default function GmsTrackerPage() {
                 align: 'center',
                 width: 110,
                 render: (_, record) => {
-                  const trend = getTrend(record, 'week', gmsData, viewLevel);
+                  const trend = getTrend(record, 'week', week.key);
                   if (trend === null) return <span style={{ color: '#94a3b8' }}>-</span>;
                   const isUp = trend >= 0;
-                  return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {trend.toFixed(1)}%</Tag>;
+                  return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%</Tag>;
                 },
-                sorter: (a, b) => (getTrend(a, 'week', gmsData, viewLevel) || 0) - (getTrend(b, 'week', gmsData, viewLevel) || 0)
+                sorter: (a, b) => (getTrend(a, 'week', week.key) || 0) - (getTrend(b, 'week', week.key) || 0)
               }
             ]
           };
@@ -788,12 +776,12 @@ export default function GmsTrackerPage() {
           align: 'center',
           width: 110,
           render: (_, record) => {
-            const trend = getTrend(record, 'week', gmsData, viewLevel);
+            const trend = getTrend(record, 'week', week.key);
             if (trend === null) return <span style={{ color: '#94a3b8' }}>-</span>;
             const isUp = trend >= 0;
-            return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {trend.toFixed(1)}%</Tag>;
+            return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%</Tag>;
           },
-          sorter: (a, b) => (getTrend(a, 'week', gmsData, viewLevel) || 0) - (getTrend(b, 'week', gmsData, viewLevel) || 0)
+          sorter: (a, b) => (getTrend(a, 'week', week.key) || 0) - (getTrend(b, 'week', week.key) || 0)
         });
 
         return {
@@ -822,12 +810,12 @@ export default function GmsTrackerPage() {
         align: 'center',
         width: 110,
         render: (_, record) => {
-          const trend = getTrend(record, 'month', gmsData, viewLevel);
+          const trend = getTrend(record, 'month', month.key);
           if (trend === null) return <span style={{ color: '#94a3b8' }}>-</span>;
           const isUp = trend >= 0;
           return <Tag color={isUp ? 'success' : 'error'} style={{ border: 'none', fontWeight: 700 }}>{isUp ? '▲' : '▼'} {trend.toFixed(1)}%</Tag>;
         },
-        sorter: (a, b) => (getTrend(a, 'month', gmsData, viewLevel) || 0) - (getTrend(b, 'month', gmsData, viewLevel) || 0)
+        sorter: (a, b) => (getTrend(a, 'month', month.key) || 0) - (getTrend(b, 'month', month.key) || 0)
       });
 
       return {
@@ -836,11 +824,14 @@ export default function GmsTrackerPage() {
       };
     });
 
+    // Pre-compute all trends during aggregation — eliminates per-cell gmsData scans
+    precomputeTrends(rows);
+
     return {
       tableColumns: [...fixedCols, ...dynamicCols],
       tableDataSource: rows
     };
-  }, [filteredData, gmsData, dbSellers, expandedMonths, expandedWeeks, viewLevel]);
+  }, [filteredData, dbSellers, expandedMonths, expandedWeeks, viewLevel]);
 
   // Chart configuration
   const chartSeries = useMemo(() => {
@@ -1010,6 +1001,13 @@ export default function GmsTrackerPage() {
           </Tooltip>
         </div>
         {tableDataSource.length > 0 ? (
+          <div style={{ position: 'relative' }}>
+            {(isFilterPending || isComputing) && (
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(2px)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #e2e8f0', borderTopColor: '#4f46e5', animation: 'gms-spin 0.8s linear infinite' }} />
+                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Computing...</Text>
+              </div>
+            )}
           <Table
             columns={tableColumns}
             dataSource={tableDataSource}
@@ -1029,6 +1027,7 @@ export default function GmsTrackerPage() {
             className="gms-tracker-table"
             style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}
           />
+          </div>
         ) : (
           <div style={{ padding: 30, textAlign: 'center' }}>
             <Empty description="No data loaded. Click 'Upload GMS Data' to upload your report file." />
@@ -1300,3 +1299,5 @@ export default function GmsTrackerPage() {
     </div>
   );
 }
+
+<style>{`@keyframes gms-spin { to { transform: rotate(360deg); } }`}</style>

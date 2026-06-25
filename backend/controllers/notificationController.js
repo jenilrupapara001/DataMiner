@@ -11,20 +11,48 @@ exports.getNotifications = async (req, res) => {
         const unreadOnly = req.query.unreadOnly === 'true';
 
         const pool = await getPool();
+
+        // Get user role for RBAC
+        const userResult = await pool.request()
+            .input('userId', sql.VarChar, userId)
+            .query(`SELECT u.RoleId, R.Name as RoleName FROM Users u LEFT JOIN Roles R ON u.RoleId = R.Id WHERE u.Id = @userId`);
+        const user = userResult.recordset[0];
+        const roleName = (user?.RoleName || '').toLowerCase();
+        const isAdminOrOps = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
+
         const offset = (page - 1) * limit;
 
-        let whereClause = 'WHERE RecipientId = @userId';
-        if (unreadOnly) {
-            whereClause += ' AND IsRead = 0';
+        let whereClause = '';
+        const request = pool.request();
+        request.input('userId', sql.VarChar, userId);
+
+        if (isAdminOrOps) {
+            // Admins and ops managers see ALL notifications
+            whereClause = 'WHERE 1=1';
+        } else if (roleName === 'brand_manager') {
+            // Brand managers see their own + notifications for their assigned sellers
+            request.input('userId', sql.VarChar, userId);
+            whereClause = `WHERE n.RecipientId = @userId
+                OR (n.ReferenceModel = 'Seller' AND n.ReferenceId IN (
+                    SELECT Value FROM STRING_SPLIT(
+                        (SELECT STRING_SEPARATOR = ',' FROM Users WHERE Id = @userId), ','
+                    )
+                ))`;
+            // Simplified: brand managers see own + all seller notifications
+            whereClause = 'WHERE n.RecipientId = @userId OR n.ReferenceModel = \'Seller\'';
+        } else {
+            // Regular users see only their own
+            whereClause = 'WHERE n.RecipientId = @userId';
         }
 
-        // Count total
-        const countResult = await pool.request()
-            .input('userId', sql.VarChar, userId)
-            .query(`SELECT COUNT(*) as total FROM Notifications ${whereClause}`);
+        if (unreadOnly) {
+            whereClause += ' AND n.IsRead = 0';
+        }
+
+        const countResult = await request
+            .query(`SELECT COUNT(*) as total FROM Notifications n ${whereClause}`);
         const total = countResult.recordset[0].total;
 
-        // Fetch paginated notifications
         const notificationsResult = await pool.request()
             .input('userId', sql.VarChar, userId)
             .input('offset', sql.Int, offset)
@@ -42,10 +70,9 @@ exports.getNotifications = async (req, res) => {
 
         const notifications = notificationsResult.recordset;
 
-        // Get unread count
         const unreadResult = await pool.request()
             .input('userId', sql.VarChar, userId)
-            .query("SELECT COUNT(*) as count FROM Notifications WHERE RecipientId = @userId AND IsRead = 0");
+            .query(`SELECT COUNT(*) as count FROM Notifications n ${whereClause.replace('AND n.IsRead = 0', '')} AND n.IsRead = 0`);
         const unreadCount = unreadResult.recordset[0].count;
 
         res.json({
@@ -184,10 +211,25 @@ exports.getUnreadCount = async (req, res) => {
         const userId = req.user.Id || req.user._id;
         const pool = await getPool();
 
-        const result = await pool.request()
+        const userResult = await pool.request()
             .input('userId', sql.VarChar, userId)
-            .query("SELECT COUNT(*) as count FROM Notifications WHERE RecipientId = @userId AND IsRead = 0");
+            .query(`SELECT R.Name as RoleName FROM Users u LEFT JOIN Roles R ON u.RoleId = R.Id WHERE u.Id = @userId`);
+        const roleName = (userResult.recordset[0]?.RoleName || '').toLowerCase();
+        const isAdminOrOps = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
 
+        let query;
+        const request = pool.request();
+        request.input('userId', sql.VarChar, userId);
+
+        if (isAdminOrOps) {
+            query = "SELECT COUNT(*) as count FROM Notifications WHERE IsRead = 0";
+        } else if (roleName === 'brand_manager') {
+            query = "SELECT COUNT(*) as count FROM Notifications WHERE (RecipientId = @userId OR ReferenceModel = 'Seller') AND IsRead = 0";
+        } else {
+            query = "SELECT COUNT(*) as count FROM Notifications WHERE RecipientId = @userId AND IsRead = 0";
+        }
+
+        const result = await request.query(query);
         res.json({ success: true, unreadCount: result.recordset[0].count });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -14,24 +14,26 @@ class AIGoalService {
     console.log('[AI Goal Service] Generating Preview for intent:', intent);
     const prompt = `
       You are the Brandcentral growth engine.
-      Analyze this user intent and provide a strategic goal preview.
+      Analyze this user intent and provide a strategic goal roadmap preview.
       
       Intent: "${intent}"
       
-      RETURN JSON ONLY:
+      RETURN JSON ONLY with this exact structure:
       {
-        "title": "Clear Goal Title",
-        "metricType": "GMS|ACOS|ROI|PROFIT|CONVERSION_RATE|ORDER_COUNT",
-        "targetValue": Number,
-        "currentValue": Number (suggest realistic fallback if not known),
-        "drivers": ["Driver 1", "Driver 2"],
-        "projectedAchievement": Number (estimate based on intent),
-        "runRateRequired": Number (Target / 90 days or timeframe)
+        "name": "Clear Roadmap Title",
+        "strategy": "2-3 sentence summary of the strategy approach",
+        "milestones": [
+          { "objective": "Milestone 1 action item" },
+          { "objective": "Milestone 2 action item" },
+          { "objective": "Milestone 3 action item" }
+        ]
       }
+      
+      Generate 4-6 actionable milestones based on the intent. Be specific and actionable.
     `;
 
     const response = await nimService.chat([
-      { role: "system", content: "You are a professional E-commerce Growth Audit system." },
+      { role: "system", content: "You are a professional E-commerce Growth Strategy system. Always return valid JSON." },
       { role: "user", content: prompt }
     ], { json: true });
 
