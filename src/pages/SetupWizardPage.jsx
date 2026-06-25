@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
-import { Input, Alert, Typography, Progress } from 'antd';
+import { Input, Alert, Typography, Progress, Row, Col } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Rocket,
@@ -179,134 +179,106 @@ const SetupWizardPage = () => {
   // ============================================
 
   const renderWelcome = () => (
-    <div className="step-content welcome-step">
-      <div className="step-icon-wrapper">
-        <div className="step-icon-bg welcome-icon-bg">
-          <Rocket size={32} strokeWidth={2} color="#4f46e5" />
-        </div>
-      </div>
-
-      <Title level={2} className="step-title">
+    <div className="step-content welcome-step" style={{ maxWidth: 640 }}>
+      <Title level={2} className="step-title" style={{ textAlign: 'center', marginBottom: 12 }}>
         Welcome to RetailOps, {fullName}
       </Title>
-
-      <Text className="step-description">
-        Let's set up your account in just a few steps. This will take about 2-3 minutes.
+      <Text className="step-description" style={{ display: 'block', textAlign: 'center', marginBottom: 32, fontSize: 15, color: '#475569' }}>
+        Let's configure your account access and preferences in a few simple steps. This process secures your credentials and verifies platform policies.
       </Text>
 
-      <div className="welcome-features">
-        {[
-          {
-            icon: Lock,
-            title: 'Secure your account',
-            desc: 'Create a strong password to protect your data'
-          },
-          {
-            icon: Shield,
-            title: 'Review security guidelines',
-            desc: 'Learn how to keep your account safe'
-          },
-          {
-            icon: FileCheck,
-            title: 'Accept our policies',
-            desc: 'Understand terms and your responsibilities'
-          }
-        ].map((feature, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 + 0.2 }}
-            className="welcome-feature-item"
-          >
-            <div className="feature-icon">
-              <feature.icon size={18} strokeWidth={2} color="#4f46e5" />
-            </div>
-            <div className="feature-text">
-              <div className="feature-title">{feature.title}</div>
-              <div className="feature-desc">{feature.desc}</div>
-            </div>
-            <ChevronRight size={16} color="#94a3b8" />
-          </motion.div>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
+          <div style={{ background: '#e0e7ff', padding: 8, borderRadius: 8, color: '#4f46e5', display: 'flex' }}>
+            <Lock size={18} />
+          </div>
+          <div>
+            <Text strong style={{ fontSize: 14 }}>Secure Credentials</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12.5 }}>Update your temporary password to a secure permanent credential.</Text>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
+          <div style={{ background: '#ecfeff', padding: 8, borderRadius: 8, color: '#06b6d4', display: 'flex' }}>
+            <Shield size={18} />
+          </div>
+          <div>
+            <Text strong style={{ fontSize: 14 }}>Security Guidelines</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12.5 }}>Review standard operating safety tips to avoid account compromise.</Text>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
+          <div style={{ background: '#f0fdf4', padding: 8, borderRadius: 8, color: '#10b981', display: 'flex' }}>
+            <FileCheck size={18} />
+          </div>
+          <div>
+            <Text strong style={{ fontSize: 14 }}>Platform Policies</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12.5 }}>Accept service terms, data privacy practices, and user compliance requirements.</Text>
+          </div>
+        </div>
       </div>
     </div>
   );
 
   const renderSecurity = () => (
-    <div className="step-content security-step">
-      <div className="step-header">
-        <div className="step-icon-bg security-icon-bg">
-          <Shield size={28} strokeWidth={2} color="#4f46e5" />
-        </div>
-        <Title level={3} className="step-title">Security Guidelines</Title>
-        <Text className="step-description">
-          Follow these best practices to keep your account secure
-        </Text>
-      </div>
+    <div className="step-content security-step" style={{ maxWidth: 640 }}>
+      <Title level={2} className="step-title" style={{ textAlign: 'center', marginBottom: 12 }}>
+        Security Guidelines
+      </Title>
+      <Text className="step-description" style={{ display: 'block', textAlign: 'center', marginBottom: 32, fontSize: 15, color: '#475569' }}>
+        Please review these guidelines to ensure the safety and integrity of your operations.
+      </Text>
 
-      <div className="security-grid">
+      <Row gutter={[16, 16]}>
         {[
           {
-            icon: Key,
             title: 'Strong Password',
-            desc: 'Use at least 12 characters with mixed case, numbers, and symbols',
+            desc: 'Create passwords that are difficult to guess. Avoid reusing passwords from other external sites.',
             color: '#4f46e5',
             bg: '#eef2ff'
           },
           {
-            icon: Smartphone,
             title: 'Trusted Devices',
-            desc: 'Only mark personal devices you control as trusted',
+            desc: 'Only mark personal or company-issued computers as trusted. Never trust public terminals.',
             color: '#06b6d4',
             bg: '#ecfeff'
           },
           {
-            icon: AlertTriangle,
             title: 'Protect OTPs',
-            desc: 'Our team will never ask for verification codes',
+            desc: 'One-time passwords are strictly confidential. No RetailOps representative will ever request your OTP.',
             color: '#f59e0b',
             bg: '#fffbeb'
           },
           {
-            icon: UserCheck,
             title: 'Account Privacy',
-            desc: 'Never share your credentials with anyone',
+            desc: 'Do not share accounts. Sharing credentials violates security protocols and dilutes activity audits.',
             color: '#10b981',
             bg: '#f0fdf4'
           }
         ].map((tip, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-            className="security-tip-card"
-          >
-            <div className="tip-icon" style={{ background: tip.bg }}>
-              <tip.icon size={20} strokeWidth={2} color={tip.color} />
+          <Col span={12} key={i}>
+            <div style={{ height: '100%', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: 18 }}>
+              <Text strong style={{ display: 'block', fontSize: 14, marginBottom: 8, color: '#0f172a' }}>{tip.title}</Text>
+              <Text type="secondary" style={{ fontSize: 12.5, lineHeight: '1.5' }}>{tip.desc}</Text>
             </div>
-            <div className="tip-content">
-              <div className="tip-title">{tip.title}</div>
-              <div className="tip-desc">{tip.desc}</div>
-            </div>
-          </motion.div>
+          </Col>
         ))}
-      </div>
+      </Row>
     </div>
   );
 
   const renderPassword = () => (
-    <div className="step-content password-step">
-      <div className="step-header">
-        <div className="step-icon-bg password-icon-bg">
-          <Lock size={28} strokeWidth={2} color="#4f46e5" />
-        </div>
-        <Title level={3} className="step-title">Create Your Password</Title>
-        <Text className="step-description">
-          Set a strong password to secure your account
-        </Text>
-      </div>
+    <div className="step-content password-step" style={{ maxWidth: 540 }}>
+      <Title level={2} className="step-title" style={{ textAlign: 'center', marginBottom: 12 }}>
+        Create Your Password
+      </Title>
+      <Text className="step-description" style={{ display: 'block', textAlign: 'center', marginBottom: 24, fontSize: 15, color: '#475569' }}>
+        Please update your temporary password to continue securing your workspace.
+      </Text>
 
       {error && (
         <Alert
@@ -315,98 +287,66 @@ const SetupWizardPage = () => {
           showIcon
           closable
           onClose={() => setError('')}
-          style={{ marginBottom: 16, borderRadius: 10 }}
+          style={{ marginBottom: 16, borderRadius: 8 }}
         />
       )}
 
-      <div className="form-container">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: 24 }}>
         {/* Current Password */}
-        <div className="form-group">
-          <label className="form-label">Current Temporary Password</label>
+        <div>
+          <Text strong style={{ fontSize: 13, color: '#334155', display: 'block', marginBottom: 6 }}>Current Temporary Password</Text>
           <Input.Password
             value={passwordForm.current}
             onChange={e => setPasswordForm({ ...passwordForm, current: e.target.value })}
-            placeholder="Enter your temporary password"
+            placeholder="Enter temporary password"
             size="large"
-            prefix={<Lock size={16} color="#94a3b8" />}
-            iconRender={visible => visible ? <Eye size={16} /> : <EyeOff size={16} />}
-            className="form-input"
+            style={{ borderRadius: 8 }}
           />
         </div>
 
         {/* New Password */}
-        <div className="form-group">
-          <label className="form-label">New Password</label>
+        <div>
+          <Text strong style={{ fontSize: 13, color: '#334155', display: 'block', marginBottom: 6 }}>New Password</Text>
           <Input.Password
             value={passwordForm.newPw}
             onChange={e => setPasswordForm({ ...passwordForm, newPw: e.target.value })}
-            placeholder="Create a strong password"
+            placeholder="Create strong password"
             size="large"
-            prefix={<Lock size={16} color="#94a3b8" />}
-            iconRender={visible => visible ? <Eye size={16} /> : <EyeOff size={16} />}
-            className="form-input"
+            style={{ borderRadius: 8 }}
           />
-
           {passwordForm.newPw && (
-            <div className="strength-meter">
-              <div className="strength-header">
-                <Text style={{ fontSize: 12, color: '#64748b' }}>
-                  Password Strength
-                </Text>
-                <Text style={{ fontSize: 12, fontWeight: 600, color: pwStrength.color }}>
-                  {pwStrength.label}
-                </Text>
+            <div style={{ marginTop: 8, background: '#f8fafc', padding: 8, borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, color: '#64748b' }}>Strength:</Text>
+                <Text style={{ fontSize: 11, fontWeight: 600, color: pwStrength.color }}>{pwStrength.label}</Text>
               </div>
-              <Progress
-                percent={pwStrength.percent}
-                strokeColor={pwStrength.color}
-                showInfo={false}
-                size="small"
-                strokeWidth={6}
-              />
+              <Progress percent={pwStrength.percent} strokeColor={pwStrength.color} showInfo={false} size="small" strokeWidth={4} />
             </div>
           )}
         </div>
 
         {/* Confirm Password */}
-        <div className="form-group">
-          <label className="form-label">Confirm Password</label>
+        <div>
+          <Text strong style={{ fontSize: 13, color: '#334155', display: 'block', marginBottom: 6 }}>Confirm Password</Text>
           <Input.Password
             value={passwordForm.confirm}
             onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-            placeholder="Re-enter your password"
+            placeholder="Re-enter new password"
             size="large"
-            prefix={<Lock size={16} color="#94a3b8" />}
-            iconRender={visible => visible ? <Eye size={16} /> : <EyeOff size={16} />}
-            className="form-input"
+            style={{ borderRadius: 8 }}
           />
           {passwordForm.confirm && passwordForm.newPw !== passwordForm.confirm && (
-            <div className="form-error">
-              <AlertTriangle size={12} />
-              <span>Passwords do not match</span>
-            </div>
+            <Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>Passwords do not match</Text>
           )}
         </div>
 
         {/* Password Requirements */}
-        <div className="requirements-box">
-          <div className="requirements-header">
-            <Info size={14} color="#64748b" />
-            <Text style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
-              Password Requirements
-            </Text>
-          </div>
-          <div className="requirements-list">
+        <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+          <Text strong style={{ fontSize: 12, color: '#475569', display: 'block', marginBottom: 8 }}>Password Requirements</Text>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
             {pwRequirements.map((req, i) => (
-              <div
-                key={i}
-                className={`requirement-item ${req.met ? 'met' : ''}`}
-              >
-                {req.met ? (
-                  <Check size={12} color="#10b981" strokeWidth={3} />
-                ) : (
-                  <div className="requirement-dot" />
-                )}
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: req.met ? '#10b981' : '#64748b' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: req.met ? '#10b981' : '#cbd5e1' }} />
                 <span>{req.text}</span>
               </div>
             ))}
@@ -416,146 +356,165 @@ const SetupWizardPage = () => {
     </div>
   );
 
-  const renderPolicies = () => (
-    <div className="step-content policies-step">
-      <div className="step-header">
-        <div className="step-icon-bg policies-icon-bg">
-          <FileCheck size={28} strokeWidth={2} color="#4f46e5" />
-        </div>
-        <Title level={3} className="step-title">Terms & Policies</Title>
-        <Text className="step-description">
-          Please review and accept our policies to continue
+  const renderPolicies = () => {
+    const policyTexts = {
+      tos: `These Terms of Service governs your use of the RetailOps platform and tools.
+
+1. Authorized Use: You agree to use the platform only for legitimate retail and inventory operations. Unauthorized actions, data scrapers running outside authorized constraints, or accessing another user's account without consent is strictly prohibited.
+2. Credentials & Security: You are fully responsible for maintaining the confidentiality of your login passwords, OTP verification codes, and sessions.
+3. System Integrity: Any deliberate attempt to disrupt server stability, scan for vulnerabilities without permission, or overload endpoints (DDoS) will result in immediate termination of access.
+4. Ownership: All processed data and report outputs generated belong to the respective store operators, governed by Amazon Developer Terms.`,
+      
+      privacy: `Your data protection and privacy is key. Please read the summary of our privacy practices:
+
+1. Data Integration: RetailOps syncs marketplace inventory metrics, ASIN details, sales dashboards, and log audits to facilitate core reporting.
+2. Data Sharing: We strictly do not share, sell, or rent your Amazon Seller accounts or retail metrics to third-party advertising or analytics networks.
+3. Security Measures: User passwords, access keys, and session tokens are encrypted at-rest using AES-256 and in-transit via TLS/HTTPS protocols.
+4. Access Logs: System log monitoring records logins, permissions updates, and task actions to ensure audit compliance.`,
+      
+      responsibilities: `As an authorized RetailOps system user, you assume the following responsibilities:
+
+1. Alert Response: Take prompt action or assign team supervisors on critical ASIN/inventory warnings.
+2. Device Integrity: Ensure devices used to access the application are clean, free of spyware/malware, and not running on unencrypted public Wi-Fi networks.
+3. API Access Compliance: Respect API usage limits and scheduling guidelines. Do not execute heavy tasks repeatedly so as to throttle store operations.`
+    };
+
+    return (
+      <div className="step-content policies-step" style={{ maxWidth: 640 }}>
+        <Title level={2} className="step-title" style={{ textAlign: 'center', marginBottom: 12 }}>
+          Terms & Policies
+        </Title>
+        <Text className="step-description" style={{ display: 'block', textAlign: 'center', marginBottom: 24, fontSize: 15, color: '#475569' }}>
+          Please read and accept the terms of service, privacy practices, and compliance guidelines to complete your registration.
         </Text>
-      </div>
 
-      {error && (
-        <Alert
-          message={error}
-          type="error"
-          showIcon
-          closable
-          onClose={() => setError('')}
-          style={{ marginBottom: 16, borderRadius: 10 }}
-        />
-      )}
+        {error && (
+          <Alert
+            message={error}
+            type="error"
+            showIcon
+            closable
+            onClose={() => setError('')}
+            style={{ marginBottom: 16, borderRadius: 8 }}
+          />
+        )}
 
-      <div className="policies-list">
-        {[
-          {
-            key: 'tos',
-            title: 'Terms of Service',
-            desc: 'I have read and agree to the Terms of Service',
-            link: '/terms'
-          },
-          {
-            key: 'privacy',
-            title: 'Privacy Policy',
-            desc: 'I accept the Privacy Policy and data handling practices',
-            link: '/privacy'
-          },
-          {
-            key: 'responsibilities',
-            title: 'User Responsibilities',
-            desc: 'I understand my responsibilities as an authorized user',
-            link: null
-          }
-        ].map((policy, i) => (
-          <motion.div
-            key={policy.key}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className={`policy-card ${policies[policy.key] ? 'accepted' : ''}`}
-            onClick={() => setPolicies({ ...policies, [policy.key]: !policies[policy.key] })}
-          >
-            <div className="policy-checkbox">
-              {policies[policy.key] ? (
-                <div className="check-icon">
-                  <Check size={14} color="white" strokeWidth={3} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Policy Collapse Accordion */}
+          <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+            <div style={{ padding: '12px 16px', background: '#fafafa', borderBottom: '1px solid #d9d9d9' }}>
+              <Text strong style={{ fontSize: 13, color: '#262626' }}>Document Viewer</Text>
+            </div>
+            
+            <div style={{ maxHeight: 220, overflowY: 'auto', padding: 16 }}>
+              <div style={{ marginBottom: 20 }}>
+                <Text strong style={{ display: 'block', fontSize: 14, color: '#0f172a', marginBottom: 6 }}>1. Terms of Service</Text>
+                <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap', background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                  {policyTexts.tos}
                 </div>
-              ) : (
-                <div className="empty-check" />
-              )}
-            </div>
-            <div className="policy-content">
-              <div className="policy-title">{policy.title}</div>
-              <div className="policy-desc">{policy.desc}</div>
-              {policy.link && (
-                <a
-                  href={policy.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="policy-link"
-                >
-                  Read full document
-                  <ExternalLink size={11} />
-                </a>
-              )}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
+              </div>
 
-  const renderComplete = () => (
-    <div className="step-content complete-step">
-      <motion.div
-        initial={{ scale: 0, rotate: -180 }}
-        animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="complete-icon-wrapper"
-      >
-        <div className="complete-icon-bg">
-          <Check size={48} strokeWidth={3} color="white" />
+              <div style={{ marginBottom: 20 }}>
+                <Text strong style={{ display: 'block', fontSize: 14, color: '#0f172a', marginBottom: 6 }}>2. Privacy Policy</Text>
+                <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap', background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                  {policyTexts.privacy}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <Text strong style={{ display: 'block', fontSize: 14, color: '#0f172a', marginBottom: 6 }}>3. User Compliance & Responsibilities</Text>
+                <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap', background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                  {policyTexts.responsibilities}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Individual accept Checkboxes */}
+          <div style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 8, padding: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }} onClick={() => setPolicies({ ...policies, tos: !policies.tos })}>
+                <input type="checkbox" checked={policies.tos} readOnly style={{ marginTop: 3, cursor: 'pointer' }} />
+                <div>
+                  <Text strong style={{ fontSize: 13, color: '#0f172a' }}>I agree to the Terms of Service</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 11 }}>Read section 1 in the document viewer above.</Text>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }} onClick={() => setPolicies({ ...policies, privacy: !policies.privacy })}>
+                <input type="checkbox" checked={policies.privacy} readOnly style={{ marginTop: 3, cursor: 'pointer' }} />
+                <div>
+                  <Text strong style={{ fontSize: 13, color: '#0f172a' }}>I accept the Privacy Policy</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 11 }}>Read section 2 in the document viewer above.</Text>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }} onClick={() => setPolicies({ ...policies, responsibilities: !policies.responsibilities })}>
+                <input type="checkbox" checked={policies.responsibilities} readOnly style={{ marginTop: 3, cursor: 'pointer' }} />
+                <div>
+                  <Text strong style={{ fontSize: 13, color: '#0f172a' }}>I understand and agree to User Responsibilities</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 11 }}>Read section 3 in the document viewer above.</Text>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <motion.div
-          className="sparkle-1"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          <Sparkles size={20} color="#fbbf24" />
-        </motion.div>
-        <motion.div
-          className="sparkle-2"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-        >
-          <Sparkles size={16} color="#a78bfa" />
-        </motion.div>
-      </motion.div>
-
-      <Title level={2} className="step-title">
-        You're All Set, {fullName}!
-      </Title>
-
-      <Text className="step-description">
-        Your account has been successfully configured. You can now access all features of RetailOps.
-      </Text>
-
-      <div className="completion-stats">
-        {[
-          { icon: Lock, label: 'Password Created' },
-          { icon: Shield, label: 'Security Set' },
-          { icon: FileCheck, label: 'Policies Accepted' }
-        ].map((item, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 + i * 0.1 }}
-            className="stat-item"
-          >
-            <div className="stat-icon">
-              <item.icon size={16} color="#10b981" />
-            </div>
-            <span>{item.label}</span>
-          </motion.div>
-        ))}
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderComplete = () => {
+    const items = [
+      { key: '1', label: 'User Name', children: fullName },
+      { key: '2', label: 'Role', children: user?.role?.displayName || user?.role?.name || 'User' },
+      { key: '3', label: 'Security State', children: 'Password Set & Verified' },
+      { key: '4', label: 'Policies Accepted', children: 'Yes' }
+    ];
+
+    return (
+      <div className="step-content complete-step" style={{ maxWidth: 640, textAlign: 'center' }}>
+        <div style={{ padding: '24px 0' }}>
+          <div style={{ 
+            width: 72, 
+            height: 72, 
+            borderRadius: '50%', 
+            background: '#ecfdf5', 
+            border: '2px solid #10b981', 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            marginBottom: 20 
+          }}>
+            <CheckCircle2 size={36} color="#10b981" />
+          </div>
+          
+          <Title level={2} style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px' }}>
+            Account Setup Completed!
+          </Title>
+          <Text type="secondary" style={{ fontSize: 14, display: 'block', marginBottom: 24 }}>
+            Congratulations, your credentials and privacy agreements have been successfully updated.
+          </Text>
+
+          <div style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: 20, textAlign: 'left', marginBottom: 16 }}>
+            <Title level={5} style={{ margin: '0 0 12px 0', fontSize: 11, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5 }}>
+              Setup Summary
+            </Title>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {items.map(item => (
+                <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                  <Text type="secondary">{item.label}</Text>
+                  <Text strong>{item.children}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderCurrentStep = () => {
     switch (steps[currentStep].id) {
