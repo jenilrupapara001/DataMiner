@@ -25,7 +25,9 @@ exports.getUsers = async (req, res) => {
 
     // RBAC: Non-admin users can only see their subordinates
     const currentUserRole = req.user?.role?.name || req.user?.role?.Name || req.user?.role;
-    const isAdmin = currentUserRole === 'admin';
+    const userPermissions = req.user?.permissions || [];
+    const hasUserManagePerm = userPermissions.includes('users_view') || userPermissions.includes('users_manage');
+    const isAdmin = currentUserRole === 'admin' || currentUserRole === 'operational_manager' || hasUserManagePerm;
 
     if (!isAdmin) {
       const userId = (req.user?.Id || req.user?.id || req.user?._id || '').toString();
