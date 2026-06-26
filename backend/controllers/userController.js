@@ -744,7 +744,7 @@ exports.getSellersForAssignment = async (req, res) => {
       FROM UserSellers US
       JOIN Users U ON US.UserId = U.Id
       JOIN Roles R ON U.RoleId = R.Id
-      WHERE US.SellerId IN (${sellerIdPlaceholders}) AND R.Name IN ('admin', 'manager', 'Brand Manager')
+      WHERE US.SellerId IN (${sellerIdPlaceholders}) AND R.Name IN ('admin', 'super_admin', 'developer', 'operational_manager', 'brand_manager')
     `);
 
     const managerMap = {};

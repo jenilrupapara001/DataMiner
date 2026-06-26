@@ -76,7 +76,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
     if (!users) return [];
     return users.filter(u => {
       const role = (u?.role?.name || u?.role || '').toLowerCase();
-      return ['superadmin', 'admin', 'manager'].includes(role);
+      return ['super_admin', 'admin', 'developer', 'operational_manager', 'manager'].includes(role);
     }).map(u => ({
       value: u._id || u.id,
       label: formatUserName(u),

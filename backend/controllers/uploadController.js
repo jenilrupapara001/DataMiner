@@ -662,7 +662,7 @@ exports.uploadGmsData = async (req, res) => {
     if (!reportDate) throw new Error('Date is required');
 
     const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
     let allowedAsins = null;
 
     if (!isGlobalUser) {
@@ -812,7 +812,7 @@ exports.uploadGmsData = async (req, res) => {
 exports.getGmsData = async (req, res) => {
   try {
     const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
     
     const pool = await getPool();
     const request = pool.request();

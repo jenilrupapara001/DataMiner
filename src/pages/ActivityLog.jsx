@@ -1,30 +1,116 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../services/db';
 import api from '../services/api';
 import { useSocket } from '../contexts/SocketContext';
 import {
-    Card, Table, Input, Select, Badge, Avatar, Space, Row, Col, Statistic, DatePicker,
-    Typography, Button, Tag, Tooltip, Modal, Empty, Descriptions, message, Layout
+    Table, Input, Select, Badge, Space, DatePicker,
+    Typography, Button, Tag, Tooltip, Modal, Descriptions, Segmented
 } from 'antd';
 import {
-    Clock, Search, ArrowRight, CheckCircle, Calendar, Cpu, Database, Play,
-    PlusCircle, Trash2, Edit3, ClipboardList, Activity, RefreshCw, ChevronRight,
-    Info, Eye, Filter, User, HardDrive, Box, Shield, LogIn, LogOut, XCircle, AlertTriangle, Zap, Mail
+    Clock, Search, RefreshCw, Eye, User, Shield, Activity,
+    Cpu, Zap, Trash2, Edit3, LogIn, LogOut, XCircle, AlertTriangle,
+    PlusCircle, ClipboardList, Filter, Mail, Target, Box, Info, Database
 } from 'lucide-react';
-import { PageLoader } from '@/components/application/loading-indicator/PageLoader';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
+const IMPORTANT_TYPES = [
+    'CREATE', 'UPDATE', 'DELETE', 'STATUS_CHANGE',
+    'AUTH_SUCCESS', 'AUTH_FAILURE', 'AUTH_LOGOUT',
+    'SYSTEM_ERROR', 'IMPORT', 'LIVE_SYNC', 'LIVE_SYNC_TEST',
+    'AUTOMATION_TASK', 'TARGET_UPDATE', 'TARGET_IMPORT', 'TARGET_DELETE'
+];
+
+const TYPE_STYLES = {
+    CREATE: { icon: <PlusCircle size={13} />, color: '#10b981', label: 'Created' },
+    UPDATE: { icon: <Edit3 size={13} />, color: '#3b82f6', label: 'Updated' },
+    DELETE: { icon: <Trash2 size={13} />, color: '#ef4444', label: 'Deleted' },
+    STATUS_CHANGE: { icon: <Activity size={13} />, color: '#f59e0b', label: 'Status Change' },
+    AUTH_SUCCESS: { icon: <LogIn size={13} />, color: '#10b981', label: 'Login' },
+    AUTH_FAILURE: { icon: <XCircle size={13} />, color: '#ef4444', label: 'Login Failed' },
+    AUTH_LOGOUT: { icon: <LogOut size={13} />, color: '#64748b', label: 'Logout' },
+    SYSTEM_ERROR: { icon: <AlertTriangle size={13} />, color: '#dc2626', label: 'Error' },
+    IMPORT: { icon: <ClipboardList size={13} />, color: '#06b6d4', label: 'Import' },
+    LIVE_SYNC: { icon: <Zap size={13} />, color: '#7c3aed', label: 'Live Sync' },
+    LIVE_SYNC_TEST: { icon: <Zap size={13} />, color: '#7c3aed', label: 'Sync Test' },
+    AUTOMATION_TASK: { icon: <Cpu size={13} />, color: '#6366f1', label: 'Automation' },
+    TARGET_UPDATE: { icon: <Edit3 size={13} />, color: '#0284c7', label: 'Target Update' },
+    TARGET_IMPORT: { icon: <ClipboardList size={13} />, color: '#0d9488', label: 'Target Import' },
+    TARGET_DELETE: { icon: <Trash2 size={13} />, color: '#e11d48', label: 'Target Delete' },
+};
+
+const ENTITY_STYLES = {
+    OBJECTIVE: { color: 'blue', icon: <Target size={11} /> },
+    ACTION: { color: 'orange', icon: <PlusCircle size={11} /> },
+    USER: { color: 'purple', icon: <User size={11} /> },
+    SELLER: { color: 'green', icon: <Box size={11} /> },
+    ASIN: { color: 'geekblue', icon: <Box size={11} /> },
+    SYSTEM: { color: 'default', icon: <Database size={11} /> },
+};
+
+function formatTime(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function relativeTime(dateStr) {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+    return formatTime(dateStr);
+}
+
+function renderMetadata(metadata) {
+    if (!metadata) return <Text type="secondary" style={{ fontSize: 12 }}>No additional data.</Text>;
+    let data = metadata;
+    if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { return <pre style={{ margin: 0, padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 11 }}>{data}</pre>; }
+    }
+    if (typeof data !== 'object') return <pre style={{ margin: 0, padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 11 }}>{String(data)}</pre>;
+    return (
+        <Descriptions bordered size="small" column={1}>
+            {Object.entries(data).map(([key, value]) => (
+                <Descriptions.Item key={key} label={key.charAt(0).toUpperCase() + key.slice(1)}>
+                    {typeof value === 'object' ? (
+                        <pre style={{ margin: 0, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(value, null, 2)}</pre>
+                    ) : String(value)}
+                </Descriptions.Item>
+            ))}
+        </Descriptions>
+    );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
 const ActivityLog = () => {
+    const socket = useSocket();
+
+    // Tab state
+    const [activeTab, setActiveTab] = useState('activity');
+
+    // Activity logs state (server-side)
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [total, setTotal] = useState(0);
+
+    // Filters
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('ALL');
     const [dateRange, setDateRange] = useState(null);
+    const [showAllEvents, setShowAllEvents] = useState(false);
+
+    // Detail modal
     const [selectedLog, setSelectedLog] = useState(null);
-    const [detailModalVisible, setDetailModalVisible] = useState(false);
-    const [activeTab, setActiveTab] = useState('activity');
+    const [detailOpen, setDetailOpen] = useState(false);
+
+    // OTP state
     const [otpLogs, setOtpLogs] = useState([]);
     const [otpLoading, setOtpLoading] = useState(false);
     const [otpStats, setOtpStats] = useState({});
@@ -32,758 +118,355 @@ const ActivityLog = () => {
     const [otpTotal, setOtpTotal] = useState(0);
     const [otpActionFilter, setOtpActionFilter] = useState('');
     const [otpEmailFilter, setOtpEmailFilter] = useState('');
-    const socket = useSocket();
 
-    useEffect(() => {
-        loadLogs();
-    }, []);
-
-    // Real-time socket sync
+    // Real-time socket
     useEffect(() => {
         if (!socket) return;
-
-        const handleNewSystemLog = (data) => {
+        const handler = (data) => {
             if (!data) return;
-            const normalized = {
-                ...data,
-                _id: data._id || data.id || data.Id,
-                createdAt: data.createdAt || data.CreatedAt,
-                type: data.type || data.Type || '',
-                entityType: data.entityType || data.EntityType || '',
-                entityTitle: data.entityTitle || data.EntityTitle || '',
-                description: data.description || data.Description || '',
-                metadata: data.metadata || data.Metadata || null
-            };
-            setLogs(prev => [normalized, ...prev]);
-
-            message.info({
-                content: `Activity Stream: ${normalized.entityTitle || 'System Activity'} - ${normalized.description}`,
-                icon: <Activity size={16} style={{ color: '#4f46e5' }} />,
-                duration: 3
-            });
+            setLogs(prev => [{ ...data, _id: data.Id, createdAt: data.CreatedAt }, ...prev]);
         };
-
-        socket.on('new_system_log', handleNewSystemLog);
-        return () => socket.off('new_system_log', handleNewSystemLog);
+        socket.on('new_system_log', handler);
+        return () => socket.off('new_system_log', handler);
     }, [socket]);
 
-    const loadLogs = async () => {
+    // Fetch logs with server-side filtering
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await db.getSystemLogs();
-            const normalized = (data || []).map(log => ({
-                ...log,
-                _id: log._id || log.id || log.Id,
-                createdAt: log.createdAt || log.CreatedAt,
-                type: log.type || log.Type || '',
-                entityType: log.entityType || log.EntityType || '',
-                entityTitle: log.entityTitle || log.EntityTitle || '',
-                description: log.description || log.Description || '',
-                metadata: log.metadata || log.Metadata || null
-            }));
-            setLogs(normalized);
-        } catch (error) {
-            console.error('Failed to load logs', error);
+            const params = {
+                page, limit: pageSize,
+                hideNoise: showAllEvents ? 'false' : 'true'
+            };
+            if (filterType !== 'ALL') params.type = filterType;
+            if (searchQuery) params.search = searchQuery;
+            if (dateRange?.[0]) params.startDate = dateRange[0].toISOString();
+            if (dateRange?.[1]) params.endDate = dateRange[1].toISOString();
+
+            const res = await db.getSystemLogs(params);
+            if (res?.success) {
+                setLogs(res.data || []);
+                setTotal(res.pagination?.total || 0);
+            }
+        } catch (e) {
+            console.error('Failed to load logs:', e);
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, pageSize, filterType, searchQuery, dateRange, showAllEvents]);
 
-    const loadOtpLogs = async (page = 1) => {
+    useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+    // OTP logs
+    const fetchOtpLogs = useCallback(async (p = 1) => {
         setOtpLoading(true);
         try {
-            const params = { page, limit: 20 };
+            const params = { page: p, limit: 20 };
             if (otpActionFilter) params.action = otpActionFilter;
             if (otpEmailFilter) params.email = otpEmailFilter;
             const res = await api.securityApi.getOtpLogs(params);
-            if (res.success) {
+            if (res?.success) {
                 setOtpLogs(res.data || []);
                 setOtpTotal(res.total || 0);
                 setOtpStats(res.stats || {});
-                setOtpPage(page);
+                setOtpPage(p);
             }
-        } catch (error) {
-            console.error('Failed to load OTP logs', error);
-        } finally {
-            setOtpLoading(false);
-        }
+        } catch (e) { console.error('OTP logs error:', e); }
+        finally { setOtpLoading(false); }
+    }, [otpActionFilter, otpEmailFilter]);
+
+    useEffect(() => { if (activeTab === 'otp') fetchOtpLogs(1); }, [activeTab, fetchOtpLogs]);
+
+    const clearFilters = () => {
+        setSearchQuery('');
+        setFilterType('ALL');
+        setDateRange(null);
+        setPage(1);
     };
+    const hasFilters = searchQuery || filterType !== 'ALL' || dateRange;
 
-    useEffect(() => { if (activeTab === 'otp') loadOtpLogs(1); }, [activeTab, otpActionFilter, otpEmailFilter]);
-
-    const getTypeStyle = (type = '') => {
-        const t = type || '';
-        switch (t) {
-            case 'CREATE':
-                return { icon: <PlusCircle size={14} />, color: '#10b981', label: 'Creation' };
-            case 'UPDATE':
-                return { icon: <Edit3 size={14} />, color: '#3b82f6', label: 'Update' };
-            case 'DELETE':
-                return { icon: <Trash2 size={14} />, color: '#ef4444', label: 'Deletion' };
-            case 'STATUS_CHANGE':
-                return { icon: <Activity size={14} />, color: '#f59e0b', label: 'Status' };
-            case 'AUTH_SUCCESS':
-                return { icon: <LogIn size={14} />, color: '#10b981', label: 'Login Success' };
-            case 'AUTH_FAILURE':
-                return { icon: <XCircle size={14} />, color: '#ef4444', label: 'Login Failure' };
-            case 'AUTH_LOGOUT':
-                return { icon: <LogOut size={14} />, color: '#64748b', label: 'Logout' };
-            case 'SYSTEM_ERROR':
-                return { icon: <AlertTriangle size={14} />, color: '#dc2626', label: 'Error' };
-            case 'IMPORT':
-                return { icon: <ClipboardList size={14} />, color: '#06b6d4', label: 'Import' };
-            case 'LIVE_SYNC':
-                return { icon: <Zap size={14} />, color: '#7c3aed', label: 'Live Sync' };
-            case 'LIVE_SYNC_TEST':
-                return { icon: <Zap size={14} />, color: '#7c3aed', label: 'Live Sync Test' };
-            case 'AUTOMATION_TASK':
-                return { icon: <Cpu size={14} />, color: '#6366f1', label: 'Automation Task' };
-            case 'TARGET_UPDATE':
-                return { icon: <Edit3 size={14} />, color: '#0284c7', label: 'Target Update' };
-            case 'TARGET_IMPORT':
-                return { icon: <ClipboardList size={14} />, color: '#0d9488', label: 'Target Import' };
-            case 'TARGET_DELETE':
-                return { icon: <Trash2 size={14} />, color: '#e11d48', label: 'Target Delete' };
-            default:
-                return { icon: <Info size={14} />, color: '#64748b', label: t.replace('_', ' ') || 'System' };
-        }
-    };
-
-    const getEntityInfo = (type = '') => {
-        const styles = {
-            OBJECTIVE: { color: 'blue', icon: <Shield size={12} /> },
-            KR: { color: 'cyan', icon: <Activity size={12} /> },
-            ACTION: { color: 'orange', icon: <PlusCircle size={12} /> },
-            SYSTEM: { color: 'default', icon: <HardDrive size={12} /> },
-            USER: { color: 'purple', icon: <User size={12} /> },
-            SERVER: { color: 'volcano', icon: <HardDrive size={12} /> },
-            SELLER: { color: 'green', icon: <Box size={12} /> },
-            ASIN: { color: 'geekblue', icon: <Box size={12} /> },
-            MONTHLY_DATA: { color: 'magenta', icon: <ClipboardList size={12} /> }
-        };
-        return styles[type] || { color: 'default', icon: <Info size={12} /> };
-    };
-
-    const formatTime = (dateString) => {
-        if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        return date.toLocaleString(undefined, {
-            month: 'short', day: 'numeric', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-    };
-
-    // Calculate metrics summaries
-    const metrics = useMemo(() => {
-        const total = logs.length;
-        const automations = logs.filter(l => l.type === 'AUTOMATION_TASK').length;
-        const liveSyncs = logs.filter(l => l.type === 'LIVE_SYNC').length;
-        const security = logs.filter(l => l.type?.startsWith('AUTH_')).length;
-        const operations = logs.filter(l => ['CREATE', 'UPDATE', 'DELETE', 'TARGET_UPDATE', 'TARGET_DELETE', 'TARGET_IMPORT'].includes(l.type)).length;
-        return { total, automations, liveSyncs, security, operations };
-    }, [logs]);
-
-    const filteredLogs = useMemo(() => {
-        return logs.filter(log => {
-            const matchesSearch = searchQuery
-                ? (log.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (log.entityTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (log.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-                : true;
-            const matchesType = filterType === 'ALL' || log.type === filterType;
-
-            const matchesDate = !dateRange || !dateRange[0] || !dateRange[1]
-                ? true
-                : (() => {
-                    const logTime = new Date(log.createdAt).getTime();
-                    const start = new Date(dateRange[0].toString()).setHours(0, 0, 0, 0);
-                    const end = new Date(dateRange[1].toString()).setHours(23, 59, 59, 999);
-                    return logTime >= start && logTime <= end;
-                })();
-
-            return matchesSearch && matchesType && matchesDate;
-        });
-    }, [logs, searchQuery, filterType, dateRange]);
-
-    const showDetails = (log) => {
-        setSelectedLog(log);
-        setDetailModalVisible(true);
-    };
-
-    const renderMetadata = (metadata) => {
-        if (!metadata) return <Text type="secondary">No technical data available.</Text>;
-
-        let data = metadata;
-        if (typeof metadata === 'string') {
-            try { data = JSON.parse(metadata); } catch (e) { return <pre style={{ margin: 0, padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>{metadata}</pre>; }
-        }
-
-        if (typeof data !== 'object') return <pre style={{ margin: 0, padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>{JSON.stringify(data)}</pre>;
-
-        return (
-            <Descriptions bordered size="small" column={1} className="metadata-descriptions">
-                {Object.entries(data).map(([key, value]) => (
-                    <Descriptions.Item label={key.charAt(0).toUpperCase() + key.slice(1)} key={key}>
-                        {typeof value === 'object' ? (
-                            <pre style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                                {JSON.stringify(value, null, 2)}
-                            </pre>
-                        ) : (
-                            String(value)
-                        )}
-                    </Descriptions.Item>
-                ))}
-            </Descriptions>
-        );
-    };
-
+    // ── Activity table columns ────────────────────────────────────────────
     const columns = [
         {
-            title: 'Timestamp',
-            dataIndex: 'createdAt',
-            key: 'createdAt',
-            width: 170,
-            sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
-            render: (val) => (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Space size={4} style={{ color: '#1e293b', fontWeight: 500, fontSize: '12px' }}>
-                        <Clock size={12} style={{ color: '#64748b' }} />
-                        <span>{new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </Space>
-                    <Text type="secondary" style={{ fontSize: '10px', marginLeft: '16px' }}>
-                        {new Date(val).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </Text>
-                </div>
-            )
-        },
-        {
             title: 'Event',
-            dataIndex: 'type',
-            key: 'type',
-            width: 160,
-            render: (type) => {
-                const conf = getTypeStyle(type);
+            key: 'event',
+            width: 150,
+            render: (_, r) => {
+                const s = TYPE_STYLES[r.type] || { icon: <Info size={13} />, color: '#64748b', label: r.type || 'Event' };
                 return (
-                    <Tag
-                        style={{
-                            backgroundColor: `${conf.color}10`,
-                            color: conf.color,
-                            borderColor: `${conf.color}30`,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            borderRadius: '20px',
-                            padding: '3px 12px',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            fontSize: '10px',
-                            letterSpacing: '0.03em'
-                        }}
-                    >
-                        {conf.icon}
-                        {conf.label}
-                    </Tag>
-                );
-            }
-        },
-        {
-            title: 'Entity',
-            dataIndex: 'entityType',
-            key: 'entityType',
-            width: 130,
-            render: (type) => {
-                const info = getEntityInfo(type);
-                return (
-                    <Tag
-                        color={info.color}
-                        style={{ borderRadius: '6px', fontSize: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px' }}
-                    >
-                        {info.icon}
-                        {type || 'SYSTEM'}
-                    </Tag>
-                );
-            }
-        },
-        {
-            title: 'Activity Description',
-            key: 'activity',
-            render: (_, record) => (
-                <div onClick={() => showDetails(record)} style={{ cursor: 'pointer' }}>
-                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', marginBottom: '2px' }}>
-                        {record.entityTitle || (record.entityType === 'SELLER' ? `Seller ${record.entityId?.substring(0, 8)}...` : 'System Activity')}
-                    </div>
-                    <div style={{ color: '#64748b', fontSize: '12px', lineHeight: '1.4' }}>
-                        {record.description || 'Action performed on the system.'}
-                    </div>
-                </div>
-            )
-        },
-        {
-            title: 'Initiated By',
-            key: 'user',
-            width: 190,
-            render: (_, record) => {
-                const name = record.user?.firstName ? `${record.user.firstName} ${record.user.lastName || ''}` : (record.user?.username || 'System');
-                const email = record.user?.email || '';
-                const initial = name.charAt(0).toUpperCase();
-                const isSystem = name === 'System';
-                return (
-                    <Space size="middle">
-                        <Avatar
-                            size={28}
-                            style={{
-                                background: isSystem
-                                    ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-                                    : 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
-                                color: '#fff',
-                                fontWeight: 600,
-                                fontSize: '11px'
-                            }}
-                        >
-                            {initial}
-                        </Avatar>
-                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                            <Text strong style={{ fontSize: '12px', color: '#1e293b' }}>{name}</Text>
-                            {email && <Text type="secondary" style={{ fontSize: '10px' }}>{email}</Text>}
-                        </div>
-                    </Space>
-                );
-            }
-        },
-        {
-            title: 'Action',
-            key: 'actions',
-            width: 70,
-            align: 'center',
-            render: (_, record) => (
-                <Tooltip title="View Detailed Log">
-                    <Button
-                        type="text"
-                        shape="circle"
-                        icon={<Eye size={15} />}
-                        onClick={() => showDetails(record)}
-                        style={{ color: '#6366f1' }}
-                    />
-                </Tooltip>
-            )
-        }
-    ];
-
-    const otpColumns = [
-        {
-            title: 'Timestamp',
-            dataIndex: 'CreatedAt',
-            key: 'CreatedAt',
-            width: 170,
-            sorter: (a, b) => new Date(a.CreatedAt) - new Date(b.CreatedAt),
-            render: (val) => (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Space size={4} style={{ color: '#1e293b', fontWeight: 500, fontSize: '12px' }}>
-                        <Clock size={12} style={{ color: '#64748b' }} />
-                        <span>{new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                    </Space>
-                    <Text type="secondary" style={{ fontSize: '10px', marginLeft: '16px' }}>
-                        {new Date(val).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </Text>
-                </div>
-            )
-        },
-        {
-            title: 'User',
-            key: 'user',
-            width: 200,
-            render: (_, record) => {
-                const name = [record.FirstName, record.LastName].filter(Boolean).join(' ') || record.Email;
-                const initial = (record.FirstName || record.Email || 'U')[0].toUpperCase();
-                return (
-                    <Space size={8}>
-                        <Avatar size={28} style={{ background: '#4f46e5', fontSize: 11, fontWeight: 700 }}>{initial}</Avatar>
-                        <div>
-                            <Text strong style={{ fontSize: '12px' }}>{name}</Text>
-                            <div style={{ fontSize: '10px', color: '#94a3b8' }}>{record.Email}</div>
-                        </div>
-                    </Space>
-                );
-            }
-        },
-        {
-            title: 'Action',
-            dataIndex: 'Action',
-            key: 'Action',
-            width: 140,
-            render: (val) => {
-                const styles = {
-                    'OTP_SENT': { color: '#3b82f6', label: 'OTP Sent', icon: <Mail size={12} /> },
-                    'OTP_VERIFIED': { color: '#10b981', label: 'Verified', icon: <CheckCircle size={12} /> },
-                    'OTP_FAILED': { color: '#ef4444', label: 'Failed', icon: <XCircle size={12} /> },
-                    'OTP_VERIFY': { color: '#10b981', label: 'Verified', icon: <CheckCircle size={12} /> },
-                    'VERIFY_FAILED': { color: '#ef4444', label: 'Failed', icon: <XCircle size={12} /> },
-                };
-                const s = styles[val] || { color: '#64748b', label: val, icon: <Info size={12} /> };
-                return (
-                    <Tag style={{ backgroundColor: `${s.color}10`, color: s.color, borderColor: `${s.color}30`, display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '20px', padding: '3px 10px', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase' }}>
+                    <Tag style={{
+                        background: `${s.color}10`, color: s.color, border: `1px solid ${s.color}25`,
+                        borderRadius: 8, fontWeight: 600, fontSize: 10, padding: '3px 10px',
+                        display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'uppercase', letterSpacing: '0.03em'
+                    }}>
                         {s.icon} {s.label}
                     </Tag>
                 );
             }
         },
         {
-            title: 'Status',
-            dataIndex: 'Status',
-            key: 'Status',
-            width: 100,
-            render: (val) => (
-                <Tag style={{ backgroundColor: val === 'SUCCESS' ? '#dcfce7' : '#fee2e2', color: val === 'SUCCESS' ? '#16a34a' : '#dc2626', borderColor: val === 'SUCCESS' ? '#bbf7d0' : '#fecaca', borderRadius: '6px', fontWeight: 600, fontSize: '10px' }}>
-                    {val}
-                </Tag>
+            title: 'Details',
+            key: 'details',
+            render: (_, r) => (
+                <div style={{ cursor: 'pointer' }} onClick={() => { setSelectedLog(r); setDetailOpen(true); }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a', marginBottom: 2 }}>
+                        {r.entityTitle || r.entityType || 'System Activity'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.description || 'No description'}
+                    </div>
+                </div>
             )
         },
         {
-            title: 'Reason',
-            dataIndex: 'Reason',
-            key: 'Reason',
-            width: 200,
-            ellipsis: true,
-            render: (val) => val ? <Tooltip title={val}><span style={{ fontSize: '12px', color: '#64748b' }}>{val}</span></Tooltip> : <span style={{ fontSize: '12px', color: '#d4d4d8' }}>—</span>
-        },
-        {
-            title: 'IP Address',
-            dataIndex: 'IpAddress',
-            key: 'IpAddress',
-            width: 140,
-            render: (val) => <Text style={{ fontSize: '11px', fontFamily: 'monospace', color: '#64748b' }}>{val || '—'}</Text>
-        },
-        {
-            title: 'Browser',
-            dataIndex: 'UserAgent',
-            key: 'UserAgent',
-            width: 120,
-            ellipsis: true,
-            render: (val) => {
-                if (!val) return <span style={{ color: '#d4d4d8', fontSize: '11px' }}>—</span>;
-                let browser = 'Other';
-                if (val.includes('Chrome')) browser = 'Chrome';
-                else if (val.includes('Firefox')) browser = 'Firefox';
-                else if (val.includes('Safari')) browser = 'Safari';
-                else if (val.includes('Edge')) browser = 'Edge';
-                return <Tag style={{ borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>{browser}</Tag>;
+            title: 'Entity',
+            dataIndex: 'entityType',
+            key: 'entityType',
+            width: 110,
+            render: (type) => {
+                const s = ENTITY_STYLES[type] || { color: 'default', icon: <Info size={11} /> };
+                return (
+                    <Tag style={{ borderRadius: 6, fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px' }}
+                        color={s.color}>
+                        {s.icon} {type || 'SYSTEM'}
+                    </Tag>
+                );
             }
+        },
+        {
+            title: 'User',
+            key: 'user',
+            width: 160,
+            render: (_, r) => {
+                const name = r.user?.firstName ? `${r.user.firstName} ${r.user.lastName || ''}` : 'System';
+                const email = r.user?.email || '';
+                const isSystem = name === 'System' || !r.user?.firstName;
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                            width: 26, height: 26, borderRadius: 8,
+                            background: isSystem ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'linear-gradient(135deg, #ec4899, #d946ef)',
+                            color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            {name.charAt(0)}
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{name}</div>
+                            {email && <div style={{ fontSize: 10, color: '#94a3b8' }}>{email}</div>}
+                        </div>
+                    </div>
+                );
+            }
+        },
+        {
+            title: 'Time',
+            key: 'time',
+            width: 130,
+            sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+            render: (_, r) => (
+                <Tooltip title={formatTime(r.createdAt)}>
+                    <div style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>{relativeTime(r.createdAt)}</div>
+                </Tooltip>
+            )
+        },
+        {
+            title: '',
+            key: 'action',
+            width: 40,
+            render: (_, r) => (
+                <Tooltip title="View details">
+                    <Button type="text" size="small" icon={<Eye size={13} />}
+                        style={{ color: '#6366f1' }}
+                        onClick={() => { setSelectedLog(r); setDetailOpen(true); }} />
+                </Tooltip>
+            )
         }
     ];
 
-    if (loading && logs.length === 0) {
-        return <PageLoader message="Initializing Activity Streams..." />;
-    }
-
-    const clearAllFilters = () => {
-        setSearchQuery('');
-        setFilterType('ALL');
-        setDateRange(null);
-    };
-
-    const hasActiveFilters = searchQuery !== '' || filterType !== 'ALL' || dateRange !== null;
-
-    return (
-        <div style={{ background: '#f8fafc', padding: '24px 32px', minHeight: 'calc(100vh - 72px)', overflowY: 'auto' }}>
-            {/* HEADER AREA */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <div>
-                    <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ padding: '6px', background: '#e0e7ff', color: '#4f46e5', borderRadius: 8, display: 'flex' }}>
-                            <Activity size={20} />
-                        </div>
-                        {activeTab === 'activity' ? 'Activity Streams' : 'OTP Audit Log'}
-                    </Title>
-                    <Text style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginTop: 4 }}>
-                        {activeTab === 'activity' ? 'Real-time audit trail of all administrative and automated actions.' : 'OTP verification attempts, deliveries, and security events.'}
-                    </Text>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ background: '#f4f4f5', borderRadius: 8, padding: 2 }}>
-                        <div style={{ display: 'flex', background: '#fff', borderRadius: 7, border: '1px solid #e4e4e7', overflow: 'hidden' }}>
-                            <button onClick={() => setActiveTab('activity')} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', background: activeTab === 'activity' ? '#18181b' : 'transparent', color: activeTab === 'activity' ? '#fff' : '#71717a' }}>
-                                <Activity size={12} style={{ marginRight: 4 }} />System Logs
-                            </button>
-                            <button onClick={() => setActiveTab('otp')} style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', background: activeTab === 'otp' ? '#18181b' : 'transparent', color: activeTab === 'otp' ? '#fff' : '#71717a' }}>
-                                <Shield size={12} style={{ marginRight: 4 }} />OTP Audit
-                            </button>
+    // ── OTP columns ────────────────────────────────────────────────────────
+    const otpColumns = [
+        {
+            title: 'Time', dataIndex: 'CreatedAt', key: 'CreatedAt', width: 150,
+            sorter: (a, b) => new Date(a.CreatedAt) - new Date(b.CreatedAt),
+            render: (v) => <span style={{ fontSize: 12, color: '#475569' }}>{formatTime(v)}</span>
+        },
+        {
+            title: 'User', key: 'user', width: 180,
+            render: (_, r) => {
+                const name = [r.FirstName, r.LastName].filter(Boolean).join(' ') || r.Email;
+                const initial = (r.FirstName || r.Email || 'U')[0].toUpperCase();
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 8, background: '#4f46e5', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initial}</div>
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{name}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{r.Email}</div>
                         </div>
                     </div>
-                    <Button
-                        type="primary"
-                        onClick={activeTab === 'activity' ? loadLogs : () => loadOtpLogs(1)}
-                        loading={loading || otpLoading}
-                        icon={<RefreshCw size={14} />}
-                        style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, borderRadius: 8, height: '34px' }}
-                    >
-                        Refresh
-                    </Button>
+                );
+            }
+        },
+        {
+            title: 'Action', dataIndex: 'Action', key: 'Action', width: 130,
+            render: (v) => {
+                const m = { 'OTP_SENT': { color: '#3b82f6', label: 'Sent' }, 'OTP_VERIFIED': { color: '#10b981', label: 'Verified' }, 'OTP_FAILED': { color: '#ef4444', label: 'Failed' } };
+                const s = m[v] || { color: '#64748b', label: v };
+                return <Tag style={{ background: `${s.color}10`, color: s.color, border: `1px solid ${s.color}25`, borderRadius: 6, fontWeight: 600, fontSize: 10 }}>{s.label}</Tag>;
+            }
+        },
+        {
+            title: 'Status', dataIndex: 'Status', key: 'Status', width: 90,
+            render: (v) => (
+                <Tag style={{ borderRadius: 6, fontWeight: 600, fontSize: 10, background: v === 'SUCCESS' ? '#dcfce7' : '#fee2e2', color: v === 'SUCCESS' ? '#16a34a' : '#dc2626', border: `1px solid ${v === 'SUCCESS' ? '#bbf7d0' : '#fecaca'}` }}>
+                    {v}
+                </Tag>
+            )
+        },
+        { title: 'Reason', dataIndex: 'Reason', key: 'Reason', width: 160, ellipsis: true, render: (v) => <span style={{ fontSize: 12, color: v ? '#475569' : '#d4d4d8' }}>{v || '—'}</span> },
+        { title: 'IP', dataIndex: 'IpAddress', key: 'IpAddress', width: 120, render: (v) => <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }}>{v || '—'}</span> },
+    ];
+
+    return (
+        <div style={{ background: '#fafbfc', minHeight: 'calc(100vh - 60px)' }}>
+            {/* Header */}
+            <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '20px 28px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                                {activeTab === 'activity' ? 'Activity Log' : 'OTP Audit'}
+                            </h2>
+                            {activeTab === 'activity' && total > 0 && (
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                    {total.toLocaleString()} events
+                                </span>
+                            )}
+                        </div>
+                        <p style={{ fontSize: 13, color: '#64748b', margin: 0, marginTop: 4, lineHeight: 1.5 }}>
+                            {activeTab === 'activity' ? 'Track system events, user actions, and automation logs.' : 'OTP verification attempts and security events.'}
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <Segmented
+                            value={activeTab}
+                            onChange={setActiveTab}
+                            options={[
+                                { label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600 }}><Activity size={12} /> System Logs</span>, value: 'activity' },
+                                { label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600 }}><Shield size={12} /> OTP Audit</span>, value: 'otp' },
+                            ]}
+                        />
+                        <Button icon={<RefreshCw size={13} />} onClick={activeTab === 'activity' ? fetchLogs : () => fetchOtpLogs(1)} loading={loading || otpLoading}
+                            style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, border: '1px solid #e2e8f0' }}>
+                            Refresh
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* METRICS ROW */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                <Col xs={12} sm={12} md={6}>
-                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
-                        <Statistic
-                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>TOTAL STREAMS</span>}
-                            value={metrics.total}
-                            prefix={<Activity size={16} style={{ color: '#3b82f6', marginRight: 6, marginBottom: -2 }} />}
-                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={12} md={6}>
-                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
-                        <Statistic
-                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>AUTOMATIONS</span>}
-                            value={metrics.automations}
-                            prefix={<Cpu size={16} style={{ color: '#8b5cf6', marginRight: 6, marginBottom: -2 }} />}
-                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={12} md={6}>
-                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
-                        <Statistic
-                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>OPERATIONS</span>}
-                            value={metrics.operations}
-                            prefix={<Database size={16} style={{ color: '#06b6d4', marginRight: 6, marginBottom: -2 }} />}
-                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
-                        />
-                    </Card>
-                </Col>
-                <Col xs={12} sm={12} md={6}>
-                    <Card style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }} styles={{ body: { padding: '16px 20px' } }}>
-                        <Statistic
-                            title={<span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>LIVE SYNCS</span>}
-                            value={metrics.liveSyncs}
-                            prefix={<Zap size={16} style={{ color: '#7c3aed', marginRight: 6, marginBottom: -2 }} />}
-                            valueStyle={{ color: '#0f172a', fontWeight: 700, fontSize: '22px' }}
-                        />
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* FILTERS CARD */}
-            <Card
-                styles={{ body: { padding: '16px 20px' } }}
-                style={{
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '24px',
-                    background: '#fff',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
-                }}
-            >
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 2, minWidth: 260 }}>
-                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>SEARCH BY PHRASE</Text>
-                        <Input
-                            placeholder="Trace events by description, entity, or user..."
-                            prefix={<Search size={14} style={{ color: '#94a3b8' }} />}
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            style={{ borderRadius: '8px', height: '38px' }}
-                            allowClear
-                        />
-                    </div>
-                    <div style={{ flex: 1.2, minWidth: 180 }}>
-                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>EVENT CATEGORY</Text>
-                        <Select
-                            value={filterType}
-                            onChange={setFilterType}
-                            style={{ width: '100%', height: '38px' }}
-                            dropdownStyle={{ borderRadius: '8px' }}
-                        >
-                            <Select.Option value="ALL">All Event Manifests</Select.Option>
-                            <Select.Option value="CREATE">Object Creation</Select.Option>
-                            <Select.Option value="UPDATE">Update Transactions</Select.Option>
-                            <Select.Option value="DELETE">Removal Operations</Select.Option>
-                            <Select.Option value="IMPORT">Data Ingestion (Bulk)</Select.Option>
-                            <Select.Option value="AUTOMATION_TASK">Automation Tasks</Select.Option>
-                            <Select.Option value="LIVE_SYNC">Live Data Sync</Select.Option>
-                            <Select.Option value="TARGET_IMPORT">Target Ingestion</Select.Option>
-                            <Select.Option value="TARGET_UPDATE">Target Updates</Select.Option>
-                            <Select.Option value="TARGET_DELETE">Target Deletions</Select.Option>
-                            <Select.Option value="STATUS_CHANGE">Status Changes</Select.Option>
-                            <Select.Option value="AUTH_SUCCESS">Identity Verification</Select.Option>
-                            <Select.Option value="AUTH_FAILURE">Security Alerts</Select.Option>
-                            <Select.Option value="SYSTEM_ERROR">System Exceptions</Select.Option>
-                        </Select>
-                    </div>
-                    <div style={{ flex: 1.5, minWidth: 220 }}>
-                        <Text strong style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>DATE WINDOW</Text>
-                        <RangePicker
-                            value={dateRange}
-                            onChange={setDateRange}
-                            style={{ width: '100%', height: '38px', borderRadius: '8px' }}
-                        />
-                    </div>
-                    {hasActiveFilters && (
-                        <div style={{ display: 'flex', alignSelf: 'flex-end', height: '38px' }}>
-                            <Button
-                                onClick={clearAllFilters}
-                                type="text"
-                                danger
-                                style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            >
-                                Clear
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            </Card>
-
-            {/* FILTER & DATA */}
-            {activeTab === 'activity' && (
-                <>
-                    {/* FILTER BAR */}
-                    <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, padding: 0 }} styles={{ body: { padding: '10px 16px' } }}>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Input prefix={<Search size={12} />} placeholder="Search events..." size="small" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} allowClear style={{ width: 200, borderRadius: 8 }} />
-                            <Select size="small" value={filterType} onChange={setFilterType} style={{ width: 150, borderRadius: 8 }} options={[
-                                { value: 'ALL', label: 'All Types' }, { value: 'CREATE', label: 'Creation' }, { value: 'UPDATE', label: 'Update' },
-                                { value: 'DELETE', label: 'Delete' }, { value: 'AUTH_SUCCESS', label: 'Login' }, { value: 'AUTH_FAILURE', label: 'Login Fail' },
-                                { value: 'LIVE_SYNC', label: 'Live Sync' }, { value: 'SYSTEM_ERROR', label: 'Error' }
-                            ]} />
-                            <DatePicker.RangePicker size="small" value={dateRange} onChange={setDateRange} style={{ width: 220, borderRadius: 8 }} />
-                            {hasActiveFilters && (
-                                <Button size="small" danger onClick={clearAllFilters}>Clear</Button>
+            <div style={{ padding: '20px 28px' }}>
+                {/* Activity Tab */}
+                {activeTab === 'activity' && (
+                    <>
+                        {/* Filters */}
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                            <Input prefix={<Search size={13} style={{ color: '#94a3b8' }} />} size="small" allowClear
+                                placeholder="Search events..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+                                style={{ width: 240, borderRadius: 8 }} />
+                            <Select size="small" value={filterType} onChange={v => { setFilterType(v); setPage(1); }}
+                                style={{ width: 150, borderRadius: 8 }}
+                                options={[
+                                    { value: 'ALL', label: 'All Events' },
+                                    ...IMPORTANT_TYPES.map(t => ({ value: t, label: TYPE_STYLES[t]?.label || t }))
+                                ]} />
+                            <RangePicker size="small" value={dateRange} onChange={v => { setDateRange(v); setPage(1); }}
+                                style={{ width: 230, borderRadius: 8 }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Show all</span>
+                                <input type="checkbox" checked={showAllEvents}
+                                    onChange={e => { setShowAllEvents(e.target.checked); setPage(1); }}
+                                    style={{ accentColor: '#4f46e5' }} />
+                            </div>
+                            {hasFilters && (
+                                <Button size="small" danger onClick={clearFilters} style={{ borderRadius: 6, fontSize: 11 }}>Clear</Button>
                             )}
                         </div>
-                    </Card>
 
-                    {/* DATA TABLE */}
-                    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
-                        <Table columns={columns} dataSource={filteredLogs} rowKey={(r) => r._id || Math.random().toString()}
-                            pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: ['15', '30', '50', '100'], showTotal: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t} events</Text> }}
-                            loading={loading} scroll={{ x: 'max-content' }} size="small" />
-                    </Card>
-                </>
-            )}
-
-            {/* OTP AUDIT TABLE */}
-            {activeTab === 'otp' && (
-                <>
-                    {/* OTP Stats Row */}
-                    <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-                        {[
-                            { label: 'Total', value: otpStats.total || otpTotal || 0, color: '#3b82f6', bg: '#eff6ff' },
-                            { label: 'Sent', value: otpStats.sent || 0, color: '#2563eb', bg: '#eff6ff' },
-                            { label: 'Verified', value: otpStats.verified || 0, color: '#059669', bg: '#ecfdf5' },
-                            { label: 'Failed', value: otpStats.failed || 0, color: '#dc2626', bg: '#fef2f2' },
-                        ].map((s, i) => (
-                            <Col key={i} xs={12} sm={6}>
-                                <div style={{ padding: '10px 14px', background: s.bg, borderRadius: 10, border: `1px solid ${s.color}20` }}>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: '#18181b' }}>{s.value}</div>
-                                </div>
-                            </Col>
-                        ))}
-                    </Row>
-
-                    {/* OTP Filters */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-                        <Select size="small" value={otpActionFilter || undefined} placeholder="Action" allowClear onChange={v => setOtpActionFilter(v || '')}
-                            style={{ width: 150, borderRadius: 8 }} options={[
-                                { value: 'OTP_SENT', label: 'OTP Sent' }, { value: 'OTP_VERIFIED', label: 'Verified' },
-                                { value: 'OTP_FAILED', label: 'Failed' }, { value: 'VERIFY_FAILED', label: 'Verify Failed' }
-                            ]} />
-                        <Input prefix={<Search size={12} />} size="small" placeholder="Filter by email..." value={otpEmailFilter}
-                            onChange={e => setOtpEmailFilter(e.target.value)} allowClear style={{ width: 200, borderRadius: 8 }} />
-                    </div>
-
-                    {/* OTP Data Table */}
-                    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
-                        <Table columns={otpColumns} dataSource={otpLogs} rowKey={(r) => r.Id || r.id}
-                            pagination={{ current: otpPage, pageSize: 20, total: otpTotal, onChange: (p) => loadOtpLogs(p), showTotal: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t} OTP records</Text> }}
-                            loading={otpLoading} scroll={{ x: 'max-content' }} size="small" />
-                    </Card>
-                </>
-            )}
-
-            {/* DETAIL MODAL */}
-            <Modal
-                title={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            backgroundColor: '#f1f5f9',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#6366f1'
-                        }}>
-                            <Activity size={18} />
+                        {/* Table */}
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            <Table className="activity-table" columns={columns} dataSource={logs} rowKey={r => r._id || Math.random().toString()}
+                                loading={loading} size="small" scroll={{ x: 'max-content' }}
+                                pagination={{
+                                    current: page, pageSize, total,
+                                    showSizeChanger: true, pageSizeOptions: ['25', '50', '100'],
+                                    showTotal: (t, range) => (
+                                        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                                            Showing <span style={{ fontWeight: 700, color: '#0f172a' }}>{range[0]}-{range[1]}</span> of <span style={{ fontWeight: 700, color: '#0f172a' }}>{t.toLocaleString()}</span> events
+                                        </span>
+                                    ),
+                                    onChange: (p, ps) => { setPage(p); if (ps !== pageSize) setPageSize(ps); }
+                                }}
+                            />
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '15px', fontWeight: 700 }}>Event Analysis</span>
-                            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>ID: {selectedLog?._id}</span>
+                    </>
+                )}
+
+                {/* OTP Tab */}
+                {activeTab === 'otp' && (
+                    <>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Select size="small" allowClear placeholder="Action" value={otpActionFilter || undefined}
+                                onChange={v => setOtpActionFilter(v || '')} style={{ width: 140, borderRadius: 8 }}
+                                options={[{ value: 'OTP_SENT', label: 'Sent' }, { value: 'OTP_VERIFIED', label: 'Verified' }, { value: 'OTP_FAILED', label: 'Failed' }]} />
+                            <Input prefix={<Search size={12} />} size="small" placeholder="Email..." allowClear value={otpEmailFilter}
+                                onChange={e => setOtpEmailFilter(e.target.value)} style={{ width: 200, borderRadius: 8 }} />
+                        </div>
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+                            <Table className="activity-table" columns={otpColumns} dataSource={otpLogs} rowKey={r => r.Id || r.id}
+                                loading={otpLoading} size="small" scroll={{ x: 'max-content' }}
+                                pagination={{ current: otpPage, pageSize: 20, total: otpTotal, onChange: fetchOtpLogs,
+                                    showTotal: t => <span style={{ fontSize: 12, color: '#64748b' }}>{t} records</span> }} />
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Detail Modal */}
+            <Modal open={detailOpen} onCancel={() => setDetailOpen(false)} centered width={620} destroyOnClose
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Activity size={15} style={{ color: '#fff' }} />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Event Details</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{selectedLog?.type || 'Activity'}</div>
                         </div>
                     </div>
                 }
-                open={detailModalVisible}
-                onCancel={() => setDetailModalVisible(false)}
-                footer={[
-                    <Button key="close" type="primary" onClick={() => setDetailModalVisible(false)} style={{ borderRadius: '8px', fontWeight: 600 }}>
-                        CLOSE ANALYSIS
-                    </Button>
-                ]}
-                width={650}
-                centered
-                styles={{ body: { padding: '20px 24px' } }}
+                footer={<Button type="primary" onClick={() => setDetailOpen(false)} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Close</Button>}
             >
                 {selectedLog && (
-                    <div className="log-details-container">
-                        <Descriptions title="" bordered column={2} size="small" style={{ marginBottom: '20px' }}>
-                            <Descriptions.Item label="Event Type" span={1}>
-                                <Tag color={getTypeStyle(selectedLog.type).color}>{getTypeStyle(selectedLog.type).label}</Tag>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <Descriptions bordered size="small" column={2}>
+                            <Descriptions.Item label="Type">
+                                {(() => { const s = TYPE_STYLES[selectedLog.type] || {}; return <Tag color={s.color || 'default'}>{s.label || selectedLog.type}</Tag>; })()}
                             </Descriptions.Item>
-                            <Descriptions.Item label="Entity" span={1}>
-                                <Text strong>{selectedLog.entityType || 'SYSTEM'}</Text>
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Timestamp" span={2}>
-                                {formatTime(selectedLog.createdAt)}
-                            </Descriptions.Item>
+                            <Descriptions.Item label="Entity">{selectedLog.entityType || 'SYSTEM'}</Descriptions.Item>
+                            <Descriptions.Item label="Time" span={2}>{formatTime(selectedLog.createdAt)}</Descriptions.Item>
                             <Descriptions.Item label="User" span={2}>
-                                {selectedLog.user?.firstName ? `${selectedLog.user.firstName} ${selectedLog.user.lastName}` : 'System'} ({selectedLog.user?.email || 'N/A'})
+                                {selectedLog.user?.firstName ? `${selectedLog.user.firstName} ${selectedLog.user.lastName || ''}` : 'System'}
+                                {selectedLog.user?.email && <Text type="secondary" style={{ marginLeft: 6, fontSize: 11 }}>({selectedLog.user.email})</Text>}
                             </Descriptions.Item>
                         </Descriptions>
-
-                        <div style={{ marginTop: '20px' }}>
-                            <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                                Activity Description
-                            </Text>
-                            <div style={{
-                                padding: '14px 16px',
-                                backgroundColor: '#f8fafc',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                                color: '#1e293b',
-                                fontSize: '13px',
-                                lineHeight: '1.6'
-                            }}>
-                                <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
-                                    {selectedLog.entityTitle || (selectedLog.entityType === 'SELLER' ? `Seller ${selectedLog.entityId?.substring(0, 8)}...` : 'System Activity')}
-                                </div>
-                                {selectedLog.description}
+                        <div>
+                            <Text strong style={{ display: 'block', marginBottom: 6, color: '#64748b', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.05em' }}>Description</Text>
+                            <div style={{ padding: 14, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, lineHeight: 1.6, color: '#1e293b' }}>
+                                {selectedLog.description || 'No description available.'}
                             </div>
                         </div>
-
-                        <div style={{ marginTop: '20px' }}>
-                            <Text strong style={{ display: 'block', marginBottom: '8px', color: '#64748b', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                                Metadata & Technical Context
-                            </Text>
-                            <div className="metadata-scroll-container" style={{
-                                maxHeight: '250px',
-                                overflowY: 'auto',
-                                borderRadius: '8px',
-                                border: '1px solid #f1f5f9'
-                            }}>
+                        <div>
+                            <Text strong style={{ display: 'block', marginBottom: 6, color: '#64748b', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.05em' }}>Metadata</Text>
+                            <div style={{ maxHeight: 220, overflowY: 'auto', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                                 {renderMetadata(selectedLog.metadata)}
                             </div>
                         </div>
@@ -792,52 +475,9 @@ const ActivityLog = () => {
             </Modal>
 
             <style>{`
-                .premium-activity-row {
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                .premium-activity-row:hover {
-                    background-color: #f8fafc !important;
-                }
-                .ant-table-thead > tr > th {
-                    background-color: #fff !important;
-                    color: #64748b !important;
-                    font-weight: 700 !important;
-                    font-size: 11px !important;
-                    text-transform: uppercase !important;
-                    letter-spacing: 0.05em !important;
-                    border-bottom: 1px solid #f1f5f9 !important;
-                    padding: 14px 16px !important;
-                }
-                .ant-table-tbody > tr > td {
-                    border-bottom: 1px solid #f8fafc !important;
-                    padding: 14px 16px !important;
-                }
-                .metadata-descriptions .ant-descriptions-item-label {
-                    background-color: #f8fafc !important;
-                    width: 140px;
-                    font-weight: 700 !important;
-                    color: #64748b !important;
-                }
-                .metadata-descriptions .ant-descriptions-item-content {
-                    font-family: 'JetBrains Mono', 'Menlo', monospace;
-                    font-size: 11px;
-                    color: #4f46e5;
-                }
-                .ant-modal-content {
-                    border-radius: 16px !important;
-                    overflow: hidden;
-                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
-                }
-                .ant-modal-header {
-                    padding: 20px 24px 14px !important;
-                    border-bottom: 1px solid #f1f5f9 !important;
-                    margin-bottom: 0 !important;
-                }
-                .ant-modal-footer {
-                    padding: 14px 24px 20px !important;
-                    border-top: 1px solid #f1f5f9 !important;
-                    margin-top: 0 !important;
-                }
+                .activity-table .ant-table-thead > tr > th { background: #fafbfc !important; font-size: 11px !important; font-weight: 700 !important; color: #475569 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; border-bottom: 2px solid #e2e8f0 !important; }
+                .activity-table .ant-table-tbody > tr > td { border-bottom: 1px solid #f1f5f9 !important; }
+                .activity-table .ant-table-tbody > tr:hover > td { background: #f8fafc !important; }
             `}</style>
         </div>
     );

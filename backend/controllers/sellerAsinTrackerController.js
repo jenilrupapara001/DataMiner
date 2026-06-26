@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId } = require('../database/db');
 const { getSellerAsins, getTokenStatus, getDomainId, isValidSellerId } = require('../services/keepaService');
 const MarketSyncService = require('../services/marketDataSyncService');
@@ -11,7 +12,7 @@ const SystemLogService = require('../services/SystemLogService');
 exports.getTrackerList = async (req, res) => {
     try {
         const userRole = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         let whereClause = 'WHERE 1=1';
         const request = (await getPool()).request();
 
@@ -86,7 +87,7 @@ exports.getTrackerList = async (req, res) => {
 exports.getSellerAsins = async (req, res) => {
     try {
         const userRole = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
         const sellerId = req.params.sellerId;
 
@@ -228,7 +229,7 @@ const syncSellerFromKeepa = async (seller) => {
 exports.syncSeller = async (req, res) => {
     try {
         const userRole = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
         const sellerId = req.params.sellerId;
 

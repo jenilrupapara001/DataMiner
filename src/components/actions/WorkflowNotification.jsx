@@ -12,7 +12,7 @@ const WorkflowNotification = ({ task, currentUser, onAction }) => {
   const currentStatus = (task.status || 'PENDING').toUpperCase();
   const userId = currentUser._id || currentUser.id;
   const role = (currentUser.role?.name || currentUser.role || '').toLowerCase();
-  const isAdmin = ['admin', 'superadmin'].includes(role);
+  const isAdmin = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(role);
 
   const isAssignee = task.assignedTo && (
     Array.isArray(task.assignedTo)

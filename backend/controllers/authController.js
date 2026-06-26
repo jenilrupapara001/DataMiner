@@ -6,6 +6,7 @@ const SystemLogService = require('../services/SystemLogService');
 const otpService = require('../services/otpService');
 const trustedDeviceService = require('../services/trustedDeviceService');
 const tokenBlacklist = require('../services/tokenBlacklistService');
+const { recordFailedAttempt, recordSuccessfulLogin, GENERIC_BLOCK } = require('../middleware/loginRateLimiter');
 
 const generateTokens = (userId, fingerprint) => {
   const accessToken = jwt.sign({ userId, type: 'access', fp: fingerprint || null }, config.jwtSecret, { expiresIn: config.jwtExpiresIn || '15m' });
@@ -100,80 +101,81 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
     const pool = await getPool();
+    const clientIp = req._authMetadata?.clientIp || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
     const result = await pool.request()
       .input('email', sql.NVarChar, email)
       .query('SELECT * FROM Users WHERE Email = @email');
 
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
     if (result.recordset.length === 0) {
       console.warn(`[AUTH_FAILURE] Account not found. Email: ${email} | IP: ${clientIp}`);
-      
-      // Log Auth failure
       await SystemLogService.log({
-        type: 'AUTH_FAILURE',
-        entityType: 'USER',
-        entityTitle: email,
+        type: 'AUTH_FAILURE', entityType: 'USER', entityTitle: email,
         description: `Failed login attempt: User not found (${email})`,
         metadata: { ip: clientIp, email }
       });
-      
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      // Record failed attempt even for non-existent emails (prevents user enumeration timing attacks)
+      await recordFailedAttempt(email, clientIp);
+      return res.status(401).json({ success: false, message: GENERIC_BLOCK });
     }
     const user = result.recordset[0];
 
     if (user.LockUntil && new Date(user.LockUntil) > new Date()) {
       await SystemLogService.log({
-        type: 'AUTH_FAILURE',
-        entityType: 'USER',
-        entityId: user.Id,
-        entityTitle: email,
-        user: user.Id,
+        type: 'AUTH_FAILURE', entityType: 'USER', entityId: user.Id,
+        entityTitle: email, user: user.Id,
         description: `Locked login attempt: ${email}`,
         metadata: { ip: clientIp }
       });
-      return res.status(423).json({ success: false, message: 'Account is temporarily locked' });
+      return res.status(423).json({ success: false, message: GENERIC_BLOCK });
     }
 
     if (!user.IsActive) {
-       await SystemLogService.log({
-        type: 'AUTH_FAILURE',
-        entityType: 'USER',
-        entityId: user.Id,
-        entityTitle: email,
-        user: user.Id,
+      await SystemLogService.log({
+        type: 'AUTH_FAILURE', entityType: 'USER', entityId: user.Id,
+        entityTitle: email, user: user.Id,
         description: `Deactivated account login attempt: ${email}`,
         metadata: { ip: clientIp }
       });
-      return res.status(403).json({ success: false, message: 'Account is deactivated' });
+      return res.status(403).json({ success: false, message: GENERIC_BLOCK });
     }
 
     const isMatch = await bcrypt.compare(password, user.Password);
     if (!isMatch) {
       const attempts = (user.LoginAttempts || 0) + 1;
       let lockUntil = null;
-      if (attempts >= 5) lockUntil = new Date(Date.now() + 30 * 60 * 1000);
-      
+      if (attempts >= 5) lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+
       await pool.request()
         .input('id', sql.VarChar, user.Id)
         .input('attempts', sql.Int, attempts)
         .input('lockUntil', sql.DateTime, lockUntil)
         .query('UPDATE Users SET LoginAttempts = @attempts, LockUntil = @lockUntil WHERE Id = @id');
-      
+
       console.warn(`[AUTH_FAILURE] Password mismatch. Email: ${email} | IP: ${clientIp} | Attempt: ${attempts}`);
-      
+
       await SystemLogService.log({
-        type: 'AUTH_FAILURE',
-        entityType: 'USER',
-        entityId: user.Id,
-        entityTitle: email,
-        user: user.Id,
+        type: 'AUTH_FAILURE', entityType: 'USER', entityId: user.Id,
+        entityTitle: email, user: user.Id,
         description: `Password mismatch. Attempt: ${attempts}`,
         metadata: { ip: clientIp, attempts }
       });
 
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      // Track failure in Redis for progressive delay and lockout
+      const failCount = await recordFailedAttempt(email, clientIp);
+      console.warn(`[LOGIN] Progressive failure count for ${email}: ${failCount}/${5}`);
+
+      return res.status(401).json({ success: false, message: GENERIC_BLOCK });
+    }
+
+    // Success — clear all failure counters
+    await recordSuccessfulLogin(email);
+
+    // Reset login attempts in DB
+    if (user.LoginAttempts > 0 || user.LockUntil) {
+      await pool.request()
+        .input('id', sql.VarChar, user.Id)
+        .query('UPDATE Users SET LoginAttempts = 0, LockUntil = NULL WHERE Id = @id');
     }
 
     await pool.request()

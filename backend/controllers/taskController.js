@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const TaskAnalyzer = require('../utils/taskAnalyzer');
@@ -145,7 +146,7 @@ exports.getTasks = async (req, res) => {
             request.input('priority', sql.NVarChar, priority);
         }
         const roleName = req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
 
         if (!isGlobalUser) {
             const allowedSellerIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());

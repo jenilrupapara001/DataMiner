@@ -32,7 +32,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
   const reviewerId = task.reviewer?._id || task.reviewer?.id || task.reviewer;
   const currentUserId = currentUser?._id || currentUser?.id;
   const role = (currentUser?.role?.name || currentUser?.role || '').toLowerCase();
-  const isAuthorized = reviewerId === currentUserId || ['admin', 'superadmin'].includes(role);
+  const isAuthorized = reviewerId === currentUserId || ['admin', 'super_admin', 'developer', 'operational_manager'].includes(role);
 
   if (!isAuthorized) {
     return (

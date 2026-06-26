@@ -26,7 +26,7 @@ const BrandTaskView = ({
     const rawRole = currentUser.role?.name || currentUser.role?.Name ||
       (typeof currentUser.role === 'string' ? currentUser.role : '') || '';
     const role = String(rawRole).toLowerCase();
-    return ['admin', 'manager', 'administrator', 'superadmin'].includes(role);
+    return ['admin', 'super_admin', 'developer', 'operational_manager', 'manager', 'administrator'].includes(role);
   }, [currentUser]);
 
   // ── Group actions by seller ──────────────────────────────────

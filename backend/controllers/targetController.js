@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { getPool, sql, generateId } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const { endOfMonth, startOfMonth, format, addDays } = require('date-fns');
@@ -39,7 +40,7 @@ function getWeekRange(year, month, weekNumber) {
 // req.user.assignedSellers holds the Sellers.Id (UUIDs). We need to resolve codes.
 const checkSellerAccess = async (user, sellerIdOrIds) => {
     const userRole = user?.role?.name || user?.role || '';
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = isGlobalUserRole(userRole);
     if (isGlobalUser) return true;
 
     const assignedSellers = user?.assignedSellers || [];
@@ -102,7 +103,7 @@ exports.getTargets = async (req, res) => {
         
         // 1. Fetch main target records with GoalType and SellerName
         const userRole = req.user?.role?.name || req.user?.role || '';
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         
         let whereClause = 'WHERE 1=1';
         const request = pool.request();

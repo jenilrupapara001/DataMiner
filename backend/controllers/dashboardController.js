@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const { BoundedCache } = require('../utils/memoryMonitor');
@@ -41,7 +42,7 @@ exports.getDashboardData = async (req, res) => {
     const pool = await getPool();
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
     const assignedSellers = req.user?.assignedSellers || [];
     const sellerIds = assignedSellers.map(s => typeof s === 'string' ? s : s._id || s.Id);
 

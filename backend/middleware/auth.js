@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../database/db');
 const config = require('../config/env');
 const tokenBlacklist = require('../services/tokenBlacklistService');
+const { isGlobalUserRole } = require('../utils/roleUtils');
 
 const DEMO_MODE = process.env.DEMO_MODE === 'true'; // Strictly require DEMO_MODE=true in .env to prevent accidental bypass in production
 
@@ -216,8 +217,7 @@ exports.checkSellerAccess = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
   const roleName = req.user.role?.Name || req.user.role?.name;
-  const isGlobalUser = ['admin', 'super_admin', 'operational_manager'].includes(roleName);
-  if (isGlobalUser) return next();
+  if (isGlobalUserRole(roleName)) return next();
 
   const sellerId = req.params.sellerId || req.body?.sellerId || req.query?.sellerId || req.params.id; 
   if (!sellerId) return next();
@@ -238,7 +238,7 @@ exports.checkUserHierarchyAccess = async (req, res, next) => {
   if (!targetUserId || req.user.Id === targetUserId || req.user._id === targetUserId) return next();
 
   const roleName = req.user.role?.Name || req.user.role?.name;
-  if (['admin', 'super_admin', 'operational_manager'].includes(roleName)) return next();
+  if (isGlobalUserRole(roleName)) return next();
 
   const hasGlobalView = await req.user.hasPermission('users_view');
   if (hasGlobalView) return next();
@@ -261,4 +261,4 @@ exports.checkUserHierarchyAccess = async (req, res, next) => {
 
 exports.auth = exports.authenticate;
 exports.isAdmin = exports.requireRole('admin', 'super_admin');
-exports.isGlobalUser = exports.requireRole('admin', 'super_admin', 'operational_manager');
+exports.isGlobalUser = exports.requireRole('admin', 'super_admin', 'developer', 'operational_manager');

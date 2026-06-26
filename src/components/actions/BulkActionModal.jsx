@@ -145,7 +145,7 @@ const BulkActionModal = ({ isOpen, onClose, selectedTasks, currentUser, onComple
             Admin Only Feature
           </Text>
           <Text style={{ fontSize: 13, color: '#94a3b8', display: 'block', marginBottom: 24 }}>
-            You need admin or superadmin permissions to perform bulk operations.
+            You need admin or super admin permissions to perform bulk operations.
           </Text>
           <Button onClick={resetAndClose} style={MODAL_STYLES.cancelBtn}>Close</Button>
         </div>

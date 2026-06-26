@@ -196,14 +196,14 @@ const ActionList = ({
         if (!user) return false;
         const rawRole = user.role?.name || user.role?.Name || (typeof user.role === 'string' ? user.role : '') || user.roleId || user.RoleId || '';
         const role = String(rawRole).toLowerCase();
-        return ['admin', 'manager', 'administrator', 'superadmin', '699048ca4fcb2d4ffb3091c7'].includes(role);
+        return ['admin', 'super_admin', 'developer', 'operational_manager', 'manager', 'administrator'].includes(role);
     };
 
     const isActuallyAdmin = (user) => {
         if (!user) return false;
         const rawRole = user.role?.name || user.role?.Name || (typeof user.role === 'string' ? user.role : '') || user.roleId || user.RoleId || '';
         const role = String(rawRole).toLowerCase();
-        return ['admin', 'administrator', 'superadmin', '699048ca4fcb2d4ffb3091c7'].includes(role);
+        return ['admin', 'super_admin', 'developer', 'operational_manager', 'administrator'].includes(role);
     };
 
     const isOwnerOfItem = (item, user) => {

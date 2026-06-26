@@ -846,8 +846,9 @@ class DatabaseService {
   /**
    * Get system activity logs
    */
-  async getSystemLogs() {
-    return this.request('/logs', { method: 'GET' }, null);
+  async getSystemLogs(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return this.request(`/logs?${qs}`, { method: 'GET' }, null);
   }
 
   // ── Webhook CRUD ──────────────────────────────────────────────────────────

@@ -43,7 +43,7 @@ export const PRIORITY_OPTIONS = [
 ];
 
 const ROLES = {
-  SUPERADMIN: 'superadmin',
+  SUPERADMIN: 'super_admin',
   ADMIN: 'admin',
   MANAGER: 'manager',
   ANALYST: 'analyst',
@@ -51,35 +51,40 @@ const ROLES = {
 };
 
 const PERMISSIONS = {
-  create_task: ['superadmin', 'admin', 'manager', 'analyst'],
-  create_objective: ['superadmin', 'admin', 'manager'],
-  edit_any_task: ['superadmin', 'admin', 'manager'],
-  edit_own_task: ['superadmin', 'admin', 'manager', 'analyst', 'user'],
-  delete_task: ['superadmin', 'admin'],
-  delete_objective: ['superadmin', 'admin'],
-  assign_users: ['superadmin', 'admin', 'manager'],
-  set_priority: ['superadmin', 'admin', 'manager', 'analyst'],
-  set_reviewer: ['superadmin', 'admin', 'manager'],
-  approve_reject: ['superadmin', 'admin', 'manager'],
-  view_all_tasks: ['superadmin', 'admin', 'manager', 'analyst'],
+  create_task: ['super_admin', 'admin', 'manager', 'analyst'],
+  create_objective: ['super_admin', 'admin', 'manager'],
+  edit_any_task: ['super_admin', 'admin', 'manager'],
+  edit_own_task: ['super_admin', 'admin', 'manager', 'analyst', 'user'],
+  delete_task: ['super_admin', 'admin'],
+  delete_objective: ['super_admin', 'admin'],
+  assign_users: ['super_admin', 'admin', 'manager'],
+  set_priority: ['super_admin', 'admin', 'manager', 'analyst'],
+  set_reviewer: ['super_admin', 'admin', 'manager'],
+  approve_reject: ['super_admin', 'admin', 'manager'],
+  view_all_tasks: ['super_admin', 'admin', 'manager', 'analyst'],
   view_assigned_only: ['user'],
-  change_status: ['superadmin', 'admin', 'manager', 'analyst', 'user'],
-  view_analytics: ['superadmin', 'admin', 'manager', 'analyst'],
-  bulk_operations: ['superadmin', 'admin'],
+  change_status: ['super_admin', 'admin', 'manager', 'analyst', 'user'],
+  view_analytics: ['super_admin', 'admin', 'manager', 'analyst'],
+  bulk_operations: ['super_admin', 'admin'],
 };
 
 export const can = (currentUser, action) => {
   if (!currentUser) return false;
   let role = (currentUser?.role?.name || currentUser?.role || '').toLowerCase();
   
+  // Normalize to permission keys
   if (role.includes('super')) {
-    role = 'superadmin';
-  } else if (role === 'admin') {
+    role = 'super_admin';
+  } else if (role === 'admin' || role === 'developer') {
     role = 'admin';
   } else if (role.includes('operational') || role.includes('operation') || role === 'manager') {
     role = 'manager';
+  } else if (role.includes('brand') || role.includes('catalog') || role.includes('listing')) {
+    role = 'analyst';
   } else if (role.includes('analyst')) {
     role = 'analyst';
+  } else if (role.includes('viewer')) {
+    role = 'user';
   }
   
   return (PERMISSIONS[action] || []).includes(role);

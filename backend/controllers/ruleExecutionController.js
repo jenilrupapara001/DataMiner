@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId } = require('../database/db');
 const { createNotification } = require('./notificationController');
 const { buildInClause } = require('../utils/sqlHelpers');
@@ -5,7 +6,7 @@ const { buildInClause } = require('../utils/sqlHelpers');
 const getUnreadAlertCount = async (req, res) => {
   try {
     const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = isGlobalUserRole(userRole);
     
     const pool = await getPool();
     const request = pool.request();
@@ -32,7 +33,7 @@ const getUnreadAlertCount = async (req, res) => {
 const acknowledgeAllAlerts = async (req, res) => {
   try {
     const userRole = req.user.role?.name || req.user.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+    const isGlobalUser = isGlobalUserRole(userRole);
     
     const pool = await getPool();
     const request = pool.request();
@@ -436,7 +437,7 @@ const executeRule = async (req, res) => {
 const executeAllRules = async (req, res) => {
     try {
       const userRole = req.user.role?.name || req.user.role;
-      const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+      const isGlobalUser = isGlobalUserRole(userRole);
       
       const pool = await getPool();
       const request = pool.request();

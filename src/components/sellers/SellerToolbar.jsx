@@ -31,10 +31,11 @@ const SellerToolbar = ({
     ...(canAccessMyntra ? [{ label: 'Myntra', value: 'myntra' }] : []),
   ];
 
+  const MANAGER_ROLES = ['brand_manager', 'operational_manager', 'admin', 'super_admin', 'developer'];
   const managerOptions = [
     { label: 'All Managers', value: 'all' },
     ...managersList
-      .filter(m => m.role?.name === 'manager' || m.role?.name === 'Brand Manager' || m.role?.name === 'listing_team')
+      .filter(m => MANAGER_ROLES.includes(m.role?.name?.toLowerCase() || ''))
       .map(m => ({ label: `${m.firstName} ${m.lastName}`, value: m._id })),
   ];
 

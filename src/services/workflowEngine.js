@@ -46,14 +46,13 @@ export const canDoTransition = (currentUser, task, transitionKey) => {
     currentUser?._id || currentUser?.id || currentUser?.userId;
 
   const isAdmin =
-    ['admin', 'superadmin', 'super_admin', 'super admin', 'supert admin'].includes(role) ||
-    role.includes('super') ||
-    role.includes('supert');
+    ['admin', 'super_admin', 'developer', 'operational_manager'].includes(role) ||
+    role.includes('super');
 
   const isManager =
-    ['admin', 'superadmin', 'super_admin', 'super admin', 'supert admin', 'manager'].includes(role) ||
+    ['admin', 'super_admin', 'developer', 'operational_manager', 'manager'].includes(role) ||
     role.includes('super') ||
-    role.includes('supert');
+    role.includes('operational');
 
   const assignedToList = task?.assignedTo
     ? Array.isArray(task.assignedTo)

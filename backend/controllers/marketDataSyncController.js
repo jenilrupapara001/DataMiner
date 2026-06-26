@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool } = require('../database/db');
 const marketDataSyncService = require('../services/marketDataSyncService');
 const liveDataSyncService = require('../services/liveDataSyncService');
@@ -78,7 +79,7 @@ exports.syncAsin = async (req, res) => {
 
         // 2. Security check
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const isAssigned = req.user && req.user.assignedSellers.includes(asin.SellerId);
 
         if (!isGlobalUser && !isAssigned && asin.SellerId) {
@@ -188,7 +189,7 @@ exports.syncSellerAsins = async (req, res) => {
 
         // 2. Security check
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const isAssigned = req.user && req.user.assignedSellers.includes(sellerId);
 
         if (!isGlobalUser && !isAssigned) {
@@ -260,7 +261,7 @@ exports.syncAllAsins = async (req, res) => {
     try {
         const pool = await getPool();
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
 
         // 1. Fetch Active, Error, Pending ASINs for assigned sellers
         let asinsQuery = "SELECT Id, SellerId FROM Asins WHERE (Status IS NULL OR Status != 'Inactive')";
@@ -523,7 +524,7 @@ exports.setupSellerTask = async (req, res) => {
 exports.uploadTaskPool = async (req, res) => {
     try {
         const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         if (!isGlobalUser) {
             return res.status(403).json({ success: false, error: 'Unauthorized to upload task pool' });
         }
@@ -566,7 +567,7 @@ exports.getPoolStatus = async (req, res) => {
 exports.syncTaskPool = async (req, res) => {
     try {
         const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         if (!isGlobalUser) {
             return res.status(403).json({ success: false, error: 'Unauthorized to sync task pool' });
         }
@@ -589,7 +590,7 @@ exports.syncTaskPool = async (req, res) => {
 exports.recoverMissingData = async (req, res) => {
     try {
         const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         if (!isGlobalUser) {
             return res.status(403).json({ success: false, error: 'Unauthorized to trigger missing data recovery' });
         }
@@ -618,7 +619,7 @@ exports.recoverMissingData = async (req, res) => {
 exports.syncAllSellersResults = async (req, res) => {
     try {
         const userRole = req.user.role?.Name || req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = isGlobalUserRole(userRole);
         if (!isGlobalUser) {
             return res.status(403).json({ success: false, error: 'Unauthorized to trigger global results ingestion' });
         }
@@ -667,7 +668,7 @@ exports.getSellerSyncStatus = async (req, res) => {
         const pool = await getPool();
         
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const isAssigned = req.user && req.user.assignedSellers.includes(sellerId);
 
         if (!isGlobalUser && !isAssigned) {
@@ -819,7 +820,7 @@ exports.getGlobalSyncTasks = async (req, res) => {
     try {
         const pool = await getPool();
         const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         
         let query = "SELECT Id, Name, Marketplace, OctoparseId FROM Sellers WHERE OctoparseId IS NOT NULL AND OctoparseId <> ''";
         const request = pool.request();

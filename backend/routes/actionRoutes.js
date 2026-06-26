@@ -117,7 +117,7 @@ router.post('/:id/start', protect, requireAnyPermission(['actions_edit', 'action
         const action = actionResult.recordset[0];
         const userId = req.user.Id || req.user._id;
         const userRole = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
         const isAssigned = action.AssignedTo === userId;
 
         if (!isGlobalUser && !isAssigned) {
@@ -189,7 +189,7 @@ router.post('/:id/submit-review', protect, requireAnyPermission(['actions_edit',
         const action = actionResult.recordset[0];
         const userId = req.user.Id || req.user._id;
         const userRole = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(userRole);
+        const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
         const isAssigned = action.AssignedTo === userId;
 
         if (!isGlobalUser && !isAssigned) {
@@ -269,7 +269,7 @@ router.post('/:id/submit-review', protect, requireAnyPermission(['actions_edit',
     }
 });
 
-router.post('/:id/review-action', protect, requireRole('admin', 'operational_manager'), async (req, res) => {
+router.post('/:id/review-action', protect, requireRole('admin', 'super_admin', 'developer', 'operational_manager'), async (req, res) => {
     try {
         const { decision, comments } = req.body;
         const pool = await actionController.getPool();

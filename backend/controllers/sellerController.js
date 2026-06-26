@@ -96,7 +96,7 @@ const enrichSellersWithAsinCounts = async (sellers) => {
 exports.getSellerStats = async (req, res) => {
   try {
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
     const { marketplace, manager, status, search } = req.query;
     const pool = await getPool();
     const reqObj = pool.request();
@@ -165,7 +165,7 @@ exports.getSellerStats = async (req, res) => {
 exports.getSellers = async (req, res) => {
   try {
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
 
     const { status, marketplace, manager, search, page = 1, limit = 200 } = req.query;
     const pageNum = parseInt(page);
@@ -311,7 +311,7 @@ exports.getSellers = async (req, res) => {
     try {
       const { id } = req.params;
       const roleName = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
       const isAssigned = (req.user?.assignedSellers || []).some(s => (s._id || s).toString() === id);
 
       if (!isGlobalUser && !isAssigned) {
@@ -360,7 +360,7 @@ exports.getSellers = async (req, res) => {
   exports.createSeller = async (req, res) => {
     try {
       const userRole = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
+      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
       const isManager = userRole === 'manager' || userRole === 'Brand Manager';
       const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
 
@@ -455,7 +455,7 @@ exports.getSellers = async (req, res) => {
       const { id } = req.params;
       const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
       const userRole = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(userRole);
+      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
 
       const pool = await getPool();
 

@@ -1,7 +1,7 @@
 export const canTransition = (currentUser, task, targetStatus) => {
   const role = (currentUser?.role?.name || currentUser?.role || '').toLowerCase();
   const userId = currentUser?._id || currentUser?.id;
-  const isAdmin = ['admin', 'superadmin'].includes(role);
+  const isAdmin = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(role);
   const isAssignee = task?.assignedTo && (
     Array.isArray(task.assignedTo)
       ? task.assignedTo.some(u => (u._id || u.id || u) === userId)

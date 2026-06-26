@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId, executeWithRetry } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const { isBuyBoxWinner } = require('../utils/buyBoxUtils');
@@ -148,7 +149,7 @@ exports.getAsins = async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
 
     const pool = await getPool();
     
@@ -884,7 +885,7 @@ exports.getAsin = async (req, res) => {
 
     // User Scope Check
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
     const isAssigned = isGlobalUser || (req.user && req.user.assignedSellers.some(s => (s._id || s).toString() === a.SellerId));
 
     if (!isAssigned) {
@@ -1101,7 +1102,7 @@ exports.getAsinStats = async (req, res) => {
   try {
     const { seller, marketplace } = req.query;
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager', 'Listing Manager'].includes(roleName);
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
 
     // Deterministic, secure cache key
     const cacheKey = JSON.stringify({
@@ -1312,7 +1313,7 @@ exports.createAsin = async (req, res) => {
 
     // User Scope Check
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
     const isAssigned = isGlobalUser || (req.user && req.user.assignedSellers.some(s => (s._id || s).toString() === seller));
 
     if (!isAssigned) {
@@ -1365,7 +1366,7 @@ exports.updateAsin = async (req, res) => {
 
     // User Scope Check
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
     const isAssigned = isGlobalUser || (req.user && req.user.assignedSellers.some(s => (s._id || s).toString() === existing.SellerId));
 
     if (!isAssigned) return res.status(403).json({ error: 'Unauthorized to update this ASIN' });
@@ -1513,7 +1514,7 @@ exports.searchAsins = async (req, res) => {
     let whereClause = 'WHERE 1=1';
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
 
     if (!isGlobalUser) {
       const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
@@ -1570,7 +1571,7 @@ exports.getAsinBrands = async (req, res) => {
     let whereClause = 'WHERE Brand IS NOT NULL AND Brand != \'\'';
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
 
     if (!isGlobalUser) {
       const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
@@ -1597,7 +1598,7 @@ exports.getAsinFilterOptions = async (req, res) => {
     let whereClause = 'WHERE 1=1';
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
 
     let allowedSellerIds = [];
     if (!isGlobalUser) {
@@ -2176,7 +2177,7 @@ exports.generateImages = async (req, res) => {
     const asin = result.recordset[0];
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
     const isAssigned = isGlobalUser || (req.user && req.user.assignedSellers.some(s => (s._id || s).toString() === asin.SellerId));
 
     if (!isAssigned) return res.status(403).json({ error: 'Unauthorized to generate images for this ASIN' });
@@ -2337,7 +2338,7 @@ exports.recalculateLqs = async (req, res) => {
         } else {
             // If no IDs provided, recalculate for all ASINs within user's scope
             const roleName = req.user?.role?.name || req.user?.role;
-            const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+            const isGlobalUser = isGlobalUserRole(roleName);
             
             if (!isGlobalUser) {
                 const allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
@@ -2595,7 +2596,7 @@ exports.exportData = async (req, res) => {
     } = req.body;
 
     const roleName = req.user?.role?.name || req.user?.role;
-    const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+    const isGlobalUser = isGlobalUserRole(roleName);
 
     const pool = await getPool();
     const request = pool.request();

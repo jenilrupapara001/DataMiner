@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const { createNotification } = require('../controllers/notificationController');
@@ -10,7 +11,7 @@ exports.getAlerts = async (req, res) => {
     try {
         const userId = req.user.Id || req.user._id;
         const roleName = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const pool = await getPool();
 
         let whereClause = 'WHERE 1=1';
@@ -63,7 +64,7 @@ exports.getAlerts = async (req, res) => {
 exports.getAlertRules = async (req, res) => {
     try {
         const roleName = req.user?.role?.name || req.user?.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const pool = await getPool();
 
         let whereClause = isGlobalUser ? '' : "WHERE (SellerId IS NULL OR SellerId NOT LIKE '%') OR SellerId IN (SELECT SellerId FROM UserSellers WHERE UserId = @userId)";
@@ -209,7 +210,7 @@ exports.acknowledgeAlert = async (req, res) => {
 
         // Check if alert belongs to user's sellers (if not admin)
         const roleName = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
 
         if (!isGlobalUser) {
             const alertResult = await pool.request()
@@ -247,7 +248,7 @@ exports.acknowledgeAllAlerts = async (req, res) => {
     try {
         const userId = req.user.Id || req.user._id;
         const roleName = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const pool = await getPool();
 
         let updateSql = "UPDATE Alerts SET Acknowledged = 1, AcknowledgedBy = @ackBy, AcknowledgedAt = dbo.GetEnvDate() WHERE Acknowledged = 0";
@@ -276,7 +277,7 @@ exports.getUnreadAlertCount = async (req, res) => {
     try {
         const userId = req.user.Id || req.user._id;
         const roleName = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const pool = await getPool();
 
         let whereClause = 'WHERE Acknowledged = 0';

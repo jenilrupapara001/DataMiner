@@ -440,7 +440,7 @@ exports.seedRolesAndPermissions = async (req, res) => {
     const permissionSets = {
       admin: allPermissions.map(p => p.Id),
       operational_manager: getPermIds(p => !['settings_manage', 'users_view', 'users_manage', 'roles_view', 'roles_manage', 'apikeys_manage'].includes(p.Name)),
-      'Brand Manager': getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'asintracker_view', 'tasks_view', 'tasks_manage', 'targets_view', 'gms_tracker_view', 'gms_tracker_import', 'gms_tracker_export'].includes(p.Name)),
+      'brand_manager': getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'asintracker_view', 'tasks_view', 'tasks_manage', 'targets_view', 'gms_tracker_view', 'gms_tracker_import', 'gms_tracker_export'].includes(p.Name)),
       catalog_manager: getPermIds(p => ['seller_view', 'asinmanager_view', 'asinmanager_export', 'asintracker_view', 'tasks_view', 'tasks_manage', 'targets_view', 'gms_tracker_view'].includes(p.Name)),
       listing_team: getPermIds(p => ['seller_view', 'asinmanager_view', 'asintracker_view', 'tasks_view', 'tasks_manage', 'targets_view', 'gms_tracker_view'].includes(p.Name)),
     };

@@ -1,3 +1,4 @@
+const { isGlobalUserRole } = require('../utils/roleUtils');
 const { sql, getPool, generateId } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const WebhookService = require('../services/WebhookService');
@@ -10,7 +11,7 @@ exports.getObjectives = async (req, res) => {
         const { sellerId, type } = req.query;
         const userId = req.user.Id || req.user._id;
         const roleName = req.user.role?.name || req.user.role;
-        const isGlobalUser = ['admin', 'operational_manager'].includes(roleName);
+        const isGlobalUser = isGlobalUserRole(roleName);
         const pool = await getPool();
 
         let whereClause = 'WHERE 1=1';
