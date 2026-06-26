@@ -362,7 +362,7 @@ const AsinTrackerPage = () => {
               price: (asin) => <span className="fw-medium text-dark">{asin.currentPrice ? `₹${asin.currentPrice.toLocaleString()}` : '-'}</span>,
               mrp: (asin) => <span className="text-muted text-decoration-line-through">{asin.mrp ? `₹${asin.mrp.toLocaleString()}` : '-'}</span>,
               dealBadge: (asin) => asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
-                <span className="badge" style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 700, fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>
+                <span className="badge" style={{ backgroundColor: '#fef2f2', color: '#C62828', border: '1px solid #fecaca', fontWeight: 700, fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>
                   {asin.dealBadge}
                 </span>
               ) : '-',

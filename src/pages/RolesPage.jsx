@@ -407,8 +407,8 @@ const RolesPage = () => {
                     transition: all 0.15s;
                 }
                 .matrix-cell-check.active {
-                    background: #10b981;
-                    border-color: #10b981;
+                    background: #2E7D32;
+                    border-color: #2E7D32;
                     box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
                 }
                 .glass-modal .ant-modal-content {
@@ -497,16 +497,16 @@ const RolesPage = () => {
                     <Col xs={12} sm={8}>
                         <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
-                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Secured Modules</span>} value={Object.keys(permissionsGrouped).length} styles={{ content: { color: '#8b5cf6', fontWeight: 800, fontSize: 22 } }} />
-                                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F5F3FF', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Key size={18} /></div>
+                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Secured Modules</span>} value={Object.keys(permissionsGrouped).length} styles={{ content: { color: '#9C27B0', fontWeight: 800, fontSize: 22 } }} />
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#F5F3FF', color: '#9C27B0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Key size={18} /></div>
                             </Space>
                         </Card>
                     </Col>
                     <Col xs={24} sm={8}>
                         <Card className="kpi-stat-card" variant="borderless">
                             <Space align="start" size={16} style={{ width: '100%', justifyContent: 'space-between' }}>
-                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Mapped Capabilities</span>} value={permissions.length} styles={{ content: { color: '#d97706', fontWeight: 800, fontSize: 22 } }} />
-                                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={18} /></div>
+                                <Statistic title={<span style={{ color: '#64748b', fontSize: 11, fontWeight: 750, textTransform: 'uppercase' }}>Mapped Capabilities</span>} value={permissions.length} styles={{ content: { color: '#E65100', fontWeight: 800, fontSize: 22 } }} />
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FEF3C7', color: '#E65100', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={18} /></div>
                             </Space>
                         </Card>
                     </Col>
@@ -542,7 +542,7 @@ const RolesPage = () => {
                                     icon={<CheckCircle2 size={14} />}
                                     loading={savingMatrix}
                                     onClick={handleSaveMatrixPermissions}
-                                    style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700, borderRadius: 8 }}
+                                    style={{ background: '#2E7D32', borderColor: '#2E7D32', fontWeight: 700, borderRadius: 8 }}
                                 >
                                     Commit & Sync Database
                                 </Button>
@@ -575,13 +575,13 @@ const RolesPage = () => {
                             return (
                                 <div key={level}>
                                     <div className="group-header-strip">
-                                        <PriorityIcon size={16} style={{ color: '#4f46e5', marginRight: 10 }} />
+                                        <PriorityIcon size={16} style={{ color: '#1976D2', marginRight: 10 }} />
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5 }}>Priority Index {level}</span>
                                             <Divider orientation="vertical" style={{ borderColor: '#cbd5e1', margin: 0 }} />
                                             <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{getPriorityDescription(levelNum)}</span>
                                         </div>
-                                        <Badge count={`${rolesInGroup.length} Roles`} style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', boxShadow: 'none', marginLeft: 'auto', fontWeight: 700, fontSize: 11 }} />
+                                        <Badge count={`${rolesInGroup.length} Roles`} style={{ backgroundColor: '#e0e7ff', color: '#1976D2', boxShadow: 'none', marginLeft: 'auto', fontWeight: 700, fontSize: 11 }} />
                                     </div>
 
                                     <Row gutter={[16, 16]}>
@@ -645,7 +645,7 @@ const RolesPage = () => {
                                                         <Divider style={{ margin: '0 0 14px 0' }} />
 
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <Space size={6} style={{ color: '#4f46e5', fontWeight: 700, fontSize: 12 }}>
+                                                            <Space size={6} style={{ color: '#1976D2', fontWeight: 700, fontSize: 12 }}>
                                                                 <Key size={12} />
                                                                 <span>{role.permissions?.length || 0} Rules Enabled</span>
                                                             </Space>
@@ -694,7 +694,7 @@ const RolesPage = () => {
                                                 <tr style={{ background: '#f8fafc' }}>
                                                     <td colSpan={6} style={{ padding: '14px 16px', borderTop: '1px solid #e2e8f0' }}>
                                                         <Space size={8}>
-                                                            <div style={{ display: 'flex', background: '#e0e7ff', padding: 5, borderRadius: 6, color: '#4f46e5' }}><Shield size={12} /></div>
+                                                            <div style={{ display: 'flex', background: '#e0e7ff', padding: 5, borderRadius: 6, color: '#1976D2' }}><Shield size={12} /></div>
                                                             <span style={{ fontWeight: 800, fontSize: 12.5, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#1e293b' }}>{category} Module Policies</span>
                                                         </Space>
                                                     </td>
@@ -845,7 +845,7 @@ const RolesPage = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                         <span style={{ fontWeight: 800, fontSize: 13.5, color: '#0f172a' }}>Access Control Boundary Scopes</span>
                         <Divider style={{ flex: 1, margin: 0 }} />
-                        <Badge count={`${selectedPermissions.length} Active Rules`} style={{ backgroundColor: '#4f46e5', fontWeight: 750, fontSize: 11 }} />
+                        <Badge count={`${selectedPermissions.length} Active Rules`} style={{ backgroundColor: '#1976D2', fontWeight: 750, fontSize: 11 }} />
                     </div>
 
                     {/* Row 3: Two-Column Grid of Modules */}
@@ -860,7 +860,7 @@ const RolesPage = () => {
                                     <div className="perm-picker-panel">
                                         <div className="header">
                                             <Space size={8}>
-                                                <div style={{ display: 'flex', background: '#e0e7ff', color: '#4f46e5', padding: 5, borderRadius: 6 }}><CatIcon size={12} /></div>
+                                                <div style={{ display: 'flex', background: '#e0e7ff', color: '#1976D2', padding: 5, borderRadius: 6 }}><CatIcon size={12} /></div>
                                                 <span style={{ fontWeight: 800, fontSize: 11.5, textTransform: 'uppercase', color: '#334155' }}>{cat} MODULE</span>
                                             </Space>
                                             <Button 
@@ -885,8 +885,8 @@ const RolesPage = () => {
                                                         <div 
                                                             style={{ 
                                                                 width: 16, height: 16, borderRadius: 4, 
-                                                                border: `1.5px solid ${isSel ? '#4f46e5' : '#cbd5e1'}`,
-                                                                background: isSel ? '#4f46e5' : 'transparent',
+                                                                border: `1.5px solid ${isSel ? '#1976D2' : '#cbd5e1'}`,
+                                                                background: isSel ? '#1976D2' : 'transparent',
                                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                 marginRight: 10, transition: 'all 0.1s'
                                                             }}

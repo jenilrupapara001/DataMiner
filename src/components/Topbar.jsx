@@ -124,7 +124,7 @@ const Topbar = ({ toggleSidebar }) => {
       if (notification.referenceId) {
         navigate(`/actions?id=${notification.referenceId}`);
       } else {
-        navigate('/actions');
+        navigate('/tasks');
       }
     } else if (notification.type === 'CHAT_MESSAGE') {
       if (notification.referenceId) {

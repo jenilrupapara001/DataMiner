@@ -164,20 +164,10 @@ export function useNavigationItems() {
                 }
             ),
             guard(
-                isAdmin || isGlobalUser || hasPermission('actions_view'),
-                {
-                    key: 'workflows',
-                    label: 'Workflows',
-                    path: '/actions',
-                    icon: GitBranch,
-                    section: 'automation',
-                }
-            ),
-            guard(
                 isAdmin || isGlobalUser || hasPermission('tasks_view'),
                 {
-                    key: 'optimization-tasks',
-                    label: 'Optimization Tasks',
+                    key: 'workflows',
+                    label: 'Workflows & Tasks',
                     path: '/tasks',
                     icon: ListTodo,
                     section: 'automation',
@@ -236,7 +226,7 @@ export function useNavigationItems() {
                     icon: Target,
                     section: 'intelligence',
                     badge: isBrandManager && !isAdmin ? 'View' : undefined,
-                    badgeColor: '#f59e0b',
+                    badgeColor: '#ED6C02',
                 }
             ),
             guard(

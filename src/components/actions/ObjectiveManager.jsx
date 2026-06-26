@@ -180,7 +180,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
             <Form form={form} layout="vertical" scrollToFirstError>
               <Form.Item
                 name="title"
-                label={<span style={labelStyle}>Objective Title <span style={{ color: '#ef4444' }}>*</span></span>}
+                label={<span style={labelStyle}>Objective Title <span style={{ color: '#D32F2F' }}>*</span></span>}
                 rules={[
                   { required: true, message: 'Title is required' },
                   { max: 200, message: 'Maximum 200 characters' },
@@ -198,7 +198,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
 
               <Form.Item
                 name="seller"
-                label={<span style={labelStyle}>Linked Seller <span style={{ color: '#ef4444' }}>*</span></span>}
+                label={<span style={labelStyle}>Linked Seller <span style={{ color: '#D32F2F' }}>*</span></span>}
                 rules={[{ required: true, message: 'Select a seller' }]}
               >
                 <Select showSearch optionFilterProp="label" placeholder="Select seller" style={inputStyle} options={sellerOptions} />
@@ -206,7 +206,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
 
               <Form.Item
                 name="owner"
-                label={<span style={labelStyle}>Owner / Responsible <span style={{ color: '#ef4444' }}>*</span></span>}
+                label={<span style={labelStyle}>Owner / Responsible <span style={{ color: '#D32F2F' }}>*</span></span>}
                 rules={[{ required: true, message: 'Select an owner' }]}
               >
                 <Select showSearch optionFilterProp="label" placeholder="Select owner" style={inputStyle} options={managerOptions} />
@@ -293,7 +293,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
                     styles={{ body: { padding: '12px' } }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <Text style={{ fontSize: 11, fontWeight: 600, color: '#6366f1' }}>KR #{i + 1}</Text>
+                      <Text style={{ fontSize: 11, fontWeight: 600, color: '#1976D2' }}>KR #{i + 1}</Text>
                       {keyResults.length > 1 && (
                         <Button
                           type="text"
@@ -307,7 +307,7 @@ const ObjectiveManager = ({ objective, users, onClose, onObjectiveCreated }) => 
                     </div>
 
                     <div style={{ marginBottom: 8 }}>
-                      <div style={labelStyle}>Title <span style={{ color: '#ef4444' }}>*</span></div>
+                      <div style={labelStyle}>Title <span style={{ color: '#D32F2F' }}>*</span></div>
                       <Input
                         placeholder="e.g. Increase revenue by 20%"
                         value={kr.title}

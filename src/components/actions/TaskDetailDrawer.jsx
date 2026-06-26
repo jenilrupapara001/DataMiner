@@ -62,7 +62,7 @@ const TaskDetailDrawer = ({
       closable
       title={null}
     >
-      <div style={{ borderLeft: '4px solid #6366f1', padding: '20px 24px 12px', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ borderLeft: '4px solid #1976D2', padding: '20px 24px 12px', borderBottom: '1px solid #f1f5f9' }}>
         <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Text strong style={{ fontSize: 16, color: '#1e293b', lineHeight: 1.3 }}>
             {action.title || action.action || 'Untitled Task'}
@@ -105,7 +105,7 @@ const TaskDetailDrawer = ({
           </Descriptions.Item>
           <Descriptions.Item label="Created by">
             <Space size={6}>
-              <Avatar size={22} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#6366f1' }} />
+              <Avatar size={22} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#1976D2' }} />
               <span>{formatUserName(action.createdBy)}</span>
             </Space>
           </Descriptions.Item>
@@ -123,13 +123,13 @@ const TaskDetailDrawer = ({
               <Avatar.Group size={24} max={{ count: 3 }}>
                 {action.assignedTo.map((u, i) => (
                   <Tooltip key={i} title={getAssigneeName(u)}>
-                    <Avatar style={{ background: '#6366f1' }}>{getInitials(getAssigneeName(u))}</Avatar>
+                    <Avatar style={{ background: '#1976D2' }}>{getInitials(getAssigneeName(u))}</Avatar>
                   </Tooltip>
                 ))}
               </Avatar.Group>
             ) : action.assignedTo ? (
               <Space size={6}>
-                <Avatar size={22} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#6366f1' }} />
+                <Avatar size={22} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#1976D2' }} />
                 <span>{formatUserName(action.assignedTo)}</span>
               </Space>
             ) : (
@@ -139,7 +139,7 @@ const TaskDetailDrawer = ({
           <Descriptions.Item label="Reviewer">
             {action.reviewer ? (
               <Space size={6}>
-                <Avatar size={22} icon={<UserOutlined />} style={{ background: '#f5f3ff', color: '#8b5cf6' }} />
+                <Avatar size={22} icon={<UserOutlined />} style={{ background: '#f5f3ff', color: '#9C27B0' }} />
                 <span>{formatUserName(action.reviewer)}</span>
               </Space>
             ) : (
@@ -154,8 +154,8 @@ const TaskDetailDrawer = ({
           <Descriptions.Item label="Linked Objective">
             {action.keyResultId ? (
               <Space size={4}>
-                <LinkOutlined style={{ color: '#6366f1', fontSize: 12 }} />
-                <Text style={{ color: '#6366f1' }}>
+                <LinkOutlined style={{ color: '#1976D2', fontSize: 12 }} />
+                <Text style={{ color: '#1976D2' }}>
                   {typeof action.keyResultId === 'string' ? action.keyResultId : action.keyResultId.title || 'Linked Objective'}
                 </Text>
               </Space>
@@ -214,7 +214,7 @@ const TaskDetailDrawer = ({
         <Progress
           percent={action.status === 'COMPLETED' ? 100 : action.status === 'IN_PROGRESS' ? 50 : 0}
           size="small"
-          strokeColor="#6366f1"
+          strokeColor="#1976D2"
           railColor="#f1f5f9"
           style={{ marginBottom: 12 }}
         />

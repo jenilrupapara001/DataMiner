@@ -793,7 +793,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
             children: (
               <div className="p-5 d-flex flex-column align-items-center justify-content-center gap-4" style={{ minHeight: '400px', background: '#fcfcfc' }}>
                 <div className="p-5 bg-white border rounded-4 text-center shadow-sm" style={{ maxWidth: '450px' }}>
-                  <div className="mb-4 d-inline-flex p-4 rounded-circle" style={{ background: '#e0e7ff', color: '#4f46e5' }}>
+                  <div className="mb-4 d-inline-flex p-4 rounded-circle" style={{ background: '#e0e7ff', color: '#1976D2' }}>
                     <FileDown size={48} />
                   </div>
                   <Title level={4}>Bulk Tags Template</Title>
@@ -805,7 +805,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                     size="large" 
                     icon={<Download size={18} />}
                     onClick={handleDownloadTemplate}
-                    style={{ background: '#4f46e5', borderColor: '#4f46e5', height: '50px', width: '100%', marginTop: '10px' }}
+                    style={{ background: '#1976D2', borderColor: '#1976D2', height: '50px', width: '100%', marginTop: '10px' }}
                   >
                     Download Template (Excel)
                   </Button>
@@ -845,7 +845,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: #3b82f6;
+          background: #0288D1;
         }
         .section-title {
           font-size: 12px;
@@ -915,7 +915,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
           background: #fcfcfc;
         }
         .field-checkbox-wrapper.selected {
-          border-color: #3b82f6;
+          border-color: #0288D1;
           background: #eff6ff;
         }
         .radio-pill {
@@ -927,7 +927,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
           margin: 0 !important;
         }
         .ant-radio-wrapper-checked .radio-pill {
-          border-color: #3b82f6;
+          border-color: #0288D1;
           background: #eff6ff;
         }
         .format-option-box {

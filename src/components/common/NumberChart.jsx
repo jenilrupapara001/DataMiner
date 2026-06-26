@@ -5,14 +5,14 @@ const NumberChart = ({
     label,
     value,
     icon: Icon,
-    color = '#4f46e5',
+    color = '#1976D2',
     delta,
     deltaType = 'neutral',
     subtitle
 }) => {
     const getDeltaStyles = () => {
-        if (deltaType === 'positive') return { color: '#10b981', bg: '#ecfdf5', icon: TrendingUp };
-        if (deltaType === 'negative') return { color: '#ef4444', bg: '#fef2f2', icon: TrendingDown };
+        if (deltaType === 'positive') return { color: '#2E7D32', bg: '#ecfdf5', icon: TrendingUp };
+        if (deltaType === 'negative') return { color: '#D32F2F', bg: '#fef2f2', icon: TrendingDown };
         return { color: '#64748b', bg: '#f8fafc', icon: Minus };
     };
 

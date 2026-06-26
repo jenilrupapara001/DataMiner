@@ -578,7 +578,7 @@ const ActionDetailModal = ({ isOpen, onClose, action: item }) => {
                     width: 32px;
                     height: 32px;
                     border-radius: 50%;
-                    background: #6366f1;
+                    background: #1976D2;
                     color: white;
                     display: flex;
                     align-items: center;

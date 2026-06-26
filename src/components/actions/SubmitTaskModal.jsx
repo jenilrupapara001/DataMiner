@@ -147,7 +147,7 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
       closable={!submitting} mask={{ closable: false }} destroyOnHidden
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 10, background: hasReviewer ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'linear-gradient(135deg, #10b981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 8px ${hasReviewer ? 'rgba(99,102,241,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: hasReviewer ? 'linear-gradient(135deg, #1976D2, #1976D2)' : 'linear-gradient(135deg, #2E7D32, #2E7D32)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 8px ${hasReviewer ? 'rgba(99,102,241,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
             {hasReviewer ? <SendOutlined style={{ fontSize: 14, color: '#fff' }} /> : <CheckCircleOutlined style={{ fontSize: 14, color: '#fff' }} />}
           </div>
           <div>
@@ -207,7 +207,7 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
             <Form.Item name="difficulty" style={{ marginBottom: 8 }}>
               <Rate count={5} tooltips={DIFFICULTY_TOOLTIPS}
                 character={({ index, value }) =>
-                  index < value ? <FlagFilled style={{ fontSize: 14, color: '#f59e0b' }} /> : <FlagOutlined style={{ fontSize: 14, color: '#d4d4d8' }} />
+                  index < value ? <FlagFilled style={{ fontSize: 14, color: '#ED6C02' }} /> : <FlagOutlined style={{ fontSize: 14, color: '#d4d4d8' }} />
                 } />
             </Form.Item>
           </Col>
@@ -218,10 +218,10 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
           <div style={{ marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span style={{ fontSize: 10, fontWeight: 600, color: '#71717a' }}>Subtask Progress</span>
-              <span style={{ fontSize: 10, fontWeight: 600, color: completedCount === totalCount ? '#059669' : '#71717a' }}>{completedCount}/{totalCount}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: completedCount === totalCount ? '#2E7D32' : '#71717a' }}>{completedCount}/{totalCount}</span>
             </div>
             <Progress percent={Math.round((completedCount / totalCount) * 100)} size="small"
-              strokeColor={completedCount === totalCount ? '#10b981' : '#6366f1'} showInfo={false} />
+              strokeColor={completedCount === totalCount ? '#2E7D32' : '#1976D2'} showInfo={false} />
           </div>
         )}
 
@@ -252,7 +252,7 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
             </Button>
             {audioPreview && (
               <Tag closable onClose={() => { setAudioFile(null); setAudioPreview(null); setAudioTranscript(''); }}
-                style={{ borderRadius: 6, fontSize: 11, background: '#f0fdf4', color: '#059669', border: '1px solid #a7f3d0' }}>
+                style={{ borderRadius: 6, fontSize: 11, background: '#f0fdf4', color: '#2E7D32', border: '1px solid #a7f3d0' }}>
                 {audioPreview.name} ({audioPreview.size})
               </Tag>
             )}
@@ -283,7 +283,7 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
             onClick={handleConfirmSubmit}
             icon={hasReviewer ? <SendOutlined /> : <CheckCircleOutlined />}
             style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32,
-              background: hasReviewer ? '#4f46e5' : '#059669', borderColor: hasReviewer ? '#4f46e5' : '#059669' }}>
+              background: hasReviewer ? '#1976D2' : '#2E7D32', borderColor: hasReviewer ? '#1976D2' : '#2E7D32' }}>
             {submitting ? 'Submitting...' : audioUploading ? 'Uploading audio...' : hasReviewer ? 'Submit for Review' : 'Mark Complete'}
         </Button>
         </div>

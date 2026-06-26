@@ -43,7 +43,7 @@ const UserMenu = () => {
         <div
           style={{
             padding: '8px 4px 12px',
-            borderBottom: '1px solid #f4f5f7',
+            borderBottom: '1px solid #F1F5F9',
             marginBottom: '4px',
             minWidth: '240px',
           }}
@@ -52,7 +52,7 @@ const UserMenu = () => {
             <Avatar
               size={40}
               style={{
-                background: 'linear-gradient(135deg, #d94033, #fb4f40)',
+                background: 'linear-gradient(135deg, #1565C0, #1976D2)',
                 fontSize: '14px',
                 fontWeight: 700,
                 fontFamily: 'Inter, sans-serif',
@@ -65,7 +65,7 @@ const UserMenu = () => {
                 style={{
                   fontSize: '13px',
                   fontWeight: 700,
-                  color: '#121b1e',
+                  color: '#0F172A',
                   fontFamily: 'Inter, sans-serif',
                   letterSpacing: '-0.2px',
                 }}
@@ -75,7 +75,7 @@ const UserMenu = () => {
               <div
                 style={{
                   fontSize: '11px',
-                  color: '#8c8e8f',
+                  color: '#94A3B8',
                   fontFamily: 'Inter, sans-serif',
                   marginTop: '1px',
                   overflow: 'hidden',
@@ -92,12 +92,12 @@ const UserMenu = () => {
                   gap: '4px',
                   marginTop: '4px',
                   padding: '1px 6px',
-                  background: '#fff0f0',
-                  border: '1px solid #ffb3ae',
+                  background: '#E3F2FD',
+                  border: '1px solid #90CAF9',
                   borderRadius: '100px',
                   fontSize: '9.5px',
                   fontWeight: 700,
-                  color: '#d94033',
+                  color: '#1565C0',
                   fontFamily: 'Inter, sans-serif',
                   letterSpacing: '0.02em',
                 }}
@@ -107,7 +107,7 @@ const UserMenu = () => {
                     width: '4px',
                     height: '4px',
                     borderRadius: '50%',
-                    background: '#fb4f40',
+                    background: '#1976D2',
                   }}
                 />
                 {roleName}
@@ -183,7 +183,7 @@ const UserMenu = () => {
         <Avatar
           size={28}
           style={{
-            background: 'linear-gradient(135deg, #d94033, #fb4f40)',
+            background: 'linear-gradient(135deg, #1565C0, #1976D2)',
             fontSize: '11px',
             fontWeight: 700,
             fontFamily: 'Inter, sans-serif',

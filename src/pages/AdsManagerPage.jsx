@@ -28,19 +28,19 @@ import dayjs from 'dayjs';
 // METRIC MAP
 // ═══════════════════════════════════════════════════════════════
 const METRIC_MAP = {
-  spend: { label: 'Ads Spend', color: '#fb4f40', type: 'currency', seriesType: 'column' },
-  sales: { label: 'Ads Sales', color: '#10b981', type: 'currency', seriesType: 'column' },
+  spend: { label: 'Ads Spend', color: '#D32F2F', type: 'currency', seriesType: 'column' },
+  sales: { label: 'Ads Sales', color: '#2E7D32', type: 'currency', seriesType: 'column' },
   totalSales: { label: 'Total Sales', color: '#0284c7', type: 'currency', seriesType: 'column' },
-  organicSales: { label: 'Organic Sales', color: '#059669', type: 'currency', seriesType: 'column' },
-  acos: { label: 'ACOS', color: '#dc2626', type: 'percent', seriesType: 'line' },
+  organicSales: { label: 'Organic Sales', color: '#2E7D32', type: 'currency', seriesType: 'column' },
+  acos: { label: 'ACOS', color: '#C62828', type: 'percent', seriesType: 'line' },
   tacos: { label: 'TACOS', color: '#0284c7', type: 'percent', seriesType: 'line' },
-  roas: { label: 'ROAS', color: '#d97706', type: 'ratio', seriesType: 'line' },
+  roas: { label: 'ROAS', color: '#E65100', type: 'ratio', seriesType: 'line' },
   cvr: { label: 'CVR', color: '#0d9488', type: 'percent', seriesType: 'line' },
   cpc: { label: 'CPC', color: '#ea580c', type: 'currency', seriesType: 'line' },
-  ctr: { label: 'CTR', color: '#ec4899', type: 'percent', seriesType: 'line' },
+  ctr: { label: 'CTR', color: '#9C27B0', type: 'percent', seriesType: 'line' },
   orders: { label: 'Ads Orders', color: '#9333ea', type: 'number', seriesType: 'column' },
   organicOrders: { label: 'Organic Orders', color: '#db2777', type: 'number', seriesType: 'column' },
-  totalOrders: { label: 'Total Orders', color: '#7c3aed', type: 'number', seriesType: 'column' },
+  totalOrders: { label: 'Total Orders', color: '#9C27B0', type: 'number', seriesType: 'column' },
   adSalesPct: { label: 'Ads Sales (%)', color: '#ea580c', type: 'percent', seriesType: 'line' },
   impressions: { label: 'Impressions', color: '#94a3b8', type: 'number', seriesType: 'column' },
   clicks: { label: 'Clicks', color: '#94a3b8', type: 'number', seriesType: 'column' }
@@ -167,7 +167,7 @@ const TrendBadge = ({ value, prevValue, isInverted = false }) => {
   }
   const isGood = isInverted ? diff < 0 : diff > 0;
   const Icon = isGood ? TrendingUp : TrendingDown;
-  const color = isGood ? '#059669' : '#dc2626';
+  const color = isGood ? '#2E7D32' : '#C62828';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9, fontWeight: 700, color }}>
       <Icon size={10} />
@@ -809,9 +809,9 @@ export default function AdsManagerPage() {
       <div className="ads-kpi-strip" style={{ maxHeight: showDashboardCharts ? 48 : 0, opacity: showDashboardCharts ? 1 : 0 }}>
         <div className="ads-kpi-scroll">
           {[
-            { label: 'Ads Spend', key: 'spend', color: '#fb4f40' },
+            { label: 'Ads Spend', key: 'spend', color: '#D32F2F' },
             { label: 'Ads Sales', key: 'sales', color: '#15803d' },
-            { label: 'Organic Sales', key: 'organicSales', color: '#059669' },
+            { label: 'Organic Sales', key: 'organicSales', color: '#2E7D32' },
             { label: 'ACOS', key: 'acos', color: '#b91c1c' },
             { label: 'TACOS', key: 'tacos', color: '#0891b2' },
             { label: 'ROAS', key: 'roas', color: '#a16207' },
@@ -842,7 +842,7 @@ export default function AdsManagerPage() {
           <Card style={{ borderRadius: 6, border: '1px solid #e5e7eb' }} styles={{ body: { padding: '10px 14px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 3, height: 14, background: '#fb4f40', borderRadius: 2 }} />
+                <div style={{ width: 3, height: 14, background: '#D32F2F', borderRadius: 2 }} />
                 <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Campaign Trends</Text>
               </div>
               <Select mode="multiple" value={chartConfigMetrics} onChange={setChartConfigMetrics}

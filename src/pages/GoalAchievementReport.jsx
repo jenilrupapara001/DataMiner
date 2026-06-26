@@ -92,7 +92,7 @@ const GoalAchievementReport = () => {
             render: (assignee) => (
                 <Space size={8}>
                     <Avatar 
-                        style={{ backgroundColor: '#e0e7ff', color: '#4f46e5', fontWeight: 700, fontSize: '11px' }} 
+                        style={{ backgroundColor: '#e0e7ff', color: '#1976D2', fontWeight: 700, fontSize: '11px' }} 
                         size="small"
                     >
                         {assignee ? assignee.charAt(0).toUpperCase() : '?'}
@@ -116,7 +116,7 @@ const GoalAchievementReport = () => {
                         </div>
                         <Progress 
                             percent={percent} 
-                            strokeColor={record.isOverdue ? '#ef4444' : '#10b981'} 
+                            strokeColor={record.isOverdue ? '#D32F2F' : '#2E7D32'} 
                             size={[140, 4]} 
                             showInfo={false} 
                         />
@@ -199,7 +199,7 @@ const GoalAchievementReport = () => {
                     <Space size={12}>
                         <Button
                             type="text"
-                            onClick={() => navigate('/actions')}
+                            onClick={() => navigate('/tasks')}
                             icon={<ArrowLeft size={14} />}
                             style={{ 
                                 padding: '4px 8px', 
@@ -258,8 +258,8 @@ const GoalAchievementReport = () => {
                             shape="round"
                             icon={<Download size={13} />}
                             style={{ 
-                                background: '#4f46e5', 
-                                borderColor: '#4f46e5', 
+                                background: '#1976D2', 
+                                borderColor: '#1976D2', 
                                 fontWeight: 700,
                                 fontSize: 12,
                                 height: 32,
@@ -289,7 +289,7 @@ const GoalAchievementReport = () => {
                                     type="circle" 
                                     percent={successRate} 
                                     size={45} 
-                                    strokeColor="#4f46e5"
+                                    strokeColor="#1976D2"
                                     strokeWidth={11}
                                 />
                             </div>
@@ -302,7 +302,7 @@ const GoalAchievementReport = () => {
                             styles={{ body: { padding: '16px 20px' } }}
                         >
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                <div style={{ background: '#ecfdf5', color: '#10b981', padding: 10, borderRadius: 10, display: 'flex' }}>
+                                <div style={{ background: '#ecfdf5', color: '#2E7D32', padding: 10, borderRadius: 10, display: 'flex' }}>
                                     <CheckCircle size={18} />
                                 </div>
                                 <div>
@@ -320,7 +320,7 @@ const GoalAchievementReport = () => {
                             styles={{ body: { padding: '16px 20px' } }}
                         >
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                                <div style={{ background: '#fffbeb', color: '#f59e0b', padding: 10, borderRadius: 10, display: 'flex' }}>
+                                <div style={{ background: '#fffbeb', color: '#ED6C02', padding: 10, borderRadius: 10, display: 'flex' }}>
                                     <Clock size={18} />
                                 </div>
                                 <div>
@@ -340,7 +340,7 @@ const GoalAchievementReport = () => {
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                                 <div style={{ 
                                     background: summary.overdue > 0 ? '#fef2f2' : '#f8fafc', 
-                                    color: summary.overdue > 0 ? '#ef4444' : '#64748b', 
+                                    color: summary.overdue > 0 ? '#D32F2F' : '#64748b', 
                                     padding: 10, 
                                     borderRadius: 10, 
                                     display: 'flex' 
@@ -349,7 +349,7 @@ const GoalAchievementReport = () => {
                                 </div>
                                 <div>
                                     <div style={{ fontSize: 10, fontWeight: 750, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Late Completions</div>
-                                    <h2 style={{ margin: 0, fontWeight: 800, color: summary.overdue > 0 ? '#ef4444' : '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{summary.overdue}</h2>
+                                    <h2 style={{ margin: 0, fontWeight: 800, color: summary.overdue > 0 ? '#D32F2F' : '#0f172a', fontSize: 22, letterSpacing: '-0.02em' }}>{summary.overdue}</h2>
                                     <Text type="secondary" style={{ fontSize: 11 }}>Exceeded estimated window</Text>
                                 </div>
                             </div>

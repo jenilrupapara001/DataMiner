@@ -34,7 +34,7 @@ const DashboardHeader = ({
         }
         .dash-header-filter .ant-select:hover .ant-select-selector,
         .dash-header-filter .ant-select-focused .ant-select-selector {
-          border-color: #fb4f40 !important;
+          border-color: #D32F2F !important;
           box-shadow: 0 0 0 2px rgba(251,79,64,0.08) !important;
         }
         .dash-header-filter .ant-picker {
@@ -44,7 +44,7 @@ const DashboardHeader = ({
         }
         .dash-header-filter .ant-picker:hover,
         .dash-header-filter .ant-picker-focused {
-          border-color: #fb4f40;
+          border-color: #D32F2F;
           box-shadow: 0 0 0 2px rgba(251,79,64,0.08);
         }
         @keyframes dash-spin {
@@ -141,7 +141,7 @@ const DashboardHeader = ({
               gap: 6,
               height: 32,
               padding: '0 14px',
-              background: loading ? '#94a3b8' : '#fb4f40',
+              background: loading ? '#94a3b8' : '#D32F2F',
               color: '#ffffff',
               border: 'none',
               borderRadius: 6,

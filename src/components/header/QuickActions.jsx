@@ -34,7 +34,7 @@ const QuickActions = () => {
           spin={isSyncing}
           style={{
             fontSize: '15px',
-            color: isSyncing ? '#fb4f40' : undefined,
+            color: isSyncing ? '#D32F2F' : undefined,
           }}
         />
       </button>

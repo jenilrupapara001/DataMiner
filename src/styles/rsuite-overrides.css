@@ -37,7 +37,7 @@
 
 .header-datepicker:hover,
 .header-datepicker.rs-picker-focused {
-    border-color: #10b981 !important;
+    border-color: #2E7D32 !important;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
 }
 

@@ -30,11 +30,11 @@ const StepIndicator = ({ current }) => (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{
               width: 36, height: 36, borderRadius: '50%',
-              background: done ? '#10b981' : active ? '#6366f1' : '#f1f5f9',
+              background: done ? '#2E7D32' : active ? '#1976D2' : '#f1f5f9',
               color: done || active ? '#ffffff' : '#94a3b8',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 800, fontSize: 13,
-              border: `2px solid ${done ? '#10b981' : active ? '#6366f1' : '#e2e8f0'}`,
+              border: `2px solid ${done ? '#2E7D32' : active ? '#1976D2' : '#e2e8f0'}`,
               transition: 'all 0.3s',
               boxShadow: active ? '0 4px 12px -2px rgba(99,102,241,0.4)' : 'none'
             }}>
@@ -42,13 +42,13 @@ const StepIndicator = ({ current }) => (
             </div>
             <span style={{
               fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-              color: done ? '#10b981' : active ? '#6366f1' : '#94a3b8'
+              color: done ? '#2E7D32' : active ? '#1976D2' : '#94a3b8'
             }}>{step.label}</span>
           </div>
           {idx < STEPS.length - 1 && (
             <div style={{
               height: 2, flex: 1, marginBottom: 20,
-              background: done ? '#10b981' : '#e2e8f0',
+              background: done ? '#2E7D32' : '#e2e8f0',
               transition: 'background 0.3s', maxWidth: 60
             }} />
           )}
@@ -100,7 +100,7 @@ const Step1Brand = ({ sellers, selectedSeller, onSelect }) => {
               style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
-                border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`,
+                border: `2px solid ${isSelected ? '#1976D2' : '#e2e8f0'}`,
                 background: isSelected ? '#f5f3ff' : '#ffffff',
                 transition: 'all 0.2s'
               }}
@@ -112,7 +112,7 @@ const Step1Brand = ({ sellers, selectedSeller, onSelect }) => {
                 background: isSelected ? '#ede9fe' : '#f8fafc',
                 border: `1px solid ${isSelected ? '#c4b5fd' : '#e2e8f0'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isSelected ? '#6366f1' : '#94a3b8', flexShrink: 0
+                color: isSelected ? '#1976D2' : '#94a3b8', flexShrink: 0
               }}>
                 <Building2 size={18} strokeWidth={2.5} />
               </div>
@@ -126,7 +126,7 @@ const Step1Brand = ({ sellers, selectedSeller, onSelect }) => {
                 </div>
               </div>
               {isSelected && (
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#1976D2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Check size={13} color="#ffffff" strokeWidth={2.5} />
                 </div>
               )}
@@ -185,9 +185,9 @@ const Step2Asins = ({ asins, selectedAsins, onToggle, onSelectAll, seller }) => 
           onClick={() => onSelectAll(filtered, !allSelected)}
           style={{
             padding: '7px 14px', fontSize: 11, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
-            border: `1.5px solid ${allSelected ? '#ef4444' : '#6366f1'}`,
+            border: `1.5px solid ${allSelected ? '#D32F2F' : '#1976D2'}`,
             background: allSelected ? '#fef2f2' : '#f5f3ff',
-            color: allSelected ? '#ef4444' : '#6366f1'
+            color: allSelected ? '#D32F2F' : '#1976D2'
           }}
         >
           {allSelected ? 'Deselect All' : `Select All (${filtered.length})`}
@@ -227,15 +227,15 @@ const Step2Asins = ({ asins, selectedAsins, onToggle, onSelectAll, seller }) => 
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <div style={{
                         width: 18, height: 18, borderRadius: 5,
-                        border: `2px solid ${isSelected ? '#6366f1' : '#e2e8f0'}`,
-                        background: isSelected ? '#6366f1' : '#ffffff',
+                        border: `2px solid ${isSelected ? '#1976D2' : '#e2e8f0'}`,
+                        background: isSelected ? '#1976D2' : '#ffffff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 'auto'
                       }}>
                         {isSelected && <Check size={11} color="#ffffff" strokeWidth={3} />}
                       </div>
                     </td>
                     <td style={{ padding: '8px 12px' }}>
-                      <code style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', background: '#f0f0ff', padding: '2px 7px', borderRadius: 5 }}>
+                      <code style={{ fontSize: 11, fontWeight: 700, color: '#1976D2', background: '#f0f0ff', padding: '2px 7px', borderRadius: 5 }}>
                         {asin.asinCode || asin.asin || id}
                       </code>
                     </td>
@@ -350,9 +350,9 @@ const Step4Assign = ({ users, sellers, formData, onChange }) => (
         <div style={{ display: 'flex', gap: 8 }}>
           {[
             { key: 'LOW', color: '#64748b', bg: '#f8fafc' },
-            { key: 'MEDIUM', color: '#3b82f6', bg: '#eff6ff' },
-            { key: 'HIGH', color: '#f59e0b', bg: '#fffbeb' },
-            { key: 'URGENT', color: '#ef4444', bg: '#fef2f2' },
+            { key: 'MEDIUM', color: '#0288D1', bg: '#eff6ff' },
+            { key: 'HIGH', color: '#ED6C02', bg: '#fffbeb' },
+            { key: 'URGENT', color: '#D32F2F', bg: '#fef2f2' },
           ].map(p => (
             <button
               key={p.key}
@@ -440,22 +440,22 @@ const Step5Review = ({ seller, selectedAsins, selectedTypes, formData, asins }) 
       <div style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Brand</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9C27B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Brand</div>
             <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{seller?.name}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Priority</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9C27B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Priority</div>
             <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{formData.priority}</div>
           </div>
           {formData.deadline && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Deadline</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#9C27B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Deadline</div>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{formData.deadline.toLocaleDateString()}</div>
             </div>
           )}
           {formData.assignedTo && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Assigned To</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#9C27B0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Assigned To</div>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>User selected</div>
             </div>
           )}
@@ -496,7 +496,7 @@ const Step5Review = ({ seller, selectedAsins, selectedTypes, formData, asins }) 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 100, overflowY: 'auto' }}>
         {asinDatas.map((asin, i) => (
           <code key={i} style={{
-            fontSize: 11, fontWeight: 700, color: '#6366f1',
+            fontSize: 11, fontWeight: 700, color: '#1976D2',
             background: '#f0f0ff', border: '1px solid #c7d2fe',
             padding: '3px 8px', borderRadius: 6
           }}>
@@ -626,7 +626,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 40, height: 40, borderRadius: 11,
-                background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#ffffff', boxShadow: '0 6px 16px -4px rgba(99,102,241,0.5)'
               }}>
@@ -634,7 +634,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
               </div>
               <div>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Brand Task Wizard</h2>
-                <p style={{ margin: 0, fontSize: 11, color: '#7c3aed' }}>Create optimization tasks grouped by brand</p>
+                <p style={{ margin: 0, fontSize: 11, color: '#9C27B0' }}>Create optimization tasks grouped by brand</p>
               </div>
             </div>
             <button onClick={onClose} style={{ padding: 8, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', color: '#64748b', display: 'flex' }}>
@@ -647,7 +647,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           {error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: 16, fontSize: 12, color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: 16, fontSize: 12, color: '#D32F2F' }}>
               <AlertCircle size={14} /> {error}
             </div>
           )}
@@ -681,7 +681,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
             {STEPS.map(s => (
               <div key={s.id} style={{
                 width: 8, height: 8, borderRadius: '50%',
-                background: step === s.id ? '#6366f1' : step > s.id ? '#10b981' : '#e2e8f0',
+                background: step === s.id ? '#1976D2' : step > s.id ? '#2E7D32' : '#e2e8f0',
                 transition: 'all 0.3s'
               }} />
             ))}
@@ -694,7 +694,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 padding: '9px 20px',
-                background: canNext() ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : '#f1f5f9',
+                background: canNext() ? 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)' : '#f1f5f9',
                 color: canNext() ? '#ffffff' : '#94a3b8',
                 border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700,
                 cursor: canNext() ? 'pointer' : 'not-allowed',
@@ -711,7 +711,7 @@ const BrandTaskWizard = ({ isOpen, onClose, sellers = [], asins = [], users = []
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '9px 20px',
-                background: saving ? '#f1f5f9' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                background: saving ? '#f1f5f9' : 'linear-gradient(135deg, #2E7D32 0%, #2E7D32 100%)',
                 color: saving ? '#94a3b8' : '#ffffff',
                 border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700,
                 cursor: saving ? 'not-allowed' : 'pointer',

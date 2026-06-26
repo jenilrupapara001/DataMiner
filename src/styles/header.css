@@ -275,7 +275,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #fb4f40;
+  background: #D32F2F;
   position: relative;
 }
 
@@ -284,7 +284,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: #fb4f40;
+  background: #D32F2F;
   animation: liveOrbit 1.8s ease-in-out infinite;
 }
 
@@ -452,7 +452,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #fb4f40;
+  background: #D32F2F;
 }
 
 .notif-item-icon {
@@ -508,29 +508,29 @@
 
 .date-range-popover .ant-picker:hover,
 .date-range-popover .ant-picker-focused {
-  border-color: #fb4f40;
+  border-color: #D32F2F;
   box-shadow: 0 0 0 2px rgba(251, 79, 64, 0.1);
 }
 
 .date-range-popover .ant-picker-active-bar {
-  background: #fb4f40;
+  background: #D32F2F;
 }
 
 .date-range-popover .ant-picker-cell-selected .ant-picker-cell-inner {
-  background: #fb4f40;
+  background: #D32F2F;
 }
 
 .date-range-popover .ant-picker-cell-today .ant-picker-cell-inner::before {
-  border-color: #fb4f40;
+  border-color: #D32F2F;
 }
 
 .date-range-popover .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
-  background: #fb4f40;
+  background: #D32F2F;
 }
 
 .date-range-popover .ant-picker-cell-in-view.ant-picker-cell-range-start .ant-picker-cell-inner,
 .date-range-popover .ant-picker-cell-in-view.ant-picker-cell-range-end .ant-picker-cell-inner {
-  background: #fb4f40;
+  background: #D32F2F;
 }
 
 .date-range-popover .ant-picker-cell-in-view.ant-picker-cell-in-range::before {
@@ -538,11 +538,11 @@
 }
 
 .date-range-popover .ant-picker-header button:hover {
-  color: #fb4f40;
+  color: #D32F2F;
 }
 
 .date-range-popover .ant-picker-today-btn {
-  color: #fb4f40;
+  color: #D32F2F;
 }
 
 .date-range-popover .ant-picker-today-btn:hover {

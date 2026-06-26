@@ -43,7 +43,7 @@ const GoalControlCenter = ({ goalData, loading }) => {
           value={`₹${Math.round(goalData?.dailyRequiredRevenue || 0).toLocaleString()}`}
           icon={Zap}
           subtitle="Target to stay on track"
-          color="#f59e0b"
+          color="#ED6C02"
         />
       </div>
       <div className="col-md-4">
@@ -52,7 +52,7 @@ const GoalControlCenter = ({ goalData, loading }) => {
           value={`₹${(Math.max(0, target - actual) / 1000).toFixed(1)}K`}
           icon={Target}
           subtitle={`By ${goalData?.endDate ? new Date(goalData.endDate).toLocaleDateString() : 'N/A'}`}
-          color="#ef4444"
+          color="#D32F2F"
         />
       </div>
     </div>

@@ -31,7 +31,7 @@ const formatNumber = (val) => {
 // ═══════════════════════════════════════════════════════════════
 // PREMIUM SPARKLINE COMPONENT
 // ═══════════════════════════════════════════════════════════════
-const PremiumSparkline = memo(({ data = [0], color = '#2563eb', height = 36 }) => {
+const PremiumSparkline = memo(({ data = [0], color = '#0288D1', height = 36 }) => {
     const width = 200;
     const chartData = data.length > 0 ? data : [0];
     const max = Math.max(...chartData);
@@ -83,7 +83,7 @@ const PremiumSparkline = memo(({ data = [0], color = '#2563eb', height = 36 }) =
 // ═══════════════════════════════════════════════════════════════
 // CIRCULAR PROGRESS (for Achievement Rate)
 // ═══════════════════════════════════════════════════════════════
-const CircularProgress = memo(({ percent = 0, color = '#10b981', size = 60 }) => {
+const CircularProgress = memo(({ percent = 0, color = '#2E7D32', size = 60 }) => {
     const radius = (size - 8) / 2;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
@@ -139,7 +139,7 @@ const KpiCard = memo(({ card, isLast }) => {
     const trendVal = trend ? trend.split(' ')[0] : '';
     const hasPercent = trendVal.includes('%');
     const displayTrend = hasPercent ? `${isPositive ? '+' : '-'}${trendVal.replace(/[+-]/g, '')}` : trendVal;
-    const indicatorColor = isPositive ? '#22c55e' : '#ef4444';
+    const indicatorColor = isPositive ? '#22c55e' : '#D32F2F';
 
     return (
         <div
@@ -227,8 +227,8 @@ const KpiStrip = ({
             trend: '+12.4% vs prior',
             isPositive: true,
             icon: <DollarSign size={16} strokeWidth={2.5} />,
-            color: '#2563eb',
-            gradient: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            color: '#0288D1',
+            gradient: 'linear-gradient(135deg, #0288D1 0%, #0288D1 100%)',
             sparkline: sparklineData.adSales || defaultSparklines.adSales,
         },
         {
@@ -238,8 +238,8 @@ const KpiStrip = ({
             trend: '+8.4% vs prior',
             isPositive: true,
             icon: <ShoppingBag size={16} strokeWidth={2.5} />,
-            color: '#06b6d4',
-            gradient: 'linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)',
+            color: '#0288D1',
+            gradient: 'linear-gradient(135deg, #22d3ee 0%, #0288D1 100%)',
             sparkline: sparklineData.orders || defaultSparklines.orders,
         },
         {
@@ -249,8 +249,8 @@ const KpiStrip = ({
             trend: '-2.1% improved',
             isPositive: true,
             icon: <Percent size={16} strokeWidth={2.5} />,
-            color: '#10b981',
-            gradient: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)',
+            color: '#2E7D32',
+            gradient: 'linear-gradient(135deg, #34d399 0%, #2E7D32 100%)',
             sparkline: sparklineData.acos || defaultSparklines.acos,
         },
         {
@@ -260,8 +260,8 @@ const KpiStrip = ({
             trend: '+15.2% vs prior',
             isPositive: true,
             icon: <Package size={16} strokeWidth={2.5} />,
-            color: '#8b5cf6',
-            gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+            color: '#9C27B0',
+            gradient: 'linear-gradient(135deg, #a78bfa 0%, #9C27B0 100%)',
             sparkline: sparklineData.units || defaultSparklines.units,
         },
     ];
@@ -275,8 +275,8 @@ const KpiStrip = ({
             trend: 'Goal Set',
             isPositive: true,
             icon: <Target size={16} strokeWidth={2.5} />,
-            color: '#6366f1',
-            gradient: 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)',
+            color: '#1976D2',
+            gradient: 'linear-gradient(135deg, #818cf8 0%, #1976D2 100%)',
             accentLeft: false,
         },
         {
@@ -286,8 +286,8 @@ const KpiStrip = ({
             trend: 'Realized',
             isPositive: true,
             icon: <Zap size={16} strokeWidth={2.5} />,
-            color: '#10b981',
-            gradient: 'linear-gradient(135deg, #34d399 0%, #059669 100%)',
+            color: '#2E7D32',
+            gradient: 'linear-gradient(135deg, #34d399 0%, #2E7D32 100%)',
             accentLeft: false,
         },
         {
@@ -297,14 +297,14 @@ const KpiStrip = ({
             trend: achievementRate >= 100 ? 'Outperforming' : achievementRate >= 50 ? 'On Schedule' : 'Below Target',
             isPositive: achievementRate >= 50,
             icon: <Award size={16} strokeWidth={2.5} />,
-            color: achievementRate >= 100 ? '#10b981' : achievementRate >= 80 ? '#3b82f6' : achievementRate >= 50 ? '#f59e0b' : '#ef4444',
+            color: achievementRate >= 100 ? '#2E7D32' : achievementRate >= 80 ? '#0288D1' : achievementRate >= 50 ? '#ED6C02' : '#D32F2F',
             gradient: achievementRate >= 100
-                ? 'linear-gradient(135deg, #34d399 0%, #059669 100%)'
+                ? 'linear-gradient(135deg, #34d399 0%, #2E7D32 100%)'
                 : achievementRate >= 80
-                    ? 'linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)'
+                    ? 'linear-gradient(135deg, #60a5fa 0%, #0288D1 100%)'
                     : achievementRate >= 50
-                        ? 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)'
-                        : 'linear-gradient(135deg, #f87171 0%, #dc2626 100%)',
+                        ? 'linear-gradient(135deg, #fbbf24 0%, #E65100 100%)'
+                        : 'linear-gradient(135deg, #f87171 0%, #C62828 100%)',
             showProgress: true,
             progressValue: achievementRate,
             accentLeft: false,
@@ -316,7 +316,7 @@ const KpiStrip = ({
             trend: 'Managed',
             isPositive: true,
             icon: <Users size={16} strokeWidth={2.5} />,
-            color: '#ec4899',
+            color: '#9C27B0',
             gradient: 'linear-gradient(135deg, #f472b6 0%, #db2777 100%)',
             accentLeft: false,
         },
@@ -362,11 +362,11 @@ const KpiStrip = ({
                         borderRadius: 20,
                         border: '1px solid #fecaca'
                     }}>
-                        <BarChart3 size={13} style={{ color: '#fb4f40' }} />
+                        <BarChart3 size={13} style={{ color: '#D32F2F' }} />
                         <span style={{
                             fontSize: 10,
                             fontWeight: 800,
-                            color: '#dc2626',
+                            color: '#C62828',
                             textTransform: 'uppercase',
                             letterSpacing: '0.08em'
                         }}>
@@ -376,7 +376,7 @@ const KpiStrip = ({
                             width: 6,
                             height: 6,
                             borderRadius: '50%',
-                            background: '#fb4f40',
+                            background: '#D32F2F',
                             marginLeft: 4
                         }} />
                     </div>
@@ -410,11 +410,11 @@ const KpiStrip = ({
                         borderRadius: 20,
                         border: '1px solid #fecaca'
                     }}>
-                        <Target size={13} style={{ color: '#fb4f40' }} />
+                        <Target size={13} style={{ color: '#D32F2F' }} />
                         <span style={{
                             fontSize: 10,
                             fontWeight: 800,
-                            color: '#dc2626',
+                            color: '#C62828',
                             textTransform: 'uppercase',
                             letterSpacing: '0.08em'
                         }}>
@@ -424,7 +424,7 @@ const KpiStrip = ({
                             width: 6,
                             height: 6,
                             borderRadius: '50%',
-                            background: '#fb4f40',
+                            background: '#D32F2F',
                             marginLeft: 4
                         }} />
                     </div>

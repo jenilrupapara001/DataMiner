@@ -23,13 +23,13 @@ const formatDueDate = (date) => {
         const overdueDays = Math.abs(days);
         return {
             label: overdueDays === 1 ? '1 day overdue' : `${overdueDays}d overdue`,
-            color: '#ef4444',
+            color: '#D32F2F',
             urgent: true
         };
     }
-    if (isToday(d)) return { label: 'Due today', color: '#f59e0b', urgent: true };
-    if (isTomorrow(d)) return { label: 'Due tomorrow', color: '#f59e0b', urgent: false };
-    if (days <= 3) return { label: `Due in ${days}d`, color: '#f59e0b', urgent: false };
+    if (isToday(d)) return { label: 'Due today', color: '#ED6C02', urgent: true };
+    if (isTomorrow(d)) return { label: 'Due tomorrow', color: '#ED6C02', urgent: false };
+    if (days <= 3) return { label: `Due in ${days}d`, color: '#ED6C02', urgent: false };
     if (days <= 7) return { label: format(d, 'EEE, MMM d'), color: '#64748b', urgent: false };
     return { label: format(d, 'MMM d, yyyy'), color: '#94a3b8', urgent: false };
 };
@@ -41,7 +41,7 @@ const getStatusConfig = (task) => {
     if (isOverdue) {
         return {
             label: 'OVERDUE',
-            color: '#ef4444',
+            color: '#D32F2F',
             bg: '#fef2f2',
             border: '#fecaca',
             icon: AlertTriangle,
@@ -53,7 +53,7 @@ const getStatusConfig = (task) => {
         case 'COMPLETED':
             return {
                 label: 'DONE',
-                color: '#10b981',
+                color: '#2E7D32',
                 bg: '#ecfdf5',
                 border: '#a7f3d0',
                 icon: CheckCircle2
@@ -61,7 +61,7 @@ const getStatusConfig = (task) => {
         case 'IN_PROGRESS':
             return {
                 label: 'ACTIVE',
-                color: '#3b82f6',
+                color: '#0288D1',
                 bg: '#eff6ff',
                 border: '#bfdbfe',
                 icon: PlayCircle,
@@ -70,7 +70,7 @@ const getStatusConfig = (task) => {
         case 'PENDING':
             return {
                 label: 'PENDING',
-                color: '#f59e0b',
+                color: '#ED6C02',
                 bg: '#fffbeb',
                 border: '#fde68a',
                 icon: Clock
@@ -89,13 +89,13 @@ const getStatusConfig = (task) => {
 const getPriorityConfig = (priority = 'NORMAL') => {
     const p = String(priority).toUpperCase();
     if (p === 'HIGH' || p === 'URGENT' || p === 'CRITICAL') {
-        return { color: '#ef4444', label: 'High', icon: '🔴' };
+        return { color: '#D32F2F', label: 'High', icon: '🔴' };
     }
     if (p === 'MEDIUM') {
-        return { color: '#f59e0b', label: 'Medium', icon: '🟡' };
+        return { color: '#ED6C02', label: 'Medium', icon: '🟡' };
     }
     if (p === 'LOW') {
-        return { color: '#10b981', label: 'Low', icon: '🟢' };
+        return { color: '#2E7D32', label: 'Low', icon: '🟢' };
     }
     return { color: '#64748b', label: 'Normal', icon: '⚪' };
 };
@@ -108,12 +108,12 @@ const getInitials = (name) => {
 const getAvatarColor = (name) => {
     if (!name) return { bg: '#f1f5f9', text: '#64748b' };
     const colors = [
-        { bg: '#dbeafe', text: '#2563eb' },
+        { bg: '#dbeafe', text: '#0288D1' },
         { bg: '#fce7f3', text: '#db2777' },
-        { bg: '#d1fae5', text: '#059669' },
-        { bg: '#fef3c7', text: '#d97706' },
-        { bg: '#e0e7ff', text: '#4f46e5' },
-        { bg: '#fee2e2', text: '#dc2626' },
+        { bg: '#d1fae5', text: '#2E7D32' },
+        { bg: '#fef3c7', text: '#E65100' },
+        { bg: '#e0e7ff', text: '#1976D2' },
+        { bg: '#fee2e2', text: '#C62828' },
         { bg: '#cffafe', text: '#0891b2' },
         { bg: '#f3e8ff', text: '#9333ea' }
     ];
@@ -166,10 +166,10 @@ const SegmentedProgress = memo(({ counts, total }) => {
     }
 
     const segments = [
-        { label: 'Completed', value: counts.completed, color: '#10b981' },
-        { label: 'In Progress', value: counts.inProgress, color: '#3b82f6' },
-        { label: 'Pending', value: counts.pending, color: '#f59e0b' },
-        { label: 'Overdue', value: counts.overdue, color: '#ef4444' },
+        { label: 'Completed', value: counts.completed, color: '#2E7D32' },
+        { label: 'In Progress', value: counts.inProgress, color: '#0288D1' },
+        { label: 'Pending', value: counts.pending, color: '#ED6C02' },
+        { label: 'Overdue', value: counts.overdue, color: '#D32F2F' },
         { label: 'Todo', value: counts.todo, color: '#94a3b8' },
     ].filter(s => s.value > 0);
 
@@ -429,7 +429,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                     border-color: #cbd0d4 !important;
                 }
                 .section-link-tasks:hover {
-                    color: #fb4f40 !important;
+                    color: #D32F2F !important;
                     transform: translateX(2px);
                 }
                 @keyframes shimmer-stat {
@@ -474,7 +474,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+                                background: 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -503,7 +503,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                             gap: 3,
                                             fontSize: 9,
                                             fontWeight: 800,
-                                            color: '#dc2626',
+                                            color: '#C62828',
                                             background: '#fef2f2',
                                             border: '1px solid #fecaca',
                                             padding: '1px 6px',
@@ -531,7 +531,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#fb4f40',
+                                color: '#D32F2F',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -559,7 +559,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 marginBottom: 8
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Award size={13} style={{ color: counts.completionRate >= 70 ? '#10b981' : counts.completionRate >= 40 ? '#f59e0b' : '#94a3b8' }} strokeWidth={2.5} />
+                                    <Award size={13} style={{ color: counts.completionRate >= 70 ? '#2E7D32' : counts.completionRate >= 40 ? '#ED6C02' : '#94a3b8' }} strokeWidth={2.5} />
                                     <span style={{
                                         fontSize: 11,
                                         fontWeight: 700,
@@ -574,7 +574,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 <span style={{
                                     fontSize: 18,
                                     fontWeight: 800,
-                                    color: counts.completionRate >= 70 ? '#10b981' : counts.completionRate >= 40 ? '#f59e0b' : '#64748b',
+                                    color: counts.completionRate >= 70 ? '#2E7D32' : counts.completionRate >= 40 ? '#ED6C02' : '#64748b',
                                     letterSpacing: '-0.3px'
                                 }}>
                                     {counts.completionRate.toFixed(0)}%
@@ -605,7 +605,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 icon={AlertTriangle}
                                 value={counts.overdue}
                                 label="Overdue"
-                                color="#ef4444"
+                                color="#D32F2F"
                                 animate
                             />
                         )}
@@ -614,7 +614,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 icon={PlayCircle}
                                 value={counts.inProgress}
                                 label="Active"
-                                color="#3b82f6"
+                                color="#0288D1"
                                 animate
                             />
                         )}
@@ -623,7 +623,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 icon={Clock}
                                 value={counts.pending}
                                 label="Pending"
-                                color="#f59e0b"
+                                color="#ED6C02"
                             />
                         )}
                         {counts.todo > 0 && (
@@ -639,7 +639,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                 icon={CheckCircle2}
                                 value={counts.completed}
                                 label="Done"
-                                color="#10b981"
+                                color="#2E7D32"
                             />
                         )}
                     </div>
@@ -667,7 +667,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                     width: 32,
                                     height: 32,
                                     border: '3px solid #f1f5f9',
-                                    borderTop: '3px solid #f59e0b',
+                                    borderTop: '3px solid #ED6C02',
                                     borderRadius: '50%',
                                     animation: 'spin 1s linear infinite',
                                     marginBottom: 12
@@ -696,7 +696,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                                     marginBottom: 12,
                                     border: '2px solid #a7f3d0'
                                 }}>
-                                    <Sparkles size={20} style={{ color: '#10b981' }} strokeWidth={2.5} />
+                                    <Sparkles size={20} style={{ color: '#2E7D32' }} strokeWidth={2.5} />
                                 </div>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
                                     All Caught Up! 🎉
@@ -749,7 +749,7 @@ const TasksOverviewCard = ({ tasks = [], loading = false }) => {
                             gap: 4,
                             fontSize: 10,
                             fontWeight: 700,
-                            color: counts.completionRate >= 70 ? '#059669' : counts.completionRate >= 40 ? '#d97706' : '#64748b',
+                            color: counts.completionRate >= 70 ? '#2E7D32' : counts.completionRate >= 40 ? '#E65100' : '#64748b',
                             background: counts.completionRate >= 70 ? '#d1fae5' : counts.completionRate >= 40 ? '#fef3c7' : '#f1f5f9',
                             padding: '3px 8px',
                             borderRadius: 12,

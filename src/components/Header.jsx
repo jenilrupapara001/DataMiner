@@ -69,12 +69,12 @@ function formatTimestamp(dateString) {
 }
 
 const TYPE_CONFIG = {
-    ALERT: { icon: BellRing, color: '#ef4444' },
-    ACTION_ASSIGNED: { icon: Check, color: '#10b981' },
-    CHAT_MENTION: { icon: MessageSquare, color: '#8b5cf6' },
-    CHAT_MESSAGE: { icon: MessageSquare, color: '#8b5cf6' },
-    SYSTEM: { icon: ShieldAlert, color: '#f59e0b' },
-    DEFAULT: { icon: Info, color: '#3b82f6' },
+    ALERT: { icon: BellRing, color: '#D32F2F' },
+    ACTION_ASSIGNED: { icon: Check, color: '#2E7D32' },
+    CHAT_MENTION: { icon: MessageSquare, color: '#9C27B0' },
+    CHAT_MESSAGE: { icon: MessageSquare, color: '#9C27B0' },
+    SYSTEM: { icon: ShieldAlert, color: '#ED6C02' },
+    DEFAULT: { icon: Info, color: '#0288D1' },
 };
 
 function getTypeConfig(type) {
@@ -151,7 +151,7 @@ const NotificationItem = memo(({ raw, onRead, onClick }) => {
                     width: 5,
                     height: 5,
                     borderRadius: '50%',
-                    backgroundColor: '#2563eb',
+                    backgroundColor: '#0288D1',
                     position: 'absolute',
                     right: 10,
                     top: 14,
@@ -183,7 +183,7 @@ const NotificationPanel = memo(({
                 <Button
                     type="link" size="small"
                     onClick={onMarkAllRead}
-                    style={{ padding: 0, height: 'auto', fontSize: 12, fontWeight: 600, color: '#2563eb' }}
+                    style={{ padding: 0, height: 'auto', fontSize: 12, fontWeight: 600, color: '#0288D1' }}
                 >
                     Clear All
                 </Button>
@@ -480,7 +480,7 @@ const Header = () => {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    backgroundColor: '#ef4444',
+                                    backgroundColor: '#D32F2F',
                                 }}
                             >
                                 <Bell size={16} />

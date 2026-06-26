@@ -99,7 +99,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
           background: #fff;
         }
         .sub-img-grid:hover {
-          border-color: #4f46e5;
+          border-color: #1976D2;
           transform: translateY(-2px);
         }
         .compact-kpi-container {
@@ -259,7 +259,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                   {discountPct > 0 && (
                     <>
                       <Text type="secondary" delete style={{ fontSize: '10px' }}>₹{asin.mrp || 0}</Text>
-                      <span style={{ color: '#10b981', fontWeight: 700, fontSize: '10px' }}>-{discountPct}%</span>
+                      <span style={{ color: '#2E7D32', fontWeight: 700, fontSize: '10px' }}>-{discountPct}%</span>
                     </>
                   )}
                 </div>
@@ -270,7 +270,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                   title={<Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>BSR Rank</Text>}
                   value={asin.bsr || 0}
                   formatter={(val) => `#${val?.toLocaleString() || '—'}`}
-                  styles={{ content: { color: '#4f46e5', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
+                  styles={{ content: { color: '#1976D2', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
                 />
                 <Text type="secondary" style={{ fontSize: '10px', display: 'block', marginTop: '2px' }}>Category Tier</Text>
               </div>
@@ -279,7 +279,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                 <Statistic
                   title={<Text type="secondary" style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stock Levels</Text>}
                   value={asin.stockLevel || 0}
-                  styles={{ content: { color: (asin.stockLevel || 0) > 10 ? '#10b981' : '#ef4444', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
+                  styles={{ content: { color: (asin.stockLevel || 0) > 10 ? '#2E7D32' : '#D32F2F', fontWeight: 800, fontSize: '16px', lineHeight: 1.2 } }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                   <Badge status={(asin.stockLevel || 0) > 10 ? 'success' : 'error'} />
@@ -334,7 +334,7 @@ const AsinDetailsModal = ({ asin, onClose }) => {
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {asin.bulletPointsList.map((point, idx) => (
                       <li key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                        <CheckCircle2 size={12} style={{ color: '#10b981', flexShrink: 0, marginTop: '2px' }} />
+                        <CheckCircle2 size={12} style={{ color: '#2E7D32', flexShrink: 0, marginTop: '2px' }} />
                         <Text style={{ color: '#475569', fontSize: '11px', lineHeight: 1.4 }}>{point}</Text>
                       </li>
                     ))}

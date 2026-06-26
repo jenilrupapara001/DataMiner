@@ -56,7 +56,7 @@ const SellerPageHeader = ({
                 size="small"
                 style={{
                   borderRadius: 6, fontWeight: 700, fontSize: 11, height: 28,
-                  background: 'linear-gradient(135deg, #d94033, #fb4f40)',
+                  background: 'linear-gradient(135deg, #d94033, #D32F2F)',
                   borderColor: '#d94033',
                 }}>
                 Add Store

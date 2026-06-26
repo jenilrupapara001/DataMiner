@@ -18,7 +18,7 @@ const RULE_TYPE_OPTIONS = [
 ];
 
 const typeColors = {
-  ASIN: { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+  ASIN: { bg: '#ecfdf5', color: '#2E7D32', border: '#a7f3d0' },
 };
 
 const TypeBadge = ({ type }) => {
@@ -147,20 +147,20 @@ const RuleSetsPage = () => {
             </div>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#ecfdf5', borderRadius: 8, border: '1px solid #d1fae5' }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#2E7D32', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <CheckCircle2 size={13} color="#fff" />
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#2E7D32', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active</div>
               <div style={{ fontSize: 17, fontWeight: 700, color: '#065f46' }}>{activeCount}</div>
             </div>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: '#0288D1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Activity size={13} color="#fff" />
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Auto-run</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#0288D1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Auto-run</div>
               <div style={{ fontSize: 17, fontWeight: 700, color: '#1e40af' }}>{autoCount}</div>
             </div>
           </div>
@@ -242,12 +242,12 @@ const RuleSetsPage = () => {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ fontSize: 10, color: '#a1a1aa' }}>Matched</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>{summary.totalMatched || 0}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#2E7D32' }}>{summary.totalMatched || 0}</span>
                       </div>
                       <div style={{ flex: 1 }} />
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         {rs.isAutomated && (
-                          <Tag style={{ fontSize: 9, fontWeight: 700, borderRadius: 4, padding: '1px 5px', margin: 0, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                          <Tag style={{ fontSize: 9, fontWeight: 700, borderRadius: 4, padding: '1px 5px', margin: 0, background: '#eff6ff', color: '#0288D1', border: '1px solid #bfdbfe' }}>
                             <Clock size={9} style={{ marginRight: 2 }} />
                             {rs.runFrequency || 'Daily'}
                           </Tag>
@@ -265,7 +265,7 @@ const RuleSetsPage = () => {
                           <Button type="text" size="small" icon={<PlayCircle size={13} />}
                             loading={executing === (rs._id || rs.id)}
                             onClick={() => handleExecute(rs._id || rs.id)}
-                            style={{ color: '#059669' }} />
+                            style={{ color: '#2E7D32' }} />
                         </Tooltip>
                         <Tooltip title="Duplicate">
                           <Button type="text" size="small" icon={<Copy size={13} />}

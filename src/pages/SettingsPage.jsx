@@ -565,7 +565,7 @@ const SettingsPage = () => {
                     </SectionCard>
 
                     {/* Live Data Sync Schedule */}
-                    <SectionCard icon={Zap} iconColor="#7c3aed" title="Live Data Sync (Amazon Creators API)">
+                    <SectionCard icon={Zap} iconColor="#9C27B0" title="Live Data Sync (Amazon Creators API)">
                         <Alert
                             message="Live Sync updates product data (Price, BSR, Rating, Reviews, Images) directly from Amazon's API in real-time."
                             type="info"
@@ -577,7 +577,7 @@ const SettingsPage = () => {
                             <Col xs={24} md={8}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block' }} />
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#9C27B0', display: 'inline-block' }} />
                                         <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>Live Sync</span>
                                     </div>
                                     <Switch

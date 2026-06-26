@@ -67,10 +67,10 @@ function getPasswordStrength(pw) {
   if (/[0-9]/.test(pw)) score++;
   if (/[!@#$%^&*(),.?":{}|<>]/.test(pw)) score++;
 
-  if (score <= 2) return { score, label: 'Weak', color: '#ef4444', percent: 25 };
-  if (score <= 3) return { score, label: 'Fair', color: '#f59e0b', percent: 50 };
-  if (score <= 4) return { score, label: 'Good', color: '#3b82f6', percent: 75 };
-  return { score, label: 'Strong', color: '#10b981', percent: 100 };
+  if (score <= 2) return { score, label: 'Weak', color: '#D32F2F', percent: 25 };
+  if (score <= 3) return { score, label: 'Fair', color: '#ED6C02', percent: 50 };
+  if (score <= 4) return { score, label: 'Good', color: '#0288D1', percent: 75 };
+  return { score, label: 'Strong', color: '#2E7D32', percent: 100 };
 }
 
 // Get user's full name
@@ -189,7 +189,7 @@ const SetupWizardPage = () => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
-          <div style={{ background: '#e0e7ff', padding: 8, borderRadius: 8, color: '#4f46e5', display: 'flex' }}>
+          <div style={{ background: '#e0e7ff', padding: 8, borderRadius: 8, color: '#1976D2', display: 'flex' }}>
             <Lock size={18} />
           </div>
           <div>
@@ -200,7 +200,7 @@ const SetupWizardPage = () => {
         </div>
 
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
-          <div style={{ background: '#ecfeff', padding: 8, borderRadius: 8, color: '#06b6d4', display: 'flex' }}>
+          <div style={{ background: '#ecfeff', padding: 8, borderRadius: 8, color: '#0288D1', display: 'flex' }}>
             <Shield size={18} />
           </div>
           <div>
@@ -211,7 +211,7 @@ const SetupWizardPage = () => {
         </div>
 
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', border: '1px solid #f1f5f9', background: '#f8fafc', padding: '16px 20px', borderRadius: 12 }}>
-          <div style={{ background: '#f0fdf4', padding: 8, borderRadius: 8, color: '#10b981', display: 'flex' }}>
+          <div style={{ background: '#f0fdf4', padding: 8, borderRadius: 8, color: '#2E7D32', display: 'flex' }}>
             <FileCheck size={18} />
           </div>
           <div>
@@ -238,25 +238,25 @@ const SetupWizardPage = () => {
           {
             title: 'Strong Password',
             desc: 'Create passwords that are difficult to guess. Avoid reusing passwords from other external sites.',
-            color: '#4f46e5',
+            color: '#1976D2',
             bg: '#eef2ff'
           },
           {
             title: 'Trusted Devices',
             desc: 'Only mark personal or company-issued computers as trusted. Never trust public terminals.',
-            color: '#06b6d4',
+            color: '#0288D1',
             bg: '#ecfeff'
           },
           {
             title: 'Protect OTPs',
             desc: 'One-time passwords are strictly confidential. No RetailOps representative will ever request your OTP.',
-            color: '#f59e0b',
+            color: '#ED6C02',
             bg: '#fffbeb'
           },
           {
             title: 'Account Privacy',
             desc: 'Do not share accounts. Sharing credentials violates security protocols and dilutes activity audits.',
-            color: '#10b981',
+            color: '#2E7D32',
             bg: '#f0fdf4'
           }
         ].map((tip, i) => (
@@ -345,8 +345,8 @@ const SetupWizardPage = () => {
           <Text strong style={{ fontSize: 12, color: '#475569', display: 'block', marginBottom: 8 }}>Password Requirements</Text>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
             {pwRequirements.map((req, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: req.met ? '#10b981' : '#64748b' }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: req.met ? '#10b981' : '#cbd5e1' }} />
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: req.met ? '#2E7D32' : '#64748b' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: req.met ? '#2E7D32' : '#cbd5e1' }} />
                 <span>{req.text}</span>
               </div>
             ))}
@@ -482,13 +482,13 @@ const SetupWizardPage = () => {
             height: 72, 
             borderRadius: '50%', 
             background: '#ecfdf5', 
-            border: '2px solid #10b981', 
+            border: '2px solid #2E7D32', 
             display: 'inline-flex', 
             alignItems: 'center', 
             justifyContent: 'center',
             marginBottom: 20 
           }}>
-            <CheckCircle2 size={36} color="#10b981" />
+            <CheckCircle2 size={36} color="#2E7D32" />
           </div>
           
           <Title level={2} style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px' }}>
@@ -616,14 +616,14 @@ const SetupWizardPage = () => {
 
             <div className="sidebar-footer">
               <div className="help-card">
-                <Info size={14} color="#4f46e5" />
+                <Info size={14} color="#1976D2" />
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#0f172a' }}>
                     Need help?
                   </div>
                   <a
                     href="mailto:support@brandcentral.in"
-                    style={{ fontSize: 11, color: '#4f46e5' }}
+                    style={{ fontSize: 11, color: '#1976D2' }}
                   >
                     Contact support
                   </a>
@@ -836,14 +836,14 @@ const wizardStyles = `
     }
     
     .step-circle.active {
-        background: #4f46e5;
-        border: 2px solid #4f46e5;
+        background: #1976D2;
+        border: 2px solid #1976D2;
         box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
     }
     
     .step-circle.completed {
-        background: #10b981;
-        border: 2px solid #10b981;
+        background: #2E7D32;
+        border: 2px solid #2E7D32;
     }
     
     .step-line {
@@ -856,7 +856,7 @@ const wizardStyles = `
     }
     
     .step-line.completed {
-        background: #10b981;
+        background: #2E7D32;
     }
     
     .step-info {
@@ -1143,7 +1143,7 @@ const wizardStyles = `
         display: flex;
         align-items: center;
         gap: 6px;
-        color: #ef4444;
+        color: #D32F2F;
         font-size: 12px;
         margin-top: 4px;
         font-weight: 500;
@@ -1196,7 +1196,7 @@ const wizardStyles = `
     }
     
     .requirement-item.met {
-        color: #10b981;
+        color: #2E7D32;
         font-weight: 500;
     }
     
@@ -1257,7 +1257,7 @@ const wizardStyles = `
         width: 20px;
         height: 20px;
         border-radius: 6px;
-        background: #10b981;
+        background: #2E7D32;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1287,7 +1287,7 @@ const wizardStyles = `
         align-items: center;
         gap: 4px;
         font-size: 12px;
-        color: #4f46e5;
+        color: #1976D2;
         font-weight: 600;
         text-decoration: none;
     }
@@ -1312,7 +1312,7 @@ const wizardStyles = `
         width: 80px;
         height: 80px;
         border-radius: 28px;
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(135deg, #2E7D32 0%, #2E7D32 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1395,7 +1395,7 @@ const wizardStyles = `
         align-items: center;
         gap: 8px;
         padding: 12px 26px;
-        background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+        background: linear-gradient(135deg, #1976D2 0%, #4338ca 100%);
         color: white;
         border: none;
         border-radius: 10px;
@@ -1422,7 +1422,7 @@ const wizardStyles = `
         align-items: center;
         gap: 8px;
         padding: 12px 28px;
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(135deg, #2E7D32 0%, #2E7D32 100%);
         color: white;
         border: none;
         border-radius: 10px;
@@ -1434,7 +1434,7 @@ const wizardStyles = `
     }
     
     .btn-success:hover:not(:disabled) {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        background: linear-gradient(135deg, #2E7D32 0%, #047857 100%);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         transform: translateY(-1px);
     }

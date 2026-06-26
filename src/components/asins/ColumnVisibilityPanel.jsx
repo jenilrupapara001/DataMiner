@@ -173,7 +173,7 @@ const ColumnVisibilityPanel = ({
         }
         .col-list-item:hover {
           background: #f8fafc;
-          border-left-color: #3b82f6;
+          border-left-color: #0288D1;
         }
         .col-list-item.selected {
           background: #eff6ff;
@@ -190,8 +190,8 @@ const ColumnVisibilityPanel = ({
           font-weight: 500;
         }
         .category-pill:hover {
-          border-color: #3b82f6;
-          color: #3b82f6;
+          border-color: #0288D1;
+          color: #0288D1;
         }
         .category-pill.active {
           background: #18181b;
@@ -304,7 +304,7 @@ const ColumnVisibilityPanel = ({
                       width: '8px', 
                       height: '8px', 
                       borderRadius: '50%', 
-                      background: isVisible ? '#10b981' : '#e2e8f0' 
+                      background: isVisible ? '#2E7D32' : '#e2e8f0' 
                     }} />
                   </div>
                 )}

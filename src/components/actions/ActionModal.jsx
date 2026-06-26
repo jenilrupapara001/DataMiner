@@ -179,7 +179,7 @@ const ActionModal = ({ isOpen, onClose, onSave, action, currentUser, users, sell
 
           <Form.Item
             name="title"
-            label={<span style={labelStyle}>Task Title <span style={{ color: '#ef4444' }}>*</span></span>}
+            label={<span style={labelStyle}>Task Title <span style={{ color: '#D32F2F' }}>*</span></span>}
             rules={[
               { required: true, message: 'Title is required' },
               { min: 3, message: 'Minimum 3 characters' },
@@ -206,7 +206,7 @@ const ActionModal = ({ isOpen, onClose, onSave, action, currentUser, users, sell
             <Col span={12}>
               <Form.Item
                 name="type"
-                label={<span style={labelStyle}>Task Type <span style={{ color: '#ef4444' }}>*</span></span>}
+                label={<span style={labelStyle}>Task Type <span style={{ color: '#D32F2F' }}>*</span></span>}
                 rules={[{ required: true, message: 'Select a type' }]}
               >
                 <Select placeholder="Select type" style={inputStyle}>
@@ -331,7 +331,7 @@ const ActionModal = ({ isOpen, onClose, onSave, action, currentUser, users, sell
             <Col span={12}>
               <Form.Item
                 name="priority"
-                label={<span style={labelStyle}>Priority <span style={{ color: '#ef4444' }}>*</span></span>}
+                label={<span style={labelStyle}>Priority <span style={{ color: '#D32F2F' }}>*</span></span>}
                 rules={[{ required: true, message: 'Select priority' }]}
               >
                 <Radio.Group

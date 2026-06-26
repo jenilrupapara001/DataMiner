@@ -19,7 +19,7 @@ import { PageLoading } from '../components/application/loading-indicator';
 
 const { Text } = Typography;
 
-const COLORS = ['#1e293b', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9', '#f43f5e', '#f97316'];
+const COLORS = ['#1e293b', '#0288D1', '#2E7D32', '#ED6C02', '#9C27B0', '#0ea5e9', '#f43f5e', '#ED6C02'];
 
 const fmtCur = (v) => {
   if (v == null || isNaN(v)) return '₹0';
@@ -125,11 +125,11 @@ const SkuReport = () => {
     const acos = adSales > 0 ? ((adSpend / adSales) * 100).toFixed(1) : '0.0';
     return [
       { label: 'REVENUE', value: fmtCur(kpiSummary.total_revenue), trend: '+8.2%', color: '#1e293b', inv: false },
-      { label: 'UNITS SOLD', value: (kpiSummary.units_sold || 0).toLocaleString('en-IN'), trend: '+5.1%', color: '#3b82f6', inv: false },
+      { label: 'UNITS SOLD', value: (kpiSummary.units_sold || 0).toLocaleString('en-IN'), trend: '+5.1%', color: '#0288D1', inv: false },
       { label: 'AD SPEND', value: fmtCur(adSpend), trend: '+3.1%', color: '#f43f5e', inv: false },
-      { label: 'ACOS', value: `${acos}%`, trend: '-1.2%', color: '#f59e0b', inv: true },
-      { label: 'SESSIONS', value: (kpiSummary.sessions || 0).toLocaleString('en-IN'), trend: '+2.4%', color: '#10b981', inv: false },
-      { label: 'CLICKS', value: (kpiSummary.clicks || 0).toLocaleString('en-IN'), trend: '+4.0%', color: '#8b5cf6', inv: false },
+      { label: 'ACOS', value: `${acos}%`, trend: '-1.2%', color: '#ED6C02', inv: true },
+      { label: 'SESSIONS', value: (kpiSummary.sessions || 0).toLocaleString('en-IN'), trend: '+2.4%', color: '#2E7D32', inv: false },
+      { label: 'CLICKS', value: (kpiSummary.clicks || 0).toLocaleString('en-IN'), trend: '+4.0%', color: '#9C27B0', inv: false },
     ];
   }, [kpiSummary]);
 
@@ -161,7 +161,7 @@ const SkuReport = () => {
   const acosBadge = (acos) => {
     const v = parseFloat(acos);
     if (!v) return <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>;
-    return <span style={{ fontSize: 11, fontWeight: 700, color: v < 15 ? '#059669' : v < 25 ? '#d97706' : '#dc2626', background: v < 15 ? '#ecfdf5' : v < 25 ? '#fffbeb' : '#fef2f2', padding: '2px 8px', borderRadius: 20 }}>{v}%</span>;
+    return <span style={{ fontSize: 11, fontWeight: 700, color: v < 15 ? '#2E7D32' : v < 25 ? '#E65100' : '#C62828', background: v < 15 ? '#ecfdf5' : v < 25 ? '#fffbeb' : '#fef2f2', padding: '2px 8px', borderRadius: 20 }}>{v}%</span>;
   };
 
   const columns = [
@@ -196,7 +196,7 @@ const SkuReport = () => {
       render: (v) => {
         const num = parseFloat(v);
         if (!num) return <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>;
-        return <span style={{ fontWeight: num >= 8 ? 700 : num >= 5 ? 600 : 500, fontSize: 12, color: num >= 8 ? '#059669' : num >= 5 ? '#0f172a' : '#d97706' }}>{num}<span style={{ color: '#8c8e8f', fontWeight: 400, fontSize: 11, marginLeft: 1 }}>x</span></span>;
+        return <span style={{ fontWeight: num >= 8 ? 700 : num >= 5 ? 600 : 500, fontSize: 12, color: num >= 8 ? '#2E7D32' : num >= 5 ? '#0f172a' : '#E65100' }}>{num}<span style={{ color: '#8c8e8f', fontWeight: 400, fontSize: 11, marginLeft: 1 }}>x</span></span>;
       } },
   ];
 
@@ -236,7 +236,7 @@ const SkuReport = () => {
               </div>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{k.value}</div>
               <div style={{ marginTop: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, color: good ? '#059669' : '#dc2626', background: good ? '#ecfdf5' : '#fef2f2' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, color: good ? '#2E7D32' : '#C62828', background: good ? '#ecfdf5' : '#fef2f2' }}>
                   {good ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                   {k.trend} <span style={{ color: '#8c8e8f', fontWeight: 500 }}>vs prev</span>
                 </span>
@@ -267,12 +267,12 @@ const SkuReport = () => {
                     <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <RTooltip content={<TooltipBox />} />
                     <Bar yAxisId="l" dataKey="revenue" fill="#1e293b" radius={[4, 4, 0, 0]} barSize={24} name="Revenue" />
-                    <Bar yAxisId="r" dataKey="units" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24} name="Units" />
+                    <Bar yAxisId="r" dataKey="units" fill="#2E7D32" radius={[4, 4, 0, 0]} barSize={24} name="Units" />
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#1e293b', display: 'inline-block' }} />Revenue</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981', display: 'inline-block' }} />Units</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#2E7D32', display: 'inline-block' }} />Units</span>
                 </div>
               </Card>
             </Col>

@@ -56,7 +56,7 @@
 }
 
 .action-tab-btn.active {
-    color: #3b82f6;
+    color: #0288D1;
 }
 
 .action-tab-btn.active::after {
@@ -66,7 +66,7 @@
     left: 0;
     width: 100%;
     height: 3px;
-    background: #3b82f6;
+    background: #0288D1;
     border-radius: 3px 3px 0 0;
 }
 
@@ -114,7 +114,7 @@
 }
 
 .form-input-clean:focus {
-    border-color: #3b82f6;
+    border-color: #0288D1;
     box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
     outline: none;
 }
@@ -158,7 +158,7 @@
 }
 
 .message-sent {
-    background: #3b82f6;
+    background: #0288D1;
     color: #fff;
     border-radius: 16px 16px 2px 16px;
     padding: 0.75rem 1rem;

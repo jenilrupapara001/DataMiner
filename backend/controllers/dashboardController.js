@@ -309,7 +309,9 @@ exports.getDashboardData = async (req, res) => {
     dashboardCache.set(cacheKey, response);
     res.json(response);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 

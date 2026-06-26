@@ -170,8 +170,9 @@ class SchedulerService {
                 console.log('⚡ [Cron] Triggering Daily Live Data Sync...');
                 try {
                     const liveSyncService = require('./liveDataSyncService');
-                    const result = await liveSyncService.syncAllSellers({ concurrency: liveSyncConcurrency });
-                    console.log('⚡ [Cron] Live Sync completed:', result.summary);
+                    // Use concurrency=1 for reliable sequential processing with retries
+                    const result = await liveSyncService.syncAllSellers({ concurrency: 1, maxRetries: 2 });
+                    console.log('⚡ [Cron] Live Sync completed:', result.summary || result);
                 } catch (err) {
                     console.error('⚡ [Cron] Live Sync failed:', err.message);
                 }

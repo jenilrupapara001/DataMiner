@@ -113,7 +113,7 @@ const SellerToolbar = ({
           />
 
           <Popover content={moreFiltersContent} title={null} trigger="click" placement="bottom">
-            <Badge count={filterCount} size="small" offset={[-4, 4]} style={{ background: '#fb4f40' }}>
+            <Badge count={filterCount} size="small" offset={[-4, 4]} style={{ background: '#D32F2F' }}>
               <Button icon={<FilterOutlined />} size="small" style={{ borderRadius: 6, color: '#8c8e8f' }} />
             </Badge>
           </Popover>
@@ -123,7 +123,7 @@ const SellerToolbar = ({
           {hasActiveFilters && (
             <Button type="link" size="small"
               onClick={onReset}
-              style={{ fontSize: 10.5, color: '#fb4f40', fontWeight: 600, padding: '0 4px' }}>
+              style={{ fontSize: 10.5, color: '#D32F2F', fontWeight: 600, padding: '0 4px' }}>
               Clear filters
             </Button>
           )}

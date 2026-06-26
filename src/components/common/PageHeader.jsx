@@ -23,11 +23,11 @@ const PageHeader = ({
     subtitle,
     actions,
     icon: Icon,
-    iconColor = '#6366f1',
+    iconColor = '#1976D2',
     iconGradient,
     breadcrumbs = [],
     badge,
-    badgeColor = '#6366f1',
+    badgeColor = '#1976D2',
     divider = true,
     compact = false,
     stats,
@@ -152,7 +152,7 @@ const PageHeader = ({
                                     right: -2,
                                     width: 10,
                                     height: 10,
-                                    background: '#10b981',
+                                    background: '#2E7D32',
                                     border: '2px solid #ffffff',
                                     borderRadius: '50%',
                                     boxShadow: '0 0 0 0 rgba(16, 185, 129, 0.4)',
@@ -262,7 +262,7 @@ const PageHeader = ({
                     }
                 }
                 .breadcrumb-link:hover {
-                    color: #4f46e5 !important;
+                    color: #1976D2 !important;
                 }
                 .page-header-icon-badge {
                     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);

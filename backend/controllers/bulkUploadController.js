@@ -290,6 +290,10 @@ exports.catalogSync = async (req, res) => {
                 // 2. Handle Dates (Fully Dynamic Logic)
                 const dateStr = getValue(row, ['Release Date', 'release_date', 'ReleaseDate', 'Released Date', 'Realeased date', 'released_date', 'Launch Date', 'launch_date', 'Created Date', 'created_date']);
                 let releaseDate = parseFlexibleDate(dateStr);
+                if (releaseDate) {
+                    const y = releaseDate.getFullYear();
+                    if (y < 1 || y > 9999) releaseDate = null;
+                }
 
                 const autoTags = AutoTagService.calculateAgeTags(releaseDate);
 

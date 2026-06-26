@@ -120,7 +120,7 @@ const PoolManagementModal = ({ stats, onClose, onRefresh }) => {
               <Statistic 
                 title={<Text strong style={{ fontSize: '10px', color: '#1e40af', textTransform: 'uppercase' }}>Assigned</Text>} 
                 value={stats.assigned} 
-                styles={{ content: { fontWeight: 800, color: '#2563eb' } }}
+                styles={{ content: { fontWeight: 800, color: '#0288D1' } }}
               />
             </Card>
           </Col>

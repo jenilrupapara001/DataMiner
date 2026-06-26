@@ -36,22 +36,17 @@ const { Text } = Typography;
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
-const GRADIENTS = [
-  'linear-gradient(135deg, #d94033, #fb4f40)',
-  'linear-gradient(135deg, #c2352a, #e8634e)',
-  'linear-gradient(135deg, #e04a3a, #ff7a6b)',
-  'linear-gradient(135deg, #b8251a, #d94033)',
-  'linear-gradient(135deg, #d94033, #fb6f5f)',
-  'linear-gradient(135deg, #a31e14, #c2352a)',
-  'linear-gradient(135deg, #c2352a, #e04a3a)',
-];
+// Marketplace-based avatar colors — all sellers of same marketplace get same color
+const MARKETPLACE_COLORS = {
+  'amazon.in': { gradient: 'linear-gradient(135deg, #1565C0, #1976D2)', color: '#1976D2', bg: '#E3F2FD' },
+  'ajio': { gradient: 'linear-gradient(135deg, #C2185B, #E91E63)', color: '#E91E63', bg: '#FCE4EC' },
+  'myntra': { gradient: 'linear-gradient(135deg, #E65100, #FF5722)', color: '#FF5722', bg: '#FBE9E7' },
+};
+const DEFAULT_MARKETPLACE = { gradient: 'linear-gradient(135deg, #455A64, #607D8B)', color: '#607D8B', bg: '#ECEFF1' };
 
-function getStoreGradient(str = '') {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+function getMarketplaceColor(marketplace) {
+  const m = (marketplace || '').toLowerCase();
+  return MARKETPLACE_COLORS[m] || DEFAULT_MARKETPLACE;
 }
 
 function formatTimeAgo(dateString) {
@@ -257,10 +252,10 @@ const SellersPage = () => {
     };
     socket.on('ASINS_UPDATED', handleAsinsUpdated);
     socket.on('liveSync:completed', (data) => {
-      toastRef.current(`Live sync complete: ${data.updatedAsins} ASINs updated in ${(data.duration/1000).toFixed(1)}s`, 'success');
+      toastRef.current(`Live sync complete: ${data.updatedAsins} ASINs updated in ${(data.duration / 1000).toFixed(1)}s`, 'success');
     });
     socket.on('liveSyncAll:completed', (data) => {
-      toastRef.current(`Global sync complete: ${data.success} sellers, ${data.totalAsinsUpdated} ASINs in ${(data.duration/1000).toFixed(1)}s`, 'success');
+      toastRef.current(`Global sync complete: ${data.success} sellers, ${data.totalAsinsUpdated} ASINs in ${(data.duration / 1000).toFixed(1)}s`, 'success');
       setGlobalSyncing(false);
     });
     return () => {
@@ -531,17 +526,17 @@ const SellersPage = () => {
   // ── Live Sync status polling (stable interval using refs) ──────────────
   const liveSyncingIdsRef = useRef(liveSyncingIds);
   liveSyncingIdsRef.current = liveSyncingIds;
-  
+
   useEffect(() => {
     const interval = setInterval(async () => {
       const currentIds = liveSyncingIdsRef.current;
       if (currentIds.size === 0) return;
-      
+
       for (const sellerId of currentIds) {
         try {
           const status = await marketSyncApi.getSellerSyncStatus(sellerId);
           const syncStatus = status.liveSync?.status;
-          
+
           if (syncStatus === 'RUNNING') {
             setLiveSyncStatuses(prev => ({
               ...prev,
@@ -575,7 +570,7 @@ const SellersPage = () => {
             }));
             if (status.liveSync.lastResult) {
               const r = status.liveSync.lastResult;
-              toastRef.current(`Live sync complete: ${r.success}/${r.totalAsins} ASINs updated in ${(r.duration/1000).toFixed(1)}s`, 'success');
+              toastRef.current(`Live sync complete: ${r.success}/${r.totalAsins} ASINs updated in ${(r.duration / 1000).toFixed(1)}s`, 'success');
             } else {
               toastRef.current('Live sync complete.', 'success');
             }
@@ -679,17 +674,22 @@ const SellersPage = () => {
   // ── Badges ─────────────────────────────────────────────────────────────
   const getMarketplaceBadge = useCallback((marketplace) => {
     const m = marketplace?.toLowerCase();
-    let logo = null, bg = '#f4f4f5', border = '#d9e6e9';
-    if (m === 'amazon.in') { bg = '#eff6ff'; border = '#bfdbfe'; logo = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg'; }
-    else if (m === 'ajio') { bg = '#f5f3ff'; border = '#ddd6fe'; logo = 'https://cdn.brandfetch.io/id78Xj7CCR/w/820/h/238/theme/dark/logo.png'; }
-    else if (m === 'myntra') { bg = '#fdf2f8'; border = '#fbcfe8'; logo = 'https://cdn.brandfetch.io/idDW82Qwj2/theme/dark/logo.svg'; }
+    const configs = {
+      'amazon.in': { label: 'AMZ', color: '#FF6200', bg: '#FFFFFF' },
+      'ajio': { label: 'AJIO', color: '#2C2C2C', bg: '#FAF5E8' },
+      'myntra': { label: 'MYNTRA', color: '#FF356E', bg: '#FFFFFF' },
+    };
+    const cfg = configs[m] || { label: (m || '??').toUpperCase().slice(0, 4), color: '#64748B', bg: '#F1F5F9' };
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 24, height: 24, borderRadius: 6,
-        background: bg, border: `1px solid ${border}`
+        fontSize: 8, fontWeight: 800, letterSpacing: '0.05em',
+        width: 'auto', height: 18, borderRadius: 4,
+        background: cfg.bg, color: cfg.color,
+        border: `1px solid ${cfg.color}30`,
+        padding: '0 8px',
       }}>
-        {logo ? <img src={logo} style={{ height: 12, width: 'auto', objectFit: 'contain' }} alt={marketplace} /> : <Text style={{ fontSize: 8, color: '#8c8e8f' }}>?</Text>}
+        {cfg.label}
       </span>
     );
   }, []);
@@ -723,23 +723,23 @@ const SellersPage = () => {
         {isGlobalUser && (
           <Tooltip title="Edit Details">
             <Button type="text" size="small" icon={<Edit3 size={14} />}
-              onClick={() => handleEditSeller(seller)} style={{ color: '#8c8e8f' }} />
+              onClick={() => handleEditSeller(seller)} style={{ color: '#94A3B8' }} />
           </Tooltip>
         )}
         <Tooltip title="Manage Catalog">
           <Button type="text" size="small" icon={<Package size={14} />}
-            onClick={() => handleViewAsins(seller)} style={{ color: '#8c8e8f' }} />
+            onClick={() => handleViewAsins(seller)} style={{ color: '#94A3B8' }} />
         </Tooltip>
         <Tooltip title="Catalog Sync">
           <Button type="text" size="small" icon={<FileUp size={14} />}
-            onClick={() => handleCatalogSync(seller)} style={{ color: '#8c8e8f' }} />
+            onClick={() => handleCatalogSync(seller)} style={{ color: '#94A3B8' }} />
         </Tooltip>
         <Tooltip title="Sync Store">
           <Button type="text" size="small"
             icon={<RefreshCw size={14} className={isSyncing ? 'spin' : ''} />}
             loading={isSyncing}
             onClick={() => handleSyncSeller(seller._id)}
-            style={{ color: '#8c8e8f' }} />
+            style={{ color: '#94A3B8' }} />
         </Tooltip>
         {seller.marketplace?.toLowerCase() === 'amazon.in' && (() => {
           const lsStatus = liveSyncStatuses[seller._id];
@@ -759,10 +759,10 @@ const SellersPage = () => {
                   borderRadius: 6,
                   fontWeight: 700,
                   fontSize: 10,
-                  background: isLiveSyncing ? '#ffe0dc' : 'linear-gradient(135deg, #d94033, #fb4f40)',
-                  borderColor: isLiveSyncing ? '#ffb3ae' : '#d94033',
-                  color: isLiveSyncing ? '#c2352a' : '#fff',
-                  boxShadow: isLiveSyncing ? 'none' : '0 1px 3px rgba(217,64,51,0.3)',
+                  background: isLiveSyncing ? '#90CAF9' : 'linear-gradient(135deg, #1565C0, #1976D2)',
+                  borderColor: isLiveSyncing ? '#90CAF9' : '#1565C0',
+                  color: isLiveSyncing ? '#1565C0' : '#fff',
+                  boxShadow: isLiveSyncing ? 'none' : '0 1px 3px rgba(25,118,210,0.3)',
                   height: 26,
                   padding: '0 8px',
                 }}
@@ -776,7 +776,7 @@ const SellersPage = () => {
           <Tooltip title={seller.isPriority ? 'Remove High Priority' : 'Set as High Priority'}>
             <Button
               type="text" size="small"
-              icon={<Star size={14} fill={seller.isPriority ? "#f59e0b" : "none"} stroke={seller.isPriority ? "#f59e0b" : "#64748b"} />}
+              icon={<Star size={14} fill={seller.isPriority ? "#ED6C02" : "none"} stroke={seller.isPriority ? "#ED6C02" : "#64748b"} />}
               onClick={() => handleTogglePriority(seller._id)}
               loading={seller._savingPriority}
             />
@@ -792,7 +792,7 @@ const SellersPage = () => {
               borderRadius: 6,
               ...(isActive
                 ? { color: '#64748b' }
-                : { background: '#10b981', borderColor: '#10b981', color: '#fff' })
+                : { background: '#2E7D32', borderColor: '#2E7D32', color: '#fff' })
             }}
           />
         </Tooltip>
@@ -806,7 +806,7 @@ const SellersPage = () => {
           >
             <Tooltip title="Delete Store">
               <Button type="text" size="small" danger
-                icon={<Trash2 size={14} />} style={{ color: '#ef4444' }} />
+                icon={<Trash2 size={14} />} style={{ color: '#D32F2F' }} />
             </Tooltip>
           </Popconfirm>
         )}
@@ -827,7 +827,7 @@ const SellersPage = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            background: getStoreGradient(seller.name || ''),
+            background: getMarketplaceColor(seller.marketplace).gradient,
             color: '#fff', display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontWeight: 800, fontSize: 10
           }}>
@@ -835,13 +835,13 @@ const SellersPage = () => {
           </div>
           <div style={{ lineHeight: 1.2 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Text strong style={{ fontSize: 12.5, color: '#121b1e' }}>{seller.name}</Text>
-              {seller.isPriority && <Star size={12} fill="#f59e0b" stroke="#f59e0b" style={{ marginTop: '-2px' }} />}
+              <Text strong style={{ fontSize: 12.5, color: '#0F172A' }}>{seller.name}</Text>
+              {seller.isPriority && <Star size={12} fill="#ED6C02" stroke="#ED6C02" style={{ marginTop: '-2px' }} />}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
               {getMarketplaceBadge(seller.marketplace)}
               {seller.sellerId && (
-                <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#f4f5f7', padding: '1px 4px', borderRadius: 4, color: '#8c8e8f' }}>
+                <Text style={{ fontSize: 9, fontFamily: 'monospace', background: '#F1F5F9', padding: '1px 4px', borderRadius: 4, color: '#94A3B8' }}>
                   {seller.sellerId}
                 </Text>
               )}
@@ -859,12 +859,12 @@ const SellersPage = () => {
             {managers.map((m) => (
               <span key={m._id} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: '#f4f5f7', padding: '2px 6px', borderRadius: 12, border: '1px solid #d9e6e9'
+                background: '#F1F5F9', padding: '2px 6px', borderRadius: 12, border: '1px solid #E5E7EB'
               }}>
-                <Avatar size={18} style={{ backgroundColor: '#cbd0d4', color: '#121b1e', fontSize: 9, fontWeight: 700 }}>
+                <Avatar size={18} style={{ backgroundColor: '#D1D5DB', color: '#0F172A', fontSize: 9, fontWeight: 700 }}>
                   {m.firstName?.charAt(0)}{m.lastName?.charAt(0)}
                 </Avatar>
-                <Text style={{ fontSize: 10.5, color: '#121b1e' }}>{m.firstName} {m.lastName}</Text>
+                <Text style={{ fontSize: 10.5, color: '#0F172A' }}>{m.firstName} {m.lastName}</Text>
               </span>
             ))}
           </Space>
@@ -875,14 +875,14 @@ const SellersPage = () => {
       title: 'INVENTORY', dataIndex: 'totalAsins', key: 'totalAsins', width: 140,
       render: (total, seller) => (
         <Button type="link" onClick={() => handleViewAsins(seller)}
-          style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#121b1e', height: 'auto' }}>
-          <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: '#f4f5f7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Package size={14} color="#8c8e8f" />
+          style={{ padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A', height: 'auto' }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Package size={14} color="#94A3B8" />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
             <Text strong style={{ fontSize: 11.5 }}>{total || 0} Total</Text>
-            <div style={{ fontSize: 9, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }} />
+            <div style={{ fontSize: 9, color: '#2E7D32', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#2E7D32', display: 'inline-block' }} />
               {seller.activeAsins || 0} Active
             </div>
           </div>
@@ -893,12 +893,12 @@ const SellersPage = () => {
       title: 'LAST ACTIVITY', dataIndex: 'lastScraped', key: 'lastScraped', width: 150,
       render: (lastScraped) => (
         <div style={{ lineHeight: 1.2 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#121b1e', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={11} style={{ color: '#8c8e8f' }} />
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Clock size={11} style={{ color: '#94A3B8' }} />
             {formatTimeAgo(lastScraped)}
           </div>
           {lastScraped && (
-            <div style={{ fontSize: 9, color: '#8c8e8f', paddingLeft: 15 }}>
+            <div style={{ fontSize: 9, color: '#94A3B8', paddingLeft: 15 }}>
               {new Date(lastScraped).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
             </div>
           )}
@@ -991,19 +991,19 @@ const SellersPage = () => {
       {/* ── Global Live Sync Progress ──────────────────────────────── */}
       {globalSyncing && globalSyncProgress && (
         <div style={{
-          padding: '10px 24px', 
-          background: 'linear-gradient(135deg, #fff0f0, #ffe0dc)', 
-          borderBottom: '1px solid #ffb3ae',
+          padding: '10px 24px',
+          background: 'linear-gradient(135deg, #FFEBEE, #EF9A9A)',
+          borderBottom: '1px solid #EF9A9A',
           display: 'flex', alignItems: 'center', gap: 12
         }}>
-          <Zap size={14} className="spin" style={{ color: '#d94033' }} />
-          <Text style={{ color: '#c2352a', fontSize: 12, fontWeight: 600 }}>
+          <Zap size={14} className="spin" style={{ color: '#C62828' }} />
+          <Text style={{ color: '#C62828', fontSize: 12, fontWeight: 600 }}>
             Global Live Sync Running
           </Text>
           {globalSyncProgress.activeSyncs > 0 && (
             <Tag color="red">{globalSyncProgress.activeSyncs} sellers syncing</Tag>
           )}
-          <Text style={{ color: '#8c8e8f', fontSize: 11 }}>
+          <Text style={{ color: '#94A3B8', fontSize: 11 }}>
             Updates appear within minutes. You can continue using the app.
           </Text>
         </div>
@@ -1012,12 +1012,12 @@ const SellersPage = () => {
       {/* ── Bulk action bar ───────────────────────────────────────── */}
       {selectedSellerIds.length > 0 && (
         <div style={{
-          padding: '8px 24px', background: '#121b1e', color: '#fff',
+          padding: '8px 24px', background: '#0F172A', color: '#fff',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           animation: 'slideDown 0.2s ease-out'
         }}>
           <Text strong style={{ color: '#fff', fontSize: 11 }}>
-            <Badge count={selectedSellerIds.length} style={{ backgroundColor: '#fb4f40', border: 'none', fontWeight: 800 }} /> Storefronts Selected
+            <Badge count={selectedSellerIds.length} style={{ backgroundColor: '#D32F2F', border: 'none', fontWeight: 800 }} /> Storefronts Selected
           </Text>
           <Space size={8}>
             <Popconfirm
@@ -1028,12 +1028,12 @@ const SellersPage = () => {
             >
               <Button size="small" type="primary" icon={<RefreshCw size={12} />}
                 loading={bulkSyncing}
-                style={{ borderRadius: 6, fontWeight: 600, background: '#d94033', borderColor: '#d94033' }}>
+                style={{ borderRadius: 6, fontWeight: 600, background: '#C62828', borderColor: '#C62828' }}>
                 Sync Selected
               </Button>
             </Popconfirm>
             <Button size="small" type="text" onClick={() => setSelectedSellerIds([])}
-              style={{ color: '#8c8e8f', fontSize: 11 }}>
+              style={{ color: '#94A3B8', fontSize: 11 }}>
               Clear
             </Button>
           </Space>
@@ -1041,9 +1041,9 @@ const SellersPage = () => {
       )}
 
       {/* ── Table ─────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 24px', flex: 1, background: '#f4f5f7' }}>
+      <div style={{ padding: '20px 24px', flex: 1, background: '#F1F5F9' }}>
         <Card styles={{ body: { padding: 0 } }}
-          style={{ borderRadius: 12, border: '1px solid #d9e6e9', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+          style={{ borderRadius: 12, border: '1px solid #E5E7EB', overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
           <Table
             columns={columns}
             dataSource={sellers}
@@ -1069,7 +1069,7 @@ const SellersPage = () => {
             locale={{
               emptyText: (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<span style={{ fontWeight: 600, color: '#8c8e8f', fontSize: 12 }}>No storefront entries match your current query.</span>}
+                  description={<span style={{ fontWeight: 600, color: '#94A3B8', fontSize: 12 }}>No storefront entries match your current query.</span>}
                 />
               )
             }}
@@ -1081,12 +1081,12 @@ const SellersPage = () => {
         .spin { animation: spin 1.5s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .premium-seller-table .ant-table-thead > tr > th {
-          background: #f4f5f7 !important; font-size: 10px !important; color: #8c8e8f !important;
+          background: #F1F5F9 !important; font-size: 10px !important; color: #94A3B8 !important;
           font-weight: 800 !important; letter-spacing: 0.1em !important;
-          padding: 14px 16px !important; border-bottom: 1px solid #d9e6e9 !important;
+          padding: 14px 16px !important; border-bottom: 1px solid #E5E7EB !important;
         }
         .premium-seller-table .ant-table-row:hover > td { background: #fcfcfd !important; }
-        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #d9e6e9 !important; }
+        .premium-seller-table .ant-table-cell { padding: 12px 16px !important; border-bottom: 1px solid #E5E7EB !important; }
         .premium-seller-table .ant-table-pagination { margin: 16px !important; }
         @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       `}</style>

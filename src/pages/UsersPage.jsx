@@ -26,16 +26,16 @@ const { TextArea } = Input;
 const getAvatarGradient = (firstName = '', lastName = '') => {
     const initials = (firstName[0] || '') + (lastName[0] || '');
     const gradients = [
-        'linear-gradient(135deg, #4f46e5, #7c3aed)',
-        'linear-gradient(135deg, #ec4899, #db2777)',
-        'linear-gradient(135deg, #10b981, #059669)',
-        'linear-gradient(135deg, #f59e0b, #d97706)',
-        'linear-gradient(135deg, #06b6d4, #0891b2)',
-        'linear-gradient(135deg, #8b5cf6, #6d28d9)',
-        'linear-gradient(135deg, #ef4444, #dc2626)',
+        'linear-gradient(135deg, #1976D2, #9C27B0)',
+        'linear-gradient(135deg, #9C27B0, #db2777)',
+        'linear-gradient(135deg, #2E7D32, #2E7D32)',
+        'linear-gradient(135deg, #ED6C02, #E65100)',
+        'linear-gradient(135deg, #0288D1, #0891b2)',
+        'linear-gradient(135deg, #9C27B0, #6d28d9)',
+        'linear-gradient(135deg, #D32F2F, #C62828)',
         'linear-gradient(135deg, #14b8a6, #0d9488)',
-        'linear-gradient(135deg, #f97316, #ea580c)',
-        'linear-gradient(135deg, #6366f1, #4f46e5)',
+        'linear-gradient(135deg, #ED6C02, #ea580c)',
+        'linear-gradient(135deg, #1976D2, #1976D2)',
     ];
 
     const hash = initials.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -45,11 +45,11 @@ const getAvatarGradient = (firstName = '', lastName = '') => {
 // Get role color
 const getRoleColor = (roleName) => {
     const colors = {
-        'super_admin': '#dc2626',
+        'super_admin': '#C62828',
         'admin': '#ea580c',
-        'operational_manager': '#7c3aed',
+        'operational_manager': '#9C27B0',
         'finance_manager': '#0891b2',
-        'brand_manager': '#2563eb',
+        'brand_manager': '#0288D1',
         'catalog_manager': '#db2777',
         'team_lead': '#9333ea',
         'listing_team': '#16a34a',
@@ -107,7 +107,7 @@ const EnhancedAvatar = ({ firstName, lastName, size = 40, showStatus = false, is
                     width: size * 0.25,
                     height: size * 0.25,
                     borderRadius: '50%',
-                    background: isOnline ? '#10b981' : '#94a3b8',
+                    background: isOnline ? '#2E7D32' : '#94a3b8',
                     border: '2px solid white',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
                     animation: isOnline ? 'pulse 2s infinite' : 'none'
@@ -203,7 +203,7 @@ const StatCard = ({ icon: Icon, label, value, subtitle, trend, gradient, onClick
                     gap: 3,
                     padding: '3px 8px',
                     background: trend.positive ? '#dcfce7' : '#fee2e2',
-                    color: trend.positive ? '#15803d' : '#dc2626',
+                    color: trend.positive ? '#15803d' : '#C62828',
                     borderRadius: 6,
                     fontSize: 10,
                     fontWeight: 700
@@ -249,7 +249,7 @@ const StatCard = ({ icon: Icon, label, value, subtitle, trend, gradient, onClick
                         width: 6,
                         height: 6,
                         borderRadius: '50%',
-                        background: '#10b981',
+                        background: '#2E7D32',
                         animation: 'pulse 2s infinite'
                     }} />
                 )}
@@ -267,14 +267,14 @@ const formatLastActive = (timestamp) => {
     const now = new Date();
     const diff = now - date;
 
-    if (diff < 60000) return { text: 'Just now', color: '#059669', isOnline: true };
-    if (diff < 300000) return { text: 'Online now', color: '#059669', isOnline: true };
+    if (diff < 60000) return { text: 'Just now', color: '#2E7D32', isOnline: true };
+    if (diff < 300000) return { text: 'Online now', color: '#2E7D32', isOnline: true };
     if (diff < 3600000) return { text: `${Math.floor(diff / 60000)}m ago`, color: '#0891b2', isOnline: false };
-    if (diff < 86400000) return { text: `${Math.floor(diff / 3600000)}h ago`, color: '#f59e0b', isOnline: false };
+    if (diff < 86400000) return { text: `${Math.floor(diff / 3600000)}h ago`, color: '#ED6C02', isOnline: false };
     if (diff < 604800000) return { text: `${Math.floor(diff / 86400000)}d ago`, color: '#ea580c', isOnline: false };
     return {
         text: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-        color: '#ef4444',
+        color: '#D32F2F',
         isOnline: false
     };
 };
@@ -818,7 +818,7 @@ const UsersPage = () => {
                         checked={isActive}
                         onChange={() => handleToggleStatus(record._id || record.id)}
                         style={{
-                            background: isActive ? '#10b981' : '#cbd5e1'
+                            background: isActive ? '#2E7D32' : '#cbd5e1'
                         }}
                     />
                     <span style={{
@@ -950,7 +950,7 @@ const UsersPage = () => {
                 justifyContent: 'space-between',
                 padding: '12px 14px',
                 background: isChecked ? '#eff6ff' : '#ffffff',
-                border: `2px solid ${isChecked ? '#3b82f6' : '#e2e8f0'}`,
+                border: `2px solid ${isChecked ? '#0288D1' : '#e2e8f0'}`,
                 borderRadius: 8,
                 cursor: readOnly ? 'default' : 'pointer',
                 transition: 'all 0.2s ease'
@@ -974,7 +974,7 @@ const UsersPage = () => {
                 <div style={{
                     width: 32, height: 32, borderRadius: 8,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: isChecked ? (iconBg || '#3b82f6') : '#f1f5f9',
+                    background: isChecked ? (iconBg || '#0288D1') : '#f1f5f9',
                     color: isChecked ? '#ffffff' : '#64748b',
                     fontSize: 11, fontWeight: 700,
                     transition: 'all 0.2s'
@@ -988,8 +988,8 @@ const UsersPage = () => {
             </div>
             <div style={{
                 width: 20, height: 20, borderRadius: '50%',
-                border: `2px solid ${isChecked ? '#3b82f6' : '#cbd5e1'}`,
-                background: isChecked ? '#3b82f6' : '#ffffff',
+                border: `2px solid ${isChecked ? '#0288D1' : '#cbd5e1'}`,
+                background: isChecked ? '#0288D1' : '#ffffff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'all 0.2s'
             }}>
@@ -1076,7 +1076,7 @@ const UsersPage = () => {
                                 <span style={{
                                     padding: '3px 10px',
                                     background: '#eef2ff',
-                                    color: '#4f46e5',
+                                    color: '#1976D2',
                                     borderRadius: 12,
                                     fontSize: 11,
                                     fontWeight: 700,
@@ -1125,7 +1125,7 @@ const UsersPage = () => {
                                         fontSize: 13,
                                         height: 38,
                                         paddingInline: 18,
-                                        background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                        background: 'linear-gradient(135deg, #1976D2, #1976D2)',
                                         border: 'none',
                                         boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)',
                                         display: 'flex',
@@ -1146,7 +1146,7 @@ const UsersPage = () => {
                                         fontSize: 13,
                                         height: 38,
                                         paddingInline: 18,
-                                        background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                        background: 'linear-gradient(135deg, #1976D2, #1976D2)',
                                         border: 'none',
                                         boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)',
                                         display: 'flex',
@@ -1269,7 +1269,7 @@ const UsersPage = () => {
                                     >
                                         <Option value="true">
                                             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2E7D32', flexShrink: 0 }} />
                                                 Active
                                             </span>
                                         </Option>
@@ -1302,7 +1302,7 @@ const UsersPage = () => {
                                             fontSize: 13,
                                             height: 38,
                                             paddingInline: 16,
-                                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                                            background: 'linear-gradient(135deg, #2E7D32, #2E7D32)',
                                             border: 'none',
                                             display: 'flex',
                                             alignItems: 'center',
@@ -1356,7 +1356,7 @@ const UsersPage = () => {
                                         width: 48,
                                         height: 48,
                                         borderRadius: 10,
-                                        background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                                        background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -1436,7 +1436,7 @@ const UsersPage = () => {
                                         width: 48,
                                         height: 48,
                                         borderRadius: 10,
-                                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                                        background: 'linear-gradient(135deg, #2E7D32, #2E7D32)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -1453,7 +1453,7 @@ const UsersPage = () => {
                                                 width: 10,
                                                 height: 10,
                                                 borderRadius: '50%',
-                                                background: '#10b981',
+                                                background: '#2E7D32',
                                                 border: '2px solid white',
                                                 animation: 'pulse 2s infinite'
                                             }} />
@@ -1526,7 +1526,7 @@ const UsersPage = () => {
                                         width: 48,
                                         height: 48,
                                         borderRadius: 10,
-                                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                                        background: 'linear-gradient(135deg, #D32F2F, #C62828)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -1566,7 +1566,7 @@ const UsersPage = () => {
                                                 <div style={{
                                                     fontSize: 11,
                                                     fontWeight: 600,
-                                                    color: '#dc2626',
+                                                    color: '#C62828',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: 2
@@ -1678,7 +1678,7 @@ const UsersPage = () => {
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                     }}>
-                                        <Shield size={14} style={{ color: '#4f46e5' }} />
+                                        <Shield size={14} style={{ color: '#1976D2' }} />
                                     </div>
                                     <span style={{
                                         fontWeight: 700,
@@ -1811,8 +1811,8 @@ const UsersPage = () => {
                                                                             width: 22,
                                                                             height: 22,
                                                                             borderRadius: 6,
-                                                                            border: `2px solid ${isAssigned ? '#059669' : '#d4d4d8'}`,
-                                                                            background: isAssigned ? 'linear-gradient(135deg, #10b981, #059669)' : '#fff',
+                                                                            border: `2px solid ${isAssigned ? '#2E7D32' : '#d4d4d8'}`,
+                                                                            background: isAssigned ? 'linear-gradient(135deg, #2E7D32, #2E7D32)' : '#fff',
                                                                             display: 'inline-flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center',
@@ -1861,7 +1861,7 @@ const UsersPage = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: '#4f46e5'
+                                color: '#1976D2'
                             }}>
                                 <UserCheck size={18} strokeWidth={2} />
                             </div>
@@ -1901,7 +1901,7 @@ const UsersPage = () => {
                                 fontWeight: 600,
                                 fontSize: 13,
                                 height: 36,
-                                background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                background: 'linear-gradient(135deg, #1976D2, #1976D2)',
                                 border: 'none'
                             }}
                         >
@@ -2041,7 +2041,7 @@ const UsersPage = () => {
                                     <span style={{
                                         fontSize: 11,
                                         fontWeight: 700,
-                                        color: '#4f46e5',
+                                        color: '#1976D2',
                                         background: '#eef2ff',
                                         padding: '2px 10px',
                                         borderRadius: 12
@@ -2104,7 +2104,7 @@ const UsersPage = () => {
                                     <span style={{
                                         fontSize: 11,
                                         fontWeight: 700,
-                                        color: '#4f46e5',
+                                        color: '#1976D2',
                                         background: '#eef2ff',
                                         padding: '2px 10px',
                                         borderRadius: 12
@@ -2281,7 +2281,7 @@ const UsersPage = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: '#4f46e5'
+                                color: '#1976D2'
                             }}>
                                 <Shield size={18} strokeWidth={2} />
                             </div>
@@ -2317,7 +2317,7 @@ const UsersPage = () => {
                                 fontWeight: 600,
                                 fontSize: 13,
                                 height: 36,
-                                background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                background: 'linear-gradient(135deg, #1976D2, #1976D2)',
                                 border: 'none'
                             }}
                         >
@@ -2403,7 +2403,7 @@ const UsersPage = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: '#2563eb'
+                                color: '#0288D1'
                             }}>
                                 <Mail size={18} strokeWidth={2} />
                             </div>
@@ -2441,7 +2441,7 @@ const UsersPage = () => {
                                 fontWeight: 600,
                                 fontSize: 13,
                                 height: 36,
-                                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                background: 'linear-gradient(135deg, #0288D1, #1d4ed8)',
                                 border: 'none'
                             }}
                         >
@@ -2494,7 +2494,7 @@ const UsersPage = () => {
                         <div>
                             {/* Profile Header */}
                             <div style={{
-                                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                                background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                                 padding: '32px 24px',
                                 color: 'white',
                                 position: 'relative'
@@ -2663,7 +2663,7 @@ const UsersPage = () => {
                                             flex: 1,
                                             borderRadius: 8,
                                             fontWeight: 600,
-                                            background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                                            background: 'linear-gradient(135deg, #1976D2, #1976D2)',
                                             border: 'none'
                                         }}
                                     >

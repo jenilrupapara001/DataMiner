@@ -76,7 +76,7 @@ const MetricSummary = memo(({ label, value, change, color, icon: Icon, isPositiv
                 gap: 2,
                 fontSize: 9,
                 fontWeight: 700,
-                color: isPositive ? '#059669' : '#dc2626',
+                color: isPositive ? '#2E7D32' : '#C62828',
                 background: isPositive ? '#d1fae5' : '#fee2e2',
                 padding: '1px 6px',
                 borderRadius: 8
@@ -170,8 +170,8 @@ const SalesTrendChart = ({
 
     const colors = useMemo(() => {
         const c = [];
-        if (showRevenue) c.push('#2563eb');
-        if (showSpend) c.push('#f59e0b');
+        if (showRevenue) c.push('#0288D1');
+        if (showSpend) c.push('#ED6C02');
         return c;
     }, [showRevenue, showSpend]);
 
@@ -344,7 +344,7 @@ const SalesTrendChart = ({
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+                                background: 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -370,7 +370,7 @@ const SalesTrendChart = ({
                                         width: 6,
                                         height: 6,
                                         borderRadius: '50%',
-                                        background: '#10b981',
+                                        background: '#2E7D32',
                                         display: 'inline-block'
                                     }} />
                                 </div>
@@ -424,7 +424,7 @@ const SalesTrendChart = ({
                             value={formatIndianCurrencyShort(stats.totalRevenue)}
                             change={stats.revenueChange}
                             isPositive={stats.revenueChange >= 0}
-                            color="#2563eb"
+                            color="#0288D1"
                             icon={DollarSign}
                         />
                         <MetricSummary
@@ -432,19 +432,19 @@ const SalesTrendChart = ({
                             value={formatIndianCurrencyShort(stats.totalSpend)}
                             change={stats.spendChange}
                             isPositive={stats.spendChange <= 0}
-                            color="#f59e0b"
+                            color="#ED6C02"
                             icon={Target}
                         />
                         <MetricSummary
                             label="Net Profit"
                             value={formatIndianCurrencyShort(stats.profit)}
-                            color={stats.profit >= 0 ? '#10b981' : '#ef4444'}
+                            color={stats.profit >= 0 ? '#2E7D32' : '#D32F2F'}
                             icon={TrendingUp}
                         />
                         <MetricSummary
                             label="ROAS"
                             value={`${stats.roas.toFixed(2)}x`}
-                            color={stats.roas >= 4 ? '#10b981' : stats.roas >= 2 ? '#f59e0b' : '#ef4444'}
+                            color={stats.roas >= 4 ? '#2E7D32' : stats.roas >= 2 ? '#ED6C02' : '#D32F2F'}
                             icon={Sparkles}
                         />
                     </div>
@@ -475,13 +475,13 @@ const SalesTrendChart = ({
                                 borderRadius: 8
                             }}
                         >
-                            {showRevenue ? <Eye size={10} style={{ color: '#2563eb' }} /> : <EyeOff size={10} style={{ color: '#94a3b8' }} />}
+                            {showRevenue ? <Eye size={10} style={{ color: '#0288D1' }} /> : <EyeOff size={10} style={{ color: '#94a3b8' }} />}
                             <div style={{
                                 width: 10,
                                 height: 10,
                                 borderRadius: 2,
                                 background: showRevenue
-                                    ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                                    ? 'linear-gradient(135deg, #0288D1 0%, #0288D1 100%)'
                                     : '#cbd5e1'
                             }} />
                             <span style={{
@@ -506,13 +506,13 @@ const SalesTrendChart = ({
                                 borderRadius: 8
                             }}
                         >
-                            {showSpend ? <Eye size={10} style={{ color: '#d97706' }} /> : <EyeOff size={10} style={{ color: '#94a3b8' }} />}
+                            {showSpend ? <Eye size={10} style={{ color: '#E65100' }} /> : <EyeOff size={10} style={{ color: '#94a3b8' }} />}
                             <div style={{
                                 width: 10,
                                 height: 10,
                                 borderRadius: 2,
                                 background: showSpend
-                                    ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
+                                    ? 'linear-gradient(135deg, #fbbf24 0%, #ED6C02 100%)'
                                     : '#cbd5e1'
                             }} />
                             <span style={{
@@ -534,7 +534,7 @@ const SalesTrendChart = ({
                                 gap: 5,
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: '#7c3aed',
+                                color: '#9C27B0',
                                 background: '#f5f3ff',
                                 padding: '3px 9px',
                                 borderRadius: 12,
@@ -626,7 +626,7 @@ const SalesTrendChart = ({
                         gap: 5,
                         fontSize: 10,
                         fontWeight: 700,
-                        color: stats.acos <= 25 ? '#059669' : '#d97706',
+                        color: stats.acos <= 25 ? '#2E7D32' : '#E65100',
                         background: stats.acos <= 25 ? '#d1fae5' : '#fef3c7',
                         padding: '3px 9px',
                         borderRadius: 12,

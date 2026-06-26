@@ -105,7 +105,7 @@ const StartTaskModal = ({ isOpen, task, currentUser, onClose, onConfirm }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#1e293b', borderTop: '1px solid #dbeafe', paddingTop: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ color: '#64748b', width: 80 }}>Assignee:</span>
-              <Avatar size={18} icon={<UserOutlined />} style={{ background: '#3b82f6' }} />
+              <Avatar size={18} icon={<UserOutlined />} style={{ background: '#0288D1' }} />
               <span style={{ fontWeight: 500 }}>
                 {Array.isArray(task.assignedTo)
                   ? task.assignedTo.map(u => formatUserName(u)).join(', ')
@@ -115,7 +115,7 @@ const StartTaskModal = ({ isOpen, task, currentUser, onClose, onConfirm }) => {
             {task.reviewer && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: '#64748b', width: 80 }}>Reviewer:</span>
-                <Avatar size={18} icon={<UserOutlined />} style={{ background: '#8b5cf6' }} />
+                <Avatar size={18} icon={<UserOutlined />} style={{ background: '#9C27B0' }} />
                 <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
                   {formatUserName(task.reviewer)}
                   <EyeOutlined style={{ color: '#94a3b8' }} />
@@ -172,7 +172,7 @@ const StartTaskModal = ({ isOpen, task, currentUser, onClose, onConfirm }) => {
           disabled={!acknowledged}
           loading={submitting}
           style={{
-            background: acknowledged ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#cbd5e1',
+            background: acknowledged ? 'linear-gradient(135deg, #1976D2, #9C27B0)' : '#cbd5e1',
             border: 'none',
             borderRadius: 8,
             height: 36,

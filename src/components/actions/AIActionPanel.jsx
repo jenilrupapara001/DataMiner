@@ -34,7 +34,7 @@ const AIActionPanel = ({ suggestions, loading }) => {
                     className="p-1.5 rounded-circle d-flex align-items-center justify-content-center"
                     style={{ 
                       backgroundColor: suggestion.type === 'STOCK' ? '#fef2f2' : suggestion.type === 'ADS' ? '#eff6ff' : '#f0fdf4',
-                      color: suggestion.type === 'STOCK' ? '#ef4444' : suggestion.type === 'ADS' ? '#3b82f6' : '#10b981'
+                      color: suggestion.type === 'STOCK' ? '#D32F2F' : suggestion.type === 'ADS' ? '#0288D1' : '#2E7D32'
                     }}
                   >
                     {suggestion.type === 'STOCK' ? <AlertTriangle size={14} /> : suggestion.type === 'ADS' ? <TrendingUp size={14} /> : <Zap size={14} />}

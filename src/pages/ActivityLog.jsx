@@ -23,18 +23,18 @@ const IMPORTANT_TYPES = [
 ];
 
 const TYPE_STYLES = {
-    CREATE: { icon: <PlusCircle size={13} />, color: '#10b981', label: 'Created' },
-    UPDATE: { icon: <Edit3 size={13} />, color: '#3b82f6', label: 'Updated' },
-    DELETE: { icon: <Trash2 size={13} />, color: '#ef4444', label: 'Deleted' },
-    STATUS_CHANGE: { icon: <Activity size={13} />, color: '#f59e0b', label: 'Status Change' },
-    AUTH_SUCCESS: { icon: <LogIn size={13} />, color: '#10b981', label: 'Login' },
-    AUTH_FAILURE: { icon: <XCircle size={13} />, color: '#ef4444', label: 'Login Failed' },
+    CREATE: { icon: <PlusCircle size={13} />, color: '#2E7D32', label: 'Created' },
+    UPDATE: { icon: <Edit3 size={13} />, color: '#0288D1', label: 'Updated' },
+    DELETE: { icon: <Trash2 size={13} />, color: '#D32F2F', label: 'Deleted' },
+    STATUS_CHANGE: { icon: <Activity size={13} />, color: '#ED6C02', label: 'Status Change' },
+    AUTH_SUCCESS: { icon: <LogIn size={13} />, color: '#2E7D32', label: 'Login' },
+    AUTH_FAILURE: { icon: <XCircle size={13} />, color: '#D32F2F', label: 'Login Failed' },
     AUTH_LOGOUT: { icon: <LogOut size={13} />, color: '#64748b', label: 'Logout' },
-    SYSTEM_ERROR: { icon: <AlertTriangle size={13} />, color: '#dc2626', label: 'Error' },
-    IMPORT: { icon: <ClipboardList size={13} />, color: '#06b6d4', label: 'Import' },
-    LIVE_SYNC: { icon: <Zap size={13} />, color: '#7c3aed', label: 'Live Sync' },
-    LIVE_SYNC_TEST: { icon: <Zap size={13} />, color: '#7c3aed', label: 'Sync Test' },
-    AUTOMATION_TASK: { icon: <Cpu size={13} />, color: '#6366f1', label: 'Automation' },
+    SYSTEM_ERROR: { icon: <AlertTriangle size={13} />, color: '#C62828', label: 'Error' },
+    IMPORT: { icon: <ClipboardList size={13} />, color: '#0288D1', label: 'Import' },
+    LIVE_SYNC: { icon: <Zap size={13} />, color: '#9C27B0', label: 'Live Sync' },
+    LIVE_SYNC_TEST: { icon: <Zap size={13} />, color: '#9C27B0', label: 'Sync Test' },
+    AUTOMATION_TASK: { icon: <Cpu size={13} />, color: '#1976D2', label: 'Automation' },
     TARGET_UPDATE: { icon: <Edit3 size={13} />, color: '#0284c7', label: 'Target Update' },
     TARGET_IMPORT: { icon: <ClipboardList size={13} />, color: '#0d9488', label: 'Target Import' },
     TARGET_DELETE: { icon: <Trash2 size={13} />, color: '#e11d48', label: 'Target Delete' },
@@ -245,7 +245,7 @@ const ActivityLog = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{
                             width: 26, height: 26, borderRadius: 8,
-                            background: isSystem ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'linear-gradient(135deg, #ec4899, #d946ef)',
+                            background: isSystem ? 'linear-gradient(135deg, #1976D2, #1976D2)' : 'linear-gradient(135deg, #9C27B0, #d946ef)',
                             color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
                             {name.charAt(0)}
@@ -276,7 +276,7 @@ const ActivityLog = () => {
             render: (_, r) => (
                 <Tooltip title="View details">
                     <Button type="text" size="small" icon={<Eye size={13} />}
-                        style={{ color: '#6366f1' }}
+                        style={{ color: '#1976D2' }}
                         onClick={() => { setSelectedLog(r); setDetailOpen(true); }} />
                 </Tooltip>
             )
@@ -297,7 +297,7 @@ const ActivityLog = () => {
                 const initial = (r.FirstName || r.Email || 'U')[0].toUpperCase();
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: 8, background: '#4f46e5', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initial}</div>
+                        <div style={{ width: 26, height: 26, borderRadius: 8, background: '#1976D2', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initial}</div>
                         <div>
                             <div style={{ fontSize: 12, fontWeight: 600 }}>{name}</div>
                             <div style={{ fontSize: 10, color: '#94a3b8' }}>{r.Email}</div>
@@ -309,7 +309,7 @@ const ActivityLog = () => {
         {
             title: 'Action', dataIndex: 'Action', key: 'Action', width: 130,
             render: (v) => {
-                const m = { 'OTP_SENT': { color: '#3b82f6', label: 'Sent' }, 'OTP_VERIFIED': { color: '#10b981', label: 'Verified' }, 'OTP_FAILED': { color: '#ef4444', label: 'Failed' } };
+                const m = { 'OTP_SENT': { color: '#0288D1', label: 'Sent' }, 'OTP_VERIFIED': { color: '#2E7D32', label: 'Verified' }, 'OTP_FAILED': { color: '#D32F2F', label: 'Failed' } };
                 const s = m[v] || { color: '#64748b', label: v };
                 return <Tag style={{ background: `${s.color}10`, color: s.color, border: `1px solid ${s.color}25`, borderRadius: 6, fontWeight: 600, fontSize: 10 }}>{s.label}</Tag>;
             }
@@ -317,7 +317,7 @@ const ActivityLog = () => {
         {
             title: 'Status', dataIndex: 'Status', key: 'Status', width: 90,
             render: (v) => (
-                <Tag style={{ borderRadius: 6, fontWeight: 600, fontSize: 10, background: v === 'SUCCESS' ? '#dcfce7' : '#fee2e2', color: v === 'SUCCESS' ? '#16a34a' : '#dc2626', border: `1px solid ${v === 'SUCCESS' ? '#bbf7d0' : '#fecaca'}` }}>
+                <Tag style={{ borderRadius: 6, fontWeight: 600, fontSize: 10, background: v === 'SUCCESS' ? '#dcfce7' : '#fee2e2', color: v === 'SUCCESS' ? '#16a34a' : '#C62828', border: `1px solid ${v === 'SUCCESS' ? '#bbf7d0' : '#fecaca'}` }}>
                     {v}
                 </Tag>
             )
@@ -384,7 +384,7 @@ const ActivityLog = () => {
                                 <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Show all</span>
                                 <input type="checkbox" checked={showAllEvents}
                                     onChange={e => { setShowAllEvents(e.target.checked); setPage(1); }}
-                                    style={{ accentColor: '#4f46e5' }} />
+                                    style={{ accentColor: '#1976D2' }} />
                             </div>
                             {hasFilters && (
                                 <Button size="small" danger onClick={clearFilters} style={{ borderRadius: 6, fontSize: 11 }}>Clear</Button>
@@ -434,7 +434,7 @@ const ActivityLog = () => {
             <Modal open={detailOpen} onCancel={() => setDetailOpen(false)} centered width={620} destroyOnHidden
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #1976D2, #1976D2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Activity size={15} style={{ color: '#fff' }} />
                         </div>
                         <div>

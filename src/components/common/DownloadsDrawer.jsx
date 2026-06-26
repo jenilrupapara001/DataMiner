@@ -48,12 +48,12 @@ const formatRelativeTime = (dateString) => {
 
 const getFileIcon = (format) => {
     const f = String(format || '').toLowerCase();
-    if (f.includes('csv')) return { Icon: FileText, color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' };
-    if (f.includes('xls') || f.includes('xlsx')) return { Icon: FileSpreadsheet, color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' };
-    if (f.includes('json')) return { Icon: FileJson, color: '#d97706', bg: '#fffbeb', border: '#fef3c7' };
-    if (f.includes('xml')) return { Icon: FileCode2, color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
-    if (f.includes('pdf')) return { Icon: FileText, color: '#dc2626', bg: '#fef2f2', border: '#fee2e2' };
-    if (f.includes('zip')) return { Icon: Archive, color: '#4f46e5', bg: '#eef2ff', border: '#e0e7ff' };
+    if (f.includes('csv')) return { Icon: FileText, color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' };
+    if (f.includes('xls') || f.includes('xlsx')) return { Icon: FileSpreadsheet, color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' };
+    if (f.includes('json')) return { Icon: FileJson, color: '#E65100', bg: '#fffbeb', border: '#fef3c7' };
+    if (f.includes('xml')) return { Icon: FileCode2, color: '#9C27B0', bg: '#f5f3ff', border: '#ddd6fe' };
+    if (f.includes('pdf')) return { Icon: FileText, color: '#C62828', bg: '#fef2f2', border: '#fee2e2' };
+    if (f.includes('zip')) return { Icon: Archive, color: '#1976D2', bg: '#eef2ff', border: '#e0e7ff' };
     return { Icon: File, color: '#4b5563', bg: '#f3f4f6', border: '#e5e7eb' };
 };
 
@@ -240,7 +240,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
             theme={{
                 token: {
                     borderRadius: 8,
-                    colorPrimary: '#4f46e5',
+                    colorPrimary: '#1976D2',
                     colorBgLayout: '#f8fafc'
                 },
                 components: {
@@ -257,7 +257,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                             width: 38,
                             height: 38,
                             borderRadius: 8,
-                            background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                            background: 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

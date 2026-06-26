@@ -14,35 +14,35 @@ const { Text } = Typography;
 const ALERT_CONFIG = {
   warning: {
     icon: AlertTriangle,
-    color: '#d97706',
+    color: '#E65100',
     bg: '#fef3c7',
     border: '#fcd34d',
     tagColor: 'warning',
   },
   success: {
     icon: CheckCircle2,
-    color: '#059669',
+    color: '#2E7D32',
     bg: '#d1fae5',
     border: '#6ee7b7',
     tagColor: 'success',
   },
   danger: {
     icon: XCircle,
-    color: '#dc2626',
+    color: '#C62828',
     bg: '#fee2e2',
     border: '#fca5a5',
     tagColor: 'error',
   },
   error: {
     icon: XCircle,
-    color: '#dc2626',
+    color: '#C62828',
     bg: '#fee2e2',
     border: '#fca5a5',
     tagColor: 'error',
   },
   info: {
     icon: Info,
-    color: '#2563eb',
+    color: '#0288D1',
     bg: '#dbeafe',
     border: '#93c5fd',
     tagColor: 'processing',
@@ -51,7 +51,7 @@ const ALERT_CONFIG = {
 
 const DEFAULT_CONFIG = {
   icon: Bell,
-  color: '#6366f1',
+  color: '#1976D2',
   bg: '#ede9fe',
   border: '#c4b5fd',
   tagColor: 'purple',
@@ -257,7 +257,7 @@ const Alerts = memo(({
             justifyContent: 'center',
           }}>
             {hasAlerts
-              ? <Bell size={14} color="#dc2626" />
+              ? <Bell size={14} color="#C62828" />
               : <BellOff size={14} color="#94a3b8" />
             }
           </div>
@@ -269,7 +269,7 @@ const Alerts = memo(({
               count={alerts.length}
               overflowCount={99}
               style={{
-                backgroundColor: '#dc2626',
+                backgroundColor: '#C62828',
                 fontSize: 10,
                 fontWeight: 800,
                 boxShadow: 'none',

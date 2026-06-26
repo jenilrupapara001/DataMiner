@@ -61,7 +61,7 @@ const DateRangeSelector = () => {
                   padding: '6px 10px',
                   borderRadius: 6,
                   border: '1px solid',
-                  borderColor: isActive ? '#fb4f40' : 'transparent',
+                  borderColor: isActive ? '#D32F2F' : 'transparent',
                   background: isActive ? '#fff0f0' : 'transparent',
                   color: isActive ? '#d94033' : '#545657',
                   fontSize: 12,

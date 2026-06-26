@@ -47,12 +47,12 @@ const { TextArea } = Input;
 /* ─── STATUS CONFIGURATION ──────────────────────────────────────────── */
 const STATUS_META = {
   TODO: { label: 'To Do', color: '#64748b', bg: '#f1f5f9', antColor: 'default', icon: <BarsOutlined /> },
-  PENDING: { label: 'Pending', color: '#d97706', bg: '#fef3c7', antColor: 'warning', icon: <ClockCircleOutlined /> },
-  IN_PROGRESS: { label: 'In Progress', color: '#6366f1', bg: '#eef2ff', antColor: 'processing', icon: <SyncOutlined spin /> },
-  REVIEW: { label: 'Review', color: '#8b5cf6', bg: '#f5f3ff', antColor: 'purple', icon: <EyeOutlined /> },
-  COMPLETED: { label: 'Completed', color: '#059669', bg: '#ecfdf5', antColor: 'success', icon: <CheckCircleOutlined /> },
+  PENDING: { label: 'Pending', color: '#E65100', bg: '#fef3c7', antColor: 'warning', icon: <ClockCircleOutlined /> },
+  IN_PROGRESS: { label: 'In Progress', color: '#1976D2', bg: '#eef2ff', antColor: 'processing', icon: <SyncOutlined spin /> },
+  REVIEW: { label: 'Review', color: '#9C27B0', bg: '#f5f3ff', antColor: 'purple', icon: <EyeOutlined /> },
+  COMPLETED: { label: 'Completed', color: '#2E7D32', bg: '#ecfdf5', antColor: 'success', icon: <CheckCircleOutlined /> },
   REJECTED: { label: 'Rejected', color: '#e11d48', bg: '#fff1f2', antColor: 'error', icon: <CloseCircleOutlined /> },
-  OVERDUE: { label: 'Overdue', color: '#dc2626', bg: '#fef2f2', antColor: 'error', icon: <ExclamationCircleOutlined /> },
+  OVERDUE: { label: 'Overdue', color: '#C62828', bg: '#fef2f2', antColor: 'error', icon: <ExclamationCircleOutlined /> },
 };
 
 const PRIORITY_META = {
@@ -63,8 +63,8 @@ const PRIORITY_META = {
 };
 
 const SELLER_PALETTE = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
-  '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
+  '#1976D2', '#9C27B0', '#9C27B0', '#f43f5e', '#ED6C02',
+  '#eab308', '#22c55e', '#14b8a6', '#0288D1', '#0288D1',
 ];
 
 /* ─── UTILITIES ─────────────────────────────────────────────────────── */
@@ -83,10 +83,10 @@ const getSellerInitial = (name) => {
 
 const getRoleColor = (role) => {
   const r = (role?.name || role || '').toLowerCase();
-  if (r.includes('admin')) return '#6366f1';
-  if (r.includes('manager')) return '#8b5cf6';
-  if (r.includes('analyst')) return '#06b6d4';
-  return '#10b981';
+  if (r.includes('admin')) return '#1976D2';
+  if (r.includes('manager')) return '#9C27B0';
+  if (r.includes('analyst')) return '#0288D1';
+  return '#2E7D32';
 };
 
 const getUserInitial = (u) =>
@@ -116,8 +116,8 @@ const getProgressColor = (pct) => {
   if (pct <= 25) return '#fb7185';
   if (pct <= 50) return '#fbbf24';
   if (pct <= 75) return '#818cf8';
-  if (pct < 100) return '#6366f1';
-  return '#10b981';
+  if (pct < 100) return '#1976D2';
+  return '#2E7D32';
 };
 
 const matchesFilter = (a, f) => {
@@ -300,15 +300,15 @@ const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
     label: 'Started',
     value: fmtTime(startedAt),
     exact: fmtExact(startedAt),
-    color: '#6366f1',
-    icon: <PlayCircleOutlined style={{ color: '#6366f1', fontSize: 10 }} />,
+    color: '#1976D2',
+    icon: <PlayCircleOutlined style={{ color: '#1976D2', fontSize: 10 }} />,
   });
   if (completedAt) items.push({
     label: 'Done',
     value: fmtTime(completedAt),
     exact: fmtExact(completedAt),
-    color: '#10b981',
-    icon: <CheckCircleOutlined style={{ color: '#10b981', fontSize: 10 }} />,
+    color: '#2E7D32',
+    icon: <CheckCircleOutlined style={{ color: '#2E7D32', fontSize: 10 }} />,
   });
 
   const duration = startedAt ? fmtDuration(startedAt, completedAt) : null;
@@ -339,7 +339,7 @@ const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
             fontSize: 10,
             fontFamily: 'monospace',
             background: status === 'COMPLETED' ? '#ecfdf5' : '#eef2ff',
-            color: status === 'COMPLETED' ? '#059669' : '#6366f1',
+            color: status === 'COMPLETED' ? '#2E7D32' : '#1976D2',
             border: 'none',
             borderRadius: 4,
             padding: '0 6px',
@@ -377,7 +377,7 @@ const RejectionForm = ({ onSubmit, onCancel }) => {
       size="small"
       style={{
         margin: '4px 16px 8px 16px',
-        borderLeft: '4px solid #f59e0b',
+        borderLeft: '4px solid #ED6C02',
         borderRadius: 8,
         background: '#fffbeb',
       }}
@@ -745,16 +745,16 @@ const TasksPage = () => {
   /* ── Filter Pills ── */
   const filterPills = [
     { type: 'ALL', label: 'All', count: kpis.all, color: '#64748b' },
-    { type: 'TODO', label: 'To Do', count: kpis.todo, color: '#3b82f6' },
-    { type: 'OVERDUE', label: 'Overdue', count: kpis.overdue, color: '#ef4444' },
-    { type: 'TOMORROW', label: 'Tomorrow', count: kpis.tomorrow, color: '#f97316' },
+    { type: 'TODO', label: 'To Do', count: kpis.todo, color: '#0288D1' },
+    { type: 'OVERDUE', label: 'Overdue', count: kpis.overdue, color: '#D32F2F' },
+    { type: 'TOMORROW', label: 'Tomorrow', count: kpis.tomorrow, color: '#ED6C02' },
     { type: 'UPCOMING', label: 'Upcoming', count: kpis.upcoming, color: '#eab308' },
     null,
     { type: 'PENDING', label: 'Pending', count: kpis.status.pending, color: '#94a3b8' },
-    { type: 'IN_PROGRESS', label: 'In Progress', count: kpis.status.inProgress, color: '#6366f1' },
-    { type: 'REVIEW', label: 'Review', count: kpis.status.review, color: '#8b5cf6' },
+    { type: 'IN_PROGRESS', label: 'In Progress', count: kpis.status.inProgress, color: '#1976D2' },
+    { type: 'REVIEW', label: 'Review', count: kpis.status.review, color: '#9C27B0' },
     { type: 'REJECTED', label: 'Rejected', count: kpis.status.rejected, color: '#f43f5e' },
-    { type: 'COMPLETED', label: 'Completed', count: kpis.status.completed, color: '#10b981' },
+    { type: 'COMPLETED', label: 'Completed', count: kpis.status.completed, color: '#2E7D32' },
   ];
 
   /* ── ALL TASKS TABLE ── */
@@ -766,7 +766,7 @@ const TasksPage = () => {
 
     items.push({
       key: 'view',
-      icon: <EyeOutlined style={{ color: '#6366f1' }} />,
+      icon: <EyeOutlined style={{ color: '#1976D2' }} />,
       label: 'View Details',
       onClick: () => handleViewTask(task)
     });
@@ -778,7 +778,7 @@ const TasksPage = () => {
     if (isPending) {
       items.push({
         key: 'start',
-        icon: <PlayCircleOutlined style={{ color: '#6366f1' }} />,
+        icon: <PlayCircleOutlined style={{ color: '#1976D2' }} />,
         label: 'Start Task',
         onClick: () => openStartModal(task),
       });
@@ -786,7 +786,7 @@ const TasksPage = () => {
     if (isInProgress) {
       items.push({
         key: 'review',
-        icon: <SendOutlined style={{ color: '#8b5cf6' }} />,
+        icon: <SendOutlined style={{ color: '#9C27B0' }} />,
         label: 'Submit for Review',
         onClick: () => openSubmitModal(task),
       });
@@ -794,7 +794,7 @@ const TasksPage = () => {
     if (isReview) {
       items.push({
         key: 'review-action',
-        icon: <CheckCircleOutlined style={{ color: '#10b981' }} />,
+        icon: <CheckCircleOutlined style={{ color: '#2E7D32' }} />,
         label: 'Review Submission',
         onClick: () => openReviewModal(task),
       });
@@ -985,14 +985,14 @@ const TasksPage = () => {
               <Col>
                 <Tag style={{
                   fontSize: 10, fontWeight: 700, fontFamily: 'monospace',
-                  background: '#eef2ff', color: '#6366f1',
+                  background: '#eef2ff', color: '#1976D2',
                   border: '1px solid #c7d2fe', borderRadius: 4,
                   minWidth: 36, textAlign: 'center',
                 }}>OBJ</Tag>
               </Col>
               <Col flex={1}>
                 <Space size={8}>
-                  {hasReview && <Tooltip title="Has tasks awaiting review"><Badge dot color="#f59e0b" /></Tooltip>}
+                  {hasReview && <Tooltip title="Has tasks awaiting review"><Badge dot color="#ED6C02" /></Tooltip>}
                   {childIncomplete && <Tooltip title="Not all tasks complete"><LockOutlined style={{ color: '#fbbf24', fontSize: 12 }} /></Tooltip>}
                   <Text strong style={{ fontSize: 13, color: '#1e293b' }}>{obj.title || 'Untitled Objective'}</Text>
                   {obj.isStandalone && <Tag style={{ fontSize: 10, background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0' }}>Direct Actions</Tag>}
@@ -1001,7 +1001,7 @@ const TasksPage = () => {
               <Col>
                 <Space size={12} align="center">
                   <Text style={{ fontSize: 11, color: '#94a3b8' }}>{objDone}/{objTasks.length} done</Text>
-                  <Progress percent={objPct} size="small" style={{ width: 80, margin: 0 }} strokeColor={objPct === 100 ? '#10b981' : '#6366f1'} railColor="#f1f5f9" showInfo={false} />
+                  <Progress percent={objPct} size="small" style={{ width: 80, margin: 0 }} strokeColor={objPct === 100 ? '#2E7D32' : '#1976D2'} railColor="#f1f5f9" showInfo={false} />
                   <Text style={{ fontSize: 11, color: '#64748b', fontVariantNumeric: 'tabular-nums', minWidth: 32 }}>{objPct}%</Text>
                 </Space>
               </Col>
@@ -1122,14 +1122,14 @@ const TasksPage = () => {
                         {totalTasks} task{totalTasks !== 1 ? 's' : ''}
                       </Tag>
                       {overdueTasks > 0 && <Tag style={{ borderRadius: 12, fontSize: 11, background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}><ExclamationCircleOutlined style={{ marginRight: 4 }} />{overdueTasks} overdue</Tag>}
-                      {reviewTasks > 0 && <Tag style={{ borderRadius: 12, fontSize: 11, background: '#f5f3ff', color: '#8b5cf6', border: '1px solid #ddd6fe' }}><EyeOutlined style={{ marginRight: 4 }} />{reviewTasks} needs review</Tag>}
+                      {reviewTasks > 0 && <Tag style={{ borderRadius: 12, fontSize: 11, background: '#f5f3ff', color: '#9C27B0', border: '1px solid #ddd6fe' }}><EyeOutlined style={{ marginRight: 4 }} />{reviewTasks} needs review</Tag>}
                     </Space>
                   </Col>
                   <Col>
                     <Space size={16} align="center">
                       <Space size={8}>
-                        <Badge color="#10b981" text={<Text style={{ fontSize: 12 }}>{doneTasks}</Text>} />
-                        <Badge color="#6366f1" text={<Text style={{ fontSize: 12 }}>{inProgTasks}</Text>} />
+                        <Badge color="#2E7D32" text={<Text style={{ fontSize: 12 }}>{doneTasks}</Text>} />
+                        <Badge color="#1976D2" text={<Text style={{ fontSize: 12 }}>{inProgTasks}</Text>} />
                       </Space>
                       <Progress percent={pct} size="small" style={{ width: 100, margin: 0 }} strokeColor={sellerColor} railColor="#f1f5f9" format={p => <Text style={{ fontSize: 11, color: '#64748b' }}>{p}%</Text>} />
                     </Space>
@@ -1149,28 +1149,28 @@ const TasksPage = () => {
   const kpiCards = [
     {
       title: 'Total Tasks', value: kpis.all,
-      icon: <UnorderedListOutlined style={{ fontSize: 20, color: '#6366f1' }} />,
-      color: '#6366f1', bg: '#eef2ff',
+      icon: <UnorderedListOutlined style={{ fontSize: 20, color: '#1976D2' }} />,
+      color: '#1976D2', bg: '#E3F2FD',
     },
     {
       title: 'In Progress', value: kpis.status.inProgress,
-      icon: <SyncOutlined spin={kpis.status.inProgress > 0} style={{ fontSize: 20, color: '#06b6d4' }} />,
-      color: '#06b6d4', bg: '#ecfeff',
+      icon: <SyncOutlined spin={kpis.status.inProgress > 0} style={{ fontSize: 20, color: '#1976D2' }} />,
+      color: '#1976D2', bg: '#E3F2FD',
     },
     {
       title: 'Pending Review', value: kpis.status.review,
-      icon: <EyeOutlined style={{ fontSize: 20, color: '#8b5cf6' }} />,
-      color: '#8b5cf6', bg: '#f5f3ff',
+      icon: <EyeOutlined style={{ fontSize: 20, color: '#9C27B0' }} />,
+      color: '#9C27B0', bg: '#F3E5F5',
     },
     {
       title: 'Overdue', value: kpis.overdue,
-      icon: <WarningOutlined style={{ fontSize: 20, color: '#ef4444' }} />,
-      color: '#ef4444', bg: '#fef2f2',
+      icon: <WarningOutlined style={{ fontSize: 20, color: '#D32F2F' }} />,
+      color: '#D32F2F', bg: '#FFEBEE',
     },
     {
       title: 'Completed', value: kpis.status.completed,
-      icon: <CheckCircleOutlined style={{ fontSize: 20, color: '#10b981' }} />,
-      color: '#10b981', bg: '#ecfdf5',
+      icon: <CheckCircleOutlined style={{ fontSize: 20, color: '#2E7D32' }} />,
+      color: '#2E7D32', bg: '#E8F5E9',
     },
   ];
 
@@ -1219,13 +1219,13 @@ const TasksPage = () => {
                     style={{
                       background: '#f5f3ff',
                       border: '1px solid #ddd6fe',
-                      color: '#8b5cf6',
+                      color: '#9C27B0',
                       borderRadius: 8,
                       fontWeight: 600,
                       fontSize: 12,
                       height: 28,
                     }}
-                    icon={<Badge count={reviewCount} size="small" color="#8b5cf6"><EyeOutlined /></Badge>}
+                    icon={<Badge count={reviewCount} size="small" color="#9C27B0"><EyeOutlined /></Badge>}
                   >
                     Review Queue
                   </Button>
@@ -1243,7 +1243,7 @@ const TasksPage = () => {
                 Auto-Generate
               </Button>
               <Button
-                icon={<ThunderboltOutlined style={{ color: '#f59e0b' }} />}
+                icon={<ThunderboltOutlined style={{ color: '#ED6C02' }} />}
                 style={{
                   height: 32, borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb',
                   fontWeight: 600, fontSize: 12, color: '#92400e',
@@ -1257,7 +1257,7 @@ const TasksPage = () => {
                 icon={<PlusOutlined />}
                 style={{
                   height: 32, borderRadius: 8, fontWeight: 600, fontSize: 12,
-                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                   border: 'none',
                   boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
                 }}
@@ -1439,7 +1439,7 @@ const TasksPage = () => {
                 icon={<CloseOutlined />}
                 style={{
                   height: 26, borderRadius: 13, fontSize: 11, fontWeight: 600,
-                  background: '#ef4444', color: 'white', border: 'none',
+                  background: '#D32F2F', color: 'white', border: 'none',
                   display: 'inline-flex', alignItems: 'center',
                 }}
               >
@@ -1514,7 +1514,7 @@ const TasksPage = () => {
             <Col flex={1}>
               <Progress
                 percent={kpis.all === 0 ? 0 : Math.round((kpis.status.completed / kpis.all) * 100)}
-                strokeColor={{ '0%': '#6366f1', '100%': '#10b981' }}
+                strokeColor={{ '0%': '#1976D2', '100%': '#2E7D32' }}
                 railColor="#f1f5f9"
                 size={6}
                 showInfo={false}
@@ -1522,7 +1522,7 @@ const TasksPage = () => {
               />
             </Col>
             <Col>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: '#1976D2', fontVariantNumeric: 'tabular-nums' }}>
                 {kpis.all === 0 ? 0 : Math.round((kpis.status.completed / kpis.all) * 100)}% complete
               </Text>
             </Col>
@@ -1533,7 +1533,7 @@ const TasksPage = () => {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Spin
-              indicator={<LoadingOutlined style={{ fontSize: 32, color: '#6366f1' }} spin />}
+              indicator={<LoadingOutlined style={{ fontSize: 32, color: '#1976D2' }} spin />}
               tip={<Text style={{ color: '#64748b', fontSize: 13, marginTop: 12 }}>Loading tasks...</Text>}
             />
           </div>
@@ -1556,11 +1556,11 @@ const TasksPage = () => {
               background: '#fafbfc',
             }}>
               <Space>
-                <UnorderedListOutlined style={{ color: '#6366f1' }} />
+                <UnorderedListOutlined style={{ color: '#1976D2' }} />
                 <Text strong style={{ fontSize: 14, color: '#1e293b' }}>
                   All Tasks
                 </Text>
-                <Tag style={{ borderRadius: 12, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', fontSize: 11 }}>
+                <Tag style={{ borderRadius: 12, background: '#eef2ff', color: '#1976D2', border: '1px solid #c7d2fe', fontSize: 11 }}>
                   {filteredActions.length} tasks
                 </Tag>
               </Space>
@@ -1594,7 +1594,7 @@ const TasksPage = () => {
                       type="primary"
                       icon={<PlusOutlined />}
                       onClick={handleCreateAction}
-                      style={{ background: '#6366f1', border: 'none' }}
+                      style={{ background: '#1976D2', border: 'none' }}
                     >
                       New Task
                     </Button>
@@ -1818,7 +1818,7 @@ const TasksPage = () => {
       >
         <div style={{ padding: '16px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #ED6C02, #E65100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Zap size={18} color="#fff" />
             </div>
             <div>
@@ -1830,7 +1830,7 @@ const TasksPage = () => {
             <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 8 }}>This will analyze your ASIN catalog and generate tasks for:</div>
             {['Titles — Missing SEO keywords or too short', 'Images — Below recommended count', 'A+ Content — Missing modules or low quality', 'LQS — Below quality threshold'].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12, color: '#334155' }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#6366f1', flexShrink: 0 }} />
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1976D2', flexShrink: 0 }} />
                 {item}
               </div>
             ))}
@@ -1839,7 +1839,7 @@ const TasksPage = () => {
             <Button onClick={() => setIsAutoGenModalOpen(false)} style={{ borderRadius: 8, fontSize: 12 }}>Cancel</Button>
             <Button type="primary" loading={autoGenerating} icon={<Zap size={13} />}
               onClick={handleAutoGenerate}
-              style={{ borderRadius: 8, fontWeight: 600, fontSize: 12, background: '#f59e0b', borderColor: '#f59e0b' }}>
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 12, background: '#ED6C02', borderColor: '#ED6C02' }}>
               {autoGenerating ? 'Generating...' : 'Generate Tasks'}
             </Button>
           </div>
@@ -1874,7 +1874,7 @@ const TasksPage = () => {
           background: white !important;
           box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
           font-weight: 700 !important;
-          color: #6366f1 !important;
+          color: #1976D2 !important;
         }
         .ant-segmented-item {
           font-weight: 500 !important;

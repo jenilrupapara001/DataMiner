@@ -224,7 +224,7 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
                 if (!firstName) return <Text type="secondary">Unassigned</Text>;
                 return (
                     <Space size={8}>
-                        <Avatar size={24} style={{ backgroundColor: '#3b82f6', fontSize: '11px' }}>
+                        <Avatar size={24} style={{ backgroundColor: '#0288D1', fontSize: '11px' }}>
                             {firstName.charAt(0).toUpperCase()}
                         </Avatar>
                         <span>{firstName} {lastName}</span>
@@ -281,7 +281,7 @@ const TasksOperationsPage = ({ isEmbedded = false }) => {
                                         shape="circle" 
                                         icon={<ThumbsUp size={12} />} 
                                         onClick={(e) => { e.stopPropagation(); openReviewModal(record); }} 
-                                        style={{ color: '#10b981', borderColor: '#10b981' }} 
+                                        style={{ color: '#2E7D32', borderColor: '#2E7D32' }} 
                                     />
                                 </Tooltip>
                                 <Tooltip title="Reject">

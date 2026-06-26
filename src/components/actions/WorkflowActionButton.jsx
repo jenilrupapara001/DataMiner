@@ -22,11 +22,11 @@ import { canDoTransition, getDisplayStatus, getRejectionCount, getLastRejection,
 // ─── STATUS COLOUR MAP ────────────────────────────────────────────────────────
 const STATUS_STYLE = {
   PENDING:     { color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
-  IN_PROGRESS: { color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe' },
-  REVIEW:      { color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
-  COMPLETED:   { color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  IN_PROGRESS: { color: '#1976D2', bg: '#eef2ff', border: '#c7d2fe' },
+  REVIEW:      { color: '#9C27B0', bg: '#f5f3ff', border: '#ddd6fe' },
+  COMPLETED:   { color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' },
   REJECTED:    { color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
-  OVERDUE:     { color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  OVERDUE:     { color: '#C62828', bg: '#fef2f2', border: '#fecaca' },
 };
 
 // ─── SHARED BUTTON STYLE ──────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ const StatusPill = ({ status, size, extra }) => {
         {status === 'IN_PROGRESS' && (
           <span style={{
             width: 6, height: 6, borderRadius: '50%',
-            background: '#6366f1',
+            background: '#1976D2',
             animation: 'wfPulse 1.5s ease infinite',
             display: 'inline-block',
           }} />
@@ -143,7 +143,7 @@ const WorkflowActionButton = ({
         <Button
           size={size}
           icon={<PlayCircleOutlined />}
-          style={btnStyle('#6366f1', size)}
+          style={btnStyle('#1976D2', size)}
           onClick={() => onStart?.(task)}
         >
           Start Task
@@ -212,7 +212,7 @@ const WorkflowActionButton = ({
         <Button
           size={size}
           icon={<SendOutlined />}
-          style={btnStyle('#8b5cf6', size)}
+          style={btnStyle('#9C27B0', size)}
           onClick={() => onSubmit?.(task)}
         >
           Submit for Review
@@ -232,7 +232,7 @@ const WorkflowActionButton = ({
           <Tag
             icon={<EyeOutlined />}
             style={{
-              background: '#f5f3ff', color: '#8b5cf6',
+              background: '#f5f3ff', color: '#9C27B0',
               border: '1px solid #ddd6fe', borderRadius: 20,
               fontWeight: 600, fontSize: size === 'small' ? 10 : 11,
               padding: size === 'small' ? '0 7px' : '1px 9px',
@@ -241,7 +241,7 @@ const WorkflowActionButton = ({
           >
             <span style={{
               width: 6, height: 6, borderRadius: '50%',
-              background: '#8b5cf6',
+              background: '#9C27B0',
               animation: 'wfPulse 1.5s ease infinite',
               display: 'inline-block',
             }} />
@@ -259,7 +259,7 @@ const WorkflowActionButton = ({
             <Button
               size={size}
               icon={<CheckOutlined />}
-              style={btnStyle('#10b981', size)}
+              style={btnStyle('#2E7D32', size)}
               onClick={() => onApprove?.(task)}
             >
               Approve
@@ -269,7 +269,7 @@ const WorkflowActionButton = ({
             <Button
               size={size}
               icon={<CloseOutlined />}
-              style={btnStyle('#ef4444', size)}
+              style={btnStyle('#D32F2F', size)}
               onClick={() => onReject?.(task)}
             >
               Reject
@@ -293,7 +293,7 @@ const WorkflowActionButton = ({
             onConfirm={() => onReopen?.(task)}
             okText="Reopen"
             cancelText="Cancel"
-            okButtonProps={{ danger: false, style: { background: '#6366f1', border: 'none' } }}
+            okButtonProps={{ danger: false, style: { background: '#1976D2', border: 'none' } }}
           >
             <Button
               type="link"

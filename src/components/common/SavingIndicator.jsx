@@ -23,8 +23,8 @@ export const SavingIndicator = memo(({
         return (
             <Tooltip title={`Save failed: ${errorIds.get(id)}`}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                    <AlertCircle size={14} color="#ef4444" />
-                    <span style={{ fontSize: 10, color: '#ef4444' }}>Failed</span>
+                    <AlertCircle size={14} color="#D32F2F" />
+                    <span style={{ fontSize: 10, color: '#D32F2F' }}>Failed</span>
                 </div>
             </Tooltip>
         );
@@ -34,8 +34,8 @@ export const SavingIndicator = memo(({
         return (
             <Tooltip title="Syncing with server...">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={12} color="#f59e0b" />
-                    <span style={{ fontSize: 10, color: '#f59e0b' }}>Syncing</span>
+                    <Clock size={12} color="#ED6C02" />
+                    <span style={{ fontSize: 10, color: '#ED6C02' }}>Syncing</span>
                 </div>
             </Tooltip>
         );
@@ -43,7 +43,7 @@ export const SavingIndicator = memo(({
 
     return (
         <Tooltip title="Saved">
-            <CheckCircle2 size={14} color="#10b981" />
+            <CheckCircle2 size={14} color="#2E7D32" />
         </Tooltip>
     );
 });

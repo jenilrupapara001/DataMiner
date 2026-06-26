@@ -11,7 +11,7 @@ import { Modal, Tag, Button, Tooltip, Typography, Space, Select, Badge } from 'a
 const { Text } = Typography;
 
 const C = {
-  primary: '#fb4f40',
+  primary: '#D32F2F',
   primaryLight: '#fce8e6',
   primaryBg: '#fff5f5',
   dark: '#121b1e',
@@ -23,9 +23,9 @@ const C = {
   white: '#fff',
   success: '#22c55e',
   successBg: '#f0fdf4',
-  warning: '#f59e0b',
+  warning: '#ED6C02',
   warningBg: '#fffbeb',
-  danger: '#ef4444',
+  danger: '#D32F2F',
   dangerBg: '#fef2f2',
 };
 
@@ -402,7 +402,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
     .chp.act { background:${C.primary}; color:#fff; border-color:${C.primary}; }
     .chp.act:hover { background:${C.primary}; border-color:${C.primary}; }
     .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:48px; }
-    .dd-has { background:${C.successBg}; color:#059669; font-weight:600; }
+    .dd-has { background:${C.successBg}; color:#2E7D32; font-weight:600; }
     .dd-no { color:#d1d5db; }
     .inp-sm { font-size:11px; height:28px; border:1.5px solid #e5e7eb; border-radius:8px; padding:2px 10px; width:80px; outline:none; }
     .inp-sm:focus { border-color:${C.primary}; }
@@ -452,7 +452,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
                     <FileText size={14} style={{ color: C.success }} /> Export Excel (.xlsx)
                   </button>
                   <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: 11, border: 'none', background: 'transparent' }}>
-                    <FileText size={14} color="#2563eb" /> Export CSV (.csv)
+                    <FileText size={14} color="#0288D1" /> Export CSV (.csv)
                   </button>
                 </div>
               )}

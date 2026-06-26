@@ -180,11 +180,11 @@ const ParentAsinReport = () => {
   };
 
   const kpiConfig = [
-    { label: 'REVENUE', value: fmtCur(kpis.totalRevenue), trend: '+8.2%', color: '#6366f1', inv: false },
+    { label: 'REVENUE', value: fmtCur(kpis.totalRevenue), trend: '+8.2%', color: '#1976D2', inv: false },
     { label: 'AD SPEND', value: fmtCur(kpis.totalAdSpend), trend: '+3.1%', color: '#f43f5e', inv: false },
-    { label: 'AD SALES', value: fmtCur(kpis.totalAdSales), trend: '+12.4%', color: '#10b981', inv: false },
-    { label: 'ACOS', value: `${kpis.avgAcos}%`, trend: '-1.2%', color: '#f59e0b', inv: true },
-    { label: 'ROAS', value: `${kpis.avgRoas}x`, trend: '+0.4x', color: '#8b5cf6', inv: false },
+    { label: 'AD SALES', value: fmtCur(kpis.totalAdSales), trend: '+12.4%', color: '#2E7D32', inv: false },
+    { label: 'ACOS', value: `${kpis.avgAcos}%`, trend: '-1.2%', color: '#ED6C02', inv: true },
+    { label: 'ROAS', value: `${kpis.avgRoas}x`, trend: '+0.4x', color: '#9C27B0', inv: false },
     { label: 'ORDERS', value: kpis.totalOrders.toLocaleString('en-IN'), trend: '+5.6%', color: '#0ea5e9', inv: false },
     { label: 'COLLECTIONS', value: kpis.totalCollections.toLocaleString('en-IN'), trend: '+2.1%', color: '#64748b', inv: false },
     { label: 'CHILD ASINs', value: kpis.totalChildren.toLocaleString('en-IN'), trend: '+0.8%', color: '#14b8a6', inv: false },
@@ -216,7 +216,7 @@ const ParentAsinReport = () => {
     {
       title: 'Children', dataIndex: 'childCount', key: 'cc', width: 90, align: 'center',
       sorter: (a, b) => a.childCount - b.childCount,
-      render: (c) => <Tag style={{ borderRadius: 4, fontWeight: 700, fontSize: 11, color: c > 100 ? '#7c3aed' : '#475569' }}>{c}</Tag>
+      render: (c) => <Tag style={{ borderRadius: 4, fontWeight: 700, fontSize: 11, color: c > 100 ? '#9C27B0' : '#475569' }}>{c}</Tag>
     },
     {
       title: 'Revenue', dataIndex: 'totalRevenue', key: 'rev', width: 130, align: 'right',
@@ -227,14 +227,14 @@ const ParentAsinReport = () => {
       title: 'Ad Spend', dataIndex: 'adSpend', key: 'as', width: 110, align: 'right',
       sorter: (a, b) => a.adSpend - b.adSpend,
       render: (v) => v === 0 ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span> : (
-        <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#e11d48' : v > 10000 ? '#d97706' : '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
+        <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#e11d48' : v > 10000 ? '#E65100' : '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
       )
     },
     {
       title: 'Ad Sales', dataIndex: 'adSales', key: 'asl', width: 110, align: 'right',
       sorter: (a, b) => a.adSales - b.adSales,
       render: (v) => v === 0 ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span> : (
-        <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#059669' : '#059669', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
+        <span style={{ fontWeight: 600, fontSize: 12, color: v > 50000 ? '#2E7D32' : '#2E7D32', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(v)}</span>
       )
     },
     {
@@ -247,7 +247,7 @@ const ParentAsinReport = () => {
       sorter: (a, b) => a.acos - b.acos,
       render: (v) => {
         if (!v) return <Tag style={{ borderRadius: 20, fontSize: 11, color: '#8c8e8f', background: '#f4f5f7' }}>—</Tag>;
-        return <Tag style={{ borderRadius: 20, fontSize: 11, fontWeight: 700, border: 'none', color: v < 10 ? '#059669' : v < 15 ? '#d97706' : '#dc2626', background: v < 10 ? '#ecfdf5' : v < 15 ? '#fffbeb' : '#fef2f2' }}>{v}%</Tag>;
+        return <Tag style={{ borderRadius: 20, fontSize: 11, fontWeight: 700, border: 'none', color: v < 10 ? '#2E7D32' : v < 15 ? '#E65100' : '#C62828', background: v < 10 ? '#ecfdf5' : v < 15 ? '#fffbeb' : '#fef2f2' }}>{v}%</Tag>;
       }
     },
     {
@@ -255,7 +255,7 @@ const ParentAsinReport = () => {
       sorter: (a, b) => a.roas - b.roas,
       render: (v) => {
         if (!v) return <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>;
-        return <span style={{ fontWeight: v >= 8 ? 700 : v >= 5 ? 600 : 500, fontSize: 12, color: v >= 8 ? '#059669' : v >= 5 ? '#0f172a' : '#d97706', fontVariantNumeric: 'tabular-nums' }}>{v}<span style={{ color: '#8c8e8f', fontWeight: 400, fontSize: 11, marginLeft: 1 }}>x</span></span>;
+        return <span style={{ fontWeight: v >= 8 ? 700 : v >= 5 ? 600 : 500, fontSize: 12, color: v >= 8 ? '#2E7D32' : v >= 5 ? '#0f172a' : '#E65100', fontVariantNumeric: 'tabular-nums' }}>{v}<span style={{ color: '#8c8e8f', fontWeight: 400, fontSize: 11, marginLeft: 1 }}>x</span></span>;
       }
     },
     {
@@ -265,7 +265,7 @@ const ParentAsinReport = () => {
         const full = Math.floor(v);
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-            {Array.from({ length: 5 }, (_, i) => <Star key={i} size={11} fill={i < full ? '#f59e0b' : '#e2e8f0'} stroke={i < full ? '#f59e0b' : '#e2e8f0'} />)}
+            {Array.from({ length: 5 }, (_, i) => <Star key={i} size={11} fill={i < full ? '#ED6C02' : '#e2e8f0'} stroke={i < full ? '#ED6C02' : '#e2e8f0'} />)}
             <span style={{ fontSize: 11, color: '#8c8e8f', marginLeft: 2 }}>{v.toFixed(1)}</span>
           </span>
         );
@@ -276,8 +276,8 @@ const ParentAsinReport = () => {
       sorter: (a, b) => (a.growth || 0) - (b.growth || 0),
       render: (v) => {
         if (v == null) return <span style={{ color: '#cbd5e1' }}>—</span>;
-        if (v > 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#059669' }}><ArrowUpRight size={11} />{v.toFixed(1)}%</span>;
-        if (v < 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#dc2626' }}><ArrowDownRight size={11} />{Math.abs(v).toFixed(1)}%</span>;
+        if (v > 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#2E7D32' }}><ArrowUpRight size={11} />{v.toFixed(1)}%</span>;
+        if (v < 0) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontWeight: 700, fontSize: 11, color: '#C62828' }}><ArrowDownRight size={11} />{Math.abs(v).toFixed(1)}%</span>;
         return <span style={{ color: '#cbd5e1' }}><Minus size={11} /></span>;
       }
     },
@@ -318,7 +318,7 @@ const ParentAsinReport = () => {
               </div>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{k.value}</div>
               <div style={{ marginTop: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, color: good ? '#059669' : '#dc2626', background: good ? '#ecfdf5' : '#fef2f2' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20, color: good ? '#2E7D32' : '#C62828', background: good ? '#ecfdf5' : '#fef2f2' }}>
                   {good ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                   {k.trend} <span style={{ color: '#8c8e8f', fontWeight: 500 }}>vs prev</span>
                 </span>
@@ -343,7 +343,7 @@ const ParentAsinReport = () => {
                 </div>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={charts.revenueBars} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                    <defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" /><stop offset="100%" stopColor="#a5b4fc" /></linearGradient></defs>
+                    <defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1976D2" /><stop offset="100%" stopColor="#a5b4fc" /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }} angle={-35} textAnchor="end" height={60} axisLine={false} tickLine={false} />
                     <YAxis tickFormatter={(v) => fmtCur(v)} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -369,12 +369,12 @@ const ParentAsinReport = () => {
                     <YAxis tickFormatter={(v) => fmtCur(v)} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <RTooltip content={<TooltipBox formatter={(v) => fmtCur(v)} />} />
                     <Bar dataKey="adSpend" fill="#f43f5e" radius={[3, 3, 0, 0]} barSize={18} />
-                    <Bar dataKey="adSales" fill="#10b981" radius={[3, 3, 0, 0]} barSize={18} />
+                    <Bar dataKey="adSales" fill="#2E7D32" radius={[3, 3, 0, 0]} barSize={18} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f43f5e', display: 'inline-block' }} />Ad Spend</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />Ad Sales</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2E7D32', display: 'inline-block' }} />Ad Sales</span>
                 </div>
               </Card>
             </Col>
@@ -386,12 +386,12 @@ const ParentAsinReport = () => {
                 <div style={{ fontSize: 11, color: '#8c8e8f', marginTop: 2, marginBottom: 8 }}>Daily average over period</div>
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={charts.acosTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                    <defs><linearGradient id="acosG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} /><stop offset="100%" stopColor="#f59e0b" stopOpacity={0.02} /></linearGradient></defs>
+                    <defs><linearGradient id="acosG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ED6C02" stopOpacity={0.2} /><stop offset="100%" stopColor="#ED6C02" stopOpacity={0.02} /></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis domain={[0, 25]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <RTooltip content={<TooltipBox formatter={(v) => `${v}%`} />} />
-                    <Area type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2} fill="url(#acosG)" dot={false} name="ACOS" />
+                    <Area type="monotone" dataKey="value" stroke="#ED6C02" strokeWidth={2} fill="url(#acosG)" dot={false} name="ACOS" />
                   </AreaChart>
                 </ResponsiveContainer>
               </Card>
@@ -407,8 +407,8 @@ const ParentAsinReport = () => {
                     <YAxis yAxisId="l" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis yAxisId="r" orientation="right" tickFormatter={(v) => fmtCur(v)} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <RTooltip content={<TooltipBox />} />
-                    <Bar yAxisId="l" dataKey="orders" fill="#6366f1" opacity={0.7} radius={[3, 3, 0, 0]} barSize={20} />
-                    <Line yAxisId="r" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} dot={false} />
+                    <Bar yAxisId="l" dataKey="orders" fill="#1976D2" opacity={0.7} radius={[3, 3, 0, 0]} barSize={20} />
+                    <Line yAxisId="r" type="monotone" dataKey="revenue" stroke="#2E7D32" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>
@@ -445,7 +445,7 @@ const ParentAsinReport = () => {
                         { title: 'Rating', dataIndex: 'rating', width: 70, align: 'center', render: (v) => v ? `${v}★` : '—' },
                         { title: 'Reviews', dataIndex: 'reviewCount', width: 80, align: 'right', render: (v) => (v || 0).toLocaleString('en-IN') },
                         { title: 'LQS', dataIndex: 'lqs', width: 70, align: 'center', render: (v) => v ? `${Math.round(v)}%` : '—' },
-                        { title: 'Stock', dataIndex: 'stockLevel', width: 70, align: 'center', render: (v) => <Tag style={{ borderRadius: 4, fontSize: 10, color: v < 10 ? '#e11d48' : v < 30 ? '#d97706' : '#059669', background: v < 10 ? '#fef2f2' : v < 30 ? '#fffbeb' : '#ecfdf5' }}>{v ?? '—'}</Tag> },
+                        { title: 'Stock', dataIndex: 'stockLevel', width: 70, align: 'center', render: (v) => <Tag style={{ borderRadius: 4, fontSize: 10, color: v < 10 ? '#e11d48' : v < 30 ? '#E65100' : '#2E7D32', background: v < 10 ? '#fef2f2' : v < 30 ? '#fffbeb' : '#ecfdf5' }}>{v ?? '—'}</Tag> },
                       ]} />
                   </Spin>
                 ),

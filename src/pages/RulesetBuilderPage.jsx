@@ -346,7 +346,7 @@ const RulesetBuilderPage = () => {
                   style={{ borderRadius: 8, fontSize: 11, height: 32 }} />
               </Tooltip>
               <Button icon={<PlayCircle size={13} />} loading={executing} onClick={handleExecute}
-                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, color: '#059669', borderColor: '#059669' }}>
+                style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32, color: '#2E7D32', borderColor: '#2E7D32' }}>
                 Run Now
               </Button>
             </>
@@ -453,7 +453,7 @@ const RulesetBuilderPage = () => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 11, color: '#71717a' }}>Auto-run</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: ruleset.isAutomated ? '#059669' : '#71717a' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: ruleset.isAutomated ? '#2E7D32' : '#71717a' }}>
                   {ruleset.isAutomated ? `${ruleset.runFrequency} at ${ruleset.runTime}` : 'Off'}
                 </span>
               </div>
@@ -484,7 +484,7 @@ const RulesetBuilderPage = () => {
                 <div key={log.Id || i} style={{ padding: '10px 0', borderBottom: '1px solid #f4f4f5' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <CheckCircle2 size={14} style={{ color: log.Status === 'SUCCESS' ? '#059669' : '#dc2626' }} />
+                      <CheckCircle2 size={14} style={{ color: log.Status === 'SUCCESS' ? '#2E7D32' : '#C62828' }} />
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#18181b' }}>
                         {log.MatchedCount || 0} matched · {log.ActionedCount || 0} actioned
                       </span>

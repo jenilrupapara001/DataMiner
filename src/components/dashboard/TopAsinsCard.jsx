@@ -30,12 +30,12 @@ const formatCurrency = (val) => {
 const getBrandColor = (brand) => {
     if (!brand) return { bg: '#f1f5f9', text: '#64748b' };
     const colors = [
-        { bg: '#dbeafe', text: '#2563eb' },
+        { bg: '#dbeafe', text: '#0288D1' },
         { bg: '#fce7f3', text: '#db2777' },
-        { bg: '#d1fae5', text: '#059669' },
-        { bg: '#fef3c7', text: '#d97706' },
-        { bg: '#e0e7ff', text: '#4f46e5' },
-        { bg: '#fee2e2', text: '#dc2626' },
+        { bg: '#d1fae5', text: '#2E7D32' },
+        { bg: '#fef3c7', text: '#E65100' },
+        { bg: '#e0e7ff', text: '#1976D2' },
+        { bg: '#fee2e2', text: '#C62828' },
         { bg: '#cffafe', text: '#0891b2' },
         { bg: '#f3e8ff', text: '#9333ea' },
         { bg: '#fde2e8', text: '#e11d48' },
@@ -55,7 +55,7 @@ const RankBadge = memo(({ rank }) => {
                 width: 32,
                 height: 32,
                 borderRadius: 10,
-                background: 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+                background: 'linear-gradient(135deg, #fbbf24 0%, #E65100 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -287,7 +287,7 @@ const AsinRow = memo(({ product, rank, maxValue, sortBy }) => {
                             gap: 2,
                             fontSize: 9,
                             fontWeight: 800,
-                            color: isPositive ? '#059669' : '#dc2626',
+                            color: isPositive ? '#2E7D32' : '#C62828',
                             background: isPositive ? '#d1fae5' : '#fee2e2',
                             padding: '1px 5px',
                             borderRadius: 8
@@ -378,7 +378,7 @@ const TopAsinsCard = ({ products = [] }) => {
                     background: #94a3b8;
                 }
                 .section-link-asins:hover {
-                    color: #fb4f40 !important;
+                    color: #D32F2F !important;
                     transform: translateX(2px);
                 }
                 @keyframes shimmer-crown {
@@ -395,7 +395,7 @@ const TopAsinsCard = ({ products = [] }) => {
                 }
                 .asin-search-input:focus,
                 .asin-search-input:hover {
-                    border-color: #fb4f40 !important;
+                    border-color: #D32F2F !important;
                     box-shadow: 0 0 0 3px rgba(251, 79, 64, 0.08) !important;
                 }
             `}</style>
@@ -433,7 +433,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+                                background: 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -473,7 +473,7 @@ const TopAsinsCard = ({ products = [] }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#fb4f40',
+                                color: '#D32F2F',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -504,8 +504,8 @@ const TopAsinsCard = ({ products = [] }) => {
                                 border: '1px solid #d9e6e9',
                                 borderRadius: 12
                             }}>
-                                <Package size={11} style={{ color: '#2563eb' }} strokeWidth={2.5} />
-                                <span style={{ fontSize: 11, fontWeight: 800, color: '#2563eb' }}>
+                                <Package size={11} style={{ color: '#0288D1' }} strokeWidth={2.5} />
+                                <span style={{ fontSize: 11, fontWeight: 800, color: '#0288D1' }}>
                                     {stats.total}
                                 </span>
                                 <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
@@ -521,8 +521,8 @@ const TopAsinsCard = ({ products = [] }) => {
                                 border: '1px solid #e2e8f0',
                                 borderRadius: 12
                             }}>
-                                <ShoppingBag size={11} style={{ color: '#10b981' }} strokeWidth={2.5} />
-                                <span style={{ fontSize: 11, fontWeight: 800, color: '#10b981' }}>
+                                <ShoppingBag size={11} style={{ color: '#2E7D32' }} strokeWidth={2.5} />
+                                <span style={{ fontSize: 11, fontWeight: 800, color: '#2E7D32' }}>
                                     {formatNumber(stats.totalUnits)}
                                 </span>
                                 <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
@@ -539,8 +539,8 @@ const TopAsinsCard = ({ products = [] }) => {
                                     border: '1px solid #d9e6e9',
                                     borderRadius: 12
                                 }}>
-                                    <BarChart3 size={11} style={{ color: '#8b5cf6' }} strokeWidth={2.5} />
-                                    <span style={{ fontSize: 11, fontWeight: 800, color: '#8b5cf6' }}>
+                                    <BarChart3 size={11} style={{ color: '#9C27B0' }} strokeWidth={2.5} />
+                                    <span style={{ fontSize: 11, fontWeight: 800, color: '#9C27B0' }}>
                                         {formatCurrency(stats.totalRevenue)}
                                     </span>
                                     <span style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>
@@ -654,7 +654,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 marginBottom: 12,
                                 border: '2px solid #fbbf24'
                             }}>
-                                <Trophy size={24} style={{ color: '#d97706' }} strokeWidth={2.5} />
+                                <Trophy size={24} style={{ color: '#E65100' }} strokeWidth={2.5} />
                             </div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
                                 {searchText ? 'No Products Found' : 'No Performance Data'}
@@ -711,7 +711,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 gap: 5,
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: '#d97706',
+                                color: '#E65100',
                                 background: '#fffbeb',
                                 padding: '3px 9px',
                                 borderRadius: 12,
@@ -721,7 +721,7 @@ const TopAsinsCard = ({ products = [] }) => {
                                 textOverflow: 'ellipsis',
                                 maxWidth: 200
                             }}>
-                                <Star size={10} strokeWidth={2.5} fill="#d97706" />
+                                <Star size={10} strokeWidth={2.5} fill="#E65100" />
                                 <span style={{
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',

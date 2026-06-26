@@ -97,7 +97,7 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
             </Space>
             {reviewerName ? (
               <Space size={6}>
-                <Avatar size={20} icon={<UserOutlined />} style={{ background: '#f5f3ff', color: '#8b5cf6' }} />
+                <Avatar size={20} icon={<UserOutlined />} style={{ background: '#f5f3ff', color: '#9C27B0' }} />
                 <Text style={{ fontSize: 12, color: '#64748b' }}>Reviewer: {reviewerName}</Text>
               </Space>
             ) : (
@@ -114,7 +114,7 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
         <Form form={form} layout="vertical" scrollToFirstError>
           <Form.Item
             name="summary"
-            label={<span style={labelStyle}>Completion Summary <span style={{ color: '#ef4444' }}>*</span></span>}
+            label={<span style={labelStyle}>Completion Summary <span style={{ color: '#D32F2F' }}>*</span></span>}
             rules={[
               { required: true, message: 'Summary is required' },
               { min: 20, message: 'Minimum 20 characters' },
@@ -154,7 +154,7 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
           <Divider style={{ margin: '12px 0' }} />
 
           <Form.Item
-            label={<span style={labelStyle}>Completion Stage <span style={{ color: '#ef4444' }}>*</span></span>}
+            label={<span style={labelStyle}>Completion Stage <span style={{ color: '#D32F2F' }}>*</span></span>}
           >
             <Radio.Group
               value={stage}
@@ -166,15 +166,15 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
                   value="REVIEW"
                   style={{
                     display: 'flex', alignItems: 'center', padding: '12px 16px',
-                    border: `1px solid ${stage === 'REVIEW' ? '#8b5cf6' : '#e2e8f0'}`,
+                    border: `1px solid ${stage === 'REVIEW' ? '#9C27B0' : '#e2e8f0'}`,
                     borderRadius: 8, background: stage === 'REVIEW' ? '#f5f3ff' : 'white',
                     width: '100%', height: 'auto', margin: 0,
                   }}
                 >
                   <Space size={12}>
-                    <EyeOutlined style={{ fontSize: 18, color: stage === 'REVIEW' ? '#8b5cf6' : '#94a3b8' }} />
+                    <EyeOutlined style={{ fontSize: 18, color: stage === 'REVIEW' ? '#9C27B0' : '#94a3b8' }} />
                     <Space orientation="vertical" size={2}>
-                      <Text strong style={{ fontSize: 13, color: stage === 'REVIEW' ? '#8b5cf6' : '#374151' }}>
+                      <Text strong style={{ fontSize: 13, color: stage === 'REVIEW' ? '#9C27B0' : '#374151' }}>
                         Submit for Review
                       </Text>
                       <Text style={{ fontSize: 11, color: '#94a3b8' }}>
@@ -189,16 +189,16 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
                   disabled={!!hasReviewer}
                   style={{
                     display: 'flex', alignItems: 'center', padding: '12px 16px',
-                    border: `1px solid ${stage === 'COMPLETED' ? '#10b981' : '#e2e8f0'}`,
+                    border: `1px solid ${stage === 'COMPLETED' ? '#2E7D32' : '#e2e8f0'}`,
                     borderRadius: 8, background: stage === 'COMPLETED' ? '#ecfdf5' : 'white',
                     width: '100%', height: 'auto', margin: 0,
                     opacity: hasReviewer ? 0.5 : 1,
                   }}
                 >
                   <Space size={12}>
-                    <CheckCircleOutlined style={{ fontSize: 18, color: stage === 'COMPLETED' ? '#10b981' : '#94a3b8' }} />
+                    <CheckCircleOutlined style={{ fontSize: 18, color: stage === 'COMPLETED' ? '#2E7D32' : '#94a3b8' }} />
                     <Space orientation="vertical" size={2}>
-                      <Text strong style={{ fontSize: 13, color: stage === 'COMPLETED' ? '#10b981' : '#374151' }}>
+                      <Text strong style={{ fontSize: 13, color: stage === 'COMPLETED' ? '#2E7D32' : '#374151' }}>
                         Mark as Complete
                       </Text>
                       <Text style={{ fontSize: 11, color: '#94a3b8' }}>
@@ -221,7 +221,7 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
           loading={submitting}
           style={{
             ...MODAL_STYLES.primaryBtn,
-            background: stage === 'COMPLETED' ? '#10b981' : '#6366f1',
+            background: stage === 'COMPLETED' ? '#2E7D32' : '#1976D2',
           }}
         >
           {stage === 'REVIEW' ? 'Submit for Review' : 'Mark Complete'}

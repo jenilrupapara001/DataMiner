@@ -90,7 +90,7 @@ const QuickTaskModal = ({ isOpen, onClose, onSave, currentUser, sellers, users }
         <Form form={form} layout="vertical">
           <Form.Item
             name="title"
-            label={<span style={labelStyle}>Task Title <span style={{ color: '#ef4444' }}>*</span></span>}
+            label={<span style={labelStyle}>Task Title <span style={{ color: '#D32F2F' }}>*</span></span>}
             rules={[
               { required: true, message: 'Title is required' },
               { min: 3, message: 'Minimum 3 characters' },

@@ -166,11 +166,11 @@ const Sidebar = () => {
                 theme={{
                     components: {
                         Menu: {
-                            itemSelectedColor: '#d94033',
-                            itemSelectedBg: '#fff0f0',
-                            itemHoverBg: '#fff0f0',
-                            itemHoverColor: '#121b1e',
-                            groupTitleColor: '#8c8e8f',
+                            itemSelectedColor: '#1565C0',
+                            itemSelectedBg: '#E3F2FD',
+                            itemHoverBg: '#F1F5F9',
+                            itemHoverColor: '#0F172A',
+                            groupTitleColor: '#94A3B8',
                             groupTitleFontSize: 9.5,
                             itemHeight: 34,
                             iconSize: 16,

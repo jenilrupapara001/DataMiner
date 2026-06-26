@@ -149,11 +149,11 @@ const BrandTaskView = ({
   }, [filteredGroups]);
 
   const STATUS_PILLS = [
-    { key: 'ALL', label: 'All Tasks', color: '#6366f1' },
-    { key: 'PENDING', label: 'Pending', color: '#f59e0b' },
-    { key: 'IN_PROGRESS', label: 'In Progress', color: '#3b82f6' },
-    { key: 'REVIEW', label: 'Review', color: '#7c3aed' },
-    { key: 'COMPLETED', label: 'Completed', color: '#10b981' },
+    { key: 'ALL', label: 'All Tasks', color: '#1976D2' },
+    { key: 'PENDING', label: 'Pending', color: '#ED6C02' },
+    { key: 'IN_PROGRESS', label: 'In Progress', color: '#0288D1' },
+    { key: 'REVIEW', label: 'Review', color: '#9C27B0' },
+    { key: 'COMPLETED', label: 'Completed', color: '#2E7D32' },
   ];
 
   return (
@@ -165,11 +165,11 @@ const BrandTaskView = ({
         padding: '14px 0', borderBottom: '1px solid #f1f5f9'
       }}>
         {[
-          { icon: Building2, label: 'Brands', value: stats.totalBrands, color: '#6366f1' },
-          { icon: CheckCircle2, label: 'Tasks', value: stats.totalTasks, color: '#3b82f6' },
-          { icon: Package, label: 'ASINs', value: stats.totalAsins, color: '#7c3aed' },
-          { icon: TrendingUp, label: 'Completed', value: stats.completedTasks, color: '#10b981' },
-          ...(stats.overdueTasks > 0 ? [{ icon: AlertTriangle, label: 'Overdue', value: stats.overdueTasks, color: '#ef4444' }] : []),
+          { icon: Building2, label: 'Brands', value: stats.totalBrands, color: '#1976D2' },
+          { icon: CheckCircle2, label: 'Tasks', value: stats.totalTasks, color: '#0288D1' },
+          { icon: Package, label: 'ASINs', value: stats.totalAsins, color: '#9C27B0' },
+          { icon: TrendingUp, label: 'Completed', value: stats.completedTasks, color: '#2E7D32' },
+          ...(stats.overdueTasks > 0 ? [{ icon: AlertTriangle, label: 'Overdue', value: stats.overdueTasks, color: '#D32F2F' }] : []),
         ].map(({ icon: Icon, label, value, color }) => (
           <div key={label} style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -198,7 +198,7 @@ const BrandTaskView = ({
               marginLeft: 'auto',
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '8px 16px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              background: 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)',
               color: '#ffffff', border: 'none', borderRadius: 10,
               fontSize: 12, fontWeight: 700, cursor: 'pointer',
               boxShadow: '0 4px 12px -2px rgba(99,102,241,0.4)',
@@ -230,7 +230,7 @@ const BrandTaskView = ({
               border: '1.5px solid #e2e8f0', background: '#ffffff',
               outline: 'none', color: '#0f172a', boxSizing: 'border-box'
             }}
-            onFocus={e => e.target.style.borderColor = '#6366f1'}
+            onFocus={e => e.target.style.borderColor = '#1976D2'}
             onBlur={e => e.target.style.borderColor = '#e2e8f0'}
           />
           {localSearch && (
@@ -284,7 +284,7 @@ const BrandTaskView = ({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid #c7d2fe'
           }}>
-            <Building2 size={32} color="#6366f1" strokeWidth={1.5} />
+            <Building2 size={32} color="#1976D2" strokeWidth={1.5} />
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
@@ -301,7 +301,7 @@ const BrandTaskView = ({
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '10px 20px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  background: 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)',
                   color: '#ffffff', border: 'none', borderRadius: 12,
                   fontSize: 13, fontWeight: 700, cursor: 'pointer',
                   boxShadow: '0 4px 12px -2px rgba(99,102,241,0.4)'

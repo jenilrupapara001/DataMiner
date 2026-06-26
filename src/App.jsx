@@ -76,7 +76,7 @@ const PageLoader = () => (
       width: 36,
       height: 36,
       border: '3px solid #e5e7eb',
-      borderTopColor: '#6366f1',
+      borderTopColor: '#1976D2',
       borderRadius: '50%',
       animation: 'spin 0.9s linear infinite'
     }} />
@@ -124,7 +124,7 @@ const BrandedLoader = () => (
       width: 80,
       height: 80,
       borderRadius: 20,
-      background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+      background: 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -136,7 +136,7 @@ const BrandedLoader = () => (
       width: 40,
       height: 40,
       border: '3px solid #d9e6e9',
-      borderTopColor: '#fb4f40',
+      borderTopColor: '#D32F2F',
       borderRadius: '50%',
       animation: 'branded-spin 0.8s linear infinite',
     }} />
@@ -181,7 +181,6 @@ function AppRoutes() {
                   <Route path="/gms-tracker" element={<ProtectedRoute permission="gms_tracker_view"><GmsTrackerPage /></ProtectedRoute>} />
                   <Route path="/profit-loss" element={<ProtectedRoute permission="pnlreport_view"><ProfitLossPage /></ProtectedRoute>} />
                   <Route path="/inventory" element={<ProtectedRoute permission="inventoryreport_view"><InventoryPage /></ProtectedRoute>} />
-                  <Route path="/actions" element={<ProtectedRoute permission="actions_view"><TasksPage /></ProtectedRoute>} />
                   <Route path="/users" element={<ProtectedRoute permission="users_view"><UsersPage /></ProtectedRoute>} />
                   <Route path="/roles" element={<ProtectedRoute permission="roles_view"><RolesPage /></ProtectedRoute>} />
                   <Route path="/team-management" element={<ProtectedRoute permission="roles_view"><TeamManagementPage /></ProtectedRoute>} />

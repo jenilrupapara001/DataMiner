@@ -64,7 +64,7 @@
 
 .search-bar-wrapper:hover,
 .search-bar-wrapper:focus-within {
-    border-color: #10b981;
+    border-color: #2E7D32;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 

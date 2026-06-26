@@ -384,7 +384,7 @@ const SellerAsinsModal = memo(({
           size="small"
           icon={
             status === 'Active'
-              ? <CheckCircle2 size={14} color="#10b981" />
+              ? <CheckCircle2 size={14} color="#2E7D32" />
               : <PauseCircle size={14} color="#a1a1aa" />
           }
           onClick={() => onToggleStatus(record._id, status)}
@@ -392,7 +392,7 @@ const SellerAsinsModal = memo(({
             fontWeight: 700,
             fontSize: 10,
             textTransform: 'uppercase',
-            color: status === 'Active' ? '#10b981' : '#a1a1aa',
+            color: status === 'Active' ? '#2E7D32' : '#a1a1aa',
           }}
         >
           {status}
@@ -571,7 +571,7 @@ const SellerAsinsModal = memo(({
                 icon={<CheckCircle2 size={13} />}
                 onClick={() => handleBulkStatusUpdate('Active')}
                 loading={isSubmitting}
-                style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 600 }}
+                style={{ background: '#2E7D32', borderColor: '#2E7D32', fontWeight: 600 }}
               >
                 Mark Active
               </Button>
@@ -580,7 +580,7 @@ const SellerAsinsModal = memo(({
                 icon={<PauseCircle size={13} />}
                 onClick={() => handleBulkStatusUpdate('Paused')}
                 loading={isSubmitting}
-                style={{ background: '#d97706', borderColor: '#d97706', color: '#fff', fontWeight: 600 }}
+                style={{ background: '#E65100', borderColor: '#E65100', color: '#fff', fontWeight: 600 }}
               >
                 Mark Paused
               </Button>

@@ -28,18 +28,18 @@ export const ACTION_TYPES = [
 
 export const STATUS_OPTIONS = [
   { value: 'TODO', label: 'To Do', color: '#64748b', bg: '#f1f5f9' },
-  { value: 'PENDING', label: 'Pending', color: '#d97706', bg: '#fef3c7' },
-  { value: 'IN_PROGRESS', label: 'In Progress', color: '#6366f1', bg: '#eef2ff' },
-  { value: 'REVIEW', label: 'Review', color: '#8b5cf6', bg: '#f5f3ff' },
-  { value: 'COMPLETED', label: 'Completed', color: '#059669', bg: '#ecfdf5' },
+  { value: 'PENDING', label: 'Pending', color: '#E65100', bg: '#fef3c7' },
+  { value: 'IN_PROGRESS', label: 'In Progress', color: '#1976D2', bg: '#eef2ff' },
+  { value: 'REVIEW', label: 'Review', color: '#9C27B0', bg: '#f5f3ff' },
+  { value: 'COMPLETED', label: 'Completed', color: '#2E7D32', bg: '#ecfdf5' },
   { value: 'REJECTED', label: 'Rejected', color: '#e11d48', bg: '#fff1f2' },
 ];
 
 export const PRIORITY_OPTIONS = [
   { value: 'LOW', label: 'Low', color: '#64748b', bg: '#f1f5f9', icon: 'ArrowDownOutlined' },
-  { value: 'MEDIUM', label: 'Medium', color: '#d97706', bg: '#fef3c7', icon: 'MinusOutlined' },
-  { value: 'HIGH', label: 'High', color: '#f97316', bg: '#fff7ed', icon: 'ArrowUpOutlined' },
-  { value: 'CRITICAL', label: 'Critical', color: '#ef4444', bg: '#fef2f2', icon: 'ExclamationCircleOutlined' },
+  { value: 'MEDIUM', label: 'Medium', color: '#E65100', bg: '#fef3c7', icon: 'MinusOutlined' },
+  { value: 'HIGH', label: 'High', color: '#ED6C02', bg: '#fff7ed', icon: 'ArrowUpOutlined' },
+  { value: 'CRITICAL', label: 'Critical', color: '#D32F2F', bg: '#fef2f2', icon: 'ExclamationCircleOutlined' },
 ];
 
 const ROLES = {
@@ -163,7 +163,7 @@ export const MODAL_STYLES = {
   headerStyle: { borderBottom: '1px solid #f1f5f9', padding: '16px 24px' },
   bodyStyle: { padding: '20px 24px' },
   footerStyle: { borderTop: '1px solid #f1f5f9', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 8 },
-  primaryBtn: { height: 36, borderRadius: 8, fontWeight: 600, background: '#6366f1', border: 'none', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' },
+  primaryBtn: { height: 36, borderRadius: 8, fontWeight: 600, background: '#1976D2', border: 'none', boxShadow: '0 2px 8px rgba(99,102,241,0.3)' },
   dangerBtn: { height: 36, borderRadius: 8, fontWeight: 600 },
   cancelBtn: { height: 36, borderRadius: 8 },
   labelStyle: { fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4, display: 'block' },

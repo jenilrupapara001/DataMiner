@@ -1972,7 +1972,11 @@ exports.bulkUploadAllSellers = async (req, res) => {
                     affectedSellerIds.add(sellerId);
 
                     const price = parseFloat(priceRaw) || 0;
-                    const releaseDate = parseFlexibleDate(releaseDateRaw);
+                    const releaseDate = (() => {
+                        const d = parseFlexibleDate(releaseDateRaw);
+                        if (d) { const y = d.getFullYear(); if (y < 1 || y > 9999) return null; }
+                        return d;
+                    })();
 
                     // Check if exists
                     const checkResult = await transaction.request()

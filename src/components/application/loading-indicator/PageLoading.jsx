@@ -13,12 +13,12 @@ const PageLoading = ({ message = 'Loading...', subMessage = '' }) => (
     }}>
       <div style={{
         width: 48, height: 48, borderRadius: 10,
-        background: '#fb4f400D', display: 'inline-flex',
+        background: '#D32F2F0D', display: 'inline-flex',
         alignItems: 'center', justifyContent: 'center', marginBottom: 16
       }}>
         <div style={{
           width: 24, height: 24, borderRadius: '50%',
-          border: '3px solid #fb4f4020', borderTopColor: '#fb4f40',
+          border: '3px solid #D32F2F20', borderTopColor: '#D32F2F',
           animation: 'pageLoadingSpin 0.8s linear infinite'
         }} />
       </div>

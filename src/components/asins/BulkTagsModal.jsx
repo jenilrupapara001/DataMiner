@@ -115,22 +115,22 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
     const t = tag.toLowerCase();
     // Green
     if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential')) 
-      return { bg: '#10b981', text: '#ffffff' };
+      return { bg: '#2E7D32', text: '#ffffff' };
     // Red
     if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
-      return { bg: '#ef4444', text: '#ffffff' };
+      return { bg: '#D32F2F', text: '#ffffff' };
     // Amber/Orange
     if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
-      return { bg: '#f59e0b', text: '#ffffff' };
+      return { bg: '#ED6C02', text: '#ffffff' };
     // Blue
     if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
-      return { bg: '#3b82f6', text: '#ffffff' };
+      return { bg: '#0288D1', text: '#ffffff' };
     // Indigo/Purple
     if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
-      return { bg: '#6366f1', text: '#ffffff' };
+      return { bg: '#1976D2', text: '#ffffff' };
     // Orange-Red
     if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
-      return { bg: '#f97316', text: '#ffffff' };
+      return { bg: '#ED6C02', text: '#ffffff' };
     // Default Gray
     return { bg: '#71717a', text: '#ffffff' };
   };
@@ -206,7 +206,7 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                 <div className={`rounded-circle d-flex align-items-center justify-content-center fw-bold`}
                   style={{ 
                     width: '28px', height: '28px', fontSize: '12px',
-                    background: step === s.num ? '#18181b' : step > s.num ? '#059669' : '#f3f4f6',
+                    background: step === s.num ? '#18181b' : step > s.num ? '#2E7D32' : '#f3f4f6',
                     color: step === s.num ? 'white' : step > s.num ? 'white' : '#9ca3af'
                   }}>
                   {step > s.num ? '✓' : s.num}
@@ -215,7 +215,7 @@ const BulkTagsModal = ({ isOpen, onClose, selectedAsins = [], onComplete }) => {
                   {s.label}
                 </span>
               </div>
-              {idx < 2 && <div className="flex-grow-1" style={{ height: '2px', background: step > s.num ? '#059669' : '#e5e7eb' }} />}
+              {idx < 2 && <div className="flex-grow-1" style={{ height: '2px', background: step > s.num ? '#2E7D32' : '#e5e7eb' }} />}
             </React.Fragment>
           ))}
         </div>

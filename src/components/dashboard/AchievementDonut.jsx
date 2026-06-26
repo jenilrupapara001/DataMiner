@@ -338,7 +338,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 range: '100%+',
                 description: 'Exceeded all targets',
                 value: elite,
-                color: '#10b981',
+                color: '#2E7D32',
                 bg: '#d1fae5',
                 icon: Crown
             },
@@ -348,7 +348,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 range: '80-99%',
                 description: 'Strong performance',
                 value: high,
-                color: '#3b82f6',
+                color: '#0288D1',
                 bg: '#dbeafe',
                 icon: Star
             },
@@ -358,7 +358,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 range: '50-79%',
                 description: 'Steady progress',
                 value: onTrack,
-                color: '#f59e0b',
+                color: '#ED6C02',
                 bg: '#fef3c7',
                 icon: Activity
             },
@@ -368,7 +368,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                 range: '<50%',
                 description: 'Needs attention',
                 value: critical,
-                color: '#ef4444',
+                color: '#D32F2F',
                 bg: '#fee2e2',
                 icon: AlertTriangle
             }
@@ -383,7 +383,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
     const overallStatus = useMemo(() => {
         if (overallRate >= 100) return {
             label: 'Outperforming',
-            color: '#10b981',
+            color: '#2E7D32',
             bg: '#d1fae5',
             border: '#a7f3d0',
             icon: Sparkles,
@@ -391,7 +391,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
         };
         if (overallRate >= 80) return {
             label: 'High Performance',
-            color: '#3b82f6',
+            color: '#0288D1',
             bg: '#dbeafe',
             border: '#bfdbfe',
             icon: TrendingUp,
@@ -399,7 +399,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
         };
         if (overallRate >= 50) return {
             label: 'On Track',
-            color: '#f59e0b',
+            color: '#ED6C02',
             bg: '#fef3c7',
             border: '#fde68a',
             icon: Activity,
@@ -407,7 +407,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
         };
         return {
             label: 'Critical',
-            color: '#ef4444',
+            color: '#D32F2F',
             bg: '#fee2e2',
             border: '#fecaca',
             icon: AlertTriangle,
@@ -450,7 +450,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                     border-color: currentColor !important;
                 }
                 .section-link-donut:hover {
-                    color: #fb4f40 !important;
+                    color: #D32F2F !important;
                     transform: translateX(2px);
                 }
                 @keyframes float-icon {
@@ -501,7 +501,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+                                background: 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -538,7 +538,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#fb4f40',
+                                color: '#D32F2F',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -579,7 +579,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                             marginBottom: 14,
                             border: '2px solid #fbbf24'
                         }}>
-                            <Target size={28} style={{ color: '#d97706' }} strokeWidth={2.5} />
+                            <Target size={28} style={{ color: '#E65100' }} strokeWidth={2.5} />
                         </div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: '#121b1e', marginBottom: 4 }}>
                             No Targets Defined
@@ -662,14 +662,14 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                         marginBottom: 4
                                     }}>
                                         {insights.isHealthy ? (
-                                            <CheckCircle2 size={11} style={{ color: '#10b981' }} strokeWidth={2.5} />
+                                            <CheckCircle2 size={11} style={{ color: '#2E7D32' }} strokeWidth={2.5} />
                                         ) : (
-                                            <Activity size={11} style={{ color: '#f59e0b' }} strokeWidth={2.5} />
+                                            <Activity size={11} style={{ color: '#ED6C02' }} strokeWidth={2.5} />
                                         )}
                                         <span style={{
                                             fontSize: 9,
                                             fontWeight: 800,
-                                            color: insights.isHealthy ? '#059669' : '#d97706',
+                                            color: insights.isHealthy ? '#2E7D32' : '#E65100',
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em'
                                         }}>
@@ -679,7 +679,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                     <div style={{
                                         fontSize: 16,
                                         fontWeight: 800,
-                                        color: insights.isHealthy ? '#059669' : '#d97706',
+                                        color: insights.isHealthy ? '#2E7D32' : '#E65100',
                                         letterSpacing: '-0.3px'
                                     }}>
                                         {insights.healthyCount}/{total}
@@ -708,14 +708,14 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                         marginBottom: 4
                                     }}>
                                         {parseInt(insights.criticalPct) > 30 ? (
-                                            <AlertTriangle size={11} style={{ color: '#ef4444' }} strokeWidth={2.5} />
+                                            <AlertTriangle size={11} style={{ color: '#D32F2F' }} strokeWidth={2.5} />
                                         ) : (
                                             <Zap size={11} style={{ color: '#64748b' }} strokeWidth={2.5} />
                                         )}
                                         <span style={{
                                             fontSize: 9,
                                             fontWeight: 800,
-                                            color: parseInt(insights.criticalPct) > 30 ? '#dc2626' : '#64748b',
+                                            color: parseInt(insights.criticalPct) > 30 ? '#C62828' : '#64748b',
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em'
                                         }}>
@@ -725,7 +725,7 @@ const AchievementDonut = ({ targets = [], overallRate = 0 }) => {
                                     <div style={{
                                         fontSize: 16,
                                         fontWeight: 800,
-                                        color: parseInt(insights.criticalPct) > 30 ? '#dc2626' : '#64748b',
+                                        color: parseInt(insights.criticalPct) > 30 ? '#C62828' : '#64748b',
                                         letterSpacing: '-0.3px'
                                     }}>
                                         {tiers[3].value}/{total}

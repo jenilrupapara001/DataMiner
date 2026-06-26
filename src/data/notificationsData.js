@@ -50,8 +50,8 @@ export const mockNotifications = [
 ];
 
 export const notificationTypeConfig = {
-  success: { color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
-  warning: { color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  error: { color: '#fb4f40', bg: '#fff0f0', border: '#ffb3ae' },
+  success: { color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' },
+  warning: { color: '#ED6C02', bg: '#fffbeb', border: '#fde68a' },
+  error: { color: '#D32F2F', bg: '#fff0f0', border: '#ffb3ae' },
   info: { color: '#8c8e8f', bg: '#f4f5f7', border: '#d9e6e9' },
 };

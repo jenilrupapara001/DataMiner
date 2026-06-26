@@ -14,7 +14,7 @@ const OPT_TYPES = {
     label: 'Title Optimization',
     shortLabel: 'Title',
     icon: Tag,
-    color: '#3b82f6',
+    color: '#0288D1',
     bg: '#eff6ff',
     border: '#bfdbfe',
     emoji: '✏️'
@@ -23,7 +23,7 @@ const OPT_TYPES = {
     label: 'A+ Content',
     shortLabel: 'A+',
     icon: Star,
-    color: '#7c3aed',
+    color: '#9C27B0',
     bg: '#f5f3ff',
     border: '#ddd6fe',
     emoji: '⭐'
@@ -32,7 +32,7 @@ const OPT_TYPES = {
     label: 'Image Optimization',
     shortLabel: 'Images',
     icon: Image,
-    color: '#10b981',
+    color: '#2E7D32',
     bg: '#ecfdf5',
     border: '#a7f3d0',
     emoji: '🖼️'
@@ -41,7 +41,7 @@ const OPT_TYPES = {
     label: 'Bullet Points',
     shortLabel: 'Bullets',
     icon: List,
-    color: '#f59e0b',
+    color: '#ED6C02',
     bg: '#fffbeb',
     border: '#fde68a',
     emoji: '📋'
@@ -50,7 +50,7 @@ const OPT_TYPES = {
     label: 'Description',
     shortLabel: 'Desc',
     icon: FileText,
-    color: '#06b6d4',
+    color: '#0288D1',
     bg: '#ecfeff',
     border: '#a5f3fc',
     emoji: '📝'
@@ -72,11 +72,11 @@ const getOptConfig = (type) => OPT_TYPES[type] || OPT_TYPES.GENERAL_OPTIMIZATION
 // STATUS HELPERS
 // ═══════════════════════════════════════════════════════════════
 const STATUS_CONFIG = {
-  PENDING: { label: 'Pending', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-  IN_PROGRESS: { label: 'In Progress', color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-  REVIEW: { label: 'In Review', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
-  COMPLETED: { label: 'Completed', color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
-  REJECTED: { label: 'Rejected', color: '#ef4444', bg: '#fef2f2', border: '#fecaca' }
+  PENDING: { label: 'Pending', color: '#ED6C02', bg: '#fffbeb', border: '#fde68a' },
+  IN_PROGRESS: { label: 'In Progress', color: '#0288D1', bg: '#eff6ff', border: '#bfdbfe' },
+  REVIEW: { label: 'In Review', color: '#9C27B0', bg: '#f5f3ff', border: '#ddd6fe' },
+  COMPLETED: { label: 'Completed', color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' },
+  REJECTED: { label: 'Rejected', color: '#D32F2F', bg: '#fef2f2', border: '#fecaca' }
 };
 
 const getStatusConfig = (status) =>
@@ -85,7 +85,7 @@ const getStatusConfig = (status) =>
 // ═══════════════════════════════════════════════════════════════
 // CIRCULAR PROGRESS RING
 // ═══════════════════════════════════════════════════════════════
-const ProgressRing = ({ pct = 0, size = 56, color = '#6366f1' }) => {
+const ProgressRing = ({ pct = 0, size = 56, color = '#1976D2' }) => {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (pct / 100) * circ;
@@ -160,7 +160,7 @@ const AsinDetailTable = ({ action, config }) => {
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     background: '#fef2f2', border: '1px solid #fecaca',
-                    color: '#ef4444', fontSize: 10, fontWeight: 700,
+                    color: '#D32F2F', fontSize: 10, fontWeight: 700,
                     padding: '2px 8px', borderRadius: 10
                   }}>
                     <AlertTriangle size={9} />
@@ -231,7 +231,7 @@ const OptimizationRow = ({ action, config, onEdit, onDelete, onStart, onSubmitFo
             <div style={{
               height: '100%',
               width: isCompleted ? '100%' : status === 'IN_PROGRESS' ? '50%' : '0%',
-              background: isCompleted ? '#10b981' : config.color,
+              background: isCompleted ? '#2E7D32' : config.color,
               borderRadius: 10, transition: 'width 0.6s ease'
             }} />
           </div>
@@ -269,7 +269,7 @@ const OptimizationRow = ({ action, config, onEdit, onDelete, onStart, onSubmitFo
             <button
               onClick={() => onStart && onStart(action)}
               title="Start Task"
-              style={{ padding: '4px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#3b82f6', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ padding: '4px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#0288D1', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <Play size={10} fill="currentColor" /> Start
             </button>
@@ -278,7 +278,7 @@ const OptimizationRow = ({ action, config, onEdit, onDelete, onStart, onSubmitFo
             <button
               onClick={() => onSubmitForReview && onSubmitForReview(action)}
               title="Submit for Review"
-              style={{ padding: '4px 8px', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#10b981', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ padding: '4px 8px', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#2E7D32', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <CheckCircle2 size={10} /> Submit
             </button>
@@ -286,7 +286,7 @@ const OptimizationRow = ({ action, config, onEdit, onDelete, onStart, onSubmitFo
           {status === 'REVIEW' && isAdmin && (
             <button
               onClick={() => onReview && onReview(action)}
-              style={{ padding: '4px 8px', background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#7c3aed', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+              style={{ padding: '4px 8px', background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#9C27B0', borderRadius: 7, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
             >
               Review
             </button>
@@ -304,7 +304,7 @@ const OptimizationRow = ({ action, config, onEdit, onDelete, onStart, onSubmitFo
             <button
               onClick={() => onDelete && onDelete(action._id || action.id, 'ACTION')}
               title="Delete"
-              style={{ padding: '5px', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', borderRadius: 7, cursor: 'pointer', display: 'flex' }}
+              style={{ padding: '5px', background: '#fef2f2', border: '1px solid #fecaca', color: '#D32F2F', borderRadius: 7, cursor: 'pointer', display: 'flex' }}
             >
               <Trash2 size={11} />
             </button>
@@ -378,7 +378,7 @@ const BrandTaskCard = ({
     });
   }, [actions]);
 
-  const cardColor = stats.pct >= 100 ? '#10b981' : stats.hasOverdue ? '#ef4444' : '#6366f1';
+  const cardColor = stats.pct >= 100 ? '#2E7D32' : stats.hasOverdue ? '#D32F2F' : '#1976D2';
   const gradientStart = stats.pct >= 100 ? '#ecfdf5' : stats.hasOverdue ? '#fef2f2' : '#f5f3ff';
   const gradientEnd = stats.pct >= 100 ? '#d1fae5' : stats.hasOverdue ? '#fee2e2' : '#ede9fe';
 
@@ -439,7 +439,7 @@ const BrandTaskCard = ({
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 background: '#fef2f2', border: '1px solid #fecaca',
-                color: '#ef4444', fontSize: 9, fontWeight: 800,
+                color: '#D32F2F', fontSize: 9, fontWeight: 800,
                 padding: '2px 7px', borderRadius: 10, textTransform: 'uppercase', letterSpacing: '0.05em'
               }}>
                 <AlertTriangle size={9} /> Overdue
@@ -476,7 +476,7 @@ const BrandTaskCard = ({
             background: '#ffffff', border: '1.5px solid #e2e8f0',
             borderRadius: 10, padding: '6px 12px', textAlign: 'center', minWidth: 60
           }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#6366f1', lineHeight: 1 }}>{stats.totalAsins}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1976D2', lineHeight: 1 }}>{stats.totalAsins}</div>
             <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>ASINs</div>
           </div>
 
@@ -485,7 +485,7 @@ const BrandTaskCard = ({
               background: '#eff6ff', border: '1.5px solid #bfdbfe',
               borderRadius: 10, padding: '6px 12px', textAlign: 'center', minWidth: 60
             }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#3b82f6', lineHeight: 1 }}>{stats.inProgress}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#0288D1', lineHeight: 1 }}>{stats.inProgress}</div>
               <div style={{ fontSize: 9, color: '#93c5fd', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>Active</div>
             </div>
           )}
@@ -495,7 +495,7 @@ const BrandTaskCard = ({
               background: '#ecfdf5', border: '1.5px solid #a7f3d0',
               borderRadius: 10, padding: '6px 12px', textAlign: 'center', minWidth: 60
             }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#10b981', lineHeight: 1 }}>{stats.completed}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#2E7D32', lineHeight: 1 }}>{stats.completed}</div>
               <div style={{ fontSize: 9, color: '#6ee7b7', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>Done</div>
             </div>
           )}

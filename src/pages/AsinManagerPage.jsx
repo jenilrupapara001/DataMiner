@@ -151,7 +151,7 @@ const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
       <div className="d-flex flex-column align-items-center justify-content-center">
         <span style={{
           fontWeight: 700,
-          color: '#059669',
+          color: '#2E7D32',
           fontSize: '10.5px',
           lineHeight: 1
         }}>
@@ -160,15 +160,15 @@ const getWeekHistoryBadge = (value, type, uploadedPrice = 0) => {
       </div>
     );
   } else if (type === 'number') {
-    return <span style={{ fontWeight: 600, color: '#2563eb', fontSize: '10.5px' }}>#{value.toLocaleString()}</span>;
+    return <span style={{ fontWeight: 600, color: '#0288D1', fontSize: '10.5px' }}>#{value.toLocaleString()}</span>;
   } else if (type === 'rating') {
-    return <span style={{ fontWeight: 600, color: '#d97706', fontSize: '10.5px' }}>{value.toFixed(1)}</span>;
+    return <span style={{ fontWeight: 600, color: '#E65100', fontSize: '10.5px' }}>{value.toFixed(1)}</span>;
   } else if (type === 'subBsr') {
     const clean = String(value).replace(/[^0-9]/g, '');
     if (!clean) return <span style={{ color: '#9ca3af' }}>-</span>;
     const num = parseInt(clean, 10);
     if (isNaN(num)) return <span style={{ color: '#9ca3af' }}>-</span>;
-    return <span style={{ fontWeight: 600, color: '#7c3aed', fontSize: '10px' }}>#{num.toLocaleString()}</span>;
+    return <span style={{ fontWeight: 600, color: '#9C27B0', fontSize: '10px' }}>#{num.toLocaleString()}</span>;
   }
   return value;
 };
@@ -843,7 +843,7 @@ const AsinManagerPage = (props) => {
           <button
             type="button"
             className="p-0 border-0 bg-transparent d-flex align-items-center hover-text-danger transition-colors"
-            style={{ color: '#f59e0b', cursor: 'pointer', marginLeft: '2px' }}
+            style={{ color: '#ED6C02', cursor: 'pointer', marginLeft: '2px' }}
             onClick={() => { setAppliedSearchQuery(''); setSearchQuery(''); }}
           >
             <X size={11} strokeWidth={2.5} />
@@ -1283,7 +1283,7 @@ const AsinManagerPage = (props) => {
       console.log('⚡ Live sync completed:', data);
       message.success({
         content: `Live sync completed — ${data.updatedAsins} ASINs updated for seller`,
-        icon: <Zap size={16} style={{ color: '#7c3aed' }} />,
+        icon: <Zap size={16} style={{ color: '#9C27B0' }} />,
         duration: 4
       });
       loadData(pagination.page);
@@ -1293,7 +1293,7 @@ const AsinManagerPage = (props) => {
       console.log('⚡ Global live sync completed:', data);
       message.success({
         content: `Global live sync completed — ${data.totalAsinsUpdated} ASINs updated across ${data.totalSellers} sellers`,
-        icon: <Zap size={16} style={{ color: '#7c3aed' }} />,
+        icon: <Zap size={16} style={{ color: '#9C27B0' }} />,
         duration: 5
       });
       loadData(pagination.page);
@@ -1342,7 +1342,7 @@ const AsinManagerPage = (props) => {
     if (stats) {
       const reviewChange = stats.reviewAnalysis?.currentVsPreviousChange || 0;
       const reviewTrend = reviewChange >= 0 ? '↑' : '↓';
-      const reviewColor = reviewChange >= 0 ? '#10b981' : '#ef4444';
+      const reviewColor = reviewChange >= 0 ? '#2E7D32' : '#D32F2F';
       const bestSeller = stats.bestSellingAsins?.[0];
 
       // Compute derived values not directly in API response
@@ -1357,17 +1357,17 @@ const AsinManagerPage = (props) => {
 
       return [
         {
-          label: 'ALL ASINS', value: totalNum.toLocaleString(), color: '#6366f1', icon: <Package size={14} />,
+          label: 'ALL ASINS', value: totalNum.toLocaleString(), color: '#1976D2', icon: <Package size={14} />,
           sub: `${uniqueParents} parent groups`
         },
         {
-          label: 'ACTIVE ASINS', value: activeNum.toLocaleString(), color: '#10b981', icon: <Activity size={14} />,
+          label: 'ACTIVE ASINS', value: activeNum.toLocaleString(), color: '#2E7D32', icon: <Activity size={14} />,
           sub: `${totalNum - activeNum} inactive`
         },
         {
           label: 'TOTAL REVIEWS',
           value: totalReviews.toLocaleString(),
-          color: '#8b5cf6',
+          color: '#9C27B0',
           icon: <Star size={14} />,
           sub: `Avg ${avgReviewsPerParent.toLocaleString()}/parent`,
           onClick: () => { setShowAllRatingHistory(true); }
@@ -1375,7 +1375,7 @@ const AsinManagerPage = (props) => {
         {
           label: 'AVG RATING',
           value: `${stats.avgRating || '0.00'} ★`,
-          color: '#f59e0b',
+          color: '#ED6C02',
           icon: <Trophy size={14} />,
           sub: `${stats.above4Star || 0} above 4★`,
           onClick: () => { setShowAllRatingHistory(true); }
@@ -1384,21 +1384,21 @@ const AsinManagerPage = (props) => {
           label: 'BEST SELLER',
           value: bestSeller ? `#${(bestSeller.BSR || bestSeller.bsr || 0).toLocaleString()}` : '-',
           sub: bestSeller?.AsinCode || bestSeller?.asinCode || '',
-          color: '#06b6d4',
+          color: '#0288D1',
           icon: <Award size={14} />,
           onClick: () => { setShowAllBsrHistory(true); }
         },
         {
           label: 'AVG PRICE',
           value: '₹' + avgPriceNum.toLocaleString(),
-          color: '#ec4899',
+          color: '#9C27B0',
           icon: <IndianRupee size={14} />,
           onClick: () => { setShowAllPriceHistory(true); }
         },
         {
           label: 'AVG LQS',
           value: avgLqsNum.toFixed(1) + '%',
-          color: '#8b5cf6',
+          color: '#9C27B0',
           icon: <Sparkles size={14} />
         },
         {
@@ -1414,8 +1414,8 @@ const AsinManagerPage = (props) => {
     // Fallback when stats not available
     const total = asins?.length || 0;
     return [
-      { label: 'ALL ASINS', value: total.toLocaleString(), color: '#6366f1', icon: <Package size={14} /> },
-      { label: 'ACTIVE', value: asins.filter(a => a.status === 'Active').length, color: '#10b981', icon: <Activity size={14} /> },
+      { label: 'ALL ASINS', value: total.toLocaleString(), color: '#1976D2', icon: <Package size={14} /> },
+      { label: 'ACTIVE', value: asins.filter(a => a.status === 'Active').length, color: '#2E7D32', icon: <Activity size={14} /> },
     ];
   }, [asins, stats]);
 
@@ -1712,10 +1712,10 @@ const AsinManagerPage = (props) => {
   };
 
   const getLqsBadge = (lqs) => {
-    let bgColor = '#059669';
+    let bgColor = '#2E7D32';
     let textColor = '#fff';
-    if (lqs < 60) { bgColor = '#dc2626'; }
-    else if (lqs < 80) { bgColor = '#d97706'; }
+    if (lqs < 60) { bgColor = '#C62828'; }
+    else if (lqs < 80) { bgColor = '#E65100'; }
     return (
       <span
         className="badge"
@@ -1743,7 +1743,7 @@ const AsinManagerPage = (props) => {
           <div className="d-flex align-items-center gap-1">
             <span
               className="badge mb-1"
-              style={{ backgroundColor: '#059669', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
+              style={{ backgroundColor: '#2E7D32', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
             >
               Won
             </span>
@@ -1763,7 +1763,7 @@ const AsinManagerPage = (props) => {
       <div className="d-flex flex-column align-items-center">
         <span
           className="badge mb-1"
-          style={{ backgroundColor: '#ef4444', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
+          style={{ backgroundColor: '#D32F2F', color: '#fff', fontWeight: 600, fontSize: '0.75rem' }}
         >
           Lost
         </span>
@@ -1781,7 +1781,7 @@ const AsinManagerPage = (props) => {
 
   const getAplusBadge = (hasAplus, status) => {
     if (status === 'Scraping') return <span style={{ color: '#9ca3af' }}>-</span>;
-    const bgColor = hasAplus ? '#059669' : '#6b7280';
+    const bgColor = hasAplus ? '#2E7D32' : '#6b7280';
     return (
       <span
         className="badge"
@@ -1793,7 +1793,7 @@ const AsinManagerPage = (props) => {
   };
 
   const getStatusBadge = (status) => {
-    const bgColor = status === 'Active' ? '#059669' : '#d97706';
+    const bgColor = status === 'Active' ? '#2E7D32' : '#E65100';
     return (
       <span
         className="badge"
@@ -1814,8 +1814,8 @@ const AsinManagerPage = (props) => {
       { key: 'fiveStar', label: '5', color: '#22c55e' },
       { key: 'fourStar', label: '4', color: '#84cc16' },
       { key: 'threeStar', label: '3', color: '#eab308' },
-      { key: 'twoStar', label: '2', color: '#f97316' },
-      { key: 'oneStar', label: '1', color: '#ef4444' }
+      { key: 'twoStar', label: '2', color: '#ED6C02' },
+      { key: 'oneStar', label: '1', color: '#D32F2F' }
     ];
 
     return (
@@ -1937,7 +1937,7 @@ const AsinManagerPage = (props) => {
           body: { padding: 0, display: 'flex', flexDirection: 'column', background: '#fff' }
         }}
         extra={
-          <Button type="link" size="small" onClick={resetAllFilters} style={{ fontSize: 12, color: '#fb4f40', fontWeight: 600, padding: 0 }}>
+          <Button type="link" size="small" onClick={resetAllFilters} style={{ fontSize: 12, color: '#D32F2F', fontWeight: 600, padding: 0 }}>
             Reset All
           </Button>
         }
@@ -2206,7 +2206,7 @@ const AsinManagerPage = (props) => {
           <div className="spin text-amber-500"><Zap size={12} /></div>
           <span className="smallest text-amber-900 fw-bold text-uppercase tracking-wider" style={{ fontSize: '9px' }}>Data Repair</span>
           <div className="flex-grow-1" style={{ height: '4px', background: '#fef3c7', borderRadius: '2px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#f59e0b', width: `${repairStatus.percentage}%`, transition: 'width 0.4s ease' }} />
+            <div style={{ height: '100%', background: '#ED6C02', width: `${repairStatus.percentage}%`, transition: 'width 0.4s ease' }} />
           </div>
           <span className="smallest text-amber-600 fw-bold" style={{ fontSize: '9px' }}>{repairStatus.processed}/{repairStatus.total}</span>
         </div>
@@ -2559,7 +2559,7 @@ const AsinManagerPage = (props) => {
               {/* Scrape Progress */}
               {scrapeProgress && (
                 <div className="bg-light border rounded-2 px-2 d-flex align-items-center gap-2" style={{ height: '32px', borderColor: '#e4e4e7' }}>
-                  <RefreshCw size={12} className="spin" style={{ color: '#fb4f40' }} />
+                  <RefreshCw size={12} className="spin" style={{ color: '#D32F2F' }} />
                   <span className="fw-bold font-monospace small" style={{ color: '#27272a' }}>{scrapeProgress.processed}/{scrapeProgress.total}</span>
                 </div>
               )}
@@ -2636,7 +2636,7 @@ const AsinManagerPage = (props) => {
                     <Button
                       onClick={handleBulkCreateActions}
                       disabled={asins.length === 0 || syncing}
-                      icon={<Zap size={14} style={{ color: '#fb4f40' }} />}
+                      icon={<Zap size={14} style={{ color: '#D32F2F' }} />}
                       style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                       className="d-flex align-items-center justify-content-center shadow-sm"
                     />
@@ -3221,7 +3221,7 @@ const AsinManagerPage = (props) => {
                           <td style={{
                             ...tdStyle,
                             fontWeight: 600,
-                            color: '#2563eb',
+                            color: '#0288D1',
                             cursor: 'pointer',
                             position: 'sticky',
                             width: '110px',
@@ -3251,7 +3251,7 @@ const AsinManagerPage = (props) => {
                                   transition: 'color 0.2s'
                                 }}
                                 onClick={(e) => e.stopPropagation()}
-                                onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                                onMouseOver={(e) => e.currentTarget.style.color = '#0288D1'}
                                 onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
                               >
                                 <ExternalLink size={13} />
@@ -3290,7 +3290,7 @@ const AsinManagerPage = (props) => {
                                 if (!pAsin) return <span style={{ color: '#d1d5db' }}>-</span>;
                                 return (
                                   <>
-                                    <span style={{ fontWeight: 600, color: '#2563eb' }}>{pAsin}</span>
+                                    <span style={{ fontWeight: 600, color: '#0288D1' }}>{pAsin}</span>
                                     <a
                                       href={(asin.marketplace === 'ajio' || marketplaceFilter === 'ajio') ? `https://www.ajio.com/p/${pAsin}` : (asin.marketplace === 'myntra' || marketplaceFilter === 'myntra') ? 'https://www.myntra.com' : `https://www.amazon.in/dp/${pAsin}`}
                                       target="_blank"
@@ -3304,7 +3304,7 @@ const AsinManagerPage = (props) => {
                                         transition: 'color 0.2s'
                                       }}
                                       onClick={(e) => e.stopPropagation()}
-                                      onMouseOver={(e) => e.currentTarget.style.color = '#2563eb'}
+                                      onMouseOver={(e) => e.currentTarget.style.color = '#0288D1'}
                                       onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
                                     >
                                       <ExternalLink size={13} />
@@ -3376,9 +3376,9 @@ const AsinManagerPage = (props) => {
                               className="badge fw-bold"
                               style={{
                                 fontSize: '10px',
-                                backgroundColor: (asin.titleScore || 0) >= 8.5 ? '#059669' :
-                                  (asin.titleScore || 0) >= 7.0 ? '#d97706' :
-                                    (asin.titleScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                backgroundColor: (asin.titleScore || 0) >= 8.5 ? '#2E7D32' :
+                                  (asin.titleScore || 0) >= 7.0 ? '#E65100' :
+                                    (asin.titleScore || 0) >= 5.0 ? '#C62828' : '#991b1b',
                                 color: '#fff',
                                 minWidth: '28px'
                               }}
@@ -3398,9 +3398,9 @@ const AsinManagerPage = (props) => {
                                 className="badge fw-bold"
                                 style={{
                                   fontSize: '10px',
-                                  backgroundColor: (asin.bulletScore || 0) >= 8.5 ? '#059669' :
-                                    (asin.bulletScore || 0) >= 7.0 ? '#d97706' :
-                                      (asin.bulletScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  backgroundColor: (asin.bulletScore || 0) >= 8.5 ? '#2E7D32' :
+                                    (asin.bulletScore || 0) >= 7.0 ? '#E65100' :
+                                      (asin.bulletScore || 0) >= 5.0 ? '#C62828' : '#991b1b',
                                   color: '#fff',
                                   minWidth: '28px'
                                 }}
@@ -3420,9 +3420,9 @@ const AsinManagerPage = (props) => {
                                 className="badge fw-bold"
                                 style={{
                                   fontSize: '10px',
-                                  backgroundColor: (asin.imageScore || 0) >= 8.5 ? '#059669' :
-                                    (asin.imageScore || 0) >= 7.0 ? '#d97706' :
-                                      (asin.imageScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  backgroundColor: (asin.imageScore || 0) >= 8.5 ? '#2E7D32' :
+                                    (asin.imageScore || 0) >= 7.0 ? '#E65100' :
+                                      (asin.imageScore || 0) >= 5.0 ? '#C62828' : '#991b1b',
                                   color: '#fff',
                                   minWidth: '28px'
                                 }}
@@ -3442,9 +3442,9 @@ const AsinManagerPage = (props) => {
                                 className="badge fw-bold"
                                 style={{
                                   fontSize: '10px',
-                                  backgroundColor: (asin.descriptionScore || 0) >= 8.5 ? '#059669' :
-                                    (asin.descriptionScore || 0) >= 7.0 ? '#d97706' :
-                                      (asin.descriptionScore || 0) >= 5.0 ? '#dc2626' : '#991b1b',
+                                  backgroundColor: (asin.descriptionScore || 0) >= 8.5 ? '#2E7D32' :
+                                    (asin.descriptionScore || 0) >= 7.0 ? '#E65100' :
+                                      (asin.descriptionScore || 0) >= 5.0 ? '#C62828' : '#991b1b',
                                   color: '#fff',
                                   minWidth: '28px'
                                 }}
@@ -3464,9 +3464,9 @@ const AsinManagerPage = (props) => {
                                 className="badge fw-bold"
                                 style={{
                                   fontSize: '11px',
-                                  backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#059669' :
-                                    (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#d97706' :
-                                      (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#dc2626' : '#991b1b',
+                                  backgroundColor: (asin.lqs || 0) >= 8.5 || (asin.lqs || 0) >= 85 ? '#2E7D32' :
+                                    (asin.lqs || 0) >= 7.0 || (asin.lqs || 0) >= 70 ? '#E65100' :
+                                      (asin.lqs || 0) >= 5.0 || (asin.lqs || 0) >= 50 ? '#C62828' : '#991b1b',
                                   color: '#fff',
                                   padding: '3px 8px',
                                   minWidth: '36px'
@@ -3494,7 +3494,7 @@ const AsinManagerPage = (props) => {
                                 const isUnavailable = s.includes('unavailable') || s.includes('out of stock') || s.includes('out_of_stock') || s.includes('currently unavailable');
                                 const isInStock = s.includes('in stock') || s.includes('add to bag') || s.includes('add to cart') || s === 'available';
                                 const bgColor = isUnavailable ? '#fef2f2' : isInStock ? '#ecfdf5' : '#f8fafc';
-                                const textColor = isUnavailable ? '#dc2626' : isInStock ? '#059669' : '#334155';
+                                const textColor = isUnavailable ? '#C62828' : isInStock ? '#2E7D32' : '#334155';
                                 const borderColor = isUnavailable ? '#fecaca' : isInStock ? '#a7f3d0' : '#e2e8f0';
                                 return (
                                   <Tooltip title={asin.availabilityStatus} placement="top" styles={{ root: { fontSize: 11 } }}>
@@ -3583,7 +3583,7 @@ const AsinManagerPage = (props) => {
                                   className="badge"
                                   style={{
                                     backgroundColor: '#fef2f2',
-                                    color: '#dc2626',
+                                    color: '#C62828',
                                     border: '1px solid #fecaca',
                                     fontWeight: 700,
                                     fontSize: '0.65rem',
@@ -3628,7 +3628,7 @@ const AsinManagerPage = (props) => {
                             {asin.dealAccessType ? (
                               <span className="badge" style={{
                                 backgroundColor: asin.dealAccessType === 'ALL' ? '#ecfdf5' : '#eff6ff',
-                                color: asin.dealAccessType === 'ALL' ? '#059669' : '#2563eb',
+                                color: asin.dealAccessType === 'ALL' ? '#2E7D32' : '#0288D1',
                                 border: `1px solid ${asin.dealAccessType === 'ALL' ? '#a7f3d0' : '#bfdbfe'}`,
                                 fontWeight: 700, fontSize: '0.6rem', padding: '2px 5px', borderRadius: '4px'
                               }}>
@@ -3672,7 +3672,7 @@ const AsinManagerPage = (props) => {
                                       ₹{price.toLocaleString()}
                                     </span>
                                     {savings > 0 && (
-                                      <span style={{ fontSize: '8px', color: '#059669', fontWeight: 600 }}>
+                                      <span style={{ fontSize: '8px', color: '#2E7D32', fontWeight: 600 }}>
                                         {savingsPct}% OFF
                                       </span>
                                     )}
@@ -3694,7 +3694,7 @@ const AsinManagerPage = (props) => {
                             title="View Price Trend Matrix">
                             <div className="d-flex flex-column align-items-end">
                               <>
-                                <span style={{ color: asin.priceDispute ? '#dc2626' : '#16a34a' }}>
+                                <span style={{ color: asin.priceDispute ? '#C62828' : '#16a34a' }}>
                                   ₹{(asin.uploadedPrice || 0).toLocaleString()}
                                 </span>
                                 {asin.priceDispute && (
@@ -3702,7 +3702,7 @@ const AsinManagerPage = (props) => {
                                     fontSize: '8px',
                                     padding: '2px 6px',
                                     fontWeight: 800,
-                                    backgroundColor: '#dc2626',
+                                    backgroundColor: '#C62828',
                                     color: '#fff',
                                     borderRadius: '4px',
                                     textTransform: 'uppercase'
@@ -3726,7 +3726,7 @@ const AsinManagerPage = (props) => {
                             <Tooltip title={asin.priceDispute ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" styles={{ root: { fontSize: 11 } }}>
                               <span className="badge" style={{
                                 backgroundColor: asin.priceDispute ? '#fef2f2' : '#ecfdf5',
-                                color: asin.priceDispute ? '#dc2626' : '#059669',
+                                color: asin.priceDispute ? '#C62828' : '#2E7D32',
                                 border: `1px solid ${asin.priceDispute ? '#fecaca' : '#a7f3d0'}`,
                                 fontWeight: 600, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px',
                                 cursor: 'default'
@@ -3772,7 +3772,7 @@ const AsinManagerPage = (props) => {
                           <td style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer', background: '#f5f3ff1a' }}
                             onClick={(e) => handleViewBsr(asin, e)}>
                             <div className="d-flex flex-column align-items-center">
-                              <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '11px' }}>
+                              <div style={{ fontWeight: 700, color: '#9C27B0', fontSize: '11px' }}>
                                 {asin.bsr ? `#${asin.bsr.toLocaleString()}` : '-'}
                               </div>
                               {asin.bsr && asin.category && (
@@ -3961,7 +3961,7 @@ const AsinManagerPage = (props) => {
                             <span
                               className="badge"
                               style={{
-                                backgroundColor: asin.videoCount > 0 ? '#059669' : '#6b7280',
+                                backgroundColor: asin.videoCount > 0 ? '#2E7D32' : '#6b7280',
                                 color: '#fff',
                                 fontWeight: 600,
                                 fontSize: '0.75rem'
@@ -4013,7 +4013,7 @@ const AsinManagerPage = (props) => {
                               <span
                                 className="badge"
                                 style={{
-                                  backgroundColor: asin.hasAplus ? '#059669' : '#6b7280',
+                                  backgroundColor: asin.hasAplus ? '#2E7D32' : '#6b7280',
                                   color: '#fff',
                                   fontWeight: 600,
                                   fontSize: '0.75rem'
@@ -4026,7 +4026,7 @@ const AsinManagerPage = (props) => {
                         )}
 
                         {isVisible('aplusDays') && (
-                          <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                          <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: '#C62828' }}>
                             {asin.aplusAbsentSince && !asin.hasAplus
                               ? Math.floor((Date.now() - new Date(asin.aplusAbsentSince)) / (1000 * 60 * 60 * 24))
                               : '-'}
@@ -4253,7 +4253,7 @@ const AsinManagerPage = (props) => {
               type="primary"
               loading={loading}
               onClick={handleCreateManualTask}
-              style={{ background: '#10b981', borderColor: '#10b981', fontWeight: 700 }}
+              style={{ background: '#2E7D32', borderColor: '#2E7D32', fontWeight: 700 }}
             >
               {loading ? 'Creating...' : 'Create Task'}
             </Button>
@@ -4440,7 +4440,7 @@ const AsinManagerPage = (props) => {
             onClick={e => e.stopPropagation()}>
             <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6d28d9, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6d28d9, #1976D2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Sparkles size={16} color="#fff" />
                 </div>
                 <div>
@@ -4462,7 +4462,7 @@ const AsinManagerPage = (props) => {
               {!aiAnalysisLoading && aiAnalysisResult && aiAnalysisResult.map((result, idx) => (
                 <div key={idx} style={{ marginBottom: 20, border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
                   {result.error ? (
-                    <div style={{ padding: 20, background: '#fef2f2', color: '#dc2626', fontSize: 12 }}>Error: {result.error}</div>
+                    <div style={{ padding: 20, background: '#fef2f2', color: '#C62828', fontSize: 12 }}>Error: {result.error}</div>
                   ) : (
                     <>
                       <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -4479,13 +4479,13 @@ const AsinManagerPage = (props) => {
                       {result.issues?.length > 0 && (
                         <div style={{ padding: 12 }}>
                           {result.issues.map((issue, i) => (
-                            <div key={i} style={{ padding: '8px 12px', background: issue.severity === 'critical' ? '#fef2f2' : issue.severity === 'high' ? '#fffbeb' : '#f8fafc', borderLeft: `3px solid ${issue.severity === 'critical' ? '#ef4444' : issue.severity === 'high' ? '#f59e0b' : '#6366f1'}`, borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                            <div key={i} style={{ padding: '8px 12px', background: issue.severity === 'critical' ? '#fef2f2' : issue.severity === 'high' ? '#fffbeb' : '#f8fafc', borderLeft: `3px solid ${issue.severity === 'critical' ? '#D32F2F' : issue.severity === 'high' ? '#ED6C02' : '#1976D2'}`, borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                 <span style={{ fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', fontSize: 10 }}>{issue.field} · {issue.severity}</span>
-                                <span style={{ fontSize: 10, fontWeight: 600, color: issue.priority === 'HIGH' ? '#dc2626' : '#64748b' }}>{issue.priority}</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: issue.priority === 'HIGH' ? '#C62828' : '#64748b' }}>{issue.priority}</span>
                               </div>
                               <div style={{ color: '#334155', marginBottom: 2 }}>{issue.issue}</div>
-                              <div style={{ color: '#059669', fontSize: 11 }}>→ {issue.recommendation}</div>
+                              <div style={{ color: '#2E7D32', fontSize: 11 }}>→ {issue.recommendation}</div>
                               {issue.amazonPolicy && <div style={{ color: '#94a3b8', fontSize: 10, marginTop: 2 }}>Policy: {issue.amazonPolicy}</div>}
                             </div>
                           ))}

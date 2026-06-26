@@ -16,7 +16,7 @@ const getAlertSeverity = (type = '') => {
     if (t.includes('ERROR') || t.includes('FAILURE') || t.includes('CRITICAL')) {
         return {
             level: 'critical',
-            color: '#ef4444',
+            color: '#D32F2F',
             bg: '#fef2f2',
             border: '#fecaca',
             icon: AlertCircle,
@@ -26,7 +26,7 @@ const getAlertSeverity = (type = '') => {
     if (t === 'DELETE' || t.includes('WARN')) {
         return {
             level: 'warning',
-            color: '#f59e0b',
+            color: '#ED6C02',
             bg: '#fffbeb',
             border: '#fde68a',
             icon: AlertTriangle,
@@ -36,7 +36,7 @@ const getAlertSeverity = (type = '') => {
     if (t === 'UPDATE' || t.includes('STATUS')) {
         return {
             level: 'info',
-            color: '#f97316',
+            color: '#ED6C02',
             bg: '#fff7ed',
             border: '#fed7aa',
             icon: Info,
@@ -46,7 +46,7 @@ const getAlertSeverity = (type = '') => {
     if (t === 'CREATE' || t.includes('SUCCESS') || t === 'IMPORT') {
         return {
             level: 'success',
-            color: '#10b981',
+            color: '#2E7D32',
             bg: '#ecfdf5',
             border: '#a7f3d0',
             icon: CheckCircle2,
@@ -55,7 +55,7 @@ const getAlertSeverity = (type = '') => {
     }
     return {
         level: 'neutral',
-        color: '#3b82f6',
+        color: '#0288D1',
         bg: '#eff6ff',
         border: '#bfdbfe',
         icon: Info,
@@ -82,7 +82,7 @@ const getPipelineStatus = (status = '') => {
     const s = String(status).toUpperCase();
     if (s === 'RUNNING' || s === 'IN_PROGRESS') {
         return {
-            color: '#3b82f6',
+            color: '#0288D1',
             bg: '#eff6ff',
             border: '#bfdbfe',
             icon: Loader2,
@@ -92,7 +92,7 @@ const getPipelineStatus = (status = '') => {
     }
     if (s === 'COMPLETED' || s === 'SUCCESS') {
         return {
-            color: '#10b981',
+            color: '#2E7D32',
             bg: '#ecfdf5',
             border: '#a7f3d0',
             icon: CheckCircle2,
@@ -101,7 +101,7 @@ const getPipelineStatus = (status = '') => {
     }
     if (s === 'FAILED' || s === 'ERROR') {
         return {
-            color: '#ef4444',
+            color: '#D32F2F',
             bg: '#fef2f2',
             border: '#fecaca',
             icon: XCircle,
@@ -193,7 +193,7 @@ const AlertItem = memo(({ alert }) => {
                             width: 6,
                             height: 6,
                             borderRadius: '50%',
-                            background: '#10b981',
+                            background: '#2E7D32',
                             display: 'inline-block'
                         }} />
                     )}
@@ -453,7 +453,7 @@ const AlertsPipelineCard = ({
                     50% { opacity: 0.5; transform: scale(1.2); }
                 }
                 @keyframes pulse-fresh {
-                    0%, 100% { box-shadow: 0 0 0 0 #10b981; }
+                    0%, 100% { box-shadow: 0 0 0 0 #2E7D32; }
                     50% { box-shadow: 0 0 0 4px transparent; }
                 }
                 @keyframes shimmer {
@@ -482,7 +482,7 @@ const AlertsPipelineCard = ({
                     box-shadow: 0 4px 12px -2px rgba(0,0,0,0.06);
                 }
                 .section-link:hover {
-                    color: #fb4f40 !important;
+                    color: #D32F2F !important;
                     transform: translateX(2px);
                 }
                 .sync-button-premium:hover {
@@ -523,7 +523,7 @@ const AlertsPipelineCard = ({
                                 width: 38,
                                 height: 38,
                                 borderRadius: 11,
-                                background: 'linear-gradient(135deg, #f87171 0%, #ef4444 100%)',
+                                background: 'linear-gradient(135deg, #f87171 0%, #D32F2F 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -548,7 +548,7 @@ const AlertsPipelineCard = ({
                                         width: 6,
                                         height: 6,
                                         borderRadius: '50%',
-                                        background: '#10b981'
+                                        background: '#2E7D32'
                                     }} />
                                 </div>
                                 <div style={{
@@ -587,7 +587,7 @@ const AlertsPipelineCard = ({
                                 gap: 5,
                                 fontSize: 10,
                                 fontWeight: 800,
-                                color: '#dc2626',
+                                color: '#C62828',
                                 background: '#fef2f2',
                                 padding: '3px 9px',
                                 borderRadius: 12,
@@ -614,7 +614,7 @@ const AlertsPipelineCard = ({
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#fb4f40',
+                                color: '#D32F2F',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -635,7 +635,7 @@ const AlertsPipelineCard = ({
                                     icon={AlertCircle}
                                     value={alertStats.critical}
                                     label="Critical"
-                                    color="#ef4444"
+                                    color="#D32F2F"
                                 />
                             )}
                             {alertStats.warning > 0 && (
@@ -643,7 +643,7 @@ const AlertsPipelineCard = ({
                                     icon={AlertTriangle}
                                     value={alertStats.warning}
                                     label="Warning"
-                                    color="#f59e0b"
+                                    color="#ED6C02"
                                 />
                             )}
                             {alertStats.info > 0 && (
@@ -651,7 +651,7 @@ const AlertsPipelineCard = ({
                                     icon={Info}
                                     value={alertStats.info}
                                     label="Info"
-                                    color="#3b82f6"
+                                    color="#0288D1"
                                 />
                             )}
                         </div>
@@ -667,8 +667,8 @@ const AlertsPipelineCard = ({
                                 border: '1px dashed #a7f3d0',
                                 borderRadius: 10
                             }}>
-                                <CheckCircle2 size={24} style={{ color: '#10b981', margin: '0 auto 6px' }} />
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', marginBottom: 2 }}>
+                                <CheckCircle2 size={24} style={{ color: '#2E7D32', margin: '0 auto 6px' }} />
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#2E7D32', marginBottom: 2 }}>
                                     All Clear
                                 </div>
                                 <div style={{ fontSize: 10, color: '#64748b' }}>
@@ -739,7 +739,7 @@ const AlertsPipelineCard = ({
                             style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: '#fb4f40',
+                                color: '#D32F2F',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -760,7 +760,7 @@ const AlertsPipelineCard = ({
                                     icon={Loader2}
                                     value={pipelineStats.running}
                                     label="Running"
-                                    color="#3b82f6"
+                                    color="#0288D1"
                                     animate
                                 />
                             )}
@@ -769,7 +769,7 @@ const AlertsPipelineCard = ({
                                     icon={CheckCircle2}
                                     value={pipelineStats.completed}
                                     label="Done"
-                                    color="#10b981"
+                                    color="#2E7D32"
                                 />
                             )}
                             {pipelineStats.failed > 0 && (
@@ -777,7 +777,7 @@ const AlertsPipelineCard = ({
                                     icon={XCircle}
                                     value={pipelineStats.failed}
                                     label="Failed"
-                                    color="#ef4444"
+                                    color="#D32F2F"
                                 />
                             )}
                             {pipelineStats.idle > 0 && (
@@ -826,7 +826,7 @@ const AlertsPipelineCard = ({
                             padding: '11px 18px',
                             background: syncLoading
                                 ? 'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)'
-                                : 'linear-gradient(135deg, #fb4f40 0%, #d94033 100%)',
+                                : 'linear-gradient(135deg, #D32F2F 0%, #d94033 100%)',
                             color: '#ffffff',
                             border: 'none',
                             borderRadius: 10,

@@ -294,7 +294,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', in
                     {/* Optimized Drag Drop Container */}
                     <div className="mb-4">
                         <div className="border border-dashed rounded-3 p-4 text-center bg-zinc-50 hover-bg-zinc-100 transition-all cursor-pointer"
-                            style={{ borderColor: file ? '#10b981' : '#e4e4e7' }}
+                            style={{ borderColor: file ? '#2E7D32' : '#e4e4e7' }}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => {
                                 e.preventDefault();
@@ -332,7 +332,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', in
 
                     {/* PROPER SOLID COLOUR BADGES AND ALERTS */}
                     {result && (
-                        <div className="rounded-3 p-3 mb-3 text-white shadow-sm" style={{ fontSize: '13px', background: '#059669', border: '1px solid #047857', animation: 'fadeIn 0.2s ease-out' }}>
+                        <div className="rounded-3 p-3 mb-3 text-white shadow-sm" style={{ fontSize: '13px', background: '#2E7D32', border: '1px solid #047857', animation: 'fadeIn 0.2s ease-out' }}>
                             <div className="d-flex align-items-center gap-2 fw-bold mb-3">
                                 <div className="bg-white rounded-circle p-0.5 d-flex"><Check size={14} className="text-emerald-700" /></div>
                                 <span>{result.message || 'Import Operation Successful'}</span>
@@ -370,7 +370,7 @@ const BulkImportModal = ({ isOpen, onClose, onComplete, initialSellerId = '', in
                     )}
 
                     {error && (
-                        <div className="rounded-3 p-3 mb-3 text-white shadow-sm" style={{ fontSize: '13px', background: '#dc2626', border: '1px solid #b91c1c', animation: 'fadeIn 0.2s ease-out' }}>
+                        <div className="rounded-3 p-3 mb-3 text-white shadow-sm" style={{ fontSize: '13px', background: '#C62828', border: '1px solid #b91c1c', animation: 'fadeIn 0.2s ease-out' }}>
                             <div className="d-flex align-items-center gap-2 fw-bold">
                                 <AlertCircle size={16} />
                                 <span>{error}</span>

@@ -216,7 +216,7 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                 <div className="mb-4">
                     <Dragger {...uploadProps} disabled={uploading} style={{ padding: '20px 0', background: '#f8fafc', borderColor: '#e2e8f0' }}>
                         <p className="ant-upload-drag-icon">
-                            <InboxOutlined style={{ color: '#4f46e5' }} />
+                            <InboxOutlined style={{ color: '#1976D2' }} />
                         </p>
                         <p className="ant-upload-text fw-bold" style={{ fontSize: '13px' }}>Choose Advertising Data Files</p>
                         <p className="ant-upload-hint text-zinc-400" style={{ fontSize: '11px' }}>Support for multiple uploads (CSV or Excel).</p>
@@ -283,7 +283,7 @@ const AdsImportModal = ({ isOpen, onClose, onComplete, selectedSeller }) => {
                                             {fileStatus.status === 'error' && (
                                                 <span
                                                     className="badge"
-                                                    style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '10px', padding: '3px 6px', fontWeight: 600, borderRadius: '4px' }}
+                                                    style={{ backgroundColor: '#fef2f2', color: '#C62828', border: '1px solid #fecaca', fontSize: '10px', padding: '3px 6px', fontWeight: 600, borderRadius: '4px' }}
                                                     title={fileStatus.error}
                                                 >
                                                     Failed

@@ -201,7 +201,7 @@ const AddSellerModal = memo(({
               }]}
               style={{ marginBottom: 0 }}>
               <Input placeholder={watchedMarketplace === 'amazon.in' ? 'Merchant ID' : 'Optional'}
-                style={{ height: 38, borderRadius: 8, fontWeight: 700, fontFamily: 'monospace', color: '#2563eb' }}
+                style={{ height: 38, borderRadius: 8, fontWeight: 700, fontFamily: 'monospace', color: '#0288D1' }}
                 maxLength={30} />
             </Form.Item>
           </div>
@@ -246,7 +246,7 @@ const FieldLabel = memo(({ icon, text, required, optional }) => (
     <Text strong style={{ fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>
       {text}
     </Text>
-    {required && <span style={{ color: '#ef4444', fontSize: 12, lineHeight: 1 }}>*</span>}
+    {required && <span style={{ color: '#D32F2F', fontSize: 12, lineHeight: 1 }}>*</span>}
     {optional && (
       <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</Text>
     )}

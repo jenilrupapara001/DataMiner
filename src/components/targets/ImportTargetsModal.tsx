@@ -204,7 +204,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                 <div>
                     <Text strong style={{ fontSize: 12 }}>{val || '—'}</Text>
                     {rec.errors.some(e => e.toLowerCase().includes('brand')) && (
-                        <div style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>
+                        <div style={{ fontSize: 10, color: '#D32F2F', marginTop: 2 }}>
                             ⚠ Not in database
                         </div>
                     )}
@@ -229,7 +229,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                 if (!rec.year || !rec.month) return <Text type="danger" style={{ fontSize: 11 }}>Invalid</Text>;
                 const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][rec.month - 1];
                 return (
-                    <Tag style={{ borderRadius: 12, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#2563eb', fontWeight: 600, fontSize: 11 }}>
+                    <Tag style={{ borderRadius: 12, background: '#eff6ff', border: '1px solid #bfdbfe', color: '#0288D1', fontWeight: 600, fontSize: 11 }}>
                         {monthName} {rec.year}
                     </Tag>
                 );
@@ -241,7 +241,7 @@ const ImportTargetsModal: React.FC<Props> = ({
             key: 'goalType',
             width: 110,
             render: (val: string) => val ? (
-                <Tag style={{ borderRadius: 12, background: '#ede9fe', border: '1px solid #c4b5fd', color: '#7c3aed', fontWeight: 700, fontSize: 11 }}>
+                <Tag style={{ borderRadius: 12, background: '#ede9fe', border: '1px solid #c4b5fd', color: '#9C27B0', fontWeight: 700, fontSize: 11 }}>
                     {val}
                 </Tag>
             ) : <Text type="danger" style={{ fontSize: 11 }}>Missing</Text>,
@@ -257,7 +257,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                     return <Text type="danger" style={{ fontSize: 11 }}>Invalid</Text>;
                 }
                 return (
-                    <Text strong style={{ fontSize: 12, color: '#059669' }}>
+                    <Text strong style={{ fontSize: 12, color: '#2E7D32' }}>
                         {Number(val).toLocaleString('en-IN')}
                     </Text>
                 );
@@ -294,7 +294,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                 <Space size={10}>
                     <div style={{
                         width: 36, height: 36, borderRadius: 10,
-                        background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                        background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                         <FileSpreadsheet size={18} color="white" />
@@ -334,7 +334,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <div style={{
                                     width: 28, height: 28, borderRadius: '50%',
-                                    background: isActive ? '#4f46e5' : isComplete ? '#10b981' : '#e2e8f0',
+                                    background: isActive ? '#1976D2' : isComplete ? '#2E7D32' : '#e2e8f0',
                                     color: isActive || isComplete ? '#fff' : '#64748b',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     fontWeight: 700, fontSize: 11,
@@ -344,7 +344,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 </div>
                                 <Text strong style={{
                                     fontSize: 12,
-                                    color: isActive ? '#4f46e5' : isComplete ? '#10b981' : '#94a3b8',
+                                    color: isActive ? '#1976D2' : isComplete ? '#2E7D32' : '#94a3b8',
                                 }}>
                                     {s.label}
                                 </Text>
@@ -352,7 +352,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                             {idx < 2 && (
                                 <div style={{
                                     width: 60, height: 2,
-                                    background: isComplete ? '#10b981' : '#e2e8f0',
+                                    background: isComplete ? '#2E7D32' : '#e2e8f0',
                                     transition: 'background 0.3s',
                                 }} />
                             )}
@@ -387,7 +387,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 icon={<Download size={14} />}
                                 onClick={downloadTemplate}
                                 type="primary"
-                                style={{ background: '#4f46e5', borderColor: '#4f46e5' }}
+                                style={{ background: '#1976D2', borderColor: '#1976D2' }}
                             >
                                 Download Template
                             </Button>
@@ -403,7 +403,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 margin: '0 auto 16px',
                             }}>
-                                <UploadIcon size={28} color="#4f46e5" />
+                                <UploadIcon size={28} color="#1976D2" />
                             </div>
                             <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
                                 {parseLoading ? 'Reading file...' : 'Click or drag Excel file here'}
@@ -444,7 +444,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 <Statistic
                                     title={<Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>TOTAL ROWS</Text>}
                                     value={stats.total}
-                                    prefix={<Database size={14} style={{ color: '#4f46e5' }} />}
+                                    prefix={<Database size={14} style={{ color: '#1976D2' }} />}
                                     valueStyle={{ fontSize: 22, color: '#0f172a', fontWeight: 800 }}
                                 />
                             </Card>
@@ -452,20 +452,20 @@ const ImportTargetsModal: React.FC<Props> = ({
                         <Col span={6}>
                             <Card size="small" style={{ borderRadius: 10, borderColor: '#d1fae5', background: '#f0fdf4' }}>
                                 <Statistic
-                                    title={<Text style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>VALID</Text>}
+                                    title={<Text style={{ fontSize: 11, color: '#2E7D32', fontWeight: 600 }}>VALID</Text>}
                                     value={stats.valid}
-                                    prefix={<CheckCircle size={14} style={{ color: '#10b981' }} />}
-                                    valueStyle={{ fontSize: 22, color: '#059669', fontWeight: 800 }}
+                                    prefix={<CheckCircle size={14} style={{ color: '#2E7D32' }} />}
+                                    valueStyle={{ fontSize: 22, color: '#2E7D32', fontWeight: 800 }}
                                 />
                             </Card>
                         </Col>
                         <Col span={6}>
                             <Card size="small" style={{ borderRadius: 10, borderColor: '#fecaca', background: '#fef2f2' }}>
                                 <Statistic
-                                    title={<Text style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>WITH ERRORS</Text>}
+                                    title={<Text style={{ fontSize: 11, color: '#C62828', fontWeight: 600 }}>WITH ERRORS</Text>}
                                     value={stats.invalid}
-                                    prefix={<XCircle size={14} style={{ color: '#ef4444' }} />}
-                                    valueStyle={{ fontSize: 22, color: '#dc2626', fontWeight: 800 }}
+                                    prefix={<XCircle size={14} style={{ color: '#D32F2F' }} />}
+                                    valueStyle={{ fontSize: 22, color: '#C62828', fontWeight: 800 }}
                                 />
                             </Card>
                         </Col>
@@ -475,7 +475,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 <Progress
                                     percent={Math.round(stats.validPct)}
                                     status={stats.validPct === 100 ? 'success' : stats.validPct >= 80 ? 'active' : 'exception'}
-                                    strokeColor={stats.validPct === 100 ? '#10b981' : stats.validPct >= 80 ? '#4f46e5' : '#ef4444'}
+                                    strokeColor={stats.validPct === 100 ? '#2E7D32' : stats.validPct >= 80 ? '#1976D2' : '#D32F2F'}
                                     style={{ marginTop: 8, marginBottom: 0 }}
                                 />
                             </Card>
@@ -521,7 +521,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                                 onClick={handleImport}
                                 disabled={stats.valid === 0}
                                 style={{
-                                    background: stats.valid === 0 ? '#cbd5e1' : 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                                    background: stats.valid === 0 ? '#cbd5e1' : 'linear-gradient(135deg, #1976D2, #9C27B0)',
                                     borderColor: 'transparent',
                                     fontWeight: 700,
                                     height: 36,
@@ -543,7 +543,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                 <div style={{ padding: 60, textAlign: 'center' }}>
                     <div style={{
                         width: 80, height: 80, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                        background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         margin: '0 auto 20px',
                         animation: 'pulse 1.5s ease-in-out infinite',
@@ -560,7 +560,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                         percent={50}
                         status="active"
                         showInfo={false}
-                        strokeColor={{ from: '#4f46e5', to: '#7c3aed' }}
+                        strokeColor={{ from: '#1976D2', to: '#9C27B0' }}
                         style={{ maxWidth: 320, margin: '24px auto 0' }}
                     />
                 </div>
@@ -575,8 +575,8 @@ const ImportTargetsModal: React.FC<Props> = ({
                         <div style={{
                             width: 72, height: 72, borderRadius: '50%',
                             background: importResult.success
-                                ? 'linear-gradient(135deg, #10b981, #059669)'
-                                : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                                ? 'linear-gradient(135deg, #2E7D32, #2E7D32)'
+                                : 'linear-gradient(135deg, #D32F2F, #C62828)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             margin: '0 auto 16px',
                             boxShadow: importResult.success
@@ -600,26 +600,26 @@ const ImportTargetsModal: React.FC<Props> = ({
                     <Row gutter={12} style={{ marginBottom: 20 }}>
                         <Col span={8}>
                             <Card size="small" style={{ borderRadius: 10, textAlign: 'center', borderColor: '#d1fae5', background: '#f0fdf4' }}>
-                                <div style={{ fontSize: 28, fontWeight: 800, color: '#059669' }}>
+                                <div style={{ fontSize: 28, fontWeight: 800, color: '#2E7D32' }}>
                                     {importResult.imported || 0}
                                 </div>
-                                <Text style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>NEW IMPORTED</Text>
+                                <Text style={{ fontSize: 11, color: '#2E7D32', fontWeight: 600 }}>NEW IMPORTED</Text>
                             </Card>
                         </Col>
                         <Col span={8}>
                             <Card size="small" style={{ borderRadius: 10, textAlign: 'center', borderColor: '#bfdbfe', background: '#eff6ff' }}>
-                                <div style={{ fontSize: 28, fontWeight: 800, color: '#2563eb' }}>
+                                <div style={{ fontSize: 28, fontWeight: 800, color: '#0288D1' }}>
                                     {importResult.updated || 0}
                                 </div>
-                                <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>UPDATED</Text>
+                                <Text style={{ fontSize: 11, color: '#0288D1', fontWeight: 600 }}>UPDATED</Text>
                             </Card>
                         </Col>
                         <Col span={8}>
                             <Card size="small" style={{ borderRadius: 10, textAlign: 'center', borderColor: '#fde68a', background: '#fffbeb' }}>
-                                <div style={{ fontSize: 28, fontWeight: 800, color: '#d97706' }}>
+                                <div style={{ fontSize: 28, fontWeight: 800, color: '#E65100' }}>
                                     {importResult.skipped || 0}
                                 </div>
-                                <Text style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>SKIPPED</Text>
+                                <Text style={{ fontSize: 11, color: '#E65100', fontWeight: 600 }}>SKIPPED</Text>
                             </Card>
                         </Col>
                     </Row>
@@ -654,7 +654,7 @@ const ImportTargetsModal: React.FC<Props> = ({
                             type="primary"
                             onClick={handleFinish}
                             style={{
-                                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                                background: 'linear-gradient(135deg, #1976D2, #9C27B0)',
                                 borderColor: 'transparent',
                                 fontWeight: 700,
                                 paddingInline: 24,

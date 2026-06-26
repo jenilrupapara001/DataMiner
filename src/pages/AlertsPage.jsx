@@ -130,7 +130,7 @@ const AlertsPage = () => {
             });
             message.info({
                 content: `Incoming: ${normMsg.substring(0, 50)}${normMsg.length > 50 ? '...' : ''}`,
-                icon: <BellRing size={16} style={{ color: '#4f46e5' }} />,
+                icon: <BellRing size={16} style={{ color: '#1976D2' }} />,
                 duration: 3
             });
         };
@@ -168,9 +168,9 @@ const AlertsPage = () => {
             content: 'Are you sure you want to clear the active unread queue?',
             okText: 'Acknowledge All',
             cancelText: 'Cancel',
-            okButtonProps: { type: 'primary', style: { borderRadius: 8, backgroundColor: '#4f46e5', borderColor: '#4f46e5' } },
+            okButtonProps: { type: 'primary', style: { borderRadius: 8, backgroundColor: '#1976D2', borderColor: '#1976D2' } },
             cancelButtonProps: { style: { borderRadius: 8 } },
-            icon: <CheckCircle style={{ color: '#10b981', marginRight: 8 }} size={22} />,
+            icon: <CheckCircle style={{ color: '#2E7D32', marginRight: 8 }} size={22} />,
             async onOk() {
                 try {
                     setActionLoading(true);
@@ -301,12 +301,12 @@ const AlertsPage = () => {
 
     const getTypeColor = (type) => {
         switch (type) {
-            case 'ALERT': return '#ef4444'; // red
-            case 'SYSTEM': return '#f59e0b'; // amber
-            case 'ACTION_ASSIGNED': return '#10b981'; // green
+            case 'ALERT': return '#D32F2F'; // red
+            case 'SYSTEM': return '#ED6C02'; // amber
+            case 'ACTION_ASSIGNED': return '#2E7D32'; // green
             case 'CHAT_MESSAGE':
-            case 'CHAT_MENTION': return '#8b5cf6'; // purple
-            default: return '#3b82f6'; // blue
+            case 'CHAT_MENTION': return '#9C27B0'; // purple
+            default: return '#0288D1'; // blue
         }
     };
 
@@ -375,7 +375,7 @@ const AlertsPage = () => {
             theme={{
                 token: {
                     borderRadius: 12,
-                    colorPrimary: '#4f46e5'
+                    colorPrimary: '#1976D2'
                 }
             }}
         >
@@ -399,7 +399,7 @@ const AlertsPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
                     <div>
                         <Title level={2} style={{ margin: 0, fontWeight: 800, letterSpacing: '-0.025em', color: '#111827', display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <Bell style={{ color: '#4f46e5' }} size={26} />
+                            <Bell style={{ color: '#1976D2' }} size={26} />
                             Operational Alerts
                         </Title>
                         <Text style={{ fontSize: 13.5, color: '#4b5563', fontWeight: 500 }}>
@@ -420,7 +420,7 @@ const AlertsPage = () => {
                             type="primary" 
                             onClick={acknowledgeAll} 
                             disabled={stats.unreadCount === 0 || actionLoading}
-                            style={{ borderRadius: '8px', height: 38, fontWeight: 700, backgroundColor: '#4f46e5', borderColor: '#4f46e5', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }}
+                            style={{ borderRadius: '8px', height: 38, fontWeight: 700, backgroundColor: '#1976D2', borderColor: '#1976D2', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)' }}
                         >
                             Mark All As Read
                         </Button>
@@ -430,10 +430,10 @@ const AlertsPage = () => {
                 {/* Professional Scoreboard KPIs */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 28 }}>
                     {[
-                        { label: 'Unread Buffer', value: stats.unreadCount, icon: Bell, color: '#4f46e5', bgColor: '#eeebff' },
-                        { label: 'Critical Incidents', value: stats.critical, icon: XCircle, color: '#ef4444', bgColor: '#fef2f2' },
-                        { label: 'Completed Operations', value: stats.success, icon: CheckCircle, color: '#10b981', bgColor: '#f0fdf4' },
-                        { label: 'System Invocations', value: stats.warning, icon: ShieldAlert, color: '#f59e0b', bgColor: '#fffbeb' }
+                        { label: 'Unread Buffer', value: stats.unreadCount, icon: Bell, color: '#1976D2', bgColor: '#eeebff' },
+                        { label: 'Critical Incidents', value: stats.critical, icon: XCircle, color: '#D32F2F', bgColor: '#fef2f2' },
+                        { label: 'Completed Operations', value: stats.success, icon: CheckCircle, color: '#2E7D32', bgColor: '#f0fdf4' },
+                        { label: 'System Invocations', value: stats.warning, icon: ShieldAlert, color: '#ED6C02', bgColor: '#fffbeb' }
                     ].map((stat, idx) => (
                         <Col xs={12} md={6} key={idx}>
                             <Card variant="borderless" style={{ 
@@ -618,7 +618,7 @@ const AlertsPage = () => {
                                                             </Tag>
                                                             {!item.isRead && (
                                                                 <Badge status="processing" style={{ marginLeft: 4 }} text={
-                                                                    <span style={{ fontSize: 10, fontWeight: 800, color: '#4f46e5' }}>NEW</span>
+                                                                    <span style={{ fontSize: 10, fontWeight: 800, color: '#1976D2' }}>NEW</span>
                                                                 } />
                                                             )}
                                                         </Space>
@@ -655,7 +655,7 @@ const AlertsPage = () => {
                                                                     type="text" 
                                                                     size="middle"
                                                                     onClick={() => acknowledgeNotification(item.id)}
-                                                                    icon={<Check size={15} style={{ color: '#10b981' }} />}
+                                                                    icon={<Check size={15} style={{ color: '#2E7D32' }} />}
                                                                     style={{ 
                                                                         backgroundColor: '#f0fdf4', 
                                                                         border: '1px solid #dcfce7',
@@ -769,7 +769,7 @@ const AlertsPage = () => {
                     .sync-bar-pulse {
                         width: 30%;
                         height: 100%;
-                        background-color: #4f46e5;
+                        background-color: #1976D2;
                         animation: pulse-bar 1.6s infinite ease-in-out;
                     }
                     @keyframes pulse-bar {

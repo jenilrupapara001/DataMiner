@@ -335,7 +335,7 @@ const InfiniteScrollSelect = ({
                     transition: color 0.1s;
                 }
                 .clear-icon-wrapper:hover .clear-icon {
-                    color: #ef4444;
+                    color: #D32F2F;
                 }
                 .infinite-select-dropdown {
                     position: absolute;

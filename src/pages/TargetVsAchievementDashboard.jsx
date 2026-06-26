@@ -42,28 +42,28 @@ const MONTH_NAMES = [
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const COLOR = {
-    primary: '#4f46e5',
-    success: '#10b981',
-    warning: '#f59e0b',
-    danger: '#ef4444',
+    primary: '#1976D2',
+    success: '#2E7D32',
+    warning: '#ED6C02',
+    danger: '#D32F2F',
     muted: '#94a3b8',
     surface: '#f8faff',
     border: '#e2e8f0',
 };
 
 const GOAL_META = {
-    GMS: { label: 'GMS', unit: '₹', color: '#4f46e5', bg: '#ede9fe' },
-    ADS: { label: 'ADS', unit: '₹', color: '#2563eb', bg: '#dbeafe' },
-    ACOS: { label: 'ACOS', unit: '%', color: '#dc2626', bg: '#fee2e2' },
-    NEW_RC: { label: 'New RC', unit: '#', color: '#059669', bg: '#d1fae5' },
-    RNR: { label: 'RNR', unit: '#', color: '#3b82f6', bg: '#eff6ff' },
+    GMS: { label: 'GMS', unit: '₹', color: '#1976D2', bg: '#ede9fe' },
+    ADS: { label: 'ADS', unit: '₹', color: '#0288D1', bg: '#dbeafe' },
+    ACOS: { label: 'ACOS', unit: '%', color: '#C62828', bg: '#fee2e2' },
+    NEW_RC: { label: 'New RC', unit: '#', color: '#2E7D32', bg: '#d1fae5' },
+    RNR: { label: 'RNR', unit: '#', color: '#0288D1', bg: '#eff6ff' },
     PO_FULFILMENT: { label: 'PO Fulfilment', unit: '%', color: '#0891b2', bg: '#cffafe' },
     PO_DAYS: { label: 'PO Days', unit: 'd', color: '#be185d', bg: '#fce7f3' },
     SELLER_CENTRAL_BUSINESS: { label: 'SC Business', unit: '₹', color: '#b45309', bg: '#fef3c7' },
 };
 
 const getGoalMeta = (goalType) => {
-    return GOAL_META[goalType] || { label: goalType || 'GMS', unit: '₹', color: '#4f46e5', bg: '#ede9fe' };
+    return GOAL_META[goalType] || { label: goalType || 'GMS', unit: '₹', color: '#1976D2', bg: '#ede9fe' };
 };
 
 const formatValue = (val, unit) => {
@@ -148,12 +148,12 @@ const AnimatedCounter = memo(({ end, duration = 1.0, unit = "₹" }) => {
 });
 
 // ─── Eased KPI Card Component ────────────────────────────────────────────────
-const KpiCard = memo(({ title, value, subtext, icon, color = '#4f46e5', unit = "₹", trend = null, isAcos = false }) => {
+const KpiCard = memo(({ title, value, subtext, icon, color = '#1976D2', unit = "₹", trend = null, isAcos = false }) => {
     return (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, background: '#fff', height: '100%', transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+        <div style={{ border: '1px solid #E5E7EB', borderRadius: 12, padding: 20, background: '#FFFFFF', height: '100%', transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
             className="kpi-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 14 }}>
-                <span style={{ color: '#64748b', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.4, flex: 1 }}>{title}</span>
+                <span style={{ color: '#64748B', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.4, flex: 1 }}>{title}</span>
                 <div style={{
                     background: `${color}12`, color: color, padding: 8, borderRadius: 10,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
@@ -191,16 +191,16 @@ const KpiCard = memo(({ title, value, subtext, icon, color = '#4f46e5', unit = "
 // Achievement Tier helper
 function getAchievementTier(pct, isAcos = false) {
     if (isAcos) {
-        if (pct === 0) return { label: 'CRITICAL', color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' };
-        if (pct <= 100) return { label: 'ELITE STATUS', color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' };
-        if (pct <= 110) return { label: 'HIGH TARGET', color: '#4f46e5', bg: '#e0e7ff', border: '#c7d2fe' };
-        if (pct <= 125) return { label: 'ON TRACK', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' };
-        return { label: 'CRITICAL', color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' };
+        if (pct === 0) return { label: 'CRITICAL', color: '#D32F2F', bg: '#fef2f2', border: '#fca5a5' };
+        if (pct <= 100) return { label: 'ELITE STATUS', color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' };
+        if (pct <= 110) return { label: 'HIGH TARGET', color: '#1976D2', bg: '#e0e7ff', border: '#c7d2fe' };
+        if (pct <= 125) return { label: 'ON TRACK', color: '#ED6C02', bg: '#fffbeb', border: '#fde68a' };
+        return { label: 'CRITICAL', color: '#D32F2F', bg: '#fef2f2', border: '#fca5a5' };
     }
-    if (pct >= 100) return { label: 'ELITE STATUS', color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' };
-    if (pct >= 80) return { label: 'HIGH TARGET', color: '#4f46e5', bg: '#e0e7ff', border: '#c7d2fe' };
-    if (pct >= 50) return { label: 'ON TRACK', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' };
-    return { label: 'CRITICAL', color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' };
+    if (pct >= 100) return { label: 'ELITE STATUS', color: '#2E7D32', bg: '#ecfdf5', border: '#a7f3d0' };
+    if (pct >= 80) return { label: 'HIGH TARGET', color: '#1976D2', bg: '#e0e7ff', border: '#c7d2fe' };
+    if (pct >= 50) return { label: 'ON TRACK', color: '#ED6C02', bg: '#fffbeb', border: '#fde68a' };
+    return { label: 'CRITICAL', color: '#D32F2F', bg: '#fef2f2', border: '#fca5a5' };
 }
 
 export const ConnectionBanner = memo(({ targets }) => {
@@ -523,10 +523,10 @@ const TargetVsAchievementDashboard = () => {
         });
 
         return [
-            { name: 'Elite (100%+)', value: elite, color: '#10b981' },
-            { name: 'High (80%+)', value: high, color: '#4f46e5' },
-            { name: 'Track (50%+)', value: track, color: '#f59e0b' },
-            { name: 'Critical (<50%)', value: critical, color: '#ef4444' }
+            { name: 'Elite (100%+)', value: elite, color: '#2E7D32' },
+            { name: 'High (80%+)', value: high, color: '#1976D2' },
+            { name: 'Track (50%+)', value: track, color: '#ED6C02' },
+            { name: 'Critical (<50%)', value: critical, color: '#D32F2F' }
         ].filter(item => item.value > 0);
     }, [filteredTargets]);
     // Breakdown table columns
@@ -542,13 +542,13 @@ const TargetVsAchievementDashboard = () => {
                 const initial = displayName ? displayName.charAt(0).toUpperCase() : 'B';
                 return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Avatar style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', fontWeight: 800 }}>
+                        <Avatar style={{ background: 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)', fontWeight: 800 }}>
                             {initial}
                         </Avatar>
                         <div>
                             <Text strong style={{ fontSize: 13 }}>{displayName}</Text>
                             <div style={{ marginTop: 2 }}>
-                                <Tag color={tier.color === '#4f46e5' ? 'blue' : tier.color === '#10b981' ? 'success' : tier.color === '#f59e0b' ? 'warning' : 'error'} style={{ fontSize: 9, fontWeight: 700 }}>
+                                <Tag color={tier.color === '#1976D2' ? 'blue' : tier.color === '#2E7D32' ? 'success' : tier.color === '#ED6C02' ? 'warning' : 'error'} style={{ fontSize: 9, fontWeight: 700 }}>
                                     {tier.label}
                                 </Tag>
                             </div>
@@ -574,7 +574,7 @@ const TargetVsAchievementDashboard = () => {
             render: (val, record) => {
                 const meta = getGoalMeta(record.GoalType);
                 return (
-                    <span style={{ color: '#4f46e5', fontWeight: 800 }}>
+                    <span style={{ color: '#1976D2', fontWeight: 800 }}>
                         {formatValue(val, meta.unit)}
                     </span>
                 );
@@ -588,7 +588,7 @@ const TargetVsAchievementDashboard = () => {
             render: (val, record) => {
                 const meta = getGoalMeta(record.GoalType);
                 return (
-                    <span style={{ color: '#10b981', fontWeight: 800 }}>
+                    <span style={{ color: '#2E7D32', fontWeight: 800 }}>
                         {formatValue(val, meta.unit)}
                     </span>
                 );
@@ -632,7 +632,7 @@ const TargetVsAchievementDashboard = () => {
         return (
             <div style={{ padding: '16px 24px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                 <Title level={5} style={{ margin: '0 0 12px 0', fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Layers size={15} style={{ color: '#4f46e5' }} />
+                    <Layers size={15} style={{ color: '#1976D2' }} />
                     Monthly Breakdown Allocation Plan ({record.Year})
                 </Title>
                 <Row gutter={[12, 12]}>
@@ -660,7 +660,7 @@ const TargetVsAchievementDashboard = () => {
                                             <Progress
                                                 percent={Math.min(pct, 100)}
                                                 size="tiny"
-                                                strokeColor={pct >= 100 ? '#10b981' : pct >= 80 ? '#4f46e5' : pct >= 50 ? '#f59e0b' : '#ef4444'}
+                                                strokeColor={pct >= 100 ? '#2E7D32' : pct >= 80 ? '#1976D2' : pct >= 50 ? '#ED6C02' : '#D32F2F'}
                                             />
                                         </div>
                                     </div>
@@ -750,7 +750,7 @@ const TargetVsAchievementDashboard = () => {
                             value={kpiStats.totalTarget}
                             unit={getGoalMeta(selectedGoalType).unit}
                             icon={<Target size={20} />}
-                            color="#4f46e5"
+                            color="#1976D2"
                             subtext={`Across ${kpiStats.brandCount} brand targets`}
                         />
                     </Col>
@@ -760,7 +760,7 @@ const TargetVsAchievementDashboard = () => {
                             value={kpiStats.totalAchieved}
                             unit={getGoalMeta(selectedGoalType).unit}
                             icon={<BarChart3 size={20} />}
-                            color="#10b981"
+                            color="#2E7D32"
                             subtext={['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "Paced average realization" : "Paced cumulative achievement"}
                         />
                     </Col>
@@ -781,7 +781,7 @@ const TargetVsAchievementDashboard = () => {
                             title={selectedGoalType === 'ACOS' ? "COMPLIANT BRANDS" : "HIGH PERFORMING BRANDS"}
                             value={kpiStats.premiumCount}
                             icon={<Award size={20} />}
-                            color="#f59e0b"
+                            color="#ED6C02"
                             unit=""
                             subtext={selectedGoalType === 'ACOS' ? "ACOS pacing within target limits" : "Goal achievements pacing >= 80%"}
                         />
@@ -796,7 +796,7 @@ const TargetVsAchievementDashboard = () => {
                             className="chart-container-card"
                             title={
                                 <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Sparkles size={16} style={{ color: '#4f46e5' }} />
+                                    <Sparkles size={16} style={{ color: '#1976D2' }} />
                                     Monthly Allocation Progress ({selectedYear})
                                 </span>
                             }
@@ -809,12 +809,12 @@ const TargetVsAchievementDashboard = () => {
                                     >
                                         <defs>
                                             <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                                                <stop offset="0%" stopColor="#1976D2" stopOpacity={1} />
                                                 <stop offset="100%" stopColor="#4338ca" stopOpacity={0.8} />
                                             </linearGradient>
                                             <linearGradient id="colorAchieved" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
-                                                <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
+                                                <stop offset="0%" stopColor="#2E7D32" stopOpacity={1} />
+                                                <stop offset="100%" stopColor="#2E7D32" stopOpacity={0.8} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -845,7 +845,7 @@ const TargetVsAchievementDashboard = () => {
                             className="chart-container-card"
                             title={
                                 <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Grid size={16} style={{ color: '#4f46e5' }} />
+                                    <Grid size={16} style={{ color: '#1976D2' }} />
                                     Plan Performance Status Ratio
                                 </span>
                             }
@@ -900,7 +900,7 @@ const TargetVsAchievementDashboard = () => {
                             className="chart-container-card"
                             title={
                                 <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <BarChart3 size={16} style={{ color: '#4f46e5' }} />
+                                    <BarChart3 size={16} style={{ color: '#1976D2' }} />
                                     Manager-wise Fulfillment
                                 </span>
                             }
@@ -934,7 +934,7 @@ const TargetVsAchievementDashboard = () => {
                                                     formatter: (val) => formatValueShort(val, getGoalMeta(selectedGoalType).unit)
                                                 }
                                             },
-                                            colors: ['#4f46e5', '#10b981'],
+                                            colors: ['#1976D2', '#2E7D32'],
                                             fill: {
                                                 type: 'gradient',
                                                 gradient: { shade: 'light', type: 'vertical', shadeIntensity: 0.25, inverseColors: false, opacityFrom: 1, opacityTo: 0.8, stops: [0, 100] }
@@ -956,7 +956,7 @@ const TargetVsAchievementDashboard = () => {
                             className="chart-container-card"
                             title={
                                 <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Layers size={16} style={{ color: '#f59e0b' }} />
+                                    <Layers size={16} style={{ color: '#ED6C02' }} />
                                     Brand-wise Progress Overview (Top 15)
                                 </span>
                             }
@@ -1028,12 +1028,12 @@ const TargetVsAchievementDashboard = () => {
                                                 <div style={{ width: '100%' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                                         <Space>
-                                                            <span style={{ fontWeight: 800, color: '#4f46e5', minWidth: 20 }}>#{index + 1}</span>
+                                                            <span style={{ fontWeight: 800, color: '#1976D2', minWidth: 20 }}>#{index + 1}</span>
                                                             <Text strong style={{ color: '#0f172a' }}>{item.name}</Text>
                                                         </Space>
                                                         <span style={{ fontWeight: 800, color: progressColor }}>{item.rate}%</span>
                                                     </div>
-                                                    <Progress percent={Math.min(item.rate, 100)} strokeColor={{ '0%': progressColor, '100%': progressColor === '#ef4444' ? '#f87171' : progressColor === '#f59e0b' ? '#fbbf24' : progressColor === '#10b981' ? '#34d399' : '#818cf8' }} showInfo={false} size="small" trailColor="#f1f5f9" />
+                                                    <Progress percent={Math.min(item.rate, 100)} strokeColor={{ '0%': progressColor, '100%': progressColor === '#D32F2F' ? '#f87171' : progressColor === '#ED6C02' ? '#fbbf24' : progressColor === '#2E7D32' ? '#34d399' : '#818cf8' }} showInfo={false} size="small" trailColor="#f1f5f9" />
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginTop: 2 }}>
                                                         <span>Goal: {formatValue(item.target, getGoalMeta(selectedGoalType).unit)}</span>
                                                         <span>Actual: {formatValue(item.achieved, getGoalMeta(selectedGoalType).unit)}</span>
@@ -1055,7 +1055,7 @@ const TargetVsAchievementDashboard = () => {
                                         <span style={{ fontWeight: 700, color: '#475569', fontSize: 12 }}>
                                             {['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "Average Target Goal" : "Cumulative Plans Target Pool"}
                                         </span>
-                                        <span style={{ fontWeight: 850, color: '#4f46e5' }}>
+                                        <span style={{ fontWeight: 850, color: '#1976D2' }}>
                                             {formatValue(kpiStats.totalTarget, getGoalMeta(selectedGoalType).unit)}
                                         </span>
                                     </div>
@@ -1071,7 +1071,7 @@ const TargetVsAchievementDashboard = () => {
                                         <span style={{ fontWeight: 700, color: '#475569', fontSize: 12 }}>
                                             {['ACOS', 'PO_FULFILMENT', 'PO_DAYS'].includes(selectedGoalType) ? "Average Realized Achievement" : "Total Realized Achievement Value"}
                                         </span>
-                                        <span style={{ fontWeight: 850, color: '#10b981' }}>
+                                        <span style={{ fontWeight: 850, color: '#2E7D32' }}>
                                             {formatValue(kpiStats.totalAchieved, getGoalMeta(selectedGoalType).unit)}
                                         </span>
                                     </div>
@@ -1087,7 +1087,7 @@ const TargetVsAchievementDashboard = () => {
                                         <span style={{ fontWeight: 700, color: '#475569', fontSize: 12 }}>
                                             {getGoalMeta(selectedGoalType).unit === '₹' ? 'Unrealized Goal Target Gap' : 'Target vs Achievement Gap'}
                                         </span>
-                                        <span style={{ fontWeight: 850, color: '#ef4444' }}>
+                                        <span style={{ fontWeight: 850, color: '#D32F2F' }}>
                                             {formatValue(Math.max(0, kpiStats.totalTarget - kpiStats.totalAchieved), getGoalMeta(selectedGoalType).unit)}
                                         </span>
                                     </div>

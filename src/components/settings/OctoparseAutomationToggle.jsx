@@ -73,7 +73,7 @@ const OctoparseAutomationToggle = () => {
                 width: '44px',
                 height: '44px',
                 background: enabled ? '#ecfdf5' : '#fef2f2',
-                color: enabled ? '#059669' : '#ef4444'
+                color: enabled ? '#2E7D32' : '#D32F2F'
               }}
             >
               {enabled ? <Zap size={22} /> : <Zap size={22} className="opacity-50" />}

@@ -19,7 +19,7 @@ import {
 const { Title, Text, Paragraph } = Typography;
 
 const C = {
-  primary: '#fb4f40',
+  primary: '#D32F2F',
   primaryLight: '#fce8e6',
   primaryBg: '#fff5f5',
   dark: '#121b1e',
@@ -31,9 +31,9 @@ const C = {
   white: '#fff',
   success: '#22c55e',
   successBg: '#f0fdf4',
-  warning: '#f59e0b',
+  warning: '#ED6C02',
   warningBg: '#fffbeb',
-  danger: '#ef4444',
+  danger: '#D32F2F',
   dangerBg: '#fef2f2',
 };
 
@@ -290,7 +290,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     if (!subBsrTrend || !subBsrTrend.trends || subBsrTrend.trends.length === 0) {
       return { subBsrSeries: [], subBsrOptions: {} };
     }
-    const colors = [C.primary, C.success, C.warning, '#ec4899', '#06b6d4', '#8b5cf6'];
+    const colors = [C.primary, C.success, C.warning, '#9C27B0', '#0288D1', '#9C27B0'];
     const series = subBsrTrend.trends.map(t => ({
       name: t.category.length > 30 ? t.category.substring(0, 30) + '...' : t.category,
       data: t.data.map(d => d.rank),
@@ -382,7 +382,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
     ...commonOptions,
     chart: { ...commonOptions.chart, type: 'line', height: 300 },
     colors: hasBreakdownHistory
-      ? [C.warning, C.success, '#84cc16', '#eab308', '#f97316', C.danger]
+      ? [C.warning, C.success, '#84cc16', '#eab308', '#ED6C02', C.danger]
       : [C.warning],
     stroke: { width: hasBreakdownHistory ? [4, 2, 2, 2, 2, 2] : [3], curve: 'smooth' },
     dataLabels: {
@@ -853,7 +853,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 { stars: 5, key: 'fiveStar', color: C.success },
                 { stars: 4, key: 'fourStar', color: '#84cc16' },
                 { stars: 3, key: 'threeStar', color: C.warning },
-                { stars: 2, key: 'twoStar', color: '#f97316' },
+                { stars: 2, key: 'twoStar', color: '#ED6C02' },
                 { stars: 1, key: 'oneStar', color: C.danger }
               ].map(({ stars, key, color }) => {
                 const percentage = ratingBreakdownData.data?.[key] || asin.ratingBreakdown?.[key] || 0;

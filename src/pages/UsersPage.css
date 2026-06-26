@@ -25,7 +25,7 @@
 }
 
 .brand-badge-glow {
-    background: linear-gradient(135deg, var(--bs-primary), #4f46e5);
+    background: linear-gradient(135deg, var(--bs-primary), #1976D2);
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
     color: white;
 }
@@ -47,7 +47,7 @@
 }
 
 .luxury-input-group:focus-within {
-    border-color: #6366f1;
+    border-color: #1976D2;
     background: white;
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
 }
@@ -155,7 +155,7 @@
     right: -2px;
     width: 12px;
     height: 12px;
-    background: #10b981;
+    background: #2E7D32;
     border: 2px solid white;
     border-radius: 50%;
 }
@@ -189,12 +189,12 @@
 
 .status-active-luxury {
     background: #ecfdf5;
-    color: #059669;
+    color: #2E7D32;
 }
 
 .status-inactive-luxury {
     background: #fef2f2;
-    color: #dc2626;
+    color: #C62828;
 }
 
 /* Action Icons */
@@ -220,7 +220,7 @@
 }
 
 .btn-action-delete:hover {
-    color: #ef4444;
+    color: #D32F2F;
     border-color: #fee2e2;
     background: #fef2f2;
 }
@@ -243,12 +243,12 @@
 
 .tag-inherited {
     background: #eff6ff;
-    color: #2563eb;
+    color: #0288D1;
 }
 
 .tag-excluded {
     background: #fef2f2;
-    color: #dc2626;
+    color: #C62828;
     text-decoration: line-through;
 }
 

@@ -70,13 +70,13 @@ const getTrendInfo = (changePercent: number, metricType: MetricType) => {
     if (changePercent > 0) {
         return {
             icon: isInverted ? TrendingDown : TrendingUp,
-            color: isInverted ? '#ef4444' : '#10b981', // Red for bad increase, Green for good increase
+            color: isInverted ? '#D32F2F' : '#2E7D32', // Red for bad increase, Green for good increase
             label: `+${changePercent.toFixed(1)}%`
         };
     } else if (changePercent < 0) {
         return {
             icon: isInverted ? TrendingUp : TrendingDown,
-            color: isInverted ? '#10b981' : '#ef4444', // Green for good decrease, Red for bad decrease
+            color: isInverted ? '#2E7D32' : '#D32F2F', // Green for good decrease, Red for bad decrease
             label: `${changePercent.toFixed(1)}%`
         };
     }
@@ -91,9 +91,9 @@ const getTrendInfo = (changePercent: number, metricType: MetricType) => {
 // Status badge color
 const getStatusColor = (status?: string) => {
     switch (status) {
-        case 'AHEAD': return '#10b981';
-        case 'ON_TRACK': return '#3b82f6';
-        case 'BEHIND': return '#f59e0b';
+        case 'AHEAD': return '#2E7D32';
+        case 'ON_TRACK': return '#0288D1';
+        case 'BEHIND': return '#ED6C02';
         default: return '#94a3b8';
     }
 };

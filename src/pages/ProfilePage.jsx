@@ -132,7 +132,7 @@ const ProfilePage = () => {
                             <div style={{ fontSize: 16, fontWeight: 700, color: '#18181b', marginBottom: 4 }}>
                                 {user?.firstName} {user?.lastName}
                             </div>
-                            <Tag style={{ fontSize: 10, borderRadius: 4, padding: '2px 8px', fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
+                            <Tag style={{ fontSize: 10, borderRadius: 4, padding: '2px 8px', fontWeight: 600, background: '#eff6ff', color: '#0288D1', border: '1px solid #bfdbfe' }}>
                                 {roleDisplay}
                             </Tag>
 
@@ -146,7 +146,7 @@ const ProfilePage = () => {
                                 <div style={{ width: 1, background: '#f4f4f5' }} />
                                 <div style={{ textAlign: 'center' }}>
                                     <div style={{ fontSize: 9, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase' }}>Status</div>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: user?.isActive ? '#059669' : '#dc2626', marginTop: 2 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: user?.isActive ? '#2E7D32' : '#C62828', marginTop: 2 }}>
                                         {user?.isActive ? 'Active' : 'Inactive'}
                                     </div>
                                 </div>
@@ -213,7 +213,7 @@ const ProfilePage = () => {
                                         <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', marginBottom: 4 }}>Email</div>
                                         <div style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#71717a', border: '1px dashed #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <span><Mail size={12} style={{ marginRight: 6 }} />{user?.email || '—'}</span>
-                                            <Tag style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', fontWeight: 600 }}>Verified</Tag>
+                                            <Tag style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', background: '#ecfdf5', color: '#2E7D32', border: '1px solid #a7f3d0', fontWeight: 600 }}>Verified</Tag>
                                         </div>
                                     </div>
                                     <div>
@@ -245,7 +245,7 @@ const ProfilePage = () => {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                     <div style={{ padding: '10px 12px', background: user?.isFirstLogin ? '#fef2f2' : '#ecfdf5', borderRadius: 8, border: `1px solid ${user?.isFirstLogin ? '#fecaca' : '#d1fae5'}` }}>
-                                        <div style={{ fontSize: 10, fontWeight: 700, color: user?.isFirstLogin ? '#dc2626' : '#059669', textTransform: 'uppercase' }}>Setup Status</div>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: user?.isFirstLogin ? '#C62828' : '#2E7D32', textTransform: 'uppercase' }}>Setup Status</div>
                                         <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', marginTop: 2 }}>{user?.setupCompletedAt ? 'Complete' : 'Pending Setup'}</div>
                                     </div>
                                     <div style={{ padding: '10px 12px', background: '#f4f4f5', borderRadius: 8, border: '1px solid #e4e4e7' }}>
@@ -265,7 +265,7 @@ const ProfilePage = () => {
                                     <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', textTransform: 'uppercase', marginBottom: 4 }}>Role Permissions</div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                                         {(user?.role?.permissions || []).slice(0, 8).map(p => (
-                                            <Tag key={p._id || p.id || p} style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', margin: 0, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontWeight: 600 }}>
+                                            <Tag key={p._id || p.id || p} style={{ fontSize: 9, borderRadius: 4, padding: '1px 6px', margin: 0, background: '#eff6ff', color: '#0288D1', border: '1px solid #bfdbfe', fontWeight: 600 }}>
                                                 {p.displayName || p.name || p}
                                             </Tag>
                                         ))}
@@ -306,7 +306,7 @@ const ProfilePage = () => {
                         <Input.Password size="small" value={pwdData.confirm} onChange={e => setPwdData({ ...pwdData, confirm: e.target.value })} placeholder="Confirm new password" style={{ borderRadius: 8 }}
                             status={pwdData.confirm && pwdData.newPw !== pwdData.confirm ? 'error' : ''} />
                         {pwdData.confirm && pwdData.newPw !== pwdData.confirm && (
-                            <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2 }}>Passwords do not match</div>
+                            <div style={{ fontSize: 10, color: '#C62828', marginTop: 2 }}>Passwords do not match</div>
                         )}
                     </div>
                 </div>

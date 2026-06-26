@@ -304,8 +304,8 @@ const efficiencyMetrics = useMemo(() => {
             yaxis: { labels: { style: { colors: '#64748b' }, formatter: v => `${v.toFixed(1)}×` } },
             annotations: {
               yaxis: [
-                { y: 1, borderColor: '#ef4444', strokeDashArray: 4, label: { text: 'Break-even', style: { background: '#ef4444', color: '#fff', fontSize: '10px' } } },
-                { y: 5, borderColor: '#10b981', strokeDashArray: 4, label: { text: 'Target', style: { background: '#10b981', color: '#fff', fontSize: '10px' } } },
+                { y: 1, borderColor: '#D32F2F', strokeDashArray: 4, label: { text: 'Break-even', style: { background: '#D32F2F', color: '#fff', fontSize: '10px' } } },
+                { y: 5, borderColor: '#2E7D32', strokeDashArray: 4, label: { text: 'Target', style: { background: '#2E7D32', color: '#fff', fontSize: '10px' } } },
               ]
             }, xaxis: base.xaxis
           },
@@ -321,7 +321,7 @@ const efficiencyMetrics = useMemo(() => {
             yaxis: { labels: { style: { colors: '#64748b' }, formatter: v => `${v.toFixed(1)}%` } },
             annotations: {
               yaxis: [
-                { y: 15, borderColor: '#f59e0b', strokeDashArray: 4, label: { text: 'Target 15%', style: { background: '#f59e0b', color: '#fff', fontSize: '10px' } } },
+                { y: 15, borderColor: '#ED6C02', strokeDashArray: 4, label: { text: 'Target 15%', style: { background: '#ED6C02', color: '#fff', fontSize: '10px' } } },
               ]
             }, xaxis: base.xaxis
           },
@@ -331,7 +331,7 @@ const efficiencyMetrics = useMemo(() => {
       case 'clicks':
         return {
           options: {
-            ...base, chart: { ...base.chart, type: 'line' }, colors: ['#4F46E5', '#06b6d4'],
+            ...base, chart: { ...base.chart, type: 'line' }, colors: ['#4F46E5', '#0288D1'],
             stroke: { curve: 'smooth', width: [0, 2] },
             plotOptions: { bar: { borderRadius: 3, columnWidth: '50%' } },
             yaxis: [
@@ -567,7 +567,7 @@ const efficiencyMetrics = useMemo(() => {
       case 'roas': {
         const val = v || 0;
         const barW = Math.min((val / 25) * 100, 100);
-        const barColor = val >= 4 ? '#10b981' : val >= 1 ? '#f59e0b' : '#ef4444';
+        const barColor = val >= 4 ? '#2E7D32' : val >= 1 ? '#ED6C02' : '#D32F2F';
         return (<div className="roas-bar-wrap"><span>{fmtX(val)}</span><div className="roas-bar"><div className="roas-bar-fill" style={{ width: `${barW}%`, background: barColor }} /></div></div>);
       }
       case 'acos': {
@@ -704,7 +704,7 @@ const efficiencyMetrics = useMemo(() => {
                         axisBorder: { show: false },
                         axisTicks: { show: false }
                       },
-                      colors: ['#0f172a', '#10b981', '#6366f1'],
+                      colors: ['#0f172a', '#2E7D32', '#1976D2'],
                       stroke: { width: 2, curve: 'smooth' },
                       grid: { borderColor: '#f1f5f9' }
                     }}
@@ -733,7 +733,7 @@ const efficiencyMetrics = useMemo(() => {
               <Chart
                 options={{
                   labels: budgetDist.labels,
-                  colors: ['#f1f5f9', '#94a3b8', '#0f172a', '#6366f1'],
+                  colors: ['#f1f5f9', '#94a3b8', '#0f172a', '#1976D2'],
                   legend: { position: 'bottom', fontSize: '11px', fontWeight: 600, labels: { colors: '#64748b' } },
                   dataLabels: { enabled: false },
                   stroke: { width: 0 },
@@ -941,7 +941,7 @@ const efficiencyMetrics = useMemo(() => {
                 <Chart
                   options={{
                     chart: { type: 'area', sparkline: { enabled: true }, background: 'transparent' },
-                    colors: ['#0f172a', '#10b981'],
+                    colors: ['#0f172a', '#2E7D32'],
                     stroke: { curve: 'smooth', width: 2 },
                     fill: { type: 'gradient', gradient: { opacityFrom: 0.1, opacityTo: 0 } },
                     tooltip: { theme: 'light', x: { show: true }, y: { formatter: v => `₹${v?.toLocaleString() || 0}` } },

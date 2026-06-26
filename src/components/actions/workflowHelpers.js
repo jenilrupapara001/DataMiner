@@ -23,10 +23,10 @@ export const canTransition = (currentUser, task, targetStatus) => {
 
 export const STATUS_META = {
   PENDING: { label: 'Pending', color: '#94a3b8', bg: '#f1f5f9' },
-  IN_PROGRESS: { label: 'In Progress', color: '#6366f1', bg: '#eef2ff' },
-  REVIEW: { label: 'Awaiting Review', color: '#8b5cf6', bg: '#f5f3ff' },
-  COMPLETED: { label: 'Completed', color: '#10b981', bg: '#ecfdf5' },
-  REJECTED: { label: 'Rejected', color: '#ef4444', bg: '#fef2f2' },
+  IN_PROGRESS: { label: 'In Progress', color: '#1976D2', bg: '#eef2ff' },
+  REVIEW: { label: 'Awaiting Review', color: '#9C27B0', bg: '#f5f3ff' },
+  COMPLETED: { label: 'Completed', color: '#2E7D32', bg: '#ecfdf5' },
+  REJECTED: { label: 'Rejected', color: '#D32F2F', bg: '#fef2f2' },
 };
 
 export const formatRelativeTime = (isoString) => {

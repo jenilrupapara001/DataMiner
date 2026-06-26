@@ -14,8 +14,8 @@ export const ACTIONS_BY_TYPE = {
 };
 
 export const TASK_PRIORITIES = [
-  { value: 'High', label: 'High', color: '#dc2626' },
-  { value: 'Medium', label: 'Medium', color: '#f59e0b' },
+  { value: 'High', label: 'High', color: '#C62828' },
+  { value: 'Medium', label: 'Medium', color: '#ED6C02' },
   { value: 'Low', label: 'Low', color: '#6b7280' },
 ];
 

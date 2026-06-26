@@ -46,11 +46,11 @@ const getWeekHeadersForMonth = (year: number, month: number) => {
 };
 
 const GOAL_META: Record<string, { label: string; unit: string; color: string; bg: string }> = {
-    GMS: { label: 'GMS', unit: '₹', color: '#4f46e5', bg: '#ede9fe' },
-    ADS: { label: 'ADS', unit: '₹', color: '#2563eb', bg: '#dbeafe' },
-    ACOS: { label: 'ACOS', unit: '%', color: '#dc2626', bg: '#fee2e2' },
-    NEW_RC: { label: 'New RC', unit: '#', color: '#059669', bg: '#d1fae5' },
-    RNR: { label: 'RNR', unit: '#', color: '#3b82f6', bg: '#eff6ff' },
+    GMS: { label: 'GMS', unit: '₹', color: '#1976D2', bg: '#ede9fe' },
+    ADS: { label: 'ADS', unit: '₹', color: '#0288D1', bg: '#dbeafe' },
+    ACOS: { label: 'ACOS', unit: '%', color: '#C62828', bg: '#fee2e2' },
+    NEW_RC: { label: 'New RC', unit: '#', color: '#2E7D32', bg: '#d1fae5' },
+    RNR: { label: 'RNR', unit: '#', color: '#0288D1', bg: '#eff6ff' },
     PO_FULFILMENT: { label: 'PO Fulfilment', unit: '%', color: '#0891b2', bg: '#cffafe' },
     PO_DAYS: { label: 'PO Days', unit: 'd', color: '#be185d', bg: '#fce7f3' },
     SELLER_CENTRAL_BUSINESS: { label: 'SC Business', unit: '₹', color: '#b45309', bg: '#fef3c7' },
@@ -59,7 +59,7 @@ const GOAL_META: Record<string, { label: string; unit: string; color: string; bg
 const ALL_GOAL_TYPES = Object.keys(GOAL_META);
 
 function getMeta(key: string) {
-    return GOAL_META[key] ?? { label: key || 'GMS', unit: '₹', color: '#4f46e5', bg: '#ede9fe' };
+    return GOAL_META[key] ?? { label: key || 'GMS', unit: '₹', color: '#1976D2', bg: '#ede9fe' };
 }
 
 function resolveGoalType(row: any): string {
@@ -87,7 +87,7 @@ const PeriodCell = memo(({
     const hasData = target > 0;
     const pct = hasData ? Math.round((achieved / target) * 100) : 0;
     const tier = getAchievementTier(pct, isAcos);
-    const achColor = !hasData ? '#d1d5db' : isAcos ? (achieved <= target ? '#059669' : '#ef4444') : (achieved > 0 ? tier.color : '#ef4444');
+    const achColor = !hasData ? '#d1d5db' : isAcos ? (achieved <= target ? '#2E7D32' : '#D32F2F') : (achieved > 0 ? tier.color : '#D32F2F');
 
     return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '8px 12px', fontSize: 12 }}>
@@ -191,7 +191,7 @@ const GoalDataRow = memo(({
                             <div style={{
                                 width: 18, height: 18, borderRadius: '50%',
                                 background: '#e0e7ff', flexShrink: 0,
-                                fontSize: 9, fontWeight: 700, color: '#4f46e5',
+                                fontSize: 9, fontWeight: 700, color: '#1976D2',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 border: '1px solid #c7d2fe'
                             }}>
@@ -257,7 +257,7 @@ const GoalDataRow = memo(({
                 background: cellBg, borderRight: '1px solid #f1f5f9', width: 150
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? (goalType === 'ACOS' ? (overallAch <= total ? '#059669' : '#ef4444') : tier.color) : '#ef4444' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: overallAch > 0 ? (goalType === 'ACOS' ? (overallAch <= total ? '#2E7D32' : '#D32F2F') : tier.color) : '#D32F2F' }}>
                         {fmtVal(overallAch, meta.unit)}
                     </span>
                     <span style={{
@@ -284,7 +284,7 @@ const GoalDataRow = memo(({
                 const hasData = tgt > 0;
                 const pct = hasData ? Math.round((ach / tgt) * 100) : 0;
                 const tier = getAchievementTier(pct, goalType === 'ACOS');
-                const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#059669' : '#ef4444') : (ach > 0 ? tier.color : '#ef4444'));
+                const achColor = !hasData ? '#d1d5db' : (goalType === 'ACOS' ? (ach <= tgt ? '#2E7D32' : '#D32F2F') : (ach > 0 ? tier.color : '#D32F2F'));
 
                 if (isCollapsed) {
                     return (
@@ -353,7 +353,7 @@ const GoalDataRow = memo(({
                                 icon={<Edit3 size={13} />}
                                 onClick={() => onEdit(record)}
                                 style={{
-                                    background: '#4f46e5', borderColor: '#4f46e5',
+                                    background: '#1976D2', borderColor: '#1976D2',
                                     width: 30, height: 30,
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     boxShadow: '0 2px 8px rgba(79,70,229,0.15)'
@@ -797,7 +797,7 @@ const TargetVsAchievement = () => {
 
                     <Space size={8} wrap>
                         <Space.Compact>
-                            <Button style={{ fontWeight: 600, fontSize: 12, background: '#f5f3ff', borderColor: '#c084fc', color: '#7c3aed' }}>
+                            <Button style={{ fontWeight: 600, fontSize: 12, background: '#f5f3ff', borderColor: '#c084fc', color: '#9C27B0' }}>
                                 Table View
                             </Button>
                             <Button icon={<BarChart3 size={13} />}
@@ -813,7 +813,7 @@ const TargetVsAchievement = () => {
                                 style={{
                                     fontWeight: 600, fontSize: 12,
                                     ...(planType === 'YEARLY'
-                                        ? { background: '#6366f1', borderColor: '#6366f1', color: '#fff' }
+                                        ? { background: '#1976D2', borderColor: '#1976D2', color: '#fff' }
                                         : { background: '#fff', borderColor: '#e2e8f0', color: '#64748b' })
                                 }}>
                                 Yearly Plans
@@ -823,7 +823,7 @@ const TargetVsAchievement = () => {
                                 style={{
                                     fontWeight: 600, fontSize: 12,
                                     ...(planType === 'MONTHLY'
-                                        ? { background: '#6366f1', borderColor: '#6366f1', color: '#fff' }
+                                        ? { background: '#1976D2', borderColor: '#1976D2', color: '#fff' }
                                         : { background: '#fff', borderColor: '#e2e8f0', color: '#64748b' })
                                 }}>
                                 Monthly Plans
@@ -848,8 +848,8 @@ const TargetVsAchievement = () => {
                                     onClick={() => setShowImportModal(true)}
                                     style={{
                                         background: '#fff',
-                                        borderColor: '#10b981',
-                                        color: '#059669',
+                                        borderColor: '#2E7D32',
+                                        color: '#2E7D32',
                                         fontWeight: 600,
                                         fontSize: 12,
                                         boxShadow: '0 2px 6px rgba(16,185,129,0.15)'
@@ -862,7 +862,7 @@ const TargetVsAchievement = () => {
                         {perms.canCreate && (
                             <Button type="primary" icon={<Plus size={14} />}
                                 onClick={() => navigate('/target-achievement/create')}
-                                style={{ background: '#4f46e5', borderColor: '#4f46e5', fontWeight: 600, boxShadow: '0 4px 12px rgba(79,70,229,0.25)' }}>
+                                style={{ background: '#1976D2', borderColor: '#1976D2', fontWeight: 600, boxShadow: '0 4px 12px rgba(79,70,229,0.25)' }}>
                                 Establish Targets
                             </Button>
                         )}
@@ -896,9 +896,9 @@ const TargetVsAchievement = () => {
                         <Divider orientation="vertical" style={{ margin: 0 }} />
                         <Space size={6}>
                             {[
-                                { label: 'Elite (100%+)', color: '#059669', bg: '#d1fae5' },
-                                { label: 'High (80%+)', color: '#2563eb', bg: '#dbeafe' },
-                                { label: 'Track (50%+)', color: '#d97706', bg: '#fef3c7' },
+                                { label: 'Elite (100%+)', color: '#2E7D32', bg: '#d1fae5' },
+                                { label: 'High (80%+)', color: '#0288D1', bg: '#dbeafe' },
+                                { label: 'Track (50%+)', color: '#E65100', bg: '#fef3c7' },
                             ].map(item => (
                                 <Tag key={item.label} style={{
                                     borderRadius: 20, fontWeight: 600, fontSize: 10,
@@ -987,7 +987,7 @@ const TargetVsAchievement = () => {
                                     style={{
                                         borderRadius: 20, fontSize: 11, fontWeight: 600,
                                         background: '#ede9fe', border: '1px solid #c4b5fd',
-                                        color: '#7c3aed', margin: 0, padding: '1px 8px'
+                                        color: '#9C27B0', margin: 0, padding: '1px 8px'
                                     }}
                                 >
                                     Brand: {sellerMap.get(filterSeller) || 'Unknown Brand'}
@@ -1000,7 +1000,7 @@ const TargetVsAchievement = () => {
                                     style={{
                                         borderRadius: 20, fontSize: 11, fontWeight: 600,
                                         background: '#e0e7ff', border: '1px solid #a5b4fc',
-                                        color: '#4f46e5', margin: 0, padding: '1px 8px'
+                                        color: '#1976D2', margin: 0, padding: '1px 8px'
                                     }}
                                 >
                                     Manager: {filterManager}
@@ -1039,7 +1039,7 @@ const TargetVsAchievement = () => {
                                 icon={<X size={11} />}
                                 onClick={clearAllFilters}
                                 style={{
-                                    fontSize: 11, color: '#ef4444', fontWeight: 600,
+                                    fontSize: 11, color: '#D32F2F', fontWeight: 600,
                                     padding: '0 4px', height: 'auto'
                                 }}
                             >
@@ -1158,7 +1158,7 @@ const TargetVsAchievement = () => {
                                                                     prev.includes(monthNum) ? prev.filter(m => m !== monthNum) : [...prev, monthNum]
                                                                 );
                                                             }}
-                                                            style={{ fontSize: 9, padding: '0 4px', height: 16, width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}
+                                                            style={{ fontSize: 9, padding: '0 4px', height: 16, width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#1976D2' }}
                                                         >
                                                             {isCollapsed ? '+' : '−'}
                                                         </Button>
@@ -1385,7 +1385,7 @@ const TargetVsAchievement = () => {
                                     });
                                     handleEdit(recs);
                                 }}
-                                style={{ background: '#6366f1', borderColor: '#6366f1', fontSize: 12, fontWeight: 600 }}>
+                                style={{ background: '#1976D2', borderColor: '#1976D2', fontSize: 12, fontWeight: 600 }}>
                                 Edit Selected
                             </Button>
                             {perms.canDelete && (
@@ -1444,7 +1444,7 @@ const TargetVsAchievement = () => {
                                     <Tag style={{
                                         marginLeft: 8, borderRadius: 20, fontSize: 10,
                                         background: '#ede9fe', border: '1px solid #c4b5fd',
-                                        color: '#7c3aed', fontWeight: 600
+                                        color: '#9C27B0', fontWeight: 600
                                     }}>
                                         Filtered
                                     </Tag>

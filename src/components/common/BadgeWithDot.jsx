@@ -12,12 +12,12 @@ const BadgeWithDot = ({ type = 'pill-color', color = 'brand', size = 'md', child
 
     const getColorStyles = (c) => {
         switch (c) {
-            case 'brand': return { bg: '#eff6ff', text: '#3b82f6', dot: '#3b82f6' }; // blue-50, blue-500
+            case 'brand': return { bg: '#eff6ff', text: '#0288D1', dot: '#0288D1' }; // blue-50, blue-500
             case 'success': return { bg: '#f0fdf4', text: '#22c55e', dot: '#22c55e' }; // green-50, green-500
             case 'warning': return { bg: '#fefce8', text: '#eab308', dot: '#eab308' }; // yellow-50, yellow-500
-            case 'danger': return { bg: '#fef2f2', text: '#ef4444', dot: '#ef4444' }; // red-50, red-500
+            case 'danger': return { bg: '#fef2f2', text: '#D32F2F', dot: '#D32F2F' }; // red-50, red-500
             case 'neutral': return { bg: '#f8fafc', text: '#64748b', dot: '#94a3b8' }; // slate-50, slate-500
-            default: return { bg: '#eff6ff', text: '#3b82f6', dot: '#3b82f6' };
+            default: return { bg: '#eff6ff', text: '#0288D1', dot: '#0288D1' };
         }
     };
 

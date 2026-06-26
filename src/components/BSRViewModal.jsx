@@ -12,12 +12,12 @@ import { Modal, Tag, Typography, Space, Badge } from 'antd';
 const { Text } = Typography;
 
 const C = {
-  primary: '#fb4f40', primaryLight: '#fce8e6', dark: '#121b1e',
+  primary: '#D32F2F', primaryLight: '#fce8e6', dark: '#121b1e',
   text: '#27272a', textSecondary: '#71717a', border: '#e4e4e7',
   borderLight: '#f0f0f3', bg: '#f4f5f7', white: '#fff',
   success: '#22c55e', successBg: '#f0fdf4',
-  warning: '#f59e0b', warningBg: '#fffbeb',
-  danger: '#ef4444', dangerBg: '#fef2f2',
+  warning: '#ED6C02', warningBg: '#fffbeb',
+  danger: '#D32F2F', dangerBg: '#fef2f2',
 };
 
 const parseRank = (str) => {
@@ -299,7 +299,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
     .chp:hover { border-color:${C.dark}; color:${C.dark}; }
     .chp.act { background:${C.primary}; color:#fff; border-color:${C.primary}; }
     .dd { font-size:10px; padding:2px 6px; border-radius:4px; text-align:center; min-width:48px; }
-    .dd-has { background:${C.successBg}; color:#059669; font-weight:600; }
+    .dd-has { background:${C.successBg}; color:#2E7D32; font-weight:600; }
     .dd-no { color:#d1d5db; }
     .loader-pulse { height:30px; display:flex; align-items:center; justify-content:center; gap:6px; margin:16px 0; }
     .pulse-dot { width:6px; height:6px; background:${C.primary}; border-radius:50%; animation:pulse 1.5s infinite; }
@@ -340,7 +340,7 @@ const BSRViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sellerI
                   <FileText size={14} style={{ color: C.success }} /> Export Excel (.xlsx)
                 </button>
                 <button className="btn btn-sm btn-ghost d-flex align-items-center gap-3 w-100 text-start py-2 px-3" onClick={() => exportAllData('csv')} style={{ fontSize: 11, border: 'none', background: 'transparent' }}>
-                  <FileText size={14} color="#2563eb" /> Export CSV (.csv)
+                  <FileText size={14} color="#0288D1" /> Export CSV (.csv)
                 </button>
               </div>
             )}

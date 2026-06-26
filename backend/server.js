@@ -238,9 +238,11 @@ app.use(async (err, req, res, next) => {
     // Don't let logging failure mask original error
   }
 
-  res.status(500).json({
-    error: 'Internal server error'
-  });
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: 'Internal server error'
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3001;

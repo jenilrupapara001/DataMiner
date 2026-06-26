@@ -306,7 +306,7 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
                 
                 <div className="mb-5">
                    <Chart 
-                      options={chartOptions('#2563eb', 'area')} 
+                      options={chartOptions('#0288D1', 'area')} 
                       series={[{ name: 'Price', data: generateSeriesData('price', true) }]} 
                       type="area" 
                       height={200} 
@@ -316,11 +316,11 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
                 <div className="mb-5">
                    <Chart 
                       options={{
-                        ...chartOptions('#10b981', 'line'),
+                        ...chartOptions('#2E7D32', 'line'),
                         yaxis: { 
                           reversed: true,
                           labels: { 
-                            style: { fontSize: '10px', fontWeight: 700, colors: '#10b981' },
+                            style: { fontSize: '10px', fontWeight: 700, colors: '#2E7D32' },
                             formatter: (val) => `#${val?.toLocaleString()}`
                           }
                         }
@@ -333,7 +333,7 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
 
                 <div>
                    <Chart 
-                      options={chartOptions('#f59e0b', 'area')} 
+                      options={chartOptions('#ED6C02', 'area')} 
                       series={[{ name: 'Rating', data: generateSeriesData('rating', true) }]} 
                       type="area" 
                       height={180} 
@@ -348,7 +348,7 @@ const AsinTrendsModal = ({ asin, isOpen, onClose }) => {
                       </h6>
                       <div className="bg-slate-50 p-2 rounded-3">
                          <Chart 
-                            options={chartOptions('#8b5cf6', 'line')} 
+                            options={chartOptions('#9C27B0', 'line')} 
                             series={[{ name: 'Images', data: generateSeriesData('imageCount', true) }]} 
                             type="line" 
                             height={150} 

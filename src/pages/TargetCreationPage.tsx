@@ -17,13 +17,13 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 export const GOAL_TYPES = [
-    { key: 'GMS', label: 'GMS', unit: '₹', color: '#10b981', bg: '#ecfdf5' },
-    { key: 'ADS', label: 'ADS Spend', unit: '₹', color: '#ef4444', bg: '#fef2f2' },
-    { key: 'ACOS', label: 'ACOS', unit: '%', color: '#8b5cf6', bg: '#f5f3ff' },
-    { key: 'NEW_RC', label: 'New RC', unit: '#', color: '#f59e0b', bg: '#fffbeb' },
-    { key: 'RNR', label: 'RNR', unit: '#', color: '#3b82f6', bg: '#eff6ff' },
-    { key: 'PO_FULFILMENT', label: 'PO Fulfilment', unit: '%', color: '#06b6d4', bg: '#ecfeff' },
-    { key: 'PO_DAYS', label: 'PO Days', unit: 'd', color: '#ec4899', bg: '#fdf2f8' },
+    { key: 'GMS', label: 'GMS', unit: '₹', color: '#2E7D32', bg: '#ecfdf5' },
+    { key: 'ADS', label: 'ADS Spend', unit: '₹', color: '#D32F2F', bg: '#fef2f2' },
+    { key: 'ACOS', label: 'ACOS', unit: '%', color: '#9C27B0', bg: '#f5f3ff' },
+    { key: 'NEW_RC', label: 'New RC', unit: '#', color: '#ED6C02', bg: '#fffbeb' },
+    { key: 'RNR', label: 'RNR', unit: '#', color: '#0288D1', bg: '#eff6ff' },
+    { key: 'PO_FULFILMENT', label: 'PO Fulfilment', unit: '%', color: '#0288D1', bg: '#ecfeff' },
+    { key: 'PO_DAYS', label: 'PO Days', unit: 'd', color: '#9C27B0', bg: '#fdf2f8' },
     { key: 'SELLER_CENTRAL_BUSINESS', label: 'SC Business', unit: '₹', color: '#14b8a6', bg: '#f0fdfa' },
 ];
 
@@ -281,7 +281,7 @@ const GoalRowComponent = memo(({
                                         size="small"
                                         placeholder="Ach"
                                         style={{
-                                            width: '100%', fontSize: 11, color: '#059669',
+                                            width: '100%', fontSize: 11, color: '#2E7D32',
                                             borderColor: '#a7f3d0', background: '#f0fdf4', borderRadius: 4
                                         }}
                                     />
@@ -317,7 +317,7 @@ const GoalRowComponent = memo(({
                                 icon={<Zap size={14} />}
                                 onClick={splitEvenly}
                                 disabled={isCellLocked}
-                                style={{ color: '#8b5cf6', padding: '0 4px' }}
+                                style={{ color: '#9C27B0', padding: '0 4px' }}
                             />
                         </Tooltip>
                     )}
@@ -327,7 +327,7 @@ const GoalRowComponent = memo(({
                         fontSize: 10, textAlign: 'center', marginTop: 4,
                         fontWeight: 700, display: 'flex', alignItems: 'center',
                         justifyContent: 'center', gap: 4,
-                        color: pctOk ? '#10b981' : '#ef4444'
+                        color: pctOk ? '#2E7D32' : '#D32F2F'
                     }}>
                         {pctOk ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
                         {totalPct.toFixed(1)}% / 100%
@@ -647,16 +647,16 @@ export default function TargetCreationPage() {
                                 />
                                 <Space align="center" size={12}>
                                     <Title level={4} style={{ margin: 0, color: '#0f172a' }}>
-                                        <Target size={20} style={{ display: 'inline', marginRight: 8, color: '#3b82f6' }} />
+                                        <Target size={20} style={{ display: 'inline', marginRight: 8, color: '#0288D1' }} />
                                         {isEditMode ? 'Edit Target Goals' : 'Create Target Goals'}
                                     </Title>
                                     <Badge
                                         count={`${sections.length} Brand${sections.length !== 1 ? 's' : ''}`}
-                                        style={{ background: '#eff6ff', color: '#3b82f6', fontWeight: 600 }}
+                                        style={{ background: '#eff6ff', color: '#0288D1', fontWeight: 600 }}
                                     />
                                     <Badge
                                         count={`${totalMetrics} Metric${totalMetrics !== 1 ? 's' : ''}`}
-                                        style={{ background: '#f0fdf4', color: '#10b981', fontWeight: 600 }}
+                                        style={{ background: '#f0fdf4', color: '#2E7D32', fontWeight: 600 }}
                                     />
                                 </Space>
                             </div>
@@ -679,7 +679,7 @@ export default function TargetCreationPage() {
                                 size="large"
                                 style={{
                                     borderRadius: 8,
-                                    background: '#3b82f6',
+                                    background: '#0288D1',
                                     boxShadow: '0 2px 8px rgba(59,130,246,0.3)'
                                 }}
                             >
@@ -744,7 +744,7 @@ export default function TargetCreationPage() {
                                                         background: '#eff6ff', display: 'flex',
                                                         alignItems: 'center', justifyContent: 'center'
                                                     }}>
-                                                        <Building2 size={20} color="#3b82f6" />
+                                                        <Building2 size={20} color="#0288D1" />
                                                     </div>
                                                     <div>
                                                         <Text type="secondary" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>

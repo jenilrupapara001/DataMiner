@@ -48,7 +48,7 @@ const TaskBoard = ({ tasks, loading }) => {
                   </td>
                   <td>
                     <div className="d-flex align-items-center gap-1">
-                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: task.priority === 'HIGH' ? '#ef4444' : task.priority === 'MEDIUM' ? '#f59e0b' : '#10b981' }}></div>
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: task.priority === 'HIGH' ? '#D32F2F' : task.priority === 'MEDIUM' ? '#ED6C02' : '#2E7D32' }}></div>
                       <span className="smallest fw-bold">{task.priority}</span>
                     </div>
                   </td>

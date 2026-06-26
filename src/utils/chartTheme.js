@@ -3,16 +3,17 @@
  * Provides consistent theming across all charts
  */
 
-// 8-color palette in order
+// 8-color palette — RetailOps design system chart palette
 export const CHART_COLORS = [
-    '#1B4FD8', // Blue - primary brand
-    '#059669', // Green - success/positive
-    '#D97706', // Amber - warning/neutral
-    '#7C3AED', // Purple - accent
-    '#0891B2', // Cyan - accent
-    '#DC2626', // Red - danger/negative
-    '#0284C7', // Sky blue - accent
-    '#65A30D'  // Lime - accent
+    '#1976D2', // Primary — Operations & Trust
+    '#42A5F5', // Primary Light
+    '#0288D1', // Info — Analytics
+    '#9C27B0', // Secondary — Growth
+    '#BA68C8', // Secondary Light
+    '#4CAF50', // Success — Revenue
+    '#FF9800', // Warning — Attention
+    '#D32F2F', // Error — Critical
+    '#64748B', // Neutral — Governance
 ];
 
 // Base configuration applied to all charts

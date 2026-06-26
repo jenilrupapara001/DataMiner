@@ -149,7 +149,7 @@ const Dashboard = () => {
 
     if (initialLoading) {
         return (
-            <div style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}>
+            <div style={{ background: '#F8FAFC', minHeight: '100%', padding: '0 24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 60 }}>
                     <Space orientation="vertical" size={2}>
                         <Skeleton.Input active size="large" style={{ width: 220, height: 32 }} />
@@ -159,7 +159,7 @@ const Dashboard = () => {
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                         <Col key={i} xs={12} sm={6} md={3}>
-                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 8 }}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #E5E7EB', padding: 8 }}>
                                 <Skeleton active paragraph={{ rows: 1 }} />
                             </Card>
                         </Col>
@@ -168,7 +168,7 @@ const Dashboard = () => {
                 <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <Col key={i} xs={24} sm={12} md={8}>
-                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 16 }}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #E5E7EB', padding: 16 }}>
                                 <Skeleton active paragraph={{ rows: 2 }} />
                             </Card>
                         </Col>
@@ -200,7 +200,7 @@ const Dashboard = () => {
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                         <Col key={i} xs={12} sm={6} md={3}>
-                            <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', padding: 8 }}>
+                            <Card style={{ borderRadius: 12, border: '1px solid #E5E7EB', padding: 8 }}>
                                 <Skeleton active paragraph={{ rows: 1 }} />
                             </Card>
                         </Col>
@@ -228,7 +228,7 @@ const Dashboard = () => {
             <Row gutter={[20, 20]} style={{ marginBottom: '24px' }}>
                 <Col xs={24} lg={14}>
                     {orch.isLoadingKpis ? (
-                        <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9' }}>
+                        <Card style={{ borderRadius: 12, border: '1px solid #E5E7EB' }}>
                             <Skeleton active paragraph={{ rows: 6 }} style={{ padding: 16 }} />
                         </Card>
                     ) : (
@@ -241,7 +241,7 @@ const Dashboard = () => {
                 </Col>
                 <Col xs={24} lg={10}>
                     {orch.isLoadingTargets ? (
-                        <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9' }}>
+                        <Card style={{ borderRadius: 12, border: '1px solid #E5E7EB' }}>
                             <Skeleton active paragraph={{ rows: 4 }} style={{ padding: 16 }} />
                         </Card>
                     ) : (

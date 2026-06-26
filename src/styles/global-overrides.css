@@ -131,7 +131,7 @@
 .ant-picker-cell-selected .ant-picker-cell-inner,
 .ant-picker-cell-range-start .ant-picker-cell-inner,
 .ant-picker-cell-range-end .ant-picker-cell-inner {
-  background-color: var(--ant-primary-color, #4f46e5) !important;
+  background-color: var(--ant-primary-color, #1976D2) !important;
   color: white !important;
 }
 

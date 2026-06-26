@@ -112,7 +112,7 @@ const MonthWiseReport = () => {
       revenue: <span className="fw-600">₹{item.revenue.toLocaleString()}</span>,
       units: <span className="fw-600 text-dark">{item.units.toLocaleString()}</span>,
       acos: (
-        <span className="fw-700" style={{ color: parseFloat(item.acos) < 20 ? '#10b981' : '#f59e0b' }}>
+        <span className="fw-700" style={{ color: parseFloat(item.acos) < 20 ? '#2E7D32' : '#ED6C02' }}>
           {item.acos}%
         </span>
       ),
@@ -142,7 +142,7 @@ const MonthWiseReport = () => {
         <Icon size={14} />
       </div>
       <div>
-        <div className="stat-pill-label">{title} <span className="ms-1" style={{ fontSize: '9px', color: (trend.startsWith('+') || trend.startsWith('↑') || trend.includes('-')) ? (trend.includes('-') && title.includes('ACoS') ? '#10b981' : (trend.includes('-') ? '#ef4444' : '#10b981')) : '#ef4444' }}>{trend}</span></div>
+        <div className="stat-pill-label">{title} <span className="ms-1" style={{ fontSize: '9px', color: (trend.startsWith('+') || trend.startsWith('↑') || trend.includes('-')) ? (trend.includes('-') && title.includes('ACoS') ? '#2E7D32' : (trend.includes('-') ? '#D32F2F' : '#2E7D32')) : '#D32F2F' }}>{trend}</span></div>
         <div className="stat-pill-value">{value}</div>
       </div>
     </div>

@@ -138,15 +138,15 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
     const getTagColor = (tag) => {
         const t = tag.toLowerCase();
         if (t.includes('best') || t.includes('high margin') || t.includes('won') || t.includes('high potential'))
-            return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
+            return { bg: '#ecfdf5', color: '#2E7D32', border: '#a7f3d0' };
         if (t.includes('low') || t.includes('lost') || t.includes('alert') || t.includes('missing') || t.includes('hijacker') || t.includes('violation'))
-            return { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' };
+            return { bg: '#fef2f2', color: '#C62828', border: '#fecaca' };
         if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
-            return { bg: '#fffbeb', color: '#d97706', border: '#fde68a' };
+            return { bg: '#fffbeb', color: '#E65100', border: '#fde68a' };
         if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
-            return { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
+            return { bg: '#eff6ff', color: '#0288D1', border: '#bfdbfe' };
         if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
-            return { bg: '#f5f3ff', color: '#7c3aed', border: '#ddd6fe' };
+            return { bg: '#f5f3ff', color: '#9C27B0', border: '#ddd6fe' };
         if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))
             return { bg: '#fff7ed', color: '#ea580c', border: '#fed7aa' };
         return { bg: '#f4f4f5', color: '#52525b', border: '#e4e4e7' };

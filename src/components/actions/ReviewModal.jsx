@@ -120,7 +120,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
 
         {submittedBy && (
           <Space size={8} style={{ marginBottom: 16 }}>
-            <Avatar size={24} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#6366f1' }} />
+            <Avatar size={24} icon={<UserOutlined />} style={{ background: '#eef2ff', color: '#1976D2' }} />
             <Text style={{ fontSize: 12, color: '#64748b' }}>
               Submitted by {formatUserName(submittedBy)}
               {action.reviewSubmittedAt ? ` on ${dayjs(action.reviewSubmittedAt).format('MMM D, YYYY')}` : ''}
@@ -144,7 +144,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
               <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                 Outcome
               </Text>
-              <Text style={{ color: '#10b981', fontSize: 13 }}>{action.outcome}</Text>
+              <Text style={{ color: '#2E7D32', fontSize: 13 }}>{action.outcome}</Text>
             </>
           )}
           {action.timeSpent && (
@@ -159,7 +159,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
           ghost
           items={[{
             key: 'details',
-            label: <Text style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>View Original Task Details</Text>,
+            label: <Text style={{ fontSize: 12, color: '#1976D2', fontWeight: 600 }}>View Original Task Details</Text>,
             children: (
               <div style={{ padding: '8px 0' }}>
                 {action.description && (
@@ -204,14 +204,14 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
             style={{
               flex: 1, height: 100, borderRadius: 10, padding: 16, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 12,
-              border: `2px solid ${decision === 'APPROVE' ? '#10b981' : '#e2e8f0'}`,
+              border: `2px solid ${decision === 'APPROVE' ? '#2E7D32' : '#e2e8f0'}`,
               background: decision === 'APPROVE' ? '#ecfdf5' : 'white',
               transition: 'all 0.15s ease',
             }}
           >
-            <CheckCircleOutlined style={{ fontSize: 28, color: decision === 'APPROVE' ? '#10b981' : '#cbd5e1' }} />
+            <CheckCircleOutlined style={{ fontSize: 28, color: decision === 'APPROVE' ? '#2E7D32' : '#cbd5e1' }} />
             <div>
-              <Text strong style={{ fontSize: 15, color: decision === 'APPROVE' ? '#059669' : '#1e293b', display: 'block' }}>
+              <Text strong style={{ fontSize: 15, color: decision === 'APPROVE' ? '#2E7D32' : '#1e293b', display: 'block' }}>
                 Approve
               </Text>
               <Text style={{ fontSize: 12, color: '#94a3b8' }}>Mark this task as completed</Text>
@@ -223,12 +223,12 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
             style={{
               flex: 1, height: 100, borderRadius: 10, padding: 16, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 12,
-              border: `2px solid ${decision === 'REJECT' ? '#ef4444' : '#e2e8f0'}`,
+              border: `2px solid ${decision === 'REJECT' ? '#D32F2F' : '#e2e8f0'}`,
               background: decision === 'REJECT' ? '#fef2f2' : 'white',
               transition: 'all 0.15s ease',
             }}
           >
-            <CloseCircleOutlined style={{ fontSize: 28, color: decision === 'REJECT' ? '#ef4444' : '#cbd5e1' }} />
+            <CloseCircleOutlined style={{ fontSize: 28, color: decision === 'REJECT' ? '#D32F2F' : '#cbd5e1' }} />
             <div>
               <Text strong style={{ fontSize: 15, color: decision === 'REJECT' ? '#e11d48' : '#1e293b', display: 'block' }}>
                 Reject
@@ -240,7 +240,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
 
         <div style={{ marginBottom: 12 }}>
           <Text style={MODAL_STYLES.labelStyle}>
-            Review Comments {decision === 'REJECT' ? <span style={{ color: '#ef4444' }}>*</span> : null}
+            Review Comments {decision === 'REJECT' ? <span style={{ color: '#D32F2F' }}>*</span> : null}
           </Text>
           <TextArea
             rows={3}
@@ -284,7 +284,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
           disabled={!decision}
           style={{
             height: 36, borderRadius: 8, fontWeight: 600,
-            background: decision === 'REJECT' ? '#ef4444' : decision === 'APPROVE' ? '#10b981' : '#6366f1',
+            background: decision === 'REJECT' ? '#D32F2F' : decision === 'APPROVE' ? '#2E7D32' : '#1976D2',
             border: 'none',
             boxShadow: decision ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
           }}

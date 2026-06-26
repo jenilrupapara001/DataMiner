@@ -494,7 +494,7 @@ const TemplateManagerPage = () => {
             <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
                 {contextHolder}
                 <div style={{ textAlign: 'center', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
-                    <Title level={4} style={{ color: '#ef4444' }}>Configuration Error</Title>
+                    <Title level={4} style={{ color: '#D32F2F' }}>Configuration Error</Title>
                     <Text type="secondary" style={{ display: 'block', marginBottom: 20 }}>{error}</Text>
                     <Button type="primary" size="large" shape="round" onClick={() => fetchTemplates(true)}>Refresh Interface</Button>
                 </div>
@@ -535,7 +535,7 @@ const TemplateManagerPage = () => {
                     flex-direction: column;
                 }
                 .segmented-templates .ant-segmented-item-selected {
-                    background-color: #4f46e5 !important;
+                    background-color: #1976D2 !important;
                     color: #ffffff !important;
                     font-weight: 700 !important;
                 }
@@ -588,8 +588,8 @@ const TemplateManagerPage = () => {
                         onChange={setActiveTab}
                         style={{ padding: 3 }}
                         options={[
-                            { label: <Space size={6}><Zap size={13} /><span>Tasks</span><Badge count={taskTemplates.length} overflowCount={99} style={{ backgroundColor: '#4f46e5', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'task' },
-                            { label: <Space size={6}><Target size={13} /><span>Roadmaps</span><Badge count={goalTemplates.length} overflowCount={99} style={{ backgroundColor: '#10b981', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'goal' }
+                            { label: <Space size={6}><Zap size={13} /><span>Tasks</span><Badge count={taskTemplates.length} overflowCount={99} style={{ backgroundColor: '#1976D2', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'task' },
+                            { label: <Space size={6}><Target size={13} /><span>Roadmaps</span><Badge count={goalTemplates.length} overflowCount={99} style={{ backgroundColor: '#2E7D32', fontSize: 10, height: 16, minWidth: 16, lineHeight: '16px' }} /></Space>, value: 'goal' }
                         ]}
                     />
                 </div>
@@ -614,8 +614,8 @@ const TemplateManagerPage = () => {
                             fontSize: 11,
                             borderRadius: 8,
                             height: 32,
-                            borderColor: '#6366f1', 
-                            color: '#4f46e5', 
+                            borderColor: '#1976D2', 
+                            color: '#1976D2', 
                             background: '#eef2ff'
                         }}
                     >

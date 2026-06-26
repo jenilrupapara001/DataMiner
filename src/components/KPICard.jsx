@@ -2,47 +2,64 @@ import React from 'react';
 import * as LucideIcons from 'lucide-react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-const KPICard = ({ title, value, icon, trend, trendType = 'neutral', subtitle = 'vs last month' }) => {
+const KPICard = ({ title, value, icon, trend, trendType = 'neutral', subtitle = 'vs last month', color }) => {
   const IconComponent = LucideIcons[icon] || LucideIcons.Activity;
 
+  // Use design system colors: primary #1976D2, success #2E7D32, error #D32F2F
+  const cardColor = color || '#1976D2';
+
   const getTrendConfig = () => {
-    if (trendType === 'positive') return { class: 'text-success', icon: TrendingUp, bg: 'rgba(16, 185, 129, 0.1)' };
-    if (trendType === 'negative') return { class: 'text-danger', icon: TrendingDown, bg: 'rgba(239, 68, 68, 0.1)' };
-    return { class: 'text-muted', icon: Minus, bg: 'rgba(107, 114, 128, 0.1)' };
+    if (trendType === 'positive') return { icon: TrendingUp, bg: '#E8F5E9', textColor: '#2E7D32', borderColor: '#A5D6A7' };
+    if (trendType === 'negative') return { icon: TrendingDown, bg: '#FFEBEE', textColor: '#D32F2F', borderColor: '#EF9A9A' };
+    return { icon: Minus, bg: '#F1F5F9', textColor: '#64748B', borderColor: '#CBD5E1' };
   };
 
   const trendConfig = getTrendConfig();
   const TrendIcon = trendConfig.icon;
 
   return (
-    <div className="kpi-card border-0 shadow-sm overflow-hidden" style={{ borderRadius: '16px', background: '#fff' }}>
-      <div className="card-body p-4">
-        <div className="d-flex justify-content-between align-items-start mb-3">
-          <div
-            className="icon-wrapper d-flex align-items-center justify-content-center"
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'rgba(59, 130, 246, 0.08)',
-              color: '#3b82f6'
-            }}
-          >
-            <IconComponent size={20} strokeWidth={2.5} />
+    <div className="kpi-card" style={{
+      borderRadius: 12,
+      background: '#FFFFFF',
+      border: '1px solid #E5E7EB',
+      overflow: 'hidden',
+      transition: 'all 0.2s ease',
+    }}>
+      <div style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: `${cardColor}12`, color: cardColor,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <IconComponent size={20} strokeWidth={2} />
           </div>
-          <div
-            className={`trend-badge px-2 py-1 rounded-pill d-flex align-items-center gap-1 small fw-bold ${trendConfig.class}`}
-            style={{ background: trendConfig.bg, fontSize: '11px' }}
-          >
-            <TrendIcon size={12} strokeWidth={3} />
-            {trend}%
-          </div>
+          {trend !== undefined && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              padding: '3px 8px', borderRadius: 6,
+              background: trendConfig.bg, color: trendConfig.textColor,
+              border: `1px solid ${trendConfig.borderColor}`,
+              fontSize: 11, fontWeight: 700,
+            }}>
+              <TrendIcon size={12} strokeWidth={3} />
+              {trend}%
+            </div>
+          )}
         </div>
 
         <div>
-          <div className="text-muted small fw-bold text-uppercase mb-1" style={{ letterSpacing: '0.02em', fontSize: '10px' }}>{title}</div>
-          <div className="h3 mb-1 fw-bold" style={{ color: '#111827' }}>{value}</div>
-          <div className="text-muted smallest">{subtitle}</div>
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: '#64748B',
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4,
+          }}>{title}</div>
+          <div style={{
+            fontSize: 24, fontWeight: 800, color: '#111827',
+            letterSpacing: '-0.02em', lineHeight: 1.1,
+          }}>{value}</div>
+          {subtitle && (
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{subtitle}</div>
+          )}
         </div>
       </div>
     </div>

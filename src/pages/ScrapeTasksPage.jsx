@@ -178,12 +178,12 @@ const ScrapeTasksPage = () => {
         .badge-idle { background: #f3f4f6; color: #4b5563; }
         .badge-running { 
           background: rgba(59, 130, 246, 0.1); 
-          color: #2563eb;
+          color: #0288D1;
           box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
         }
-        .badge-success { background: rgba(16, 185, 129, 0.1); color: #059669; }
-        .badge-warning { background: rgba(245, 158, 11, 0.1); color: #d97706; }
-        .badge-danger { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
+        .badge-success { background: rgba(16, 185, 129, 0.1); color: #2E7D32; }
+        .badge-warning { background: rgba(245, 158, 11, 0.1); color: #E65100; }
+        .badge-danger { background: rgba(239, 68, 68, 0.1); color: #C62828; }
         
         .spin {
           animation: bi-spin 2s linear infinite;
@@ -235,7 +235,7 @@ const ScrapeTasksPage = () => {
         .hint-card {
           background: #fff;
           border: 1px solid #e5e7eb;
-          border-left: 4px solid #3b82f6;
+          border-left: 4px solid #0288D1;
           border-radius: 12px;
           padding: 1.25rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);

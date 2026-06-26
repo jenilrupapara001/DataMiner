@@ -86,7 +86,7 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
       <div style={styles.cardBody}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f0f5ff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-            <SafetyCertificateOutlined style={{ fontSize: 22, color: '#4f46e5' }} />
+            <SafetyCertificateOutlined style={{ fontSize: 22, color: '#1976D2' }} />
           </div>
           <Title level={4} style={{ margin: 0 }}>Verify Your Identity</Title>
           <Text style={{ fontSize: 13, color: '#64748b', display: 'block', marginTop: 6 }}>
@@ -102,12 +102,12 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
             <input key={i} ref={el => inputRefs.current[i] = el} type="text" inputMode="numeric" maxLength={1}
               value={d} onChange={e => handleChange(i, e.target.value)} onKeyDown={e => handleKeyDown(i, e)}
               onPaste={i === 0 ? handlePaste : undefined} disabled={loading}
-              style={{ width: 44, height: 52, fontSize: 22, fontWeight: 600, textAlign: 'center', border: `2px solid ${d ? '#4f46e5' : '#e2e8f0'}`, borderRadius: 8, outline: 'none', fontFamily: 'monospace', background: d ? '#f5f3ff' : '#fff', transition: 'all 0.15s' }} />
+              style={{ width: 44, height: 52, fontSize: 22, fontWeight: 600, textAlign: 'center', border: `2px solid ${d ? '#1976D2' : '#e2e8f0'}`, borderRadius: 8, outline: 'none', fontFamily: 'monospace', background: d ? '#f5f3ff' : '#fff', transition: 'all 0.15s' }} />
           ))}
         </div>
 
         {timeLeft > 0 ? (
-          <Text style={{ display: 'block', textAlign: 'center', fontSize: 13, color: timeLeft < 60 ? '#dc2626' : '#64748b', marginBottom: 16 }}>
+          <Text style={{ display: 'block', textAlign: 'center', fontSize: 13, color: timeLeft < 60 ? '#C62828' : '#64748b', marginBottom: 16 }}>
             Expires in {fmt(timeLeft)}
           </Text>
         ) : (
@@ -126,7 +126,7 @@ const OtpStep = ({ tempToken, destination, expiresIn, onBack }) => {
         </Button>
 
         <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', justifyContent: 'center', gap: 16 }}>
-          <Button type="link" size="small" icon={<ReloadOutlined />} onClick={handleResend} loading={resending} disabled={resendCooldown > 0} style={{ fontSize: 12, color: '#4f46e5' }}>
+          <Button type="link" size="small" icon={<ReloadOutlined />} onClick={handleResend} loading={resending} disabled={resendCooldown > 0} style={{ fontSize: 12, color: '#1976D2' }}>
             {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
           </Button>
           <Button type="link" size="small" icon={<ArrowLeftOutlined />} onClick={onBack} style={{ fontSize: 12 }}>Back to Login</Button>
@@ -233,7 +233,7 @@ const LoginPage = () => {
                 </Form.Item>
               </Form>
 
-              {/* <div style={{ textAlign: 'center', marginTop: 20, padding: '12px', background: '#f5f3ff', borderRadius: 8, fontSize: 12, color: '#7c3aed' }}>
+              {/* <div style={{ textAlign: 'center', marginTop: 20, padding: '12px', background: '#f5f3ff', borderRadius: 8, fontSize: 12, color: '#9C27B0' }}>
                 🔐 Two-step verification required on every login
               </div> */}
 
@@ -256,7 +256,7 @@ const styles = {
   logoWrap: { textAlign: 'center', marginBottom: 24 },
   logo: { height: 36, width: 'auto' },
   card: { background: '#fff', borderRadius: 16, boxShadow: '0 8px 30px rgba(0,0,0,0.06)', overflow: 'hidden', position: 'relative' },
-  cardAccent: { height: 3, background: 'linear-gradient(90deg, #fb4f40, #f97316, #fb4f40)' },
+  cardAccent: { height: 3, background: 'linear-gradient(90deg, #D32F2F, #ED6C02, #D32F2F)' },
   cardBody: { padding: '32px 28px 24px' },
   header: { textAlign: 'center', marginBottom: 24 },
   title: { fontSize: 20, fontWeight: 700, margin: 0, color: '#18181b' },

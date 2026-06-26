@@ -672,7 +672,7 @@ export default function GmsTrackerPage() {
                 width: 120,
                 render: (_, record) => {
                   const rev = record.weeklyRev[week.key] || 0;
-                  return rev ? <span style={{ fontWeight: 700, color: '#4f46e5' }}>₹{rev.toLocaleString('en-IN')}</span> : '-';
+                  return rev ? <span style={{ fontWeight: 700, color: '#1976D2' }}>₹{rev.toLocaleString('en-IN')}</span> : '-';
                 },
                 sorter: (a, b) => (a.weeklyRev[week.key] || 0) - (b.weeklyRev[week.key] || 0)
               },
@@ -720,7 +720,7 @@ export default function GmsTrackerPage() {
 
             dayCols.push({
               title: <Tooltip title={`Trend: ${dayjs(prevDayStr).format('DD MMM')} → ${dayjs(currDayStr).format('DD MMM')}`}>
-                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 700, whiteSpace: 'nowrap' }}>▸ {trendLabel}</span>
+                <span style={{ fontSize: 11, color: '#1976D2', fontWeight: 700, whiteSpace: 'nowrap' }}>▸ {trendLabel}</span>
               </Tooltip>,
               key: `dod-trend-${prevDayStr}-${currDayStr}`,
               align: 'center',
@@ -764,7 +764,7 @@ export default function GmsTrackerPage() {
           width: 120,
           render: (_, record) => {
             const rev = record.weeklyRev[week.key] || 0;
-            return rev ? <span style={{ fontWeight: 700, color: '#4f46e5' }}>₹{rev.toLocaleString('en-IN')}</span> : '-';
+            return rev ? <span style={{ fontWeight: 700, color: '#1976D2' }}>₹{rev.toLocaleString('en-IN')}</span> : '-';
           },
           sorter: (a, b) => (a.weeklyRev[week.key] || 0) - (b.weeklyRev[week.key] || 0)
         });
@@ -847,7 +847,7 @@ export default function GmsTrackerPage() {
     });
 
     const sortedDates = Object.keys(dailyData).sort();
-    const palette = ['#fb4f40', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+    const palette = ['#D32F2F', '#0288D1', '#2E7D32', '#ED6C02', '#9C27B0', '#9C27B0', '#0288D1', '#ED6C02'];
     const barColors = sortedDates.map((_, i) => palette[i % palette.length]);
     return {
       options: {
@@ -953,14 +953,14 @@ export default function GmsTrackerPage() {
       ) : (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
-            { label: 'Ordered Revenue', value: `₹${kpiMetrics.orderedRevenue.toLocaleString('en-IN')}`, color: '#6366f1', change: percentageChanges.orderedRevenue },
-            { label: 'Ordered Units', value: kpiMetrics.orderedUnits.toLocaleString(), color: '#3b82f6', change: percentageChanges.orderedUnits },
-            { label: 'Shipped Units', value: kpiMetrics.shippedUnits.toLocaleString(), color: '#10b981', change: percentageChanges.shippedUnits },
-            { label: 'Customer Returns', value: kpiMetrics.customerReturns.toLocaleString(), color: '#ef4444', change: percentageChanges.customerReturns, invertColor: true },
-            { label: 'Return Ratio', value: `${(kpiMetrics.returnRatio || 0).toFixed(2)}%`, color: '#f97316', change: percentageChanges.returnRatio, invertColor: true },
+            { label: 'Ordered Revenue', value: `₹${kpiMetrics.orderedRevenue.toLocaleString('en-IN')}`, color: '#1976D2', change: percentageChanges.orderedRevenue },
+            { label: 'Ordered Units', value: kpiMetrics.orderedUnits.toLocaleString(), color: '#0288D1', change: percentageChanges.orderedUnits },
+            { label: 'Shipped Units', value: kpiMetrics.shippedUnits.toLocaleString(), color: '#2E7D32', change: percentageChanges.shippedUnits },
+            { label: 'Customer Returns', value: kpiMetrics.customerReturns.toLocaleString(), color: '#D32F2F', change: percentageChanges.customerReturns, invertColor: true },
+            { label: 'Return Ratio', value: `${(kpiMetrics.returnRatio || 0).toFixed(2)}%`, color: '#ED6C02', change: percentageChanges.returnRatio, invertColor: true },
           ].map((kpi, idx) => {
             const isPositive = kpi.invertColor ? kpi.change <= 0 : kpi.change >= 0;
-            const trendColor = isPositive ? '#10b981' : '#ef4444';
+            const trendColor = isPositive ? '#2E7D32' : '#D32F2F';
             return (
               <div key={idx} style={{ height: 32, minWidth: 'max-content', flexShrink: 0, borderRadius: 6,
                 border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex',
@@ -1004,7 +1004,7 @@ export default function GmsTrackerPage() {
           <div style={{ position: 'relative' }}>
             {(isFilterPending || isComputing) && (
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(2px)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #e2e8f0', borderTopColor: '#4f46e5', animation: 'gms-spin 0.8s linear infinite' }} />
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #e2e8f0', borderTopColor: '#1976D2', animation: 'gms-spin 0.8s linear infinite' }} />
                 <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Computing...</Text>
               </div>
             )}
@@ -1087,7 +1087,7 @@ export default function GmsTrackerPage() {
                 maxCount={1}
               >
                 <p className="ant-upload-drag-icon" style={{ marginBottom: 8 }}>
-                  <UploadOutlined style={{ color: '#6366f1', fontSize: 24 }} />
+                  <UploadOutlined style={{ color: '#1976D2', fontSize: 24 }} />
                 </p>
                 <p className="ant-upload-text" style={{ fontSize: 11, fontWeight: 600, color: '#1e293b' }}>
                   Click or drag GMS CSV/Excel report here
@@ -1115,7 +1115,7 @@ export default function GmsTrackerPage() {
               width: 30,
               height: 30,
               borderRadius: 6,
-              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              background: 'linear-gradient(135deg, #1976D2 0%, #1976D2 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1140,7 +1140,7 @@ export default function GmsTrackerPage() {
         <div style={{ padding: '12px 0 4px 0' }}>
           {/* Level Switcher Option */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#4f46e5', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
               <span style={{ background: '#eef2ff', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>01</span>
               EXPORT LEVEL
             </div>
@@ -1159,7 +1159,7 @@ export default function GmsTrackerPage() {
 
           {/* Date Filtering Options */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#4f46e5', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
               <span style={{ background: '#eef2ff', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>02</span>
               DATE RANGE BREAKDOWN
             </div>
@@ -1182,7 +1182,7 @@ export default function GmsTrackerPage() {
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
                       Currently Filtered Range
                       {startDate && endDate && (
-                        <span style={{ color: '#4f46e5', fontWeight: 700, marginLeft: 6, fontSize: 11 }}>
+                        <span style={{ color: '#1976D2', fontWeight: 700, marginLeft: 6, fontSize: 11 }}>
                           ({dayjs(startDate).format('DD MMM YYYY')} - {dayjs(endDate).format('DD MMM YYYY')})
                         </span>
                       )}
@@ -1214,7 +1214,7 @@ export default function GmsTrackerPage() {
 
           {/* Brand Filtering Options */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#4f46e5', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
               <span style={{ background: '#eef2ff', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>03</span>
               BRAND / SELLER FILTER
             </div>
@@ -1237,7 +1237,7 @@ export default function GmsTrackerPage() {
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
                       Currently Selected Page Brands
                       {selectedBrands.length > 0 && (
-                        <span style={{ color: '#4f46e5', fontWeight: 700, marginLeft: 6, fontSize: 11 }}>
+                        <span style={{ color: '#1976D2', fontWeight: 700, marginLeft: 6, fontSize: 11 }}>
                           ({selectedBrands.length} selected)
                         </span>
                       )}

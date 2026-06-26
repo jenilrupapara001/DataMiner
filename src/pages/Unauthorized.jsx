@@ -26,7 +26,7 @@ const Unauthorized = () => {
                 justifyContent: 'center',
                 marginBottom: '24px'
             }}>
-                <ShieldAlert size={40} color="#ef4444" />
+                <ShieldAlert size={40} color="#D32F2F" />
             </div>
             
             <h1 style={{ 
@@ -78,7 +78,7 @@ const Unauthorized = () => {
                         alignItems: 'center',
                         gap: '8px',
                         padding: '10px 20px',
-                        backgroundColor: '#6366f1',
+                        backgroundColor: '#1976D2',
                         color: 'white',
                         border: 'none',
                         borderRadius: '8px',

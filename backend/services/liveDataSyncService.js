@@ -243,7 +243,7 @@ class LiveDataSyncService extends EventEmitter {
     // GLOBAL: Sync All Sellers (parallel batching)
     // ============================================
     async syncAllSellers(options = {}) {
-        const { concurrency = 3, sellerIds = null } = options;
+        const { concurrency = 1, sellerIds = null, maxRetries = 2 } = options;
         const startTime = Date.now();
         
         // Prevent duplicate global sync
@@ -273,45 +273,73 @@ class LiveDataSyncService extends EventEmitter {
             const sellersResult = await request.query(sellersQuery);
             const sellers = sellersResult.recordset;
 
-            console.log(`Live sync all: ${sellers.length} sellers with Amazon ASINs`);
+            console.log(`⚡ Live sync all: ${sellers.length} sellers (${sellers.reduce((s, v) => s + v.AsinCount, 0)} ASINs)`);
+            console.log(`   Config: concurrency=${concurrency}, retries=${maxRetries}, delay=${this._config.sellerDelay}ms`);
             this.emit('liveSyncAll:started', { totalSellers: sellers.length });
 
             const results = [];
-            const limit = pLimit(concurrency);
 
-            const promises = sellers.map(seller =>
-                limit(async () => {
-                    if (this.activeSyncs.has(seller.Id)) {
-                        results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Already syncing' });
-                        return;
-                    }
+            // Process sellers sequentially for reliability (concurrency=1 default)
+            for (let i = 0; i < sellers.length; i++) {
+                const seller = sellers[i];
+                const progress = `[${i + 1}/${sellers.length}]`;
 
+                if (this._globalSyncAborted) {
+                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Sync aborted' });
+                    continue;
+                }
+
+                if (this.activeSyncs.has(seller.Id)) {
+                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'SKIPPED', reason: 'Already syncing' });
+                    console.log(`  ${progress} ⏭️  ${seller.Name} — already syncing, skipped`);
+                    continue;
+                }
+
+                let lastError = null;
+                let attempt = 0;
+
+                while (attempt <= maxRetries) {
                     try {
+                        if (attempt > 0) {
+                            console.log(`  ${progress} 🔄 ${seller.Name} — retry ${attempt}/${maxRetries}`);
+                            await this._delay(this._config.retryDelay);
+                        }
+
                         const result = await this.syncSellerLiveData(seller.Id);
                         results.push({
                             sellerId: seller.Id,
                             name: seller.Name,
-                            status: result.success ? 'SUCCESS' : 'FAILED',
+                            status: result.success ? 'SUCCESS' : 'PARTIAL',
                             updated: result.updatedAsins || 0,
                             failed: result.failedAsins || 0,
                             duration: result.duration || 0
                         });
-                        console.log(`  ✅ ${seller.Name}: ${result.updatedAsins || 0} updated`);
+                        console.log(`  ${progress} ✅ ${seller.Name}: ${result.updatedAsins || 0} updated, ${result.failedAsins || 0} failed (${((result.duration || 0) / 1000).toFixed(1)}s)`);
+                        break; // success, no more retries
                     } catch (err) {
-                        results.push({ sellerId: seller.Id, name: seller.Name, status: 'FAILED', error: err.message });
-                        console.error(`  ❌ ${seller.Name}: ${err.message}`);
+                        lastError = err;
+                        attempt++;
+                        console.warn(`  ${progress} ⚠️  ${seller.Name}: attempt ${attempt}/${maxRetries} failed — ${err.message}`);
                     }
+                }
 
+                // If all retries failed
+                if (lastError && attempt > maxRetries) {
+                    results.push({ sellerId: seller.Id, name: seller.Name, status: 'FAILED', error: lastError.message, retries: maxRetries });
+                    console.error(`  ${progress} ❌ ${seller.Name}: FAILED after ${maxRetries} retries — ${lastError.message}`);
+                }
+
+                // Delay between sellers (respect rate limit)
+                if (i < sellers.length - 1) {
                     await this._delay(this._config.sellerDelay);
-                })
-            );
-
-            await Promise.all(promises);
+                }
+            }
 
             const totalDuration = Date.now() - startTime;
             const summary = {
                 totalSellers: sellers.length,
                 success: results.filter(r => r.status === 'SUCCESS').length,
+                partial: results.filter(r => r.status === 'PARTIAL').length,
                 failed: results.filter(r => r.status === 'FAILED').length,
                 skipped: results.filter(r => r.status === 'SKIPPED').length,
                 totalAsinsUpdated: results.reduce((sum, r) => sum + (r.updated || 0), 0),
@@ -319,7 +347,7 @@ class LiveDataSyncService extends EventEmitter {
                 completedAt: new Date().toISOString()
             };
 
-            console.log(`Live sync all complete: ${summary.success}/${summary.totalSellers} sellers, ${summary.totalAsinsUpdated} ASINs in ${(totalDuration / 1000).toFixed(1)}s`);
+            console.log(`⚡ Live sync complete: ${summary.success}/${summary.totalSellers} success, ${summary.partial} partial, ${summary.failed} failed, ${summary.totalAsinsUpdated} ASINs in ${(totalDuration / 1000).toFixed(1)}s`);
             this.emit('liveSyncAll:completed', summary);
 
             // Emit socket event for real-time UI updates

@@ -273,8 +273,8 @@ const AddBulkAsinModal = memo(({ seller, onClose, onAdd, isSubmitting = false })
                   background: '#fef2f2', border: '1.5px solid #fca5a5'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <AlertCircle size={14} color="#dc2626" />
-                    <Text style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }}>
+                    <AlertCircle size={14} color="#C62828" />
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: '#C62828' }}>
                       {invalid.length} Invalid
                     </Text>
                   </div>
@@ -283,7 +283,7 @@ const AddBulkAsinModal = memo(({ seller, onClose, onAdd, isSubmitting = false })
                       <Tag key={val} style={{
                         fontFamily: 'monospace', fontSize: 10,
                         borderRadius: 4, margin: 0,
-                        background: '#fee2e2', border: '1px solid #fca5a5', color: '#dc2626'
+                        background: '#fee2e2', border: '1px solid #fca5a5', color: '#C62828'
                       }}>
                         {val}
                       </Tag>
@@ -291,7 +291,7 @@ const AddBulkAsinModal = memo(({ seller, onClose, onAdd, isSubmitting = false })
                     {invalid.length > 4 && (
                       <Tag style={{
                         fontSize: 10, borderRadius: 4, margin: 0,
-                        background: '#fee2e2', border: '1px solid #fca5a5', color: '#dc2626'
+                        background: '#fee2e2', border: '1px solid #fca5a5', color: '#C62828'
                       }}>
                         +{invalid.length - 4} more
                       </Tag>

@@ -288,7 +288,7 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
               <Card
                 size="small"
                 title={<span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#ffffff', fontWeight: 'bold' }}>Total Changes</span>}
-                style={{ background: '#4f46e5', color: '#ffffff', textAlign: 'center', height: '100%' }}
+                style={{ background: '#1976D2', color: '#ffffff', textAlign: 'center', height: '100%' }}
                 headStyle={{ borderBottom: 'none' }}
               >
                 <Typography.Title level={3} style={{ margin: 0, color: '#ffffff', fontWeight: 'bold' }}>

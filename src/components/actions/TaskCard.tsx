@@ -24,9 +24,9 @@ import { METRIC_CONFIG, MetricType, Task, TaskStatus, TaskPriority, TaskActionTy
 // Priority colors
 const getPriorityColor = (priority: TaskPriority): string => {
     switch (priority) {
-        case 'URGENT': return '#ef4444';
-        case 'HIGH': return '#f59e0b';
-        case 'MEDIUM': return '#3b82f6';
+        case 'URGENT': return '#D32F2F';
+        case 'HIGH': return '#ED6C02';
+        case 'MEDIUM': return '#0288D1';
         case 'LOW': return '#94a3b8';
         default: return '#94a3b8';
     }
@@ -36,12 +36,12 @@ const getPriorityColor = (priority: TaskPriority): string => {
 const getStatusBadge = (status: TaskStatus) => {
     const styles = {
         TODO: { bg: '#f1f5f9', color: '#64748b', label: 'TODO' },
-        IN_PROGRESS: { bg: '#eff6ff', color: '#3b82f6', label: 'IN PROGRESS' },
-        BLOCKED: { bg: '#fef2f2', color: '#ef4444', label: 'BLOCKED' },
+        IN_PROGRESS: { bg: '#eff6ff', color: '#0288D1', label: 'IN PROGRESS' },
+        BLOCKED: { bg: '#fef2f2', color: '#D32F2F', label: 'BLOCKED' },
         REVIEW: { bg: '#fefce8', color: '#eab308', label: 'REVIEW' },
-        COMPLETED: { bg: '#f0fdf4', color: '#10b981', label: 'COMPLETED' },
+        COMPLETED: { bg: '#f0fdf4', color: '#2E7D32', label: 'COMPLETED' },
         CANCELLED: { bg: '#f1f5f9', color: '#94a3b8', label: 'CANCELLED' },
-        REJECTED: { bg: '#fef2f2', color: '#dc2626', label: 'REJECTED' },
+        REJECTED: { bg: '#fef2f2', color: '#C62828', label: 'REJECTED' },
     };
     const style = styles[status] || styles.TODO;
     return (

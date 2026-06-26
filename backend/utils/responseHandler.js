@@ -20,6 +20,7 @@ class ResponseHandler {
    * Error Response (4xx/5xx)
    */
   error(res, message = 'Internal Server Error', statusCode = 500, error = null) {
+    if (res.headersSent) return;
     const response = {
       success: false,
       timestamp: new Date().toISOString(),

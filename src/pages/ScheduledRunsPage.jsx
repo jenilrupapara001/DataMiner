@@ -78,13 +78,13 @@ const tokens = {
         accent: '#0ea5e9'
     },
     semantic: {
-        success: '#059669',
+        success: '#2E7D32',
         successLight: '#d1fae5',
-        warning: '#d97706',
+        warning: '#E65100',
         warningLight: '#fef3c7',
-        error: '#dc2626',
+        error: '#C62828',
         errorLight: '#fee2e2',
-        info: '#2563eb',
+        info: '#0288D1',
         infoLight: '#dbeafe'
     },
     radius: { sm: '6px', md: '10px', lg: '14px' },
@@ -144,7 +144,7 @@ const MetricCard = ({ label, value, suffix, icon: Icon, trend, trendLabel, color
 );
 
 const StatusDot = ({ status }) => {
-    const colors = { RUNNING: '#f59e0b', COMPLETED: '#059669', FAILED: '#dc2626' };
+    const colors = { RUNNING: '#ED6C02', COMPLETED: '#2E7D32', FAILED: '#C62828' };
     const isRunning = status === 'RUNNING';
     return (
         <span style={{

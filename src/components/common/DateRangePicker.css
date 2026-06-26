@@ -120,7 +120,7 @@
 
 .custom-input-field:focus {
     outline: none;
-    border-color: #10b981;
+    border-color: #2E7D32;
     background: #fff;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
@@ -171,7 +171,7 @@
 }
 
 .date-input-box.active {
-    border-color: #10b981;
+    border-color: #2E7D32;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
     color: #171717;
 }

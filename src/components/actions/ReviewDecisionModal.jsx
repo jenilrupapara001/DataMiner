@@ -40,7 +40,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
         footer={<Button type="primary" block onClick={onClose} style={{ borderRadius: 8, fontWeight: 600, fontSize: 11 }}>Close</Button>}
         title={<span style={{ fontSize: 14, fontWeight: 700 }}>Not Authorized</span>}>
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <LockOutlined style={{ fontSize: 32, color: '#dc2626', marginBottom: 12 }} />
+          <LockOutlined style={{ fontSize: 32, color: '#C62828', marginBottom: 12 }} />
           <div style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 4 }}>Only {formatUserName(task.reviewer)} can review</div>
         </div>
       </Modal>
@@ -81,7 +81,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <EyeOutlined style={{ fontSize: 14, color: '#7c3aed' }} />
+            <EyeOutlined style={{ fontSize: 14, color: '#9C27B0' }} />
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Review Submission</div>
@@ -102,7 +102,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
               <div style={{ fontSize: 10, color: '#a1a1aa' }}>Assignee</div>
             </div>
           </div>
-          <Tag style={{ fontSize: 9, borderRadius: 4, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', fontWeight: 600, margin: 0 }}>SUBMITTED</Tag>
+          <Tag style={{ fontSize: 9, borderRadius: 4, background: '#f5f3ff', color: '#9C27B0', border: '1px solid #ddd6fe', fontWeight: 600, margin: 0 }}>SUBMITTED</Tag>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -122,8 +122,8 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
 
           {(submission.before || submission.after) && (
             <div style={{ display: 'flex', gap: 8 }}>
-              {submission.before && <Tag style={{ fontSize: 10, borderRadius: 4, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600, margin: 0 }}>Before: {submission.before}</Tag>}
-              {submission.after && <Tag style={{ fontSize: 10, borderRadius: 4, background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', fontWeight: 600, margin: 0 }}>After: {submission.after}</Tag>}
+              {submission.before && <Tag style={{ fontSize: 10, borderRadius: 4, background: '#fef2f2', color: '#C62828', border: '1px solid #fecaca', fontWeight: 600, margin: 0 }}>Before: {submission.before}</Tag>}
+              {submission.after && <Tag style={{ fontSize: 10, borderRadius: 4, background: '#ecfdf5', color: '#2E7D32', border: '1px solid #a7f3d0', fontWeight: 600, margin: 0 }}>After: {submission.after}</Tag>}
             </div>
           )}
 
@@ -147,24 +147,24 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
         <div style={{ display: 'flex', gap: 10 }}>
           <div onClick={() => setDecision('APPROVE')} style={{
             flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', gap: 10, border: decision === 'APPROVE' ? '2px solid #059669' : '1px solid #e4e4e7',
+            display: 'flex', alignItems: 'center', gap: 10, border: decision === 'APPROVE' ? '2px solid #2E7D32' : '1px solid #e4e4e7',
             background: decision === 'APPROVE' ? '#ecfdf5' : '#fff'
           }}>
-            <CheckCircleOutlined style={{ fontSize: 20, color: '#059669' }} />
+            <CheckCircleOutlined style={{ fontSize: 20, color: '#2E7D32' }} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#065f46' }}>Approve</div>
-              <div style={{ fontSize: 10, color: '#059669' }}>Task is complete</div>
+              <div style={{ fontSize: 10, color: '#2E7D32' }}>Task is complete</div>
             </div>
           </div>
           <div onClick={() => setDecision('REJECT')} style={{
             flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', gap: 10, border: decision === 'REJECT' ? '2px solid #dc2626' : '1px solid #e4e4e7',
+            display: 'flex', alignItems: 'center', gap: 10, border: decision === 'REJECT' ? '2px solid #C62828' : '1px solid #e4e4e7',
             background: decision === 'REJECT' ? '#fef2f2' : '#fff'
           }}>
-            <CloseCircleOutlined style={{ fontSize: 20, color: '#dc2626' }} />
+            <CloseCircleOutlined style={{ fontSize: 20, color: '#C62828' }} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#991b1b' }}>Reject</div>
-              <div style={{ fontSize: 10, color: '#dc2626' }}>Needs more work</div>
+              <div style={{ fontSize: 10, color: '#C62828' }}>Needs more work</div>
             </div>
           </div>
         </div>
@@ -215,7 +215,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
           onClick={handleConfirm}
           icon={decision === 'APPROVE' ? <CheckCircleOutlined /> : decision === 'REJECT' ? <CloseCircleOutlined /> : <SendOutlined />}
           style={{ borderRadius: 8, fontWeight: 600, fontSize: 11, height: 32,
-            background: !decision ? '#d4d4d8' : decision === 'APPROVE' ? '#059669' : '#dc2626',
+            background: !decision ? '#d4d4d8' : decision === 'APPROVE' ? '#2E7D32' : '#C62828',
             borderColor: 'transparent' }}>
           {!decision ? 'Select Decision' : decision === 'APPROVE' ? 'Approve' : 'Reject & Return'}
         </Button>

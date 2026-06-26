@@ -9,11 +9,11 @@ import './WebhookSettingsPage.css';
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 const CATEGORIES = {
-  task:   { label: 'Tasks',      color: '#6366f1', bg: '#eef2ff' },
-  target: { label: 'Targets',    color: '#f59e0b', bg: '#fffbeb' },
-  alert:  { label: 'Alerts',     color: '#ef4444', bg: '#fef2f2' },
-  report: { label: 'Reports',    color: '#10b981', bg: '#ecfdf5' },
-  okr:    { label: 'OKR',        color: '#8b5cf6', bg: '#f5f3ff' },
+  task:   { label: 'Tasks',      color: '#1976D2', bg: '#eef2ff' },
+  target: { label: 'Targets',    color: '#ED6C02', bg: '#fffbeb' },
+  alert:  { label: 'Alerts',     color: '#D32F2F', bg: '#fef2f2' },
+  report: { label: 'Reports',    color: '#2E7D32', bg: '#ecfdf5' },
+  okr:    { label: 'OKR',        color: '#9C27B0', bg: '#f5f3ff' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

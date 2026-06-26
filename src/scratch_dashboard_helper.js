@@ -16,7 +16,7 @@ export const DashboardMotionWrapper = ({ children }) => {
 export const StatCard = ({ label, value, trend, trendType, icon: Icon, index }) => {
   const isPositive = trendType === 'positive';
   const isNegative = trendType === 'negative';
-  const accentColor = isPositive ? '#10b981' : isNegative ? '#ef4444' : '#4f46e5';
+  const accentColor = isPositive ? '#2E7D32' : isNegative ? '#D32F2F' : '#1976D2';
 
   return (
     <motion.div
@@ -63,7 +63,7 @@ export const StatCard = ({ label, value, trend, trendType, icon: Icon, index }) 
         {trend && (
           <div style={{
             backgroundColor: isPositive ? '#ecfdf5' : isNegative ? '#fef2f2' : '#f3f4f6',
-            color: isPositive ? '#059669' : isNegative ? '#dc2626' : '#4b5563',
+            color: isPositive ? '#2E7D32' : isNegative ? '#C62828' : '#4b5563',
             padding: '4px 8px',
             borderRadius: '100px',
             fontSize: '11px',

@@ -22,8 +22,8 @@ const { TextArea } = Input;
 // Helpers
 // ─────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
-  '#4f46e5', '#0891b2', '#059669', '#d97706',
-  '#dc2626', '#9333ea', '#db2777', '#0284c7'
+  '#1976D2', '#0891b2', '#2E7D32', '#E65100',
+  '#C62828', '#9333ea', '#db2777', '#0284c7'
 ];
 function avatarColor(str = '') {
   const hash = str.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -326,7 +326,7 @@ const TeamManagementPage = () => {
                 type="text"
                 icon={<EditOutlined />}
                 size="small"
-                style={{ color: '#4f46e5' }}
+                style={{ color: '#1976D2' }}
                 onClick={() => handleOpenEditMember(record)}
               />
             </Tooltip>
@@ -358,7 +358,7 @@ const TeamManagementPage = () => {
           {initials(team.name || 'T').toUpperCase() || 'T'}
         </Avatar>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 12, color: activeTeam?._id === team._id ? '#4f46e5' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+          <div style={{ fontWeight: 600, fontSize: 12, color: activeTeam?._id === team._id ? '#1976D2' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
             {team.name || 'Unnamed Team'}
           </div>
           <div style={{ fontSize: 10, color: '#94a3b8' }}>{team._memberCount || 0} members</div>
@@ -394,7 +394,7 @@ const TeamManagementPage = () => {
                   size="small"
                   icon={<PlusOutlined />}
                   onClick={() => { teamForm.resetFields(); setCreateTeamOpen(true); }}
-                  style={{ borderRadius: 6, background: '#4f46e5', borderColor: '#4f46e5', padding: '0 8px' }}
+                  style={{ borderRadius: 6, background: '#1976D2', borderColor: '#1976D2', padding: '0 8px' }}
                 />
               </Tooltip>
             </div>
@@ -432,7 +432,7 @@ const TeamManagementPage = () => {
                       {(initials(team.name || 'T').toUpperCase() || 'T')[0]}
                     </Avatar>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12.5, color: activeTeam?._id === team._id ? '#4f46e5' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 600, fontSize: 12.5, color: activeTeam?._id === team._id ? '#1976D2' : '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {team.name || 'Unnamed Team'}
                       </div>
                       <div style={{ fontSize: 10.5, color: '#94a3b8' }}>
@@ -441,7 +441,7 @@ const TeamManagementPage = () => {
                       </div>
                     </div>
                     {activeTeam?._id === team._id && (
-                      <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#4f46e5', flexShrink: 0 }} />
+                      <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#1976D2', flexShrink: 0 }} />
                     )}
                   </div>
                 ))}
@@ -455,7 +455,7 @@ const TeamManagementPage = () => {
           {!activeTeam ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
               <Result
-                icon={<TeamOutlined style={{ color: '#4f46e5' }} />}
+                icon={<TeamOutlined style={{ color: '#1976D2' }} />}
                 title="Select or Create a Team"
                 subTitle="Choose a team from the sidebar or create a new one to get started."
                 extra={
@@ -463,7 +463,7 @@ const TeamManagementPage = () => {
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => { teamForm.resetFields(); setCreateTeamOpen(true); }}
-                    style={{ background: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
+                    style={{ background: '#1976D2', borderColor: '#1976D2', borderRadius: 8, fontWeight: 600 }}
                   >
                     Create Team
                   </Button>
@@ -519,7 +519,7 @@ const TeamManagementPage = () => {
                       type="primary"
                       icon={<UserAddOutlined />}
                       onClick={() => { memberForm.resetFields(); setAddMemberOpen(true); }}
-                      style={{ borderRadius: 8, fontWeight: 700, background: '#4f46e5', borderColor: '#4f46e5' }}
+                      style={{ borderRadius: 8, fontWeight: 700, background: '#1976D2', borderColor: '#1976D2' }}
                     >
                       Add Member
                     </Button>
@@ -533,7 +533,7 @@ const TeamManagementPage = () => {
                     <Statistic
                       title={<span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Members</span>}
                       value={members.length}
-                      prefix={<TeamOutlined style={{ color: '#4f46e5', marginRight: 4 }} />}
+                      prefix={<TeamOutlined style={{ color: '#1976D2', marginRight: 4 }} />}
                       valueStyle={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}
                     />
                   </Col>
@@ -541,7 +541,7 @@ const TeamManagementPage = () => {
                     <Statistic
                       title={<span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Team Leads</span>}
                       value={teamLeads}
-                      prefix={<CrownOutlined style={{ color: '#f59e0b', marginRight: 4 }} />}
+                      prefix={<CrownOutlined style={{ color: '#ED6C02', marginRight: 4 }} />}
                       valueStyle={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}
                     />
                   </Col>
@@ -549,7 +549,7 @@ const TeamManagementPage = () => {
                     <Statistic
                       title={<span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Operators</span>}
                       value={members.length - teamLeads}
-                      prefix={<UserOutlined style={{ color: '#10b981', marginRight: 4 }} />}
+                      prefix={<UserOutlined style={{ color: '#2E7D32', marginRight: 4 }} />}
                       valueStyle={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}
                     />
                   </Col>
@@ -573,7 +573,7 @@ const TeamManagementPage = () => {
                 {/* Table Header */}
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text strong style={{ fontSize: 14, color: '#0f172a' }}>
-                    <TeamOutlined style={{ marginRight: 8, color: '#4f46e5' }} />
+                    <TeamOutlined style={{ marginRight: 8, color: '#1976D2' }} />
                     Members ({members.length})
                   </Text>
                   <Input
@@ -610,11 +610,11 @@ const TeamManagementPage = () => {
         onOk={handleCreateTeam}
         okText="Create Team"
         confirmLoading={saving}
-        okButtonProps={{ style: { background: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 700 } }}
+        okButtonProps={{ style: { background: '#1976D2', borderColor: '#1976D2', borderRadius: 8, fontWeight: 700 } }}
         cancelButtonProps={{ style: { borderRadius: 8 } }}
         title={
           <Space>
-            <Avatar size={32} style={{ background: '#4f46e5' }} icon={<TeamOutlined />} />
+            <Avatar size={32} style={{ background: '#1976D2' }} icon={<TeamOutlined />} />
             <div>
               <div style={{ fontWeight: 800, fontSize: 14 }}>Create New Team</div>
               <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>Set up a new operational workspace team</div>
@@ -715,7 +715,7 @@ const TeamManagementPage = () => {
               type="primary"
               loading={saving}
               onClick={handleUpdateTeam}
-              style={{ borderRadius: 8, fontWeight: 700, background: '#4f46e5', borderColor: '#4f46e5' }}
+              style={{ borderRadius: 8, fontWeight: 700, background: '#1976D2', borderColor: '#1976D2' }}
             >
               Save Changes
             </Button>
@@ -732,11 +732,11 @@ const TeamManagementPage = () => {
         onOk={handleAddMember}
         okText="Add Member"
         confirmLoading={saving}
-        okButtonProps={{ style: { background: '#059669', borderColor: '#059669', borderRadius: 8, fontWeight: 700 } }}
+        okButtonProps={{ style: { background: '#2E7D32', borderColor: '#2E7D32', borderRadius: 8, fontWeight: 700 } }}
         cancelButtonProps={{ style: { borderRadius: 8 } }}
         title={
           <Space>
-            <Avatar size={32} style={{ background: '#059669' }} icon={<UserAddOutlined />} />
+            <Avatar size={32} style={{ background: '#2E7D32' }} icon={<UserAddOutlined />} />
             <div>
               <div style={{ fontWeight: 800, fontSize: 14 }}>Add Team Member</div>
               <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>Add a platform user to this team</div>
@@ -774,10 +774,10 @@ const TeamManagementPage = () => {
           >
             <Select style={{ borderRadius: 8 }}>
               <Select.Option value="member">
-                <Space><UserOutlined style={{ color: '#4f46e5' }} />Member</Space>
+                <Space><UserOutlined style={{ color: '#1976D2' }} />Member</Space>
               </Select.Option>
               <Select.Option value="lead">
-                <Space><CrownOutlined style={{ color: '#f59e0b' }} />Team Lead</Space>
+                <Space><CrownOutlined style={{ color: '#ED6C02' }} />Team Lead</Space>
               </Select.Option>
             </Select>
           </Form.Item>
@@ -815,11 +815,11 @@ const TeamManagementPage = () => {
         onOk={handleSaveMember}
         okText="Save Changes"
         confirmLoading={saving}
-        okButtonProps={{ style: { background: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 700 } }}
+        okButtonProps={{ style: { background: '#1976D2', borderColor: '#1976D2', borderRadius: 8, fontWeight: 700 } }}
         cancelButtonProps={{ style: { borderRadius: 8 } }}
         title={
           <Space>
-            <Avatar size={32} style={{ background: '#4f46e5' }} icon={<EditOutlined />} />
+            <Avatar size={32} style={{ background: '#1976D2' }} icon={<EditOutlined />} />
             <div>
               <div style={{ fontWeight: 800, fontSize: 14 }}>Edit Member Access</div>
               <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
@@ -848,10 +848,10 @@ const TeamManagementPage = () => {
           >
             <Select style={{ borderRadius: 8 }}>
               <Select.Option value="member">
-                <Space><UserOutlined style={{ color: '#4f46e5' }} />Member</Space>
+                <Space><UserOutlined style={{ color: '#1976D2' }} />Member</Space>
               </Select.Option>
               <Select.Option value="lead">
-                <Space><CrownOutlined style={{ color: '#f59e0b' }} />Team Lead</Space>
+                <Space><CrownOutlined style={{ color: '#ED6C02' }} />Team Lead</Space>
               </Select.Option>
             </Select>
           </Form.Item>

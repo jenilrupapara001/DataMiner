@@ -29,7 +29,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Started',
       description: 'The task has moved to In Progress.',
-      icon:        <PlayCircleOutlined style={{ color: '#6366f1' }} />,
+      icon:        <PlayCircleOutlined style={{ color: '#1976D2' }} />,
     },
     error: { message: 'Could not start task' },
   },
@@ -37,7 +37,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Submitted for Review',
       description: 'The reviewer has been notified.',
-      icon:        <SendOutlined style={{ color: '#8b5cf6' }} />,
+      icon:        <SendOutlined style={{ color: '#9C27B0' }} />,
     },
     error: { message: 'Submission failed' },
   },
@@ -45,7 +45,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Approved',
       description: 'The task has been marked as complete.',
-      icon:        <CheckCircleOutlined style={{ color: '#10b981' }} />,
+      icon:        <CheckCircleOutlined style={{ color: '#2E7D32' }} />,
     },
     error: { message: 'Approval failed' },
   },
@@ -53,7 +53,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Rejected',
       description: 'The task has been returned to In Progress.',
-      icon:        <CloseCircleOutlined style={{ color: '#ef4444' }} />,
+      icon:        <CloseCircleOutlined style={{ color: '#D32F2F' }} />,
     },
     error: { message: 'Rejection failed' },
   },
@@ -61,7 +61,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Completed',
       description: 'Task marked complete without review.',
-      icon:        <CheckCircleOutlined style={{ color: '#10b981' }} />,
+      icon:        <CheckCircleOutlined style={{ color: '#2E7D32' }} />,
     },
     error: { message: 'Could not complete task' },
   },
@@ -69,7 +69,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Force Rejected',
       description: 'Task has been rejected by admin.',
-      icon:        <ExclamationCircleOutlined style={{ color: '#ef4444' }} />,
+      icon:        <ExclamationCircleOutlined style={{ color: '#D32F2F' }} />,
     },
     error: { message: 'Force rejection failed' },
   },
@@ -77,7 +77,7 @@ const TRANSITION_MESSAGES = {
     success: {
       message:     'Task Reopened',
       description: 'Task has been moved back to In Progress.',
-      icon:        <PlayCircleOutlined style={{ color: '#6366f1' }} />,
+      icon:        <PlayCircleOutlined style={{ color: '#1976D2' }} />,
     },
     error: { message: 'Could not reopen task' },
   },
