@@ -623,7 +623,7 @@ const TeamManagementPage = () => {
         }
         width={480}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={teamForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
@@ -668,7 +668,7 @@ const TeamManagementPage = () => {
         }
         width={480}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={teamForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
@@ -745,7 +745,7 @@ const TeamManagementPage = () => {
         }
         width={500}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={memberForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
@@ -830,7 +830,7 @@ const TeamManagementPage = () => {
         }
         width={500}
         centered
-        destroyOnClose={false}
+        destroyOnHidden={false}
       >
         <Form
           form={editMemberForm}

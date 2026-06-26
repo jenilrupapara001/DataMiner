@@ -59,7 +59,7 @@ const StatusPill = ({ status, size, extra }) => {
   const { icon, label } = meta[status] || { icon: null, label: status };
 
   return (
-    <Space size={4} direction="vertical" style={{ lineHeight: 1 }}>
+    <Space size={4} orientation="vertical" style={{ lineHeight: 1 }}>
       <Tag
         icon={icon}
         style={{
@@ -138,7 +138,7 @@ const WorkflowActionButton = ({
         : null;
     }
     return (
-      <Space direction="vertical" size={3}>
+      <Space orientation="vertical" size={3}>
         {showStatus && <StatusPill status="PENDING" size={size} />}
         <Button
           size={size}
@@ -189,7 +189,7 @@ const WorkflowActionButton = ({
 
     if (!can('SUBMIT_REVIEW')) {
       return (
-        <Space direction="vertical" size={3}>
+        <Space orientation="vertical" size={3}>
           <StatusPill
             status={isOverdueTask ? 'OVERDUE' : 'IN_PROGRESS'}
             size={size}
@@ -200,7 +200,7 @@ const WorkflowActionButton = ({
     }
 
     return (
-      <Space direction="vertical" size={3}>
+      <Space orientation="vertical" size={3}>
         {showStatus && (
           <StatusPill
             status={isOverdueTask ? 'OVERDUE' : 'IN_PROGRESS'}
@@ -228,7 +228,7 @@ const WorkflowActionButton = ({
     if (!canAct) {
       // Assignee or non-reviewer sees "Awaiting Review" pill
       return (
-        <Space direction="vertical" size={3}>
+        <Space orientation="vertical" size={3}>
           <Tag
             icon={<EyeOutlined />}
             style={{
@@ -252,7 +252,7 @@ const WorkflowActionButton = ({
     }
 
     return (
-      <Space direction="vertical" size={3}>
+      <Space orientation="vertical" size={3}>
         {showStatus && <StatusPill status="REVIEW" size={size} />}
         <Space size={4}>
           <Tooltip title="Approve — mark this task complete">
@@ -284,7 +284,7 @@ const WorkflowActionButton = ({
   if (displayStatus === 'COMPLETED') {
     const canReopenTask = can('REOPEN');
     return (
-      <Space direction="vertical" size={3}>
+      <Space orientation="vertical" size={3}>
         <StatusPill status="COMPLETED" size={size} />
         {canReopenTask && (
           <Popconfirm

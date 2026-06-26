@@ -730,7 +730,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                     <Text type="secondary" style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OVERALL SCORE</Text>
                     <div style={{ fontSize: 28, fontWeight: 900, marginTop: 2, lineHeight: 1, color: accentColor }}>{lqsScore.toFixed(1)}</div>
                   </div>
-                  <Divider type="vertical" style={{ height: 32, borderColor: C.border }} />
+                  <Divider orientation="vertical" style={{ height: 32, borderColor: C.border }} />
                   <div style={{ textAlign: 'center' }}>
                     <Text type="secondary" style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>QUALITY GRADE</Text>
                     <div style={{ marginTop: 4 }}>
@@ -900,7 +900,7 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
       footer={null}
       width={1200}
       centered
-      destroyOnClose
+      destroyOnHidden
       closeIcon={<X size={18} />}
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>

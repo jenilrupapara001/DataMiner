@@ -58,7 +58,7 @@ const TaskDetailDrawer = ({
       onClose={onClose}
       placement="right"
       styles={{ body: { padding: 0 }, wrapper: { width: 560 } }}
-      destroyOnClose
+      destroyOnHidden
       closable
       title={null}
     >

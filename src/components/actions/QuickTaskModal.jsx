@@ -78,7 +78,7 @@ const QuickTaskModal = ({ isOpen, onClose, onSave, currentUser, sellers, users }
       footer={null}
       width={480}
       centered
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={MODAL_STYLES.headerStyle}>
         <Text style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>

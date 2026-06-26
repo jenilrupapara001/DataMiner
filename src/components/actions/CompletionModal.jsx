@@ -73,7 +73,7 @@ const CompletionModal = ({ isOpen, action, onClose, onComplete }) => {
       footer={null}
       width={540}
       centered
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={MODAL_STYLES.headerStyle}>
         <Space size={12} align="center">

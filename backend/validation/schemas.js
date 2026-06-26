@@ -51,16 +51,15 @@ const schemas = {
   }),
 
   verifyOtp: Joi.object({
-    email: emailField,
+    tempToken: Joi.string().min(20).max(2000).required(),
     otp: Joi.string().pattern(/^\d{6}$/).required().messages({
       'string.pattern.base': 'OTP must be a 6-digit code',
     }),
-    deviceFingerprint: Joi.string().max(500).optional().allow('', null),
-    trustedDeviceName: Joi.string().max(100).optional().allow('', null),
+    trustDevice: Joi.boolean().optional(),
   }),
 
   resendOtp: Joi.object({
-    email: emailField,
+    tempToken: Joi.string().min(20).max(2000).required(),
   }),
 
   changePassword: Joi.object({

@@ -436,7 +436,7 @@ const EditTagsModal = ({ isOpen, onClose, asin, onUpdate }) => {
         }
         destroyOnHidden
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           {/* Subheader Metadata */}
           <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded">
             <Typography.Text type="secondary" style={{ fontSize: '12px' }}>

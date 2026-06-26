@@ -676,7 +676,7 @@ const SellerAsinsModal = memo(({
                   Data Ingest
                 </Button>
 
-                <Divider type="vertical" />
+                <Divider orientation="vertical" />
 
                 <Button
                   size="small"

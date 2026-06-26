@@ -158,7 +158,7 @@ const ActionModal = ({ isOpen, onClose, onSave, action, currentUser, users, sell
       footer={null}
       width={720}
       centered
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={MODAL_STYLES.headerStyle}>
         <Space size={12} align="center">

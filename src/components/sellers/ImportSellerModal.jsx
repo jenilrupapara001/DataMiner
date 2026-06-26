@@ -161,7 +161,7 @@ const ImportSellerModal = ({ onClose, onImport }) => {
           </Button>
         </Dragger>
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Alert
             message={
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

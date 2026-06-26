@@ -663,7 +663,7 @@ const SettingsPage = () => {
 
                     {/* Notifications */}
                     <SectionCard icon={Bell} iconColor="#15803d" title="Notifications">
-                        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                        <Space orientation="vertical" size={10} style={{ width: '100%' }}>
                             <ToggleRow
                                 title="In-App Notifications"
                                 description="Show slide-in notifications within the application"

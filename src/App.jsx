@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntdApp } from 'antd';
+import retailOpsTheme from './theme/antdTheme';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { PageTitleProvider } from './contexts/PageTitleContext';
@@ -37,7 +38,6 @@ const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AsinManagerPage = lazy(() => import('./pages/AsinManagerPage'));
 const AdsManagerPage = lazy(() => import('./pages/AdsManagerPage'));
 const GmsTrackerPage = lazy(() => import('./pages/GmsTrackerPage'));
-const ActionsPage = lazy(() => import('./pages/ActionsPage.jsx'));
 const SellerAsinTrackerPage = lazy(() => import('./pages/SellerAsinTrackerPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
@@ -181,7 +181,7 @@ function AppRoutes() {
                   <Route path="/gms-tracker" element={<ProtectedRoute permission="gms_tracker_view"><GmsTrackerPage /></ProtectedRoute>} />
                   <Route path="/profit-loss" element={<ProtectedRoute permission="pnlreport_view"><ProfitLossPage /></ProtectedRoute>} />
                   <Route path="/inventory" element={<ProtectedRoute permission="inventoryreport_view"><InventoryPage /></ProtectedRoute>} />
-                  <Route path="/actions" element={<ProtectedRoute permission="actions_view"><ActionsPage /></ProtectedRoute>} />
+                  <Route path="/actions" element={<ProtectedRoute permission="actions_view"><TasksPage /></ProtectedRoute>} />
                   <Route path="/users" element={<ProtectedRoute permission="users_view"><UsersPage /></ProtectedRoute>} />
                   <Route path="/roles" element={<ProtectedRoute permission="roles_view"><RolesPage /></ProtectedRoute>} />
                   <Route path="/team-management" element={<ProtectedRoute permission="roles_view"><TeamManagementPage /></ProtectedRoute>} />
@@ -238,24 +238,7 @@ function App() {
                   <PageTitleProvider>
                     <ToastProvider>
                       <ConfigProvider
-                        theme={{
-                          token: {
-                            colorPrimary: '#fb4f40',
-                            colorBgBase: '#f4f5f7',
-                            colorTextBase: '#121b1e',
-                            colorBorder: '#cbd0d4',
-                            borderRadius: 10,
-                            colorBgContainer: '#ffffff',
-                            colorBgElevated: '#ffffff',
-                            colorBgLayout: '#f4f5f7',
-                            colorTextSecondary: '#545657',
-                            colorTextTertiary: '#8c8e8f',
-                            colorBorderSecondary: '#d9e6e9',
-                            fontSize: 14,
-                            controlHeight: 48,
-                            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-                          }
-                        }}
+                        theme={retailOpsTheme}
                       >
                       <AntdApp>
                         <AppRoutes />

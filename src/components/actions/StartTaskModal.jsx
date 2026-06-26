@@ -52,8 +52,8 @@ const StartTaskModal = ({ isOpen, task, currentUser, onClose, onConfirm }) => {
       footer={null}
       width={480}
       centered
-      maskClosable={false}
-      destroyOnClose
+      mask={{ closable: false }}
+      destroyOnHidden
     >
       <div style={{ marginBottom: 20 }}>
         <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#1e293b' }}>Start Task</h3>

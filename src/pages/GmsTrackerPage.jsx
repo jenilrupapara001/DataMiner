@@ -897,7 +897,7 @@ export default function GmsTrackerPage() {
     <div style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}>
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60, flexWrap: 'wrap', gap: 8 }}>
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Text strong style={{ fontSize: 16, color: '#0f172a' }}>GMS Tracker</Text>
             <Tag color="blue" style={{ border: 'none', fontWeight: 700, borderRadius: 4, fontSize: 10 }}>Interactive</Tag>
@@ -1041,11 +1041,11 @@ export default function GmsTrackerPage() {
         open={isUploadOpen}
         onCancel={() => { if (!isUploading) { setIsUploadOpen(false); setFileList([]); } }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         centered
         width={450}
         closable={!isUploading}
-        maskClosable={!isUploading}
+        mask={{ closable: !isUploading }}
       >
         {isUploading ? (
           <div style={{ padding: '20px 10px', textAlign: 'center' }}>
@@ -1133,7 +1133,7 @@ export default function GmsTrackerPage() {
         open={isExportOpen}
         onCancel={() => setIsExportOpen(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         centered
         width={520}
       >

@@ -77,7 +77,7 @@ const ReviewDecisionModal = ({ isOpen, task, currentUser, onClose, onDecision })
 
   return (
     <Modal open={isOpen} onCancel={onClose} footer={null} width={600} centered closable={!submitting}
-      maskClosable={false} destroyOnClose
+      mask={{ closable: false }} destroyOnHidden
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

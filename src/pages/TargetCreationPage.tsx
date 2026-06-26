@@ -691,7 +691,7 @@ export default function TargetCreationPage() {
             </Header>
 
             <Content style={{ padding: '24px 32px', maxWidth: 1600, margin: '0 auto', width: '100%' }}>
-                <Space direction="vertical" size={20} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={20} style={{ width: '100%' }}>
 
                     {/* Add Section Button */}
                     {!isEditMode && (

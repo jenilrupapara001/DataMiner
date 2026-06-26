@@ -125,7 +125,7 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
       render: (_, record) => {
         const formattedDate = format(new Date(record.createdAt), 'dd MMM yyyy, HH:mm');
         return (
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#434343' }}>
               <Clock size={12} className="me-1 text-muted" style={{ display: 'inline', verticalAlign: 'middle' }} />
               {formattedDate}
@@ -241,7 +241,7 @@ const TagsHistoryModal = ({ isOpen, onClose, asinId, asinCode }) => {
       ]}
       destroyOnHidden
     >
-      <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: '12px' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: '12px' }}>
         {/* Summary Info Cards */}
         {summary && (
           <Row gutter={16}>

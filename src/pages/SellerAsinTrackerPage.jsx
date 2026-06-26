@@ -943,7 +943,7 @@ const SellerDetailView = ({ seller, onSync, syncing, refreshKey }) => {
                   Active
                 </span>
               </div>
-              <Space size={12} split={<Divider type="vertical" style={{ margin: 0 }} />}>
+              <Space size={12} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>
                 <span style={{ fontSize: 12, fontWeight: 500, color: '#475569' }}>
                   {marketplaceLabel}
                 </span>

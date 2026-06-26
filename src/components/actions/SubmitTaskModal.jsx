@@ -144,7 +144,7 @@ const SubmitTaskModal = ({ isOpen, task, currentUser, onClose, onSubmit }) => {
 
   return (
     <Modal open={isOpen} onCancel={onClose} footer={null} width={620} centered
-      closable={!submitting} maskClosable={false} destroyOnClose
+      closable={!submitting} mask={{ closable: false }} destroyOnHidden
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, background: hasReviewer ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'linear-gradient(135deg, #10b981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 8px ${hasReviewer ? 'rgba(99,102,241,0.3)' : 'rgba(16,185,129,0.3)'}` }}>

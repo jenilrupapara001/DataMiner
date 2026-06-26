@@ -977,7 +977,7 @@ const TargetVsAchievement = () => {
                     {/* Active filter chips + clear */}
                     {hasActiveFilters && (
                         <>
-                            <Divider type="vertical" style={{ margin: '0 2px' }} />
+                            <Divider orientation="vertical" style={{ margin: '0 2px' }} />
 
                             {/* Show active filter chips */}
                             {filterSeller && (
@@ -1367,7 +1367,7 @@ const TargetVsAchievement = () => {
                             <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>
                                 {selectedRowKeys.length} {selectedRowKeys.length === 1 ? 'row' : 'rows'} selected
                             </Text>
-                            <Divider type="vertical" style={{ background: '#334155', margin: 0, height: 20 }} />
+                            <Divider orientation="vertical" style={{ background: '#334155', margin: 0, height: 20 }} />
                             <Button type="primary" size="small" icon={<Edit3 size={12} />}
                                 onClick={() => {
                                     const recs = grouped.filter(g => {

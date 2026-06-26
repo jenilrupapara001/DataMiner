@@ -18,6 +18,7 @@ import {
   SyncOutlined, CheckSquareOutlined,
   SendOutlined, LoadingOutlined
 } from '@ant-design/icons';
+import { Zap } from 'lucide-react';
 import { db } from '../services/db';
 import ActionModal from '../components/actions/ActionModal';
 import ObjectiveManager from '../components/actions/ObjectiveManager';
@@ -211,7 +212,7 @@ const buildSellerHierarchy = (objectives, allActions, sellers) => {
       if (s) sname = s.name || s.sellerName || '';
     }
     if (!sid) { sid = 'unassigned'; sname = 'Unassigned'; }
-        if (!map[sid]) map[sid] = { sellerId: sid, sellerName: sname || 'Unknown Brand', objectives: [], directTasks: [] };
+    if (!map[sid]) map[sid] = { sellerId: sid, sellerName: sname || 'Unknown Brand', objectives: [], directTasks: [] };
     const subs = allActions.filter(x =>
       x.parentTaskId === (a._id || a.id) || x.parentId === (a._id || a.id)
     );
@@ -313,7 +314,7 @@ const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
   const duration = startedAt ? fmtDuration(startedAt, completedAt) : null;
 
   const content = (
-    <Space direction="vertical" size={2}>
+    <Space orientation="vertical" size={2}>
       {items.map((it, i) => (
         <Text key={i} style={{ fontSize: 11, color: '#64748b' }}>{it.label}: {it.exact}</Text>
       ))}
@@ -324,7 +325,7 @@ const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
 
   return (
     <Tooltip title={content}>
-      <Space direction="vertical" size={2}>
+      <Space orientation="vertical" size={2}>
         {items.slice(-2).map((it, i) => (
           <Space key={i} size={4}>
             {it.icon}
@@ -354,7 +355,7 @@ const TimelineCell = ({ createdAt, startedAt, completedAt, status }) => {
 const ProgressCell = ({ pct }) => {
   const color = getProgressColor(pct);
   return (
-    <Space direction="vertical" size={2} style={{ width: 80 }}>
+    <Space orientation="vertical" size={2} style={{ width: 80 }}>
       <Progress
         percent={pct}
         size="small"
@@ -382,7 +383,7 @@ const RejectionForm = ({ onSubmit, onCancel }) => {
       }}
       styles={{ body: { padding: '12px 16px' } }}
     >
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         <Text strong style={{ fontSize: 12, color: '#92400e' }}>
           <ExclamationCircleOutlined style={{ marginRight: 6 }} />
           Rejection Reason (Required)
@@ -433,15 +434,15 @@ const TasksPage = () => {
   const [statusFilter, setStatusFilter] = useState(null);
   const [priorityFilter, setPriorityFilter] = useState(null);
 
-  const [startingTask,    setStartingTask]    = useState(null);
-  const [submittingTask,  setSubmittingTask]  = useState(null);
-  const [reviewingTask,   setReviewingTask]   = useState(null);
-  const [viewingTask,     setViewingTask]     = useState(null);
-  const [editingAction,   setEditingAction]   = useState(null);
+  const [startingTask, setStartingTask] = useState(null);
+  const [submittingTask, setSubmittingTask] = useState(null);
+  const [reviewingTask, setReviewingTask] = useState(null);
+  const [viewingTask, setViewingTask] = useState(null);
+  const [editingAction, setEditingAction] = useState(null);
   const [editingObjective, setEditingObjective] = useState(null);
   const [completingAction, setCompletingAction] = useState(null);
 
-  const [isStartModalOpen,  setIsStartModalOpen]  = useState(false);
+  const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -595,7 +596,7 @@ const TasksPage = () => {
     handleReject,
     handleForceComplete,
     handleReopen,
-    isLoading:  isWorkflowLoading,
+    isLoading: isWorkflowLoading,
     loadingTaskId,
   } = useWorkflow({
     currentUser,
@@ -655,6 +656,39 @@ const TasksPage = () => {
   const handleViewTask = (task) => {
     setViewingTask(task);
     setIsDetailDrawerOpen(true);
+  };
+
+  // ── Rejection form handlers ──
+  const submitRejection = async (taskId, reason) => {
+    try {
+      const task = allActions.find(a => (a._id || a.id) === taskId);
+      if (!task) return;
+      await handleReject(task, { feedback: reason });
+      closeRejectionForm(taskId);
+    } catch { addToast('Failed to reject', 'error'); }
+  };
+
+  const closeRejectionForm = (taskId) => {
+    setRejectionForms(prev => ({ ...prev, [taskId]: { open: false } }));
+  };
+
+  // ── Auto-generate tasks ──
+  const [isAutoGenModalOpen, setIsAutoGenModalOpen] = useState(false);
+  const [autoGenerating, setAutoGenerating] = useState(false);
+
+  const handleAutoGenerate = async () => {
+    setAutoGenerating(true);
+    try {
+      const result = await db.generateBulkActions();
+      if (result?.success || result?.count > 0) {
+        loadData();
+        setIsAutoGenModalOpen(false);
+        addToast(`Generated ${result?.count || 0} optimization tasks`);
+      } else {
+        addToast('No new tasks generated', 'error');
+      }
+    } catch (e) { addToast('Failed to auto-generate tasks', 'error'); }
+    finally { setAutoGenerating(false); }
   };
 
   const clearFilters = () => {
@@ -791,7 +825,7 @@ const TasksPage = () => {
         const name = task.action || task.title || task.name || 'Untitled';
         const asins = task.asins?.length || task.asinCount || 0;
         return (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Text strong style={{ fontSize: 13, color: '#1e293b' }}>{name}</Text>
             {asins > 0 && (
               <Tag style={{ fontSize: 10, borderRadius: 4, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }}>
@@ -1053,7 +1087,7 @@ const TasksPage = () => {
     };
 
     return (
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {visibleGroups.map(group => {
           const totalTasks = group.filteredTasks.length;
           const doneTasks = group.filteredTasks.filter(t => (t.status || '').toUpperCase() === 'COMPLETED').length;
@@ -1158,7 +1192,7 @@ const TasksPage = () => {
           <Col>
             <Space size={12} align="center">
               {/* KPI quick numbers - clean inline */}
-              <Space direction="vertical" size={0} style={{ textAlign: 'center' }}>
+              <Space orientation="vertical" size={0} style={{ textAlign: 'center' }}>
                 <Text style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                   {kpis.all}
                 </Text>
@@ -1167,7 +1201,7 @@ const TasksPage = () => {
                 </Text>
               </Space>
               <Divider vertical style={{ margin: 0, height: 25 }} />
-              <Space direction="vertical" size={0} style={{ textAlign: 'center' }}>
+              <Space orientation="vertical" size={0} style={{ textAlign: 'center' }}>
                 <Text style={{ fontSize: 16, fontWeight: 800, color: '#ffa200ff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
                   {kpis.todo}
                 </Text>
@@ -1203,6 +1237,16 @@ const TasksPage = () => {
                 style={{
                   height: 32, borderRadius: 8, border: '1px solid #e2e8f0',
                   fontWeight: 600, fontSize: 12,
+                }}
+                onClick={() => setIsAutoGenModalOpen(true)}
+              >
+                Auto-Generate
+              </Button>
+              <Button
+                icon={<ThunderboltOutlined style={{ color: '#f59e0b' }} />}
+                style={{
+                  height: 32, borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb',
+                  fontWeight: 600, fontSize: 12, color: '#92400e',
                 }}
                 onClick={handleCreateAction}
               >
@@ -1344,7 +1388,7 @@ const TasksPage = () => {
         <div style={{ display: 'flex', alignItems: 'center', paddingTop: 7, paddingBottom: 7, gap: 6, overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch', borderTop: '1px solid #f1f5f9' }} className="filter-pills-row">
           {filterPills.map((pill, idx) => {
             if (pill === null) return (
-              <Divider key={`div-${idx}`} type="vertical" style={{ height: 18, margin: '0 4px' }} />
+              <Divider key={`div-${idx}`} orientation="vertical" style={{ height: 18, margin: '0 4px' }} />
             );
             const isActive = activeFilter === pill.type;
             return (
@@ -1529,7 +1573,7 @@ const TasksPage = () => {
               <div style={{ padding: 60, textAlign: 'center' }}>
                 <Empty
                   description={
-                    <Space direction="vertical" size={8}>
+                    <Space orientation="vertical" size={8}>
                       <Text style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>
                         No tasks found
                       </Text>
@@ -1577,7 +1621,7 @@ const TasksPage = () => {
                 rowClassName={(_, idx) => idx % 2 === 0 ? '' : 'task-row-stripe'}
                 expandable={{
                   expandedRowRender: (task) => {
-                    const id      = task._id || task.id;
+                    const id = task._id || task.id;
                     const hasForm = !!rejectionForms[id]?.open;
                     const hasSubtasks = task.subtasks && task.subtasks.length > 0;
                     const wasRejected = Array.isArray(task.rejections) && task.rejections.length > 0;
@@ -1606,7 +1650,7 @@ const TasksPage = () => {
                             }}>
                               Subtasks ({task.subtasks.length})
                             </Text>
-                            <Space direction="vertical" size={4} style={{ width: '100%', padding: '0 12px 8px' }}>
+                            <Space orientation="vertical" size={4} style={{ width: '100%', padding: '0 12px 8px' }}>
                               {task.subtasks.map((sub, si) => (
                                 <Row
                                   key={si}
@@ -1763,6 +1807,44 @@ const TasksPage = () => {
         onSubmit={openSubmitModal}
         onReview={openReviewModal}
       />
+
+      {/* ═══ AUTO-GENERATE MODAL ════════════════════════════════════ */}
+      <Modal
+        open={isAutoGenModalOpen}
+        onCancel={() => setIsAutoGenModalOpen(false)}
+        centered width={480}
+        footer={null}
+        destroyOnHidden
+      >
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Zap size={18} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Auto-Generate Tasks</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>Scan ASINs and create optimization tasks automatically</div>
+            </div>
+          </div>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 8 }}>This will analyze your ASIN catalog and generate tasks for:</div>
+            {['Titles — Missing SEO keywords or too short', 'Images — Below recommended count', 'A+ Content — Missing modules or low quality', 'LQS — Below quality threshold'].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12, color: '#334155' }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#6366f1', flexShrink: 0 }} />
+                {item}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setIsAutoGenModalOpen(false)} style={{ borderRadius: 8, fontSize: 12 }}>Cancel</Button>
+            <Button type="primary" loading={autoGenerating} icon={<Zap size={13} />}
+              onClick={handleAutoGenerate}
+              style={{ borderRadius: 8, fontWeight: 600, fontSize: 12, background: '#f59e0b', borderColor: '#f59e0b' }}>
+              {autoGenerating ? 'Generating...' : 'Generate Tasks'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ═══ GLOBAL STYLES ════════════════════════════════════════════ */}
       <style>{`

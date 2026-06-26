@@ -138,7 +138,7 @@ const BulkActionModal = ({ isOpen, onClose, selectedTasks, currentUser, onComple
 
   if (isBlocked) {
     return (
-      <Modal open={isOpen} onCancel={resetAndClose} footer={null} width={480} centered destroyOnClose>
+      <Modal open={isOpen} onCancel={resetAndClose} footer={null} width={480} centered destroyOnHidden>
         <div style={{ padding: '40px 24px', textAlign: 'center' }}>
           <LockOutlined style={{ fontSize: 40, color: '#cbd5e1', display: 'block', marginBottom: 16 }} />
           <Text strong style={{ fontSize: 16, color: '#1e293b', display: 'block', marginBottom: 8 }}>
@@ -162,7 +162,7 @@ const BulkActionModal = ({ isOpen, onClose, selectedTasks, currentUser, onComple
       footer={null}
       width={560}
       centered
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={MODAL_STYLES.headerStyle}>
         <Space size={12} align="center">

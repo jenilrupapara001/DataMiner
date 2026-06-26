@@ -42,7 +42,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
 
   if (!canReview) {
     return (
-      <Modal open={isOpen} onCancel={onClose} footer={null} width={480} centered destroyOnClose>
+      <Modal open={isOpen} onCancel={onClose} footer={null} width={480} centered destroyOnHidden>
         <div style={{ padding: '40px 24px', textAlign: 'center' }}>
           <Alert
             type="warning"
@@ -92,7 +92,7 @@ const ReviewModal = ({ isOpen, action, onClose, onReview }) => {
       footer={null}
       width={580}
       centered
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={MODAL_STYLES.headerStyle}>
         <Space size={12} align="center">

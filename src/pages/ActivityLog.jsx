@@ -431,7 +431,7 @@ const ActivityLog = () => {
             </div>
 
             {/* Detail Modal */}
-            <Modal open={detailOpen} onCancel={() => setDetailOpen(false)} centered width={620} destroyOnClose
+            <Modal open={detailOpen} onCancel={() => setDetailOpen(false)} centered width={620} destroyOnHidden
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

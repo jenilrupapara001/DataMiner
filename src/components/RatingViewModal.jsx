@@ -304,7 +304,7 @@ const RatingViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', sell
 
   return (
     <Modal
-      open={isOpen} onCancel={onClose} footer={null} width={1650} centered destroyOnClose
+      open={isOpen} onCancel={onClose} footer={null} width={1650} centered destroyOnHidden
       closeIcon={<X size={18} />}
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 32 }}>

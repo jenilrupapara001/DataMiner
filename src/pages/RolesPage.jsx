@@ -184,7 +184,7 @@ const RolesPage = () => {
             okText: 'Confirm Termination',
             okType: 'danger',
             centered: true,
-            maskClosable: true,
+            mask: { closable: true },
             onOk: async () => {
                 try {
                     await roleApi.delete(roleId);

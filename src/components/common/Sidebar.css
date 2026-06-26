@@ -37,14 +37,14 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1.5px solid #d9e6e9;
+  border: 1.5px solid var(--border);
   background: white;
-  color: #8c8e8f;
+  color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(18, 27, 30, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
 }

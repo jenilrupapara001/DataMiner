@@ -424,7 +424,7 @@ const PriceViewModal = ({ isOpen, onClose, filters = {}, searchQuery = '', selle
       footer={null}
       width={1650}
       centered
-      destroyOnClose
+      destroyOnHidden
       closeIcon={<X size={18} />}
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 32 }}>

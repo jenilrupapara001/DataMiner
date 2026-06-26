@@ -127,7 +127,7 @@ const Sidebar = () => {
                                 showZero
                                 overflowCount={9999}
                                 style={{ 
-                                    backgroundColor: item.badgeColor || '#fb4f40', 
+                                    backgroundColor: item.badgeColor || '#D32F2F', 
                                     color: '#ffffff', 
                                     boxShadow: 'none',
                                     fontSize: '10px',

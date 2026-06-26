@@ -622,7 +622,7 @@ const TemplateManagerPage = () => {
                         AI Generate
                     </Button>
 
-                    <Divider type="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
+                    <Divider orientation="vertical" style={{ height: 16, borderColor: '#e2e8f0', margin: '0 2px' }} />
 
                     <Button 
                         type="primary" 

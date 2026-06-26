@@ -372,7 +372,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                                         <Empty
                                             image={Empty.PRESENTED_IMAGE_SIMPLE}
                                             description={
-                                                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                                                     <Text strong>No Exports Registered</Text>
                                                     <Text type="secondary" style={{ fontSize: 11 }}>
                                                         Your downloaded files and matrix spreadsheets will show up here.
@@ -434,7 +434,7 @@ const DownloadsDrawer = ({ isOpen, onClose }) => {
                                                         </div>
 
                                                         {/* Metadata row */}
-                                                        <Space size="middle" split={<span style={{ color: '#d9d9d9', fontSize: 10 }}>|</span>} style={{ fontSize: 11, color: '#8c8c8c', marginBottom: item.status === 'processing' || item.status === 'failed' ? 8 : 0, display: 'flex', flexWrap: 'wrap' }}>
+                                                        <Space size="middle" separator={<span style={{ color: '#d9d9d9', fontSize: 10 }}>|</span>} style={{ fontSize: 11, color: '#8c8c8c', marginBottom: item.status === 'processing' || item.status === 'failed' ? 8 : 0, display: 'flex', flexWrap: 'wrap' }}>
                                                             <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, color: fileConfig.color }}>
                                                                 {item.format.toUpperCase()}
                                                             </Text>

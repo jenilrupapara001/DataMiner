@@ -98,7 +98,7 @@ const RejectedTaskBanner = ({ task }) => {
                     </Text>
                   ),
                   children: (
-                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                    <Space orientation="vertical" size={6} style={{ width: '100%' }}>
                       {rejections
                         .slice(0, -1)
                         .reverse()

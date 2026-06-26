@@ -710,7 +710,7 @@ const ExportAsinModal = ({ isOpen, onClose, currentFilters = {}, searchQuery = '
                         <Col span={12}>
                           <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '10px', textTransform: 'uppercase' }}>File Type</Text>
                           <Radio.Group value={exportFormat} onChange={e => setExportFormat(e.target.value)} className="w-100">
-                            <Space direction="vertical" className="w-100">
+                            <Space orientation="vertical" className="w-100">
                               <Radio value="csv" className="format-option-box">
                                 <Space size={12}>
                                   <div className="format-icon csv"><FileText size={16} /></div>
