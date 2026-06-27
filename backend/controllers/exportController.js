@@ -675,7 +675,7 @@ async function processExportJob(downloadId, params, userId) {
 
                 if (field === 'brand' || field === 'Brand') {
                     value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
-                } else                 if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
+                } else if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
                     value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
                 } else if (field === 'availabilityStatus') {
                     value = value || 'Available';
@@ -725,7 +725,7 @@ async function processExportJob(downloadId, params, userId) {
         let workbook;
         let worksheet;
         let rowCount = 0;
-        
+
         const borderStyle = {
             top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
             left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
@@ -755,11 +755,8 @@ async function processExportJob(downloadId, params, userId) {
                 }
             };
         } else {
-            workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-                filename: filePath,
-                useStyles: true,
-                useSharedStrings: false
-            });
+            // Non-streaming Excel writer — guaranteed file integrity
+            workbook = new ExcelJS.Workbook();
             worksheet = workbook.addWorksheet('ASINs');
             writer = {
                 writeHeader: (headersArray) => {
@@ -778,7 +775,6 @@ async function processExportJob(downloadId, params, userId) {
                     };
                     headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
                     headerRow.height = 24;
-                    headerRow.commit();
                 },
                 addRow: (rowObj) => {
                     rowCount++;
@@ -786,10 +782,11 @@ async function processExportJob(downloadId, params, userId) {
                     row.eachCell(cell => {
                         cell.border = borderStyle;
                     });
-                    row.commit();
                 },
                 commit: async () => {
-                    await workbook.commit();
+                    // Write workbook to buffer then to file for guaranteed integrity
+                    const buffer = await workbook.xlsx.writeBuffer();
+                    fs.writeFileSync(filePath, buffer);
                 }
             };
         }
@@ -802,13 +799,13 @@ async function processExportJob(downloadId, params, userId) {
                 const param = request.parameters[key];
                 selectRequest.input(key, param.type, param.value);
             });
-            
+
             selectRequest.stream = true;
-            
+
             let currentAsin = null;
             let currentAsinData = null;
             let headersWritten = false;
-            
+
             const metrics = [
                 { key: 'Price (₹)', name: 'Price (₹)', metricKey: 'Price' },
                 { key: 'Best Seller Rank', name: 'BSR', metricKey: 'BSR' },
@@ -826,7 +823,7 @@ async function processExportJob(downloadId, params, userId) {
                             writer.writeHeader(headers);
                             headersWritten = true;
                         }
-                        
+
                         const asin = row['ASIN Code'];
                         if (asin !== currentAsin) {
                             if (currentAsinData) {
@@ -843,7 +840,7 @@ async function processExportJob(downloadId, params, userId) {
                                 });
                                 writer.addRow(finalObj);
                             }
-                            
+
                             currentAsin = asin;
                             currentAsinData = {
                                 'ASIN Code': asin,
@@ -852,7 +849,7 @@ async function processExportJob(downloadId, params, userId) {
                                 _dates: new Map()
                             };
                         }
-                        
+
                         metrics.forEach(m => {
                             const val = row[m.metricKey];
                             if (val !== undefined && val !== null) {
@@ -871,11 +868,11 @@ async function processExportJob(downloadId, params, userId) {
                     selectRequest.emit('error', e);
                 }
             });
-            
+
             selectRequest.on('error', err => {
                 reject(err);
             });
-            
+
             selectRequest.on('done', async result => {
                 try {
                     if (params.isHistorical && currentAsinData) {
@@ -892,18 +889,18 @@ async function processExportJob(downloadId, params, userId) {
                         });
                         writer.addRow(finalObj);
                     }
-                    
+
                     if (!headersWritten) {
                         writer.writeHeader(headers);
                     }
-                    
+
                     await writer.commit();
                     resolve();
                 } catch (e) {
                     reject(e);
                 }
             });
-            
+
             selectRequest.query(selectQuery);
         });
 
@@ -1077,30 +1074,12 @@ exports.downloadFile = async (req, res) => {
             .input('id', sql.VarChar, id)
             .query('UPDATE Downloads SET DownloadCount = DownloadCount + 1, DownloadedAt = dbo.GetEnvDate() WHERE Id = @id');
 
-        // Determine Content-Type from file extension
-        const ext = path.extname(download.FileName).toLowerCase();
-        const contentTypes = {
-            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            '.xls': 'application/vnd.ms-excel',
-            '.csv': 'text/csv; charset=utf-8'
-        };
-        const contentType = contentTypes[ext] || 'application/octet-stream';
-
-        // Send file with explicit headers
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(download.FileName).replace(/%20/g, ' ')}"`);
-        res.download(filePath, download.FileName, (err) => {
-            if (err && !res.headersSent) {
-                console.error('Download stream error:', err);
-                res.status(500).json({ success: false, error: 'Failed to stream file' });
-            }
-        });
+        // Send file
+        res.download(filePath, download.FileName);
 
     } catch (error) {
         console.error('Download File Error:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ success: false, error: error.message });
-        }
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
@@ -1233,7 +1212,7 @@ const getWeekRangeLabel = (year, week) => {
     const Monday = new Date(ISOweekStart);
     const Sunday = new Date(ISOweekStart);
     Sunday.setDate(Monday.getDate() + 6);
-    
+
     const options = { day: '2-digit', month: 'short' };
     const startStr = Monday.toLocaleDateString('en-IN', options);
     const endStr = Sunday.toLocaleDateString('en-IN', options);
@@ -1257,7 +1236,7 @@ const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
         const [year, month] = latestMonth.split('-').map(Number);
         const prevMonthDate = new Date(year, month - 2, 1);
         const prevMonthStr = prevMonthDate.toISOString().slice(0, 7);
-        
+
         previousVal = entityData.monthly[prevMonthStr] || 0;
     } else if (type === 'week') {
         const weeks = Object.keys(row.weeklyRev).sort();
@@ -1268,7 +1247,7 @@ const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
         const [year, weekStr] = latestWeek.split('-W');
         const yVal = parseInt(year);
         const wVal = parseInt(weekStr);
-        
+
         let prevW = wVal - 1;
         let prevY = yVal;
         if (prevW === 0) {
@@ -1287,7 +1266,7 @@ const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
 
         const prevDayDate = new Date(new Date(latestDay).getTime() - 86400000);
         const prevDayStr = prevDayDate.toISOString().split('T')[0];
-        
+
         previousVal = entityData.daily[prevDayStr] || 0;
     }
 
@@ -1376,53 +1355,53 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     // Format dates to YYYY-MM-DD avoiding timezone issues
     const rawGmsData = result.recordset.map(row => {
-      if (!row.date) return { ...row, date: null };
-      const d = new Date(row.date);
-      const tzOffset = d.getTimezoneOffset() * 60000;
-      const localDate = new Date(d.getTime() - tzOffset);
-      return {
-        ...row,
-        date: localDate.toISOString().split('T')[0],
-        resolvedDbBrand: row.dbBrand || '-'
-      };
+        if (!row.date) return { ...row, date: null };
+        const d = new Date(row.date);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        const localDate = new Date(d.getTime() - tzOffset);
+        return {
+            ...row,
+            date: localDate.toISOString().split('T')[0],
+            resolvedDbBrand: row.dbBrand || '-'
+        };
     });
 
     // Build a fast lookup map for all raw GMS data
     const rawGmsMap = {};
     rawGmsData.forEach(d => {
-      const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
-      const entityKey = exportLevel === 'seller'
-        ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
-        : d.asin;
-        
-      if (!rawGmsMap[entityKey]) {
-        rawGmsMap[entityKey] = {
-          daily: {},
-          weekly: {},
-          monthly: {}
-        };
-      }
-      
-      const dObj = new Date(d.date);
-      const dateStr = d.date;
-      if (!dateStr) return;
-      const monthKey = dateStr.slice(0, 7);
-      const { year: wYear, week: wWeek } = getISOWeek(dObj);
-      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
-      
-      const entityData = rawGmsMap[entityKey];
-      
-      // Daily
-      if (!entityData.daily[dateStr]) entityData.daily[dateStr] = 0;
-      entityData.daily[dateStr] += d.orderedRevenue || 0;
-      
-      // Weekly
-      if (!entityData.weekly[weekKey]) entityData.weekly[weekKey] = 0;
-      entityData.weekly[weekKey] += d.orderedRevenue || 0;
-      
-      // Monthly
-      if (!entityData.monthly[monthKey]) entityData.monthly[monthKey] = 0;
-      entityData.monthly[monthKey] += d.orderedRevenue || 0;
+        const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
+        const entityKey = exportLevel === 'seller'
+            ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
+            : d.asin;
+
+        if (!rawGmsMap[entityKey]) {
+            rawGmsMap[entityKey] = {
+                daily: {},
+                weekly: {},
+                monthly: {}
+            };
+        }
+
+        const dObj = new Date(d.date);
+        const dateStr = d.date;
+        if (!dateStr) return;
+        const monthKey = dateStr.slice(0, 7);
+        const { year: wYear, week: wWeek } = getISOWeek(dObj);
+        const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+
+        const entityData = rawGmsMap[entityKey];
+
+        // Daily
+        if (!entityData.daily[dateStr]) entityData.daily[dateStr] = 0;
+        entityData.daily[dateStr] += d.orderedRevenue || 0;
+
+        // Weekly
+        if (!entityData.weekly[weekKey]) entityData.weekly[weekKey] = 0;
+        entityData.weekly[weekKey] += d.orderedRevenue || 0;
+
+        // Monthly
+        if (!entityData.monthly[monthKey]) entityData.monthly[monthKey] = 0;
+        entityData.monthly[monthKey] += d.orderedRevenue || 0;
     });
 
     await updateDownloadStatus(pool, downloadId, 'processing', 35);
@@ -1431,206 +1410,206 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     // Date range filtering
     if (exportDateType === 'current' && startDate && endDate) {
-      const sDate = new Date(startDate);
-      const eDate = new Date(endDate);
-      dataToExport = dataToExport.filter(d => {
-        const dDate = new Date(d.date);
-        return dDate >= sDate && dDate <= eDate;
-      });
+        const sDate = new Date(startDate);
+        const eDate = new Date(endDate);
+        dataToExport = dataToExport.filter(d => {
+            const dDate = new Date(d.date);
+            return dDate >= sDate && dDate <= eDate;
+        });
     } else if (exportDateType === 'custom' && exportCustomDates && exportCustomDates[0] && exportCustomDates[1]) {
-      const sDate = new Date(exportCustomDates[0]);
-      const eDate = new Date(exportCustomDates[1]);
-      dataToExport = dataToExport.filter(d => {
-        const dDate = new Date(d.date);
-        return dDate >= sDate && dDate <= eDate;
-      });
+        const sDate = new Date(exportCustomDates[0]);
+        const eDate = new Date(exportCustomDates[1]);
+        dataToExport = dataToExport.filter(d => {
+            const dDate = new Date(d.date);
+            return dDate >= sDate && dDate <= eDate;
+        });
     }
 
     // Brand filtering
     if (exportBrandType === 'current' && selectedBrands.length > 0) {
-      dataToExport = dataToExport.filter(d => 
-        selectedBrands.includes(d.brand) || selectedBrands.includes(d.dbBrand)
-      );
+        dataToExport = dataToExport.filter(d =>
+            selectedBrands.includes(d.brand) || selectedBrands.includes(d.dbBrand)
+        );
     } else if (exportBrandType === 'custom' && exportCustomBrands.length > 0) {
-      dataToExport = dataToExport.filter(d => 
-        exportCustomBrands.includes(d.brand) || exportCustomBrands.includes(d.dbBrand)
-      );
+        dataToExport = dataToExport.filter(d =>
+            exportCustomBrands.includes(d.brand) || exportCustomBrands.includes(d.dbBrand)
+        );
     }
 
     if (dataToExport.length === 0) {
-      throw new Error('No GMS data found for the selected export filters.');
+        throw new Error('No GMS data found for the selected export filters.');
     }
 
     await updateDownloadStatus(pool, downloadId, 'processing', 50);
 
     const matrixMap = {};
     dataToExport.forEach(d => {
-      const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
-      const key = exportLevel === 'seller'
-        ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
-        : d.asin;
+        const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
+        const key = exportLevel === 'seller'
+            ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
+            : d.asin;
 
-      if (!matrixMap[key]) {
-        if (exportLevel === 'seller') {
-          matrixMap[key] = {
-            dbBrand: key,
-            isUnmatched: isUnmatched,
-            asins: new Set(),
-            brands: new Set(),
-            storeCodes: new Set(),
-            dailyRev: {},
-            weeklyRev: {},
-            monthlyRev: {}
-          };
-        } else {
-          matrixMap[key] = {
-            asin: d.asin,
-            productTitle: d.productTitle || '-',
-            dbBrand: d.resolvedDbBrand || '-',
-            brand: d.brand || 'Generic',
-            storeCode: d.storeCode || 'IN',
-            dailyRev: {},
-            weeklyRev: {},
-            monthlyRev: {}
-          };
+        if (!matrixMap[key]) {
+            if (exportLevel === 'seller') {
+                matrixMap[key] = {
+                    dbBrand: key,
+                    isUnmatched: isUnmatched,
+                    asins: new Set(),
+                    brands: new Set(),
+                    storeCodes: new Set(),
+                    dailyRev: {},
+                    weeklyRev: {},
+                    monthlyRev: {}
+                };
+            } else {
+                matrixMap[key] = {
+                    asin: d.asin,
+                    productTitle: d.productTitle || '-',
+                    dbBrand: d.resolvedDbBrand || '-',
+                    brand: d.brand || 'Generic',
+                    storeCode: d.storeCode || 'IN',
+                    dailyRev: {},
+                    weeklyRev: {},
+                    monthlyRev: {}
+                };
+            }
         }
-      }
 
-      const row = matrixMap[key];
-      if (exportLevel === 'seller') {
-        if (d.asin) row.asins.add(d.asin);
-        if (d.brand) row.brands.add(d.brand);
-        if (d.storeCode) row.storeCodes.add(d.storeCode);
-      }
+        const row = matrixMap[key];
+        if (exportLevel === 'seller') {
+            if (d.asin) row.asins.add(d.asin);
+            if (d.brand) row.brands.add(d.brand);
+            if (d.storeCode) row.storeCodes.add(d.storeCode);
+        }
 
-      const dObj = new Date(d.date);
-      const dateStr = d.date;
-      const monthKey = dateStr.slice(0, 7);
-      const { year: wYear, week: wWeek } = getISOWeek(dObj);
-      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+        const dObj = new Date(d.date);
+        const dateStr = d.date;
+        const monthKey = dateStr.slice(0, 7);
+        const { year: wYear, week: wWeek } = getISOWeek(dObj);
+        const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
 
-      // Day Revenue
-      if (!row.dailyRev[dateStr]) row.dailyRev[dateStr] = 0;
-      row.dailyRev[dateStr] += d.orderedRevenue;
+        // Day Revenue
+        if (!row.dailyRev[dateStr]) row.dailyRev[dateStr] = 0;
+        row.dailyRev[dateStr] += d.orderedRevenue;
 
-      // Week Revenue
-      if (!row.weeklyRev[weekKey]) row.weeklyRev[weekKey] = 0;
-      row.weeklyRev[weekKey] += d.orderedRevenue;
+        // Week Revenue
+        if (!row.weeklyRev[weekKey]) row.weeklyRev[weekKey] = 0;
+        row.weeklyRev[weekKey] += d.orderedRevenue;
 
-      // Month Revenue
-      if (!row.monthlyRev[monthKey]) row.monthlyRev[monthKey] = 0;
-      row.monthlyRev[monthKey] += d.orderedRevenue;
+        // Month Revenue
+        if (!row.monthlyRev[monthKey]) row.monthlyRev[monthKey] = 0;
+        row.monthlyRev[monthKey] += d.orderedRevenue;
     });
 
     const matrixRows = Object.values(matrixMap).map(r => {
-      if (exportLevel === 'seller') {
-        return {
-          ...r,
-          asinsList: Array.from(r.asins),
-          brandsList: Array.from(r.brands),
-          storeCodesList: Array.from(r.storeCodes)
-        };
-      }
-      return r;
+        if (exportLevel === 'seller') {
+            return {
+                ...r,
+                asinsList: Array.from(r.asins),
+                brandsList: Array.from(r.brands),
+                storeCodesList: Array.from(r.storeCodes)
+            };
+        }
+        return r;
     });
 
     const dates = [...new Set(dataToExport.map(d => d.date))].sort();
     const monthGroups = {};
 
     dates.forEach(dateStr => {
-      const dObj = new Date(dateStr);
-      const monthKey = dateStr.slice(0, 7);
-      const monthLabel = dObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-      const { year: wYear, week: wWeek } = getISOWeek(dObj);
-      const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
-      const weekLabel = getWeekRangeLabel(wYear, wWeek);
+        const dObj = new Date(dateStr);
+        const monthKey = dateStr.slice(0, 7);
+        const monthLabel = dObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        const { year: wYear, week: wWeek } = getISOWeek(dObj);
+        const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
+        const weekLabel = getWeekRangeLabel(wYear, wWeek);
 
-      if (!monthGroups[monthKey]) {
-        monthGroups[monthKey] = {
-          label: monthLabel,
-          key: monthKey,
-          weeks: {}
-        };
-      }
+        if (!monthGroups[monthKey]) {
+            monthGroups[monthKey] = {
+                label: monthLabel,
+                key: monthKey,
+                weeks: {}
+            };
+        }
 
-      if (!monthGroups[monthKey].weeks[weekKey]) {
-        monthGroups[monthKey].weeks[weekKey] = {
-          label: weekLabel,
-          key: weekKey,
-          days: []
-        };
-      }
+        if (!monthGroups[monthKey].weeks[weekKey]) {
+            monthGroups[monthKey].weeks[weekKey] = {
+                label: weekLabel,
+                key: weekKey,
+                days: []
+            };
+        }
 
-      monthGroups[monthKey].weeks[weekKey].days.push(dateStr);
+        monthGroups[monthKey].weeks[weekKey].days.push(dateStr);
     });
 
     const columnDef = [];
 
     if (exportLevel === 'seller') {
-      columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
-      columnDef.push({ label: 'ASIN', getValue: () => '-' });
-      columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brandsList && r.brandsList.length > 0 ? r.brandsList.join(', ') : '-' });
-      columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCodesList && r.storeCodesList.length > 0 ? r.storeCodesList.join(', ') : '-' });
+        columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
+        columnDef.push({ label: 'ASIN', getValue: () => '-' });
+        columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brandsList && r.brandsList.length > 0 ? r.brandsList.join(', ') : '-' });
+        columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCodesList && r.storeCodesList.length > 0 ? r.storeCodesList.join(', ') : '-' });
     } else {
-      columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
-      columnDef.push({ label: 'ASIN', getValue: (r) => r.asin });
-      columnDef.push({ label: 'Product Title', getValue: (r) => r.productTitle });
-      columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brand });
-      columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCode });
+        columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
+        columnDef.push({ label: 'ASIN', getValue: (r) => r.asin });
+        columnDef.push({ label: 'Product Title', getValue: (r) => r.productTitle });
+        columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brand });
+        columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCode });
     }
 
     Object.values(monthGroups).forEach(month => {
-      Object.values(month.weeks).forEach(week => {
-        const sortedDays = [...week.days].sort();
-        sortedDays.forEach((dayStr, idx) => {
-          const formattedDayLabel = new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-          columnDef.push({
-            label: formattedDayLabel,
-            getValue: (r) => r.dailyRev[dayStr] || 0
-          });
+        Object.values(month.weeks).forEach(week => {
+            const sortedDays = [...week.days].sort();
+            sortedDays.forEach((dayStr, idx) => {
+                const formattedDayLabel = new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                columnDef.push({
+                    label: formattedDayLabel,
+                    getValue: (r) => r.dailyRev[dayStr] || 0
+                });
 
-          if (idx > 0) {
-            const prevDayStr = sortedDays[idx - 1];
-            const currDayStr = dayStr;
-            const pDayNum = new Date(prevDayStr).getDate();
-            const cDayNum = new Date(currDayStr).getDate();
-            columnDef.push({
-              label: `DoD (${pDayNum}->${cDayNum})`,
-              getValue: (r) => {
-                const prev = r.dailyRev[prevDayStr] || 0;
-                const curr = r.dailyRev[currDayStr] || 0;
-                if (!prev && !curr) return '-';
-                if (!prev) return 'NEW';
-                return `${(((curr - prev) / prev) * 100).toFixed(1)}%`;
-              }
+                if (idx > 0) {
+                    const prevDayStr = sortedDays[idx - 1];
+                    const currDayStr = dayStr;
+                    const pDayNum = new Date(prevDayStr).getDate();
+                    const cDayNum = new Date(currDayStr).getDate();
+                    columnDef.push({
+                        label: `DoD (${pDayNum}->${cDayNum})`,
+                        getValue: (r) => {
+                            const prev = r.dailyRev[prevDayStr] || 0;
+                            const curr = r.dailyRev[currDayStr] || 0;
+                            if (!prev && !curr) return '-';
+                            if (!prev) return 'NEW';
+                            return `${(((curr - prev) / prev) * 100).toFixed(1)}%`;
+                        }
+                    });
+                }
             });
-          }
+
+            columnDef.push({
+                label: `${week.label} Total`,
+                getValue: (r) => r.weeklyRev[week.key] || 0
+            });
+            columnDef.push({
+                label: `${week.label} WoW Trend`,
+                getValue: (r) => {
+                    const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel);
+                    return trend === null ? '-' : `${trend.toFixed(1)}%`;
+                }
+            });
         });
 
         columnDef.push({
-          label: `${week.label} Total`,
-          getValue: (r) => r.weeklyRev[week.key] || 0
+            label: `${month.label} Total`,
+            getValue: (r) => r.monthlyRev[month.key] || 0
         });
         columnDef.push({
-          label: `${week.label} WoW Trend`,
-          getValue: (r) => {
-            const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel);
-            return trend === null ? '-' : `${trend.toFixed(1)}%`;
-          }
+            label: `${month.label} MoM Trend`,
+            getValue: (r) => {
+                const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel);
+                return trend === null ? '-' : `${trend.toFixed(1)}%`;
+            }
         });
-      });
-
-      columnDef.push({
-        label: `${month.label} Total`,
-        getValue: (r) => r.monthlyRev[month.key] || 0
-      });
-      columnDef.push({
-        label: `${month.label} MoM Trend`,
-        getValue: (r) => {
-          const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel);
-          return trend === null ? '-' : `${trend.toFixed(1)}%`;
-        }
-      });
     });
 
     const sheetHeaders = columnDef.map(c => c.label);
@@ -1643,15 +1622,15 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('GMS Matrix');
-    
+
     if (sheetRows.length > 0) {
         worksheet.columns = sheetHeaders.map(label => ({
             header: label,
             width: label.includes('Product Title') || label.includes('Seller') || label.includes('Brand') ? 25 : 15
         }));
-        
+
         sheetRows.forEach(rowArr => worksheet.addRow(rowArr));
-        
+
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         headerRow.fill = {
@@ -1676,7 +1655,7 @@ async function processGmsExportJob(downloadId, params, userId) {
             }
         });
     }
-    
+
     await workbook.xlsx.writeFile(filePath);
     const stats = fs.statSync(filePath);
 
