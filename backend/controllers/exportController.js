@@ -181,9 +181,12 @@ exports.startExport = async (req, res) => {
 /**
  * Background export processing function
  */
+// Single source of truth for BuyBox own-seller names
+const OWN_SELLERS = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEZ Pvt Ltd'];
+
 async function processExportJob(downloadId, params, userId) {
     const pool = await getPool();
-    let filePath = null;
+    let filePath = null; // tracked here so catch block can clean up partial files
     let user = null;
 
     try {
@@ -326,12 +329,11 @@ async function processExportJob(downloadId, params, userId) {
                 whereClause += ' AND a.HasAplus = @hasAplus';
             }
             if (buyBoxWin !== undefined && buyBoxWin !== '' && buyBoxWin !== null) {
-                const ownSellers = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEz'];
-                ownSellers.forEach((s, i) => request.input(`ownSeller${i}`, sql.NVarChar, s));
+                OWN_SELLERS.forEach((s, i) => request.input(`ownSeller${i}`, sql.NVarChar, s));
                 if (buyBoxWin === true || buyBoxWin === 'true') {
-                    whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ')})`;
+                    whereClause += ` AND (${OWN_SELLERS.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ')})`;
                 } else {
-                    whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy != @ownSeller${i}`).join(' AND ')})`;
+                    whereClause += ` AND (${OWN_SELLERS.map((s, i) => `a.SoldBy != @ownSeller${i}`).join(' AND ')})`;
                 }
             }
             if (priceDispute !== undefined && priceDispute !== '' && priceDispute !== null) {
@@ -467,7 +469,7 @@ async function processExportJob(downloadId, params, userId) {
             'secondAsp': 'a.SecondAsp',
             'aspDifference': 'a.AspDifference',
             'bsr': 'a.BSR',
-            'totalOrders': '(SELECT SUM(ISNULL(OrderedUnits, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)',
+            'totalOrders': 'ISNULL(op.totalOrders, 0)',
             'orderedRevenue': '(SELECT SUM(ISNULL(OrderedRevenue, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)',
             'orderedUnits': '(SELECT SUM(ISNULL(OrderedUnits, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)',
             'shippedRevenue': '(SELECT SUM(ISNULL(ShippedRevenue, 0)) FROM GmsDailyPerformance WHERE Asin = a.AsinCode)',
@@ -496,7 +498,7 @@ async function processExportJob(downloadId, params, userId) {
             'descriptionGrade': 'a.DescriptionGrade',
             'cdq': 'a.Cdq',
             'cdqGrade': 'a.CdqGrade',
-            'buyBoxWin': `CASE WHEN a.SoldBy IN ('ETrade Online','Cocoblu Retail','Clicktech Retail Private Ltd','RetailEZ Pvt Ltd') THEN 'Yes' ELSE 'No' END`,
+            'buyBoxWin': `CASE WHEN a.SoldBy IN (${OWN_SELLERS.map(s => `'${s}'`).join(',')}) THEN 'Yes' ELSE 'No' END`,
             'buyBoxStatus': 'a.BuyBoxStatus',
             'buyBoxSellerId': 'a.BuyBoxSellerId',
             'soldBy': 'a.SoldBy',
@@ -634,7 +636,7 @@ async function processExportJob(downloadId, params, userId) {
             .input('id', sql.VarChar, downloadId)
             .query('SELECT FileName FROM Downloads WHERE Id = @id');
         const fileName = resultDownloads.recordset[0]?.FileName || `asin_export_${downloadId}.${format}`;
-        const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
+        filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
 
         // Define stream writer helpers
         const formatCSVRow = (fieldsArray) => {
@@ -704,7 +706,7 @@ async function processExportJob(downloadId, params, userId) {
                         const parsed = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {});
                         value = Object.entries(parsed).map(([star, pct]) => `${star}: ${pct}`).join(', ');
                     } catch { value = ''; }
-                } else if (['createdAt', 'updatedAt', 'lastScraped', 'CreatedAt', 'UpdatedAt', 'LastScrapedAt', 'ReleaseDate'].includes(field)) {
+                } else if (['createdAt', 'updatedAt', 'lastScraped', 'releaseDate', 'CreatedAt', 'UpdatedAt', 'LastScrapedAt'].includes(field)) {
                     if (value) value = new Date(value).toLocaleString('en-IN');
                 } else if (field === 'sellerName' || field === 'SellerName') {
                     value = row.sellerName || row.SellerName || '';
@@ -834,7 +836,8 @@ async function processExportJob(downloadId, params, userId) {
                                 };
                                 metrics.forEach(m => {
                                     sortedDates.forEach(d => {
-                                        const val = currentAsinData._dates.get(d);
+                                        const dateData = currentAsinData._dates.get(d);
+                                        const val = dateData ? dateData[m.metricKey] : undefined;
                                         finalObj[`${m.name} [${d}]`] = (val !== undefined && val !== null) ? val : '';
                                     });
                                 });
@@ -850,10 +853,14 @@ async function processExportJob(downloadId, params, userId) {
                             };
                         }
 
+                        const dateKey = row['Date'];
+                        if (!currentAsinData._dates.has(dateKey)) {
+                            currentAsinData._dates.set(dateKey, {});
+                        }
                         metrics.forEach(m => {
                             const val = row[m.metricKey];
                             if (val !== undefined && val !== null) {
-                                currentAsinData._dates.set(row['Date'], val);
+                                currentAsinData._dates.get(dateKey)[m.metricKey] = val;
                             }
                         });
                     } else {
@@ -883,7 +890,8 @@ async function processExportJob(downloadId, params, userId) {
                         };
                         metrics.forEach(m => {
                             sortedDates.forEach(d => {
-                                const val = currentAsinData._dates.get(d);
+                                const dateData = currentAsinData._dates.get(d);
+                                const val = dateData ? dateData[m.metricKey] : undefined;
                                 finalObj[`${m.name} [${d}]`] = (val !== undefined && val !== null) ? val : '';
                             });
                         });
@@ -913,13 +921,14 @@ async function processExportJob(downloadId, params, userId) {
             .input('id', sql.VarChar, downloadId)
             .input('fileSize', sql.BigInt, stats.size)
             .input('rowCount', sql.Int, rowCount)
+            .input('relPath', sql.NVarChar, `/exports/${downloadId}_${fileName}`)
             .query(`
-                UPDATE Downloads SET 
+                UPDATE Downloads SET
                     Status = 'completed',
                     Progress = 100,
                     FileSize = @fileSize,
                     [RowCount] = @rowCount,
-                    FilePath = '/exports/' + (SELECT FileName FROM Downloads WHERE Id = @id),
+                    FilePath = @relPath,
                     CompletedAt = dbo.GetEnvDate(),
                     ExpiresAt = DATEADD(HOUR, 24, dbo.GetEnvDate())
                 WHERE Id = @id
@@ -940,6 +949,12 @@ async function processExportJob(downloadId, params, userId) {
 
     } catch (error) {
         console.error(`❌ Export job ${downloadId} failed:`, error);
+
+        // Clean up any partial file written before failure
+        if (filePath && fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) { /* ignore cleanup errors */ }
+        }
+
         await updateDownloadStatus(pool, downloadId, 'failed', 0, error.message, userId);
 
         const io = SocketService.getIo();
@@ -1617,7 +1632,11 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 75);
 
-    const fileName = `gms_export_${exportLevel}_${Date.now()}.xlsx`;
+    // Use the filename already stored in the DB record to keep them consistent
+    const gmsFileResult = await pool.request()
+        .input('id', sql.VarChar, downloadId)
+        .query('SELECT FileName FROM Downloads WHERE Id = @id');
+    const fileName = gmsFileResult.recordset[0]?.FileName || `gms_export_${exportLevel}_${downloadId}.xlsx`;
     const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
 
     const workbook = new ExcelJS.Workbook();
