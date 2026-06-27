@@ -758,7 +758,7 @@ async function processExportJob(downloadId, params, userId) {
             workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
                 filename: filePath,
                 useStyles: true,
-                useSharedStrings: true
+                useSharedStrings: false
             });
             worksheet = workbook.addWorksheet('ASINs');
             writer = {
@@ -1077,12 +1077,30 @@ exports.downloadFile = async (req, res) => {
             .input('id', sql.VarChar, id)
             .query('UPDATE Downloads SET DownloadCount = DownloadCount + 1, DownloadedAt = dbo.GetEnvDate() WHERE Id = @id');
 
-        // Send file
-        res.download(filePath, download.FileName);
+        // Determine Content-Type from file extension
+        const ext = path.extname(download.FileName).toLowerCase();
+        const contentTypes = {
+            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            '.xls': 'application/vnd.ms-excel',
+            '.csv': 'text/csv; charset=utf-8'
+        };
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+
+        // Send file with explicit headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(download.FileName).replace(/%20/g, ' ')}"`);
+        res.download(filePath, download.FileName, (err) => {
+            if (err && !res.headersSent) {
+                console.error('Download stream error:', err);
+                res.status(500).json({ success: false, error: 'Failed to stream file' });
+            }
+        });
 
     } catch (error) {
         console.error('Download File Error:', error);
-        res.status(500).json({ success: false, error: error.message });
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: error.message });
+        }
     }
 };
 

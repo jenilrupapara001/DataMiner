@@ -117,16 +117,19 @@ class LiveDataSyncService extends EventEmitter {
             // 3. Get token (global, not per-seller)
             const token = await this._getToken(creds);
             
-            // 4. Process in parallel batches
+            // 4. Process in parallel batches with rate-limit-aware delays
             const batches = this._createBatches(allAsins, this._config.maxPerRequest);
             const limit = pLimit(this._config.concurrency);
             
             let processed = 0;
+            let consecutiveFailures = 0;
+            
             const promises = batches.map((batch, index) => 
                 limit(async () => {
                     try {
                         await this._processBatch(sellerIdStr, batch, token, creds, stats);
                         processed++;
+                        consecutiveFailures = 0;
                         
                         const progress = Math.round((processed / batches.length) * 100);
                         this.emit('liveSync:progress', {
@@ -136,15 +139,22 @@ class LiveDataSyncService extends EventEmitter {
                             total: batches.length
                         });
 
-                        // Yield execution to respect rate limits
+                        // Always delay after each batch (success or failure) to respect rate limits
                         await this._delay(this._config.requestDelay);
                     } catch (e) {
                         stats.errors.push({ batch: index, error: e.message });
-                        // Track ASINs from failed batches (e.g. 429 rate limit)
+                        consecutiveFailures++;
+                        
+                        // Track ASINs from failed batches
                         for (const asinRecord of batch) {
                             stats.failedCount++;
                             stats.failedAsinCodes.push(asinRecord.AsinCode);
                         }
+                        
+                        // Exponential backoff on consecutive failures (2s → 4s → 8s → 16s)
+                        const backoff = Math.min(this._config.requestDelay * Math.pow(2, consecutiveFailures), 16000);
+                        console.log(`  ⏳ Batch ${index + 1} failed, backing off ${(backoff / 1000).toFixed(0)}s (consecutive failures: ${consecutiveFailures})`);
+                        await this._delay(backoff);
                     }
                 })
             );
