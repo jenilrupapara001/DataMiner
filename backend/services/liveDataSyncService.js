@@ -1,6 +1,4 @@
 const axios = require('axios');
-const pLimitModule = require('p-limit');
-const pLimit = pLimitModule.default || pLimitModule;
 const { sql, getPool } = require('../database/db');
 const SystemLogService = require('./SystemLogService');
 const notificationController = require('../controllers/notificationController');
@@ -16,8 +14,8 @@ class LiveDataSyncService extends EventEmitter {
             _t: 'https://api.amazon.co.uk/auth/o2/token',
             _b: 'https://creatorsapi.amazon',
             maxPerRequest: 10,
-            concurrency: 2,
-            requestDelay: 2000,
+            concurrency: 1,              // Token bucket: 1 req/sec — must serialize
+            requestDelay: 1100,          // Slightly > 1s to stay under burst
             sellerDelay: 2000,
             maxRetries: 3,
             retryDelay: 5000,
@@ -28,9 +26,10 @@ class LiveDataSyncService extends EventEmitter {
         this.activeSyncs = new Map();
         this._globalSyncRunning = false;
         this._lastRequestTime = 0;
+        this._rateLimitQueue = Promise.resolve();  // Serialized queue
     }
     
-    // Rate limiter - ensures max 1 request per second
+    // Rate limiter — serialized via promise chain (token bucket: 1 req/sec)
     async _rateLimit() {
         const now = Date.now();
         const elapsed = now - this._lastRequestTime;
@@ -39,6 +38,16 @@ class LiveDataSyncService extends EventEmitter {
             await this._delay(minInterval - elapsed);
         }
         this._lastRequestTime = Date.now();
+    }
+
+    // Adjust rate from API response header (dynamic token bucket)
+    _updateRateFromHeader(headers) {
+        const limit = parseFloat(headers['x-amzn-ratelimit-limit']);
+        if (limit && limit > 0) {
+            this._config.rateLimitPerSecond = limit;
+            this._config.requestDelay = Math.ceil(1000 / limit) + 100;
+            console.log(`📊 Rate limit updated from API: ${limit} req/s (delay: ${this._config.requestDelay}ms)`);
+        }
     }
 
     // ============================================
@@ -98,6 +107,8 @@ class LiveDataSyncService extends EventEmitter {
                     FROM Asins 
                     WHERE SellerId = @sellerId 
                     AND Status IN ('Active', 'Error')
+                    AND AsinCode IS NOT NULL
+                    ORDER BY AsinCode
                 `);
             
             const allAsins = asinsResult.recordset;
@@ -117,50 +128,52 @@ class LiveDataSyncService extends EventEmitter {
             // 3. Get token (global, not per-seller)
             const token = await this._getToken(creds);
             
-            // 4. Process in parallel batches with rate-limit-aware delays
+            // 4. Process batches SEQUENTIALLY — token bucket = 1 req/sec
             const batches = this._createBatches(allAsins, this._config.maxPerRequest);
-            const limit = pLimit(this._config.concurrency);
+            const totalBatches = batches.length;
             
             let processed = 0;
             let consecutiveFailures = 0;
             
-            const promises = batches.map((batch, index) => 
-                limit(async () => {
-                    try {
-                        await this._processBatch(sellerIdStr, batch, token, creds, stats);
-                        processed++;
-                        consecutiveFailures = 0;
-                        
-                        const progress = Math.round((processed / batches.length) * 100);
-                        this.emit('liveSync:progress', {
-                            sellerId: sellerIdStr,
-                            progress,
-                            processed,
-                            total: batches.length
-                        });
+            for (let index = 0; index < totalBatches; index++) {
+                // Check abort flag
+                if (this._globalSyncAborted) {
+                    console.log(`🚫 [LiveSync] Global sync aborted, stopping after batch ${index}/${totalBatches}`);
+                    break;
+                }
+                
+                const batch = batches[index];
+                try {
+                    await this._processBatch(sellerIdStr, batch, token, creds, stats);
+                    processed++;
+                    consecutiveFailures = 0;
+                    
+                    const progress = Math.round((processed / totalBatches) * 100);
+                    this.emit('liveSync:progress', {
+                        sellerId: sellerIdStr,
+                        progress,
+                        processed,
+                        total: totalBatches
+                    });
 
-                        // Always delay after each batch (success or failure) to respect rate limits
-                        await this._delay(this._config.requestDelay);
-                    } catch (e) {
-                        stats.errors.push({ batch: index, error: e.message });
-                        consecutiveFailures++;
-                        
-                        // Track ASINs from failed batches
-                        for (const asinRecord of batch) {
-                            stats.failedCount++;
-                            stats.failedAsinCodes.push(asinRecord.AsinCode);
-                        }
-                        
-                        // Exponential backoff on consecutive failures (2s → 4s → 8s → 16s)
-                        const backoff = Math.min(this._config.requestDelay * Math.pow(2, consecutiveFailures), 16000);
-                        console.log(`  ⏳ Batch ${index + 1} failed, backing off ${(backoff / 1000).toFixed(0)}s (consecutive failures: ${consecutiveFailures})`);
-                        await this._delay(backoff);
+                    // Delay after each batch to respect rate limits
+                    await this._delay(this._config.requestDelay);
+                } catch (e) {
+                    stats.errors.push({ batch: index, error: e.message });
+                    consecutiveFailures++;
+                    
+                    // Track ASINs from failed batches
+                    for (const asinRecord of batch) {
+                        stats.failedCount++;
+                        stats.failedAsinCodes.push(asinRecord.AsinCode);
                     }
-                })
-            );
-            
-            await Promise.all(promises);
-            
+                    
+                    // Exponential backoff on consecutive failures (2s → 4s → 8s → 16s)
+                    const backoff = Math.min(this._config.requestDelay * Math.pow(2, consecutiveFailures), 16000);
+                    console.log(`  ⏳ Batch ${index + 1}/${totalBatches} failed, backing off ${(backoff / 1000).toFixed(0)}s (streak: ${consecutiveFailures})`);
+                    await this._delay(backoff);
+                }
+            }
             stats.duration = Date.now() - startTime;
             
             console.log(`Live sync complete: Seller ${sellerIdStr}`, {
@@ -434,12 +447,33 @@ class LiveDataSyncService extends EventEmitter {
                 }
             );
             
-            const items = response.data.itemsResult?.items || [];
+            // Dynamic rate limit from API response
+            this._updateRateFromHeader(response.headers);
             
+            const items = response.data.itemsResult?.items || [];
+
+            // Build error map from API response
+            // Amazon returns errors like: { code: "ItemNotAccessible", message: "The ItemId B0xxx is not accessible..." }
+            // The ASIN may be in err.asin, err.itemId, err.resourceId, or embedded in the message text
+            const apiErrors = response.data.errors || [];
+            const errorMap = new Map();
+            for (const err of apiErrors) {
+                let asin = err.asin || err.itemId || err.resourceId;
+                // Extract ASIN from message if not in a field (e.g. "The ItemId B0DQTBRZRV is not accessible...")
+                if (!asin && err.message) {
+                    const match = err.message.match(/(?:ItemId|ASIN|Item)\s+(B[A-Z0-9]{9,})/i);
+                    if (match) asin = match[1];
+                }
+                if (asin) errorMap.set(asin, err.message || err.errorType || err.code || 'API error');
+            }
+
             const savePromises = batch.map(async (asinRecord) => {
                 try {
                     const item = items.find(i => i.asin === asinRecord.AsinCode);
                     if (!item) {
+                        const reason = errorMap.get(asinRecord.AsinCode) || 'Not returned by API';
+                        stats.errors.push({ asin: asinRecord.AsinCode, error: reason });
+                        
                         stats.failedCount++;
                         stats.failedAsinCodes.push(asinRecord.AsinCode);
                         return;
@@ -457,22 +491,46 @@ class LiveDataSyncService extends EventEmitter {
             await Promise.all(savePromises);
             
         } catch (error) {
+            // Log full API error for diagnostics
+            if (error.response) {
+                const body = typeof error.response.data === 'string'
+                    ? error.response.data.substring(0, 500)
+                    : JSON.stringify(error.response.data || {}).substring(0, 500);
+                console.error(`❌ [LiveSync] API ${error.response.status} for batch [${codes?.slice(0, 3).join(', ')}...]: ${body}`);
+            }
+
+            // 429: Rate limited — respect Retry-After
             if (error.response?.status === 429 && retry < this._config.maxRetries) {
-                const backoff = this._config.retryDelay * Math.pow(2, retry + 1);
-                console.log(`⏳ Rate limited on batch, retrying in ${(backoff / 1000).toFixed(0)}s (attempt ${retry + 1}/${this._config.maxRetries})...`);
+                const retryAfterSec = parseInt(error.response.headers['retry-after'] || '0', 10);
+                const backoff = retryAfterSec > 0
+                    ? retryAfterSec * 1000
+                    : this._config.retryDelay * Math.pow(2, retry + 1);
+                console.warn(`⏳ [429] Rate limited. Backing off ${(backoff / 1000).toFixed(0)}s (attempt ${retry + 1}/${this._config.maxRetries})`);
                 await this._delay(backoff);
                 return this._processBatch(sellerId, batch, token, creds, stats, retry + 1);
             }
             
+            // 401: Token expired — refresh and retry
             if (error.response?.status === 401 && retry < this._config.maxRetries) {
                 this._tokens.delete('global');
                 const newToken = await this._getToken(creds);
                 return this._processBatch(sellerId, batch, newToken, creds, stats, retry + 1);
             }
             
+            // 400: Sometimes means expired token (Amazon quirk)
+            if (error.response?.status === 400 && retry < this._config.maxRetries) {
+                this._tokens.delete('global');
+                const newToken = await this._getToken(creds);
+                console.warn(`🔄 [400] Retrying with fresh token (attempt ${retry + 1}/${this._config.maxRetries})`);
+                await this._delay(this._config.retryDelay);
+                return this._processBatch(sellerId, batch, newToken, creds, stats, retry + 1);
+            }
+            
             throw error;
         }
     }
+
+    // Mark an ASIN as not accessible via API (permanent failure)
     
     // ============================================
     // 🔥 KEY: Update ALL Fields EXCEPT A+ and Rating Breakdown
@@ -966,20 +1024,15 @@ class LiveDataSyncService extends EventEmitter {
 
             const token = await this._getToken(creds);
             const batches = this._createBatches(asinsToRetry, this._config.maxPerRequest);
-            const limit = pLimit(this._config.concurrency);
 
-            const promises = batches.map((batch) =>
-                limit(async () => {
-                    try {
-                        await this._processBatch(sellerId, batch, token, creds, stats);
-                        await this._delay(this._config.requestDelay);
-                    } catch (e) {
-                        stats.errors.push({ error: e.message });
-                    }
-                })
-            );
-
-            await Promise.all(promises);
+            for (const batch of batches) {
+                try {
+                    await this._processBatch(sellerId, batch, token, creds, stats);
+                    await this._delay(this._config.requestDelay);
+                } catch (e) {
+                    stats.errors.push({ error: e.message });
+                }
+            }
             stats.duration = Date.now() - startTime;
 
             console.log(`🔄 Re-sync complete: Seller ${sellerId}`, {
