@@ -155,7 +155,8 @@ const ExportAsinModal = ({
         ['titleScore', 'bulletScore', 'imageScore', 'descriptionScore'].forEach(f => base.add(f));
     }
     setSelectedFields(Array.from(base));
-  }, [isOpen, selectedSeller, selectedIds, currentFilters]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const fetchSellers = async () => {
     try {
@@ -172,7 +173,7 @@ const ExportAsinModal = ({
       return marketplace === 'ajio' ? m === 'ajio' : m !== 'ajio';
     });
     const opts = list.map(s => ({
-      label: `${s.name} ${s.sellerId}`,
+      label: s.name || s.sellerId || s.Id,
       value: s._id || s.Id,
       meta: { name: s.name, sellerId: s.sellerId, marketplace: s.marketplace || 'amazon.in' },
     }));

@@ -2397,9 +2397,23 @@ class MarketDataSyncService {
                 aplusContent = JSON.stringify(aplusContent);
             }
             let aplusModuleCount = 0;
-            if (aplusContent) {
-                const moduleMatches = aplusContent.match(/aplus-module|apm-module|aplus-3p-fixed-width/g);
-                aplusModuleCount = moduleMatches ? moduleMatches.length : 1;
+            if (aplusContent && typeof aplusContent === 'string') {
+                // Count A+ modules from HTML markers
+                const modulePatterns = [
+                    /aplus-\d+p-fixed-width/gi,
+                    /apm-module/gi,
+                    /aplus-module/gi,
+                    /launchpad-module/gi,
+                    /aplus-content-wrapper/gi,
+                    /aplus-v2/gi,
+                    /apm-banner/gi
+                ];
+                const moduleMatches = new Set();
+                for (const pattern of modulePatterns) {
+                    const matches = aplusContent.match(pattern);
+                    if (matches) matches.forEach(m => moduleMatches.add(m.toLowerCase()));
+                }
+                aplusModuleCount = moduleMatches.size || (aplusContent.length > 300 ? 1 : 0);
             }
 
             const updates = {
@@ -2929,7 +2943,9 @@ class MarketDataSyncService {
                 
                 const aplusMarkers = [
                     'aplus-v2', 'aplus-standard', 'aplus-module', 'launchpad-module',
-                    'apm-', 'aplus-content-wrapper', 'productDescription_feature_div'
+                    'apm-', 'aplus-content-wrapper', 'productDescription_feature_div',
+                    'aplus-3p-fixed-width', 'aplus-banner', 'aplus-image',
+                    'shoppable', 'aplus_media', 'aplusBlock'
                 ];
 
                 for (const marker of aplusMarkers) {
@@ -2938,8 +2954,18 @@ class MarketDataSyncService {
                     }
                 }
 
-                // If content has significant length and HTML structure
-                if (trimmed.length > 300 && (trimmed.includes('<div') || trimmed.includes('<img'))) {
+                // If content has significant length and HTML structure (lowered threshold)
+                if (trimmed.length > 100 && (trimmed.includes('<div') || trimmed.includes('<img') || trimmed.includes('<section'))) {
+                    return true;
+                }
+                
+                // If content has any HTML tags at all, it's likely A+ content
+                if (trimmed.includes('<') && trimmed.includes('>') && trimmed.length > 50) {
+                    return true;
+                }
+                
+                // If the field is 'A_plus' or 'aplus_content' and has meaningful content
+                if (aplusContent.length > 10) {
                     return true;
                 }
             }
@@ -3011,9 +3037,10 @@ class MarketDataSyncService {
 
         if (!ratingStr) return breakdown;
 
-        const s = ratingStr.toString();
+        const s = ratingStr.toString().replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+        if (!s) return breakdown;
 
-        // Extract percentages from the pattern (e.g., "53%23%12%5%7%")
+        // Method 1: Extract percentages from pattern like "53%23%12%5%7%"
         const percMatch = s.match(/(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%[^\d]*?(\d{1,3})%/);
         if (percMatch) {
             breakdown.fiveStar = parseFloat(percMatch[1]) || 0;
@@ -3021,6 +3048,39 @@ class MarketDataSyncService {
             breakdown.threeStar = parseFloat(percMatch[3]) || 0;
             breakdown.twoStar = parseFloat(percMatch[4]) || 0;
             breakdown.oneStar = parseFloat(percMatch[5]) || 0;
+            const sum = breakdown.fiveStar + breakdown.fourStar + breakdown.threeStar + breakdown.twoStar + breakdown.oneStar;
+            if (sum > 0) return breakdown;
+        }
+
+        // Method 2: Extract individual star ratings like "5 star34%" or "5-star: 34%"
+        const starPattern = /(\d)\s*(?:star|★|star[s]?|Star[s]?)[^%]*?(\d{1,3})%/gi;
+        let match;
+        const starMap = {};
+        while ((match = starPattern.exec(s)) !== null) {
+            const starNum = parseInt(match[1]);
+            const pct = parseInt(match[2]);
+            if (starNum >= 1 && starNum <= 5 && !isNaN(pct)) {
+                starMap[starNum] = pct;
+            }
+        }
+        if (Object.keys(starMap).length === 5) {
+            breakdown.fiveStar = starMap[5] || 0;
+            breakdown.fourStar = starMap[4] || 0;
+            breakdown.threeStar = starMap[3] || 0;
+            breakdown.twoStar = starMap[2] || 0;
+            breakdown.oneStar = starMap[1] || 0;
+            return breakdown;
+        }
+
+        // Method 3: Simple percentage extraction without star labels
+        const simplePercs = s.match(/(\d{1,3})%/g);
+        if (simplePercs && simplePercs.length >= 5) {
+            breakdown.fiveStar = parseInt(simplePercs[0]) || 0;
+            breakdown.fourStar = parseInt(simplePercs[1]) || 0;
+            breakdown.threeStar = parseInt(simplePercs[2]) || 0;
+            breakdown.twoStar = parseInt(simplePercs[3]) || 0;
+            breakdown.oneStar = parseInt(simplePercs[4]) || 0;
+            return breakdown;
         }
 
         return breakdown;
