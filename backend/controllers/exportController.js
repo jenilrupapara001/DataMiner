@@ -103,15 +103,12 @@ const ALL_ASIN_FIELDS = [
     { key: 'availabilityStatus', label: 'Availability Status', category: 'Inventory' },
     { key: 'stockLevel', label: 'Stock Level', category: 'Inventory' },
     { key: 'lossPerReturn', label: 'Loss Per Return (₹)', category: 'Inventory' },
-    // Sync & Dates
+    // Sync (dates removed except releaseDate)
     { key: 'sellerId', label: 'Seller ID', category: 'Sync' },
     { key: 'sellerExternalId', label: 'Seller External ID', category: 'Sync' },
     { key: 'lastSyncSource', label: 'Last Sync Source', category: 'Sync' },
     { key: 'lastLiveSyncAt', label: 'Last Live Sync', category: 'Sync' },
     { key: 'lastOctoparseSyncAt', label: 'Last Octoparse Sync', category: 'Sync' },
-    { key: 'lastScraped', label: 'Last Scraped', category: 'Sync' },
-    { key: 'createdAt', label: 'Created At', category: 'Sync' },
-    { key: 'updatedAt', label: 'Updated At', category: 'Sync' },
     { key: 'releaseDate', label: 'Release Date', category: 'Sync' },
 ];
 
@@ -416,20 +413,21 @@ async function processExportJob(downloadId, params, userId) {
                 });
             }
 
-            // Date Range (CreatedAt or LastScrapedAt based on context)
-            if (dateRange === 'today') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, dbo.GetEnvDate())';
-            else if (dateRange === 'yesterday') whereClause += ' AND CONVERT(DATE, a.LastScrapedAt) = CONVERT(DATE, DATEADD(DAY, -1, dbo.GetEnvDate()))';
-            else if (dateRange === '7days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -7, dbo.GetEnvDate())';
-            else if (dateRange === '30days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -30, dbo.GetEnvDate())';
-            else if (dateRange === '90days') whereClause += ' AND a.LastScrapedAt >= DATEADD(DAY, -90, dbo.GetEnvDate())';
+            // Date Range — COALESCE for compatibility with NULL LastScrapedAt
+            // 'today' and 'yesterday' skip date filter for ASIN export (show current data)
+            if (dateRange === 'yesterday' || dateRange === 'today') {
+                // No date filter — export current ASIN data for selected sellers
+            } else if (dateRange === '7days') whereClause += ' AND COALESCE(a.LastScrapedAt, a.CreatedAt) >= DATEADD(DAY, -7, dbo.GetEnvDate())';
+            else if (dateRange === '30days') whereClause += ' AND COALESCE(a.LastScrapedAt, a.CreatedAt) >= DATEADD(DAY, -30, dbo.GetEnvDate())';
+            else if (dateRange === '90days') whereClause += ' AND COALESCE(a.LastScrapedAt, a.CreatedAt) >= DATEADD(DAY, -90, dbo.GetEnvDate())';
             else if (dateRange && typeof dateRange === 'object' && dateRange.start) {
                 request.input('dateStart', sql.DateTime2, new Date(dateRange.start));
-                whereClause += ' AND a.LastScrapedAt >= @dateStart';
+                whereClause += ' AND COALESCE(a.LastScrapedAt, a.CreatedAt) >= @dateStart';
                 if (dateRange.end) {
                     const dEnd = new Date(dateRange.end);
                     dEnd.setHours(23, 59, 59, 999);
                     request.input('dateEnd', sql.DateTime2, dEnd);
-                    whereClause += ' AND a.LastScrapedAt <= @dateEnd';
+                    whereClause += ' AND COALESCE(a.LastScrapedAt, a.CreatedAt) <= @dateEnd';
                 }
             }
         }
@@ -524,9 +522,10 @@ async function processExportJob(downloadId, params, userId) {
             'lastSyncSource': 'a.LastSyncSource',
             'lastLiveSyncAt': 'a.LastLiveSyncAt',
             'lastOctoparseSyncAt': 'a.LastOctoparseSyncAt',
-            'lastScraped': 'a.LastScrapedAt',
-            'createdAt': 'a.CreatedAt',
-            'updatedAt': 'a.UpdatedAt',
+            // Date fields removed per request — users don't need them in export
+            'lastScraped': null,
+            'createdAt': null,
+            'updatedAt': null,
             'releaseDate': 'a.ReleaseDate',
             'tags': 'a.Tags',
         };
@@ -1520,7 +1519,7 @@ async function processGmsExportJob(downloadId, params, userId) {
         return r;
     });
 
-    const dates = [...new Set(dataToExport.map(d => d.date))].sort();
+    const dates = [...new Set(dataToExport.map(d => d.date))].sort((a, b) => String(a).localeCompare(String(b)));
     const monthGroups = {};
 
     dates.forEach(dateStr => {
@@ -1567,7 +1566,7 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     Object.values(monthGroups).forEach(month => {
         Object.values(month.weeks).forEach(week => {
-            const sortedDays = [...week.days].sort();
+            const sortedDays = [...week.days].sort((a, b) => String(a).localeCompare(String(b)));
             sortedDays.forEach((dayStr, idx) => {
                 const formattedDayLabel = new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
                 columnDef.push({

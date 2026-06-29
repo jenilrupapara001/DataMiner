@@ -51,9 +51,11 @@ const resolveDbBrands = (data, asins, sellers) => {
         }
       }
     }
+    const resolvedSellerId = d.sellerId != null ? d.sellerId : (matchedDbAsin?.sellerId ?? null);
     return {
       ...d,
-      resolvedDbBrand: d.dbBrand || dbBrandName || '-'
+      resolvedDbBrand: d.dbBrand || dbBrandName || '-',
+      resolvedSellerId
     };
   });
 };
@@ -172,9 +174,12 @@ export default function GmsTrackerPage() {
         }
 
         // Always re-fetch GMS data when date range changes
+        // Default to current month if no date range set (prevent 4GB memory spike)
+        const effectiveStart = startDate || dayjs().startOf('month').format('YYYY-MM-DD');
+        const effectiveEnd = endDate || dayjs().endOf('month').format('YYYY-MM-DD');
         const gmsRes = await gmsApi.getAll({
-          startDate: startDate ? dayjs(startDate).format('YYYY-MM-DD') : undefined,
-          endDate: endDate ? dayjs(endDate).format('YYYY-MM-DD') : undefined
+          startDate: effectiveStart,
+          endDate: effectiveEnd
         }).catch(() => null);
 
         if (gmsRes?.success && gmsRes.data) {
@@ -214,6 +219,10 @@ export default function GmsTrackerPage() {
   // Handle GMS spreadsheet matrix export via background job served in Downloads drawer
   const handleExport = async () => {
     try {
+      // selectedBrands holds seller IDs — resolve to names for export backend (which filters by name)
+      const resolvedSelectedBrands = selectedBrands.map(id =>
+        dbSellers.find(s => (s._id || s.id) === id)?.name
+      ).filter(Boolean);
       const exportParams = {
         exportLevel,
         exportDateType,
@@ -224,7 +233,7 @@ export default function GmsTrackerPage() {
         exportCustomBrands,
         startDate: (exportDateType === 'current' && startDate) ? dayjs(startDate).format('YYYY-MM-DD') : null,
         endDate: (exportDateType === 'current' && endDate) ? dayjs(endDate).format('YYYY-MM-DD') : null,
-        selectedBrands
+        selectedBrands: resolvedSelectedBrands
       };
 
       message.loading({ content: 'Initiating GMS matrix export...', key: 'gms-export', duration: 2 });
@@ -269,7 +278,12 @@ export default function GmsTrackerPage() {
         message.success(`Successfully uploaded GMS report: ${res.processed} rows processed, ${res.skipped} skipped.`);
 
         // Reload fresh data from database
-        const freshGms = await gmsApi.getAll();
+        const effectiveStart = dayjs().startOf('month').format('YYYY-MM-DD');
+        const effectiveEnd = dayjs().endOf('month').format('YYYY-MM-DD');
+        const freshGms = await gmsApi.getAll({
+          startDate: effectiveStart,
+          endDate: effectiveEnd
+        });
         if (freshGms.success && freshGms.data) {
           const resolved = resolveDbBrands(freshGms.data, dbAsinsRef.current, dbSellers);
           setGmsData(resolved);
@@ -300,7 +314,7 @@ export default function GmsTrackerPage() {
     const startMs = startDate ? dayjs(startDate).startOf('day').valueOf() : 0;
     const endMs = endDate ? dayjs(endDate).endOf('day').valueOf() : Infinity;
     const hasDateFilter = !!startDate && !!endDate;
-    const brandSet = selectedBrands.length > 0 ? new Set(selectedBrands) : null;
+    const sellerIdSet = selectedBrands.length > 0 ? new Set(selectedBrands) : null;
     const searchLower = searchQuery ? searchQuery.toLowerCase() : '';
 
     // Resolve manager -> seller IDs filter
@@ -319,15 +333,21 @@ export default function GmsTrackerPage() {
         const itemMs = new Date(item.date).getTime();
         if (itemMs < startMs || itemMs > endMs) return false;
       }
-      if (brandSet && !brandSet.has(item.brand) && !brandSet.has(item.dbBrand)) return false;
-      if (managerSellerIds && (!item.sellerId || !managerSellerIds.has(item.sellerId))) return false;
+      if (sellerIdSet) {
+        const effectiveSellerId = item.sellerId ?? item.resolvedSellerId;
+        if (!effectiveSellerId || !sellerIdSet.has(effectiveSellerId)) return false;
+      }
+      if (managerSellerIds) {
+        const effectiveSellerId = item.sellerId ?? item.resolvedSellerId;
+        if (!effectiveSellerId || !managerSellerIds.has(effectiveSellerId)) return false;
+      }
       if (searchLower) {
         if (!(item.asin && item.asin.toLowerCase().includes(searchLower)) &&
           !(item.productTitle && item.productTitle.toLowerCase().includes(searchLower)) &&
           !(item.brand && item.brand.toLowerCase().includes(searchLower)) &&
           !(item.dbBrand && item.dbBrand.toLowerCase().includes(searchLower)) &&
-          !(item.sku && item.sku.toLowerCase().includes(searchLower)) &&
-          !(item.parentAsin && item.parentAsin.toLowerCase().includes(searchLower))) return false;
+          !(item.resolvedDbBrand && item.resolvedDbBrand.toLowerCase().includes(searchLower)) &&
+          !(item.storeCode && item.storeCode.toLowerCase().includes(searchLower))) return false;
       }
       return true;
     });
@@ -980,7 +1000,7 @@ export default function GmsTrackerPage() {
         <Select mode="multiple" placeholder="All Sellers" size="small" allowClear maxTagCount="responsive"
           loading={loading}
           value={selectedBrands} onChange={(val) => startFilterTransition(() => setSelectedBrands(val))}
-          options={dbSellers.map(s => ({ label: s.name, value: s.name }))}
+          options={dbSellers.map(s => ({ label: s.name, value: s._id || s.id }))}
           style={{ minWidth: 200, maxWidth: 320 }} showSearch
           filterOption={(input, opt) => (opt?.label ?? '').toLowerCase().includes(input.toLowerCase())} />
         <Select mode="multiple" placeholder="All Managers" size="small" allowClear maxTagCount="responsive"
