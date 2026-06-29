@@ -277,15 +277,14 @@ export default function GmsTrackerPage() {
         setUploadStatus('Processing completed successfully!');
         message.success(`Successfully uploaded GMS report: ${res.processed} rows processed, ${res.skipped} skipped.`);
 
-        // Reload fresh data from database
-        const effectiveStart = dayjs().startOf('month').format('YYYY-MM-DD');
-        const effectiveEnd = dayjs().endOf('month').format('YYYY-MM-DD');
+        const effectiveStart = startDate || dayjs().startOf('month').format('YYYY-MM-DD');
+        const effectiveEnd = endDate || dayjs().endOf('month').format('YYYY-MM-DD');
         const freshGms = await gmsApi.getAll({
           startDate: effectiveStart,
           endDate: effectiveEnd
         });
         if (freshGms.success && freshGms.data) {
-          const resolved = resolveDbBrands(freshGms.data, dbAsinsRef.current, dbSellers);
+          const resolved = resolveDbBrands(freshGms.data, dbAsinsRef.current, dbSellersRef.current);
           setGmsData(resolved);
         }
 

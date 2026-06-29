@@ -254,10 +254,12 @@ exports.getAsins = async (req, res) => {
     if (hasAplus !== undefined && hasAplus !== '') whereClause += ' AND HasAplus = @hasAplus';
     if (buyBoxWin !== undefined && buyBoxWin !== '') {
       const ownSellers = ['ETrade Online', 'Cocoblu Retail', 'Clicktech Retail Private Ltd', 'RetailEz'];
+      const sellerChecks = ownSellers.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ');
+      const jsonSellerChecks = ownSellers.map((s, i) => `JSON_VALUE(a.BuyBoxes, '$[0].seller') = @ownSeller${i}`).join(' OR ');
       if (buyBoxWin === 'true') {
-        whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy = @ownSeller${i}`).join(' OR ')})`;
+        whereClause += ` AND (${sellerChecks} OR (a.SoldBy IS NULL AND (${jsonSellerChecks})))`;
       } else {
-        whereClause += ` AND (${ownSellers.map((s, i) => `a.SoldBy != @ownSeller${i}`).join(' AND ')})`;
+        whereClause += ` AND NOT (${sellerChecks} OR (a.SoldBy IS NULL AND (${jsonSellerChecks})))`;
       }
     }
     if (priceDispute !== undefined && priceDispute !== '') {
@@ -304,19 +306,34 @@ exports.getAsins = async (req, res) => {
     }
 
     if (req.query.hasVideo !== undefined && req.query.hasVideo !== '') {
-      whereClause += ' AND VideoCount ' + (req.query.hasVideo === 'true' ? '> 0' : '= 0');
+      whereClause += req.query.hasVideo === 'true'
+        ? ' AND VideoCount > 0'
+        : ' AND (VideoCount = 0 OR VideoCount IS NULL)';
     }
     if (req.query.ads !== undefined && req.query.ads !== '') {
-      whereClause += ' AND a.Ads = @ads';
+      whereClause += req.query.ads === 'true'
+        ? ' AND a.Ads = 1'
+        : ' AND (a.Ads = 0 OR a.Ads IS NULL)';
     }
     if (req.query.availabilityStatus) {
-      whereClause += ' AND a.AvailabilityStatus = @availabilityStatus';
+      const status = req.query.availabilityStatus;
+      if (status === 'In Stock') {
+        whereClause += " AND LOWER(a.AvailabilityStatus) LIKE '%in stock%'";
+      } else if (status === 'Out of Stock') {
+        whereClause += " AND (LOWER(a.AvailabilityStatus) LIKE '%out of stock%' OR LOWER(a.AvailabilityStatus) LIKE '%unavailable%' OR LOWER(a.AvailabilityStatus) LIKE '%temporarily%')";
+      } else {
+        whereClause += ' AND LOWER(a.AvailabilityStatus) = LOWER(@availabilityStatus)';
+      }
     }
     if (req.query.manufacturer) {
       whereClause += ' AND a.Manufacturer LIKE @manufacturer';
     }
     if (req.query.dealAccessType) {
-      whereClause += ' AND a.DealAccessType = @dealAccessType';
+      if (req.query.dealAccessType === 'ALL') {
+        whereClause += " AND a.DealAccessType IS NOT NULL AND a.DealAccessType != ''";
+      } else {
+        whereClause += ' AND LOWER(a.DealAccessType) = LOWER(@dealAccessType)';
+      }
     }
 
     if (req.query.minTitleScore) {

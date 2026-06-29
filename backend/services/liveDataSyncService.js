@@ -103,7 +103,7 @@ class LiveDataSyncService extends EventEmitter {
             const asinsResult = await pool.request()
                 .input('sellerId', sql.VarChar, sellerIdStr)
                 .query(`
-                    SELECT Id, AsinCode 
+                    SELECT Id, AsinCode, UploadedPrice 
                     FROM Asins 
                     WHERE SellerId = @sellerId 
                     AND Status IN ('Active', 'Error')
@@ -479,7 +479,7 @@ class LiveDataSyncService extends EventEmitter {
                         return;
                     }
                     
-                    await this._updateAsinFromLiveSync(asinRecord.Id, sellerId, item);
+                    await this._updateAsinFromLiveSync(asinRecord.Id, sellerId, item, asinRecord);
                     stats.successCount++;
                 } catch (e) {
                     stats.failedCount++;
@@ -535,7 +535,7 @@ class LiveDataSyncService extends EventEmitter {
     // ============================================
     // 🔥 KEY: Update ALL Fields EXCEPT A+ and Rating Breakdown
     // ============================================
-    async _updateAsinFromLiveSync(asinId, sellerId, item) {
+    async _updateAsinFromLiveSync(asinId, sellerId, item, asinRecord = null) {
         const pool = await getPool();
         const transaction = new sql.Transaction(pool);
         
@@ -544,8 +544,8 @@ class LiveDataSyncService extends EventEmitter {
             
             const extracted = this._extractFields(item);
             
-            // Price Dispute Calculation
-            const uploadedPrice = item.uploadedPrice || item.UploadedPrice || 0;
+            // Price Dispute Calculation — read UploadedPrice from DB record (passed from batch query)
+            const uploadedPrice = asinRecord?.UploadedPrice || 0;
             const currentPrice = extracted.priceAmount || 0;
             const dealBadge = extracted.dealBadge || '';
             
@@ -1010,7 +1010,7 @@ class LiveDataSyncService extends EventEmitter {
                 .input('sellerId', sql.VarChar, sellerId);
             failedCodes.forEach((code, i) => request.input(`code${i}`, sql.VarChar, code));
             const asinsResult = await request.query(`
-                    SELECT Id, AsinCode 
+                    SELECT Id, AsinCode, UploadedPrice
                     FROM Asins 
                     WHERE SellerId = @sellerId 
                     AND AsinCode IN (${failedCodes.map((_, i) => `@code${i}`).join(',')})

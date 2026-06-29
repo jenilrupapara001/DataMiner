@@ -2421,6 +2421,7 @@ class MarketDataSyncService {
                 AplusContent: aplusContent,
                 AplusModuleCount: aplusModuleCount,
                 RatingBreakdown: JSON.stringify(finalRatingBreakdown),
+                PriceDispute: isDisputed ? 1 : 0,
                 LastOctoparseSyncAt: now,
                 LastSyncSource: 'OCTOPARSE',
                 ScrapeStatus: 'COMPLETED',

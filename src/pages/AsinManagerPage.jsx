@@ -1968,7 +1968,7 @@ const AsinManagerPage = (props) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Scrape Status</div>
-                <Select size="small" placeholder="All Statuses" value={filters.scrapeStatus || undefined} onChange={(v) => setFilters({ ...filters, scrapeStatus: v || '' })} allowClear style={{ width: '100%', borderRadius: 8 }} options={[{ value: 'Success', label: 'Success' }, { value: 'Failed', label: 'Failed' }, { value: 'Pending', label: 'Pending' }]} />
+                <Select size="small" placeholder="All Statuses" value={filters.scrapeStatus || undefined} onChange={(v) => setFilters({ ...filters, scrapeStatus: v || '' })} allowClear showSearch optionFilterProp="label" style={{ width: '100%', borderRadius: 8 }} options={(filterOptions.scrapeStatuses || []).map(s => ({ value: s, label: s }))} />
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Brand</div>
@@ -2017,7 +2017,7 @@ const AsinManagerPage = (props) => {
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Availability</div>
-                <Select size="small" placeholder="All" value={filters.availabilityStatus || undefined} onChange={(v) => setFilters({ ...filters, availabilityStatus: v || '' })} allowClear style={{ width: '100%', borderRadius: 8 }} options={[{ value: 'In stock', label: 'In Stock' }, { value: 'Out of Stock', label: 'Out of Stock' }, { value: 'Available', label: 'Available' }, { value: 'Currently unavailable', label: 'Unavailable' }]} />
+                <Select size="small" placeholder="All" value={filters.availabilityStatus || undefined} onChange={(v) => setFilters({ ...filters, availabilityStatus: v || '' })} allowClear style={{ width: '100%', borderRadius: 8 }} options={[{ value: 'In Stock', label: 'In Stock' }, { value: 'Out of Stock', label: 'Out of Stock' }, { value: 'Available', label: 'Available' }, { value: 'Currently unavailable.', label: 'Unavailable' }, { value: 'ADD TO BAG', label: 'Add to Bag' }]} />
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#52525b', marginBottom: 4 }}>Deal Type</div>
