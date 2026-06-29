@@ -496,10 +496,10 @@ async function processExportJob(downloadId, params, userId) {
             'descriptionGrade': 'a.DescriptionGrade',
             'cdq': 'a.Cdq',
             'cdqGrade': 'a.CdqGrade',
-            'buyBoxWin': `CASE WHEN a.SoldBy IN (${OWN_SELLERS.map(s => `'${s}'`).join(',')}) THEN 'Yes' ELSE 'No' END`,
+            'buyBoxWin': `CASE WHEN a.SoldBy IN (${OWN_SELLERS.map(s => `'${s}'`).join(',')}) THEN 'Yes' WHEN a.SoldBy IS NULL AND a.BuyBoxes IS NOT NULL AND a.BuyBoxes != '[]' THEN (SELECT TOP 1 CASE WHEN JSON_VALUE(a.BuyBoxes, '$[0].isBuyBoxWinner') = 'true' AND JSON_VALUE(a.BuyBoxes, '$[0].seller') IN (${OWN_SELLERS.map(s => `'${s}'`).join(',')}) THEN 'Yes' ELSE 'No' END) ELSE 'No' END`,
             'buyBoxStatus': 'a.BuyBoxStatus',
             'buyBoxSellerId': 'a.BuyBoxSellerId',
-            'soldBy': 'a.SoldBy',
+            'soldBy': `CASE WHEN a.SoldBy IS NOT NULL THEN a.SoldBy WHEN a.BuyBoxes IS NOT NULL AND a.BuyBoxes != '[]' THEN JSON_VALUE(a.BuyBoxes, '$[0].seller') ELSE '' END`,
             'soldBySec': 'a.SoldBySec',
             'allOffers': 'a.AllOffers',
             'buyBoxes': 'a.BuyBoxes',
@@ -676,8 +676,8 @@ async function processExportJob(downloadId, params, userId) {
 
                 if (field === 'brand' || field === 'Brand') {
                     value = row.sellerName || row.SellerName || row.brand || row.Brand || '';
-                } else if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
-                    value = (value === 1 || value === true || value === 'true') ? 'Yes' : 'No';
+                } else                 if (field === 'buyBoxWin' || field === 'hasAplus' || field === 'priceDispute') {
+                    value = (value === 1 || value === true || value === 'true' || value === 'Yes') ? 'Yes' : 'No';
                 } else if (field === 'availabilityStatus') {
                     value = value || 'Available';
                 } else if (field === 'tags' || field === 'Tags') {
