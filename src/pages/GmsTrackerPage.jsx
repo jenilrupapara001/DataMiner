@@ -1,20 +1,25 @@
-import React, { useState, useEffect, useMemo, useCallback, useTransition, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useTransition } from 'react';
 import {
   Card, Row, Col, Table, Button, DatePicker, Upload, Modal, Typography, Space, Input, Tag, Tooltip, message, Empty, Progress, Skeleton, Select, Segmented, Radio
 } from 'antd';
 import {
-  UploadOutlined, SearchOutlined, InfoCircleOutlined, DownloadOutlined
+  UploadOutlined, SearchOutlined, InfoCircleOutlined, DownloadOutlined, DeleteOutlined
 } from '@ant-design/icons';
+
 import Chart from 'react-apexcharts';
-import { sellerApi, asinApi, gmsApi, exportApi } from '../services/api';
+import { sellerApi, gmsApi, exportApi } from '../services/api';
+import { userApi } from '../services/api';
 import { useDateRange } from '../contexts/DateRangeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { LoadingIndicator } from '@/components/application/loading-indicator/loading-indicator';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
 dayjs.extend(weekOfYear);
 dayjs.extend(isoWeek);
+
+const { RangePicker } = DatePicker;
 
 const { Text } = Typography;
 
@@ -29,7 +34,7 @@ const resolveDbBrands = (data, asins, sellers) => {
   sellers.forEach(s => {
     sellerMap.set(s._id || s.id, s.name || '');
   });
-  
+
   return data.map(d => {
     if (d.resolvedDbBrand) return d;
     const matchedDbAsin = asinMap.get((d.asin || '').toUpperCase());
@@ -61,7 +66,7 @@ const precomputeTrends = (rows) => {
     row._dodTrends = {};
 
     // MoM: current month vs previous month from row.monthlyRev
-    const months = Object.keys(row.monthlyRev).sort();
+    const months = Object.keys(row.monthlyRev).sort((a, b) => a.localeCompare(b));
     for (let i = 1; i < months.length; i++) {
       const curr = row.monthlyRev[months[i]] || 0;
       const prev = row.monthlyRev[months[i - 1]] || 0;
@@ -69,7 +74,7 @@ const precomputeTrends = (rows) => {
     }
 
     // WoW: current week vs previous week from row.weeklyRev
-    const weeks = Object.keys(row.weeklyRev).sort();
+    const weeks = Object.keys(row.weeklyRev).sort((a, b) => a.localeCompare(b));
     for (let i = 1; i < weeks.length; i++) {
       const curr = row.weeklyRev[weeks[i]] || 0;
       const prev = row.weeklyRev[weeks[i - 1]] || 0;
@@ -77,7 +82,7 @@ const precomputeTrends = (rows) => {
     }
 
     // DoD: each day vs previous day from row.dailyRev
-    const days = Object.keys(row.dailyRev).sort();
+    const days = Object.keys(row.dailyRev).sort((a, b) => a.localeCompare(b));
     for (let i = 1; i < days.length; i++) {
       const curr = row.dailyRev[days[i]] || 0;
       const prev = row.dailyRev[days[i - 1]] || 0;
@@ -98,14 +103,13 @@ const getTrend = (record, period, key) => {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function GmsTrackerPage() {
-  const { user: currentUser, isAdmin, isGlobalUser, hasPermission } = useAuth();
+  const { isAdmin, isGlobalUser, hasPermission } = useAuth();
   const [gmsData, setGmsData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isComputing, setIsComputing] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadDate, setUploadDate] = useState(dayjs());
   const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedAsins, setSelectedAsins] = useState([]);
+  const [selectedManagers, setSelectedManagers] = useState([]);
   const { startDate, endDate } = useDateRange();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -121,11 +125,14 @@ export default function GmsTrackerPage() {
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(50);
 
-  // Database Sellers / Brands
+  // Database Sellers / Brands / Managers
   const [dbSellers, setDbSellers] = useState([]);
+  const [dbManagers, setDbManagers] = useState([]);
   const dbAsinsRef = useRef([]);
+  const dbSellersRef = useRef([]); // Cached for date-change refetch (avoids re-fetching static data)
+  const staticLoadedRef = useRef(false);
 
-  // Deferred filter flag for smooth UX during heavy filter recomputation
+  // Deferred filter transition for smooth UX during heavy filter recomputation
   const [isFilterPending, startFilterTransition] = useTransition();
 
   // Upload Progress States
@@ -133,43 +140,55 @@ export default function GmsTrackerPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('');
 
-  // Fetch Brands/Sellers, ASINs & GMS Tracker data from Database
+  // Fetch Brands/Sellers, ASINs & GMS data — only static data once, GMS data on every date change
   useEffect(() => {
     const loadAllData = async () => {
       setLoading(true);
       try {
-        const [sellersRes, asinsRes, gmsRes] = await Promise.all([
-          sellerApi.getAll({ limit: 1000 }).catch(() => null),
-          gmsApi.getAsins().catch(() => null),
-          gmsApi.getAll({
-            startDate: startDate ? dayjs(startDate).format('YYYY-MM-DD') : undefined,
-            endDate: endDate ? dayjs(endDate).format('YYYY-MM-DD') : undefined
-          }).catch(() => null)
-        ]);
+        let sellers = dbSellersRef.current;
+        let asins = dbAsinsRef.current;
 
-        let sellers = [];
-        let asins = [];
+        // Only fetch sellers/asins/managers on the first load
+        if (!staticLoadedRef.current) {
+          const [sellersRes, asinsRes, managersRes] = await Promise.all([
+            sellerApi.getAll({ limit: 1000 }).catch(() => null),
+            gmsApi.getAsins().catch(() => null),
+            userApi.getManagers().catch(() => null)
+          ]);
 
-        if (sellersRes && sellersRes.success && sellersRes.data?.sellers) {
-          sellers = sellersRes.data.sellers;
-          setDbSellers(sellers);
+          if (sellersRes?.success && sellersRes.data?.sellers) {
+            sellers = sellersRes.data.sellers;
+            dbSellersRef.current = sellers;
+            setDbSellers(sellers);
+          }
+          if (asinsRes?.success && asinsRes.data) {
+            asins = asinsRes.data || [];
+            dbAsinsRef.current = asins;
+          }
+          if (managersRes?.success && managersRes.data) {
+            setDbManagers(managersRes.data);
+          }
+          staticLoadedRef.current = true;
         }
-        if (asinsRes && asinsRes.success && asinsRes.data) {
-          asins = asinsRes.data || [];
-          dbAsinsRef.current = asins;
-        }
-        if (gmsRes && gmsRes.success && gmsRes.data) {
+
+        // Always re-fetch GMS data when date range changes
+        const gmsRes = await gmsApi.getAll({
+          startDate: startDate ? dayjs(startDate).format('YYYY-MM-DD') : undefined,
+          endDate: endDate ? dayjs(endDate).format('YYYY-MM-DD') : undefined
+        }).catch(() => null);
+
+        if (gmsRes?.success && gmsRes.data) {
           const resolved = resolveDbBrands(gmsRes.data, asins, sellers);
           setGmsData(resolved);
         }
       } catch (err) {
-        console.error('Failed to load initial GMS data:', err);
+        console.error('Failed to load GMS data:', err);
       } finally {
         setLoading(false);
       }
     };
     loadAllData();
-  }, []);
+  }, [startDate, endDate]);
 
   const clearAllData = useCallback(() => {
     Modal.confirm({
@@ -209,7 +228,7 @@ export default function GmsTrackerPage() {
       };
 
       message.loading({ content: 'Initiating GMS matrix export...', key: 'gms-export', duration: 2 });
-      
+
       const res = await exportApi.startGmsExport(exportParams);
       if (res.success) {
         message.success({ content: 'GMS export started! Open the Downloads drawer to track progress.', key: 'gms-export', duration: 3 });
@@ -226,7 +245,7 @@ export default function GmsTrackerPage() {
 
   // Extract unique brands from database sellers only
   const uniqueBrands = useMemo(() => {
-    return dbSellers.map(s => s.name).filter(Boolean).sort();
+    return dbSellers.map(s => s.name).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)));
   }, [dbSellers]);
 
   // Handle CSV file parsing with visual loading stages
@@ -282,8 +301,18 @@ export default function GmsTrackerPage() {
     const endMs = endDate ? dayjs(endDate).endOf('day').valueOf() : Infinity;
     const hasDateFilter = !!startDate && !!endDate;
     const brandSet = selectedBrands.length > 0 ? new Set(selectedBrands) : null;
-    const asinSet = selectedAsins.length > 0 ? new Set(selectedAsins) : null;
     const searchLower = searchQuery ? searchQuery.toLowerCase() : '';
+
+    // Resolve manager -> seller IDs filter
+    let managerSellerIds = null;
+    if (selectedManagers.length > 0) {
+      managerSellerIds = new Set();
+      dbManagers.forEach(m => {
+        if (selectedManagers.includes(m._id || m.id)) {
+          (m.assignedSellers || []).forEach(s => managerSellerIds.add(s._id || s.id || s.SellerId));
+        }
+      });
+    }
 
     return gmsData.filter(item => {
       if (hasDateFilter) {
@@ -291,25 +320,21 @@ export default function GmsTrackerPage() {
         if (itemMs < startMs || itemMs > endMs) return false;
       }
       if (brandSet && !brandSet.has(item.brand) && !brandSet.has(item.dbBrand)) return false;
-      if (asinSet && !asinSet.has(item.asin)) return false;
+      if (managerSellerIds && (!item.sellerId || !managerSellerIds.has(item.sellerId))) return false;
       if (searchLower) {
         if (!(item.asin && item.asin.toLowerCase().includes(searchLower)) &&
-            !(item.productTitle && item.productTitle.toLowerCase().includes(searchLower)) &&
-            !(item.brand && item.brand.toLowerCase().includes(searchLower)) &&
-            !(item.dbBrand && item.dbBrand.toLowerCase().includes(searchLower))) return false;
+          !(item.productTitle && item.productTitle.toLowerCase().includes(searchLower)) &&
+          !(item.brand && item.brand.toLowerCase().includes(searchLower)) &&
+          !(item.dbBrand && item.dbBrand.toLowerCase().includes(searchLower)) &&
+          !(item.sku && item.sku.toLowerCase().includes(searchLower)) &&
+          !(item.parentAsin && item.parentAsin.toLowerCase().includes(searchLower))) return false;
       }
       return true;
     });
-  }, [gmsData, startDate, endDate, selectedBrands, selectedAsins, searchQuery]);
-
-  const uniqueAsins = useMemo(() => {
-    const set = new Set();
-    filteredData.forEach(d => { if (d.asin) set.add(d.asin); });
-    return [...set].sort();
-  }, [filteredData]);
+  }, [gmsData, startDate, endDate, selectedBrands, selectedManagers, searchQuery, dbManagers]);
 
   // Reset table pagination when filters change
-  useEffect(() => { setTablePage(1); }, [selectedBrands, selectedAsins, searchQuery, viewLevel]);
+  useEffect(() => { setTablePage(1); }, [selectedBrands, selectedManagers, searchQuery, viewLevel]);
 
   // Aggregate Metrics for KPIs
   const kpiMetrics = useMemo(() => {
@@ -346,7 +371,7 @@ export default function GmsTrackerPage() {
 
   // Compute period-over-period percentage change for each metric
   const percentageChanges = useMemo(() => {
-    const sortedDates = [...new Set(filteredData.map(d => d.date))].sort();
+    const sortedDates = [...new Set(filteredData.map(d => d.date))].sort((a, b) => String(a).localeCompare(String(b)));
     if (sortedDates.length < 2) {
       return { orderedRevenue: 0, orderedUnits: 0, shippedRevenue: 0, shippedUnits: 0, customerReturns: 0, returnRatio: 0, profit: 0 };
     }
@@ -384,10 +409,10 @@ export default function GmsTrackerPage() {
     };
   }, [filteredData]);
 
-  // Dynamic Excel-style horizontal columns and row data grouping by ASIN or Seller
-  const { tableColumns, tableDataSource } = useMemo(() => {
+  // MEMO 1 — Build aggregated rows, fixed columns, and month/week/day groupings from filteredData
+  const { tableDataSource, fixedCols, monthGroups } = useMemo(() => {
     if (filteredData.length === 0) {
-      return { tableColumns: [], tableDataSource: [] };
+      return { tableDataSource: [], fixedCols: [], monthGroups: {} };
     }
 
     let rows = [];
@@ -473,7 +498,7 @@ export default function GmsTrackerPage() {
           dataIndex: 'brand',
           key: 'brand',
           width: 120,
-          render: (text, record) => record.brandsList && record.brandsList.length > 0 ? record.brandsList.join(', ') : '-',
+          render: (_text, record) => record.brandsList && record.brandsList.length > 0 ? record.brandsList.join(', ') : '-',
           sorter: (a, b) => (a.brand || '').localeCompare(b.brand || '')
         },
         {
@@ -481,7 +506,7 @@ export default function GmsTrackerPage() {
           dataIndex: 'storeCode',
           key: 'storeCode',
           width: 90,
-          render: (text, record) => record.storeCodesList && record.storeCodesList.length > 0 ? record.storeCodesList.join(', ') : '-',
+          render: (_text, record) => record.storeCodesList && record.storeCodesList.length > 0 ? record.storeCodesList.join(', ') : '-',
           sorter: (a, b) => (a.storeCode || '').localeCompare(b.storeCode || '')
         }
       ];
@@ -557,8 +582,11 @@ export default function GmsTrackerPage() {
       ];
     }
 
-    // Gather and sort all unique dates from filteredData
-    const dates = [...new Set(filteredData.map(d => d.date))].sort();
+    // Pre-compute all trends after rows are built — eliminates per-cell gmsData scans
+    precomputeTrends(rows);
+
+    // Gather and sort all unique dates from filteredData and build month/week/day groupings
+    const dates = [...new Set(filteredData.map(d => d.date))].sort((a, b) => String(a).localeCompare(String(b)));
     const monthGroups = {};
 
     dates.forEach(dateStr => {
@@ -590,6 +618,15 @@ export default function GmsTrackerPage() {
 
       monthGroups[monthKey].weeks[weekKey].days.push(dateStr);
     });
+
+    return { tableDataSource: rows, fixedCols, monthGroups };
+  }, [filteredData, viewLevel]);
+
+  // MEMO 2 — Build column definitions from fixedCols and monthGroups; re-runs only when expand state changes
+  const tableColumns = useMemo(() => {
+    if (fixedCols.length === 0 && Object.keys(monthGroups).length === 0) {
+      return [];
+    }
 
     // Build nested dynamic Excel columns with collapsible month and week levels
     const dynamicCols = Object.values(monthGroups).map(month => {
@@ -695,7 +732,7 @@ export default function GmsTrackerPage() {
 
         // Expanded Week: show day columns with interleaved DoD trend columns
         // Layout: Day1 | Day2 | Trend(1→2) | Day3 | Trend(2→3) | ...
-        const sortedDays = [...week.days].sort();
+        const sortedDays = [...week.days].sort((a, b) => String(a).localeCompare(String(b)));
         const dayCols = [];
 
         sortedDays.forEach((dayStr, idx) => {
@@ -824,14 +861,8 @@ export default function GmsTrackerPage() {
       };
     });
 
-    // Pre-compute all trends during aggregation — eliminates per-cell gmsData scans
-    precomputeTrends(rows);
-
-    return {
-      tableColumns: [...fixedCols, ...dynamicCols],
-      tableDataSource: rows
-    };
-  }, [filteredData, dbSellers, expandedMonths, expandedWeeks, viewLevel]);
+    return [...fixedCols, ...dynamicCols];
+  }, [fixedCols, monthGroups, expandedMonths, expandedWeeks]);
 
   // Chart configuration
   const chartSeries = useMemo(() => {
@@ -846,7 +877,7 @@ export default function GmsTrackerPage() {
       dailyData[k] = Math.round(dailyData[k]);
     });
 
-    const sortedDates = Object.keys(dailyData).sort();
+    const sortedDates = Object.keys(dailyData).sort((a, b) => String(a).localeCompare(String(b)));
     const palette = ['#D32F2F', '#0288D1', '#2E7D32', '#ED6C02', '#9C27B0', '#9C27B0', '#0288D1', '#ED6C02'];
     const barColors = sortedDates.map((_, i) => palette[i % palette.length]);
     return {
@@ -895,6 +926,16 @@ export default function GmsTrackerPage() {
 
   return (
     <div style={{ background: '#f4f5f7', minHeight: '100%', padding: '0 24px' }}>
+      {loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
+          <LoadingIndicator type="line-simple" size="md" />
+        </div>
+      )}
+      {isFilterPending && !loading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }}>
+          <LoadingIndicator type="line-simple" size="sm" />
+        </div>
+      )}
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60, flexWrap: 'wrap', gap: 8 }}>
         <Space orientation="vertical" size={2}>
@@ -925,18 +966,30 @@ export default function GmsTrackerPage() {
               Upload Data
             </Button>
           )}
+          {(isAdmin || isGlobalUser || hasPermission('gms_tracker_export')) && (
+            <Button danger icon={<DeleteOutlined />} size="small" style={btnStyle}
+              onClick={clearAllData}>
+              Clear Data
+            </Button>
+          )}
         </div>
       </div>
 
       {/* FILTERS */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <Select mode="multiple" placeholder="All Brands / Sellers" size="small" allowClear maxTagCount="responsive"
+        <Select mode="multiple" placeholder="All Sellers" size="small" allowClear maxTagCount="responsive"
+          loading={loading}
           value={selectedBrands} onChange={(val) => startFilterTransition(() => setSelectedBrands(val))}
-          style={{ minWidth: 200, maxWidth: 320 }} />
-        <Select mode="multiple" placeholder="All ASINs" size="small" allowClear maxTagCount="responsive"
-          value={selectedAsins} onChange={(val) => startFilterTransition(() => setSelectedAsins(val))}
-          style={{ minWidth: 200, maxWidth: 320 }} />
-        <Input.Search placeholder="Search ASIN, Title, Brand..." size="small" allowClear style={{ width: 220, borderRadius: 8 }}
+          options={dbSellers.map(s => ({ label: s.name, value: s.name }))}
+          style={{ minWidth: 200, maxWidth: 320 }} showSearch
+          filterOption={(input, opt) => (opt?.label ?? '').toLowerCase().includes(input.toLowerCase())} />
+        <Select mode="multiple" placeholder="All Managers" size="small" allowClear maxTagCount="responsive"
+          loading={loading}
+          value={selectedManagers} onChange={(val) => startFilterTransition(() => setSelectedManagers(val))}
+          options={dbManagers.map(m => ({ label: [m.firstName, m.lastName].filter(Boolean).join(' ').trim() || m.email, value: m._id || m.id }))}
+          style={{ minWidth: 200, maxWidth: 320 }} showSearch
+          filterOption={(input, opt) => (opt?.label ?? '').toLowerCase().includes(input.toLowerCase())} />
+        <Input.Search placeholder="Search ASIN, SKU, Parent, Title, Brand..." size="small" allowClear style={{ width: 260, borderRadius: 8 }}
           prefix={<SearchOutlined style={{ color: '#94a3b8', fontSize: 12 }} />}
           value={searchQuery} onChange={e => startFilterTransition(() => setSearchQuery(e.target.value))} />
       </div>
@@ -962,9 +1015,11 @@ export default function GmsTrackerPage() {
             const isPositive = kpi.invertColor ? kpi.change <= 0 : kpi.change >= 0;
             const trendColor = isPositive ? '#2E7D32' : '#D32F2F';
             return (
-              <div key={idx} style={{ height: 32, minWidth: 'max-content', flexShrink: 0, borderRadius: 6,
+              <div key={idx} style={{
+                height: 32, minWidth: 'max-content', flexShrink: 0, borderRadius: 6,
                 border: '1px solid #e5e7eb', background: '#ffffff', display: 'flex',
-                alignItems: 'center', gap: 8, padding: '0 12px' }}>
+                alignItems: 'center', gap: 8, padding: '0 12px'
+              }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: kpi.color }} />
                 <span style={{ fontSize: 10, fontWeight: 700, color: kpi.color, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{kpi.label}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{kpi.value}</span>
@@ -984,11 +1039,11 @@ export default function GmsTrackerPage() {
             <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Ordered Revenue Trend Timeline</Text>
           </div>
           <Chart
-                options={chartSeries.options}
-                series={chartSeries.series}
-                type="bar"
-                height={180}
-              />
+            options={chartSeries.options}
+            series={chartSeries.series}
+            type="bar"
+            height={180}
+          />
         </Card>
       )}
 
@@ -1002,31 +1057,25 @@ export default function GmsTrackerPage() {
         </div>
         {tableDataSource.length > 0 ? (
           <div style={{ position: 'relative' }}>
-            {(isFilterPending || isComputing) && (
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(2px)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #e2e8f0', borderTopColor: '#1976D2', animation: 'gms-spin 0.8s linear infinite' }} />
-                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Computing...</Text>
-              </div>
-            )}
-          <Table
-            columns={tableColumns}
-            dataSource={tableDataSource}
-            pagination={{
-              current: tablePage,
-              pageSize: tablePageSize,
-              showSizeChanger: true,
-              pageSizeOptions: ['25', '50', '100'],
-              size: 'small',
-              onChange: (page, size) => { setTablePage(page); setTablePageSize(size); },
-              total: tableDataSource.length,
-              showTotal: (total) => `${total} rows`
-            }}
-            size="small"
-            scroll={{ x: 'max-content' }}
-            bordered
-            className="gms-tracker-table"
-            style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}
-          />
+            <Table
+              columns={tableColumns}
+              dataSource={tableDataSource}
+              pagination={{
+                current: tablePage,
+                pageSize: tablePageSize,
+                showSizeChanger: true,
+                pageSizeOptions: ['25', '50', '100'],
+                size: 'small',
+                onChange: (page, size) => { setTablePage(page); setTablePageSize(size); },
+                total: tableDataSource.length,
+                showTotal: (total) => `${total} rows`
+              }}
+              size="small"
+              scroll={{ x: 'max-content' }}
+              bordered
+              className="gms-tracker-table"
+              style={{ borderRadius: '0 0 8px 8px', overflow: 'hidden' }}
+            />
           </div>
         ) : (
           <div style={{ padding: 30, textAlign: 'center' }}>
@@ -1263,19 +1312,13 @@ export default function GmsTrackerPage() {
                   placeholder="Select custom brands to export"
                   value={exportCustomBrands}
                   onChange={setExportCustomBrands}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', borderRadius: 8 }}
                   allowClear
                   maxTagCount="responsive"
-                  styles={{
-                    selector: {
-                      borderRadius: '8px !important'
-                    }
-                  }}
-                >
-                  {uniqueBrands.map(b => (
-                    <Select.Option key={b} value={b}>{b}</Select.Option>
-                  ))}
-                </Select>
+                  showSearch
+                  filterOption={(input, opt) => (opt?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                  options={uniqueBrands.map(b => ({ label: b, value: b }))}
+                />
               </div>
             )}
           </div>

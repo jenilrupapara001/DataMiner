@@ -1,0 +1,24 @@
+---
+description: Next.js stack conventions and token-discipline rules
+globs: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"]
+alwaysApply: true
+---
+
+# Next.js — Stack Assumptions (do not re-verify these every session)
+- App Router (`app/`) only. Never propose Pages Router (`pages/`) patterns or APIs.
+- TypeScript strict mode. Do not create new `.js` files unless the existing file is already `.js`.
+- Server Components are the default for every new component. Add `"use client"` only at the smallest leaf component that actually needs state, effects, refs, or browser APIs — never at a layout or page level "just in case."
+- Styling is Tailwind utility classes only. Do not introduce CSS Modules, styled-components, or inline `style={}` unless the file you are editing already uses that pattern.
+- Data fetching uses native `fetch` with Next.js cache directives (`cache`, `revalidate`, `tags`). Do not import `axios`, `swr`, or `react-query` unless it is already a dependency in `package.json`.
+- Routing, metadata, and loading/error states follow file-convention (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`) — do not hand-roll alternatives.
+
+# Token Discipline
+- Never restate App Router file-system routing rules, Next.js release notes, or React fundamentals in chat. Assume this is known; apply it silently in code.
+- When modifying an existing file, output a diff/patch of only the changed lines. Output a full file only when creating it for the first time.
+- Do not re-declare types/interfaces that already exist in the current feature folder (`types.ts`, shared `lib/`) — import and reuse them.
+- Do not open or re-read `next.config.js`, `tailwind.config.js`, or `tsconfig.json` unless the current task explicitly requires changing one of them.
+- Skip "best practice" explanations and folder-structure walkthroughs in responses — just apply the convention in the diff.
+
+# Scope Discipline
+- Limit working context to the current route segment (`app/<segment>/`) plus its direct shared dependencies (`components/`, `lib/`, `types/`). Do not pull in unrelated route segments or features.
+- For UI-only changes, do not open API route handlers, middleware, or database/`lib/db` files unless the task explicitly touches data flow.

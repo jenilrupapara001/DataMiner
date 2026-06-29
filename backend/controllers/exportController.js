@@ -1234,35 +1234,33 @@ const getWeekRangeLabel = (year, week) => {
     return `Week ${week} (${startStr} - ${endStr})`;
 };
 
-const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
+/**
+ * Compute period-over-period trend for a specific period key.
+ * @param {object} row - aggregated row with dailyRev/weeklyRev/monthlyRev
+ * @param {'month'|'week'|'day'} type - period type
+ * @param {object} rawGmsMap - full dataset lookup (includes prior periods not in export range)
+ * @param {'asin'|'seller'} level - grouping level
+ * @param {string} periodKey - the specific period to compute trend for (e.g. '2024-06', '2024-W23')
+ */
+const getGmsTrend = (row, type, rawGmsMap, level = 'asin', periodKey) => {
+    const entityKey = level === 'seller' ? row.dbBrand : row.asin;
+    const entityData = rawGmsMap[entityKey];
+    if (!entityData || !periodKey) return null;
+
     let currentVal = 0;
     let previousVal = 0;
 
-    const entityKey = level === 'seller' ? row.dbBrand : row.asin;
-    const entityData = rawGmsMap[entityKey];
-    if (!entityData) return null;
-
     if (type === 'month') {
-        const months = Object.keys(row.monthlyRev).sort();
-        if (months.length < 1) return null;
-        const latestMonth = months[months.length - 1];
-        currentVal = row.monthlyRev[latestMonth] || 0;
-
-        const [year, month] = latestMonth.split('-').map(Number);
+        currentVal = row.monthlyRev[periodKey] || 0;
+        const [year, month] = periodKey.split('-').map(Number);
         const prevMonthDate = new Date(year, month - 2, 1);
         const prevMonthStr = prevMonthDate.toISOString().slice(0, 7);
-
         previousVal = entityData.monthly[prevMonthStr] || 0;
     } else if (type === 'week') {
-        const weeks = Object.keys(row.weeklyRev).sort();
-        if (weeks.length < 1) return null;
-        const latestWeek = weeks[weeks.length - 1];
-        currentVal = row.weeklyRev[latestWeek] || 0;
-
-        const [year, weekStr] = latestWeek.split('-W');
-        const yVal = parseInt(year);
+        currentVal = row.weeklyRev[periodKey] || 0;
+        const [yearStr, weekStr] = periodKey.split('-W');
+        const yVal = parseInt(yearStr);
         const wVal = parseInt(weekStr);
-
         let prevW = wVal - 1;
         let prevY = yVal;
         if (prevW === 0) {
@@ -1271,17 +1269,11 @@ const getGmsTrend = (row, type, rawGmsMap, level = 'asin') => {
             prevW = getISOWeek(d).week;
         }
         const prevWeekKey = `${prevY}-W${String(prevW).padStart(2, '0')}`;
-
         previousVal = entityData.weekly[prevWeekKey] || 0;
     } else if (type === 'day') {
-        const days = Object.keys(row.dailyRev).sort();
-        if (days.length < 1) return null;
-        const latestDay = days[days.length - 1];
-        currentVal = row.dailyRev[latestDay] || 0;
-
-        const prevDayDate = new Date(new Date(latestDay).getTime() - 86400000);
+        currentVal = row.dailyRev[periodKey] || 0;
+        const prevDayDate = new Date(new Date(periodKey).getTime() - 86400000);
         const prevDayStr = prevDayDate.toISOString().split('T')[0];
-
         previousVal = entityData.daily[prevDayStr] || 0;
     }
 
@@ -1608,7 +1600,7 @@ async function processGmsExportJob(downloadId, params, userId) {
             columnDef.push({
                 label: `${week.label} WoW Trend`,
                 getValue: (r) => {
-                    const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel);
+                    const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel, week.key);
                     return trend === null ? '-' : `${trend.toFixed(1)}%`;
                 }
             });
@@ -1621,7 +1613,7 @@ async function processGmsExportJob(downloadId, params, userId) {
         columnDef.push({
             label: `${month.label} MoM Trend`,
             getValue: (r) => {
-                const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel);
+                const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel, month.key);
                 return trend === null ? '-' : `${trend.toFixed(1)}%`;
             }
         });

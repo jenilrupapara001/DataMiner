@@ -670,9 +670,9 @@ exports.uploadGmsData = async (req, res) => {
       if (assignedSellerIds.length === 0) {
         throw new Error('You do not have any assigned sellers.');
       }
-      const req = pool.request();
-      const inClause = buildInClause(req, 'sellerId', assignedSellerIds);
-      const allowedAsinsResult = await req.query(`SELECT AsinCode FROM Asins WHERE SellerId IN (${inClause})`);
+      const dbReq = pool.request();
+      const inClause = buildInClause(dbReq, 'sellerId', assignedSellerIds);
+      const allowedAsinsResult = await dbReq.query(`SELECT AsinCode FROM Asins WHERE SellerId IN (${inClause})`);
       allowedAsins = new Set(allowedAsinsResult.recordset.map(r => r.AsinCode.toUpperCase()));
     }
 
@@ -838,47 +838,28 @@ exports.getGmsData = async (req, res) => {
 
     const whereSQL = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-    // For global users, skip the expensive JOINs — frontend resolves brands
-    let query;
-    if (isGlobalUser && !whereClauses.some(c => c.includes('SellerId'))) {
-      query = `
-        SELECT 
-          g.Date as date,
-          g.Asin as asin,
-          g.Brand as brand,
-          g.StoreCode as storeCode,
-          g.OrderedRevenue as orderedRevenue,
-          g.OrderedUnits as orderedUnits,
-          g.ShippedRevenue as shippedRevenue,
-          g.ShippedCOGS as shippedCOGS,
-          g.ShippedUnits as shippedUnits,
-          g.CustomerReturns as customerReturns
-        FROM GmsDailyPerformance g
-        ${whereSQL}
-        ORDER BY g.Date DESC
-      `;
-    } else {
-      query = `
-        SELECT 
-          g.Date as date,
-          g.Asin as asin,
-          g.Brand as brand,
-          g.StoreCode as storeCode,
-          g.OrderedRevenue as orderedRevenue,
-          g.OrderedUnits as orderedUnits,
-          g.ShippedRevenue as shippedRevenue,
-          g.ShippedCOGS as shippedCOGS,
-          g.ShippedUnits as shippedUnits,
-          g.CustomerReturns as customerReturns,
-          s.Name as dbBrand,
-          a.Title as productTitle
-        FROM GmsDailyPerformance g
-        LEFT JOIN Asins a ON g.Asin = a.AsinCode
-        LEFT JOIN Sellers s ON a.SellerId = s.Id
-        ${whereSQL}
-        ORDER BY g.Date DESC
-      `;
-    }
+    // Always JOIN Asins and Sellers — sellerId is required for the frontend manager filter.
+    const query = `
+      SELECT
+        g.Date as date,
+        g.Asin as asin,
+        g.Brand as brand,
+        g.StoreCode as storeCode,
+        g.OrderedRevenue as orderedRevenue,
+        g.OrderedUnits as orderedUnits,
+        g.ShippedRevenue as shippedRevenue,
+        g.ShippedCOGS as shippedCOGS,
+        g.ShippedUnits as shippedUnits,
+        g.CustomerReturns as customerReturns,
+        a.SellerId as sellerId,
+        s.Name as dbBrand,
+        a.Title as productTitle
+      FROM GmsDailyPerformance g
+      LEFT JOIN Asins a ON g.Asin = a.AsinCode
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      ${whereSQL}
+      ORDER BY g.Date DESC
+    `;
 
     const result = await request.query(query);
     
@@ -904,8 +885,26 @@ exports.getGmsData = async (req, res) => {
 exports.clearGmsData = async (req, res) => {
   try {
     const pool = await getPool();
-    await pool.request().query("DELETE FROM GmsDailyPerformance");
-    res.json({ success: true, message: "GMS Performance data cleared successfully" });
+    const userRole = req.user.role?.name || req.user.role;
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
+
+    if (isGlobalUser) {
+      await pool.request().query("DELETE FROM GmsDailyPerformance");
+    } else {
+      const assignedSellerIds = (req.user.assignedSellers || []).map(s => (s._id || s).toString());
+      if (assignedSellerIds.length === 0) {
+        return res.json({ success: true, message: "No sellers assigned — nothing deleted.", deleted: 0 });
+      }
+      const dbReq = pool.request();
+      const inClause = buildInClause(dbReq, 'clearSellerId', assignedSellerIds);
+      await dbReq.query(`
+        DELETE g FROM GmsDailyPerformance g
+        INNER JOIN Asins a ON g.Asin = a.AsinCode
+        WHERE a.SellerId IN (${inClause})
+      `);
+    }
+
+    res.json({ success: true, message: "GMS Performance data cleared successfully." });
   } catch (error) {
     console.error("❌ Gms clear error:", error);
     res.status(500).json({ success: false, message: "Failed to clear GMS data" });

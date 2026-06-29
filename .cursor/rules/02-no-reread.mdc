@@ -1,0 +1,17 @@
+---
+description: Prevent unchanged file re-reads — trust session memory
+alwaysApply: true
+---
+
+# No Re-read — Session Memory Trust
+- If a file has already been opened, read, or edited earlier in this session, treat its last-known content as still accurate. Do not re-request, re-open, or re-print it unless one of the following is true:
+  1. The user explicitly says the file changed outside this session (e.g., "I edited this manually," "pulled latest from main").
+  2. A tool result or terminal output indicates the file was modified by something other than this session.
+  3. More than one full task/feature has passed since it was last read AND the current task directly depends on its exact current state.
+- When referencing a previously-read file in your reasoning or output, refer to it by name and the relevant lines only — do not reprint its full content "for context."
+- Do not re-read configuration, type-definition, or constants files (`tsconfig.json`, `types.ts`, `constants.ts`, etc.) more than once per session unless the current task modifies them.
+- If you are unsure whether a file changed, ask a single short question ("Has `X.ts` changed since I last read it?") instead of defensively re-reading it.
+
+# What this does NOT permit
+- Do not assume a file is unchanged if the user has been away from the conversation for a long time and the task involves shared/multi-developer files (see Team Architecture Sync rule) — in that case, a single confirmation question is cheaper than a wrong assumption.
+- Never apply this to files the current task is actively editing — those must always reflect the latest edit, not a stale memory of the pre-edit state.
