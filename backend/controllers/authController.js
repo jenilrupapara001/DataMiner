@@ -70,9 +70,9 @@ exports.requestOtp = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
     }
 
-    // Generate temp token for OTP verification
+    // Generate temp token for OTP verification (must match verifyOtp's expected step)
     const tempToken = jwt.sign(
-      { userId: user.Id, email: user.Email, step: 'OTP_REQUESTED', purpose: 'OTP_VERIFICATION' },
+      { userId: user.Id, email: user.Email, step: 'PASSWORD_VERIFIED', purpose: 'OTP_VERIFICATION' },
       config.jwtSecret,
       { expiresIn: '10m' }
     );

@@ -12,6 +12,7 @@ import { hasPermission } from '../utils/rbac';
 import { useAuth } from '../../../contexts/AuthContext';
 import { ReviewExecutiveKpis } from '../components/ReviewExecutiveKpis';
 import ReviewWorkspace from '../components/ReviewWorkspace';
+import { exportReviewQueueToExcel } from '../utils/exportUtils';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -225,6 +226,7 @@ export default function ReviewQueuePage() {
               </Space>
             )}
             <Button icon={<ReloadOutlined />} onClick={loadInstances} loading={loading} size="small" style={{ borderRadius: 8 }}>Refresh</Button>
+            <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 8 }} onClick={() => { exportReviewQueueToExcel(instances); message.success('Exported review queue to Excel'); }}>Export</Button>
           </Space>
         </div>
       </div>

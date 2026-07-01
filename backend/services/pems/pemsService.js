@@ -402,6 +402,35 @@ async function transitionStatus(taskInstanceId, toStatus, actorId, actorName, ac
 
   await writeAuditLog(taskInstanceId, 'STATUS_CHANGED', instance.Status, toStatus, actorId, actorName, details || `Status changed to ${toStatus}`);
 
+  // ── Notification Triggers ──
+  try {
+    const { triggerNotification } = require('./emailNotificationService');
+    switch (toStatus) {
+      case 'ASSIGNED':
+        if (instance.AssignedTo) triggerNotification('TASK_ASSIGNED', instance, instance.AssignedTo);
+        break;
+      case 'SUBMITTED':
+        if (instance.ReviewerId) triggerNotification('TASK_SUBMITTED', instance, instance.ReviewerId);
+        break;
+      case 'APPROVED':
+        if (instance.AssignedTo) triggerNotification('TASK_APPROVED', instance, instance.AssignedTo);
+        break;
+      case 'REJECTED':
+        if (instance.AssignedTo) triggerNotification('TASK_REJECTED', instance, instance.AssignedTo);
+        break;
+      case 'ESCALATED':
+        if (instance.ReviewerId) triggerNotification('TASK_ESCALATED', instance, instance.ReviewerId);
+        break;
+    }
+    // SLA breach notification
+    if (toStatus === 'IN_PROGRESS' && instance.DueDate && instance.SLAHours) {
+      const hoursUntilDue = (new Date(instance.DueDate) - new Date()) / (1000 * 60 * 60);
+      if (hoursUntilDue <= 0) {
+        triggerNotification('SLA_BREACH', instance, instance.AssignedTo);
+      }
+    }
+  } catch (err) { console.warn('Notification trigger error:', err.message); }
+
   return { success: true, from: instance.Status, to: toStatus };
 }
 

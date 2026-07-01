@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Typography, Tag, Button, Space, Tooltip } from 'antd';
+import { Typography, Tag, Button, Space, Tooltip, Card } from 'antd';
 import { LeftOutlined, RightOutlined, EyeOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { WORKFLOW_STATUSES, PRIORITIES } from '../constants';
 import { calculateHealth, getDueDateLabel } from '../utils/taskHealth';

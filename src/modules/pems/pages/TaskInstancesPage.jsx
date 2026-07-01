@@ -157,7 +157,7 @@ export default function TaskInstancesPage() {
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadInstances} loading={loading} size="small" style={{ borderRadius: 8 }}>Refresh</Button>
-          <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 8 }}>Export</Button>
+          <Button icon={<DownloadOutlined />} size="small" style={{ borderRadius: 8 }} onClick={() => { exportTasksToExcel(instances); message.success('Exported tasks to Excel'); }}>Export</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openWizard} style={{ borderRadius: 8, fontWeight: 600, background: '#2563eb', borderColor: '#2563eb' }}>New Task</Button>
         </Space>
       </div>
@@ -235,6 +235,8 @@ export default function TaskInstancesPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             {viewMode === 'board' ? (
               <BoardView instances={instances} loading={loading} onView={openWorkspace} />
+            ) : viewMode === 'calendar' ? (
+              <CalendarView instances={instances} loading={loading} onView={openWorkspace} />
             ) : (
               /* LIST VIEW */
               <Card size="small" style={{ borderRadius: 10 }} styles={{ body: { padding: 0 } }}>
