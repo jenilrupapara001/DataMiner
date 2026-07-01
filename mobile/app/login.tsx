@@ -485,17 +485,18 @@ export default function LoginScreen() {
       if (error instanceof ApiError) {
         if (error.status === 404) {
           setEmailError('No account found with this email');
+        } else if (error.status === 403) {
+          setGeneralError(error.message || 'No seller account associated with this email.');
         } else if (error.status === 429) {
           setGeneralError('Too many attempts. Please try again later.');
         } else if (error.status === 0) {
-          setGeneralError(
-            'Cannot connect to server. Ensure backend is running on port 3001.'
-          );
+          setGeneralError('Cannot connect to server. Ensure backend is running on port 3001.');
         } else {
-          setGeneralError(
-            error.message || 'Failed to send OTP. Please try again.'
-          );
+          setGeneralError(error.message || 'Failed to send OTP. Please try again.');
         }
+      } else {
+        setGeneralError('Network error. Please check your connection.');
+      }
       } else {
         setGeneralError('Network error. Please check your connection.');
       }

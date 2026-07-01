@@ -70,6 +70,25 @@ exports.requestOtp = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
     }
 
+    // Check if user is associated with any active seller
+    const sellerCheck = await pool.request()
+      .input('userId', sql.VarChar, user.Id)
+      .query(`
+        SELECT COUNT(*) as sellerCount 
+        FROM UserSellers US
+        JOIN Sellers S ON US.SellerId = S.Id
+        WHERE US.UserId = @userId AND S.IsActive = 1
+      `);
+
+    const sellerCount = sellerCheck.recordset[0]?.sellerCount || 0;
+
+    if (sellerCount === 0) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No seller account associated with this email. Please contact your administrator.' 
+      });
+    }
+
     // Generate temp token for OTP verification (must match verifyOtp's expected step)
     const tempToken = jwt.sign(
       { userId: user.Id, email: user.Email, step: 'PASSWORD_VERIFIED', purpose: 'OTP_VERIFICATION' },
