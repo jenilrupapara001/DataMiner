@@ -19,7 +19,7 @@ const ENV = {
     USE_LIVE_API: false,
   },
   production: {
-    BASE_URL: 'http://31.97.62.95:3001/api',
+    BASE_URL: 'https://data.brandcentral.in/api',
     USE_LIVE_API: true,
   },
 } as const;
