@@ -332,7 +332,29 @@ exports.getMe = async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().input('id', sql.VarChar, req.userId).query('SELECT * FROM Users WHERE Id = @id');
     if (result.recordset.length === 0) return res.status(404).json({ success: false });
-    const resolvedUser = await getResolvedUserResponse(result.recordset[0], pool);
+    const user = result.recordset[0];
+
+    // Fetch assigned sellers with full details
+    let sellers = [];
+    try {
+      const sellersResult = await pool.request()
+        .input('userId', sql.VarChar, req.userId)
+        .query(`
+          SELECT S.Id, S.Name, S.Marketplace, S.SellerId, S.IsActive, S.[Plan],
+                 S.PartnerTag, S.CreatedAt
+          FROM Sellers S
+          JOIN UserSellers US ON S.Id = US.SellerId
+          WHERE US.UserId = @userId AND S.IsActive = 1
+        `);
+      sellers = sellersResult.recordset;
+    } catch (e) {
+      console.error('[AUTH] Failed to fetch sellers:', e.message);
+    }
+
+    const resolvedUser = await getResolvedUserResponse(user, pool);
+    resolvedUser.sellers = sellers;
+    resolvedUser.assignedSellers = sellers.map(s => s.Id);
+
     res.json({ success: true, data: resolvedUser });
   } catch (error) {
     res.status(500).json({ success: false });
