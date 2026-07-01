@@ -259,14 +259,38 @@ const Header = () => {
         const controller = new AbortController();
         try {
             if (showSpinner) setLoading(true);
-            const response = await api.notificationApi.getNotifications(
-                { limit: 5 },
-                { signal: controller.signal }
-            );
-            if (response?.success) {
-                setNotifications(response.data || []);
-                setUnreadCount(response.unreadCount || 0);
-            }
+            // Fetch regular notifications + PEMS notifications in parallel
+            const [regularRes, pemsRes] = await Promise.allSettled([
+                api.notificationApi.getNotifications({ limit: 5 }, { signal: controller.signal }),
+                fetch('/api/pems/notifications/merged?limit=5', {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+                    signal: controller.signal,
+                }).then(r => r.json()),
+            ]);
+
+            const regular = regularRes.status === 'fulfilled' ? regularRes.value : null;
+            const pems = pemsRes.status === 'fulfilled' ? pemsRes.value : null;
+
+            const regularData = regular?.data || [];
+            const pemsData = (pems?.data || []).map(n => ({
+                _id: n.Id,
+                type: n.Type || 'TASK_NOTIFICATION',
+                title: n.Title || n.Message || 'PEMS Notification',
+                message: n.Message || '',
+                isRead: !!n.IsRead,
+                createdAt: n.CreatedAt,
+                referenceId: n.ReferenceId,
+                source: 'PEMS',
+            }));
+
+            // Merge and sort by date (most recent first)
+            const merged = [...regularData, ...pemsData]
+                .sort((a, b) => new Date(b.createdAt || b.CreatedAt) - new Date(a.createdAt || a.CreatedAt))
+                .slice(0, 10);
+
+            setNotifications(merged);
+            const totalUnread = merged.filter(n => !n.isRead && !n.IsRead).length;
+            setUnreadCount(totalUnread);
         } catch (error) {
             if (error?.name === 'AbortError') return;
             if (!error?.message?.includes('404')) {

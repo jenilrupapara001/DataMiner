@@ -40,7 +40,10 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://127.0.0.1:5173',
+    'http://10.0.2.2:3001',
+    'http://10.0.2.2:8081',
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true
@@ -158,6 +161,8 @@ const taskRoutes = require('./routes/taskRoutes');
 const scheduledRunRoutes = require('./routes/scheduledRunRoutes');
 const targetRoutes = require('./routes/targetRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
+const pemsRoutes = require('./routes/pems/pemsRoutes');
+const pemsDashboardRoutes = require('./routes/pems/dashboardRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -195,6 +200,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/scheduled-runs', scheduledRunRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/pems', pemsRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {
@@ -642,8 +648,8 @@ io.on('connection', async (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Backend running: http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Backend running: http://0.0.0.0:${PORT}`);
 
   // Only start cron jobs and background syncs on the primary instance in a PM2 cluster
   // PM2 sets NODE_APP_INSTANCE to '0', '1', '2', etc.

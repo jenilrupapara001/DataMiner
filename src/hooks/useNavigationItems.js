@@ -7,7 +7,7 @@ import {
     Target, TrendingUp, Calendar, PieChart,
     Settings, Activity, FileText, Layers,
     ShoppingBag, Zap, Bell, FolderOpen,
-    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse, Webhook
+    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse, Webhook, ClipboardList, CheckSquare, UserCheck, LineChart
 } from 'lucide-react';
 
 export function useNavigationItems() {
@@ -170,6 +170,56 @@ export function useNavigationItems() {
                     label: 'Workflows & Tasks',
                     path: '/tasks',
                     icon: ListTodo,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('tasks_view'),
+                {
+                    key: 'pems-dashboard',
+                    label: 'PEMS Dashboard',
+                    path: '/pems/dashboard',
+                    icon: BarChart2,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('tasks_manage'),
+                {
+                    key: 'pems-templates',
+                    label: 'Task Templates',
+                    path: '/pems/templates',
+                    icon: ClipboardList,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('tasks_view'),
+                {
+                    key: 'pems-instances',
+                    label: 'Task Execution',
+                    path: '/pems/tasks',
+                    icon: CheckSquare,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('tasks_view'),
+                {
+                    key: 'pems-reviews',
+                    label: 'Review Queue',
+                    path: '/pems/reviews',
+                    icon: UserCheck,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('tasks_view'),
+                {
+                    key: 'pems-analytics',
+                    label: 'Analytics',
+                    path: '/pems/analytics',
+                    icon: LineChart,
                     section: 'automation',
                 }
             ),

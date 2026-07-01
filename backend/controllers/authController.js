@@ -47,6 +47,66 @@ exports.register = async (req, res) => {
   return res.status(403).json({ success: false, message: 'Registration is currently disabled.' });
 };
 
+exports.requestOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('email', sql.VarChar, email.toLowerCase().trim())
+      .query('SELECT * FROM Users WHERE Email = @email');
+
+    const user = result.recordset[0];
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with this email' });
+    }
+
+    if (!user.IsActive) {
+      return res.status(403).json({ success: false, message: 'Account is deactivated' });
+    }
+
+    // Generate temp token for OTP verification
+    const tempToken = jwt.sign(
+      { userId: user.Id, email: user.Email, step: 'OTP_REQUESTED', purpose: 'OTP_VERIFICATION' },
+      config.jwtSecret,
+      { expiresIn: '10m' }
+    );
+
+    // Send OTP
+    try {
+      const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      const otpResult = await otpService.sendOtp(
+        user.Id,
+        user.Email,
+        'LOGIN',
+        { ipAddress: clientIp, userAgent: req.headers['user-agent'] }
+      );
+      
+      return res.json({
+        success: true,
+        requiresOtp: true,
+        tempToken,
+        destination: otpResult.destination,
+        expiresIn: otpResult.expiresIn,
+        message: `Verification code sent to ${otpResult.destination}`
+      });
+    } catch (otpError) {
+      return res.status(429).json({
+        success: false,
+        message: otpError.message || 'Failed to send verification code'
+      });
+    }
+  } catch (error) {
+    console.error('[REQUEST_OTP] Error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
 exports.register_disabled = async (req, res) => {
   try {
     const { email, password, firstName, lastName } = req.body;

@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { ipRateLimiter, accountLockoutCheck } = require('../middleware/loginRateLimiter');
 
 const otpLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, message: { success: false, message: 'Too many OTP requests, try again later' } });
+const requestOtpLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 3, message: { success: false, message: 'Too many OTP requests, try again later' } });
 
 router.post('/register', (req, res) => res.status(403).json({ message: 'Registration is currently disabled' }));
 router.post('/login',
@@ -15,6 +16,7 @@ router.post('/login',
     accountLockoutCheck,     // Layer 2+3: Check lockout + progressive delay
     authController.login
 );
+router.post('/request-otp', requestOtpLimiter, authController.requestOtp);
 router.post('/verify-otp', otpLimiter, validate('verifyOtp'), authController.verifyOtp);
 router.post('/resend-otp', otpLimiter, validate('resendOtp'), authController.resendOtp);
 router.post('/refresh-token', authController.refreshToken);

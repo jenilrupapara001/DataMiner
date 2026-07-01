@@ -539,6 +539,7 @@ async function processExportJob(downloadId, params, userId) {
 
         let selectQuery = '';
         let sortedDates = [];
+        let historyMetrics = [];
         const headers = [];
 
         // Build label mapping for standard live export
@@ -567,23 +568,57 @@ async function processExportJob(downloadId, params, userId) {
             const datesResult = await datesRequest.query(datesQuery);
             sortedDates = datesResult.recordset.map(r => r.Date);
 
+            // Map user-selected fields to AsinHistory columns
+            const fieldToHistoryCol = {
+                currentPrice: 'Price', mrp: 'MRP', discountPercentage: 'Discount',
+                bsr: 'BSR', subBSR: 'SubBSR', subBsrCategory: 'SubBSRCategory',
+                rating: 'Rating', reviewCount: 'ReviewCount',
+                buyBoxWin: 'BuyBoxStatus', hasAplus: 'HasAplus',
+                stockLevel: 'StockLevel', availabilityStatus: 'AvailabilityStatus',
+                lqs: 'LQS', manufacturer: 'Manufacturer',
+                mainImage: 'ImageUrl', images: 'Images', bulletPointCount: 'BulletPoints'
+            };
+
+            // Determine which metrics to include in historical export
+            if (fields && fields.length > 0) {
+                // Use user-selected fields, mapped to AsinHistory columns
+                historyMetrics = fields
+                    .filter(f => fieldToHistoryCol[f])
+                    .map(f => ({
+                        key: f,
+                        name: labelMapping[f] || f,
+                        metricKey: fieldToHistoryCol[f]
+                    }));
+            }
+            // Always include core metrics if user didn't select any history-compatible fields
+            if (historyMetrics.length === 0) {
+                historyMetrics = [
+                    { key: 'currentPrice', name: 'Price (₹)', metricKey: 'Price' },
+                    { key: 'bsr', name: 'BSR', metricKey: 'BSR' },
+                    { key: 'subBSR', name: 'SubBSR', metricKey: 'SubBSR' },
+                    { key: 'rating', name: 'Rating', metricKey: 'Rating' },
+                    { key: 'reviewCount', name: 'Reviews', metricKey: 'ReviewCount' },
+                    { key: 'buyBoxWin', name: 'BuyBox Win', metricKey: 'BuyBoxStatus' },
+                    { key: 'stockLevel', name: 'Stock', metricKey: 'StockLevel' },
+                    { key: 'lqs', name: 'LQS', metricKey: 'LQS' }
+                ];
+            }
+
             // Construct headers
             headers.push('ASIN Code', 'Product Title', 'Brand');
-            const metrics = [
-                { key: 'Price (₹)', name: 'Price (₹)', metricKey: 'Price' },
-                { key: 'Best Seller Rank', name: 'BSR', metricKey: 'BSR' },
-                { key: 'Rating', name: 'Rating', metricKey: 'Rating' },
-                { key: 'Review Count', name: 'Reviews', metricKey: 'ReviewCount' },
-                { key: 'BuyBox Winner', name: 'BuyBox Win', metricKey: 'BuyBoxWinner' },
-                { key: 'Stock Level', name: 'Stock', metricKey: 'StockLevel' },
-                { key: 'LQS Score', name: 'LQS', metricKey: 'LQS' }
-            ];
-
-            metrics.forEach(m => {
+            historyMetrics.forEach(m => {
                 sortedDates.forEach(d => {
-                    headers.push(`${m.name} [${d}]`);
+                    headers.push(`${m.name}(${d})`);
                 });
             });
+
+            // Build SELECT columns for history query
+            const historySelectCols = historyMetrics.map(m => {
+                if (m.metricKey === 'BuyBoxStatus') {
+                    return `CASE WHEN ah.BuyBoxStatus = 1 THEN 'Yes' ELSE 'No' END as [${m.name}]`;
+                }
+                return `ah.[${m.metricKey}] as [${m.name}]`;
+            }).join(',\n                  ');
 
             selectQuery = `
                 SELECT 
@@ -591,13 +626,7 @@ async function processExportJob(downloadId, params, userId) {
                   a.AsinCode as [ASIN Code],
                   a.Title as [Product Title],
                   s.Name as [Brand],
-                  ah.Price as [Price],
-                  ah.BSR as [BSR],
-                  ah.Rating as [Rating],
-                  ah.ReviewCount as [ReviewCount],
-                  CASE WHEN ah.BuyBoxStatus = 1 THEN 'Yes' ELSE 'No' END as [BuyBoxWinner],
-                  ah.StockLevel as [StockLevel],
-                  ah.LQS as [LQS]
+                  ${historySelectCols}
                 FROM AsinHistory ah
                 JOIN Asins a ON ah.AsinId = a.Id
                 LEFT JOIN Sellers s ON a.SellerId = s.Id
@@ -807,16 +836,6 @@ async function processExportJob(downloadId, params, userId) {
             let currentAsinData = null;
             let headersWritten = false;
 
-            const metrics = [
-                { key: 'Price (₹)', name: 'Price (₹)', metricKey: 'Price' },
-                { key: 'Best Seller Rank', name: 'BSR', metricKey: 'BSR' },
-                { key: 'Rating', name: 'Rating', metricKey: 'Rating' },
-                { key: 'Review Count', name: 'Reviews', metricKey: 'ReviewCount' },
-                { key: 'BuyBox Winner', name: 'BuyBox Win', metricKey: 'BuyBoxWinner' },
-                { key: 'Stock Level', name: 'Stock', metricKey: 'StockLevel' },
-                { key: 'LQS Score', name: 'LQS', metricKey: 'LQS' }
-            ];
-
             selectRequest.on('row', row => {
                 try {
                     if (params.isHistorical) {
@@ -833,11 +852,11 @@ async function processExportJob(downloadId, params, userId) {
                                     'Product Title': currentAsinData['Product Title'],
                                     'Brand': currentAsinData['Brand']
                                 };
-                                metrics.forEach(m => {
+                                historyMetrics.forEach(m => {
                                     sortedDates.forEach(d => {
                                         const dateData = currentAsinData._dates.get(d);
                                         const val = dateData ? dateData[m.metricKey] : undefined;
-                                        finalObj[`${m.name} [${d}]`] = (val !== undefined && val !== null) ? val : '';
+                                        finalObj[`${m.name}(${d})`] = (val !== undefined && val !== null) ? val : '';
                                     });
                                 });
                                 writer.addRow(finalObj);
@@ -856,8 +875,8 @@ async function processExportJob(downloadId, params, userId) {
                         if (!currentAsinData._dates.has(dateKey)) {
                             currentAsinData._dates.set(dateKey, {});
                         }
-                        metrics.forEach(m => {
-                            const val = row[m.metricKey];
+                        historyMetrics.forEach(m => {
+                            const val = row[m.name];
                             if (val !== undefined && val !== null) {
                                 currentAsinData._dates.get(dateKey)[m.metricKey] = val;
                             }
@@ -887,11 +906,11 @@ async function processExportJob(downloadId, params, userId) {
                             'Product Title': currentAsinData['Product Title'],
                             'Brand': currentAsinData['Brand']
                         };
-                        metrics.forEach(m => {
+                        historyMetrics.forEach(m => {
                             sortedDates.forEach(d => {
                                 const dateData = currentAsinData._dates.get(d);
                                 const val = dateData ? dateData[m.metricKey] : undefined;
-                                finalObj[`${m.name} [${d}]`] = (val !== undefined && val !== null) ? val : '';
+                                finalObj[`${m.name}(${d})`] = (val !== undefined && val !== null) ? val : '';
                             });
                         });
                         writer.addRow(finalObj);
@@ -1338,6 +1357,14 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 20);
 
+    // Build WHERE clause with date filtering pushed down to SQL
+    let sqlDateFilter = '';
+    if (exportDateType === 'current' && startDate && endDate) {
+        sqlDateFilter = `AND g.Date >= '${startDate}' AND g.Date <= '${endDate}'`;
+    } else if (exportDateType === 'custom' && exportCustomDates && exportCustomDates[0] && exportCustomDates[1]) {
+        sqlDateFilter = `AND g.Date >= '${exportCustomDates[0]}' AND g.Date <= '${exportCustomDates[1]}'`;
+    }
+
     const result = await gmsRequest.query(`
       SELECT 
         g.Date as date,
@@ -1356,6 +1383,7 @@ async function processGmsExportJob(downloadId, params, userId) {
       LEFT JOIN Asins a ON g.Asin = a.AsinCode
       LEFT JOIN Sellers s ON a.SellerId = s.Id
       ${whereClause}
+      ${sqlDateFilter}
       ORDER BY g.Date DESC
     `);
 
@@ -1449,7 +1477,13 @@ async function processGmsExportJob(downloadId, params, userId) {
     await updateDownloadStatus(pool, downloadId, 'processing', 50);
 
     const matrixMap = {};
-    dataToExport.forEach(d => {
+
+    // Process in chunks to avoid memory spikes and allow progress updates
+    const CHUNK_SIZE = 5000;
+    for (let i = 0; i < dataToExport.length; i += CHUNK_SIZE) {
+        const chunk = dataToExport.slice(i, i + CHUNK_SIZE);
+        
+        chunk.forEach(d => {
         const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
         const key = exportLevel === 'seller'
             ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
@@ -1505,7 +1539,12 @@ async function processGmsExportJob(downloadId, params, userId) {
         // Month Revenue
         if (!row.monthlyRev[monthKey]) row.monthlyRev[monthKey] = 0;
         row.monthlyRev[monthKey] += d.orderedRevenue;
-    });
+        });
+
+        // Update progress between chunks
+        const chunkProgress = Math.min(70, 50 + Math.round((i + chunk.length) / dataToExport.length * 20));
+        await updateDownloadStatus(pool, downloadId, 'processing', chunkProgress);
+    }
 
     const matrixRows = Object.values(matrixMap).map(r => {
         if (exportLevel === 'seller') {
@@ -1639,7 +1678,14 @@ async function processGmsExportJob(downloadId, params, userId) {
             width: label.includes('Product Title') || label.includes('Seller') || label.includes('Brand') ? 25 : 15
         }));
 
-        sheetRows.forEach(rowArr => worksheet.addRow(rowArr));
+        // Add rows in chunks to avoid memory issues
+        const ROW_CHUNK = 1000;
+        for (let i = 0; i < sheetRows.length; i += ROW_CHUNK) {
+            const rowChunk = sheetRows.slice(i, i + ROW_CHUNK);
+            rowChunk.forEach(rowArr => worksheet.addRow(rowArr));
+            const rowProgress = Math.min(95, 75 + Math.round((i + rowChunk.length) / sheetRows.length * 20));
+            await updateDownloadStatus(pool, downloadId, 'processing', rowProgress);
+        }
 
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1666,7 +1712,9 @@ async function processGmsExportJob(downloadId, params, userId) {
         });
     }
 
-    await workbook.xlsx.writeFile(filePath);
+    // Write workbook to buffer then to file for guaranteed integrity
+    const buffer = await workbook.xlsx.writeBuffer();
+    fs.writeFileSync(filePath, buffer);
     const stats = fs.statSync(filePath);
 
     // Update download record as completed

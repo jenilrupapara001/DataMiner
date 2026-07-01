@@ -216,6 +216,7 @@ exports.getAsins = async (req, res) => {
     if (!isGlobalUser) {
       allowedSellerIds = req.user.assignedSellers.map(s => (s._id || s).toString());
       if (allowedSellerIds.length === 0) {
+        if (res.headersSent) return;
         return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0 } });
       }
       
@@ -224,6 +225,7 @@ exports.getAsins = async (req, res) => {
         if (matchedSellerId) {
           whereClause += ' AND a.SellerId = @seller';
         } else {
+          if (res.headersSent) return;
           return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 } });
         }
       } else {
@@ -469,6 +471,7 @@ exports.getAsins = async (req, res) => {
     const asins = asinsResult.recordset;
 
     if (asins.length === 0) {
+      if (res.headersSent) return;
       return res.json({ asins: [], pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) } });
     }
 
@@ -856,6 +859,7 @@ exports.getAsins = async (req, res) => {
       return `${yr}-${mo}-${da}`;
     }).filter(Boolean).sort();
 
+    if (res.headersSent) return;
     res.json({
       asins: processedAsins,
       months: availableMonths,

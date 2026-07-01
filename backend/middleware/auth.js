@@ -36,17 +36,17 @@ exports.authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    
+
     if (await tokenBlacklist.isBlacklisted(token)) {
       return res.status(401).json({ success: false, message: 'Token revoked' });
     }
-    
+
     const decoded = jwt.verify(token, config.jwtSecret);
-    
+
     if (await tokenBlacklist.isUserBlacklisted(decoded.userId, decoded.iat)) {
       return res.status(401).json({ success: false, message: 'Session invalidated' });
     }
-    
+
     const pool = await getPool();
 
     // 1. Fetch User and Role
@@ -151,10 +151,10 @@ exports.authenticate = async (req, res, next) => {
     req.user = {
       ...userData,
       _id: userData.Id, // Compatibility with legacy code
-      role: { 
-        Name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName, 
-        name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName, 
-        DisplayName: userData.RoleDisplayName 
+      role: {
+        Name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName,
+        name: userData.RoleName === 'super_admin' ? 'admin' : userData.RoleName,
+        DisplayName: userData.RoleDisplayName
       },
       assignedSellers: assignedSellers,
       permissions: permissions,
@@ -164,7 +164,7 @@ exports.authenticate = async (req, res, next) => {
 
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired' });
+    if (error.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired. Please login again.' });
     if (error.name === 'JsonWebTokenError') return res.status(401).json({ success: false, message: 'Invalid token' });
     res.status(500).json({ success: false, message: 'Authentication failed' });
   }
@@ -219,7 +219,7 @@ exports.checkSellerAccess = async (req, res, next) => {
   const roleName = req.user.role?.Name || req.user.role?.name;
   if (isGlobalUserRole(roleName)) return next();
 
-  const sellerId = req.params.sellerId || req.body?.sellerId || req.query?.sellerId || req.params.id; 
+  const sellerId = req.params.sellerId || req.body?.sellerId || req.query?.sellerId || req.params.id;
   if (!sellerId) return next();
 
   if (!req.user.assignedSellers || !req.user.assignedSellers.includes(sellerId.toString())) {

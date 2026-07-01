@@ -52,6 +52,12 @@ const TargetCreationPage = lazy(() => import('./pages/TargetCreationPage'));
 const RevenueCalculatorPage = lazy(() => import('./pages/RevenueCalculatorPage'));
 const TemplateManagerPage = lazy(() => import('./pages/TemplateManagerPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
+const PemsDashboard = lazy(() => import('./modules/pems/pages/PemsDashboard'));
+const TaskTemplatesPage = lazy(() => import('./modules/pems/pages/TaskTemplatesPage'));
+const TaskInstancesPage = lazy(() => import('./modules/pems/pages/TaskInstancesPage'));
+const ReviewQueuePage = lazy(() => import('./modules/pems/pages/ReviewQueuePage'));
+const PemsAnalyticsPage = lazy(() => import('./modules/pems/pages/PemsAnalyticsPage'));
+const TemplateDetailPage = lazy(() => import('./modules/pems/pages/TemplateDetailPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChatContainer = lazy(() => import('./components/chat/ChatContainer'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
@@ -206,6 +212,12 @@ function AppRoutes() {
                   <Route path="/target-achievement/create" element={<ProtectedRoute permission="monthlyreport_edit"><TargetCreationPage /></ProtectedRoute>} />
                   <Route path="/revenue-calculator" element={<ProtectedRoute permission="calculator_view"><RevenueCalculatorPage /></ProtectedRoute>} />
                   <Route path="/tasks" element={<ProtectedRoute permission="tasks_view"><TasksPage /></ProtectedRoute>} />
+                  <Route path="/pems/dashboard" element={<ProtectedRoute permission="tasks_view"><PemsDashboard /></ProtectedRoute>} />
+                  <Route path="/pems/templates" element={<ProtectedRoute permission="tasks_manage"><TaskTemplatesPage /></ProtectedRoute>} />
+                  <Route path="/pems/templates/:id" element={<ProtectedRoute permission="tasks_manage"><TemplateDetailPage /></ProtectedRoute>} />
+                  <Route path="/pems/tasks" element={<ProtectedRoute permission="tasks_view"><TaskInstancesPage /></ProtectedRoute>} />
+                  <Route path="/pems/reviews" element={<ProtectedRoute permission="tasks_view"><ReviewQueuePage /></ProtectedRoute>} />
+                  <Route path="/pems/analytics" element={<ProtectedRoute permission="tasks_view"><PemsAnalyticsPage /></ProtectedRoute>} />
                   <Route path="/webhooks" element={<ProtectedRoute permission="rules_manage"><WebhookSettingsPage /></ProtectedRoute>} />
 
                   <Route path="/profile" element={<ProfilePage />} />
